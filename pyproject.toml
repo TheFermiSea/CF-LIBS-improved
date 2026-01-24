@@ -48,6 +48,12 @@ bayesian = [
 ]
 # Uncertainty propagation for classical inversion
 uncertainty = ["uncertainties>=3.2.0"]
+<<<<<<< HEAD
+# Interactive Jupyter widgets for visualization
+widgets = [
+    "ipywidgets>=8.0.0",
+    "plotly>=5.0.0",
+]
 # Physics-Informed Neural Networks (requires JAX + Equinox + Optax)
 pinn = [
     "jax>=0.4.20",
@@ -78,6 +84,8 @@ local = [
     "numpyro>=0.14.0",
     "arviz>=0.17.0",
     "uncertainties>=3.2.0",
+    "ipywidgets>=8.0.0",
+    "plotly>=5.0.0",
     "equinox>=0.11.0",
     "optax>=0.2.0",
     "pytest>=7.4.0",
