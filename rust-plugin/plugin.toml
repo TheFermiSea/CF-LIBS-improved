@@ -1,0 +1,13 @@
+[plugin]
+id = "cflibs-plugin"
+name = "CF-LIBS External Plugin"
+version = "0.1.0"
+author = "Brian Squires"
+description = "CF-LIBS integration plugin for rust-daq"
+min_daq_version = "0.5.0"
+type = "native"
+
+[[modules]]
+type_id = "cflibs_inversion"
+display_name = "CF-LIBS Inversion"
+description = "Real-time plasma parameters from CF-LIBS"

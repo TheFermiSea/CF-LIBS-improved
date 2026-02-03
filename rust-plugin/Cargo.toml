@@ -1,0 +1,25 @@
+[package]
+name = "cflibs-plugin"
+version = "0.1.0"
+edition = "2021"
+description = "Native rust-daq plugin for CF-LIBS integration via PyO3"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Dependencies from rust-daq
+plugin-api = { path = "../../rust-daq/crates/plugin-api" }
+common = { path = "../../rust-daq/crates/common", optional = true } 
+
+# FFI stability
+abi_stable = "0.11"
+
+# Python integration
+pyo3 = { version = "0.24", features = ["auto-initialize"] }
+numpy = "0.24"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+anyhow = "1.0"
