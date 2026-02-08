@@ -27,6 +27,12 @@ from cflibs.inversion.line_selection import (
     identify_resonance_lines,
 )
 from cflibs.inversion.line_detection import LineDetectionResult, detect_line_observations
+from cflibs.inversion.element_id import (
+    IdentifiedLine,
+    ElementIdentification,
+    ElementIdentificationResult,
+    to_line_observations,
+)
 from cflibs.inversion.self_absorption import (
     AbsorptionCorrectionResult,
     SelfAbsorptionResult,
@@ -286,6 +292,11 @@ __all__ = [
     "identify_resonance_lines",
     "LineDetectionResult",
     "detect_line_observations",
+    # Element identification
+    "IdentifiedLine",
+    "ElementIdentification",
+    "ElementIdentificationResult",
+    "to_line_observations",
     # Self-absorption
     "AbsorptionCorrectionResult",
     "SelfAbsorptionResult",

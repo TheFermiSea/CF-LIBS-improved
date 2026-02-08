@@ -637,3 +637,82 @@ def sample_atomic_transitions():
         ),
     ]
     return transitions
+
+
+@pytest.fixture
+def synthetic_libs_spectrum():
+    """Factory fixture for creating synthetic LIBS spectra with known peaks."""
+
+    def _create(
+        elements=None,
+        temperature_K=10000.0,
+        wavelength_range=(200.0, 800.0),
+        n_points=6000,
+        noise_level=0.01,
+        fwhm_nm=0.15,
+        seed=42,
+    ):
+        """
+        Generate synthetic LIBS spectrum with Gaussian peaks at known wavelengths.
+
+        Parameters
+        ----------
+        elements : dict, optional
+            Dict mapping element symbols to list of (wavelength_nm, amplitude) tuples.
+            Default: {"Fe": [(371.99, 1000.0), (373.49, 500.0), (374.95, 200.0)],
+                      "H": [(656.28, 5000.0), (486.13, 1000.0)]}
+        temperature_K : float
+            Plasma temperature in K (metadata only)
+        wavelength_range : tuple
+            (min_nm, max_nm) wavelength range
+        n_points : int
+            Number of wavelength points
+        noise_level : float
+            Relative noise level (0.01 = 1%)
+        fwhm_nm : float
+            Full width at half maximum for Gaussian peaks in nm
+        seed : int
+            Random seed for reproducibility
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - "wavelength": ndarray of wavelengths
+            - "intensity": ndarray of intensities
+            - "elements": dict of element peaks
+            - "peaks": list of (element, wavelength_nm, amplitude) tuples
+            - "temperature_K": plasma temperature (metadata)
+        """
+        if elements is None:
+            elements = {
+                "Fe": [(371.99, 1000.0), (373.49, 500.0), (374.95, 200.0)],
+                "H": [(656.28, 5000.0), (486.13, 1000.0)],
+            }
+
+        rng = np.random.default_rng(seed)
+        wl_min, wl_max = wavelength_range
+        wavelength = np.linspace(wl_min, wl_max, n_points)
+        intensity = np.ones_like(wavelength) * 10.0  # baseline
+
+        sigma = fwhm_nm / 2.3548  # FWHM to sigma
+        all_peaks = []
+        for element, peaks in elements.items():
+            for center_nm, amplitude in peaks:
+                if wl_min <= center_nm <= wl_max:
+                    peak = amplitude * np.exp(-0.5 * ((wavelength - center_nm) / sigma) ** 2)
+                    intensity += peak
+                    all_peaks.append((element, center_nm, amplitude))
+
+        intensity += rng.normal(0, noise_level * np.max(intensity), size=n_points)
+        intensity = np.maximum(intensity, 0.0)
+
+        return {
+            "wavelength": wavelength,
+            "intensity": intensity,
+            "elements": elements,
+            "peaks": all_peaks,
+            "temperature_K": temperature_K,
+        }
+
+    return _create
