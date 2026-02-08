@@ -33,6 +33,7 @@ from cflibs.inversion.element_id import (
     ElementIdentificationResult,
     to_line_observations,
 )
+from cflibs.inversion.comb_identifier import CombIdentifier
 from cflibs.inversion.self_absorption import (
     AbsorptionCorrectionResult,
     SelfAbsorptionResult,
@@ -297,6 +298,7 @@ __all__ = [
     "ElementIdentification",
     "ElementIdentificationResult",
     "to_line_observations",
+    "CombIdentifier",
     # Self-absorption
     "AbsorptionCorrectionResult",
     "SelfAbsorptionResult",
