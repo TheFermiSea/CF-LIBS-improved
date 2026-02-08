@@ -35,6 +35,7 @@ from cflibs.inversion.element_id import (
 )
 from cflibs.inversion.alias_identifier import ALIASIdentifier
 from cflibs.inversion.comb_identifier import CombIdentifier
+from cflibs.inversion.correlation_identifier import CorrelationIdentifier
 from cflibs.inversion.self_absorption import (
     AbsorptionCorrectionResult,
     SelfAbsorptionResult,
@@ -301,6 +302,7 @@ __all__ = [
     "to_line_observations",
     "ALIASIdentifier",
     "CombIdentifier",
+    "CorrelationIdentifier",
     # Self-absorption
     "AbsorptionCorrectionResult",
     "SelfAbsorptionResult",

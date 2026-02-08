@@ -39,6 +39,8 @@ jax-metal = ["jax>=0.4.20", "jax-metal>=0.1.0"]
 jax-cuda = ["jax[cuda12]>=0.4.20"]
 # HDF5 for manifold storage
 hdf5 = ["h5py>=3.8.0"]
+# Vector index for fast similarity search
+vector = ["faiss-cpu>=1.7.0"]
 # Bayesian inference (MCMC, nested sampling)
 bayesian = [
     "numpyro>=0.14.0",
@@ -71,6 +73,7 @@ local = [
     "jax>=0.4.20",
     "jax-metal>=0.1.0",
     "h5py>=3.8.0",
+    "faiss-cpu>=1.7.0",
     "numpyro>=0.14.0",
     "arviz>=0.17.0",
     "uncertainties>=3.2.0",
@@ -87,6 +90,7 @@ local = [
 cluster = [
     "jax[cuda12]>=0.4.20",
     "h5py>=3.8.0",
+    "faiss-cpu>=1.7.0",
     "numpyro>=0.14.0",
     "arviz>=0.17.0",
     "uncertainties>=3.2.0",
@@ -118,4 +122,3 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-
