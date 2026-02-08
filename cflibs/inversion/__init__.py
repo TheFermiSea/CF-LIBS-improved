@@ -33,6 +33,7 @@ from cflibs.inversion.element_id import (
     ElementIdentificationResult,
     to_line_observations,
 )
+from cflibs.inversion.alias_identifier import ALIASIdentifier
 from cflibs.inversion.self_absorption import (
     AbsorptionCorrectionResult,
     SelfAbsorptionResult,
@@ -297,6 +298,7 @@ __all__ = [
     "ElementIdentification",
     "ElementIdentificationResult",
     "to_line_observations",
+    "ALIASIdentifier",
     # Self-absorption
     "AbsorptionCorrectionResult",
     "SelfAbsorptionResult",
