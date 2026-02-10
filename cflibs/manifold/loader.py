@@ -230,3 +230,54 @@ class ManifoldLoader:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+    def build_vector_index(self, n_components: int = 30, index_config=None):
+        """
+        Build vector index for fast similarity search.
+
+        Parameters
+        ----------
+        n_components : int
+            Number of PCA components for embedding (default: 30)
+        index_config : VectorIndexConfig, optional
+            FAISS index configuration (default: flat index)
+
+        Returns
+        -------
+        embedder : SpectralEmbedder
+            Fitted spectral embedder
+        index : VectorIndex
+            Built vector index
+
+        Raises
+        ------
+        ImportError
+            If FAISS or vector_index module not available
+
+        Examples
+        --------
+        >>> loader = ManifoldLoader("manifold.h5")
+        >>> embedder, index = loader.build_vector_index(n_components=20)
+        >>> # Use embedder for query spectra, index for search
+        """
+        from cflibs.manifold.vector_index import SpectralEmbedder, VectorIndex, VectorIndexConfig
+
+        if index_config is None:
+            index_config = VectorIndexConfig(index_type="flat")
+
+        logger.info(f"Building vector index with {n_components} components")
+
+        # Fit embedder
+        embedder = SpectralEmbedder(n_components=n_components)
+        embeddings = embedder.fit_transform(self.spectra)
+
+        # Build index
+        vector_index = VectorIndex(dimension=n_components, config=index_config)
+        vector_index.build(embeddings)
+
+        logger.info(
+            f"Vector index built: {vector_index.index.ntotal} vectors, "
+            f"type={index_config.index_type}"
+        )
+
+        return embedder, vector_index
