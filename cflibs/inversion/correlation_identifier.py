@@ -156,21 +156,32 @@ class CorrelationIdentifier:
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
+        # Apply relative threshold filter (only if multiple elements)
+        if element_scores and len(element_scores) > 1:
+            scores = [score for _, score, _, _, _ in element_scores]
+            median_score = np.median(scores)
+            relative_threshold = 1.5 * median_score
+            logger.debug(f"Relative threshold: {relative_threshold:.3f} (1.5 × median {median_score:.3f})")
+        else:
+            relative_threshold = 0.0  # No relative filter for single element
+
         # Build result
         detected_elements = []
         rejected_elements = []
 
         for element, score, confidence, matched_lines, unmatched_lines in element_scores:
+            # Apply both absolute (min_confidence) and relative threshold
+            passes_threshold = confidence >= self.min_confidence and score >= relative_threshold
             elem_id = ElementIdentification(
                 element=element,
-                detected=confidence >= self.min_confidence,
+                detected=passes_threshold,
                 score=score,
                 confidence=confidence,
                 n_matched_lines=len(matched_lines),
                 n_total_lines=len(matched_lines) + len(unmatched_lines),
                 matched_lines=matched_lines,
                 unmatched_lines=unmatched_lines,
-                metadata={"correlation": score},
+                metadata={"correlation": score, "relative_threshold": relative_threshold},
             )
 
             if elem_id.detected:

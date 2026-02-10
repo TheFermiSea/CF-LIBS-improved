@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# PreToolUse: Block Edit/Write on main branch outside worktrees
+# PreToolUse: Block Edit/Write on main/master branch
 #
-# Supervisors must work in .worktrees/bd-{BEAD_ID}/ directories, not main.
-# This prevents accidental commits to main directory.
+# Protects main branch from direct edits. Work must happen on
+# feature branches or in .worktrees/bd-{BEAD_ID}/ directories.
 #
 
 INPUT=$(cat)
@@ -15,33 +15,20 @@ TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
 # Get the file path being edited
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
-# Allow if editing within .worktrees/ directory
-if [[ "$FILE_PATH" == *"/.worktrees/"* ]] || [[ "$FILE_PATH" == *"\.worktrees\"* ]]; then
-  exit 0
-fi
+# Allow edits to hook/settings files (meta-configuration)
+[[ "$FILE_PATH" == *"/.claude/"* ]] && exit 0
 
-# Get current working directory
-CWD=$(pwd)
+# Allow if editing within a worktree directory
+[[ "$FILE_PATH" == *"/.worktrees/"* ]] && exit 0
 
-# Allow if currently inside a .worktrees/ directory
-if [[ "$CWD" == *"/.worktrees/"* ]] || [[ "$CWD" == *"\.worktrees\"* ]]; then
-  exit 0
-fi
-
-# Check current branch (if we're in a git repo outside worktrees)
+# Check current branch
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 
-# Block if on main or master (and not in a worktree)
-if [[ "$CURRENT_BRANCH" == "main" ]] || [[ "$CURRENT_BRANCH" == "master" ]]; then
-  cat << EOF
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Cannot edit files on $CURRENT_BRANCH branch. Supervisors must work in worktrees.
+# Allow if not on main or master
+[[ "$CURRENT_BRANCH" != "main" ]] && [[ "$CURRENT_BRANCH" != "master" ]] && exit 0
 
-Create a worktree first using the API:
-  POST /api/git/worktree { repo_path, bead_id }
-
-Then cd into .worktrees/bd-{BEAD_ID}/ to make changes."}}
+# Block: on main/master and not in a worktree
+cat << EOF
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Cannot edit files on '$CURRENT_BRANCH'. Create a worktree or feature branch first:\n\n  git worktree add .worktrees/bd-{BEAD_ID} -b bd-{BEAD_ID} main\n\nOr with beads:\n\n  bd create \"Task title\" -d \"Description\"\n  git worktree add .worktrees/bd-{BEAD_ID} -b bd-{BEAD_ID} main"}}
 EOF
-  exit 0
-fi
-
 exit 0

@@ -80,7 +80,7 @@ class CombIdentifier:
         atomic_db: AtomicDatabase,
         baseline_window_nm: float = 10.0,
         threshold_percentile: float = 85.0,
-        min_correlation: float = 0.5,
+        min_correlation: float = 0.14,
         max_shift_pts: int = 5,
         min_width_pts: int = 3,
         max_width_factor: float = 1.0,

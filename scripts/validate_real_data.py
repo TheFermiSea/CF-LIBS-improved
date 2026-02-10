@@ -207,6 +207,8 @@ def select_representative_spectrum(
     """
     Select a representative 1D spectrum from multi-dimensional data.
 
+    For 3D spatial datasets, averages over 3×3 neighborhood for improved SNR.
+
     Parameters
     ----------
     data : np.ndarray
@@ -223,11 +225,19 @@ def select_representative_spectrum(
         return data
 
     if data.ndim == 3:
-        # Grid data (steel, Fe, Ni): use center position
+        # Grid data (steel, Fe, Ni): average 3×3 neighborhood around center
         if dataset_name in ["steel_245nm", "Fe_245nm", "Ni_245nm"]:
             x_center = data.shape[0] // 2
             y_center = data.shape[1] // 2
-            return data[x_center, y_center, :]
+
+            # Define 3×3 neighborhood with bounds checking
+            x_lo = max(0, x_center - 1)
+            x_hi = min(data.shape[0], x_center + 2)
+            y_lo = max(0, y_center - 1)
+            y_hi = min(data.shape[1], y_center + 2)
+
+            # Average over spatial dimensions
+            return data[x_lo:x_hi, y_lo:y_hi, :].mean(axis=(0, 1))
 
         # Line scan (FeNi_380nm, FeNi_480nm, 20shot): use first position, squeeze Y
         else:
