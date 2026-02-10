@@ -64,7 +64,7 @@ def test_spectral_embedder_area_normalization():
 @pytest.mark.parametrize("index_type", ["flat"])
 def test_vector_index_build_and_search(index_type):
     """Test building and searching vector index."""
-    faiss = pytest.importorskip("faiss")
+    pytest.importorskip("faiss")
     from cflibs.manifold.vector_index import VectorIndex
 
     # Create embeddings
@@ -92,7 +92,7 @@ def test_vector_index_build_and_search(index_type):
 
 def test_vector_index_search_without_build():
     """Test that search without build raises error."""
-    faiss = pytest.importorskip("faiss")
+    pytest.importorskip("faiss")
     from cflibs.manifold.vector_index import VectorIndex
 
     config = VectorIndexConfig(index_type="flat")
@@ -106,8 +106,8 @@ def test_vector_index_search_without_build():
 
 def test_vector_index_save_load():
     """Test saving and loading index."""
-    faiss = pytest.importorskip("faiss")
-    h5py = pytest.importorskip("h5py")
+    pytest.importorskip("faiss")
+    pytest.importorskip("h5py")
     from cflibs.manifold.vector_index import VectorIndex
 
     # Create and build index
@@ -139,11 +139,10 @@ def test_vector_index_without_faiss():
     # This test only makes sense if faiss is not installed
     # Skip if faiss is available
     try:
-        import faiss
+        import faiss  # noqa: F401
         pytest.skip("faiss is installed, cannot test ImportError")
-    except ImportError:
+    except ImportError:  # faiss not installed; continue to test error handling
         pass
-
     from cflibs.manifold.vector_index import VectorIndex, VectorIndexConfig
 
     config = VectorIndexConfig(index_type="flat")
