@@ -7,6 +7,8 @@ import numpy as np
 from cflibs.inversion.comb_identifier import CombIdentifier
 from cflibs.inversion.element_id import ElementIdentificationResult
 
+pytestmark = pytest.mark.requires_db
+
 
 def test_build_triangular_template():
     """Test triangular template generation."""
@@ -178,24 +180,28 @@ def test_analyze_interferences(atomic_db):
 
 
 def test_fingerprint_computation(atomic_db):
-    """Test fingerprint as mean of active tooth correlations."""
+    """Test fingerprint as sum(active correlations) / n_total_teeth."""
     identifier = CombIdentifier(atomic_db)
 
-    # Test with active teeth
+    # Test with active teeth: score = sum(active) / total
     teeth = [
         {"best_correlation": 0.8, "active": True},
         {"best_correlation": 0.6, "active": True},
-        {"best_correlation": 0.3, "active": False},  # Should be excluded
+        {"best_correlation": 0.3, "active": False},  # Excluded from sum
         {"best_correlation": 0.7, "active": True},
     ]
 
     fingerprint = identifier._compute_fingerprint(teeth)
-    expected = (0.8 + 0.6 + 0.7) / 3
+    expected = (0.8 + 0.6 + 0.7) / 4  # Divide by total teeth (4), not active (3)
     assert abs(fingerprint - expected) < 1e-6
 
     # Test with no active teeth
     teeth_inactive = [{"best_correlation": 0.3, "active": False}]
     fingerprint = identifier._compute_fingerprint(teeth_inactive)
+    assert fingerprint == 0.0
+
+    # Test with empty list
+    fingerprint = identifier._compute_fingerprint([])
     assert fingerprint == 0.0
 
 
@@ -453,12 +459,12 @@ def test_fingerprint_with_mixed_correlations(atomic_db):
     ]
 
     fingerprint = identifier._compute_fingerprint(teeth)
-    expected = (0.9 + 0.7 + 0.5) / 3
+    expected = (0.9 + 0.7 + 0.5) / 5  # Divide by total teeth (5)
     np.testing.assert_allclose(fingerprint, expected)
 
 
 def test_fingerprint_all_active(atomic_db):
-    """Test fingerprint when all teeth are active."""
+    """Test fingerprint when all teeth are active (sum/total = mean)."""
     identifier = CombIdentifier(atomic_db)
 
     teeth = [
@@ -468,6 +474,7 @@ def test_fingerprint_all_active(atomic_db):
     ]
 
     fingerprint = identifier._compute_fingerprint(teeth)
+    # When all active: (0.8*3)/3 = 0.8 (same as mean)
     np.testing.assert_allclose(fingerprint, 0.8)
 
 
@@ -592,3 +599,51 @@ def test_identify_spectrum_range_validation(atomic_db, synthetic_libs_spectrum):
     assert len(spectrum["wavelength"]) > 0
     assert spectrum["wavelength"][0] >= 350.0
     assert spectrum["wavelength"][-1] <= 400.0
+
+
+def test_false_positive_noise_only(atomic_db):
+    """Noise-only input should not detect any element."""
+    identifier = CombIdentifier(atomic_db, elements=["Fe", "H"], min_correlation=0.5)
+
+    # Create pure noise spectrum
+    rng = np.random.default_rng(42)
+    wavelength = np.linspace(200, 400, 2000)
+    intensity = 100 + rng.normal(0, 10, 2000)
+
+    result = identifier.identify(wavelength, intensity)
+    # No element should be detected in pure noise
+    assert len(result.detected_elements) == 0, (
+        f"False positives on noise: {[e.element for e in result.detected_elements]}"
+    )
+
+
+def test_coverage_penalty_reduces_score(atomic_db):
+    """Elements with few active teeth out of many should score low."""
+    identifier = CombIdentifier(atomic_db)
+
+    # Build teeth list: 3 active out of 50 total
+    teeth = []
+    for i in range(50):
+        if i < 3:
+            teeth.append({"active": True, "best_correlation": 0.9})
+        else:
+            teeth.append({"active": False, "best_correlation": 0.1})
+
+    score = identifier._compute_fingerprint(teeth)
+    # 3 * 0.9 / 50 = 0.054, should be much less than min_correlation
+    assert score < 0.1, f"Score {score} too high for 3/50 active teeth"
+
+def test_max_lines_per_element_parameter(atomic_db):
+    """Test that max_lines_per_element caps transition count."""
+    identifier = CombIdentifier(atomic_db, max_lines_per_element=5)
+    assert identifier.max_lines_per_element == 5
+
+    # Default should be 50
+    identifier_default = CombIdentifier(atomic_db)
+    assert identifier_default.max_lines_per_element == 50
+
+
+def test_default_min_correlation_lowered(atomic_db):
+    """Test that default min_correlation is 0.10."""
+    identifier = CombIdentifier(atomic_db)
+    assert identifier.min_correlation == 0.10

@@ -16,7 +16,7 @@
       {
         "matcher": "Bash",
         "hooks": [
-          {"type": "command", "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/validate-epic-close.sh"}
+          {"type": "command", "command": ".claude/hooks/validate-epic-close.sh"}
         ]
       }
     ],

@@ -55,24 +55,23 @@ def load_netcdf(path: str) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
     metadata : dict
         Metadata extracted from dataset
     """
-    ds = xr.open_dataset(path)
-    wavelength = ds.coords["Wavelength"].values
+    with xr.open_dataset(path) as ds:
+        wavelength = ds.coords["Wavelength"].values
 
-    # Handle different variable names
-    if "__xarray_dataarray_variable__" in ds:
-        data = ds["__xarray_dataarray_variable__"].values
-    elif "Intensity" in ds:
-        data = ds["Intensity"].values
-    else:
-        raise ValueError(f"Unknown data variable in {path}")
+        # Handle different variable names
+        if "__xarray_dataarray_variable__" in ds:
+            data = ds["__xarray_dataarray_variable__"].values
+        elif "Intensity" in ds:
+            data = ds["Intensity"].values
+        else:
+            raise ValueError(f"Unknown data variable in {path}")
 
-    metadata = {
-        "format": "netcdf",
-        "shape": data.shape,
-        "wavelength_range": (wavelength.min(), wavelength.max()),
-    }
+        metadata = {
+            "format": "netcdf",
+            "shape": data.shape,
+            "wavelength_range": (wavelength.min(), wavelength.max()),
+        }
 
-    ds.close()
     return wavelength, data, metadata
 
 
@@ -195,6 +194,21 @@ DATASETS = [
     },
 ]
 
+BENCHMARK_CRITERIA = {
+    "min_recall": 0.60,
+    "max_fpr": 0.20,
+    "required_detections": {
+        ("Fe_245nm", "Fe"),
+        ("Ni_245nm", "Ni"),
+        ("steel_245nm", "Fe"),
+    },
+    "required_absences": {
+        ("Fe_245nm", "Ni"),
+        ("Fe_245nm", "Cu"),
+        ("Ni_245nm", "Fe"),
+    },
+}
+
 
 # ============================================================================
 # Spectrum Selection
@@ -207,7 +221,8 @@ def select_representative_spectrum(
     """
     Select a representative 1D spectrum from multi-dimensional data.
 
-    For 3D spatial datasets, averages over 3×3 neighborhood for improved SNR.
+    For 3D spatial datasets (steel, Fe, Ni), averages over a 3x3 neighborhood
+    around the center to improve SNR. For line scan datasets, uses single pixel.
 
     Parameters
     ----------
@@ -225,19 +240,13 @@ def select_representative_spectrum(
         return data
 
     if data.ndim == 3:
-        # Grid data (steel, Fe, Ni): average 3×3 neighborhood around center
+        # Grid data (steel, Fe, Ni): use center pixel
+        # Note: 3×3 averaging was removed because the Fe/Ni grids ARE 3×3,
+        # so averaging over the whole grid dilutes element-specific signal
         if dataset_name in ["steel_245nm", "Fe_245nm", "Ni_245nm"]:
             x_center = data.shape[0] // 2
             y_center = data.shape[1] // 2
-
-            # Define 3×3 neighborhood with bounds checking
-            x_lo = max(0, x_center - 1)
-            x_hi = min(data.shape[0], x_center + 2)
-            y_lo = max(0, y_center - 1)
-            y_hi = min(data.shape[1], y_center + 2)
-
-            # Average over spatial dimensions
-            return data[x_lo:x_hi, y_lo:y_hi, :].mean(axis=(0, 1))
+            return data[x_center, y_center, :]
 
         # Line scan (FeNi_380nm, FeNi_480nm, 20shot): use first position, squeeze Y
         else:
@@ -352,10 +361,11 @@ def print_result_table(
                 detected_str = "YES*" if (e.detected and elem in expected) else (
                     "YES" if e.detected else "NO"
                 )
+                matched_str = f"{e.n_matched_lines}/{e.n_total_lines}"
                 print(
                     f"{algo_name:<15} {e.element:<8} {detected_str:<10} "
                     f"{e.score:<8.3f} {e.confidence:<12.3f} "
-                    f"{e.n_matched_lines}/{e.n_total_lines:<15}"
+                    f"{matched_str:<15}"
                 )
                 algo_name = ""  # Don't repeat algorithm name
             else:
@@ -548,7 +558,7 @@ def plot_spatial_map(
 
     # Plot heatmaps
     fig, axes = plt.subplots(2, (n_elements + 1) // 2, figsize=(12, 8))
-    axes = axes.flatten() if n_elements > 1 else [axes]
+    axes = np.atleast_1d(axes).flatten()
 
     for idx, elem in enumerate(elements):
         ax = axes[idx]
@@ -616,6 +626,11 @@ def main():
         action="store_true",
         help="Skip spatial maps (slow) (default: False)",
     )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Run benchmark mode with pass/fail criteria (default: False)",
+    )
 
     args = parser.parse_args()
 
@@ -647,6 +662,11 @@ def main():
 
     # Summary tracking
     summary = {algo: {"expected_detected": 0, "total_expected": 0} for algo in ["ALIAS", "Comb", "Correlation"]}
+    # Per-dataset detection results for benchmark mode
+    # Structure: {algo: {(dataset_name, element): bool_detected}}
+    detection_results: Dict[str, Dict[Tuple[str, str], bool]] = {
+        algo: {} for algo in ["ALIAS", "Comb", "Correlation"]
+    }
 
     # Process each dataset
     for dataset in datasets_to_run:
@@ -672,7 +692,8 @@ def main():
             continue
 
         print(f"  Loaded: {metadata['format']}, shape={metadata['shape']}")
-        print(f"  Wavelength range: {metadata['wavelength_range'][0]:.2f}-{metadata['wavelength_range'][1]:.2f} nm")
+        wl_min, wl_max = metadata["wavelength_range"]
+        print(f"  Wavelength range: {wl_min:.2f}-{wl_max:.2f} nm")
 
         # Select representative spectrum
         spectrum = select_representative_spectrum(data, dataset["name"])
@@ -689,15 +710,19 @@ def main():
         # Print results table
         print_result_table(results, dataset["name"], expected)
 
-        # Update summary
+        # Update summary and per-dataset detection results
         for algo_name in ["ALIAS", "Comb", "Correlation"]:
             result = results.get(algo_name)
             if result is not None:
                 detected_elems = {e.element for e in result.detected_elements}
+                all_searched = {e.element for e in result.all_elements}
                 for exp_elem in expected:
                     if exp_elem in detected_elems:
                         summary[algo_name]["expected_detected"] += 1
                 summary[algo_name]["total_expected"] += len(expected)
+                # Record per-(dataset, element) detection for benchmark
+                for elem in all_searched:
+                    detection_results[algo_name][(dataset["name"], elem)] = elem in detected_elems
 
         # Generate plots
         if not args.no_plots:
@@ -743,6 +768,106 @@ def main():
         print(f"{algo_name:<15} {detected:<20} {total:<15} {success_rate:<15.2%}")
 
     print(f"\nValidation complete. Results saved to {output_dir}")
+
+    # Benchmark mode
+    if args.benchmark:
+        passed = run_benchmark(detection_results, datasets_to_run)
+        sys.exit(0 if passed else 1)
+
+
+def run_benchmark(
+    detection_results: Dict[str, Dict[Tuple[str, str], bool]],
+    datasets_run: List[Dict[str, Any]],
+) -> bool:
+    """
+    Evaluate benchmark criteria against collected detection results.
+
+    Parameters
+    ----------
+    detection_results : dict
+        {algo: {(dataset_name, element): bool_detected}}
+    datasets_run : list
+        List of dataset dicts that were processed
+
+    Returns
+    -------
+    bool
+        True if all benchmark criteria pass
+    """
+    print(f"\n{'='*100}")
+    print("BENCHMARK RESULTS")
+    print(f"{'='*100}")
+
+    # Build expected set from datasets that were actually run
+    dataset_expected = {}
+    for ds in datasets_run:
+        dataset_expected[ds["name"]] = set(ds["expected"])
+
+    all_passed = True
+
+    for algo_name in ["ALIAS", "Comb", "Correlation"]:
+        print(f"\n--- {algo_name} ---")
+        algo_results = detection_results.get(algo_name, {})
+
+        # Classify TP/FP/FN/TN
+        tp = fp = fn = tn = 0
+        for (ds_name, elem), detected in algo_results.items():
+            if ds_name not in dataset_expected:
+                continue
+            is_expected = elem in dataset_expected[ds_name]
+            if is_expected and detected:
+                tp += 1
+            elif is_expected and not detected:
+                fn += 1
+            elif not is_expected and detected:
+                fp += 1
+            else:
+                tn += 1
+
+        # Compute metrics
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+
+        print(f"  TP={tp}  FP={fp}  FN={fn}  TN={tn}")
+        print(f"  Precision: {precision:.3f}")
+        print(f"  Recall:    {recall:.3f}  (min: {BENCHMARK_CRITERIA['min_recall']:.2f})")
+        print(f"  FPR:       {fpr:.3f}  (max: {BENCHMARK_CRITERIA['max_fpr']:.2f})")
+
+        # Check thresholds
+        recall_ok = recall >= BENCHMARK_CRITERIA["min_recall"]
+        fpr_ok = fpr <= BENCHMARK_CRITERIA["max_fpr"]
+        print(f"  Recall pass: {'YES' if recall_ok else 'FAIL'}")
+        print(f"  FPR pass:    {'YES' if fpr_ok else 'FAIL'}")
+
+        if not recall_ok or not fpr_ok:
+            all_passed = False
+
+        # Check required detections
+        for ds_name, elem in BENCHMARK_CRITERIA["required_detections"]:
+            key = (ds_name, elem)
+            if key in algo_results:
+                detected = algo_results[key]
+                status = "OK" if detected else "FAIL"
+                print(f"  Required detection ({ds_name}, {elem}): {status}")
+                if not detected:
+                    all_passed = False
+
+        # Check required absences
+        for ds_name, elem in BENCHMARK_CRITERIA["required_absences"]:
+            key = (ds_name, elem)
+            if key in algo_results:
+                detected = algo_results[key]
+                status = "OK" if not detected else "FAIL"
+                print(f"  Required absence  ({ds_name}, {elem}): {status}")
+                if detected:
+                    all_passed = False
+
+    print(f"\n{'='*100}")
+    print(f"BENCHMARK {'PASSED' if all_passed else 'FAILED'}")
+    print(f"{'='*100}")
+
+    return all_passed
 
 
 if __name__ == "__main__":

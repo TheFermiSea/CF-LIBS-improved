@@ -11,13 +11,13 @@ import os
 import io
 
 # --- CONFIGURATION ---
-DB_NAME = "libs_production.db"
+DB_NAME = "ASD_da/libs_production.db"
 
 # ULTRAFAST FILTER SETTINGS
 # Prune physics that don't exist in <10us cooling plasmas
 MAX_IONIZATION_STAGE = 2      # Keep only I and II (Neutrals & Singly Ionized)
-MAX_UPPER_ENERGY_EV = 12.0    # Drop levels > 12 eV (unlikely to be populated)
-MIN_RELATIVE_INTENSITY = 50   # Drop extremely weak lines
+MAX_UPPER_ENERGY_EV = 25.0    # Raised from 12.0; emissivity sorting handles ranking via Boltzmann factor
+MIN_RELATIVE_INTENSITY = 10   # Lowered from 50; emissivity sorting correctly ranks weak lines
 
 ALL_ELEMENTS = [
     "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
@@ -238,6 +238,10 @@ def build_production_db():
                 if df.empty: continue
 
                 # Basic Cleaning
+                # Prefer observed wavelength, fallback to Ritz for UV lines
+                if 'ritz_wl_air(nm)' in df.columns:
+                    df['obs_wl_air(nm)'] = df['obs_wl_air(nm)'].fillna(df['ritz_wl_air(nm)'])
+
                 mask = df['obs_wl_air(nm)'].notna() & df['Aki(s^-1)'].notna() & df['Ek(cm-1)'].notna()
                 clean = df[mask].copy()
                 if clean.empty: continue
@@ -254,7 +258,10 @@ def build_production_db():
                     'ek_ev': clean['Ek(cm-1)'] * CM_TO_EV,
                     'gi': clean['g_i'],
                     'gk': clean['g_k'],
-                    'rel_int': pd.to_numeric(clean['intens'], errors='coerce').fillna(0),
+                    'rel_int': pd.to_numeric(
+                        clean['intens'].astype(str).str.extract(r'(\d+\.?\d*)')[0],
+                        errors='coerce'
+                    ).fillna(0),
                     'stark_w': None,
                     'stark_alpha': None,
                     'stark_shift': None,
@@ -266,7 +273,9 @@ def build_production_db():
                 sql_df = sql_df[sql_df['ek_ev'] <= MAX_UPPER_ENERGY_EV]
                 
                 # 2. Drop very weak lines (Noise floor)
-                sql_df = sql_df[sql_df['rel_int'] >= MIN_RELATIVE_INTENSITY]
+                # Keep lines with valid Aki even if rel_int is missing (Ritz-only lines)
+                has_aki = sql_df['aki'].notna() & (sql_df['aki'] > 0)
+                sql_df = sql_df[(sql_df['rel_int'] >= MIN_RELATIVE_INTENSITY) | has_aki]
                 
                 # Deduplicate
                 sql_df = sql_df.drop_duplicates(subset=['wavelength_nm', 'ek_ev'])

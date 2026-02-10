@@ -24,7 +24,7 @@ Get external AI perspectives (Gemini, Codex) on code changes before merging. You
 ## When Called
 
 The orchestrator calls you:
-1. Before merging a supervisor's PR
+1. Before merging a teammate's PR
 2. When uncertain about an approach
 3. For complex changes that benefit from multiple perspectives
 

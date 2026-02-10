@@ -154,6 +154,41 @@ def test_identify_no_elements(atomic_db, synthetic_libs_spectrum):
     assert len(cu_elements) == 0
 
 
+def test_detect_peaks_low_snr(atomic_db):
+    """Peaks at SNR=5-15 should be detected with new threshold."""
+    rng = np.random.default_rng(42)
+    wavelength = np.linspace(200, 400, 2000)
+    noise_level = 10.0
+    baseline = 100 + 0.3 * wavelength  # sloped continuum
+    noise = rng.normal(0, noise_level, 2000)
+
+    # Add peaks at SNR 5, 8, 12, 15
+    peaks_data = [(400, 50), (800, 80), (1200, 120), (1600, 150)]
+    signal = np.zeros(2000)
+    for loc, height in peaks_data:
+        signal[loc - 2 : loc + 3] = height
+
+    intensity = baseline + signal + noise
+    identifier = ALIASIdentifier(atomic_db)
+    detected = identifier._detect_peaks(wavelength, intensity)
+
+    # Should detect at least the SNR=12 and SNR=15 peaks
+    assert len(detected) >= 2, f"Only detected {len(detected)} peaks at SNR 5-15"
+
+
+def test_noise_only_no_detection(atomic_db):
+    """Pure noise should not detect any elements."""
+    rng = np.random.default_rng(42)
+    wavelength = np.linspace(200, 400, 2000)
+    intensity = 100 + rng.normal(0, 10, 2000)
+
+    identifier = ALIASIdentifier(atomic_db, elements=["Fe"])
+    result = identifier.identify(wavelength, intensity)
+    assert len(result.detected_elements) == 0, (
+        f"False detections in noise: {[e.element for e in result.detected_elements]}"
+    )
+
+
 def test_scores_between_zero_and_one(atomic_db, synthetic_libs_spectrum):
     """Test that all scores are in [0, 1] range."""
     spectrum = synthetic_libs_spectrum(
@@ -179,3 +214,19 @@ def test_scores_between_zero_and_one(atomic_db, synthetic_libs_spectrum):
             assert 0.0 <= metadata["k_shift"] <= 1.0
         if "k_det" in metadata:
             assert 0.0 <= metadata["k_det"] <= 1.0
+
+
+def test_max_lines_per_element_parameter(atomic_db):
+    """Test that max_lines_per_element caps transition count."""
+    identifier = ALIASIdentifier(atomic_db, max_lines_per_element=5)
+    assert identifier.max_lines_per_element == 5
+
+    # Default should be 50
+    identifier_default = ALIASIdentifier(atomic_db)
+    assert identifier_default.max_lines_per_element == 50
+
+
+def test_default_detection_threshold_lowered(atomic_db):
+    """Test that default detection_threshold is 0.02."""
+    identifier = ALIASIdentifier(atomic_db)
+    assert identifier.detection_threshold == 0.02

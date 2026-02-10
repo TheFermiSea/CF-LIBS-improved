@@ -148,7 +148,7 @@ Phase 2 - Code Quality: ✅
 - Security: [evidence with file:line]
 - Tests: [evidence with file:line]
 
-Comment added. Supervisor may proceed.
+Comment added. Teammate may proceed.
 ```
 
 ### If NOT APPROVED:
@@ -165,7 +165,7 @@ Reviewed: {BEAD_ID} on branch bd-{BEAD_ID}
 Phase 0 - DEMO Verification: ❌
 - FAILED: Claimed `curl localhost:3008/api/endpoint` returns 200
 - ACTUAL: Returns 401 Unauthorized
-- Supervisor must fix and provide new DEMO
+- Teammate must fix and provide new DEMO
 
 [OR]
 
@@ -179,7 +179,7 @@ Phase 2 - Code Quality: ❌
 - CRITICAL: [issue] at file:line
 
 ORCHESTRATOR ACTION REQUIRED:
-Return to supervisor with these issues. Re-review after fixes.
+Return to teammate with these issues. Re-review after fixes.
 ```
 
 ## Anti-Rubber-Stamp Rules

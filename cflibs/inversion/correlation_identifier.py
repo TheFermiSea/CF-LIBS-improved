@@ -6,6 +6,7 @@ from experimental spectra using model spectrum correlation matching.
 """
 
 from typing import List, Optional, Tuple
+import math
 import numpy as np
 from scipy.signal import find_peaks
 from scipy.stats import pearsonr
@@ -45,7 +46,7 @@ class CorrelationIdentifier:
     top_k : int
         Number of nearest neighbors for vector mode (default: 10)
     min_confidence : float
-        Minimum confidence threshold for detection (default: 0.3)
+        Minimum confidence threshold for detection (default: 0.03)
     T_range_K : Tuple[float, float]
         Temperature range for classic mode in Kelvin (default: (8000, 12000))
     n_e_range_cm3 : Tuple[float, float]
@@ -54,6 +55,13 @@ class CorrelationIdentifier:
         Temperature grid steps for classic mode (default: 5)
     n_e_steps : int
         Density grid steps for classic mode (default: 3)
+    instrument_fwhm_nm : float
+        Instrument spectral FWHM in nm (default: 0.05). Used to derive
+        Gaussian sigma = FWHM / 2.355 for model line profiles.
+    max_lines_per_element : int
+        Cap transitions per element by emissivity (default: 100)
+    reference_temperature : float
+        Reference temperature in K for emissivity ranking (default: 10000.0)
 
     Attributes
     ----------
@@ -83,11 +91,14 @@ class CorrelationIdentifier:
         elements: Optional[List[str]] = None,
         wavelength_tolerance_nm: float = 0.1,
         top_k: int = 10,
-        min_confidence: float = 0.3,
+        min_confidence: float = 0.03,
         T_range_K: Tuple[float, float] = (8000, 12000),
         n_e_range_cm3: Tuple[float, float] = (3e16, 3e17),
         T_steps: int = 5,
         n_e_steps: int = 3,
+        instrument_fwhm_nm: float = 0.05,
+        max_lines_per_element: int = 100,
+        reference_temperature: float = 10000.0,
     ):
         self.atomic_db = atomic_db
         self.vector_index = vector_index
@@ -99,6 +110,9 @@ class CorrelationIdentifier:
         self.n_e_range_cm3 = n_e_range_cm3
         self.T_steps = T_steps
         self.n_e_steps = n_e_steps
+        self.instrument_fwhm_nm = instrument_fwhm_nm
+        self.max_lines_per_element = max_lines_per_element
+        self.reference_temperature = reference_temperature
 
         self.saha_solver = SahaBoltzmannSolver(atomic_db)
 
@@ -156,25 +170,23 @@ class CorrelationIdentifier:
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
-        # Apply relative threshold filter (only if multiple elements)
-        if element_scores and len(element_scores) > 1:
-            scores = [score for _, score, _, _, _ in element_scores]
-            median_score = np.median(scores)
-            relative_threshold = 1.5 * median_score
-            logger.debug(f"Relative threshold: {relative_threshold:.3f} (1.5 × median {median_score:.3f})")
+        # Relative score filter: require score to stand out from median
+        # Only apply when comparing 2+ elements (single-element has nothing to compare)
+        non_zero_scores = [s for _, s, _, _, _ in element_scores if s > 0]
+        if len(non_zero_scores) >= 2:
+            median_score = np.median(non_zero_scores)
+            relative_threshold = min(1.0, 1.5 * median_score)
         else:
-            relative_threshold = 0.0  # No relative filter for single element
+            relative_threshold = 0.0
 
         # Build result
         detected_elements = []
         rejected_elements = []
 
         for element, score, confidence, matched_lines, unmatched_lines in element_scores:
-            # Apply both absolute (min_confidence) and relative threshold
-            passes_threshold = confidence >= self.min_confidence and score >= relative_threshold
             elem_id = ElementIdentification(
                 element=element,
-                detected=passes_threshold,
+                detected=confidence >= self.min_confidence and confidence >= relative_threshold,
                 score=score,
                 confidence=confidence,
                 n_matched_lines=len(matched_lines),
@@ -247,17 +259,43 @@ class CorrelationIdentifier:
                 element_scores.append((element, 0.0, 0.0, [], []))
                 continue
 
+            # Cap to strongest lines by estimated emissivity to avoid line-count disparity
+            if len(transitions) > self.max_lines_per_element:
+                kB_eV = 8.617e-5
+                kT = kB_eV * self.reference_temperature
+                transitions = sorted(
+                    transitions,
+                    key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT),
+                    reverse=True,
+                )
+                transitions = transitions[: self.max_lines_per_element]
+
             # Compute correlations for each (T, n_e) point
+            # Paper (Labutin et al. 2013): correlate only in peak regions, not full spectrum
             correlations = []
             for T_K in T_grid:
                 T_eV = T_K * KB_EV
                 for n_e in n_e_grid:
-                    model_spectrum = self._generate_model_spectrum(intensity, 
+                    model_spectrum = self._generate_model_spectrum(intensity,
                         element, transitions, wavelength, T_eV, n_e
                     )
-                    # Pearson correlation
-                    if np.std(model_spectrum) > 1e-10 and np.std(intensity) > 1e-10:
-                        corr, _ = pearsonr(intensity, model_spectrum)
+                    # Peak-region mask: correlate only where signal is significant
+                    # Union of experimental and model peaks above normalized threshold
+                    i_min, i_max = intensity.min(), intensity.max()
+                    m_min, m_max = model_spectrum.min(), model_spectrum.max()
+                    sigma_threshold = 0.05
+                    if (i_max - i_min) > 1e-10 and (m_max - m_min) > 1e-10:
+                        exp_norm = (intensity - i_min) / (i_max - i_min)
+                        mod_norm = (model_spectrum - m_min) / (m_max - m_min)
+                        peak_mask = (exp_norm >= sigma_threshold) | (mod_norm >= sigma_threshold)
+                    else:
+                        peak_mask = np.ones(len(intensity), dtype=bool)
+
+                    # Pearson correlation on peak regions only
+                    exp_peaks = intensity[peak_mask]
+                    mod_peaks = model_spectrum[peak_mask]
+                    if len(exp_peaks) > 2 and np.std(mod_peaks) > 1e-10 and np.std(exp_peaks) > 1e-10:
+                        corr, _ = pearsonr(exp_peaks, mod_peaks)
                         correlations.append(corr)
                     else:
                         correlations.append(0.0)
@@ -367,23 +405,40 @@ class CorrelationIdentifier:
 
         model_spectrum = np.zeros_like(wavelength, dtype=np.float64)
 
+        # Compute ionization fractions using Saha equation
+        total_density = 1e15  # arbitrary reference density
+        try:
+            stage_densities = self.saha_solver.solve_ionization_balance(
+                element, T_eV, n_e, total_density
+            )
+        except Exception:
+            stage_densities = None
+
+        sigma = self.instrument_fwhm_nm / 2.355
+
         for trans in transitions:
             # Partition function
             U = self.saha_solver.calculate_partition_function(
                 element, trans.ionization_stage, T_eV
             )
 
-            # Boltzmann factor: eps = A_ki * g_k * exp(-E_k/kT) / U(T)
-            eps = trans.A_ki * trans.g_k * np.exp(-trans.E_k_ev / T_eV) / U
+            # Ion-stage population fraction from Saha balance
+            if stage_densities is not None:
+                W_q = stage_densities.get(trans.ionization_stage, 1.0) / max(total_density, 1e-30)
+            else:
+                W_q = 1.0  # Fallback: avoid zeroing model when Saha fails
 
-            # Add Gaussian line profile (simple approximation)
-            sigma = 0.05  # nm, simple width
+            # Boltzmann factor weighted by ionization fraction
+            eps = W_q * trans.A_ki * trans.g_k * np.exp(-trans.E_k_ev / T_eV) / U
+
             gaussian = np.exp(-0.5 * ((wavelength - trans.wavelength_nm) / sigma) ** 2)
             model_spectrum += eps * gaussian
 
-        # Normalize to match experimental scale
-        if np.max(model_spectrum) > 1e-10:
-            model_spectrum = model_spectrum / np.max(model_spectrum) * np.max(intensity)
+        # Robust normalization: 95th percentile instead of max (resistant to spikes)
+        exp_scale = np.percentile(intensity, 95.0)
+        model_scale = np.percentile(model_spectrum, 95.0)
+        if model_scale > 1e-10 and exp_scale > 1e-10:
+            model_spectrum = model_spectrum * (exp_scale / model_scale)
 
         return model_spectrum
 

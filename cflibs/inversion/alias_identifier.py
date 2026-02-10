@@ -7,6 +7,7 @@ calculation, line fusion, matching, threshold determination, scoring, and decisi
 """
 
 from typing import List, Tuple, Optional
+import math
 import numpy as np
 from scipy.signal import find_peaks
 
@@ -18,6 +19,7 @@ from cflibs.inversion.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
 )
+from cflibs.inversion.preprocessing import estimate_baseline, estimate_noise
 
 
 class ALIASIdentifier:
@@ -48,9 +50,9 @@ class ALIASIdentifier:
     n_e_steps : int, optional
         Number of electron density grid points (default: 3)
     intensity_threshold_factor : float, optional
-        Peak detection threshold = factor × noise_estimate (default: 10.0)
+        Peak detection threshold = factor × noise_estimate (default: 4.0)
     detection_threshold : float, optional
-        Minimum confidence level for element detection (default: 0.5)
+        Minimum confidence level for element detection (default: 0.02)
     elements : Optional[List[str]], optional
         List of elements to search for. If None, searches all available (default: None)
     """
@@ -63,9 +65,11 @@ class ALIASIdentifier:
         n_e_range_cm3: Tuple[float, float] = (3e16, 3e17),
         T_steps: int = 5,
         n_e_steps: int = 3,
-        intensity_threshold_factor: float = 10.0,
-        detection_threshold: float = 0.5,
+        intensity_threshold_factor: float = 4.0,
+        detection_threshold: float = 0.02,
         elements: Optional[List[str]] = None,
+        max_lines_per_element: int = 50,
+        reference_temperature: float = 10000.0,
     ):
         self.atomic_db = atomic_db
         self.resolving_power = resolving_power
@@ -76,6 +80,8 @@ class ALIASIdentifier:
         self.intensity_threshold_factor = intensity_threshold_factor
         self.detection_threshold = detection_threshold
         self.elements = elements
+        self.max_lines_per_element = max_lines_per_element
+        self.reference_temperature = reference_temperature
 
         # Create Saha-Boltzmann solver
         self.solver = SahaBoltzmannSolver(atomic_db)
@@ -264,16 +270,31 @@ class ALIASIdentifier:
         List[Tuple[int, float]]
             List of (peak_index, peak_wavelength) tuples
         """
-        # Estimate noise using MAD (Median Absolute Deviation)
-        median_intensity = np.median(intensity)
-        mad = np.median(np.abs(intensity - median_intensity))
-        noise_estimate = mad * 1.4826  # Scale factor for normal distribution
+        # Estimate baseline and noise using sigma-clipped MAD
+        baseline = estimate_baseline(wavelength, intensity)
+        noise_estimate = estimate_noise(intensity, baseline)
 
-        # Threshold
+        # Threshold in intensity domain (well-calibrated)
         threshold = noise_estimate * self.intensity_threshold_factor
 
-        # Find peaks
-        peak_indices, properties = find_peaks(intensity, height=threshold, prominence=threshold / 2)
+        # Find peaks in baseline-corrected intensity
+        corrected = intensity - baseline
+        peak_indices, _ = find_peaks(corrected, height=threshold, prominence=threshold / 3)
+
+        # Paper (Noël et al. 2025): enhance peak detection using negative 2nd derivative
+        # Compute -d²I/dλ², zero negatives — true peaks have positive curvature here
+        d2 = -np.gradient(np.gradient(corrected, wavelength), wavelength)
+        d2[d2 < 0] = 0.0
+
+        # Filter: keep peaks where d2 > 0 in a ±2-point neighborhood around peak center
+        # This handles discretization effects where d2 peak may be slightly offset
+        confirmed = []
+        for idx in peak_indices:
+            lo = max(0, idx - 2)
+            hi = min(len(d2), idx + 3)
+            if np.max(d2[lo:hi]) > 0:
+                confirmed.append(idx)
+        peak_indices = np.array(confirmed, dtype=int) if confirmed else np.array([], dtype=int)
 
         # Return as list of (index, wavelength) tuples
         peaks = [(int(idx), float(wavelength[idx])) for idx in peak_indices]
@@ -315,6 +336,16 @@ class ALIASIdentifier:
 
         if not transitions:
             return []
+
+        # Cap to strongest lines by estimated emissivity to avoid line-count disparity
+        if len(transitions) > self.max_lines_per_element:
+            kT = KB_EV * self.reference_temperature
+            transitions = sorted(
+                transitions,
+                key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT),
+                reverse=True,
+            )
+            transitions = transitions[: self.max_lines_per_element]
 
         # Compute emissivities
         line_data = []
@@ -464,21 +495,39 @@ class ALIASIdentifier:
         mean_wl = np.mean([line["wavelength_nm"] for line in fused_lines])
         delta_lambda = mean_wl / self.resolving_power
 
+        # Estimate global wavelength offset from strongest peaks
+        sorted_by_emissivity = sorted(
+            fused_lines, key=lambda x: x["avg_emissivity"], reverse=True
+        )
+        top_lines = sorted_by_emissivity[: min(5, len(sorted_by_emissivity))]
+
+        shifts = []
+        for line in top_lines:
+            wl_th = line["wavelength_nm"]
+            distances = np.abs(peak_wavelengths - wl_th)
+            if len(distances) > 0:
+                min_dist = np.min(distances)
+                if min_dist <= delta_lambda:  # within one resolution element
+                    closest_idx = np.argmin(distances)
+                    shifts.append(peak_wavelengths[closest_idx] - wl_th)
+
+        global_shift = np.median(shifts) if shifts else 0.0
+
         matched_mask = np.zeros(len(fused_lines), dtype=bool)
         wavelength_shifts = np.zeros(len(fused_lines))
 
         for i, line in enumerate(fused_lines):
-            wl_th = line["wavelength_nm"]
+            wl_th = line["wavelength_nm"] + global_shift  # Apply correction
 
-            # Find peaks within +/- delta_lambda/2
+            # Find peaks within +/- delta_lambda
             distances = np.abs(peak_wavelengths - wl_th)
-            within_window = distances <= delta_lambda / 2
+            within_window = distances <= delta_lambda
 
             if np.any(within_window):
                 matched_mask[i] = True
-                # Shift to closest peak
+                # Shift to closest peak (relative to uncorrected wavelength)
                 closest_idx = np.argmin(distances)
-                wavelength_shifts[i] = peak_wavelengths[closest_idx] - wl_th
+                wavelength_shifts[i] = peak_wavelengths[closest_idx] - line["wavelength_nm"]
 
         return matched_mask, wavelength_shifts
 
@@ -679,6 +728,9 @@ class ALIASIdentifier:
         # k_det formula
         if N_X > 0:
             k_det = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
+        elif k_rate > 0:
+            # Partial credit: some lines matched but below emissivity threshold
+            k_det = k_rate * 0.3
         else:
             k_det = 0.0
 
@@ -701,7 +753,7 @@ class ALIASIdentifier:
         # P_ab: abundance prior (placeholder)
         P_ab = 1.0
 
-        # Confidence level
-        CL = k_det * P_maj * P_SNR * P_ab
+        # Confidence level: CL = k_det × P_SNR × P_maj × P_ab (paper formula)
+        CL = k_det * P_SNR * P_maj * P_ab
 
         return k_det, CL

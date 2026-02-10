@@ -1,9 +1,4 @@
-"""Shared preprocessing for element identification algorithms.
-
-This module provides common preprocessing steps used by ALIAS, Comb, and
-Correlation identifiers: baseline estimation, noise estimation, peak detection,
-and robust normalization.
-"""
+"""Shared preprocessing for element identification algorithms."""
 
 import numpy as np
 from scipy.signal import find_peaks
@@ -16,94 +11,61 @@ def estimate_baseline(
 ) -> np.ndarray:
     """Robust baseline estimation via median filter.
 
-    Estimates the continuum background by applying a median filter with a
-    window sized appropriately for the wavelength spacing. This is more
-    robust than polynomial fitting for LIBS spectra with strong emission lines.
-
     Parameters
     ----------
     wavelength : np.ndarray
-        Wavelength array in nm, shape (N,)
+        Wavelength array in nm
     intensity : np.ndarray
-        Intensity array, shape (N,)
+        Intensity array
     window_nm : float
-        Window size in nm (default: 10.0)
+        Filter window width in nm (default 10.0)
 
     Returns
     -------
-    baseline : np.ndarray
-        Estimated baseline, shape (N,)
-
-    Notes
-    -----
-    The window size is converted from nm to points using the median wavelength
-    spacing. The window is forced to be odd to ensure symmetric filtering.
+    np.ndarray
+        Estimated baseline
     """
-    # Convert window_nm to points
     spacing = np.median(np.diff(wavelength))
     window_pts = max(3, int(window_nm / spacing))
-
-    # Ensure odd window size for symmetric filtering
     if window_pts % 2 == 0:
-        window_pts += 1
-
-    # Apply median filter
-    baseline = median_filter(intensity, size=window_pts, mode="nearest")
-
-    return baseline
+        window_pts += 1  # ensure odd
+    return median_filter(intensity, size=window_pts)
 
 
 def estimate_noise(intensity: np.ndarray, baseline: np.ndarray) -> float:
     """Iterative sigma-clipped MAD noise estimation.
 
-    Estimates the noise level by computing the median absolute deviation (MAD)
-    on residuals after iterative sigma clipping. This removes contributions
-    from emission lines, providing a robust estimate of the baseline noise.
+    Uses 3 iterations of 3-sigma clipping to remove peak contributions
+    before computing noise. Critical for LIBS spectra where raw MAD
+    overestimates noise due to emission peaks and continuum.
 
     Parameters
     ----------
     intensity : np.ndarray
-        Intensity array, shape (N,)
+        Intensity array
     baseline : np.ndarray
-        Estimated baseline, shape (N,)
+        Baseline estimate
 
     Returns
     -------
-    sigma : float
-        Estimated noise level (standard deviation)
-
-    Notes
-    -----
-    Uses 3 iterations of 3-sigma clipping. The MAD is converted to standard
-    deviation via the factor 1.4826 (for Gaussian distributions).
-
-    This is critical for LIBS data: raw MAD on the full spectrum overestimates
-    noise due to Poisson statistics on peaks. Sigma clipping removes peak
-    contributions to isolate the baseline noise.
+    float
+        Noise level (sigma)
     """
     residuals = intensity - baseline
-
-    # Iterative sigma clipping (3 iterations, 3-sigma threshold)
     for _ in range(3):
-        median_val = np.median(residuals)
-        mad = np.median(np.abs(residuals - median_val))
-        sigma = mad * 1.4826  # Convert MAD to std for Gaussian
-
+        med = np.median(residuals)
+        mad = np.median(np.abs(residuals - med))
+        sigma = mad * 1.4826
         if sigma < 1e-10:
             break
-
-        # 3-sigma mask
-        mask = np.abs(residuals - median_val) < 3 * sigma
-        if np.sum(mask) < 10:  # Safety: need enough points
+        mask = np.abs(residuals - med) < 3.0 * sigma
+        if np.sum(mask) < 10:
             break
         residuals = residuals[mask]
-
-    # Final MAD -> sigma conversion
-    median_val = np.median(residuals)
-    mad = np.median(np.abs(residuals - median_val))
-    sigma = mad * 1.4826
-
-    return sigma
+    # Final estimate
+    med = np.median(residuals)
+    mad = np.median(np.abs(residuals - med))
+    return mad * 1.4826
 
 
 def detect_peaks(
@@ -114,82 +76,55 @@ def detect_peaks(
     threshold_factor: float = 4.0,
     prominence_factor: float = 1.5,
 ) -> List[Tuple[int, float]]:
-    """Unified peak detection.
-
-    Detects peaks in the baseline-corrected spectrum using scipy.signal.find_peaks
-    with SNR-based thresholds.
+    """Unified peak detection above baseline.
 
     Parameters
     ----------
     wavelength : np.ndarray
-        Wavelength array in nm, shape (N,)
+        Wavelength array in nm
     intensity : np.ndarray
-        Intensity array, shape (N,)
+        Intensity array
     baseline : np.ndarray
-        Estimated baseline, shape (N,)
+        Baseline estimate
     noise : float
-        Estimated noise level
+        Noise level from estimate_noise
     threshold_factor : float
-        Minimum SNR for peak detection (default: 4.0)
+        Peak height threshold = noise * threshold_factor (default 4.0)
     prominence_factor : float
-        Minimum prominence in units of noise (default: 1.5)
+        Peak prominence threshold = noise * prominence_factor (default 1.5)
 
     Returns
     -------
-    peaks : List[Tuple[int, float]]
+    List[Tuple[int, float]]
         List of (index, wavelength_nm) tuples for detected peaks
-
-    Notes
-    -----
-    The corrected intensity is computed as ``intensity - baseline``.
-    Peaks must satisfy both height and prominence thresholds to be detected.
     """
-    # Baseline-corrected spectrum
     corrected = intensity - baseline
+    threshold = noise * threshold_factor
+    prominence = noise * prominence_factor
 
-    # Thresholds
-    height_threshold = noise * threshold_factor
-    prominence_threshold = noise * prominence_factor
-
-    # Detect peaks
-    peak_indices, _ = find_peaks(
-        corrected,
-        height=height_threshold,
-        prominence=prominence_threshold,
-    )
-
-    # Build list of (index, wavelength) tuples
-    peaks = [(int(idx), float(wavelength[idx])) for idx in peak_indices]
-
-    return peaks
+    peak_indices, _ = find_peaks(corrected, height=threshold, prominence=prominence)
+    return [(int(idx), float(wavelength[idx])) for idx in peak_indices]
 
 
 def robust_normalize(intensity: np.ndarray, percentile: float = 95.0) -> np.ndarray:
-    """Percentile-based normalization.
+    """Percentile-based normalization robust to cosmic ray artifacts.
 
-    Normalizes intensity by a high percentile value rather than the maximum.
-    This is robust to cosmic rays and outliers.
+    Uses the given percentile instead of max() to avoid sensitivity
+    to single-pixel cosmic ray spikes.
 
     Parameters
     ----------
     intensity : np.ndarray
-        Intensity array, shape (N,)
+        Intensity array
     percentile : float
-        Percentile to use for scaling (default: 95.0)
+        Normalization percentile (default 95.0)
 
     Returns
     -------
-    normalized : np.ndarray
-        Normalized intensity, shape (N,)
-
-    Notes
-    -----
-    NOT max-based (vulnerable to cosmic rays). Uses percentile-based scaling
-    for robustness.
+    np.ndarray
+        Normalized intensity array
     """
     scale = np.percentile(intensity, percentile)
-
     if scale > 1e-10:
         return intensity / scale
-
-    return intensity
+    return intensity.copy()

@@ -65,11 +65,19 @@ class SahaBoltzmannSolver(SolverStrategy):
             logger.warning(f"No ionization potential for {element} I, assuming neutral only")
             return {1: total_density_cm3}
 
-        # Saha equation: n_{z+1} * n_e / n_z = const * T^1.5 * exp(-IP/kT)
+        # Saha equation: n_{z+1} * n_e / n_z = const * T^1.5 * (U_{z+1}/U_z) * exp(-IP/kT)
         # For neutral to singly ionized:
-        # n_II * n_e / n_I = SAHA_CONST * T^1.5 * exp(-IP_I/kT)
+        # n_II * n_e / n_I = SAHA_CONST * T^1.5 * (U_II/U_I) * exp(-IP_I/kT)
 
-        saha_ratio_I = (SAHA_CONST_CM3 / n_e_cm3) * (T_e_eV**1.5) * np.exp(-ip_I / T_e_eV)
+        U_I = self.calculate_partition_function(element, 1, T_e_eV)
+        U_II = self.calculate_partition_function(element, 2, T_e_eV)
+
+        saha_ratio_I = (
+            (SAHA_CONST_CM3 / n_e_cm3)
+            * (T_e_eV**1.5)
+            * (U_II / U_I)
+            * np.exp(-ip_I / T_e_eV)
+        )
 
         # n_I + n_II = n_total
         # n_II = saha_ratio_I * n_I
@@ -83,7 +91,13 @@ class SahaBoltzmannSolver(SolverStrategy):
 
         # If we have IP for stage II and n_II is significant, calculate stage III
         if ip_II is not None and n_II > total_density_cm3 * 1e-6:
-            saha_ratio_II = (SAHA_CONST_CM3 / n_e_cm3) * (T_e_eV**1.5) * np.exp(-ip_II / T_e_eV)
+            U_III = self.calculate_partition_function(element, 3, T_e_eV)
+            saha_ratio_II = (
+                (SAHA_CONST_CM3 / n_e_cm3)
+                * (T_e_eV**1.5)
+                * (U_III / U_II)
+                * np.exp(-ip_II / T_e_eV)
+            )
             n_III = n_II * saha_ratio_II / (1.0 + saha_ratio_II)
             n_II = n_II - n_III
             result[2] = n_II
