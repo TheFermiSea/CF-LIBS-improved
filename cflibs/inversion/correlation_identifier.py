@@ -131,9 +131,9 @@ class CorrelationIdentifier:
         ValueError
             If mode is "vector" but no vector_index provided
         """
-        # Resolve mode (auto always uses classic since vector not yet implemented)
+        # Resolve mode
         if mode == "auto":
-            mode = "classic"
+            mode = "vector" if self.vector_index is not None else "classic" 
 
         if mode == "vector" and self.vector_index is None:
             raise ValueError("mode='vector' requires vector_index to be provided")

@@ -244,7 +244,7 @@ class VectorIndex:
     >>> distances, indices = index.search(query_embeddings, k=10)
     """
 
-    def __init__(self, dimension: int, config = None):
+    def __init__(self, dimension: int, config=None):
         if not HAS_FAISS:
             raise ImportError(
                 "faiss is required for VectorIndex. "
