@@ -241,10 +241,10 @@ class VectorIndex:
     >>> config = VectorIndexConfig(index_type="flat")
     >>> index = VectorIndex(dimension=30, config=config)
     >>> index.build(embeddings)
-    >>> indices, distances = index.search(query_embeddings, k=10)
+    >>> distances, indices = index.search(query_embeddings, k=10)
     """
 
-    def __init__(self, dimension: int, config: VectorIndexConfig = VectorIndexConfig()):
+    def __init__(self, dimension: int, config=None):
         if not HAS_FAISS:
             raise ImportError(
                 "faiss is required for VectorIndex. "
@@ -252,7 +252,7 @@ class VectorIndex:
             )
 
         self.dimension = dimension
-        self.config = config
+        self.config = config or VectorIndexConfig()
         self.index = None
 
     @property

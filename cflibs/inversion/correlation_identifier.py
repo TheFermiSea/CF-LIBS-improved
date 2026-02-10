@@ -39,7 +39,7 @@ class CorrelationIdentifier:
     vector_index : VectorIndex, optional
         Pre-built vector index for vector mode
     elements : List[str], optional
-        Elements to consider (default: all in database)
+        Elements to consider (default: None, uses all elements from database)
     wavelength_tolerance_nm : float
         Wavelength matching tolerance in nm (default: 0.1)
     top_k : int
@@ -91,7 +91,7 @@ class CorrelationIdentifier:
     ):
         self.atomic_db = atomic_db
         self.vector_index = vector_index
-        self.elements = elements or ["Fe", "Ti", "Cr", "Ca", "Al", "Mg", "Si"]
+        self.elements = elements
         self.wavelength_tolerance_nm = wavelength_tolerance_nm
         self.top_k = top_k
         self.min_confidence = min_confidence
@@ -133,7 +133,7 @@ class CorrelationIdentifier:
         """
         # Resolve mode
         if mode == "auto":
-            mode = "vector" if self.vector_index is not None else "classic"
+            mode = "vector" if self.vector_index is not None else "classic" 
 
         if mode == "vector" and self.vector_index is None:
             raise ValueError("mode='vector' requires vector_index to be provided")
@@ -141,7 +141,7 @@ class CorrelationIdentifier:
         logger.info(f"Running correlation identifier in {mode} mode")
 
         # Detect experimental peaks
-        peak_indices, peak_properties = find_peaks(
+        peak_indices, _ = find_peaks(
             intensity, height=np.max(intensity) * 0.05, distance=5
         )
         experimental_peaks = [(int(idx), float(wavelength[idx])) for idx in peak_indices]
@@ -224,7 +224,8 @@ class CorrelationIdentifier:
 
         element_scores = []
 
-        for element in self.elements:
+        elements_to_search = self.elements if self.elements is not None else self.atomic_db.get_available_elements()
+        for element in elements_to_search:
             # Get transitions
             transitions = self.atomic_db.get_transitions(
                 element, wavelength_min=wl_min, wavelength_max=wl_max
@@ -238,7 +239,7 @@ class CorrelationIdentifier:
             # Compute correlations for each (T, n_e) point
             correlations = []
             for T_K in T_grid:
-                T_eV = T_K / KB_EV
+                T_eV = T_K * KB_EV
                 for n_e in n_e_grid:
                     model_spectrum = self._generate_model_spectrum(intensity, 
                         element, transitions, wavelength, T_eV, n_e
@@ -276,9 +277,13 @@ class CorrelationIdentifier:
         -------
         List[Tuple[str, float, float, List[IdentifiedLine], List[Transition]]]
             List of (element, score, confidence, matched_lines, unmatched_lines)
+        
+        Raises
+        ------
+        NotImplementedError
+            Vector mode not yet implemented
         """
-        # Placeholder for vector mode - requires embedder and manifold metadata
-        # For now, return empty results with a warning
+        raise NotImplementedError("Vector mode not yet implemented. Use mode='classic'.")
 
     def _generate_model_spectrum(
         self,
