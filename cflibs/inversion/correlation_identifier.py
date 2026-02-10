@@ -193,7 +193,7 @@ class CorrelationIdentifier:
                 n_total_lines=len(matched_lines) + len(unmatched_lines),
                 matched_lines=matched_lines,
                 unmatched_lines=unmatched_lines,
-                metadata={"correlation": score},
+                metadata={"correlation": score, "relative_threshold": relative_threshold},
             )
 
             if elem_id.detected:
