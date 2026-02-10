@@ -1440,8 +1440,14 @@ class ALIASIdentifier:
         # k_det formula — uses N_matched (paper: N_X = matched count)
         # for the blend weighting.  Single-line elements (N_X=1) naturally
         # reduce to k_rate × k_shift via the blend formula.
-        N_X = max(N_matched, 1)
-        k_det = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
+        if N_matched > 0:
+            N_X = N_matched
+            k_det = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
+        elif k_rate > 0:
+            # Partial credit: some lines matched but below emissivity threshold
+            k_det = k_rate * 0.3
+        else:
+            k_det = 0.0
 
         P_SNR = self._compute_p_snr(intensity, peaks)
 
