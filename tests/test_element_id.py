@@ -446,3 +446,710 @@ def test_to_line_observations_intensity_uncertainty_floor(mock_transition):
 
     # Uncertainty should be floored at 1e-6
     assert observations[0].intensity_uncertainty == 1e-6
+
+
+# ============================================================================
+# Additional comprehensive tests
+# ============================================================================
+
+
+def test_identified_line_wavelength_shift(mock_transition):
+    """Test IdentifiedLine with wavelength shift between exp and theoretical."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.1,  # 0.11 nm shift
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    # Check shift
+    shift = line.wavelength_exp_nm - line.wavelength_th_nm
+    assert abs(shift - 0.11) < 1e-6
+
+
+def test_identified_line_different_ionization_stages(mock_transition):
+    """Test IdentifiedLine with different ionization stages."""
+    line_neutral = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,  # Neutral
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    line_ionized = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=2,  # Singly ionized
+        intensity_exp=800.0,
+        emissivity_th=400.0,
+        transition=mock_transition,
+    )
+
+    assert line_neutral.ionization_stage == 1
+    assert line_ionized.ionization_stage == 2
+
+
+def test_identified_line_multiple_interfering_elements(mock_transition):
+    """Test IdentifiedLine with multiple interfering elements."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+        is_interfered=True,
+        interfering_elements=["Ti", "Cr", "Mn"],
+    )
+
+    assert line.is_interfered is True
+    assert len(line.interfering_elements) == 3
+    assert "Ti" in line.interfering_elements
+    assert "Cr" in line.interfering_elements
+    assert "Mn" in line.interfering_elements
+
+
+def test_element_identification_zero_matched_lines(mock_transition):
+    """Test ElementIdentification with zero matched lines."""
+    elem_id = ElementIdentification(
+        element="Ca",
+        detected=False,
+        score=0.0,
+        confidence=0.0,
+        n_matched_lines=0,
+        n_total_lines=10,
+        matched_lines=[],
+        unmatched_lines=[mock_transition],
+        metadata={"reason": "no_peaks_found"},
+    )
+
+    assert elem_id.detected is False
+    assert elem_id.n_matched_lines == 0
+    assert len(elem_id.matched_lines) == 0
+    assert len(elem_id.unmatched_lines) > 0
+
+
+def test_element_identification_all_lines_matched(mock_transition):
+    """Test ElementIdentification with all lines matched."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe",
+        detected=True,
+        score=1.0,
+        confidence=1.0,
+        n_matched_lines=1,
+        n_total_lines=1,
+        matched_lines=[line],
+        unmatched_lines=[],
+        metadata={"match_rate": 1.0},
+    )
+
+    assert elem_id.n_matched_lines == elem_id.n_total_lines
+    assert len(elem_id.unmatched_lines) == 0
+
+
+def test_element_identification_score_confidence_difference(mock_transition):
+    """Test ElementIdentification with different score and confidence."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe",
+        detected=True,
+        score=0.70,  # Based on correlation
+        confidence=0.85,  # Includes quality factors
+        n_matched_lines=5,
+        n_total_lines=10,
+        matched_lines=[line],
+        unmatched_lines=[],
+        metadata={"quality_boost": 0.15},
+    )
+
+    assert elem_id.score < elem_id.confidence
+
+
+def test_element_identification_metadata_types(mock_transition):
+    """Test ElementIdentification with various metadata types."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe",
+        detected=True,
+        score=0.85,
+        confidence=0.90,
+        n_matched_lines=1,
+        n_total_lines=1,
+        matched_lines=[line],
+        unmatched_lines=[],
+        metadata={
+            "mean_snr": 50.0,
+            "n_interfered": 0.0,
+            "algorithm_time_ms": 15.3,
+        },
+    )
+
+    assert isinstance(elem_id.metadata["mean_snr"], float)
+    assert elem_id.metadata["n_interfered"] == 0.0
+
+
+def test_element_identification_result_empty(mock_transition):
+    """Test ElementIdentificationResult with no elements detected."""
+    result = ElementIdentificationResult(
+        detected_elements=[],
+        rejected_elements=[],
+        all_elements=[],
+        experimental_peaks=[],
+        n_peaks=0,
+        n_matched_peaks=0,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    assert len(result.detected_elements) == 0
+    assert len(result.rejected_elements) == 0
+    assert len(result.all_elements) == 0
+    assert result.n_peaks == 0
+
+
+def test_element_identification_result_all_peaks_matched(mock_transition):
+    """Test ElementIdentificationResult with all peaks matched."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe",
+        detected=True,
+        score=0.95,
+        confidence=0.95,
+        n_matched_lines=1,
+        n_total_lines=1,
+        matched_lines=[line],
+        unmatched_lines=[],
+        metadata={},
+    )
+
+    result = ElementIdentificationResult(
+        detected_elements=[elem_id],
+        rejected_elements=[],
+        all_elements=[elem_id],
+        experimental_peaks=[(0, 372.0)],
+        n_peaks=1,
+        n_matched_peaks=1,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    assert result.n_unmatched_peaks == 0
+    assert result.n_matched_peaks == result.n_peaks
+
+
+def test_element_identification_result_warnings(mock_transition):
+    """Test ElementIdentificationResult with warnings."""
+    result = ElementIdentificationResult(
+        detected_elements=[],
+        rejected_elements=[],
+        all_elements=[],
+        experimental_peaks=[(0, 300.0)],
+        n_peaks=1,
+        n_matched_peaks=0,
+        n_unmatched_peaks=1,
+        algorithm="comb",
+        warnings=[
+            "Low SNR detected",
+            "Baseline instability at 300-350 nm",
+            "Possible saturation in detector",
+        ],
+    )
+
+    assert len(result.warnings) == 3
+    assert "Low SNR" in result.warnings[0]
+
+
+def test_element_identification_result_multiple_algorithms(mock_transition):
+    """Test ElementIdentificationResult for different algorithms."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe",
+        detected=True,
+        score=0.85,
+        confidence=0.85,
+        n_matched_lines=1,
+        n_total_lines=1,
+        matched_lines=[line],
+        unmatched_lines=[],
+        metadata={},
+    )
+
+    for algorithm in ["alias", "comb", "correlation"]:
+        result = ElementIdentificationResult(
+            detected_elements=[elem_id],
+            rejected_elements=[],
+            all_elements=[elem_id],
+            experimental_peaks=[(0, 372.0)],
+            n_peaks=1,
+            n_matched_peaks=1,
+            n_unmatched_peaks=0,
+            algorithm=algorithm,
+        )
+        assert result.algorithm == algorithm
+
+
+def test_to_line_observations_empty_result():
+    """Test to_line_observations with empty result."""
+    result = ElementIdentificationResult(
+        detected_elements=[],
+        rejected_elements=[],
+        all_elements=[],
+        experimental_peaks=[],
+        n_peaks=0,
+        n_matched_peaks=0,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    observations = to_line_observations(result)
+    assert len(observations) == 0
+
+
+def test_to_line_observations_only_rejected_elements(mock_transition):
+    """Test to_line_observations with only rejected elements."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe",
+        detected=False,  # Rejected
+        score=0.30,
+        confidence=0.25,
+        n_matched_lines=1,
+        n_total_lines=5,
+        matched_lines=[line],
+        unmatched_lines=[],
+        metadata={},
+    )
+
+    result = ElementIdentificationResult(
+        detected_elements=[],
+        rejected_elements=[elem_id],
+        all_elements=[elem_id],
+        experimental_peaks=[(0, 372.0)],
+        n_peaks=1,
+        n_matched_peaks=0,
+        n_unmatched_peaks=1,
+        algorithm="comb",
+    )
+
+    observations = to_line_observations(result)
+    # Should be empty because element is rejected
+    assert len(observations) == 0
+
+
+def test_to_line_observations_all_interfered(mock_transition):
+    """Test to_line_observations when all lines are interfered."""
+    line1 = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+        is_interfered=True,
+        interfering_elements=["Ti"],
+    )
+
+    line2 = IdentifiedLine(
+        wavelength_exp_nm=373.5,
+        wavelength_th_nm=373.49,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=500.0,
+        emissivity_th=250.0,
+        transition=mock_transition,
+        is_interfered=True,
+        interfering_elements=["Cr"],
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe",
+        detected=True,
+        score=0.75,
+        confidence=0.70,
+        n_matched_lines=2,
+        n_total_lines=2,
+        matched_lines=[line1, line2],
+        unmatched_lines=[],
+        metadata={},
+    )
+
+    result = ElementIdentificationResult(
+        detected_elements=[elem_id],
+        rejected_elements=[],
+        all_elements=[elem_id],
+        experimental_peaks=[(0, 372.0), (1, 373.5)],
+        n_peaks=2,
+        n_matched_peaks=2,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    observations = to_line_observations(result)
+    # All lines interfered, should be empty
+    assert len(observations) == 0
+
+
+def test_to_line_observations_multiple_elements(mock_transition, mock_transition_ti):
+    """Test to_line_observations with multiple detected elements."""
+    fe_line = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    ti_line = IdentifiedLine(
+        wavelength_exp_nm=498.2,
+        wavelength_th_nm=498.17,
+        element="Ti",
+        ionization_stage=1,
+        intensity_exp=500.0,
+        emissivity_th=250.0,
+        transition=mock_transition_ti,
+    )
+
+    cu_transition = Transition(
+        element="Cu",
+        ionization_stage=1,
+        wavelength_nm=324.75,
+        A_ki=1.4e8,
+        E_k_ev=3.82,
+        E_i_ev=0.0,
+        g_k=4,
+        g_i=2,
+    )
+
+    cu_line = IdentifiedLine(
+        wavelength_exp_nm=324.8,
+        wavelength_th_nm=324.75,
+        element="Cu",
+        ionization_stage=1,
+        intensity_exp=2000.0,
+        emissivity_th=1000.0,
+        transition=cu_transition,
+    )
+
+    fe_id = ElementIdentification(
+        element="Fe", detected=True, score=0.85, confidence=0.90,
+        n_matched_lines=1, n_total_lines=1, matched_lines=[fe_line],
+        unmatched_lines=[], metadata={},
+    )
+
+    ti_id = ElementIdentification(
+        element="Ti", detected=True, score=0.70, confidence=0.75,
+        n_matched_lines=1, n_total_lines=1, matched_lines=[ti_line],
+        unmatched_lines=[], metadata={},
+    )
+
+    cu_id = ElementIdentification(
+        element="Cu", detected=True, score=0.95, confidence=0.95,
+        n_matched_lines=1, n_total_lines=1, matched_lines=[cu_line],
+        unmatched_lines=[], metadata={},
+    )
+
+    result = ElementIdentificationResult(
+        detected_elements=[fe_id, ti_id, cu_id],
+        rejected_elements=[],
+        all_elements=[fe_id, ti_id, cu_id],
+        experimental_peaks=[(0, 324.8), (1, 372.0), (2, 498.2)],
+        n_peaks=3,
+        n_matched_peaks=3,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    observations = to_line_observations(result)
+    assert len(observations) == 3
+    elements = [obs.element for obs in observations]
+    assert "Fe" in elements
+    assert "Ti" in elements
+    assert "Cu" in elements
+
+
+def test_to_line_observations_preserves_atomic_data(mock_transition):
+    """Test that atomic data is correctly transferred to LineObservation."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe",
+        detected=True,
+        score=0.85,
+        confidence=0.90,
+        n_matched_lines=1,
+        n_total_lines=1,
+        matched_lines=[line],
+        unmatched_lines=[],
+        metadata={},
+    )
+
+    result = ElementIdentificationResult(
+        detected_elements=[elem_id],
+        rejected_elements=[],
+        all_elements=[elem_id],
+        experimental_peaks=[(0, 372.0)],
+        n_peaks=1,
+        n_matched_peaks=1,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    observations = to_line_observations(result)
+    obs = observations[0]
+
+    # Check atomic data is preserved
+    assert obs.E_k_ev == mock_transition.E_k_ev
+    assert obs.g_k == mock_transition.g_k
+    assert obs.A_ki == mock_transition.A_ki
+
+
+def test_to_line_observations_intensity_uncertainty_calculation(mock_transition):
+    """Test intensity uncertainty calculation (2% or 1e-6 floor)."""
+    # High intensity case - 2% should dominate
+    line_high = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=10000.0,
+        emissivity_th=5000.0,
+        transition=mock_transition,
+    )
+
+    elem_id_high = ElementIdentification(
+        element="Fe", detected=True, score=0.9, confidence=0.9,
+        n_matched_lines=1, n_total_lines=1, matched_lines=[line_high],
+        unmatched_lines=[], metadata={},
+    )
+
+    result_high = ElementIdentificationResult(
+        detected_elements=[elem_id_high],
+        rejected_elements=[],
+        all_elements=[elem_id_high],
+        experimental_peaks=[(0, 372.0)],
+        n_peaks=1,
+        n_matched_peaks=1,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    obs_high = to_line_observations(result_high)[0]
+    assert obs_high.intensity_uncertainty == 10000.0 * 0.02  # 2%
+
+    # Low intensity case - 1e-6 floor should dominate
+    line_low = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1e-9,
+        emissivity_th=5e-10,
+        transition=mock_transition,
+    )
+
+    elem_id_low = ElementIdentification(
+        element="Fe", detected=True, score=0.5, confidence=0.5,
+        n_matched_lines=1, n_total_lines=1, matched_lines=[line_low],
+        unmatched_lines=[], metadata={},
+    )
+
+    result_low = ElementIdentificationResult(
+        detected_elements=[elem_id_low],
+        rejected_elements=[],
+        all_elements=[elem_id_low],
+        experimental_peaks=[(0, 372.0)],
+        n_peaks=1,
+        n_matched_peaks=1,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    obs_low = to_line_observations(result_low)[0]
+    assert obs_low.intensity_uncertainty == 1e-6  # Floor
+
+
+def test_to_line_observations_uses_theoretical_wavelength(mock_transition):
+    """Test that LineObservation uses theoretical wavelength, not experimental."""
+    line = IdentifiedLine(
+        wavelength_exp_nm=372.1,  # Shifted from theoretical
+        wavelength_th_nm=371.99,  # This should be used
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe", detected=True, score=0.85, confidence=0.90,
+        n_matched_lines=1, n_total_lines=1, matched_lines=[line],
+        unmatched_lines=[], metadata={},
+    )
+
+    result = ElementIdentificationResult(
+        detected_elements=[elem_id],
+        rejected_elements=[],
+        all_elements=[elem_id],
+        experimental_peaks=[(0, 372.1)],
+        n_peaks=1,
+        n_matched_peaks=1,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    observations = to_line_observations(result)
+    # Should use theoretical wavelength
+    assert observations[0].wavelength_nm == 371.99
+
+
+def test_to_line_observations_deduplication_order(mock_transition):
+    """Test that deduplication keeps first occurrence."""
+    line1 = IdentifiedLine(
+        wavelength_exp_nm=372.0,
+        wavelength_th_nm=371.99,
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1000.0,  # First occurrence
+        emissivity_th=500.0,
+        transition=mock_transition,
+    )
+
+    line2 = IdentifiedLine(
+        wavelength_exp_nm=372.05,
+        wavelength_th_nm=371.99,  # Same theoretical
+        element="Fe",
+        ionization_stage=1,
+        intensity_exp=1100.0,  # Different intensity
+        emissivity_th=550.0,
+        transition=mock_transition,
+    )
+
+    elem_id = ElementIdentification(
+        element="Fe", detected=True, score=0.85, confidence=0.90,
+        n_matched_lines=2, n_total_lines=2, matched_lines=[line1, line2],
+        unmatched_lines=[], metadata={},
+    )
+
+    result = ElementIdentificationResult(
+        detected_elements=[elem_id],
+        rejected_elements=[],
+        all_elements=[elem_id],
+        experimental_peaks=[(0, 372.0), (1, 372.05)],
+        n_peaks=2,
+        n_matched_peaks=2,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    observations = to_line_observations(result)
+    assert len(observations) == 1
+    # Should keep first occurrence
+    assert observations[0].intensity == 1000.0
+
+
+def test_element_identification_result_consistency():
+    """Test that all_elements equals detected + rejected."""
+    fe_id = ElementIdentification(
+        element="Fe", detected=True, score=0.85, confidence=0.90,
+        n_matched_lines=1, n_total_lines=1, matched_lines=[],
+        unmatched_lines=[], metadata={},
+    )
+
+    ti_id = ElementIdentification(
+        element="Ti", detected=False, score=0.30, confidence=0.25,
+        n_matched_lines=0, n_total_lines=5, matched_lines=[],
+        unmatched_lines=[], metadata={},
+    )
+
+    cu_id = ElementIdentification(
+        element="Cu", detected=True, score=0.75, confidence=0.80,
+        n_matched_lines=2, n_total_lines=3, matched_lines=[],
+        unmatched_lines=[], metadata={},
+    )
+
+    result = ElementIdentificationResult(
+        detected_elements=[fe_id, cu_id],
+        rejected_elements=[ti_id],
+        all_elements=[fe_id, ti_id, cu_id],
+        experimental_peaks=[],
+        n_peaks=0,
+        n_matched_peaks=0,
+        n_unmatched_peaks=0,
+        algorithm="comb",
+    )
+
+    assert len(result.all_elements) == len(result.detected_elements) + len(result.rejected_elements)

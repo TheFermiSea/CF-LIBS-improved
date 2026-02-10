@@ -213,3 +213,382 @@ def test_identify_with_no_elements(atomic_db, synthetic_libs_spectrum):
 
     # Should have all elements in rejected (or none detected)
     assert len(result.detected_elements) == 0
+
+
+# ============================================================================
+# Additional comprehensive tests
+# ============================================================================
+
+
+def test_triangular_template_even_width(atomic_db):
+    """Test that even widths are converted to odd."""
+    identifier = CombIdentifier(atomic_db)
+
+    # Pass even width, should become odd
+    template = identifier._build_triangular_template(4)
+    assert len(template) == 5  # 4+1 to make odd
+
+    template = identifier._build_triangular_template(6)
+    assert len(template) == 7  # 6+1 to make odd
+
+
+def test_triangular_template_normalization(atomic_db):
+    """Test template normalization to max=1.0."""
+    identifier = CombIdentifier(atomic_db)
+
+    for width in [3, 5, 7, 9]:
+        template = identifier._build_triangular_template(width)
+        assert np.max(template) == 1.0
+        assert np.all(template >= 0)
+        assert np.all(template <= 1.0)
+
+
+def test_estimate_baseline_with_noisy_spectrum(atomic_db, synthetic_libs_spectrum):
+    """Test baseline estimation with high noise."""
+    identifier = CombIdentifier(atomic_db)
+
+    spectrum = synthetic_libs_spectrum(
+        elements={"Fe": [(400.0, 1000.0)]},
+        noise_level=0.2,  # 20% noise
+    )
+
+    baseline, threshold = identifier._estimate_baseline_threshold(
+        spectrum["wavelength"], spectrum["intensity"]
+    )
+
+    # Should still produce valid results
+    assert len(baseline) == len(spectrum["intensity"])
+    assert threshold > 0
+
+
+def test_estimate_baseline_flat_spectrum(atomic_db):
+    """Test baseline estimation on flat spectrum."""
+    identifier = CombIdentifier(atomic_db)
+
+    wavelength = np.linspace(300.0, 400.0, 1000)
+    intensity = np.ones_like(wavelength) * 100.0
+
+    baseline, threshold = identifier._estimate_baseline_threshold(wavelength, intensity)
+
+    # Baseline should be close to flat value
+    np.testing.assert_allclose(baseline, 100.0, rtol=0.1)
+    # No positive residuals, threshold should be 0
+    assert threshold == 0.0
+
+
+def test_correlate_tooth_at_spectrum_edge(atomic_db):
+    """Test tooth correlation at spectrum edge."""
+    identifier = CombIdentifier(atomic_db)
+
+    wavelength = np.linspace(370.0, 380.0, 1000)
+    intensity = np.ones_like(wavelength) * 10.0
+    baseline = np.ones_like(wavelength) * 10.0
+
+    # Try to correlate at the very edge
+    tooth = identifier._correlate_tooth(
+        wavelength, intensity, baseline, center_nm=370.0, threshold=50.0
+    )
+
+    # Should handle edge without crashing
+    assert "best_correlation" in tooth
+    assert "active" in tooth
+
+
+def test_correlate_tooth_with_multiple_peaks(atomic_db):
+    """Test tooth correlation with multiple nearby peaks."""
+    identifier = CombIdentifier(atomic_db)
+
+    wavelength = np.linspace(370.0, 380.0, 1000)
+    sigma = 0.05
+    # Create two nearby peaks
+    intensity = 10.0 + 1000.0 * np.exp(-0.5 * ((wavelength - 375.0) / sigma) ** 2)
+    intensity += 800.0 * np.exp(-0.5 * ((wavelength - 375.5) / sigma) ** 2)
+    baseline = np.ones_like(wavelength) * 10.0
+
+    tooth = identifier._correlate_tooth(
+        wavelength, intensity, baseline, center_nm=375.0, threshold=50.0
+    )
+
+    # Should still find correlation at 375.0
+    assert tooth["best_correlation"] > 0.3
+
+
+def test_correlate_tooth_with_negative_baseline(atomic_db):
+    """Test tooth correlation when baseline subtraction gives negative values."""
+    identifier = CombIdentifier(atomic_db)
+
+    wavelength = np.linspace(370.0, 380.0, 1000)
+    intensity = np.ones_like(wavelength) * 10.0
+    # Overestimated baseline
+    baseline = np.ones_like(wavelength) * 20.0
+
+    tooth = identifier._correlate_tooth(
+        wavelength, intensity, baseline, center_nm=375.0, threshold=50.0
+    )
+
+    # Should handle negative residuals
+    assert tooth["best_correlation"] <= 0.5  # Won't match well
+
+
+def test_comb_identifier_custom_parameters(atomic_db, synthetic_libs_spectrum):
+    """Test CombIdentifier with custom parameters."""
+    identifier = CombIdentifier(
+        atomic_db,
+        baseline_window_nm=5.0,
+        threshold_percentile=90.0,
+        min_correlation=0.6,
+        max_shift_pts=3,
+        min_width_pts=5,
+        max_width_factor=0.8,
+        elements=["Fe"],
+    )
+
+    spectrum = synthetic_libs_spectrum(
+        elements={"Fe": [(371.99, 1000.0)]},
+        noise_level=0.01,
+    )
+
+    result = identifier.identify(spectrum["wavelength"], spectrum["intensity"])
+
+    # Check parameters are stored in result
+    assert result.parameters["baseline_window_nm"] == 5.0
+    assert result.parameters["threshold_percentile"] == 90.0
+    assert result.parameters["min_correlation"] == 0.6
+
+
+def test_identify_empty_wavelength_range(atomic_db):
+    """Test identify with empty wavelength range."""
+    identifier = CombIdentifier(atomic_db, elements=["Fe"])
+
+    # Very narrow range with no lines
+    wavelength = np.linspace(200.0, 201.0, 100)
+    intensity = np.ones_like(wavelength) * 10.0
+
+    result = identifier.identify(wavelength, intensity)
+
+    # Should complete without error
+    assert isinstance(result, ElementIdentificationResult)
+
+
+def test_identify_high_correlation_threshold(atomic_db, synthetic_libs_spectrum):
+    """Test identify with very high correlation threshold."""
+    identifier = CombIdentifier(
+        atomic_db,
+        elements=["Fe", "H"],
+        min_correlation=0.95  # Very high threshold
+    )
+
+    spectrum = synthetic_libs_spectrum(
+        elements={"Fe": [(371.99, 1000.0)]},
+        noise_level=0.05,  # Some noise
+    )
+
+    result = identifier.identify(spectrum["wavelength"], spectrum["intensity"])
+
+    # With high threshold, detection might be more strict
+    assert isinstance(result, ElementIdentificationResult)
+
+
+def test_analyze_interferences_no_overlap(atomic_db):
+    """Test interference analysis with well-separated lines."""
+    identifier = CombIdentifier(atomic_db)
+
+    element_teeth = {
+        "Fe": [{"center_nm": 400.0, "best_correlation": 0.8, "active": True}],
+        "Cu": [{"center_nm": 500.0, "best_correlation": 0.75, "active": True}],
+    }
+
+    updated_teeth = identifier._analyze_interferences(element_teeth)
+
+    # No teeth should be interfered
+    assert updated_teeth["Fe"][0].get("is_interfered", False) is False
+    assert updated_teeth["Cu"][0].get("is_interfered", False) is False
+
+
+def test_analyze_interferences_inactive_teeth(atomic_db):
+    """Test that inactive teeth don't cause interferences."""
+    identifier = CombIdentifier(atomic_db)
+
+    element_teeth = {
+        "Fe": [{"center_nm": 400.0, "best_correlation": 0.8, "active": True}],
+        "Cu": [
+            {"center_nm": 400.05, "best_correlation": 0.3, "active": False}  # Inactive
+        ],
+    }
+
+    updated_teeth = identifier._analyze_interferences(element_teeth)
+
+    # Fe should NOT be interfered by inactive Cu tooth
+    assert updated_teeth["Fe"][0].get("is_interfered", False) is False
+
+
+def test_analyze_interferences_custom_tolerance(atomic_db):
+    """Test interference analysis with custom wavelength tolerance."""
+    identifier = CombIdentifier(atomic_db)
+
+    element_teeth = {
+        "Fe": [{"center_nm": 400.0, "best_correlation": 0.8, "active": True}],
+        "Cu": [{"center_nm": 400.15, "best_correlation": 0.75, "active": True}],
+    }
+
+    # With tight tolerance, should not interfere
+    updated_teeth = identifier._analyze_interferences(element_teeth, wl_tolerance_nm=0.1)
+    assert updated_teeth["Fe"][0].get("is_interfered", False) is False
+
+    # With loose tolerance, should interfere
+    updated_teeth = identifier._analyze_interferences(element_teeth, wl_tolerance_nm=0.2)
+    assert updated_teeth["Fe"][0].get("is_interfered", False) is True
+
+
+def test_fingerprint_with_mixed_correlations(atomic_db):
+    """Test fingerprint computation with mixed correlation values."""
+    identifier = CombIdentifier(atomic_db)
+
+    teeth = [
+        {"best_correlation": 0.9, "active": True},
+        {"best_correlation": 0.7, "active": True},
+        {"best_correlation": 0.5, "active": True},
+        {"best_correlation": 0.1, "active": False},
+        {"best_correlation": 0.0, "active": False},
+    ]
+
+    fingerprint = identifier._compute_fingerprint(teeth)
+    expected = (0.9 + 0.7 + 0.5) / 3
+    np.testing.assert_allclose(fingerprint, expected)
+
+
+def test_fingerprint_all_active(atomic_db):
+    """Test fingerprint when all teeth are active."""
+    identifier = CombIdentifier(atomic_db)
+
+    teeth = [
+        {"best_correlation": 0.8, "active": True},
+        {"best_correlation": 0.8, "active": True},
+        {"best_correlation": 0.8, "active": True},
+    ]
+
+    fingerprint = identifier._compute_fingerprint(teeth)
+    np.testing.assert_allclose(fingerprint, 0.8)
+
+
+def test_identify_matched_lines_have_transitions(atomic_db, synthetic_libs_spectrum):
+    """Test that matched lines have associated Transition objects."""
+    identifier = CombIdentifier(atomic_db, elements=["Fe"])
+
+    spectrum = synthetic_libs_spectrum(
+        elements={"Fe": [(371.99, 1000.0), (373.49, 500.0)]},
+        noise_level=0.01,
+    )
+
+    result = identifier.identify(spectrum["wavelength"], spectrum["intensity"])
+
+    # Check detected elements have transitions
+    for elem_id in result.detected_elements:
+        for line in elem_id.matched_lines:
+            assert line.transition is not None
+            assert line.transition.element == elem_id.element
+
+
+def test_identify_peak_counting(atomic_db, synthetic_libs_spectrum):
+    """Test experimental peak counting."""
+    identifier = CombIdentifier(atomic_db, elements=["Fe"])
+
+    spectrum = synthetic_libs_spectrum(
+        elements={"Fe": [(371.99, 1000.0), (373.49, 500.0), (374.95, 200.0)]},
+        noise_level=0.01,
+    )
+
+    result = identifier.identify(spectrum["wavelength"], spectrum["intensity"])
+
+    # Should detect multiple peaks
+    assert result.n_peaks >= 3
+    assert result.n_matched_peaks >= 0
+    assert result.n_unmatched_peaks >= 0
+    assert result.n_peaks == result.n_matched_peaks + result.n_unmatched_peaks
+
+
+def test_identify_metadata_fields(atomic_db, synthetic_libs_spectrum):
+    """Test that metadata fields are populated correctly."""
+    identifier = CombIdentifier(atomic_db, elements=["Fe"])
+
+    spectrum = synthetic_libs_spectrum(
+        elements={"Fe": [(371.99, 1000.0)]},
+        noise_level=0.01,
+    )
+
+    result = identifier.identify(spectrum["wavelength"], spectrum["intensity"])
+
+    # Check for metadata in element identifications
+    for elem_id in result.all_elements:
+        assert "fingerprint" in elem_id.metadata
+        assert "n_active_teeth" in elem_id.metadata
+        assert "n_total_teeth" in elem_id.metadata
+        assert elem_id.metadata["fingerprint"] >= 0.0
+        assert elem_id.metadata["fingerprint"] <= 1.0
+
+
+def test_identify_score_equals_confidence(atomic_db, synthetic_libs_spectrum):
+    """Test that score equals confidence for comb algorithm."""
+    identifier = CombIdentifier(atomic_db, elements=["Fe"])
+
+    spectrum = synthetic_libs_spectrum(
+        elements={"Fe": [(371.99, 1000.0)]},
+        noise_level=0.01,
+    )
+
+    result = identifier.identify(spectrum["wavelength"], spectrum["intensity"])
+
+    # For comb algorithm, score should equal confidence (both are fingerprint)
+    for elem_id in result.all_elements:
+        assert elem_id.score == elem_id.confidence
+
+
+def test_correlate_tooth_zero_std_deviation(atomic_db):
+    """Test tooth correlation when data has zero standard deviation."""
+    identifier = CombIdentifier(atomic_db)
+
+    wavelength = np.linspace(370.0, 380.0, 1000)
+    intensity = np.ones_like(wavelength) * 10.0  # Constant
+    baseline = np.ones_like(wavelength) * 10.0  # Residual will be zero
+
+    tooth = identifier._correlate_tooth(
+        wavelength, intensity, baseline, center_nm=375.0, threshold=50.0
+    )
+
+    # Should handle zero std gracefully
+    assert tooth["best_correlation"] == 0.0
+    assert tooth["active"] is False
+
+
+def test_identify_with_single_element(atomic_db, synthetic_libs_spectrum):
+    """Test identify with only one element in search list."""
+    identifier = CombIdentifier(atomic_db, elements=["H"])
+
+    spectrum = synthetic_libs_spectrum(
+        elements={"H": [(656.28, 5000.0), (486.13, 1000.0)]},
+        noise_level=0.01,
+    )
+
+    result = identifier.identify(spectrum["wavelength"], spectrum["intensity"])
+
+    # Should have exactly one element analyzed
+    assert len(result.all_elements) == 1
+    assert result.all_elements[0].element == "H"
+
+
+def test_identify_spectrum_range_validation(atomic_db, synthetic_libs_spectrum):
+    """Test that spectrum range is logged correctly."""
+    identifier = CombIdentifier(atomic_db, elements=["Fe"])
+
+    spectrum = synthetic_libs_spectrum(
+        wavelength_range=(350.0, 400.0),
+        elements={"Fe": [(371.99, 1000.0)]},
+    )
+
+    result = identifier.identify(spectrum["wavelength"], spectrum["intensity"])
+
+    # Should complete successfully
+    assert result.algorithm == "comb"
+    assert len(spectrum["wavelength"]) > 0
+    assert spectrum["wavelength"][0] >= 350.0
+    assert spectrum["wavelength"][-1] <= 400.0
