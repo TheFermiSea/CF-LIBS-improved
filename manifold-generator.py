@@ -10,14 +10,12 @@ Output: HDF5 Manifold Archive
 
 import jax
 import jax.numpy as jnp
-from jax import jit, vmap, pmap
-from jax.scipy.special import voigt_profile
+from jax import jit, vmap
 import numpy as np
 import pandas as pd
 import sqlite3
 import h5py
 import time
-import os
 
 # --- 1. CONFIGURATION ---
 DB_PATH = "libs_production.db"
@@ -89,7 +87,7 @@ def load_atomic_data():
 # --- 3. PHYSICS KERNEL (JAX/GPU) ---
 
 @jit
-def saha_eggert_solver(T_eV, n_e, concentration_map, lines_ip, lines_z, lines_el_idx):
+def saha_eggert_solver(T_eV, n_e, concentration_map, lines_ip, lines_z, lines_el_idx, lines_ek, lines_gk):
     """
     Vectorized Saha-Eggert Solver.
     Calculates the population density of the upper level for EVERY line simultaneously.
@@ -159,7 +157,7 @@ def compute_spectrum_snapshot(wl_grid, T_eV, n_e, concentrations, atomic_data):
     (l_wl, l_aki, l_ek, l_gk, l_ip, l_z, l_el_idx) = atomic_data
     
     # 1. Solve Populations
-    n_upper = saha_eggert_solver(T_eV, n_e, concentrations, l_ip, l_z, l_el_idx)
+    n_upper = saha_eggert_solver(T_eV, n_e, concentrations, l_ip, l_z, l_el_idx, l_ek, l_gk)
     
     # 2. Line Emissivity (Watts / m^3 / sr)
     # epsilon = (hc / 4pi lambda) * A * n_upper
@@ -169,7 +167,7 @@ def compute_spectrum_snapshot(wl_grid, T_eV, n_e, concentrations, atomic_data):
     # Stark Broadening ~ ne (Lorentzian)
     # Doppler Broadening ~ sqrt(T) (Gaussian)
     
-    gamma_stark = 2e-16 * n_e # Simplified Stark param (needs real data for accuracy)
+    # gamma_stark = 2e-16 * n_e # Simplified Stark param (needs real data for accuracy)
     sigma_doppler = (l_wl * 7.16e-7 * jnp.sqrt(T_eV * 11604))
     
     # Instrument Function dominates in reality (Gaussian)
@@ -267,17 +265,20 @@ def main():
     # Fixed Ti base, varying Al (0-10%) and V (0-10%)
     al_range = np.linspace(0, 0.12, CONC_STEPS)
     v_range = np.linspace(0, 0.12, CONC_STEPS)
+    fe_range = np.linspace(0.000, 0.005, 5) # Trace amount 0 - 0.5%
     
     params_list = []
     for T in T_grid:
         for ne in ne_grid:
             for al in al_range:
                 for v in v_range:
-                    # Normalize: Ti is remainder
-                    ti = 1.0 - (al + v)
-                    if ti < 0: continue
-                    # [T, ne, Ti, Al, V, Fe] (Fe fixed trace for now)
-                    params_list.append([T, ne, ti, al, v, 0.002])
+                    for fe in fe_range:
+                        # Normalize: Ti is remainder
+                        ti = 1.0 - (al + v + fe)
+                        if ti < 0:
+                            continue
+                        # [T, ne, Ti, Al, V, Fe]
+                        params_list.append([T, ne, ti, al, v, fe])
     
     params_arr = np.array(params_list, dtype=np.float32)
     n_samples = len(params_arr)
