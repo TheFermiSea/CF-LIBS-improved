@@ -130,9 +130,7 @@ def detect_line_observations(
     wl_step = _estimate_wl_step(wavelength)
 
     # One-to-one matching: assign each peak to at most one transition
-    peak_assignments = _match_peaks_to_transitions(
-        peaks, transitions, wavelength_tolerance_nm
-    )
+    peak_assignments = _match_peaks_to_transitions(peaks, transitions, wavelength_tolerance_nm)
 
     matched_peaks = 0
 
@@ -141,7 +139,6 @@ def detect_line_observations(
         if key in seen_keys:
             continue
         seen_keys.add(key)
-        matched_peaks += 1
 
         # Resolution-aware integration half-width
         if resolving_power is not None and resolving_power > 0:
@@ -162,6 +159,8 @@ def detect_line_observations(
         line_area = float(np.trapezoid(segment_corrected, segment_wl))
         if line_area <= 0:
             continue
+
+        matched_peaks += 1
 
         # Poisson noise approximation for integrated intensity
         counts = np.maximum(intensity[start_idx:end_idx], 1.0)
@@ -234,9 +233,9 @@ def _match_peaks_to_transitions(
 ) -> List[Tuple[int, float, Transition]]:
     """One-to-one greedy matching of peaks to transitions.
 
-    Each peak is assigned to at most one transition (closest within
-    tolerance), and each transition is assigned to at most one peak
-    (strongest emissivity wins ties).
+    Each peak is assigned to at most one transition and vice versa,
+    with conflicts resolved by closest wavelength distance
+    (no emissivity weighting).
 
     Returns list of (peak_index, peak_wavelength, transition) tuples.
     """
@@ -245,14 +244,15 @@ def _match_peaks_to_transitions(
 
     peak_wls = np.array([p[1] for p in peaks])
 
-    # Build candidate matches: (distance, peak_idx, transition)
+    # Build ALL candidate matches within tolerance: (distance, peak_idx, transition)
+    # Using all pairs ensures the second-closest peak can still be matched
+    # if the nearest was claimed by another transition.
     candidates = []
     for trans in transitions:
         distances = np.abs(peak_wls - trans.wavelength_nm)
-        nearest_idx = int(np.argmin(distances))
-        min_dist = distances[nearest_idx]
-        if min_dist <= tolerance_nm:
-            candidates.append((min_dist, nearest_idx, trans))
+        for p_idx in range(len(peak_wls)):
+            if distances[p_idx] <= tolerance_nm:
+                candidates.append((distances[p_idx], p_idx, trans))
 
     # Sort by distance (best matches first)
     candidates.sort(key=lambda c: c[0])

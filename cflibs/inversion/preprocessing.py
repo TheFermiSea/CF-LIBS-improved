@@ -17,6 +17,10 @@ from scipy.signal import find_peaks, peak_widths
 from scipy.ndimage import median_filter
 from typing import List, Optional, Tuple
 
+from cflibs.core.logging_config import get_logger
+
+logger = get_logger("inversion.preprocessing")
+
 
 def estimate_baseline(
     wavelength: np.ndarray, intensity: np.ndarray, window_nm: float = 10.0
@@ -77,7 +81,14 @@ def estimate_noise(intensity: np.ndarray, baseline: np.ndarray) -> float:
     # Final estimate
     med = np.median(residuals)
     mad = np.median(np.abs(residuals - med))
-    return mad * 1.4826
+    noise = mad * 1.4826
+
+    # Floor noise to prevent zero thresholds that cause find_peaks to
+    # return many trivial local maxima.
+    if noise < 1e-10:
+        noise = max(1e-10, float(np.nanpercentile(np.abs(intensity - baseline), 95)) * 1e-6)
+
+    return noise
 
 
 def detect_peaks(
@@ -154,21 +165,26 @@ def detect_peaks(
         return []
 
     # Cosmic ray rejection: filter by minimum FWHM
-    if min_fwhm_pixels > 0 and len(peak_indices) > 0:
+    if min_fwhm_pixels > 0:
         try:
             widths_result = peak_widths(corrected, peak_indices, rel_height=0.5)
             fwhm_pixels = widths_result[0]
             width_mask = fwhm_pixels >= min_fwhm_pixels
             peak_indices = peak_indices[width_mask]
-        except Exception:
-            pass  # peak_widths can fail on edge cases; keep all peaks
+        except (ValueError, RuntimeError) as exc:
+            logger.debug("peak_widths failed for %d peaks: %s", len(peak_indices), exc)
 
     if len(peak_indices) == 0:
         return []
 
     # Second-derivative confirmation
     if use_second_derivative:
-        d2 = -np.gradient(np.gradient(corrected, wavelength), wavelength)
+        if wavelength.size > 1:
+            spacing = float(np.median(np.diff(wavelength)))
+        else:
+            spacing = 1.0
+        d1 = np.gradient(corrected, spacing, edge_order=2)
+        d2 = -np.gradient(d1, spacing, edge_order=2)
         d2[d2 < 0] = 0.0
         confirmed = []
         for idx in peak_indices:
