@@ -116,7 +116,7 @@ def detect_line_observations(
         return LineDetectionResult([], set(), 0, 0, 0, ["no_transitions_found"])
 
     # Canonical peak detection with baseline subtraction
-    peaks, baseline, noise = detect_peaks_auto(
+    peaks, baseline, _noise = detect_peaks_auto(
         wavelength,
         intensity,
         resolving_power=resolving_power,
@@ -162,7 +162,11 @@ def detect_line_observations(
 
         matched_peaks += 1
 
-        # Poisson noise approximation for integrated intensity
+        # Poisson noise approximation for integrated intensity.
+        # Uses rectangular sum (sqrt(sum(counts)) * wl_step) rather than
+        # trapezoidal integration because the Poisson shot noise dominates
+        # and the rectangular approximation is well within the overall
+        # uncertainty budget for LIBS measurements.
         counts = np.maximum(intensity[start_idx:end_idx], 1.0)
         line_unc = float(np.sqrt(np.sum(counts)) * wl_step)
 
@@ -239,7 +243,7 @@ def _match_peaks_to_transitions(
 
     Returns list of (peak_index, peak_wavelength, transition) tuples.
     """
-    if not peaks or not transitions:
+    if not peaks or not transitions or tolerance_nm <= 0:
         return []
 
     peak_wls = np.array([p[1] for p in peaks])

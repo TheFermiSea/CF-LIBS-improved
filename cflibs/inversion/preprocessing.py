@@ -41,7 +41,11 @@ def estimate_baseline(
     np.ndarray
         Estimated baseline
     """
+    if wavelength.size < 2:
+        return intensity.copy()
     spacing = np.median(np.diff(wavelength))
+    if not np.isfinite(spacing) or spacing <= 0:
+        spacing = 1e-10
     window_pts = max(3, int(window_nm / spacing))
     if window_pts % 2 == 0:
         window_pts += 1  # ensure odd
@@ -154,7 +158,7 @@ def detect_peaks(
     else:
         min_distance = 3
 
-    peak_indices, properties = find_peaks(
+    peak_indices, _ = find_peaks(
         corrected,
         height=threshold,
         prominence=prominence,
@@ -240,6 +244,9 @@ def detect_peaks_auto(
     noise : float
         Estimated noise level (sigma)
     """
+    if wavelength.size < 2:
+        return [], np.zeros_like(intensity), 0.0
+
     baseline = estimate_baseline(wavelength, intensity, window_nm=baseline_window_nm)
     noise = estimate_noise(intensity, baseline)
 

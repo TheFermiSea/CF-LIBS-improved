@@ -363,14 +363,22 @@ class QualityAssessor:
                 continue
             R_obs = I_ion / I_neutral
 
+            # NOTE: U_I and U_II are evaluated at the input temperature_K as an
+            # approximation. For large differences between T_saha and temperature_K,
+            # this introduces error. A future improvement could accept callables.
+
             # Saha ratio as function of temperature
             def saha_ratio(T_K: float) -> float:
                 T_eV_local = T_K * KB_EV
                 if T_eV_local <= 0:
                     return 0.0
-                S = (SAHA_CONST_CM3 / max(electron_density_cm3, 1e-30)) * (
-                    T_eV_local ** 1.5
-                ) * np.exp(-ip / T_eV_local) * 2.0 * (U_II / U_I)
+                S = (
+                    (SAHA_CONST_CM3 / max(electron_density_cm3, 1e10))
+                    * (T_eV_local**1.5)
+                    * np.exp(-ip / T_eV_local)
+                    * 2.0
+                    * (U_II / U_I)
+                )
                 return S
 
             # Bisection to find T_saha where saha_ratio(T) ~ R_obs
@@ -386,15 +394,16 @@ class QualityAssessor:
                 t_saha_estimates.append(T_lo)
                 continue
 
-            for _ in range(50):
+            max_iterations = 50
+            iteration = 0
+            while iteration < max_iterations and abs(T_hi - T_lo) >= 10.0:
                 T_mid = 0.5 * (T_lo + T_hi)
                 S_mid = saha_ratio(T_mid)
                 if S_mid < R_obs:
                     T_lo = T_mid
                 else:
                     T_hi = T_mid
-                if abs(T_hi - T_lo) < 10.0:
-                    break
+                iteration += 1
 
             t_saha_estimates.append(0.5 * (T_lo + T_hi))
 

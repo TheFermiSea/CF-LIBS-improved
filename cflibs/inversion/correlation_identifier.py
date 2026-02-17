@@ -81,7 +81,7 @@ class CorrelationIdentifier:
     >>> identifier = CorrelationIdentifier(atomic_db, elements=['Fe', 'Ti', 'Cr'])
     >>> result = identifier.identify(wavelength, intensity, mode="classic")
     >>> print(f"Detected: {[e.element for e in result.detected_elements]}")
-    
+
     >>> # Vector mode with pre-built index
     >>> identifier = CorrelationIdentifier(atomic_db, vector_index=index)
     >>> result = identifier.identify(wavelength, intensity, mode="vector")
@@ -152,7 +152,7 @@ class CorrelationIdentifier:
         """
         # Resolve mode
         if mode == "auto":
-            mode = "vector" if self.vector_index is not None else "classic" 
+            mode = "vector" if self.vector_index is not None else "classic"
 
         if mode == "vector" and self.vector_index is None:
             raise ValueError("mode='vector' requires vector_index to be provided")
@@ -160,11 +160,13 @@ class CorrelationIdentifier:
         logger.info(f"Running correlation identifier in {mode} mode")
 
         # Detect experimental peaks using canonical baseline-subtracted pipeline
-        experimental_peaks, self._baseline, self._noise = detect_peaks_auto(
+        # Store peaks for reuse in _match_lines_to_peaks to avoid redundant calls
+        self._peaks, self._baseline, self._noise = detect_peaks_auto(
             wavelength,
             intensity,
             resolving_power=self.resolving_power,
         )
+        experimental_peaks = self._peaks
 
         logger.info(f"Detected {len(experimental_peaks)} experimental peaks")
 
@@ -253,7 +255,9 @@ class CorrelationIdentifier:
 
         element_scores: List[Tuple[str, float, float, List[Any], List[Any]]] = []
 
-        elements_to_search = self.elements if self.elements is not None else self.atomic_db.get_available_elements()
+        elements_to_search = (
+            self.elements if self.elements is not None else self.atomic_db.get_available_elements()
+        )
         for element in elements_to_search:
             # Get transitions with strength filtering
             transitions = self.atomic_db.get_transitions(
@@ -284,8 +288,8 @@ class CorrelationIdentifier:
             for T_K in T_grid:
                 T_eV = T_K * KB_EV
                 for n_e in n_e_grid:
-                    model_spectrum = self._generate_model_spectrum(intensity,
-                        element, transitions, wavelength, T_eV, n_e
+                    model_spectrum = self._generate_model_spectrum(
+                        intensity, element, transitions, wavelength, T_eV, n_e
                     )
                     # Peak-region mask: correlate only where BOTH spectra
                     # have significant signal (AND, not OR) to avoid diluting
@@ -299,14 +303,20 @@ class CorrelationIdentifier:
                         peak_mask = (exp_norm >= sigma_threshold) & (mod_norm >= sigma_threshold)
                         # Fallback: if AND is too restrictive (< 5 pts), use OR
                         if np.sum(peak_mask) < 5:
-                            peak_mask = (exp_norm >= sigma_threshold) | (mod_norm >= sigma_threshold)
+                            peak_mask = (exp_norm >= sigma_threshold) | (
+                                mod_norm >= sigma_threshold
+                            )
                     else:
                         peak_mask = np.ones(len(intensity), dtype=bool)
 
                     # Pearson correlation on peak regions only
                     exp_peaks = intensity[peak_mask]
                     mod_peaks = model_spectrum[peak_mask]
-                    if len(exp_peaks) > 2 and np.std(mod_peaks) > 1e-10 and np.std(exp_peaks) > 1e-10:
+                    if (
+                        len(exp_peaks) > 2
+                        and np.std(mod_peaks) > 1e-10
+                        and np.std(exp_peaks) > 1e-10
+                    ):
                         corr, _ = pearsonr(exp_peaks, mod_peaks)
                         correlations.append(corr)
                     else:
@@ -338,7 +348,7 @@ class CorrelationIdentifier:
         -------
         List[Tuple[str, float, float, List[IdentifiedLine], List[Transition]]]
             List of (element, score, confidence, matched_lines, unmatched_lines)
-        
+
         Raises
         ------
         NotImplementedError
@@ -381,40 +391,6 @@ class CorrelationIdentifier:
             Model spectrum intensity on wavelength grid
         """
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         model_spectrum = np.zeros_like(wavelength, dtype=np.float64)
 
         # Compute ionization fractions using Saha equation
@@ -430,9 +406,7 @@ class CorrelationIdentifier:
 
         for trans in transitions:
             # Partition function
-            U = self.saha_solver.calculate_partition_function(
-                element, trans.ionization_stage, T_eV
-            )
+            U = self.saha_solver.calculate_partition_function(element, trans.ionization_stage, T_eV)
 
             # Ion-stage population fraction from Saha balance
             if stage_densities is not None:
@@ -492,9 +466,11 @@ class CorrelationIdentifier:
             Transitions with no experimental match
         """
         # Use cached peaks from identify() or detect fresh
-        peaks, _, _ = detect_peaks_auto(
-            wavelength, intensity, resolving_power=self.resolving_power
-        )
+        peaks = getattr(self, "_peaks", None)
+        if peaks is None:
+            peaks, _, _ = detect_peaks_auto(
+                wavelength, intensity, resolving_power=self.resolving_power
+            )
         if not peaks:
             return [], list(transitions)
 

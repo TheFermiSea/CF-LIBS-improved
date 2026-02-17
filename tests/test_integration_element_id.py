@@ -123,6 +123,8 @@ def test_correlation_e2e_pipeline(atomic_db, synthetic_libs_spectrum):
         assert fit_result.temperature_K > 0
         assert fit_result.temperature_uncertainty_K > 0
         assert not np.isnan(fit_result.temperature_K)
+    else:
+        pytest.skip(f"Only {len(observations)} observation(s); Boltzmann fit requires >= 2")
 
 
 @pytest.mark.integration
@@ -309,4 +311,3 @@ def test_comparative_line_counts(atomic_db, synthetic_libs_spectrum):
     assert len(alias_obs) > 0, "ALIAS should detect at least some lines"
     assert len(comb_obs) >= 0, "Comb identifier should return valid result"
     assert len(corr_obs) >= 0, "Correlation identifier should return valid result"
-
