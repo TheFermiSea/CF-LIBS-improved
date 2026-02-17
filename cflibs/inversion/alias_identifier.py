@@ -519,6 +519,9 @@ class ALIASIdentifier:
                 # No data for this ionization stage
                 continue
 
+        # Remove unobservable weak lines before emissivity calculation
+        transitions = [t for t in transitions if t.A_ki * t.g_k >= 1e4]
+
         if not transitions:
             return []
 

@@ -302,19 +302,39 @@ class QualityAssessor:
         """
         Check Saha-Boltzmann consistency.
 
-        Compare the temperature from Boltzmann slope to the temperature
-        that would be needed to reproduce observed ion/neutral intensity ratios
-        via Saha equation.
+        For elements with both neutral (I) and singly-ionized (II) lines,
+        estimate the temperature implied by the observed intensity ratio
+        via the Saha equation and compare to the Boltzmann-fitted T.
+
+        The Saha ratio at temperature T is:
+
+            S(T) = (C_Saha / n_e) * T_eV^1.5 * exp(-IP / T_eV) * 2 * U_II / U_I
+
+        The observed II/I intensity ratio is proportional to S(T), so we
+        solve for T_saha by bisection on:
+
+            R_obs = mean(I_II) / mean(I_I) ~ S(T_saha)
+
+        Parameters
+        ----------
+        observations : List[LineObservation]
+            Line observations
+        temperature_K : float
+            Boltzmann-fitted temperature in K
+        electron_density_cm3 : float
+            Electron density in cm^-3
+        ionization_potentials : Dict[str, float]
+            Ionization potentials for each element in eV
+        partition_funcs_I : Dict[str, float]
+            Neutral partition functions U_I(T)
+        partition_funcs_II : Dict[str, float]
+            Ion partition functions U_II(T)
 
         Returns
         -------
         Tuple[float, float]
             (relative_difference, T_saha_estimate)
         """
-        # Unused parameters kept for API compatibility
-        _ = electron_density_cm3, ionization_potentials, partition_funcs_I, partition_funcs_II
-
-
         # Group by element and ionization stage
         obs_by_element_stage: DefaultDict[str, DefaultDict[int, List[LineObservation]]] = (
             defaultdict(lambda: defaultdict(list))
@@ -322,24 +342,61 @@ class QualityAssessor:
         for obs in observations:
             obs_by_element_stage[obs.element][obs.ionization_stage].append(obs)
 
-        # For elements with both I and II lines, compute implied T from Saha
         t_saha_estimates = []
 
-        for _element, stages in obs_by_element_stage.items():
+        for element, stages in obs_by_element_stage.items():
             if 1 not in stages or 2 not in stages:
                 continue
 
-            # Average intensity ratio (simplified)
-            I_neutral = float(np.mean(np.asarray([obs.intensity for obs in stages[1]])))
-            I_ion = float(np.mean(np.asarray([obs.intensity for obs in stages[2]])))
-
-            if I_neutral <= 0 or I_ion <= 0:
+            ip = ionization_potentials.get(element)
+            U_I = partition_funcs_I.get(element)
+            U_II = partition_funcs_II.get(element)
+            if ip is None or U_I is None or U_II is None:
+                continue
+            if U_I <= 0 or U_II <= 0:
                 continue
 
-            # For simplicity, just check if current T is consistent
-            # A full implementation would solve for T from observed ion/neutral ratios
-            # For now, store the current T as the Saha estimate
-            t_saha_estimates.append(temperature_K)
+            # Observed intensity ratio (ion / neutral)
+            I_neutral = float(np.mean(np.asarray([obs.intensity for obs in stages[1]])))
+            I_ion = float(np.mean(np.asarray([obs.intensity for obs in stages[2]])))
+            if I_neutral <= 0 or I_ion <= 0:
+                continue
+            R_obs = I_ion / I_neutral
+
+            # Saha ratio as function of temperature
+            def saha_ratio(T_K: float) -> float:
+                T_eV_local = T_K * KB_EV
+                if T_eV_local <= 0:
+                    return 0.0
+                S = (SAHA_CONST_CM3 / max(electron_density_cm3, 1e-30)) * (
+                    T_eV_local ** 1.5
+                ) * np.exp(-ip / T_eV_local) * 2.0 * (U_II / U_I)
+                return S
+
+            # Bisection to find T_saha where saha_ratio(T) ~ R_obs
+            T_lo, T_hi = 3000.0, 50000.0
+            S_lo = saha_ratio(T_lo)
+            S_hi = saha_ratio(T_hi)
+
+            # Saha ratio is monotonically increasing with T
+            if S_hi <= R_obs:
+                t_saha_estimates.append(T_hi)
+                continue
+            if S_lo >= R_obs:
+                t_saha_estimates.append(T_lo)
+                continue
+
+            for _ in range(50):
+                T_mid = 0.5 * (T_lo + T_hi)
+                S_mid = saha_ratio(T_mid)
+                if S_mid < R_obs:
+                    T_lo = T_mid
+                else:
+                    T_hi = T_mid
+                if abs(T_hi - T_lo) < 10.0:
+                    break
+
+            t_saha_estimates.append(0.5 * (T_lo + T_hi))
 
         if len(t_saha_estimates) == 0:
             return 0.0, temperature_K

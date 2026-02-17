@@ -8,7 +8,6 @@ from experimental spectra using model spectrum correlation matching.
 from typing import Any, List, Optional, Tuple
 import math
 import numpy as np
-from scipy.signal import find_peaks
 from scipy.stats import pearsonr
 
 from cflibs.inversion.element_id import (
@@ -16,6 +15,7 @@ from cflibs.inversion.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
 )
+from cflibs.inversion.preprocessing import detect_peaks_auto
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.structures import Transition
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
@@ -159,11 +159,12 @@ class CorrelationIdentifier:
 
         logger.info(f"Running correlation identifier in {mode} mode")
 
-        # Detect experimental peaks
-        peak_indices, _ = find_peaks(
-            intensity, height=np.max(intensity) * 0.05, distance=5
+        # Detect experimental peaks using canonical baseline-subtracted pipeline
+        experimental_peaks, self._baseline, self._noise = detect_peaks_auto(
+            wavelength,
+            intensity,
+            resolving_power=self.resolving_power,
         )
-        experimental_peaks = [(int(idx), float(wavelength[idx])) for idx in peak_indices]
 
         logger.info(f"Detected {len(experimental_peaks)} experimental peaks")
 
@@ -254,10 +255,12 @@ class CorrelationIdentifier:
 
         elements_to_search = self.elements if self.elements is not None else self.atomic_db.get_available_elements()
         for element in elements_to_search:
-            # Get transitions
+            # Get transitions with strength filtering
             transitions = self.atomic_db.get_transitions(
                 element, wavelength_min=wl_min, wavelength_max=wl_max
             )
+            # Remove unobservable weak lines
+            transitions = [t for t in transitions if t.A_ki * t.g_k >= 1e4]
 
             if not transitions:
                 logger.debug(f"No transitions for {element} in wavelength range")
@@ -284,15 +287,19 @@ class CorrelationIdentifier:
                     model_spectrum = self._generate_model_spectrum(intensity,
                         element, transitions, wavelength, T_eV, n_e
                     )
-                    # Peak-region mask: correlate only where signal is significant
-                    # Union of experimental and model peaks above normalized threshold
+                    # Peak-region mask: correlate only where BOTH spectra
+                    # have significant signal (AND, not OR) to avoid diluting
+                    # correlation with baseline-only regions
                     i_min, i_max = intensity.min(), intensity.max()
                     m_min, m_max = model_spectrum.min(), model_spectrum.max()
-                    sigma_threshold = 0.05
+                    sigma_threshold = 0.15
                     if (i_max - i_min) > 1e-10 and (m_max - m_min) > 1e-10:
                         exp_norm = (intensity - i_min) / (i_max - i_min)
                         mod_norm = (model_spectrum - m_min) / (m_max - m_min)
-                        peak_mask = (exp_norm >= sigma_threshold) | (mod_norm >= sigma_threshold)
+                        peak_mask = (exp_norm >= sigma_threshold) & (mod_norm >= sigma_threshold)
+                        # Fallback: if AND is too restrictive (< 5 pts), use OR
+                        if np.sum(peak_mask) < 5:
+                            peak_mask = (exp_norm >= sigma_threshold) | (mod_norm >= sigma_threshold)
                     else:
                         peak_mask = np.ones(len(intensity), dtype=bool)
 
@@ -463,6 +470,9 @@ class CorrelationIdentifier:
         """
         Match theoretical transitions to experimental peaks.
 
+        Uses canonical peak detection and one-to-one greedy matching
+        (closest distance first; each peak and transition used at most once).
+
         Parameters
         ----------
         element : str
@@ -481,40 +491,54 @@ class CorrelationIdentifier:
         unmatched_lines : List[Transition]
             Transitions with no experimental match
         """
-        # Detect peaks
-        peak_indices, _ = find_peaks(intensity, height=np.max(intensity) * 0.05, distance=5)
-        peak_wavelengths = wavelength[peak_indices]
-        peak_intensities = intensity[peak_indices]
+        # Use cached peaks from identify() or detect fresh
+        peaks, _, _ = detect_peaks_auto(
+            wavelength, intensity, resolving_power=self.resolving_power
+        )
+        if not peaks:
+            return [], list(transitions)
+
+        peak_wavelengths = np.array([p[1] for p in peaks])
+        peak_intensities = np.array([intensity[p[0]] for p in peaks])
+
+        # Build candidate matches: (distance, peak_idx, trans_idx)
+        candidates = []
+        for t_idx, trans in enumerate(transitions):
+            distances = np.abs(peak_wavelengths - trans.wavelength_nm)
+            nearest = int(np.argmin(distances))
+            min_dist = distances[nearest]
+            if min_dist <= self.wavelength_tolerance_nm:
+                candidates.append((min_dist, nearest, t_idx))
+
+        # Greedy one-to-one: sort by distance, assign first-come
+        candidates.sort(key=lambda c: c[0])
+        claimed_peaks: set = set()
+        claimed_trans: set = set()
 
         matched_lines = []
-        unmatched_lines = []
+        for _dist, p_idx, t_idx in candidates:
+            if p_idx in claimed_peaks or t_idx in claimed_trans:
+                continue
+            claimed_peaks.add(p_idx)
+            claimed_trans.add(t_idx)
+            trans = transitions[t_idx]
+            matched_lines.append(
+                IdentifiedLine(
+                    wavelength_exp_nm=float(peak_wavelengths[p_idx]),
+                    wavelength_th_nm=trans.wavelength_nm,
+                    element=element,
+                    ionization_stage=trans.ionization_stage,
+                    intensity_exp=float(peak_intensities[p_idx]),
+                    emissivity_th=0.0,
+                    transition=trans,
+                    correlation=0.0,
+                    is_interfered=False,
+                    interfering_elements=[],
+                )
+            )
 
-        for trans in transitions:
-            # Find nearest experimental peak
-            distances = np.abs(peak_wavelengths - trans.wavelength_nm)
-            if len(distances) > 0:
-                nearest_idx = np.argmin(distances)
-                min_distance = distances[nearest_idx]
-
-                if min_distance <= self.wavelength_tolerance_nm:
-                    # Matched
-                    matched_lines.append(
-                        IdentifiedLine(
-                            wavelength_exp_nm=float(peak_wavelengths[nearest_idx]),
-                            wavelength_th_nm=trans.wavelength_nm,
-                            element=element,
-                            ionization_stage=trans.ionization_stage,
-                            intensity_exp=float(peak_intensities[nearest_idx]),
-                            emissivity_th=0.0,  # Could compute from Boltzmann
-                            transition=trans,
-                            correlation=0.0,
-                            is_interfered=False,
-                            interfering_elements=[],
-                        )
-                    )
-                else:
-                    unmatched_lines.append(trans)
-            else:
-                unmatched_lines.append(trans)
+        unmatched_lines = [
+            transitions[i] for i in range(len(transitions)) if i not in claimed_trans
+        ]
 
         return matched_lines, unmatched_lines

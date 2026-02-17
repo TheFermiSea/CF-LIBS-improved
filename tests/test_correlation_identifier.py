@@ -17,17 +17,19 @@ def test_correlation_identifier_classic_mode(temp_db):
 
     db = AtomicDatabase(temp_db)
 
-    # Create synthetic spectrum with Fe lines
+    # Create synthetic spectrum with Gaussian Fe lines (realistic shape)
     wavelength = np.linspace(370, 380, 1000)
     intensity = np.zeros_like(wavelength)
+    sigma = 0.05  # ~0.12 nm FWHM, typical for moderate resolving power
 
     # Add Fe lines from test database: 371.99, 373.49, 374.95
     for wl in [371.99, 373.49, 374.95]:
-        idx = np.argmin(np.abs(wavelength - wl))
-        intensity[idx] = 1.0
+        intensity += 1000.0 * np.exp(-0.5 * ((wavelength - wl) / sigma) ** 2)
 
     # Add noise
-    intensity += np.random.rand(len(intensity)) * 0.1
+    rng = np.random.default_rng(42)
+    intensity += rng.normal(0, 10, len(intensity))
+    intensity = np.maximum(intensity, 0.0)
 
     # Run identification
     identifier = CorrelationIdentifier(
@@ -119,13 +121,13 @@ def test_correlation_identifier_matched_lines(temp_db):
 
     db = AtomicDatabase(temp_db)
 
-    # Create spectrum with known Fe lines
+    # Create spectrum with known Fe lines (Gaussian peaks)
     wavelength = np.linspace(370, 380, 1000)
     intensity = np.zeros_like(wavelength)
+    sigma = 0.05
 
     # Add Fe I 371.99 nm line
-    idx = np.argmin(np.abs(wavelength - 371.99))
-    intensity[idx] = 1.0
+    intensity += 500.0 * np.exp(-0.5 * ((wavelength - 371.99) / sigma) ** 2)
 
     identifier = CorrelationIdentifier(
         db,

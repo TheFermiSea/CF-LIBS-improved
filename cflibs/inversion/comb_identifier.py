@@ -20,6 +20,7 @@ from cflibs.inversion.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
 )
+from cflibs.inversion.preprocessing import detect_peaks_auto
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -261,11 +262,11 @@ class CombIdentifier:
         detected_elements = [e for e in element_identifications if e.detected]
         rejected_elements = [e for e in element_identifications if not e.detected]
 
-        # Step 7: Identify experimental peaks (simple threshold-based for now)
-        residual = intensity - baseline
-        peak_mask = residual > threshold
-        peak_indices = np.where(peak_mask)[0]
-        experimental_peaks = [(i, wavelength[i]) for i in peak_indices]
+        # Step 7: Identify experimental peaks using canonical peak detection
+        # (not pixel-level threshold which over-counts broad peaks)
+        experimental_peaks, _, _ = detect_peaks_auto(
+            wavelength, intensity, resolving_power=self.resolving_power
+        )
 
         # Count matched peaks (peaks that have at least one identified line)
         matched_peak_wavelengths = set()
@@ -327,6 +328,8 @@ class CombIdentifier:
         transitions = self.atomic_db.get_transitions(
             element, wavelength_min=wl_min, wavelength_max=wl_max
         )
+        # Remove unobservable weak lines
+        transitions = [t for t in transitions if t.A_ki * t.g_k >= 1e4]
         if len(transitions) > self.max_lines_per_element:
             kT = KB_EV * self.reference_temperature
             transitions = sorted(

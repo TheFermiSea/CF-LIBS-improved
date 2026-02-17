@@ -40,6 +40,7 @@ from cflibs.inversion.preprocessing import (
     estimate_baseline,
     estimate_noise,
     detect_peaks,
+    detect_peaks_auto,
     robust_normalize,
 )
 from cflibs.inversion.self_absorption import (
@@ -313,6 +314,7 @@ __all__ = [
     "estimate_baseline",
     "estimate_noise",
     "detect_peaks",
+    "detect_peaks_auto",
     "robust_normalize",
     # Self-absorption
     "AbsorptionCorrectionResult",
