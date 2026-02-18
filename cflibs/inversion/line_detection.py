@@ -68,8 +68,7 @@ def detect_line_observations(
     wavelength_tolerance_nm : float
         Matching tolerance for known lines in nm
     min_peak_height : float
-        Minimum peak height as fraction of max intensity (legacy, used
-        as fallback if baseline estimation fails)
+        Minimum peak height as fraction of max intensity
     peak_width_nm : float
         Expected peak width for integration (nm).  Overridden by
         ``resolving_power`` when provided.
@@ -91,16 +90,6 @@ def detect_line_observations(
     LineDetectionResult
         Detected line observations and resonance set
     """
-    if min_peak_height != 0.01:  # non-default value
-        import warnings
-
-        warnings.warn(
-            "min_peak_height is deprecated and ignored by the new noise-calibrated "
-            "peak detection pipeline. Use threshold_factor instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
     if wavelength.size == 0 or intensity.size == 0:
         return LineDetectionResult([], set(), 0, 0, 0, ["empty_spectrum"])
 
@@ -132,10 +121,14 @@ def detect_line_observations(
         resolving_power=resolving_power,
         threshold_factor=threshold_factor,
     )
+    # Preserve legacy semantics for min_peak_height by requiring
+    # raw intensity to exceed a fraction of spectrum maximum.
+    if min_peak_height is not None and min_peak_height > 0.0:
+        peak_floor = float(min_peak_height) * float(np.max(intensity))
+        peaks = [(idx, wl) for idx, wl in peaks if intensity[idx] >= peak_floor]
 
     observations: List[LineObservation] = []
     resonance_lines: Set[Tuple[str, int, float]] = set()
-    seen_keys: Set[Tuple[str, int, float]] = set()
 
     wl_step = _estimate_wl_step(wavelength)
 
@@ -146,9 +139,6 @@ def detect_line_observations(
 
     for peak_idx, peak_wl, transition in peak_assignments:
         key = (transition.element, transition.ionization_stage, transition.wavelength_nm)
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
 
         # Resolution-aware integration half-width
         if resolving_power is not None and resolving_power > 0:
@@ -166,7 +156,7 @@ def detect_line_observations(
         segment_corrected = intensity[start_idx:end_idx] - baseline[start_idx:end_idx]
         segment_corrected = np.maximum(segment_corrected, 0.0)
 
-        line_area = float(np.trapezoid(segment_corrected, segment_wl))
+        line_area = _trapezoid(segment_corrected, segment_wl)
         if line_area <= 0:
             continue
 
@@ -298,3 +288,10 @@ def _estimate_wl_step(wavelength: np.ndarray) -> float:
     diffs = np.diff(wavelength)
     diffs = diffs[np.isfinite(diffs)]
     return float(np.median(diffs)) if diffs.size else 1.0
+
+
+def _trapezoid(y: np.ndarray, x: np.ndarray) -> float:
+    """NumPy 1.x/2.x compatible trapezoidal integration."""
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(y, x))
+    return float(np.trapz(y, x))

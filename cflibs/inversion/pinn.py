@@ -225,7 +225,10 @@ class PINNResult:
             "=" * 50,
             f"Temperature: {self.temperature_eV:.4f} +/- {self.temperature_uncertainty_eV:.4f} eV",
             f"            ({self.temperature_K:.0f} K)",
-            f"Electron density: {self.electron_density_cm3:.2e} +/- {self.density_uncertainty_cm3:.2e} cm^-3",
+            (
+                f"Electron density: {self.electron_density_cm3:.2e} +/- "
+                f"{self.density_uncertainty_cm3:.2e} cm^-3"
+            ),
             "",
             "Concentrations:",
         ]

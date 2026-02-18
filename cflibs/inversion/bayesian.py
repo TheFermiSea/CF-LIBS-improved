@@ -118,7 +118,7 @@ except ImportError:
     jnp = None
 
     def jit(f):
-        return f  # noqa: E731
+        return f
 
     _faddeeva_weideman_jax = None
 

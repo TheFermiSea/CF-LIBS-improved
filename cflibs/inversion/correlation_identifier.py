@@ -63,6 +63,8 @@ class CorrelationIdentifier:
         resolving_power is None to derive Gaussian sigma = FWHM / 2.355.
     max_lines_per_element : int
         Cap transitions per element by emissivity (default: 100)
+    min_line_strength : float
+        Minimum observable line strength A_ki * g_k (default: 1e4)
     reference_temperature : float
         Reference temperature in K for emissivity ranking (default: 10000.0)
 
@@ -102,6 +104,7 @@ class CorrelationIdentifier:
         n_e_steps: int = 3,
         instrument_fwhm_nm: float = 0.05,
         max_lines_per_element: int = 100,
+        min_line_strength: float = 1e4,
         reference_temperature: float = 10000.0,
     ):
         self.atomic_db = atomic_db
@@ -117,6 +120,7 @@ class CorrelationIdentifier:
         self.n_e_steps = n_e_steps
         self.instrument_fwhm_nm = instrument_fwhm_nm
         self.max_lines_per_element = max_lines_per_element
+        self.min_line_strength = min_line_strength
         self.reference_temperature = reference_temperature
 
         self.saha_solver = SahaBoltzmannSolver(atomic_db)
@@ -161,7 +165,7 @@ class CorrelationIdentifier:
 
         # Detect experimental peaks using canonical baseline-subtracted pipeline
         # Store peaks for reuse in _match_lines_to_peaks to avoid redundant calls
-        self._peaks, self._baseline, self._noise = detect_peaks_auto(
+        self._peaks, _, _ = detect_peaks_auto(
             wavelength,
             intensity,
             resolving_power=self.resolving_power,
@@ -264,7 +268,7 @@ class CorrelationIdentifier:
                 element, wavelength_min=wl_min, wavelength_max=wl_max
             )
             # Remove unobservable weak lines
-            transitions = [t for t in transitions if t.A_ki * t.g_k >= 1e4]
+            transitions = [t for t in transitions if t.A_ki * t.g_k >= self.min_line_strength]
 
             if not transitions:
                 logger.debug(f"No transitions for {element} in wavelength range")

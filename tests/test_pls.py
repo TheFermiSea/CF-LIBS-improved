@@ -189,15 +189,18 @@ class TestPLSRegression:
             pls.fit(X[:-5], Y)  # Different number of samples
 
     def test_n_components_capped(self):
-        """Test that n_components is capped appropriately."""
+        """Test that fit-time component cap does not mutate configured n_components."""
         X = np.random.default_rng(42).standard_normal((10, 100))
         Y = np.random.default_rng(42).standard_normal((10, 2))
 
         pls = PLSRegression(n_components=50)  # More than samples
         pls.fit(X, Y)
 
-        # Should be capped to n_samples - 1 = 9
-        assert pls.n_components <= 9
+        # Requested count is preserved on the instance.
+        assert pls.n_components == 50
+        # Fitted decomposition is capped to n_samples - 1 = 9.
+        assert pls.components is not None
+        assert pls.components.n_components <= 9
 
 
 class TestPreprocessing:

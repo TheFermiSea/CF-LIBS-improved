@@ -1454,12 +1454,14 @@ class TransferLearningPipeline:
             )
 
         if self._transfer_result is not None:
+            r_squared = self._transfer_result.metrics.get("r_squared")
+            r_squared_str = f"{r_squared:.4f}" if isinstance(r_squared, (int, float)) else "N/A"
             lines.extend(
                 [
                     "Calibration Transfer:",
                     f"  Method: {self._transfer_result.method}",
                     f"  Samples: {self._transfer_result.n_transfer_samples}",
-                    f"  R-squared: {self._transfer_result.metrics.get('r_squared', 'N/A'):.4f}",
+                    f"  R-squared: {r_squared_str}",
                 ]
             )
 

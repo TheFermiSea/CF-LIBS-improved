@@ -259,7 +259,7 @@ def detect_peaks_auto(
         Estimated noise level (sigma)
     """
     if wavelength.size < 2:
-        return [], np.zeros_like(intensity), 0.0
+        return [], intensity.copy(), 0.0
 
     baseline = estimate_baseline(wavelength, intensity, window_nm=baseline_window_nm)
     noise = estimate_noise(intensity, baseline)

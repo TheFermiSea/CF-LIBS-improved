@@ -4,6 +4,7 @@ Includes Gaussian, Lorentzian, and Voigt profiles.
 """
 
 import numpy as np
+import warnings
 from typing import Union, Callable
 
 try:
@@ -267,6 +268,18 @@ def total_lorentzian_width(
 # --- JAX IMPLEMENTATION ---
 
 if HAS_JAX:
+    x64_enabled_attr = getattr(jax.config, "x64_enabled", False)
+    x64_enabled = x64_enabled_attr() if callable(x64_enabled_attr) else bool(x64_enabled_attr)
+    _weideman_dtype = jnp.float64 if x64_enabled else jnp.float32
+    if not x64_enabled:
+        warnings.warn(
+            "JAX x64 mode is disabled. Voigt profile coefficients will use float32 precision. "
+            "Enable float64 with jax.config.update('jax_enable_x64', True) before importing "
+            "cflibs.radiation.profiles for highest accuracy.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     # Weideman (1994) coefficients for Faddeeva function approximation
     # Reference: Weideman, SIAM J. Numer. Anal. 31, 1497 (1994)
     # N = 36 terms, provides ~15 digits of accuracy
@@ -309,7 +322,8 @@ if HAS_JAX:
             2.0193976436113505e00,
             2.4453784928519209e00,
             2.7407450274098601e00,
-        ]
+        ],
+        dtype=_weideman_dtype,
     )
 
     @jit

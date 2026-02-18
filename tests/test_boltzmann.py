@@ -296,7 +296,11 @@ class TestHuberFitting:
             T_target, n_points=15, n_outliers=3, outlier_factor=0.2, seed=456
         )
 
-        fitter = BoltzmannPlotFitter(method=FitMethod.HUBER, huber_epsilon=1.35, max_iterations=20)
+        fitter = BoltzmannPlotFitter(
+            method=FitMethod.HUBER,
+            huber_epsilon=1.35,
+            max_iterations=20,
+        )
         result = fitter.fit(lines)
 
         assert result.fit_method == "huber"

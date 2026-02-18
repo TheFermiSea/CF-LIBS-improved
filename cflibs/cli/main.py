@@ -150,6 +150,8 @@ def invert_cmd(args):
     )
     min_relative_intensity = analysis_cfg.get("min_relative_intensity")
     resolving_power = analysis_cfg.get("resolving_power")
+    if args.resolving_power is not None:
+        resolving_power = args.resolving_power
 
     detection = detect_line_observations(
         wavelength=wavelength,
@@ -378,6 +380,12 @@ def main():
         type=float,
         default=None,
         help="Peak integration width in nm (default: config or 0.2)",
+    )
+    invert_parser.add_argument(
+        "--resolving-power",
+        type=float,
+        default=None,
+        help="Instrument resolving power lambda/delta_lambda (default: config value)",
     )
     invert_parser.add_argument(
         "--output",

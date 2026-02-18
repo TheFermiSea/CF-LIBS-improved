@@ -8,6 +8,12 @@ from cflibs.radiation.profiles import gaussian_profile, doppler_width, apply_gau
 from cflibs.radiation.emissivity import calculate_line_emissivity, calculate_spectrum_emissivity
 
 
+def _trapezoid(y: np.ndarray, x: np.ndarray) -> float:
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(y, x))
+    return float(np.trapz(y, x))
+
+
 def test_gaussian_profile():
     """Test Gaussian profile calculation."""
     wavelength = np.linspace(370, 375, 100)
@@ -25,7 +31,7 @@ def test_gaussian_profile():
     assert abs(wavelength[peak_idx] - center) < 0.1
 
     # Profile should be normalized (approximately)
-    integral = np.trapezoid(profile, wavelength)
+    integral = _trapezoid(profile, wavelength)
     assert abs(integral - amplitude) < 0.1
 
 

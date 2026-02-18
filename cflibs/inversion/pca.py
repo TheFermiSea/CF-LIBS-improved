@@ -62,7 +62,7 @@ except ImportError:
     jnp = None
 
     def jit(f):
-        return f  # noqa: E731
+        return f
 
 
 @dataclass

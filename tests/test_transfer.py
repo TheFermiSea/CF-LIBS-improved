@@ -31,6 +31,8 @@ from cflibs.inversion.transfer import (
     TransferLearningPipeline,
 )
 
+pytestmark = pytest.mark.unit
+
 
 # ============================================================================
 # Fixtures

@@ -532,7 +532,12 @@ class PhysicsGuidedFeatureExtractor:
         start_idx = max(0, peak_idx - half_width_pixels)
         end_idx = min(len(spectrum), peak_idx + half_width_pixels + 1)
 
-        peak_area = float(np.trapezoid(spectrum[start_idx:end_idx], wavelengths[start_idx:end_idx]))
+        if hasattr(np, "trapezoid"):
+            peak_area = float(
+                np.trapezoid(spectrum[start_idx:end_idx], wavelengths[start_idx:end_idx])
+            )
+        else:
+            peak_area = float(np.trapz(spectrum[start_idx:end_idx], wavelengths[start_idx:end_idx]))
         area_unc = float(np.sqrt(np.sum(uncertainty[start_idx:end_idx] ** 2)) * wl_step)
 
         features.append(

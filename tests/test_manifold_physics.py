@@ -41,6 +41,12 @@ except ImportError:
     HAS_JAX_FUNCS = False
 
 
+def _jnp_trapezoid(y: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
+    if hasattr(jnp, "trapezoid"):
+        return jnp.trapezoid(y, x)
+    return jnp.trapz(y, x)
+
+
 @pytest.fixture
 def sample_params():
     """Sample physical parameters for testing."""
@@ -238,7 +244,7 @@ class TestVoigtProfileJAX:
         np.testing.assert_allclose(wl_grid[peak_idx], center, atol=0.03)
 
         # Should integrate to ~1 (amplitude)
-        integral = jnp.trapezoid(profile, wl_grid)
+        integral = _jnp_trapezoid(profile, wl_grid)
         np.testing.assert_allclose(float(integral), 1.0, rtol=0.1)
 
     def test_voigt_matches_gaussian_limit(self):
@@ -327,5 +333,5 @@ class TestProfilesVmap:
         assert spectrum.shape == (100,)
 
         # Integral should be sum of amplitudes
-        total_integral = float(jnp.trapezoid(spectrum, wl_grid))
+        total_integral = float(_jnp_trapezoid(spectrum, wl_grid))
         np.testing.assert_allclose(total_integral, 3.5, rtol=0.1)

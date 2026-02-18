@@ -12,6 +12,8 @@ from cflibs.inversion.element_id import (
 from cflibs.atomic.structures import Transition
 from cflibs.inversion.boltzmann import LineObservation
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def mock_transition():

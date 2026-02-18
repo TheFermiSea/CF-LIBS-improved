@@ -178,8 +178,8 @@ def _load_hdf5(path: Path) -> "BenchmarkDataset":
 
     try:
         import h5py
-    except ImportError:
-        raise ImportError("h5py required for HDF5 support. Install with: pip install h5py")
+    except ImportError as e:
+        raise ImportError("h5py required for HDF5 support. Install with: pip install h5py") from e
 
     with h5py.File(path, "r") as f:
         # Read dataset-level metadata
@@ -319,8 +319,8 @@ def _save_hdf5(
     """Save dataset to HDF5 file."""
     try:
         import h5py
-    except ImportError:
-        raise ImportError("h5py required for HDF5 support. Install with: pip install h5py")
+    except ImportError as e:
+        raise ImportError("h5py required for HDF5 support. Install with: pip install h5py") from e
 
     with h5py.File(path, "w") as f:
         # Write dataset-level metadata

@@ -14,13 +14,19 @@ from cflibs.radiation.profiles import (
 )
 
 
+def _trapezoid(y: np.ndarray, x: np.ndarray) -> float:
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(y, x))
+    return float(np.trapz(y, x))
+
+
 def test_gaussian_integral():
     """Test Gaussian profile integrates to amplitude."""
     x = np.linspace(-10, 10, 1000)
     sigma = 1.0
     amp = 5.0
     y = gaussian_profile(x, 0.0, sigma, amp)
-    integral = np.trapezoid(y, x)
+    integral = _trapezoid(y, x)
     assert np.isclose(integral, amp, rtol=1e-3)
 
 
@@ -32,7 +38,7 @@ def test_lorentzian_integral():
     amp = 5.0
     y = lorentzian_profile(x, 0.0, gamma, amp)
 
-    integral = np.trapezoid(y, x)
+    integral = _trapezoid(y, x)
     # 1e-2 tolerance due to finite integration range
     assert np.isclose(integral, amp, rtol=1e-2)
 

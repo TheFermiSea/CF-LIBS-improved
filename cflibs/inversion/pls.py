@@ -243,6 +243,8 @@ class PLSRegression:
     ):
         if n_components < 1:
             raise ValueError(f"n_components must be >= 1, got {n_components}")
+        if max_iter < 1:
+            raise ValueError(f"max_iter must be >= 1, got {max_iter}")
 
         self.n_components = n_components
         self.algorithm = algorithm
@@ -254,7 +256,6 @@ class PLSRegression:
         self._x_mean: Optional[np.ndarray] = None
         self._x_std: Optional[np.ndarray] = None
         self._y_mean: Optional[np.ndarray] = None
-        self._y_std: Optional[np.ndarray] = None
         self._components: Optional[PLSComponents] = None
         self._is_fitted: bool = False
 
@@ -348,8 +349,6 @@ class PLSRegression:
 
         if fit:
             self._y_mean = Y.mean(axis=0)
-            self._y_std = Y.std(axis=0, ddof=1)
-            self._y_std = np.where(self._y_std < 1e-10, 1.0, self._y_std)
 
         if self._y_mean is None:
             raise RuntimeError("Model must be fitted before preprocessing")
@@ -362,7 +361,12 @@ class PLSRegression:
             raise RuntimeError("Model must be fitted before postprocessing")
         return Y_pred + self._y_mean
 
-    def _nipals_pls(self, X: np.ndarray, Y: np.ndarray) -> PLSComponents:
+    def _nipals_pls(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        n_components: Optional[int] = None,
+    ) -> PLSComponents:
         """
         NIPALS algorithm for PLS regression.
 
@@ -380,7 +384,8 @@ class PLSRegression:
         """
         n_samples, n_features = X.shape
         n_targets = Y.shape[1]
-        n_comp = min(self.n_components, n_samples, n_features)
+        requested_components = self.n_components if n_components is None else n_components
+        n_comp = min(requested_components, n_samples, n_features)
 
         # Initialize storage
         T = np.zeros((n_samples, n_comp))  # X scores
@@ -407,6 +412,9 @@ class PLSRegression:
             t = np.zeros(n_samples)
             q = np.zeros(n_targets)
             converged = False
+            w_norm = 0.0
+            diff = np.inf
+            iteration = -1
 
             for iteration in range(self.max_iter):
                 # X block: w = X'u / u'u
@@ -447,6 +455,14 @@ class PLSRegression:
                 if diff < self.tol:
                     converged = True
                     break
+
+            if not converged:
+                logger.warning(
+                    "Component %d: NIPALS did not converge in %d iterations (final diff=%.2e)",
+                    k + 1,
+                    self.max_iter,
+                    diff,
+                )
 
             # If we broke early due to numerical issues, stop extracting components
             if not converged and iteration == 0 and w_norm < 1e-10:
@@ -557,12 +573,17 @@ class PLSRegression:
 
         # Adjust n_components if needed
         max_components = min(n_samples - 1, n_features)
-        if self.n_components > max_components:
-            logger.warning(f"Reducing n_components from {self.n_components} to {max_components}")
-            self.n_components = max_components
+        n_components = self.n_components
+        if n_components > max_components:
+            logger.warning(
+                "Reducing n_components from %d to %d for this fit",
+                n_components,
+                max_components,
+            )
+            n_components = max_components
 
         logger.info(
-            f"Fitting PLS with {self.n_components} components on "
+            f"Fitting PLS with {n_components} components on "
             f"{n_samples} samples x {n_features} features -> {n_targets} targets"
         )
 
@@ -572,11 +593,11 @@ class PLSRegression:
 
         # Fit using selected algorithm
         if self.algorithm == PLSAlgorithm.NIPALS:
-            self._components = self._nipals_pls(X_proc, Y_proc)
+            self._components = self._nipals_pls(X_proc, Y_proc, n_components=n_components)
         else:
             # SIMPLS (not yet implemented, fall back to NIPALS)
             logger.warning("SIMPLS not implemented, using NIPALS")
-            self._components = self._nipals_pls(X_proc, Y_proc)
+            self._components = self._nipals_pls(X_proc, Y_proc, n_components=n_components)
 
         self._is_fitted = True
         logger.info(
@@ -722,7 +743,7 @@ class PLSRegression:
         n_comp = W.shape[1]
 
         # Sum of squares of Y explained by each component
-        ss_y = np.array([np.sum((T[:, k : k + 1] @ Q[:, k : k + 1].T) ** 2) for k in range(n_comp)])
+        ss_y = np.sum(T**2, axis=0) * np.sum(Q**2, axis=0)
 
         # VIP = sqrt(p * sum_k(w_k^2 * ss_y_k) / sum(ss_y))
         vip = np.zeros(n_features)
@@ -879,6 +900,11 @@ class PLSCrossValidator:
 
         # Adjust max components
         max_comp = min(self.max_components, n_samples - 2, n_features)
+        if max_comp < 1:
+            raise ValueError(
+                "Cannot perform cross-validation: need at least 3 samples and 1 feature "
+                f"(got n_samples={n_samples}, n_features={n_features})."
+            )
 
         logger.info(f"Running {self.n_folds}-fold CV for 1-{max_comp} components")
 

@@ -7,6 +7,7 @@ key ALIAS thresholds and ranking configurations by global F1.
 """
 
 import argparse
+import csv
 import itertools
 import json
 import logging
@@ -219,6 +220,16 @@ def run_sweep(
                     f"itf={itf} dt={dt} cws={cws} mri={mri} mle={mle}",
                     exc,
                 )
+                logger.debug(
+                    "Traceback for dataset %s config itf=%s dt=%s cws=%s mri=%s mle=%s",
+                    case.name,
+                    itf,
+                    dt,
+                    cws,
+                    mri,
+                    mle,
+                    exc_info=True,
+                )
                 continue
             tp += ctp
             fp += cfp
@@ -271,10 +282,10 @@ def _write_outputs(results: List[SweepResult], output_dir: Path) -> Tuple[Path, 
 
     if payload:
         headers = list(payload[0].keys())
-        lines = [",".join(headers)]
-        for row in payload:
-            lines.append(",".join(str(row[h]) for h in headers))
-        csv_path.write_text("\n".join(lines) + "\n")
+        with csv_path.open("w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            writer.writerows([row[h] for h in headers] for row in payload)
     else:
         csv_path.write_text("")
 

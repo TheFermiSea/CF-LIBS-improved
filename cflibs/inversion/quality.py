@@ -103,6 +103,27 @@ class QualityAssessor:
         self.closure_weight = closure_weight
         self.fitter = BoltzmannPlotFitter(outlier_sigma=2.5)
 
+    @staticmethod
+    def _resolve_neutral_ion_stages(stage_keys: List[int]) -> Optional[Tuple[int, int]]:
+        """
+        Resolve neutral/ion stage pair from observed stage keys.
+
+        Supports both common conventions:
+        - 0/1 (neutral/ion)
+        - 1/2 (neutral/ion)
+        """
+        stage_set = set(stage_keys)
+        if 0 in stage_set and 1 in stage_set:
+            return (0, 1)
+        if 1 in stage_set and 2 in stage_set:
+            return (1, 2)
+        if not stage_set:
+            return None
+        base = min(stage_set)
+        if base + 1 in stage_set:
+            return (base, base + 1)
+        return None
+
     def assess(
         self,
         observations: List[LineObservation],
@@ -212,6 +233,17 @@ class QualityAssessor:
             return 0.0
 
         T_eV = temperature_K / EV_TO_K
+        obs_by_element_stage: DefaultDict[str, DefaultDict[int, List[LineObservation]]] = (
+            defaultdict(lambda: defaultdict(list))
+        )
+        for obs in observations:
+            obs_by_element_stage[obs.element][obs.ionization_stage].append(obs)
+
+        stage_pairs: Dict[str, Tuple[int, int]] = {}
+        for element, stages in obs_by_element_stage.items():
+            pair = self._resolve_neutral_ion_stages(list(stages.keys()))
+            if pair is not None:
+                stage_pairs[element] = pair
 
         # Apply Saha corrections and collect points
         x_all = []
@@ -226,14 +258,16 @@ class QualityAssessor:
             # Calculate Saha ratio
             S_raw = (SAHA_CONST_CM3 / electron_density_cm3) * (T_eV**1.5) * np.exp(-ip / T_eV)
             S = S_raw * 2.0 * (U_II / U_I)
-            correction = np.log(S * U_I / U_II) if obs.ionization_stage == 2 else 0.0
+            stage_pair = stage_pairs.get(el)
+            ion_stage = stage_pair[1] if stage_pair is not None else 2
+            correction = np.log(S * U_I / U_II) if obs.ionization_stage == ion_stage else 0.0
 
             y = obs.y_value
             if not np.isfinite(y):
                 continue
 
             # Apply correction
-            if obs.ionization_stage == 2:
+            if obs.ionization_stage == ion_stage:
                 y -= correction
                 x = obs.E_k_ev + ip
             else:
@@ -345,8 +379,10 @@ class QualityAssessor:
         t_saha_estimates = []
 
         for element, stages in obs_by_element_stage.items():
-            if 1 not in stages or 2 not in stages:
+            pair = self._resolve_neutral_ion_stages(list(stages.keys()))
+            if pair is None:
                 continue
+            neutral_stage, ion_stage = pair
 
             ip = ionization_potentials.get(element)
             U_I = partition_funcs_I.get(element)
@@ -357,8 +393,8 @@ class QualityAssessor:
                 continue
 
             # Observed intensity ratio (ion / neutral)
-            I_neutral = float(np.mean(np.asarray([obs.intensity for obs in stages[1]])))
-            I_ion = float(np.mean(np.asarray([obs.intensity for obs in stages[2]])))
+            I_neutral = float(np.mean(np.asarray([obs.intensity for obs in stages[neutral_stage]])))
+            I_ion = float(np.mean(np.asarray([obs.intensity for obs in stages[ion_stage]])))
             if I_neutral <= 0 or I_ion <= 0:
                 continue
             R_obs = I_ion / I_neutral

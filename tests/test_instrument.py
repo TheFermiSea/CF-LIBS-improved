@@ -13,6 +13,12 @@ from cflibs.instrument.model import InstrumentModel
 from cflibs.instrument.convolution import apply_instrument_function
 
 
+def _trapezoid(y: np.ndarray, x: np.ndarray) -> float:
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(y, x))
+    return float(np.trapz(y, x))
+
+
 def test_instrument_model_creation():
     """Test creating instrument model."""
     instrument = InstrumentModel(resolution_fwhm_nm=0.05)
@@ -129,9 +135,9 @@ def test_apply_instrument_function_preserves_integral():
     wavelength = np.linspace(200, 800, 1000)
     intensity = np.exp(-(((wavelength - 500) / 10) ** 2))  # Gaussian peak
 
-    original_integral = np.trapezoid(intensity, wavelength)
+    original_integral = _trapezoid(intensity, wavelength)
     convolved = apply_instrument_function(wavelength, intensity, 0.05)
-    convolved_integral = np.trapezoid(convolved, wavelength)
+    convolved_integral = _trapezoid(convolved, wavelength)
 
     # Integrals should be approximately equal (within 5%)
     assert abs(convolved_integral - original_integral) / original_integral < 0.05

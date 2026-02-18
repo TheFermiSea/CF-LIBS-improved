@@ -57,6 +57,8 @@ class CombIdentifier:
     resolving_power : float, optional
         Instrument resolving power (λ/Δλ). If set, tooth width is derived from
         center wavelength / resolving_power instead of fixed 0.1 nm (default: None).
+    min_aki_gk : float, optional
+        Minimum observable line strength A_ki * g_k (default: 1e4).
 
     Attributes
     ----------
@@ -99,6 +101,7 @@ class CombIdentifier:
         elements: Optional[List[str]] = None,
         max_lines_per_element: int = 50,
         reference_temperature: float = 10000.0,
+        min_aki_gk: float = 1e4,
     ):
         self.atomic_db = atomic_db
         self.resolving_power = resolving_power
@@ -114,6 +117,7 @@ class CombIdentifier:
         self.elements = elements
         self.max_lines_per_element = max_lines_per_element
         self.reference_temperature = reference_temperature
+        self.min_aki_gk = min_aki_gk
 
     def identify(
         self, wavelength: np.ndarray, intensity: np.ndarray
@@ -331,7 +335,7 @@ class CombIdentifier:
             element, wavelength_min=wl_min, wavelength_max=wl_max
         )
         # Remove unobservable weak lines
-        transitions = [t for t in transitions if t.A_ki * t.g_k >= 1e4]
+        transitions = [t for t in transitions if t.A_ki * t.g_k >= self.min_aki_gk]
         if len(transitions) > self.max_lines_per_element:
             kT = KB_EV * self.reference_temperature
             transitions = sorted(
