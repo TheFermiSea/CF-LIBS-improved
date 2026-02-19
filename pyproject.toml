@@ -48,7 +48,6 @@ bayesian = [
 ]
 # Uncertainty propagation for classical inversion
 uncertainty = ["uncertainties>=3.2.0"]
-<<<<<<< HEAD
 # Interactive Jupyter widgets for visualization
 widgets = [
     "ipywidgets>=8.0.0",
