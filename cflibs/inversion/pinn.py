@@ -967,7 +967,7 @@ class PINNInverter:
         n_wavelengths: int,
         elements: List[str],
         ionization_potentials: np.ndarray,
-        config: PINNConfig = PINNConfig(),
+        config: Optional[PINNConfig] = None,
         forward_model: Optional[DifferentiableForwardModel] = None,
         seed: int = 42,
     ):
@@ -979,6 +979,8 @@ class PINNInverter:
             )
         if not HAS_OPTAX:
             raise ImportError("Optax required for PINNInverter. Install with: pip install optax")
+        if config is None:
+            config = PINNConfig()
 
         self.n_wavelengths = n_wavelengths
         self.elements = elements

@@ -29,6 +29,7 @@ ENV/
 # IDEs
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
@@ -67,8 +68,11 @@ Thumbs.db
 libs_production.db
 spectral_manifold.h5
 *.log
+output/
 outputs/
 target/
+conductor/setup_state.json
+.serena/
 
 # Beads task tracking (ephemeral)
 .beads/

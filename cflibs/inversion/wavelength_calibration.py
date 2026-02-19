@@ -27,7 +27,38 @@ CalibrationModel = Literal["none", "shift", "affine", "quadratic"]
 
 @dataclass
 class WavelengthCalibrationResult:
-    """Result of robust wavelength calibration."""
+    """
+    Result of robust wavelength calibration.
+
+    Attributes
+    ----------
+    success : bool
+        Whether calibration was successfully estimated.
+    model : CalibrationModel
+        Calibration model used.
+    coefficients : Tuple[float, ...]
+        Fitted model coefficients.
+    corrected_wavelength : np.ndarray
+        Corrected wavelength axis.
+    bic : float
+        Bayesian information criterion for selected fit.
+    rmse_nm : float
+        Inlier RMSE in nm.
+    n_inliers : int
+        Number of robust inlier peak-line pairs.
+    n_peaks : int
+        Number of detected peaks in the measured spectrum.
+    n_candidates : int
+        Number of candidate peak-line pairs considered.
+    matched_peak_fraction : float
+        Fraction of detected peaks that matched candidate lines.
+    quality_passed : bool
+        Whether quality-gate criteria were satisfied.
+    quality_reason : str
+        Quality-gate pass/fail reason.
+    details : Dict[str, Any]
+        Additional diagnostics and quality metrics.
+    """
 
     success: bool
     model: CalibrationModel
@@ -162,7 +193,7 @@ def _fit_model(
             return (float(coef[0]), float(coef[1]), float(coef[2]))
     except np.linalg.LinAlgError:
         return None
-    return None
+    raise ValueError(f"Unsupported calibration model: {model}")
 
 
 def _is_monotonic_on_grid(
@@ -410,6 +441,12 @@ def calibrate_wavelength_axis(
         Minimum inlier peak span as a fraction of full wavelength span.
     quality_max_abs_correction_nm : float
         Maximum absolute correction magnitude over the wavelength axis.
+
+    Returns
+    -------
+    WavelengthCalibrationResult
+        Calibration result with corrected wavelength axis, fit diagnostics,
+        and quality-gate outcome.
     """
     wavelength = np.asarray(wavelength, dtype=float)
     intensity = np.asarray(intensity, dtype=float)

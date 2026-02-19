@@ -15,7 +15,7 @@ import os
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 
@@ -43,7 +43,7 @@ from scripts.validate_real_data import (  # noqa: E402
 )
 
 
-LoaderFn = Callable[[str], Tuple[np.ndarray, np.ndarray, Dict]]
+LoaderFn = Callable[[str], Tuple[np.ndarray, np.ndarray, Dict[str, Any]]]
 
 
 @dataclass
@@ -121,8 +121,13 @@ def _select_cases(
         if not path.exists():
             continue
 
-        wavelength, data, _ = loader(str(path))
-        spectrum = select_representative_spectrum(data, ds["name"])
+        try:
+            wavelength, data, _ = loader(str(path))
+            spectrum = select_representative_spectrum(data, ds["name"])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Skipping dataset %s due to load error: %s", ds["name"], exc)
+            logger.debug("Traceback while loading dataset %s", ds["name"], exc_info=True)
+            continue
         if "resolving_power" in ds:
             rp = float(ds["resolving_power"])
         else:
@@ -268,7 +273,16 @@ def run_sweep(
             f"-> F1={f1:.3f} P={precision:.3f} R={recall:.3f} FPR={fpr:.3f}"
         )
 
-    results.sort(key=lambda r: (-r.f1, -r.precision, -r.recall, r.fpr, -r.exact_matches))
+    results.sort(
+        key=lambda r: (
+            r.datasets_evaluated <= 0,
+            -r.f1,
+            -r.precision,
+            -r.recall,
+            r.fpr,
+            -r.exact_matches,
+        )
+    )
     return results
 
 
@@ -310,6 +324,10 @@ def main() -> None:
     parser.add_argument("--max-lines-per-element", type=str, default="30,50")
 
     args = parser.parse_args()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
 
     db_path = Path(args.db_path)
     data_dir = Path(args.data_dir)
@@ -319,7 +337,6 @@ def main() -> None:
     if not data_dir.exists():
         raise FileNotFoundError(f"Data dir not found: {data_dir}")
 
-    db = AtomicDatabase(str(db_path))
     cases = _select_cases(data_dir=data_dir, selected_datasets=args.datasets)
     if not cases:
         raise RuntimeError("No labeled datasets available for calibration.")
@@ -328,16 +345,17 @@ def main() -> None:
     for c in cases:
         print(f"  - {c.name:<20} RP={c.resolving_power:>6.0f}  expected={sorted(c.expected)}")
 
-    results = run_sweep(
-        db=db,
-        cases=cases,
-        intensity_threshold_factors=_parse_float_list(args.intensity_threshold_factors),
-        detection_thresholds=_parse_float_list(args.detection_thresholds),
-        chance_window_scales=_parse_float_list(args.chance_window_scales),
-        min_relative_intensities=_parse_float_list(args.min_relative_intensities),
-        max_lines_per_element=_parse_int_list(args.max_lines_per_element),
-        max_combinations=args.max_combinations if args.max_combinations > 0 else None,
-    )
+    with AtomicDatabase(str(db_path)) as db:
+        results = run_sweep(
+            db=db,
+            cases=cases,
+            intensity_threshold_factors=_parse_float_list(args.intensity_threshold_factors),
+            detection_thresholds=_parse_float_list(args.detection_thresholds),
+            chance_window_scales=_parse_float_list(args.chance_window_scales),
+            min_relative_intensities=_parse_float_list(args.min_relative_intensities),
+            max_lines_per_element=_parse_int_list(args.max_lines_per_element),
+            max_combinations=args.max_combinations if args.max_combinations > 0 else None,
+        )
 
     if not results:
         raise RuntimeError("Sweep produced no valid results.")

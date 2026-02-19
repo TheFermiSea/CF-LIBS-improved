@@ -458,7 +458,7 @@ class PCAPipeline:
             explained_variance_ratio=result.explained_variance_ratio,
             singular_values=result.singular_values,
             mean=mean,
-            n_components=n_components,
+            n_components=result.n_components,
             n_features=n_features,
             n_samples=n_samples,
             total_variance=total_variance,

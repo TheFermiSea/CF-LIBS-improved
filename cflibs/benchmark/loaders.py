@@ -88,7 +88,7 @@ def load_benchmark(
             format = BenchmarkFormat.HDF5
         else:
             raise ValueError(
-                f"Cannot detect format from extension: {ext}. " "Please specify format explicitly."
+                f"Cannot detect format from extension: {ext}. Please specify format explicitly."
             )
 
     if format == BenchmarkFormat.JSON:
@@ -133,7 +133,7 @@ def save_benchmark(
             format = BenchmarkFormat.HDF5
         else:
             raise ValueError(
-                f"Cannot detect format from extension: {ext}. " "Please specify format explicitly."
+                f"Cannot detect format from extension: {ext}. Please specify format explicitly."
             )
 
     if format == BenchmarkFormat.JSON:
@@ -419,7 +419,7 @@ def _save_hdf5(
             for name, split in dataset.splits.items():
                 split_group = splits_group.create_group(name)
                 # Use variable-length strings
-                dt = h5py.special_dtype(vlen=str)
+                dt = h5py.string_dtype(encoding="utf-8")
                 split_group.create_dataset("train_ids", data=split.train_ids, dtype=dt)
                 split_group.create_dataset("test_ids", data=split.test_ids, dtype=dt)
                 if split.validation_ids:

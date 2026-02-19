@@ -45,3 +45,8 @@ def test_default_recipes_filter_to_candidates():
     for recipe in recipes:
         assert set(recipe.mass_fractions.keys()).issubset({"Fe", "Ni"})
         assert np.isclose(sum(recipe.mass_fractions.values()), 1.0)
+
+
+def test_default_recipes_empty_for_disjoint_candidates():
+    recipes = default_recipes(["Zn", "Pb"])
+    assert recipes == []

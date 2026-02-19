@@ -23,6 +23,15 @@ def _parse_csv_float_list(value: str) -> list[float]:
     return [float(x.strip()) for x in value.split(",") if x.strip()]
 
 
+def _parse_range(name: str, value: str) -> list[float]:
+    values = _parse_csv_float_list(value)
+    if len(values) != 2:
+        raise argparse.ArgumentTypeError(
+            f"{name} requires exactly two comma-separated values: min,max"
+        )
+    return values
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-path", type=str, default="ASD_da/libs_production.db")
@@ -49,6 +58,11 @@ def main() -> None:
     parser.add_argument("--warp-quadratic-nm", type=str, default="0.0,0.15")
 
     args = parser.parse_args()
+    try:
+        temperature_range_eV = _parse_range("--temperature-range-eV", args.temperature_range_eV)
+        log_ne_range = _parse_range("--log-ne-range", args.log_ne_range)
+    except argparse.ArgumentTypeError as exc:
+        parser.error(str(exc))
 
     summary = build_synthetic_id_corpus(
         db_path=args.db_path,
@@ -59,8 +73,8 @@ def main() -> None:
         wavelength_min_nm=args.lambda_min,
         wavelength_max_nm=args.lambda_max,
         pixels=args.pixels,
-        temperature_range_eV=_parse_csv_float_list(args.temperature_range_eV),
-        log_ne_range=_parse_csv_float_list(args.log_ne_range),
+        temperature_range_eV=temperature_range_eV,
+        log_ne_range=log_ne_range,
         axes=PerturbationAxes(
             snr_db=_parse_csv_float_list(args.snr_db),
             continuum_level=_parse_csv_float_list(args.continuum_level),

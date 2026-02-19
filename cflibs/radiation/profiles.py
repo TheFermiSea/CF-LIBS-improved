@@ -268,8 +268,7 @@ def total_lorentzian_width(
 # --- JAX IMPLEMENTATION ---
 
 if HAS_JAX:
-    x64_enabled_attr = getattr(jax.config, "x64_enabled", False)
-    x64_enabled = x64_enabled_attr() if callable(x64_enabled_attr) else bool(x64_enabled_attr)
+    x64_enabled = bool(getattr(jax.config, "jax_enable_x64", False))
     _weideman_dtype = jnp.float64 if x64_enabled else jnp.float32
     if not x64_enabled:
         warnings.warn(
@@ -282,7 +281,7 @@ if HAS_JAX:
 
     # Weideman (1994) coefficients for Faddeeva function approximation
     # Reference: Weideman, SIAM J. Numer. Anal. 31, 1497 (1994)
-    # N = 36 terms, provides ~15 digits of accuracy
+    # N = 36 terms, provides up to ~15 digits in float64 mode
     _WEIDEMAN_L = 5.0453784915222872
     _WEIDEMAN_COEFFS = jnp.array(
         [
@@ -334,8 +333,8 @@ if HAS_JAX:
         This is a branch-free implementation with stable gradients for all z,
         making it suitable for use with JAX autodiff (including MCMC sampling).
 
-        The approximation uses N=36 terms and achieves ~15 digits of accuracy
-        across the entire complex plane.
+        The approximation uses N=36 terms and achieves up to ~15 digits in
+        float64 mode across the complex plane.
 
         Parameters
         ----------

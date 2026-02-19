@@ -661,7 +661,11 @@ class CalibrationTransfer:
         self._slope: Optional[np.ndarray] = None
         self._bias: Optional[np.ndarray] = None
         self._transfer_matrix: Optional[np.ndarray] = None
-        self._pds_matrices: Optional[List[np.ndarray]] = None
+        self._pds_matrices: Optional[List[Tuple[int, int, np.ndarray]]] = None
+        self._source_mean: Optional[np.ndarray] = None
+        self._source_std: Optional[np.ndarray] = None
+        self._target_mean: Optional[np.ndarray] = None
+        self._target_std: Optional[np.ndarray] = None
 
         self._fitted = False
 
@@ -842,10 +846,14 @@ class CalibrationTransfer:
 
     def _transform_sbc(self, target: np.ndarray) -> np.ndarray:
         """Apply Slope/Bias Correction."""
+        if self._slope is None or self._bias is None:
+            raise RuntimeError("SBC model is not fitted")
         return target * self._slope + self._bias
 
     def _transform_pds(self, target: np.ndarray) -> np.ndarray:
         """Apply Piecewise Direct Standardization."""
+        if self._pds_matrices is None:
+            raise RuntimeError("PDS model is not fitted")
         n_samples, n_wavelengths = target.shape
         transformed = np.zeros_like(target)
 
@@ -857,10 +865,19 @@ class CalibrationTransfer:
 
     def _transform_ds(self, target: np.ndarray) -> np.ndarray:
         """Apply Direct Standardization."""
+        if self._transfer_matrix is None:
+            raise RuntimeError("DS model is not fitted")
         return np.dot(target, self._transfer_matrix)
 
     def _transform_standardization(self, target: np.ndarray) -> np.ndarray:
         """Apply simple standardization."""
+        if (
+            self._source_mean is None
+            or self._source_std is None
+            or self._target_mean is None
+            or self._target_std is None
+        ):
+            raise RuntimeError("STANDARDIZATION model is not fitted")
         normalized = (target - self._target_mean) / self._target_std
         return normalized * self._source_std + self._source_mean
 
@@ -926,6 +943,22 @@ class CalibrationTransfer:
             "transfer_matrix": (
                 self._transfer_matrix.tolist() if self._transfer_matrix is not None else None
             ),
+            "pds_matrices": (
+                [
+                    {
+                        "start": int(start),
+                        "end": int(end),
+                        "coeffs": coeffs.tolist(),
+                    }
+                    for start, end, coeffs in self._pds_matrices
+                ]
+                if self._pds_matrices is not None
+                else None
+            ),
+            "source_mean": self._source_mean.tolist() if self._source_mean is not None else None,
+            "source_std": self._source_std.tolist() if self._source_std is not None else None,
+            "target_mean": self._target_mean.tolist() if self._target_mean is not None else None,
+            "target_std": self._target_std.tolist() if self._target_std is not None else None,
         }
 
         with open(path, "w") as f:
@@ -963,6 +996,23 @@ class CalibrationTransfer:
             transfer._bias = np.array(data["bias"])
         if data.get("transfer_matrix") is not None:
             transfer._transfer_matrix = np.array(data["transfer_matrix"])
+        if data.get("pds_matrices") is not None:
+            transfer._pds_matrices = [
+                (
+                    int(row["start"]),
+                    int(row["end"]),
+                    np.array(row["coeffs"], dtype=float),
+                )
+                for row in data["pds_matrices"]
+            ]
+        if data.get("source_mean") is not None:
+            transfer._source_mean = np.array(data["source_mean"], dtype=float)
+        if data.get("source_std") is not None:
+            transfer._source_std = np.array(data["source_std"], dtype=float)
+        if data.get("target_mean") is not None:
+            transfer._target_mean = np.array(data["target_mean"], dtype=float)
+        if data.get("target_std") is not None:
+            transfer._target_std = np.array(data["target_std"], dtype=float)
 
         transfer._fitted = True
 
@@ -1149,8 +1199,15 @@ class FineTuner:
             # Compute gradients
             loss_val, grads = value_and_grad(loss_fn)(params, X_train, y_train)
 
-            # Update parameters (frozen layers excluded)
-            params = {k: v - self.learning_rate * grads[k] for k, v in params.items()}
+            # Update parameters; optionally keep the first N parameter tensors frozen.
+            if self.freeze_layers > 0:
+                frozen_keys = set(list(params.keys())[: self.freeze_layers])
+            else:
+                frozen_keys = set()
+            params = {
+                k: (v if k in frozen_keys else v - self.learning_rate * grads[k])
+                for k, v in params.items()
+            }
 
             loss_history.append(float(loss_val))
 

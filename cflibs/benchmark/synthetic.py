@@ -36,6 +36,8 @@ from cflibs.benchmark.dataset import (
 logger = get_logger("benchmark.synthetic")
 
 # Standard atomic masses used for mass-fraction -> number-density conversion [amu]
+# NOTE: Keep this table aligned with candidate elements used in synthetic benchmarks.
+# Unknown elements now raise to avoid silently corrupting number-fraction conversion.
 STANDARD_MASSES = {
     "H": 1.008,
     "He": 4.003,
@@ -512,8 +514,12 @@ class SyntheticBenchmarkGenerator:
                 )
             return intensity_model
 
-        except Exception as e:
-            logger.warning(f"Forward model failed: {e}, using simplified model")
+        except (RuntimeError, ValueError, ImportError) as e:
+            logger.warning(
+                "Forward model failed (%s), using simplified model fallback",
+                e,
+                exc_info=True,
+            )
             return self._generate_simplified(composition, temperature_K, rng)
 
     @staticmethod
@@ -533,7 +539,11 @@ class SyntheticBenchmarkGenerator:
         for element, mass_fraction in composition.items():
             if mass_fraction <= 0:
                 continue
-            mass_amu = STANDARD_MASSES.get(element, 50.0)
+            if element not in STANDARD_MASSES:
+                raise KeyError(
+                    f"Missing standard atomic mass for element '{element}' in synthetic generator"
+                )
+            mass_amu = STANDARD_MASSES[element]
             weighted[element] = mass_fraction / max(float(mass_amu), 1e-9)
 
         total_weighted = sum(weighted.values())
@@ -552,9 +562,7 @@ class SyntheticBenchmarkGenerator:
         rng: np.random.Generator,
     ) -> np.ndarray:
         """Generate simplified synthetic spectrum without atomic database."""
-        from cflibs.core.constants import KB_EV, EV_TO_K
-
-        temperature_K / EV_TO_K
+        from cflibs.core.constants import KB_EV
 
         # Initialize with low background
         spectrum = np.ones(len(self._wavelength_grid)) * 10.0

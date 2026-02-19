@@ -11,6 +11,7 @@ import argparse
 import ast
 import csv
 import json
+import logging
 import re
 import sys
 import time
@@ -36,6 +37,9 @@ from scripts.validate_real_data import (  # noqa: E402
     load_scipp_depth_scan,
     select_representative_spectrum,
 )
+from cflibs.inversion.preprocessing import detect_peaks_auto  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 def _loader_map():
@@ -48,6 +52,14 @@ def _loader_map():
     }
 
 
+def _portable_path(path: Path) -> str:
+    """Return repo-relative path when possible, otherwise absolute string."""
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path.resolve())
+
+
 def _normalize(y: np.ndarray) -> np.ndarray:
     y = np.asarray(y, dtype=float)
     y = y - np.nanmin(y)
@@ -58,13 +70,12 @@ def _normalize(y: np.ndarray) -> np.ndarray:
 def _synth_from_lines(
     wavelength: np.ndarray, line_wl: np.ndarray, line_strength: np.ndarray, resolution: float
 ) -> np.ndarray:
-    synth = np.zeros_like(wavelength, dtype=float)
-    for wl0, amp in zip(line_wl, line_strength):
-        fwhm = max(wl0 / max(resolution, 1e-6), 1e-6)
-        sigma = fwhm / 2.355
-        x = (wavelength - wl0) / sigma
-        synth += amp * np.exp(-0.5 * x * x)
-    return synth
+    if len(line_wl) == 0:
+        return np.zeros_like(wavelength, dtype=float)
+    fwhm = np.maximum(line_wl / max(float(resolution), 1e-6), 1e-6)
+    sigma = fwhm / 2.355
+    x = (wavelength[:, None] - line_wl[None, :]) / sigma[None, :]
+    return np.sum(line_strength[None, :] * np.exp(-0.5 * x * x), axis=1)
 
 
 def _fetch_nist_lines(
@@ -94,18 +105,22 @@ def _fetch_nist_lines(
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-            ),
-            "Referer": "https://physics.nist.gov/PhysRefData/ASD/LIBS/libs-form.html",
+            "User-Agent": "CF-LIBS-nist-audit/1.0 (contact: maintainers@thefermsea.org)",
         },
     )
     with urllib.request.urlopen(req, timeout=45) as resp:
+        status = getattr(resp, "status", None)
         html = resp.read().decode("utf-8", errors="ignore")
 
     match = re.search(r"var lines = (\[\[.*?\]\]);", html, re.S)
     if not match:
+        logger.error(
+            "Failed to parse NIST lines for %s (status=%s, html_len=%d)",
+            element,
+            status,
+            len(html),
+        )
+        logger.debug("NIST response prefix for %s: %s", element, html[:500])
         raise RuntimeError(f"Could not parse NIST lines array for {element}")
 
     lines = ast.literal_eval(match.group(1))
@@ -166,6 +181,10 @@ def main() -> None:
         help="Pure dataset names from scripts/validate_real_data.py",
     )
     args = parser.parse_args()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
 
     data_dir = (ROOT / args.data_dir).resolve()
     out_dir = (ROOT / args.output_dir).resolve()
@@ -203,8 +222,14 @@ def main() -> None:
                     eden_cm3=eden_cm3,
                 )
                 synth = _synth_from_lines(wavelength, line_wl, line_strength, resolving_power)
-                corr = float(np.corrcoef(_normalize(spectrum), _normalize(synth))[0, 1])
-                mae = float(np.mean(np.abs(_normalize(spectrum) - _normalize(synth))))
+                norm_spec = _normalize(spectrum)
+                norm_synth = _normalize(synth)
+                if np.allclose(norm_spec, 0.0) or np.allclose(norm_synth, 0.0):
+                    corr = 0.0
+                else:
+                    corr = float(np.corrcoef(norm_spec, norm_synth)[0, 1])
+                corr = float(np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0))
+                mae = float(np.mean(np.abs(norm_spec - norm_synth)))
                 row = {
                     "dataset": name,
                     "element": element,
@@ -281,10 +306,6 @@ def main() -> None:
         plt.close(fig)
 
         # Peak-line shift diagnostics
-        from cflibs.inversion.preprocessing import (
-            detect_peaks_auto,
-        )  # local import to avoid startup cost
-
         peaks, _, _ = detect_peaks_auto(wavelength, spectrum, threshold_factor=4.0)
         peak_wl = np.array([p[1] for p in peaks], dtype=float)
         shift_diag = _best_shift_peak_match(peak_wl=peak_wl, line_wl=best["line_wl"])
@@ -303,10 +324,10 @@ def main() -> None:
             },
             "peak_to_line_shift_diagnostics": shift_diag,
             "outputs": {
-                "grid_csv": str(grid_csv),
-                "line_csv": str(line_csv),
-                "comparison_csv": str(comp_csv),
-                "overlay_png": str(overlay_png),
+                "grid_csv": _portable_path(grid_csv),
+                "line_csv": _portable_path(line_csv),
+                "comparison_csv": _portable_path(comp_csv),
+                "overlay_png": _portable_path(overlay_png),
             },
         }
         (out_dir / f"{name}_summary.json").write_text(json.dumps(summary, indent=2))

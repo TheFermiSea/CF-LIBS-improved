@@ -3,6 +3,7 @@
 This document captures the initial equation-to-code audit for synthetic spectrum generation.
 
 ## Scope Audited
+
 - `cflibs/plasma/saha_boltzmann.py`
 - `cflibs/radiation/emissivity.py`
 - `cflibs/radiation/profiles.py`
@@ -12,6 +13,7 @@ This document captures the initial equation-to-code audit for synthetic spectrum
 - `cflibs/benchmark/synthetic.py`
 
 ## Equation-to-Code Mapping
+
 1. Saha ionization balance:
    - Implemented in `cflibs/plasma/saha_boltzmann.py` (`solve_ionization_balance`)
    - Implemented in vectorized form in `cflibs/inversion/bayesian.py` (`_compute_spectrum`)
@@ -30,6 +32,7 @@ This document captures the initial equation-to-code audit for synthetic spectrum
    - Applied from `cflibs/radiation/spectrum_model.py`
 
 ## Key Findings (Initial)
+
 1. Critical: synthetic benchmark forward-model path was effectively broken.
    - `cflibs/benchmark/synthetic.py` used outdated constructor signatures for `SingleZoneLTEPlasma` and `SpectrumModel`.
    - This could silently force fallback to simplified, non-physical synthetic spectra.
@@ -41,6 +44,7 @@ This document captures the initial equation-to-code audit for synthetic spectrum
    - `cflibs/inversion/bayesian.py` includes Voigt/Stark but different state parametrization.
 
 ## Fixes Implemented in This Step
+
 1. Repaired benchmark forward-model integration in `cflibs/benchmark/synthetic.py`:
    - Correct `SingleZoneLTEPlasma` construction (`T_e`, `n_e`, `species`).
    - Correct `SpectrumModel` construction (`plasma`, `atomic_db`, `instrument`, wavelength range, step).
@@ -52,6 +56,7 @@ This document captures the initial equation-to-code audit for synthetic spectrum
    - Composition conversion preserves normalization and atomic-mass ordering.
 
 ## Remaining Risks / Next Audit Targets
+
 1. Reconcile density parametrization between benchmark/radiation model and Bayesian forward model.
 2. Validate Stark broadening and temperature scaling against trusted line subsets.
 3. Add quantitative physical sanity checks (line-ratio vs Boltzmann prediction, width-vs-density trend checks).

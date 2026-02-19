@@ -15,6 +15,8 @@ os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 from cflibs.benchmark.synthetic_eval import CalibrationOptions, run_synthetic_benchmark
 
+DEFAULT_MANIFEST_PATH = "output/synthetic_corpus/ak3_1_3_corpus_v1/manifest.jsonl"
+
 
 def _parse_elements(value: str) -> list[str]:
     return [x.strip() for x in value.split(",") if x.strip()]
@@ -36,7 +38,8 @@ def main() -> None:
     parser.add_argument(
         "--manifest-path",
         type=str,
-        default="output/synthetic_corpus/ak3_1_3_corpus_v1/manifest.jsonl",
+        default=None,
+        help=f"Optional manifest JSONL path (default if present: {DEFAULT_MANIFEST_PATH})",
     )
     parser.add_argument(
         "--elements",
@@ -70,7 +73,10 @@ def main() -> None:
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    default_manifest = Path(DEFAULT_MANIFEST_PATH)
+    manifest_path = args.manifest_path
+    if manifest_path is None and default_manifest.exists():
+        manifest_path = str(default_manifest)
 
     calibration = CalibrationOptions(
         mode=args.wavelength_calibration_mode,
@@ -89,7 +95,7 @@ def main() -> None:
         db_path=args.db_path,
         output_dir=str(output_dir),
         candidate_elements=_parse_elements(args.elements) if args.elements else None,
-        manifest_path=args.manifest_path if args.manifest_path else None,
+        manifest_path=manifest_path if manifest_path else None,
         presence_threshold=args.presence_threshold,
         max_spectra=args.max_spectra,
         calibration=calibration,

@@ -17,6 +17,7 @@
 - `mypy cflibs/` runs type checks.
 
 ## CLI Workflows
+
 - `cflibs generate-db` generates the atomic database via the CLI.
 - `python datagen_v2.py` runs the database generator directly.
 - `cflibs forward examples/config_example.yaml --output spectrum.csv` generates a synthetic spectrum.
@@ -24,6 +25,7 @@
 - `cflibs generate-manifold examples/manifold_config_example.yaml --progress` builds a spectral manifold.
 
 ## Deployment Environment
+
 - `uv venv --python 3.12` creates a virtual environment (Deployment guide).
 - `uv pip install -e ".[local]"` installs local extras in the uv-managed env.
 

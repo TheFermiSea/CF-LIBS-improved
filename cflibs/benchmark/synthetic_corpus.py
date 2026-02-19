@@ -63,7 +63,15 @@ def default_recipes(candidate_elements: Iterable[str]) -> List[CorpusRecipe]:
     """
     Return default pure + mixture recipes filtered to candidate elements.
 
-    Recipes remain normalized after filtering.
+    Parameters
+    ----------
+    candidate_elements : Iterable[str]
+        Candidate element symbols to keep in recipes.
+
+    Returns
+    -------
+    List[CorpusRecipe]
+        Filtered and renormalized recipes.
     """
     candidates = set(candidate_elements)
     base = [
@@ -94,7 +102,14 @@ def default_recipes(candidate_elements: Iterable[str]) -> List[CorpusRecipe]:
 
 
 def default_axes() -> PerturbationAxes:
-    """Default perturbation ranges used for CF-LIBS-ak3.1.3."""
+    """
+    Return default perturbation ranges used for CF-LIBS-ak3.1.3.
+
+    Returns
+    -------
+    PerturbationAxes
+        Default perturbation grid.
+    """
     return PerturbationAxes(
         snr_db=[20.0, 30.0, 40.0],
         continuum_level=[0.00, 0.03],
@@ -109,12 +124,26 @@ def mass_to_number_fractions(mass_fractions: Dict[str, float]) -> Dict[str, floa
     Convert mass fractions into number fractions.
 
     n_i is proportional to w_i / A_i.
+
+    Parameters
+    ----------
+    mass_fractions : Dict[str, float]
+        Element mass fractions.
+
+    Returns
+    -------
+    Dict[str, float]
+        Element number fractions normalized to 1.
     """
     weighted = {}
     for element, mass_fraction in mass_fractions.items():
         if mass_fraction <= 0:
             continue
-        atomic_mass = STANDARD_MASSES.get(element, 50.0)
+        if element not in STANDARD_MASSES:
+            raise KeyError(
+                f"Missing standard atomic mass for element '{element}' in synthetic corpus builder"
+            )
+        atomic_mass = STANDARD_MASSES[element]
         weighted[element] = float(mass_fraction) / max(float(atomic_mass), 1e-12)
 
     total = sum(weighted.values())
@@ -133,6 +162,20 @@ def distort_wavelength_axis(
     Apply global shift + quadratic non-linear warp to wavelength axis.
 
     The quadratic warp is centered to keep average warp ~0 over the axis.
+
+    Parameters
+    ----------
+    wavelength_nm : np.ndarray
+        Base wavelength axis in nm.
+    shift_nm : float
+        Global wavelength shift in nm.
+    warp_quadratic_nm : float
+        Quadratic warp amplitude in nm.
+
+    Returns
+    -------
+    np.ndarray
+        Distorted wavelength axis.
     """
     wl = np.asarray(wavelength_nm, dtype=float)
     x = np.linspace(-1.0, 1.0, wl.size)
@@ -144,7 +187,19 @@ def distort_wavelength_axis(
 
 
 def full_factorial_perturbations(axes: PerturbationAxes) -> Iterator[Dict[str, float]]:
-    """Yield full-factorial perturbation combinations in deterministic order."""
+    """
+    Yield full-factorial perturbation combinations in deterministic order.
+
+    Parameters
+    ----------
+    axes : PerturbationAxes
+        Perturbation axes definition.
+
+    Yields
+    ------
+    Dict[str, float]
+        One perturbation setting per combination.
+    """
     for snr_db in axes.snr_db:
         for continuum in axes.continuum_level:
             for resolving_power in axes.resolving_power:
@@ -164,20 +219,28 @@ def _apply_resolving_power(
 ) -> np.ndarray:
     wl = np.asarray(wavelength_nm, dtype=float)
     y = np.asarray(intensity, dtype=float)
-    mean_wl = float(np.mean(wl))
-    fwhm_nm = mean_wl / max(float(resolving_power), 1e-9)
-    sigma_nm = fwhm_nm / 2.355
-    step_nm = float(np.mean(np.diff(wl)))
+    if wl.size < 3:
+        return y
+    if not np.all(np.diff(wl) > 0):
+        raise ValueError("wavelength_nm must be strictly increasing")
+
+    # Constant resolving power implies constant broadening width in log(lambda).
+    log_wl = np.log(wl)
+    log_grid = np.linspace(log_wl[0], log_wl[-1], wl.size)
+    y_log = np.interp(log_grid, log_wl, y)
+    sigma_log = 1.0 / (2.355 * max(float(resolving_power), 1e-9))
+    step_log = float(np.mean(np.diff(log_grid)))
 
     # Skip tiny kernels where discrete convolution would be numerically pointless.
-    if sigma_nm < 0.15 * step_nm:
+    if sigma_log < 0.15 * step_log:
         return y
 
-    half_width_px = max(int(np.ceil(5.0 * sigma_nm / max(step_nm, 1e-12))), 1)
-    kernel_axis = np.arange(-half_width_px, half_width_px + 1, dtype=float) * step_nm
-    kernel = np.exp(-0.5 * (kernel_axis / sigma_nm) ** 2)
+    half_width_px = max(int(np.ceil(5.0 * sigma_log / max(step_log, 1e-12))), 1)
+    kernel_axis = np.arange(-half_width_px, half_width_px + 1, dtype=float) * step_log
+    kernel = np.exp(-0.5 * (kernel_axis / sigma_log) ** 2)
     kernel = kernel / np.sum(kernel)
-    return signal.convolve(y, kernel, mode="same")
+    y_blurred_log = signal.convolve(y_log, kernel, mode="same")
+    return np.interp(log_wl, log_grid, y_blurred_log)
 
 
 def _add_continuum_and_noise(
@@ -188,16 +251,14 @@ def _add_continuum_and_noise(
 ) -> np.ndarray:
     y = np.asarray(intensity, dtype=float)
     y = y - float(np.min(y))
-    peak = float(np.max(y))
-    if peak > 0:
-        y = y / peak
+    signal_scale = max(float(np.percentile(y, 99)), 1e-9)
 
     x = np.linspace(0.0, 1.0, y.size)
     continuum_shape = 0.7 + 0.3 * x + 0.2 * (x - 0.5) ** 2
-    y = y + float(continuum_level) * continuum_shape
+    y = y + float(continuum_level) * signal_scale * continuum_shape
 
     snr_linear = 10.0 ** (float(snr_db) / 20.0)
-    noise_std = 1.0 / max(snr_linear, 1e-9)
+    noise_std = signal_scale / max(snr_linear, 1e-9)
     y = y + rng.normal(0.0, noise_std, size=y.size)
 
     return np.clip(y, 0.0, None)
@@ -220,7 +281,37 @@ def build_synthetic_id_corpus(
     """
     Build deterministic synthetic corpus and persist benchmark + manifests.
 
-    Returns a summary dictionary with generated paths and counts.
+    Parameters
+    ----------
+    db_path : str
+        Path to atomic database.
+    output_dir : str
+        Output directory.
+    dataset_name : str
+        Dataset name for output folder.
+    seed : int
+        RNG seed for deterministic generation.
+    candidate_elements : List[str]
+        Candidate elements to include in synthetic spectra.
+    wavelength_min_nm : float
+        Lower wavelength bound.
+    wavelength_max_nm : float
+        Upper wavelength bound.
+    pixels : int
+        Number of spectral channels.
+    temperature_range_eV : List[float]
+        Two-value temperature range [min, max] in eV.
+    log_ne_range : List[float]
+        Two-value log10 electron density range [min, max].
+    recipes : List[CorpusRecipe], optional
+        Optional custom recipe set.
+    axes : PerturbationAxes, optional
+        Optional custom perturbation axes.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Summary dictionary with generated paths and counts.
     """
     # Import here to keep module lightweight for helper-only unit tests.
     from cflibs.inversion.bayesian import BayesianForwardModel

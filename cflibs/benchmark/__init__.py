@@ -73,11 +73,6 @@ from cflibs.benchmark.synthetic_corpus import (
     default_axes,
     default_recipes,
 )
-from cflibs.benchmark.synthetic_eval import (
-    CalibrationOptions,
-    compute_binary_metrics,
-    run_synthetic_benchmark,
-)
 
 from cflibs.benchmark.loaders import (
     load_benchmark,
@@ -114,3 +109,14 @@ __all__ = [
     "save_benchmark",
     "BenchmarkFormat",
 ]
+
+
+def __getattr__(name: str):
+    """Lazy-load heavy synthetic benchmark evaluation helpers."""
+    if name in {"CalibrationOptions", "compute_binary_metrics", "run_synthetic_benchmark"}:
+        from cflibs.benchmark import synthetic_eval as _synthetic_eval
+
+        value = getattr(_synthetic_eval, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

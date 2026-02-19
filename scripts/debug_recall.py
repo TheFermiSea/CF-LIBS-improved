@@ -50,6 +50,8 @@ for name, path, loader, elements, expected, rp in CASES:
         wavelength, data, _ = load_hdf5(str(data_path))
     elif loader == "scipp":
         wavelength, data, _ = load_scipp(str(data_path))
+    else:
+        raise ValueError(f"Unsupported loader '{loader}' for case {name}")
 
     # Get mean spectrum
     if data.ndim == 3:

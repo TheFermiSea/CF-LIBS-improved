@@ -412,6 +412,7 @@ class PLSRegression:
             t = np.zeros(n_samples)
             q = np.zeros(n_targets)
             converged = False
+            stop_due_numerics = False
             w_norm = 0.0
             diff = np.inf
             iteration = -1
@@ -424,6 +425,7 @@ class PLSRegression:
                     logger.warning(f"Component {k+1}: near-zero weight vector, stopping")
                     # No more useful components can be extracted
                     n_comp = k
+                    stop_due_numerics = True
                     break
                 w = w / w_norm
 
@@ -435,6 +437,7 @@ class PLSRegression:
                 if t_sq < 1e-10:
                     logger.warning(f"Component {k+1}: near-zero score vector, stopping")
                     n_comp = k
+                    stop_due_numerics = True
                     break
 
                 q = Yk.T @ t / t_sq
@@ -456,7 +459,7 @@ class PLSRegression:
                     converged = True
                     break
 
-            if not converged:
+            if not converged and not stop_due_numerics:
                 logger.warning(
                     "Component %d: NIPALS did not converge in %d iterations (final diff=%.2e)",
                     k + 1,
@@ -465,7 +468,7 @@ class PLSRegression:
                 )
 
             # If we broke early due to numerical issues, stop extracting components
-            if not converged and iteration == 0 and w_norm < 1e-10:
+            if stop_due_numerics:
                 break
 
             # Store component

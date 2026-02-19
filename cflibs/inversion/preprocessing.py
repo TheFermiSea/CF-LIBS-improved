@@ -192,10 +192,7 @@ def detect_peaks(
     # Second-derivative confirmation
     if use_second_derivative and len(peak_indices) > 0:
         if wavelength.size >= 3:  # edge_order=2 requires >= 3 points
-            if wavelength.size > 1:
-                spacing = float(np.median(np.abs(np.diff(wavelength))))
-            else:
-                spacing = 1.0
+            spacing = float(np.median(np.abs(np.diff(wavelength))))
             d1 = np.gradient(corrected, spacing, edge_order=2)
             d2 = -np.gradient(d1, spacing, edge_order=2)
             d2[d2 < 0] = 0.0

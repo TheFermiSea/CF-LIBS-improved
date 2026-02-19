@@ -1,5 +1,7 @@
 """Unit tests for synthetic benchmark evaluation helpers."""
 
+import pytest
+
 from cflibs.benchmark.synthetic_eval import (
     compute_binary_metrics,
     confusion_counts,
@@ -7,6 +9,8 @@ from cflibs.benchmark.synthetic_eval import (
     summarize_aggregate,
     summarize_by_group,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_derive_truth_elements_threshold():

@@ -1,13 +1,16 @@
 # Synthetic Corpus Specification (CF-LIBS-ak3.1.3)
 
 ## Builder
-- Script: `/Users/briansquires/code/CF-LIBS/scripts/build_synthetic_id_corpus.py`
-- Core module: `/Users/briansquires/code/CF-LIBS/cflibs/benchmark/synthetic_corpus.py`
+
+- Script: `scripts/build_synthetic_id_corpus.py`
+- Core module: `cflibs/benchmark/synthetic_corpus.py`
 
 ## Purpose
+
 Generate deterministic synthetic spectra with explicit ground-truth labels for synthetic-first debugging of ALIAS/Comb/Correlation.
 
 ## Ground Truth
+
 Per spectrum manifest includes:
 - `sample_id`
 - `recipe` (pure or mixture)
@@ -19,6 +22,7 @@ Per spectrum manifest includes:
 - `perturbation` block
 
 ## Controlled Perturbation Axes
+
 - `snr_db`
 - `continuum_level`
 - `resolving_power`
@@ -28,6 +32,7 @@ Per spectrum manifest includes:
 Full-factorial combinations are generated in deterministic order.
 
 ## Output Artifacts
+
 For each dataset name:
 - `corpus.json` (BenchmarkDataset)
 - `corpus.h5` (BenchmarkDataset)
@@ -36,13 +41,15 @@ For each dataset name:
 - `summary.json`
 
 Default location:
-- `/Users/briansquires/code/CF-LIBS/output/synthetic_corpus/<dataset_name>/`
+- `output/synthetic_corpus/<dataset_name>/`
 
 ## Determinism
+
 - RNG seed controls all sampled plasma parameters and noise draws.
 - Re-running with same seed and configuration produces identical `manifest.json`.
 
 ## Default Recipes
+
 - `pure_Fe`
 - `pure_Ni`
 - `binary_Fe_Ni`

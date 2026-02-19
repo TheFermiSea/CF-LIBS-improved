@@ -233,6 +233,7 @@ class QualityAssessor:
             return 0.0
 
         T_eV = temperature_K / EV_TO_K
+        safe_ne_cm3 = max(float(electron_density_cm3), 1e10)
         obs_by_element_stage: DefaultDict[str, DefaultDict[int, List[LineObservation]]] = (
             defaultdict(lambda: defaultdict(list))
         )
@@ -256,18 +257,22 @@ class QualityAssessor:
             U_II = partition_funcs_II.get(el, 15.0)
 
             # Calculate Saha ratio
-            S_raw = (SAHA_CONST_CM3 / electron_density_cm3) * (T_eV**1.5) * np.exp(-ip / T_eV)
+            S_raw = (SAHA_CONST_CM3 / safe_ne_cm3) * (T_eV**1.5) * np.exp(-ip / T_eV)
             S = S_raw * 2.0 * (U_II / U_I)
             stage_pair = stage_pairs.get(el)
-            ion_stage = stage_pair[1] if stage_pair is not None else 2
-            correction = np.log(S * U_I / U_II) if obs.ionization_stage == ion_stage else 0.0
+            ion_stage = stage_pair[1] if stage_pair is not None else None
+            correction = (
+                np.log(S * U_I / U_II)
+                if ion_stage is not None and obs.ionization_stage == ion_stage
+                else 0.0
+            )
 
             y = obs.y_value
             if not np.isfinite(y):
                 continue
 
             # Apply correction
-            if obs.ionization_stage == ion_stage:
+            if ion_stage is not None and obs.ionization_stage == ion_stage:
                 y -= correction
                 x = obs.E_k_ev + ip
             else:
@@ -402,6 +407,7 @@ class QualityAssessor:
             # NOTE: U_I and U_II are evaluated at the input temperature_K as an
             # approximation. For large differences between T_saha and temperature_K,
             # this introduces error. A future improvement could accept callables.
+            safe_ne_cm3 = max(float(electron_density_cm3), 1e10)
 
             # Saha ratio as function of temperature
             def saha_ratio(T_K: float) -> float:
@@ -409,7 +415,7 @@ class QualityAssessor:
                 if T_eV_local <= 0:
                     return 0.0
                 S = (
-                    (SAHA_CONST_CM3 / max(electron_density_cm3, 1e10))
+                    (SAHA_CONST_CM3 / safe_ne_cm3)
                     * (T_eV_local**1.5)
                     * np.exp(-ip / T_eV_local)
                     * 2.0
@@ -424,9 +430,21 @@ class QualityAssessor:
 
             # Saha ratio is monotonically increasing with T
             if S_hi <= R_obs:
+                logger.debug(
+                    "Saha consistency clamp high for %s: R_obs=%.3e S_hi=%.3e",
+                    element,
+                    R_obs,
+                    S_hi,
+                )
                 t_saha_estimates.append(T_hi)
                 continue
             if S_lo >= R_obs:
+                logger.debug(
+                    "Saha consistency clamp low for %s: R_obs=%.3e S_lo=%.3e",
+                    element,
+                    R_obs,
+                    S_lo,
+                )
                 t_saha_estimates.append(T_lo)
                 continue
 

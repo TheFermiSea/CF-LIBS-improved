@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 import csv
 import json
+import logging
 
 import numpy as np
 
@@ -23,6 +24,8 @@ from cflibs.inversion.comb_identifier import CombIdentifier
 from cflibs.inversion.correlation_identifier import CorrelationIdentifier
 from cflibs.inversion.element_id import ElementIdentification, ElementIdentificationResult
 from cflibs.inversion.wavelength_calibration import calibrate_wavelength_axis
+
+logger = logging.getLogger(__name__)
 
 
 def derive_truth_elements(
@@ -143,13 +146,18 @@ def _identifier_suite(
                 results[name] = identifier.identify(wavelength, intensity, mode="classic")
             else:
                 results[name] = identifier.identify(wavelength, intensity)
-        except Exception:
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Identifier %s failed during synthetic benchmark run", name, exc_info=True
+            )
             results[name] = None
     return results
 
 
 @dataclass
 class CalibrationOptions:
+    """Options for optional wavelength-calibration preprocessing."""
+
     mode: str = "none"
     max_pair_window_nm: float = 2.0
     inlier_tolerance_nm: float = 0.08
@@ -173,7 +181,27 @@ def evaluate_dataset(
     """
     Evaluate all identifiers on synthetic benchmark dataset.
 
-    Returns dictionary with per-spectrum rows and aggregate summaries.
+    Parameters
+    ----------
+    dataset : BenchmarkDataset
+        Synthetic benchmark dataset to evaluate.
+    db : AtomicDatabase
+        Atomic database used by the identifiers.
+    candidate_elements : List[str]
+        Candidate elements considered for detection.
+    manifest_by_sample : dict, optional
+        Optional per-sample perturbation metadata.
+    presence_threshold : float
+        Minimum composition fraction to consider an element present.
+    max_spectra : int, optional
+        Optional cap on number of spectra evaluated.
+    calibration : CalibrationOptions, optional
+        Optional wavelength calibration settings.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary with per-spectrum rows and aggregate summaries.
     """
     if calibration is None:
         calibration = CalibrationOptions()
@@ -435,7 +463,7 @@ def summarize_by_group(
 
     for field in group_fields:
         grouped_rows: List[Dict[str, Any]] = []
-        values = sorted({row.get(field) for row in rows if row.get(field) is not None})
+        values = sorted({value for row in rows if (value := row.get(field)) is not None})
         for value in values:
             for algorithm in algorithms:
                 subset = [
@@ -481,11 +509,11 @@ def _load_manifest_index(manifest_path: Optional[str]) -> Dict[str, Dict[str, An
     if path.suffix.lower() == ".jsonl":
         rows: List[Dict[str, Any]] = []
         with path.open() as f:
-            for line in f:
-                line = line.strip()
-                if not line:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
                     continue
-                rows.append(json.loads(line))
+                rows.append(json.loads(stripped))
     else:
         rows = json.loads(path.read_text())
     return {row["sample_id"]: row for row in rows if "sample_id" in row}

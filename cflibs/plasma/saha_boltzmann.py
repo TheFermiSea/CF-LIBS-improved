@@ -2,6 +2,7 @@
 Saha-Boltzmann solver for LTE plasma.
 """
 
+import threading
 from typing import Dict, Tuple
 import numpy as np
 
@@ -14,6 +15,7 @@ from cflibs.plasma.partition import PartitionFunctionEvaluator
 
 logger = get_logger("plasma.saha_boltzmann")
 _MISSING_LEVEL_WARNED: set[tuple[str, int]] = set()
+_MISSING_LEVEL_WARNED_LOCK = threading.Lock()
 
 
 class SahaBoltzmannSolver(SolverStrategy):
@@ -143,11 +145,14 @@ class SahaBoltzmannSolver(SolverStrategy):
             # Fallback: assume simple approximation
             # For many elements, U ~ 2 * g_ground at low T
             key = (element, ionization_stage)
-            if key not in _MISSING_LEVEL_WARNED:
+            with _MISSING_LEVEL_WARNED_LOCK:
+                should_warn = key not in _MISSING_LEVEL_WARNED
+                if should_warn:
+                    _MISSING_LEVEL_WARNED.add(key)
+            if should_warn:
                 logger.warning(
                     "No energy levels for %s %s, using approximation", element, ionization_stage
                 )
-                _MISSING_LEVEL_WARNED.add(key)
             return 2.0  # Rough approximation
 
         # Partition function: U = sum(g_i * exp(-E_i / kT))

@@ -277,7 +277,10 @@ class CombIdentifier:
         # Step 7: Identify experimental peaks using canonical peak detection
         # (not pixel-level threshold which over-counts broad peaks)
         experimental_peaks, _, _ = detect_peaks_auto(
-            wavelength, intensity, resolving_power=self.resolving_power
+            wavelength,
+            intensity,
+            resolving_power=self.resolving_power,
+            baseline_window_nm=self.baseline_window_nm,
         )
 
         # Count matched peaks (peaks that have at least one identified line)

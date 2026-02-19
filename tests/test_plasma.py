@@ -111,6 +111,7 @@ def test_calculate_partition_function(atomic_db):
     assert 1 <= U <= 1000
 
 
+@pytest.mark.unit
 def test_missing_levels_warning_emitted_once(caplog):
     """Repeated missing-level fallback should warn only once per element/stage."""
 
@@ -122,13 +123,18 @@ def test_missing_levels_warning_emitted_once(caplog):
             return []
 
     solver = SahaBoltzmannSolver(_NoLevelsDB())
-    saha_module._MISSING_LEVEL_WARNED.clear()
-    with caplog.at_level("WARNING"):
-        solver.calculate_partition_function.__wrapped__(solver, "Xx", 3, 1.0)
-        solver.calculate_partition_function.__wrapped__(solver, "Xx", 3, 1.2)
+    previous = set(saha_module._MISSING_LEVEL_WARNED)
+    try:
+        saha_module._MISSING_LEVEL_WARNED.clear()
+        with caplog.at_level("WARNING"):
+            solver.calculate_partition_function.__wrapped__(solver, "Xx", 3, 1.0)
+            solver.calculate_partition_function.__wrapped__(solver, "Xx", 3, 1.2)
 
-    messages = [r.message for r in caplog.records if "No energy levels for" in r.message]
-    assert len(messages) == 1
+        messages = [m for m in caplog.messages if "No energy levels for" in m]
+        assert len(messages) == 1
+    finally:
+        saha_module._MISSING_LEVEL_WARNED.clear()
+        saha_module._MISSING_LEVEL_WARNED.update(previous)
 
 
 def test_solve_level_population(atomic_db):

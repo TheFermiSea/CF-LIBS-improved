@@ -8,10 +8,13 @@ Generates per-dataset plots showing:
   - Detection threshold and TP/FP labeling
 """
 
+from __future__ import annotations
+
 import os
 
 os.environ["JAX_PLATFORMS"] = "cpu"
 
+import argparse
 import sys
 from pathlib import Path
 import numpy as np
@@ -28,7 +31,7 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.inversion.alias_identifier import ALIASIdentifier
 
 # Reuse data loading from validate_real_data
-from validate_real_data import (
+from scripts.validate_real_data import (
     load_scipp,
     select_representative_spectrum,
     DATASET_CONFIGS,
@@ -55,7 +58,7 @@ def run_alias_with_diagnostics(wavelength, intensity, db, elements, rp):
             "P_sig": m.get("P_sig", 1.0),
             "k_det": m.get("k_det", 0.0),
         }
-    return result, diag
+    return result, diag, float(identifier.detection_threshold)
 
 
 def plot_gate_breakdown(diag, dataset_name, expected, threshold, output_path):
@@ -299,12 +302,19 @@ def plot_suppression_waterfall(diag, dataset_name, expected, threshold, output_p
     print(f"  Saved: {output_path}")
 
 
-def main():
-    data_dir = Path("data")
-    output_dir = Path("output/validation")
-    output_dir.mkdir(parents=True, exist_ok=True)
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db-path", type=str, default="ASD_da/libs_production.db")
+    parser.add_argument("--data-dir", type=str, default="data")
+    parser.add_argument("--output-dir", type=str, default="output/validation")
+    args = parser.parse_args()
 
-    db = AtomicDatabase()
+    data_dir = Path(args.data_dir)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    db_path = Path(args.db_path)
+    if not db_path.exists():
+        raise FileNotFoundError(f"Atomic DB not found: {db_path}")
 
     datasets_to_run = [
         "FeNi_380nm",
@@ -314,64 +324,65 @@ def main():
         "Ti6Al4V_substrate",
     ]
 
-    for ds_name in datasets_to_run:
-        cfg = next((d for d in DATASET_CONFIGS if d["name"] == ds_name), None)
-        if cfg is None:
-            print(f"  Skipping {ds_name}: no config found")
-            continue
+    with AtomicDatabase(str(db_path)) as db:
+        for ds_name in datasets_to_run:
+            cfg = next((d for d in DATASET_CONFIGS if d["name"] == ds_name), None)
+            if cfg is None:
+                print(f"  Skipping {ds_name}: no config found")
+                continue
 
-        print(f"\n{'='*60}")
-        print(f"  {ds_name}")
-        print(f"{'='*60}")
+            print(f"\n{'='*60}")
+            print(f"  {ds_name}")
+            print(f"{'='*60}")
 
-        # Load data
-        ds_path = data_dir / cfg["filename"]
-        if not ds_path.exists():
-            print(f"  Skipping: {ds_path} not found")
-            continue
+            # Load data
+            ds_path = data_dir / cfg["filename"]
+            if not ds_path.exists():
+                print(f"  Skipping: {ds_path} not found")
+                continue
 
-        data = load_scipp(str(ds_path))
-        wavelength = data["wavelength"]
-        spectrum = select_representative_spectrum(data, ds_name)
+            wavelength, data, _meta = load_scipp(str(ds_path))
+            spectrum = select_representative_spectrum(data, ds_name)
 
-        rp = cfg.get("resolving_power", 500)
-        elements = cfg["elements"]
-        expected = set(cfg["expected"])
-        threshold = 0.03  # default ALIASIdentifier threshold
+            rp = cfg.get("resolving_power", 500)
+            elements = cfg["elements"]
+            expected = set(cfg["expected"])
 
-        result, diag = run_alias_with_diagnostics(wavelength, spectrum, db, elements, rp)
-
-        # Print summary table
-        print(
-            f"  {'Elem':<4} {'Score':>7} {'Conf':>7} {'Det':>4} "
-            f"{'P_local':>8} {'P_mix':>7} {'R_rat':>6} {'n':>6}"
-        )
-        print(f"  {'-'*52}")
-        for e in sorted(diag.keys()):
-            d = diag[e]
-            tp_mark = "*" if e in expected else " "
-            det_mark = "YES" if d["detected"] else "no"
-            print(
-                f"  {e:<3}{tp_mark} {d['score']:7.3f} {d['confidence']:7.3f} "
-                f"{det_mark:>4} {d['P_local']:8.3f} {d['P_mix']:7.3f} "
-                f"{d['R_rat']:6.3f} {d['n_matched']:>2}/{d['n_total']}"
+            result, diag, threshold = run_alias_with_diagnostics(
+                wavelength, spectrum, db, elements, rp
             )
 
-        # Generate plots
-        plot_gate_breakdown(
-            diag,
-            ds_name,
-            expected,
-            threshold,
-            output_dir / f"{ds_name}_gate_breakdown.png",
-        )
-        plot_suppression_waterfall(
-            diag,
-            ds_name,
-            expected,
-            threshold,
-            output_dir / f"{ds_name}_waterfall.png",
-        )
+            # Print summary table
+            print(
+                f"  {'Elem':<4} {'Score':>7} {'Conf':>7} {'Det':>4} "
+                f"{'P_local':>8} {'P_mix':>7} {'R_rat':>6} {'n':>6}"
+            )
+            print(f"  {'-'*52}")
+            for e in sorted(diag.keys()):
+                d = diag[e]
+                tp_mark = "*" if e in expected else " "
+                det_mark = "YES" if d["detected"] else "no"
+                print(
+                    f"  {e:<3}{tp_mark} {d['score']:7.3f} {d['confidence']:7.3f} "
+                    f"{det_mark:>4} {d['P_local']:8.3f} {d['P_mix']:7.3f} "
+                    f"{d['R_rat']:6.3f} {d['n_matched']:>2}/{d['n_total']}"
+                )
+
+            # Generate plots
+            plot_gate_breakdown(
+                diag,
+                ds_name,
+                expected,
+                threshold,
+                output_dir / f"{ds_name}_gate_breakdown.png",
+            )
+            plot_suppression_waterfall(
+                diag,
+                ds_name,
+                expected,
+                threshold,
+                output_dir / f"{ds_name}_waterfall.png",
+            )
 
 
 if __name__ == "__main__":

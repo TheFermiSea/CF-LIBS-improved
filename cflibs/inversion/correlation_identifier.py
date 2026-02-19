@@ -300,9 +300,10 @@ class CorrelationIdentifier:
                     model_spectrum = self._generate_model_spectrum(
                         intensity, element, transitions, wavelength, T_eV, n_e
                     )
-                    # Peak-region mask: correlate only where BOTH spectra
-                    # have significant signal (AND, not OR) to avoid diluting
-                    # correlation with baseline-only regions
+                    # Peak-region mask: correlate only where BOTH spectra have significant
+                    # signal to avoid baseline-dominated correlations. The 0.15 level and
+                    # fallback minimum support (5 points) were tuned on sparse/weak-line
+                    # cases to preserve recall while still suppressing continuum regions.
                     i_min, i_max = intensity.min(), intensity.max()
                     m_min, m_max = model_spectrum.min(), model_spectrum.max()
                     sigma_threshold = 0.15

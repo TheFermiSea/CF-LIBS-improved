@@ -210,3 +210,31 @@ def test_default_min_confidence_lowered(temp_db):
 
     identifier = CorrelationIdentifier(db)
     assert identifier.min_confidence == 0.03
+
+
+def test_sparse_weak_lines_produce_finite_scores(temp_db):
+    """Sparse/weak spectra should still produce stable finite correlation scores."""
+    from cflibs.atomic.database import AtomicDatabase
+
+    db = AtomicDatabase(temp_db)
+
+    wavelength = np.linspace(370, 380, 220)
+    intensity = np.zeros_like(wavelength)
+    intensity += 2.5 * np.exp(-0.5 * ((wavelength - 371.99) / 0.03) ** 2)
+    rng = np.random.default_rng(123)
+    intensity += rng.normal(0, 0.15, size=intensity.size)
+    intensity = np.clip(intensity, 0.0, None)
+
+    identifier = CorrelationIdentifier(
+        db,
+        elements=["Fe"],
+        T_steps=2,
+        n_e_steps=2,
+        max_lines_per_element=5,
+        min_confidence=0.0,
+    )
+    result = identifier.identify(wavelength, intensity, mode="classic")
+
+    fe = next(e for e in result.all_elements if e.element == "Fe")
+    assert np.isfinite(fe.score)
+    assert np.isfinite(fe.confidence)

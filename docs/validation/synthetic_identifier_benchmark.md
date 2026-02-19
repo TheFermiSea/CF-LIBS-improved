@@ -5,11 +5,11 @@
 Run the benchmark end-to-end with one command:
 
 ```bash
-.venv/bin/python /Users/briansquires/code/CF-LIBS/scripts/benchmark_synthetic_identifiers.py \
-  --dataset-path /Users/briansquires/code/CF-LIBS/output/synthetic_corpus/ak3_1_3_corpus_v1/corpus.json \
-  --manifest-path /Users/briansquires/code/CF-LIBS/output/synthetic_corpus/ak3_1_3_corpus_v1/manifest.jsonl \
-  --db-path /Users/briansquires/code/CF-LIBS/ASD_da/libs_production.db \
-  --output-dir /Users/briansquires/code/CF-LIBS/output/synthetic_benchmark/ak3_1_4_v1
+.venv/bin/python scripts/benchmark_synthetic_identifiers.py \
+  --dataset-path output/synthetic_corpus/ak3_1_3_corpus_v1/corpus.json \
+  --manifest-path output/synthetic_corpus/ak3_1_3_corpus_v1/manifest.jsonl \
+  --db-path ASD_da/libs_production.db \
+  --output-dir output/synthetic_benchmark/ak3_1_4_v1
 ```
 
 ## Scope

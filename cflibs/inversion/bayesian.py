@@ -1767,13 +1767,13 @@ class NestedSampler:
         # Concentrations: Dirichlet-like via stick-breaking
         # For n elements, we have n-1 free parameters
         if self.n_elements > 1:
+            from scipy import stats
+
             # Stick-breaking transformation for Dirichlet(alpha, alpha, ..., alpha)
             alpha = self.prior_config.concentration_alpha
             remaining = 1.0
             for i in range(self.n_elements - 1):
                 # Beta distribution via inverse CDF
-                from scipy import stats
-
                 beta_sample = stats.beta.ppf(u[2 + i], alpha, alpha * (self.n_elements - 1 - i))
                 x[2 + i] = remaining * beta_sample
                 remaining -= x[2 + i]
