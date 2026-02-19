@@ -17,6 +17,19 @@ from pathlib import Path
 import numpy as np
 
 
+def _error_exit(message: str) -> None:
+    print(f"ERROR: {message}")
+    sys.exit(1)
+
+
+def _require_h5py():
+    try:
+        import h5py
+    except ImportError:
+        _error_exit("h5py not available. Install h5py: pip install h5py")
+    return h5py
+
+
 def chunk_mode(
     chunk_id: int,
     n_chunks: int,
@@ -49,27 +62,19 @@ def chunk_mode(
     n_spectra_per_chunk : int
         Number of spectra to generate per chunk
     """
-    try:
-        import h5py
-    except ImportError:
-        print("ERROR: h5py not available. Install h5py: pip install h5py")
-        sys.exit(1)
-    
+    if n_chunks < 1:
+        _error_exit(f"n_chunks must be >= 1, got {n_chunks}")
+    if not (0 <= chunk_id < n_chunks):
+        _error_exit(f"chunk_id must be in range [0, {n_chunks}), got {chunk_id}")
+
+    h5py = _require_h5py()
+
     try:
         from cflibs.inversion.manifold import ManifoldGenerator  # noqa: F401
     except ImportError:
-        print("ERROR: ManifoldGenerator not available. Install cflibs first.")
-        sys.exit(1)
+        _error_exit("ManifoldGenerator not available. Install cflibs first.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Fix 9: Validate chunk_id bounds
-    if n_chunks < 1:
-        print(f"ERROR: n_chunks must be >= 1, got {n_chunks}")
-        sys.exit(1)
-    if not (0 <= chunk_id < n_chunks):
-        print(f"ERROR: chunk_id must be in range [0, {n_chunks}), got {chunk_id}")
-        sys.exit(1)
 
     # Divide temperature range into chunks
     t_range = np.linspace(t_min, t_max, n_chunks + 1)
@@ -113,16 +118,11 @@ def consolidate_mode(output_dir: Path) -> None:
     output_dir : Path
         Directory containing chunk files
     """
-    try:
-        import h5py
-    except ImportError:
-        print("ERROR: h5py not available. Install h5py: pip install h5py")
-        sys.exit(1)
-    
+    h5py = _require_h5py()
+
     chunk_files = sorted(output_dir.glob("chunk_*.h5"))
     if not chunk_files:
-        print(f"ERROR: No chunk files found in {output_dir}")
-        sys.exit(1)
+        _error_exit(f"No chunk files found in {output_dir}")
 
     print(f"Consolidating {len(chunk_files)} chunks...")
 
@@ -177,14 +177,12 @@ def build_index_mode(output_dir: Path) -> None:
     """
     library_file = output_dir / "model_library.h5"
     if not library_file.exists():
-        print(f"ERROR: Library file not found: {library_file}")
-        sys.exit(1)
+        _error_exit(f"Library file not found: {library_file}")
 
-    raise NotImplementedError(
-        "FAISS index building not yet implemented. "
-        "This requires: (1) Load spectra from model_library.h5, "
-        "(2) Apply dimensionality reduction (PCA/wavelength subset), "
-        "(3) Build FAISS index (IVF/HNSW), (4) Save index to disk."
+    _error_exit(
+        "FAISS index building is not implemented yet. "
+        "Planned steps: load model_library.h5, apply optional dimensionality reduction, "
+        "build FAISS IVF/HNSW index, and persist index artifacts."
     )
 
 
@@ -215,10 +213,16 @@ def submit_mode(
         Max concurrent array tasks (default: 20)
     """
     try:
-        from cflibs.hpc import ArrayJobConfig, SlurmJobManager
+        from cflibs.hpc import ArrayJobConfig, SlurmJobConfig, SlurmJobManager
     except ImportError:
-        print("ERROR: cflibs.hpc not available. Install cflibs first.")
-        sys.exit(1)
+        _error_exit("cflibs.hpc not available. Install cflibs first.")
+
+    if n_chunks < 1:
+        _error_exit(f"n_chunks must be >= 1, got {n_chunks}")
+    if max_concurrent < 0:
+        _error_exit(f"max_concurrent must be >= 0, got {max_concurrent}")
+    if mem_gb < 1:
+        _error_exit(f"mem_gb must be >= 1, got {mem_gb}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     manager = SlurmJobManager(dry_run=False)
@@ -249,8 +253,6 @@ python {script_path} chunk \\
     print(f"Submitted chunk job: {chunk_job_id}")
 
     # Consolidation job with dependency
-    from cflibs.hpc import SlurmJobConfig
-    
     consolidate_config = SlurmJobConfig(
         job_name="cflibs_consolidate",
         partition=partition,

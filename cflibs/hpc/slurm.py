@@ -5,10 +5,11 @@ Provides classes and utilities for submitting, monitoring, and managing
 SLURM jobs for CF-LIBS model spectrum generation.
 """
 
+import re
 import shlex
 import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
@@ -142,6 +143,16 @@ class SlurmJobManager:
 
     def __init__(self, dry_run: bool = False) -> None:
         self.dry_run = dry_run
+        self._env_key_pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+        self._sbatch_key_pattern = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
+
+    def _validate_env_key(self, key: str) -> None:
+        if not self._env_key_pattern.fullmatch(key):
+            raise ValueError(f"Invalid environment variable name: {key!r}")
+
+    def _validate_sbatch_key(self, key: str) -> None:
+        if not self._sbatch_key_pattern.fullmatch(key):
+            raise ValueError(f"Invalid SBATCH directive key: {key!r}")
 
     def generate_sbatch_script(self, config: SlurmJobConfig, script_content: str) -> str:
         """
@@ -177,8 +188,6 @@ class SlurmJobManager:
 
         # Array job directives
         if isinstance(config, ArrayJobConfig):
-            if config.array_size < 1:
-                raise ValueError(f"array_size must be >= 1, got {config.array_size}")
             array_str = f"0-{config.array_size - 1}"
             if config.max_concurrent > 0:
                 array_str += f"%{config.max_concurrent}"
@@ -186,6 +195,9 @@ class SlurmJobManager:
 
         # Extra SBATCH directives
         for key, value in config.extra_sbatch.items():
+            self._validate_sbatch_key(key)
+            if "\n" in value:
+                raise ValueError(f"SBATCH directive value for {key!r} must not contain newlines")
             lines.append(f"#SBATCH --{key}={value}")
 
         lines.append("")
@@ -199,6 +211,11 @@ class SlurmJobManager:
 
         # Environment variables
         for key, value in config.env_vars.items():
+            self._validate_env_key(key)
+            if "\n" in value:
+                raise ValueError(
+                    f"Environment variable value for {key!r} must not contain newlines"
+                )
             lines.append(f"export {key}={shlex.quote(value)}")
 
         if config.env_vars:
@@ -288,8 +305,6 @@ class SlurmJobManager:
             Job ID (or "DRY_RUN_<jobname>" if dry_run=True)
         """
         # Add dependency directive to extra_sbatch
-        from dataclasses import replace
-
         extra_sbatch_copy = config.extra_sbatch.copy()
         dependency_str = f"{dependency_type}:" + ":".join(depends_on)
         extra_sbatch_copy["dependency"] = dependency_str
