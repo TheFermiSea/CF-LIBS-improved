@@ -13,13 +13,14 @@ import argparse
 import shlex
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 import numpy as np
 
 
-def _error_exit(message: str) -> None:
+def _error_exit(message: str, code: int = 1) -> NoReturn:
     print(f"ERROR: {message}")
-    sys.exit(1)
+    sys.exit(code)
 
 
 def _require_h5py():
@@ -182,7 +183,8 @@ def build_index_mode(output_dir: Path) -> None:
     _error_exit(
         "FAISS index building is not implemented yet. "
         "Planned steps: load model_library.h5, apply optional dimensionality reduction, "
-        "build FAISS IVF/HNSW index, and persist index artifacts."
+        "build FAISS IVF/HNSW index, and persist index artifacts.",
+        code=2,
     )
 
 

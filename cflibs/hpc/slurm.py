@@ -501,7 +501,7 @@ class SlurmJobManager:
             return SlurmJobState.RUNNING
         elif "COMP" in state_upper:
             return SlurmJobState.COMPLETED
-        elif "FAIL" in state_upper or "OUT_OF_MEMORY" in state_upper or "NODE_FAIL" in state_upper:
+        elif "FAIL" in state_upper or "OUT_OF_MEMORY" in state_upper:
             return SlurmJobState.FAILED
         elif "CANC" in state_upper or "PREEMPT" in state_upper:
             return SlurmJobState.CANCELLED
