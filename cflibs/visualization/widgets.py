@@ -859,11 +859,14 @@ class PosteriorViewer:
                     yi = self._samples[pi]
 
                     # Subsample for performance
-                    n_plot = min(2000, len(xi))
-                    if n_plot == len(xi):
-                        idx = np.arange(len(xi))
+                    n_samples = len(xi)
+                    n_plot = min(2000, n_samples)
+                    if n_samples == 0:
+                        idx = np.array([], dtype=int)
+                    elif n_plot == n_samples:
+                        idx = np.arange(n_samples)
                     else:
-                        idx = np.random.choice(len(xi), n_plot, replace=False)
+                        idx = np.random.choice(n_samples, n_plot, replace=False)
 
                     fig.add_trace(
                         go.Scatter(
