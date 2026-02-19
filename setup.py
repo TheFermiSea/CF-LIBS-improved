@@ -53,6 +53,10 @@ setup(
         "hdf5": [
             "h5py>=3.0.0",
         ],
+        "widgets": [
+            "ipywidgets>=8.0.0",
+            "plotly>=5.0.0",
+        ],
         "dev": [
             "pytest>=7.0.0",
             "pytest-cov>=3.0.0",
@@ -64,6 +68,8 @@ setup(
             "jax>=0.4.0",
             "jaxlib>=0.4.0",
             "h5py>=3.0.0",
+            "ipywidgets>=8.0.0",
+            "plotly>=5.0.0",
             "pytest>=7.0.0",
             "pytest-cov>=3.0.0",
             "black>=22.0.0",
@@ -77,4 +83,3 @@ setup(
         ],
     },
 )
-

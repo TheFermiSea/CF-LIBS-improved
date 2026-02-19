@@ -24,8 +24,11 @@ Install with: pip install cflibs[widgets]
 
 from __future__ import annotations
 
+from html import escape as html_escape
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import numpy as np
+
+from cflibs.core.constants import EV_TO_K
 
 if TYPE_CHECKING:
     import ipywidgets as widgets
@@ -53,6 +56,11 @@ except ImportError:
     make_subplots = None  # type: ignore[assignment]
 
 HAS_WIDGETS = HAS_IPYWIDGETS and HAS_PLOTLY
+
+
+def _escape_html(value: Any) -> str:
+    """Escape dynamic values rendered via widgets.HTML."""
+    return html_escape(str(value), quote=True)
 
 
 def _require_widgets() -> None:
@@ -144,14 +152,16 @@ class SpectrumViewer:
         SpectrumViewer
             Self for method chaining
         """
-        self._spectra.append({
-            "wavelength": np.asarray(wavelength),
-            "intensity": np.asarray(intensity),
-            "label": label,
-            "color": color,
-            "line_width": line_width,
-            "opacity": opacity,
-        })
+        self._spectra.append(
+            {
+                "wavelength": np.asarray(wavelength),
+                "intensity": np.asarray(intensity),
+                "label": label,
+                "color": color,
+                "line_width": line_width,
+                "opacity": opacity,
+            }
+        )
         return self
 
     def _build_figure(self) -> "go.FigureWidget":
@@ -160,8 +170,16 @@ class SpectrumViewer:
 
         # Default color cycle
         colors = [
-            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-            "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+            "#1f77b4",
+            "#ff7f0e",
+            "#2ca02c",
+            "#d62728",
+            "#9467bd",
+            "#8c564b",
+            "#e377c2",
+            "#7f7f7f",
+            "#bcbd22",
+            "#17becf",
         ]
 
         for i, spec in enumerate(self._spectra):
@@ -255,9 +273,11 @@ class SpectrumViewer:
 
         reset_btn.on_click(on_reset)
 
-        return widgets.VBox([
-            widgets.HBox([range_slider, log_toggle, reset_btn]),
-        ])
+        return widgets.VBox(
+            [
+                widgets.HBox([range_slider, log_toggle, reset_btn]),
+            ]
+        )
 
     def show(self) -> "widgets.VBox":
         """
@@ -392,11 +412,14 @@ class BoltzmannPlotWidget:
         # Separate inliers and outliers
         rejected_set = set(result.rejected_points)
         inlier_mask = np.array([i not in rejected_set for i in range(len(obs))])
+        inlier_indices = np.where(inlier_mask)[0]
+        outlier_indices = np.where(~inlier_mask)[0]
 
         # Create subplots if showing residuals
         if self.show_residuals:
             fig = make_subplots(
-                rows=2, cols=1,
+                rows=2,
+                cols=1,
                 row_heights=[0.7, 0.3],
                 shared_xaxes=True,
                 vertical_spacing=0.08,
@@ -435,7 +458,7 @@ class BoltzmannPlotWidget:
                     color="#1f77b4",
                     thickness=1,
                 ),
-                text=[hover_text[i] for i in range(len(obs)) if inlier_mask[i]],
+                text=[hover_text[i] for i in inlier_indices],
                 hovertemplate="%{text}<extra></extra>",
             ),
             row=1 if self.show_residuals else None,
@@ -455,7 +478,7 @@ class BoltzmannPlotWidget:
                         color="#d62728",
                         symbol="x",
                     ),
-                    text=[hover_text[i] for i in range(len(obs)) if not inlier_mask[i]],
+                    text=[hover_text[i] for i in outlier_indices],
                     hovertemplate="%{text}<extra></extra>",
                 ),
                 row=1 if self.show_residuals else None,
@@ -496,7 +519,8 @@ class BoltzmannPlotWidget:
                     marker=dict(size=6, color="#1f77b4"),
                     showlegend=False,
                 ),
-                row=2, col=1,
+                row=2,
+                col=1,
             )
 
             if np.any(~inlier_mask):
@@ -509,13 +533,17 @@ class BoltzmannPlotWidget:
                         marker=dict(size=6, color="#d62728", symbol="x"),
                         showlegend=False,
                     ),
-                    row=2, col=1,
+                    row=2,
+                    col=1,
                 )
 
             # Add zero line
             fig.add_hline(
-                y=0, line_dash="dot", line_color="gray",
-                row=2, col=1,
+                y=0,
+                line_dash="dot",
+                line_color="gray",
+                row=2,
+                col=1,
             )
 
             fig.update_yaxes(title_text="Residuals", row=2, col=1)
@@ -525,7 +553,7 @@ class BoltzmannPlotWidget:
         fig.update_layout(
             title=dict(
                 text=f"{self.title}<br><sup>R^2 = {result.r_squared:.4f}, "
-                     f"Method: {result.fit_method}</sup>",
+                f"Method: {result.fit_method}</sup>",
             ),
             height=self.height,
             width=self.width,
@@ -540,11 +568,13 @@ class BoltzmannPlotWidget:
         )
 
         if self.show_residuals:
-            fig.update_yaxes(title_text="ln(I * lambda / g * A)", row=1, col=1)
+            fig.update_yaxes(title_text="ln(I * lambda / (g * A))", row=1, col=1)
         else:
             fig.update_xaxes(title_text="Upper Level Energy E_k (eV)")
-            fig.update_yaxes(title_text="ln(I * lambda / g * A)")
+            fig.update_yaxes(title_text="ln(I * lambda / (g * A))")
 
+        if isinstance(fig, go.FigureWidget):
+            return fig
         return go.FigureWidget(fig)
 
     def show(self) -> "go.FigureWidget":
@@ -741,6 +771,16 @@ class PosteriorViewer:
         if n_params < 1:
             raise ValueError("At least one parameter required.")
 
+        missing = [p for p in params if p not in self._samples]
+        if missing:
+            missing_str = ", ".join(sorted(missing))
+            raise ValueError(f"Requested parameters not available in samples: {missing_str}")
+
+        empty = [p for p in params if np.asarray(self._samples[p]).size == 0]
+        if empty:
+            empty_str = ", ".join(sorted(empty))
+            raise ValueError(f"Cannot plot empty posterior samples for parameter(s): {empty_str}")
+
         if n_params == 1:
             # Single histogram
             fig = go.FigureWidget()
@@ -773,7 +813,8 @@ class PosteriorViewer:
 
         # Corner plot for multiple parameters
         fig = make_subplots(
-            rows=n_params, cols=n_params,
+            rows=n_params,
+            cols=n_params,
             shared_xaxes=False,
             shared_yaxes=False,
             vertical_spacing=0.02,
@@ -796,15 +837,20 @@ class PosteriorViewer:
                             marker_color="#1f77b4",
                             opacity=0.7,
                         ),
-                        row=row, col=col,
+                        row=row,
+                        col=col,
                     )
 
                     # Add credible interval lines
                     q025, q50, q975 = np.percentile(samples, [2.5, 50, 97.5])
                     for q, dash in [(q025, "dot"), (q50, "solid"), (q975, "dot")]:
                         fig.add_vline(
-                            x=q, line_dash=dash, line_color="red", line_width=1,
-                            row=row, col=col,
+                            x=q,
+                            line_dash=dash,
+                            line_color="red",
+                            line_width=1,
+                            row=row,
+                            col=col,
                         )
 
                 elif i > j:
@@ -814,7 +860,10 @@ class PosteriorViewer:
 
                     # Subsample for performance
                     n_plot = min(2000, len(xi))
-                    idx = np.random.choice(len(xi), n_plot, replace=False)
+                    if n_plot == len(xi):
+                        idx = np.arange(len(xi))
+                    else:
+                        idx = np.random.choice(len(xi), n_plot, replace=False)
 
                     fig.add_trace(
                         go.Scatter(
@@ -828,7 +877,8 @@ class PosteriorViewer:
                             ),
                             showlegend=False,
                         ),
-                        row=row, col=col,
+                        row=row,
+                        col=col,
                     )
                 # Upper triangle: empty
 
@@ -836,12 +886,14 @@ class PosteriorViewer:
                 if i == n_params - 1:
                     fig.update_xaxes(
                         title_text=self._param_labels.get(pj, pj),
-                        row=row, col=col,
+                        row=row,
+                        col=col,
                     )
                 if j == 0 and i > 0:
                     fig.update_yaxes(
                         title_text=self._param_labels.get(pi, pi),
-                        row=row, col=col,
+                        row=row,
+                        col=col,
                     )
 
         fig.update_layout(
@@ -988,8 +1040,8 @@ class QualityDashboard:
             Self for method chaining
         """
         self._metrics = {
-            "temperature_K": result.T_eV_mean * 11604.5,  # eV to K
-            "temperature_uncertainty_K": result.T_eV_std * 11604.5,
+            "temperature_K": result.T_K_mean,
+            "temperature_uncertainty_K": result.T_eV_std * EV_TO_K,
             "T_eV": result.T_eV_mean,
             "T_eV_std": result.T_eV_std,
             "log_ne": result.log_ne_mean,
@@ -1033,17 +1085,20 @@ class QualityDashboard:
         color: str = "#1f77b4",
     ) -> "widgets.VBox":
         """Create a styled metric card widget."""
+        title_text = _escape_html(title)
+        value_text = _escape_html(value)
         title_label = widgets.HTML(
-            f"<div style='color: #666; font-size: 12px; margin-bottom: 2px;'>{title}</div>"
+            f"<div style='color: #666; font-size: 12px; margin-bottom: 2px;'>{title_text}</div>"
         )
         value_label = widgets.HTML(
-            f"<div style='color: {color}; font-size: 24px; font-weight: bold;'>{value}</div>"
+            f"<div style='color: {color}; font-size: 24px; font-weight: bold;'>{value_text}</div>"
         )
         children = [title_label, value_label]
 
         if subtitle:
+            subtitle_text = _escape_html(subtitle)
             subtitle_label = widgets.HTML(
-                f"<div style='color: #999; font-size: 11px;'>{subtitle}</div>"
+                f"<div style='color: #999; font-size: 11px;'>{subtitle_text}</div>"
             )
             children.append(subtitle_label)
 
@@ -1066,9 +1121,8 @@ class QualityDashboard:
         cards = []
 
         # Title
-        title_html = widgets.HTML(
-            f"<h2 style='margin: 0 0 16px 0; color: #333;'>{self.title}</h2>"
-        )
+        safe_title = _escape_html(self.title)
+        title_html = widgets.HTML(f"<h2 style='margin: 0 0 16px 0; color: #333;'>{safe_title}</h2>")
 
         # Temperature card
         T_K = self._metrics.get("temperature_K", 0)
@@ -1153,7 +1207,8 @@ class QualityDashboard:
 
             for el, conc in concentrations.items():
                 unc = conc_uncertainties.get(el, 0)
-                comp_html += f"<tr><td style='padding: 8px;'><b>{el}</b></td>"
+                safe_element = _escape_html(el)
+                comp_html += f"<tr><td style='padding: 8px;'><b>{safe_element}</b></td>"
                 comp_html += f"<td style='padding: 8px; text-align: right;'>{conc:.4f}</td>"
                 comp_html += f"<td style='padding: 8px; text-align: right;'>+/- {unc:.4f}</td>"
                 comp_html += "</tr>"
@@ -1168,7 +1223,9 @@ class QualityDashboard:
         ess = self._metrics.get("ess", {})
 
         if r_hat:
-            diag_html = "<h4 style='margin: 16px 0 8px 0; color: #666;'>Convergence Diagnostics</h4>"
+            diag_html = (
+                "<h4 style='margin: 16px 0 8px 0; color: #666;'>Convergence Diagnostics</h4>"
+            )
             diag_html += "<table style='border-collapse: collapse; width: 100%;'>"
             diag_html += "<tr style='background: #f5f5f5;'>"
             diag_html += "<th style='padding: 8px; text-align: left;'>Parameter</th>"
@@ -1182,8 +1239,9 @@ class QualityDashboard:
                 status = "ok" if rhat < 1.01 else "warning"
                 status_icon = "+" if status == "ok" else "!"
                 status_color = "#2ca02c" if status == "ok" else "#d62728"
+                safe_param = _escape_html(param)
 
-                diag_html += f"<tr><td style='padding: 8px;'>{param}</td>"
+                diag_html += f"<tr><td style='padding: 8px;'>{safe_param}</td>"
                 diag_html += f"<td style='padding: 8px; text-align: right;'>{rhat:.3f}</td>"
                 diag_html += f"<td style='padding: 8px; text-align: right;'>{ess_val:.0f}</td>"
                 diag_html += f"<td style='padding: 8px; text-align: center; color: {status_color};'>{status_icon}</td>"
@@ -1194,12 +1252,14 @@ class QualityDashboard:
         else:
             diag_widget = widgets.HTML("")
 
-        return widgets.VBox([
-            title_html,
-            top_row,
-            comp_widget,
-            diag_widget,
-        ])
+        return widgets.VBox(
+            [
+                title_html,
+                top_row,
+                comp_widget,
+                diag_widget,
+            ]
+        )
 
     def show(self) -> "widgets.VBox":
         """
