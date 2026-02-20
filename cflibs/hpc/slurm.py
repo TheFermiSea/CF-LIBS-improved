@@ -305,6 +305,9 @@ class SlurmJobManager:
         str
             Job ID (or "DRY_RUN_<jobname>" if dry_run=True)
         """
+        if not depends_on:
+            raise ValueError("depends_on must contain at least one job ID")
+
         # Add dependency directive to extra_sbatch
         extra_sbatch_copy = config.extra_sbatch.copy()
         dependency_str = f"{dependency_type}:" + ":".join(depends_on)

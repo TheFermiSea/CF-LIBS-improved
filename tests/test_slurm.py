@@ -229,6 +229,20 @@ def test_submit_with_dependency_dry_run():
     assert "#SBATCH --dependency=afterok:12345:67890" in script
 
 
+def test_submit_with_dependency_rejects_empty_dependency_list():
+    """submit_with_dependency should reject empty dependency lists."""
+    manager = SlurmJobManager(dry_run=True)
+    config = SlurmJobConfig(job_name="dependent_job")
+
+    with pytest.raises(ValueError, match="depends_on must contain at least one job ID"):
+        manager.submit_with_dependency(
+            config,
+            "echo 'depends on previous jobs'",
+            depends_on=[],
+            dependency_type="afterok",
+        )
+
+
 def test_submit_with_dependency_preserves_array_config():
     """Test that submit_with_dependency preserves ArrayJobConfig fields."""
     manager = SlurmJobManager(dry_run=True)
