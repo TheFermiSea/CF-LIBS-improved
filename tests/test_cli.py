@@ -26,6 +26,7 @@ def test_forward_model_cmd_missing_config():
 def test_forward_model_cmd_invalid_config():
     """Test forward command with invalid config."""
     import os
+
     config_fd, config_path = tempfile.mkstemp(suffix=".yaml")
     os.close(config_fd)  # Close file descriptor to prevent leaks
 
@@ -46,8 +47,8 @@ def test_forward_model_cmd_invalid_config():
         Path(config_path).unlink()
 
 
-def test_invert_cmd_placeholder():
-    """Test that invert command shows placeholder message."""
+def test_invert_cmd_requires_elements():
+    """Invert command should require elements via CLI args or config."""
 
     class Args:
         spectrum = "spectrum.csv"
@@ -56,11 +57,8 @@ def test_invert_cmd_placeholder():
 
     args = Args()
 
-    # Should print message and not raise error
-    try:
+    with pytest.raises(ValueError, match="Elements must be specified"):
         invert_cmd(args)
-    except SystemExit:
-        pass  # May exit, that's okay
 
 
 def test_dbgen_cmd_missing_script():
@@ -72,11 +70,8 @@ def test_dbgen_cmd_missing_script():
 
     args = Args()
 
-    # Mock the path to not exist
-    with patch("cflibs.cli.main.Path") as mock_path:
-        mock_path.return_value.exists.return_value = False
-
-        # Should exit with error
+    # Mock script-path existence check to fail.
+    with patch("cflibs.cli.main.Path.exists", return_value=False):
         with pytest.raises(SystemExit):
             dbgen_cmd(args)
 

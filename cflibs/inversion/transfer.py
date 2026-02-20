@@ -68,6 +68,7 @@ try:
     import jax  # noqa: F401
     import jax.numpy as jnp
     from jax import jit, grad  # noqa: F401
+
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
@@ -77,6 +78,7 @@ try:
     from scipy import linalg  # noqa: F401
     from scipy.optimize import minimize
     from scipy.interpolate import interp1d  # noqa: F401
+
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
@@ -258,21 +260,19 @@ def compute_mmd(
 
 def _pairwise_distances(X: np.ndarray, Y: np.ndarray) -> np.ndarray:
     """Compute pairwise Euclidean distances."""
-    XX = np.sum(X ** 2, axis=1, keepdims=True)
-    YY = np.sum(Y ** 2, axis=1, keepdims=True)
+    XX = np.sum(X**2, axis=1, keepdims=True)
+    YY = np.sum(Y**2, axis=1, keepdims=True)
     distances = XX + YY.T - 2.0 * np.dot(X, Y.T)
     return np.sqrt(np.maximum(distances, 0))
 
 
-def _compute_kernel(
-    X: np.ndarray, Y: np.ndarray, kernel: str, gamma: float
-) -> np.ndarray:
+def _compute_kernel(X: np.ndarray, Y: np.ndarray, kernel: str, gamma: float) -> np.ndarray:
     """Compute kernel matrix."""
     if kernel == "linear":
         return np.dot(X, Y.T)
     elif kernel == "rbf":
         dists = _pairwise_distances(X, Y)
-        return np.exp(-gamma * dists ** 2)
+        return np.exp(-gamma * dists**2)
     elif kernel == "poly":
         return (np.dot(X, Y.T) + 1.0) ** 3
     else:
@@ -433,8 +433,8 @@ class DomainAdapter:
         result = minimize(
             objective,
             A_init,
-            method='L-BFGS-B',
-            options={'maxiter': 100, 'disp': False},
+            method="L-BFGS-B",
+            options={"maxiter": 100, "disp": False},
         )
 
         self._transform_matrix = result.x.reshape(d, d)
@@ -471,10 +471,7 @@ class DomainAdapter:
 
         # Subspace alignment: M = P_s @ P_s.T @ P_t @ P_t.T
         # This aligns source subspace to target while preserving dimensions
-        self._transform_matrix = np.dot(
-            np.dot(P_s, P_s.T),
-            np.dot(P_t, P_t.T)
-        )
+        self._transform_matrix = np.dot(np.dot(P_s, P_s.T), np.dot(P_t, P_t.T))
 
         logger.debug(f"Subspace: aligned {k} components")
 
@@ -524,19 +521,13 @@ class DomainAdapter:
         """Compute matrix square root via eigendecomposition."""
         eigenvalues, eigenvectors = np.linalg.eigh(M)
         eigenvalues = np.maximum(eigenvalues, 0)  # Ensure positive
-        return np.dot(
-            eigenvectors * np.sqrt(eigenvalues),
-            eigenvectors.T
-        )
+        return np.dot(eigenvectors * np.sqrt(eigenvalues), eigenvectors.T)
 
     def _matrix_sqrt_inv(self, M: np.ndarray) -> np.ndarray:
         """Compute inverse matrix square root."""
         eigenvalues, eigenvectors = np.linalg.eigh(M)
         eigenvalues = np.maximum(eigenvalues, self.regularization)
-        return np.dot(
-            eigenvectors * (1.0 / np.sqrt(eigenvalues)),
-            eigenvectors.T
-        )
+        return np.dot(eigenvectors * (1.0 / np.sqrt(eigenvalues)), eigenvectors.T)
 
     def transform(self, X: np.ndarray) -> np.ndarray:
         """
@@ -607,8 +598,7 @@ class DomainAdapter:
         mmd_after = compute_mmd(source_aligned, target)
 
         logger.info(
-            f"Domain adaptation ({self.method.name}): "
-            f"MMD {mmd_before:.6f} -> {mmd_after:.6f}"
+            f"Domain adaptation ({self.method.name}): " f"MMD {mmd_before:.6f} -> {mmd_after:.6f}"
         )
 
         return DomainAdaptationResult(
@@ -720,9 +710,7 @@ class CalibrationTransfer:
         self._fitted = True
         return self
 
-    def _fit_sbc(
-        self, source: np.ndarray, target: np.ndarray
-    ) -> None:
+    def _fit_sbc(self, source: np.ndarray, target: np.ndarray) -> None:
         """
         Fit Slope/Bias Correction.
 
@@ -760,9 +748,7 @@ class CalibrationTransfer:
             f"slope range [{self._slope.min():.3f}, {self._slope.max():.3f}]"
         )
 
-    def _fit_pds(
-        self, source: np.ndarray, target: np.ndarray
-    ) -> None:
+    def _fit_pds(self, source: np.ndarray, target: np.ndarray) -> None:
         """
         Fit Piecewise Direct Standardization.
 
@@ -797,9 +783,7 @@ class CalibrationTransfer:
 
         logger.debug(f"PDS: fitted {n_wavelengths} local models, window={self.window_size}")
 
-    def _fit_ds(
-        self, source: np.ndarray, target: np.ndarray
-    ) -> None:
+    def _fit_ds(self, source: np.ndarray, target: np.ndarray) -> None:
         """
         Fit Direct Standardization.
 
@@ -815,9 +799,7 @@ class CalibrationTransfer:
 
         logger.debug(f"DS: fitted transfer matrix {self._transfer_matrix.shape}")
 
-    def _fit_standardization(
-        self, source: np.ndarray, target: np.ndarray
-    ) -> None:
+    def _fit_standardization(self, source: np.ndarray, target: np.ndarray) -> None:
         """
         Fit simple spectral standardization (mean/std normalization).
         """
@@ -913,12 +895,12 @@ class CalibrationTransfer:
             transformed_spectra=transformed,
             method=self.method.name,
             parameters={
-                'slope': self._slope.tolist() if self._slope is not None else None,
-                'bias': self._bias.tolist() if self._bias is not None else None,
+                "slope": self._slope.tolist() if self._slope is not None else None,
+                "bias": self._bias.tolist() if self._bias is not None else None,
             },
             metrics={
-                'mean_absolute_residual': float(residual),
-                'r_squared': float(r_squared),
+                "mean_absolute_residual": float(residual),
+                "r_squared": float(r_squared),
             },
             n_transfer_samples=source_spectra.shape[0],
         )
@@ -936,18 +918,17 @@ class CalibrationTransfer:
             raise RuntimeError("Cannot save unfitted model")
 
         data = {
-            'method': self.method.name,
-            'window_size': self.window_size,
-            'n_components': self.n_components,
-            'slope': self._slope.tolist() if self._slope is not None else None,
-            'bias': self._bias.tolist() if self._bias is not None else None,
-            'transfer_matrix': (
-                self._transfer_matrix.tolist()
-                if self._transfer_matrix is not None else None
+            "method": self.method.name,
+            "window_size": self.window_size,
+            "n_components": self.n_components,
+            "slope": self._slope.tolist() if self._slope is not None else None,
+            "bias": self._bias.tolist() if self._bias is not None else None,
+            "transfer_matrix": (
+                self._transfer_matrix.tolist() if self._transfer_matrix is not None else None
             ),
         }
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(data, f, indent=2)
 
         logger.info(f"Saved transfer model to {path}")
@@ -971,17 +952,17 @@ class CalibrationTransfer:
             data = json.load(f)
 
         transfer = cls(
-            method=CalibrationMethod[data['method']],
-            window_size=data.get('window_size', 5),
-            n_components=data.get('n_components', 10),
+            method=CalibrationMethod[data["method"]],
+            window_size=data.get("window_size", 5),
+            n_components=data.get("n_components", 10),
         )
 
-        if data.get('slope') is not None:
-            transfer._slope = np.array(data['slope'])
-        if data.get('bias') is not None:
-            transfer._bias = np.array(data['bias'])
-        if data.get('transfer_matrix') is not None:
-            transfer._transfer_matrix = np.array(data['transfer_matrix'])
+        if data.get("slope") is not None:
+            transfer._slope = np.array(data["slope"])
+        if data.get("bias") is not None:
+            transfer._bias = np.array(data["bias"])
+        if data.get("transfer_matrix") is not None:
+            transfer._transfer_matrix = np.array(data["transfer_matrix"])
 
         transfer._fitted = True
 
@@ -1108,20 +1089,15 @@ class FineTuner:
         y_val = target_concentrations[val_idx]
 
         if verbose:
-            logger.info(
-                f"Fine-tuning: {n_train} train, {n_val} val samples, "
-                f"{epochs} epochs"
-            )
+            logger.info(f"Fine-tuning: {n_train} train, {n_val} val samples, " f"{epochs} epochs")
 
         if HAS_JAX:
             return self._adapt_jax(
-                initial_params, X_train, y_train, X_val, y_val,
-                epochs, batch_size, loss_fn, verbose
+                initial_params, X_train, y_train, X_val, y_val, epochs, batch_size, loss_fn, verbose
             )
         else:
             return self._adapt_numpy(
-                initial_params, X_train, y_train, X_val, y_val,
-                epochs, verbose
+                initial_params, X_train, y_train, X_val, y_val, epochs, verbose
             )
 
     def _adapt_jax(
@@ -1150,16 +1126,14 @@ class FineTuner:
         # Default loss: MSE with L2 regularization
         def default_loss(params, X, y):
             # Simple linear model: y_pred = X @ W + b
-            W = params.get('W', jnp.eye(X.shape[1], y.shape[1]))
-            b = params.get('b', jnp.zeros(y.shape[1]))
+            W = params.get("W", jnp.eye(X.shape[1], y.shape[1]))
+            b = params.get("b", jnp.zeros(y.shape[1]))
 
             y_pred = jnp.dot(X, W) + b
             mse = jnp.mean((y_pred - y) ** 2)
 
             # L2 regularization
-            l2_loss = self.l2_reg * sum(
-                jnp.sum(v ** 2) for v in params.values()
-            )
+            l2_loss = self.l2_reg * sum(jnp.sum(v**2) for v in params.values())
 
             return mse + l2_loss
 
@@ -1167,7 +1141,7 @@ class FineTuner:
 
         # Training loop
         loss_history = []
-        best_val_loss = float('inf')
+        best_val_loss = float("inf")
         best_params = params
         patience_counter = 0
 
@@ -1176,10 +1150,7 @@ class FineTuner:
             loss_val, grads = value_and_grad(loss_fn)(params, X_train, y_train)
 
             # Update parameters (frozen layers excluded)
-            params = {
-                k: v - self.learning_rate * grads[k]
-                for k, v in params.items()
-            }
+            params = {k: v - self.learning_rate * grads[k] for k, v in params.items()}
 
             loss_history.append(float(loss_val))
 
@@ -1195,8 +1166,7 @@ class FineTuner:
 
             if verbose and epoch % 10 == 0:
                 logger.info(
-                    f"Epoch {epoch}: train_loss={loss_val:.6f}, "
-                    f"val_loss={val_loss:.6f}"
+                    f"Epoch {epoch}: train_loss={loss_val:.6f}, " f"val_loss={val_loss:.6f}"
                 )
 
             # Early stopping
@@ -1214,7 +1184,7 @@ class FineTuner:
             validation_loss=best_val_loss,
             n_epochs=len(loss_history),
             converged=converged,
-            final_loss=loss_history[-1] if loss_history else float('inf'),
+            final_loss=loss_history[-1] if loss_history else float("inf"),
         )
 
     def _adapt_numpy(
@@ -1230,10 +1200,11 @@ class FineTuner:
         """NumPy fallback: closed-form linear adaptation."""
         logger.info("Using NumPy fallback (ridge regression)")
 
-        # Simple ridge regression as fallback
-        # y = X @ W + b
-        X_train.shape[1]
-        y_train.shape[1]
+        # Baseline loss with incoming parameters (for comparable history with JAX path).
+        W_init = initial_params.get("W", np.zeros((X_train.shape[1], y_train.shape[1])))
+        b_init = initial_params.get("b", np.zeros(y_train.shape[1]))
+        y_pred_init = np.dot(X_train, W_init) + b_init
+        initial_loss = np.mean((y_pred_init - y_train) ** 2)
 
         # Add bias column
         X_aug = np.hstack([X_train, np.ones((X_train.shape[0], 1))])
@@ -1248,7 +1219,7 @@ class FineTuner:
         W = W_aug[:-1, :]
         b = W_aug[-1, :]
 
-        adapted_params = {'W': W, 'b': b}
+        adapted_params = {"W": W, "b": b}
 
         # Compute losses
         y_pred_train = np.dot(X_train, W) + b
@@ -1261,9 +1232,9 @@ class FineTuner:
 
         return FineTuneResult(
             adapted_params=adapted_params,
-            loss_history=[float(train_loss)],
+            loss_history=[float(initial_loss), float(train_loss)],
             validation_loss=float(val_loss),
-            n_epochs=1,
+            n_epochs=2,
             converged=True,
             final_loss=float(train_loss),
         )
@@ -1374,9 +1345,7 @@ class TransferLearningPipeline:
         )
 
         # Step 1: Domain adaptation (aligns feature distributions)
-        self._adaptation_result = self.domain_adapter.fit_transform(
-            source_spectra, target_spectra
-        )
+        self._adaptation_result = self.domain_adapter.fit_transform(source_spectra, target_spectra)
 
         # Step 2: Calibration transfer (maps target to source domain)
         adapted_source = self._adaptation_result.source_aligned
@@ -1387,13 +1356,9 @@ class TransferLearningPipeline:
         # Step 3: Fine-tuning (optional)
         if self.use_finetuning and self.finetuner is not None:
             if target_concentrations is None:
-                logger.warning(
-                    "Fine-tuning requested but no target concentrations provided"
-                )
+                logger.warning("Fine-tuning requested but no target concentrations provided")
             elif pretrained_params is None:
-                logger.warning(
-                    "Fine-tuning requested but no pretrained params provided"
-                )
+                logger.warning("Fine-tuning requested but no pretrained params provided")
             else:
                 corrected_spectra = self.calibration_transfer.transform(target_spectra)
                 self._finetune_result = self.finetuner.adapt(
@@ -1455,14 +1420,14 @@ class TransferLearningPipeline:
         mmd = compute_mmd(source_spectra, transformed)
         residuals = transformed - source_spectra
         mae = np.mean(np.abs(residuals))
-        rmse = np.sqrt(np.mean(residuals ** 2))
+        rmse = np.sqrt(np.mean(residuals**2))
         r_squared = 1 - np.var(residuals) / (np.var(source_spectra) + 1e-10)
 
         return {
-            'mmd': float(mmd),
-            'mae': float(mae),
-            'rmse': float(rmse),
-            'r_squared': float(r_squared),
+            "mmd": float(mmd),
+            "mae": float(mae),
+            "rmse": float(rmse),
+            "r_squared": float(r_squared),
         }
 
     def summary(self) -> str:
@@ -1480,20 +1445,24 @@ class TransferLearningPipeline:
         ]
 
         if self._adaptation_result is not None:
-            lines.extend([
-                "Domain Adaptation:",
-                f"  Method: {self._adaptation_result.method.name}",
-                f"  MMD: {self._adaptation_result.mmd_before:.6f} -> "
-                f"{self._adaptation_result.mmd_after:.6f}",
-            ])
+            lines.extend(
+                [
+                    "Domain Adaptation:",
+                    f"  Method: {self._adaptation_result.method.name}",
+                    f"  MMD: {self._adaptation_result.mmd_before:.6f} -> "
+                    f"{self._adaptation_result.mmd_after:.6f}",
+                ]
+            )
 
         if self._transfer_result is not None:
-            lines.extend([
-                "Calibration Transfer:",
-                f"  Method: {self._transfer_result.method}",
-                f"  Samples: {self._transfer_result.n_transfer_samples}",
-                f"  R-squared: {self._transfer_result.metrics.get('r_squared', 'N/A'):.4f}",
-            ])
+            lines.extend(
+                [
+                    "Calibration Transfer:",
+                    f"  Method: {self._transfer_result.method}",
+                    f"  Samples: {self._transfer_result.n_transfer_samples}",
+                    f"  R-squared: {self._transfer_result.metrics.get('r_squared', 'N/A'):.4f}",
+                ]
+            )
 
         lines.append("=" * 60)
         return "\n".join(lines)
@@ -1508,17 +1477,17 @@ class TransferLearningPipeline:
 
         # Save metadata
         metadata = {
-            'source_name': self.source_name,
-            'target_name': self.target_name,
-            'adaptation_method': self.domain_adapter.method.name,
-            'use_finetuning': self.use_finetuning,
+            "source_name": self.source_name,
+            "target_name": self.target_name,
+            "adaptation_method": self.domain_adapter.method.name,
+            "use_finetuning": self.use_finetuning,
         }
 
         if self._adaptation_result is not None:
-            metadata['mmd_before'] = self._adaptation_result.mmd_before
-            metadata['mmd_after'] = self._adaptation_result.mmd_after
+            metadata["mmd_before"] = self._adaptation_result.mmd_before
+            metadata["mmd_after"] = self._adaptation_result.mmd_after
 
-        with open(path / "metadata.json", 'w') as f:
+        with open(path / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
 
         logger.info(f"Saved pipeline to {path}")
@@ -1532,15 +1501,13 @@ class TransferLearningPipeline:
             metadata = json.load(f)
 
         pipeline = cls(
-            source_name=metadata['source_name'],
-            target_name=metadata['target_name'],
-            adaptation_method=metadata['adaptation_method'],
-            use_finetuning=metadata.get('use_finetuning', False),
+            source_name=metadata["source_name"],
+            target_name=metadata["target_name"],
+            adaptation_method=metadata["adaptation_method"],
+            use_finetuning=metadata.get("use_finetuning", False),
         )
 
-        pipeline.calibration_transfer = CalibrationTransfer.load(
-            path / "transfer_model.json"
-        )
+        pipeline.calibration_transfer = CalibrationTransfer.load(path / "transfer_model.json")
         pipeline._fitted = True
 
         logger.info(f"Loaded pipeline from {path}")
