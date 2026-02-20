@@ -117,11 +117,11 @@ def invert_cmd(args):
 
     analysis_cfg = config.get("analysis", {}) if isinstance(config, dict) else {}
 
-    elements = args.elements or analysis_cfg.get("elements") or config.get("elements")
+    elements = (
+        getattr(args, "elements", None) or analysis_cfg.get("elements") or config.get("elements")
+    )
     if elements is None:
-        raise ValueError(
-            "Elements must be specified via --elements or config 'analysis.elements'."
-        )
+        raise ValueError("Elements must be specified via --elements or config 'analysis.elements'.")
     if isinstance(elements, str):
         elements = [elements]
 
@@ -136,18 +136,18 @@ def invert_cmd(args):
     atomic_db = AtomicDatabase(db_path)
 
     wavelength_tolerance = (
-        args.tolerance_nm
-        if args.tolerance_nm is not None
+        getattr(args, "tolerance_nm", None)
+        if getattr(args, "tolerance_nm", None) is not None
         else analysis_cfg.get("wavelength_tolerance_nm", 0.1)
     )
     min_peak_height = (
-        args.min_peak_height
-        if args.min_peak_height is not None
+        getattr(args, "min_peak_height", None)
+        if getattr(args, "min_peak_height", None) is not None
         else analysis_cfg.get("min_peak_height", 0.01)
     )
     peak_width_nm = (
-        args.peak_width_nm
-        if args.peak_width_nm is not None
+        getattr(args, "peak_width_nm", None)
+        if getattr(args, "peak_width_nm", None) is not None
         else analysis_cfg.get("peak_width_nm", 0.2)
     )
     min_relative_intensity = analysis_cfg.get("min_relative_intensity")
@@ -215,9 +215,7 @@ def invert_cmd(args):
 
     print("CF-LIBS inversion results:")
     print(f"  Temperature: {result.temperature_K:.0f} ± {result.temperature_uncertainty_K:.0f} K")
-    print(
-        f"  Electron density: {result.electron_density_cm3:.3e} cm^-3"
-    )
+    print(f"  Electron density: {result.electron_density_cm3:.3e} cm^-3")
     print("  Concentrations:")
     for element, concentration in result.concentrations.items():
         unc = result.concentration_uncertainties.get(element, 0.0)

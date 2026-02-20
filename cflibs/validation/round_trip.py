@@ -205,9 +205,7 @@ class GoldenSpectrumGenerator:
         for element, concentration in concentrations.items():
             # Get transitions for this element
             for ion_stage in [1, 2] if include_ionic else [1]:
-                transitions = self._get_element_transitions(
-                    element, ion_stage, n_lines_per_element
-                )
+                transitions = self._get_element_transitions(element, ion_stage, n_lines_per_element)
 
                 # Get partition function (approximate if not in database)
                 U = self._get_partition_function(element, ion_stage, temperature_K)
@@ -277,9 +275,7 @@ class GoldenSpectrumGenerator:
             },
         )
 
-    def _get_element_transitions(
-        self, element: str, ion_stage: int, n_lines: int
-    ) -> List[Dict]:
+    def _get_element_transitions(self, element: str, ion_stage: int, n_lines: int) -> List[Dict]:
         """Get transitions from database or generate synthetic ones."""
         try:
             transitions = self.atomic_db.get_transitions(
@@ -317,16 +313,19 @@ class GoldenSpectrumGenerator:
         self, element: str, ion_stage: int, n_lines: int
     ) -> List[Dict]:
         """Generate synthetic transitions when database is unavailable."""
-        # Use absolute value to ensure non-negative seed
-        seed = abs(hash(element)) + ion_stage
+        # Deterministic seed (avoid process-randomized Python hash()).
+        seed = ion_stage + sum((idx + 1) * ord(ch) for idx, ch in enumerate(element))
         rng = np.random.default_rng(seed)
 
         transitions = []
         for i in range(n_lines):
             # Spread wavelengths across range
-            wl = self.wavelength_range[0] + (
-                self.wavelength_range[1] - self.wavelength_range[0]
-            ) * (i + rng.random()) / n_lines
+            wl = (
+                self.wavelength_range[0]
+                + (self.wavelength_range[1] - self.wavelength_range[0])
+                * (i + rng.random())
+                / n_lines
+            )
 
             transitions.append(
                 {
@@ -339,9 +338,7 @@ class GoldenSpectrumGenerator:
 
         return transitions
 
-    def _get_partition_function(
-        self, element: str, ion_stage: int, temperature_K: float
-    ) -> float:
+    def _get_partition_function(self, element: str, ion_stage: int, temperature_K: float) -> float:
         """Get partition function from database or estimate."""
         try:
             coeffs = self.atomic_db.get_partition_coefficients(element, ion_stage)
@@ -378,9 +375,7 @@ class GoldenSpectrumGenerator:
         fallback = {"Fe": 7.87, "Cu": 7.73, "Al": 5.99, "Ti": 6.83, "Mg": 7.65, "Ca": 6.11}
         return fallback.get(element, 7.0)
 
-    def _calculate_saha_factor(
-        self, temperature_K: float, n_e: float, ip_eV: float
-    ) -> float:
+    def _calculate_saha_factor(self, temperature_K: float, n_e: float, ip_eV: float) -> float:
         """Calculate Saha ionization factor n_II/n_I."""
         from cflibs.core.constants import SAHA_CONST_CM3
 
@@ -622,9 +617,7 @@ class RoundTripValidator:
 
         # Calculate errors
         temp_error = abs(result.temperature_K - temperature_K) / temperature_K
-        ne_error = (
-            abs(result.electron_density_cm3 - electron_density_cm3) / electron_density_cm3
-        )
+        ne_error = abs(result.electron_density_cm3 - electron_density_cm3) / electron_density_cm3
 
         conc_errors = {}
         for el, true_c in concentrations.items():
@@ -699,12 +692,8 @@ class RoundTripValidator:
         if concentrations is None:
             concentrations = {"Fe": 0.7, "Cu": 0.3}
 
-        temperatures = np.linspace(
-            temperature_range[0], temperature_range[1], n_temperatures
-        )
-        densities = np.logspace(
-            np.log10(density_range[0]), np.log10(density_range[1]), n_densities
-        )
+        temperatures = np.linspace(temperature_range[0], temperature_range[1], n_temperatures)
+        densities = np.logspace(np.log10(density_range[0]), np.log10(density_range[1]), n_densities)
 
         results = []
         for i, T in enumerate(temperatures):
