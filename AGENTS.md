@@ -32,10 +32,15 @@
 - Framework: pytest with optional `pytest-cov` and `pytest-benchmark`.
 - Coverage target for new code: >80% (see `CONTRIBUTING.md`).
 - Use markers to scope runs (e.g., `requires_db`, `requires_jax`, `slow`).
+- Coverage report: `pytest tests/ --cov=cflibs --cov-report=html`.
 
 ## CLI & Data Workflows
 - `cflibs generate-manifold examples/manifold_config_example.yaml --progress` builds a spectral manifold.
 - `python datagen_v2.py` generates the atomic database (long-running).
+- `nohup python datagen_v2.py &` runs database generation in the background.
+- Multi-node manifold generation:
+  - `mpirun -np 3 --hostfile hosts.txt python generate_manifold.py`.
+  - `srun -N 3 --gpus-per-node=1 python generate_manifold.py` (SLURM).
 
 ## Commit & Pull Request Guidelines
 - Commit messages: short imperative summary (<=50 chars) with optional body explaining what/why.
