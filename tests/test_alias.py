@@ -2,6 +2,7 @@
 Tests for ALIAS element identification algorithm.
 """
 
+import pytest
 import numpy as np
 from cflibs.inversion.alias_identifier import ALIASIdentifier
 from cflibs.inversion.element_id import ElementIdentificationResult

@@ -2,6 +2,7 @@
 Tests for comb template correlation algorithm.
 """
 
+import pytest
 import numpy as np
 from cflibs.inversion.comb_identifier import CombIdentifier
 from cflibs.inversion.element_id import ElementIdentificationResult
