@@ -8,12 +8,18 @@
 - Root scripts like `datagen_v2.py` and `manifold-generator.py` are utilities for database and manifold generation.
 
 ## Build, Test, and Development Commands
+- `uv venv --python 3.12` creates a virtual environment with `uv`.
 - `pip install -e "[dev]"` installs the project in editable mode with dev tools.
+- `uv pip install -e ".[local]"` installs local dev extras (JAX Metal, hdf5, dev tools).
+- `uv pip install -e ".[cluster]"` installs cluster extras (JAX CUDA, hdf5, mpi4py).
 - `pytest tests/ -v` runs the full test suite.
+- `JAX_PLATFORMS=cpu pytest tests/` forces CPU backend for tests.
 - `pytest tests/test_plasma.py -v` runs a single test file.
 - `pytest -m "not requires_db"` skips database-dependent tests.
 - `black cflibs/ tests/` formats code.
+- `black --check cflibs/` checks formatting.
 - `ruff check cflibs/ tests/` runs linting.
+- `ruff check --fix cflibs/` auto-fixes lint issues where possible.
 - `mypy cflibs/` runs type checks.
 
 ## Coding Style & Naming Conventions
@@ -26,6 +32,10 @@
 - Framework: pytest with optional `pytest-cov` and `pytest-benchmark`.
 - Coverage target for new code: >80% (see `CONTRIBUTING.md`).
 - Use markers to scope runs (e.g., `requires_db`, `requires_jax`, `slow`).
+
+## CLI & Data Workflows
+- `cflibs generate-manifold examples/manifold_config_example.yaml --progress` builds a spectral manifold.
+- `python datagen_v2.py` generates the atomic database (long-running).
 
 ## Commit & Pull Request Guidelines
 - Commit messages: short imperative summary (<=50 chars) with optional body explaining what/why.
