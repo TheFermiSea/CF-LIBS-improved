@@ -117,7 +117,8 @@ def invert_cmd(args):
 
     analysis_cfg = config.get("analysis", {}) if isinstance(config, dict) else {}
 
-    elements = args.elements or analysis_cfg.get("elements") or config.get("elements")
+    cli_elements = getattr(args, "elements", None)
+    elements = cli_elements or analysis_cfg.get("elements") or config.get("elements")
     if elements is None:
         raise ValueError(
             "Elements must be specified via --elements or config 'analysis.elements'."

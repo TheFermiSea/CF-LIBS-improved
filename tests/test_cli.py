@@ -46,8 +46,8 @@ def test_forward_model_cmd_invalid_config():
         Path(config_path).unlink()
 
 
-def test_invert_cmd_placeholder():
-    """Test that invert command shows placeholder message."""
+def test_invert_cmd_requires_elements():
+    """Invert command should fail with a clear error when no elements are provided."""
 
     class Args:
         spectrum = "spectrum.csv"
@@ -56,11 +56,8 @@ def test_invert_cmd_placeholder():
 
     args = Args()
 
-    # Should print message and not raise error
-    try:
+    with pytest.raises(ValueError, match="Elements must be specified"):
         invert_cmd(args)
-    except SystemExit:
-        pass  # May exit, that's okay
 
 
 def test_dbgen_cmd_missing_script():

@@ -1235,6 +1235,20 @@ class FineTuner:
         X_train.shape[1]
         y_train.shape[1]
 
+        # Capture the pre-adaptation train loss when possible so the fallback exposes a
+        # meaningful baseline in loss_history, matching JAX mode semantics.
+        initial_train_loss: Optional[float] = None
+        init_W = initial_params.get('W')
+        init_b = initial_params.get('b')
+        if init_W is not None:
+            if init_b is None:
+                init_b = np.zeros(y_train.shape[1])
+            try:
+                y_pred_init = np.dot(X_train, init_W) + init_b
+                initial_train_loss = float(np.mean((y_pred_init - y_train) ** 2))
+            except ValueError:
+                initial_train_loss = None
+
         # Add bias column
         X_aug = np.hstack([X_train, np.ones((X_train.shape[0], 1))])
 
@@ -1259,9 +1273,13 @@ class FineTuner:
 
         self._adapted_params = adapted_params
 
+        loss_history = [float(train_loss)]
+        if initial_train_loss is not None:
+            loss_history.insert(0, initial_train_loss)
+
         return FineTuneResult(
             adapted_params=adapted_params,
-            loss_history=[float(train_loss)],
+            loss_history=loss_history,
             validation_loss=float(val_loss),
             n_epochs=1,
             converged=True,
