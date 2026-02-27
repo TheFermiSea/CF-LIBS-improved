@@ -314,7 +314,7 @@ def test_to_line_observations_skips_interfered(mock_transition):
 
     interfered_line = IdentifiedLine(
         wavelength_exp_nm=373.5,
-        wavelength_th_nm=373.49,
+        wavelength_th_nm=371.99,
         element="Fe",
         ionization_stage=1,
         intensity_exp=500.0,
