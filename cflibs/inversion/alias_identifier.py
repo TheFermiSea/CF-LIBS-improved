@@ -177,8 +177,16 @@ class ALIASIdentifier:
 
         # Get elements to search
         if self.elements is None:
-            # Default to common LIBS elements (database does not provide get_available_elements)
-            search_elements = ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
+            # Prefer database-provided availability when possible.
+            get_available = getattr(self.atomic_db, "get_available_elements", None)
+            if callable(get_available):
+                try:
+                    available = list(get_available())
+                except Exception:
+                    available = []
+                search_elements = available or ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
+            else:
+                search_elements = ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
         else:
             search_elements = self.elements
 
@@ -616,11 +624,11 @@ class ALIASIdentifier:
                     stage_densities = grid_stage_densities.get((T_K, n_e))
                     if stage_densities is None:
                         continue
-                    
+
                     stage_density = stage_densities.get(transition.ionization_stage, 0.0)
                     if stage_density == 0.0:
                         continue
-                    
+
                     W_q = stage_density / total_density
 
                     try:

@@ -595,7 +595,10 @@ class CombIdentifier:
             interfering = []
             # Look forward while within tolerance
             j = i + 1
-            while j < n and (all_active_teeth[j][1]["center_nm"] - tooth_i["center_nm"]) < wl_tolerance_nm:
+            while (
+                j < n
+                and (all_active_teeth[j][1]["center_nm"] - tooth_i["center_nm"]) < wl_tolerance_nm
+            ):
                 element_j, tooth_j = all_active_teeth[j]
                 if element_i != element_j:
                     interfering.append(element_j)
@@ -610,7 +613,8 @@ class CombIdentifier:
             # Only update if not already set by reciprocal marking
             if interfering:
                 tooth_i["is_interfered"] = True
-                tooth_i["interfering_elements"] = interfering
+                existing = tooth_i.get("interfering_elements", [])
+                tooth_i["interfering_elements"] = sorted(set(existing + interfering))
             elif "is_interfered" not in tooth_i:
                 # Only set to False if not already marked from a previous iteration
                 tooth_i["is_interfered"] = False
