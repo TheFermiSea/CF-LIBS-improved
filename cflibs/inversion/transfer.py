@@ -1170,16 +1170,27 @@ class FineTuner:
         best_val_loss = float('inf')
         best_params = params
         patience_counter = 0
+        frozen_param_count = max(0, min(self.freeze_layers, len(params)))
+        frozen_param_names = set(list(params.keys())[:frozen_param_count])
+        if verbose and frozen_param_names:
+            logger.info(
+                "Freezing %d parameter tensor(s): %s",
+                frozen_param_count,
+                ", ".join(sorted(frozen_param_names)),
+            )
 
         for epoch in range(epochs):
             # Compute gradients
             loss_val, grads = value_and_grad(loss_fn)(params, X_train, y_train)
 
             # Update parameters (frozen layers excluded)
-            params = {
-                k: v - self.learning_rate * grads[k]
-                for k, v in params.items()
-            }
+            updated_params = {}
+            for k, v in params.items():
+                if k in frozen_param_names:
+                    updated_params[k] = v
+                else:
+                    updated_params[k] = v - self.learning_rate * grads[k]
+            params = updated_params
 
             loss_history.append(float(loss_val))
 
