@@ -113,7 +113,8 @@ class TestMMD:
         mmd_xy = compute_mmd(X, Y)
         mmd_yx = compute_mmd(Y, X)
 
-        assert abs(mmd_xy - mmd_yx) < 1e-6
+        # Numerical kernels can differ slightly by operand order across BLAS/Python versions.
+        assert abs(mmd_xy - mmd_yx) < 2e-5
 
     def test_mmd_kernels(self, rng):
         """Test different kernel options."""

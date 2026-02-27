@@ -2,6 +2,7 @@
 Tests for CLI module.
 """
 
+import os
 import pytest
 import tempfile
 from pathlib import Path
@@ -25,8 +26,6 @@ def test_forward_model_cmd_missing_config():
 
 def test_forward_model_cmd_invalid_config():
     """Test forward command with invalid config."""
-    import os
-
     config_fd, config_path = tempfile.mkstemp(suffix=".yaml")
     os.close(config_fd)  # Close file descriptor to prevent leaks
 
@@ -48,7 +47,7 @@ def test_forward_model_cmd_invalid_config():
 
 
 def test_invert_cmd_requires_elements():
-    """Invert command should require elements via CLI args or config."""
+    """Invert command should fail with a clear error when no elements are provided."""
 
     class Args:
         spectrum = "spectrum.csv"
@@ -70,8 +69,11 @@ def test_dbgen_cmd_missing_script():
 
     args = Args()
 
-    # Mock script-path existence check to fail.
-    with patch("cflibs.cli.main.Path.exists", return_value=False):
+    # Mock the path to not exist
+    with patch("cflibs.cli.main.Path") as mock_path:
+        mock_path.return_value.exists.return_value = False
+
+        # Should exit with error
         with pytest.raises(SystemExit):
             dbgen_cmd(args)
 
