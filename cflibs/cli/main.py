@@ -121,7 +121,10 @@ def invert_cmd(args):
     config_elements = config.get("elements") if isinstance(config, dict) else None
     elements = cli_elements or analysis_cfg.get("elements") or config_elements
     if elements is None:
-        raise ValueError("Elements must be specified via --elements or config 'analysis.elements'.")
+        raise ValueError(
+            "Elements must be specified via --elements, config 'analysis.elements', "
+            "or config 'elements'."
+        )
     if isinstance(elements, str):
         elements = [elements]
 
@@ -135,20 +138,19 @@ def invert_cmd(args):
     wavelength, intensity = load_spectrum(args.spectrum)
     atomic_db = AtomicDatabase(db_path)
 
+    cli_tolerance = getattr(args, "tolerance_nm", None)
+    cli_min_peak_height = getattr(args, "min_peak_height", None)
+    cli_peak_width_nm = getattr(args, "peak_width_nm", None)
     wavelength_tolerance = (
-        getattr(args, "tolerance_nm", None)
-        if getattr(args, "tolerance_nm", None) is not None
-        else analysis_cfg.get("wavelength_tolerance_nm", 0.1)
+        cli_tolerance if cli_tolerance is not None else analysis_cfg.get("wavelength_tolerance_nm", 0.1)
     )
     min_peak_height = (
-        getattr(args, "min_peak_height", None)
-        if getattr(args, "min_peak_height", None) is not None
+        cli_min_peak_height
+        if cli_min_peak_height is not None
         else analysis_cfg.get("min_peak_height", 0.01)
     )
     peak_width_nm = (
-        getattr(args, "peak_width_nm", None)
-        if getattr(args, "peak_width_nm", None) is not None
-        else analysis_cfg.get("peak_width_nm", 0.2)
+        cli_peak_width_nm if cli_peak_width_nm is not None else analysis_cfg.get("peak_width_nm", 0.2)
     )
     min_relative_intensity = analysis_cfg.get("min_relative_intensity")
 
