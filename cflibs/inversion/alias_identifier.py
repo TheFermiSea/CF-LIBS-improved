@@ -61,7 +61,8 @@ class ALIASIdentifier:
         Scale factor for chance-coincidence windows used in fill-factor estimation.
         The chance half-window is `chance_window_scale * (lambda / R)`.
     elements : Optional[List[str]], optional
-        List of elements to search for. If None, searches all available (default: None)
+        List of elements to search for. If None, uses default common LIBS elements:
+        ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"] (default: None)
     """
 
     # Crustal abundance in log10(ppm) — from CRC Handbook / USGS
@@ -176,7 +177,16 @@ class ALIASIdentifier:
 
         # Get elements to search
         if self.elements is None:
-            search_elements = ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
+            # Prefer database-provided availability when possible.
+            get_available = getattr(self.atomic_db, "get_available_elements", None)
+            if callable(get_available):
+                try:
+                    available = list(get_available())
+                except Exception:
+                    available = []
+                search_elements = available or ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
+            else:
+                search_elements = ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
         else:
             search_elements = self.elements
 
@@ -396,7 +406,8 @@ class ALIASIdentifier:
 
             detected = CL >= self.detection_threshold
 
-            # Build IdentifiedLine objects
+            # Create IdentifiedLine objects for matched lines
+            # Reuse peak indices from matching to avoid re-selection outside window
             matched_lines = []
             unmatched_lines = []
             for i, line_data in enumerate(fused_lines):
@@ -456,9 +467,9 @@ class ALIASIdentifier:
         detected_elements = [e for e in all_element_ids if e.detected]
         rejected_elements = [e for e in all_element_ids if not e.detected]
 
-        # Count matched peaks across detected elements
-        matched_peak_indices: set = set()
-        for element_id in detected_elements:
+        # Count matched peaks (peak matched if any element matched it, detected or rejected)
+        matched_peak_indices = set()
+        for element_id in all_element_ids:  # Use all_element_ids, not just detected
             for line in element_id.matched_lines:
                 peak_idx = np.argmin(
                     np.abs(np.array([p[1] for p in peaks]) - line.wavelength_exp_nm)
@@ -489,7 +500,7 @@ class ALIASIdentifier:
         self, wavelength: np.ndarray, intensity: np.ndarray
     ) -> List[Tuple[int, float]]:
         """
-        Detect peaks using 2nd derivative enhancement.
+        Detect peaks using MAD-based noise estimation and scipy.signal.find_peaks.
 
         Parameters
         ----------
@@ -507,12 +518,13 @@ class ALIASIdentifier:
         baseline = estimate_baseline(wavelength, intensity)
         noise_estimate = estimate_noise(intensity, baseline)
 
-        # Threshold in intensity domain (well-calibrated)
-        threshold = noise_estimate * self.intensity_threshold_factor
+        # Threshold in intensity domain (with floor for flat spectra / zero MAD)
+        threshold = max(noise_estimate * self.intensity_threshold_factor, np.finfo(float).eps)
+        prominence = max(threshold / 3, np.finfo(float).eps)
 
         # Find peaks in baseline-corrected intensity
         corrected = intensity - baseline
-        peak_indices, _ = find_peaks(corrected, height=threshold, prominence=threshold / 3)
+        peak_indices, _ = find_peaks(corrected, height=threshold, prominence=prominence)
 
         # Paper (Noël et al. 2025): enhance peak detection using negative 2nd derivative
         # Compute -d²I/dλ², zero negatives — true peaks have positive curvature here
@@ -563,7 +575,7 @@ class ALIASIdentifier:
                 )
                 if trans_list:
                     transitions.extend(trans_list)
-            except Exception:
+            except (KeyError, ValueError, AttributeError):
                 # No data for this ionization stage
                 continue
 
@@ -587,6 +599,20 @@ class ALIASIdentifier:
         line_data = []
         total_density = 1e15  # Arbitrary reference density
 
+        # Precompute stage densities for all (T, n_e) grid points
+        grid_stage_densities = {}
+        for T_K in self.T_grid_K:
+            for n_e in self.n_e_grid_cm3:
+                T_eV = T_K * KB_EV
+                try:
+                    stage_densities = self.solver.solve_ionization_balance(
+                        element, T_eV, n_e, total_density
+                    )
+                    grid_stage_densities[(T_K, n_e)] = stage_densities
+                except (KeyError, ValueError, ZeroDivisionError):
+                    # Failed for this grid point, skip
+                    continue
+
         for transition in transitions:
             emissivities = []
 
@@ -594,14 +620,18 @@ class ALIASIdentifier:
                 for n_e in self.n_e_grid_cm3:
                     T_eV = T_K * KB_EV
 
-                    # Get ionization balance
-                    try:
-                        stage_densities = self.solver.solve_ionization_balance(
-                            element, T_eV, n_e, total_density
-                        )
-                        stage_density = stage_densities.get(transition.ionization_stage, 0.0)
-                        W_q = stage_density / total_density
+                    # Get precomputed ionization balance
+                    stage_densities = grid_stage_densities.get((T_K, n_e))
+                    if stage_densities is None:
+                        continue
 
+                    stage_density = stage_densities.get(transition.ionization_stage, 0.0)
+                    if stage_density == 0.0:
+                        continue
+
+                    W_q = stage_density / total_density
+
+                    try:
                         # Get partition function
                         U_T = self.solver.calculate_partition_function(
                             element, transition.ionization_stage, T_eV
@@ -612,8 +642,8 @@ class ALIASIdentifier:
                         eps = W_q * transition.A_ki * transition.g_k * boltzmann_factor / U_T
 
                         emissivities.append(eps)
-                    except Exception:
-                        # Failed for this grid point, skip
+                    except (KeyError, ValueError, ZeroDivisionError):
+                        # Failed to compute partition function or emissivity, skip
                         continue
 
             if emissivities:

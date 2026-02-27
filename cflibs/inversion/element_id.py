@@ -6,7 +6,7 @@ Bridge function to_line_observations() converts results for downstream Boltzmann
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 from cflibs.atomic.structures import Transition
 from cflibs.inversion.boltzmann import LineObservation
 
@@ -29,7 +29,7 @@ class IdentifiedLine:
     intensity_exp : float
         Experimental intensity at peak (arbitrary units)
     emissivity_th : float
-        Theoretical emissivity (0.0 default)
+        Theoretical emissivity
     transition : Transition
         Atomic transition from database
     correlation : float
@@ -75,8 +75,8 @@ class ElementIdentification:
         Detailed matched lines
     unmatched_lines : List[Transition]
         Theoretical lines with no experimental match
-    metadata : Dict[str, float]
-        Algorithm-specific sub-scores (default {})
+    metadata : Dict[str, Any]
+        Algorithm-specific metadata (default {})
     """
 
     element: str
@@ -87,7 +87,7 @@ class ElementIdentification:
     n_total_lines: int
     matched_lines: List[IdentifiedLine]
     unmatched_lines: List[Transition]
-    metadata: Dict[str, float] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
