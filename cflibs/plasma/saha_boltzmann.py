@@ -186,11 +186,27 @@ class SahaBoltzmannSolver(SolverStrategy):
         Dict[int, float]
             Mapping from ionization stage (1=neutral, 2=singly ionized, ...)
             to fractional population (0-1).
+        Raises
+        ------
+        ValueError
+            If T_e_eV <= 0, n_e_cm3 <= 0, or solver returns non-positive total.
         """
+        if T_e_eV <= 0.0:
+            raise ValueError(f"T_e_eV must be positive; got {T_e_eV!r}")
+        if n_e_cm3 <= 0.0:
+            raise ValueError(f"n_e_cm3 must be positive; got {n_e_cm3!r}")
+
         # Use arbitrary total density; fractions are independent of it
         total_density = 1.0
-        stage_densities = self.solve_ionization_balance(element, T_e_eV, n_e_cm3, total_density)
+        stage_densities = self.solve_ionization_balance(
+            element, T_e_eV, n_e_cm3, total_density
+        )
         total = sum(stage_densities.values())
+        if total <= 0.0:
+            raise ValueError(
+                f"Ionization balance returned non-positive total density "
+                f"({total!r}) for element {element!r}"
+            )
         return {stage: n / total for stage, n in stage_densities.items()}
 
     def solve_level_population(

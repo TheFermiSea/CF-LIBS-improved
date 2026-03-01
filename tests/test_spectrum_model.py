@@ -219,16 +219,19 @@ def test_spectrum_model_legacy_mode_unchanged(atomic_db, sample_plasma):
 
 
 def test_spectrum_model_nist_parity_vs_legacy_differ(atomic_db, sample_plasma):
-    """Test NIST_PARITY and LEGACY produce different spectra."""
+    """Test NIST_PARITY and LEGACY produce different spectra.
+
+    Uses the same resolving-power instrument for both modes so the
+    difference is purely from the broadening mode, not the instrument.
+    """
     from cflibs.radiation.profiles import BroadeningMode
 
-    instrument_fwhm = InstrumentModel(resolution_fwhm_nm=0.05)
-    instrument_rp = InstrumentModel.from_resolving_power(1000)
+    instrument = InstrumentModel.from_resolving_power(1000)
 
     model_legacy = SpectrumModel(
         plasma=sample_plasma,
         atomic_db=atomic_db,
-        instrument=instrument_fwhm,
+        instrument=instrument,
         lambda_min=370.0,
         lambda_max=375.0,
         delta_lambda=0.01,
@@ -238,7 +241,7 @@ def test_spectrum_model_nist_parity_vs_legacy_differ(atomic_db, sample_plasma):
     model_nist = SpectrumModel(
         plasma=sample_plasma,
         atomic_db=atomic_db,
-        instrument=instrument_rp,
+        instrument=instrument,
         lambda_min=370.0,
         lambda_max=375.0,
         delta_lambda=0.01,
@@ -248,7 +251,8 @@ def test_spectrum_model_nist_parity_vs_legacy_differ(atomic_db, sample_plasma):
     _, I_legacy = model_legacy.compute_spectrum()
     _, I_nist = model_nist.compute_spectrum()
 
-    # They should produce different spectra
+    # They should produce different spectra (LEGACY uses scalar sigma +
+    # convolution; NIST_PARITY uses per-line sigma, no convolution)
     assert not np.allclose(I_legacy, I_nist, rtol=0.1)
 
 

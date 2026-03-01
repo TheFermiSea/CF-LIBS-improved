@@ -113,19 +113,29 @@ def calculate_spectrum_emissivity(
     is_per_line = isinstance(sigma_nm, np.ndarray) and sigma_nm.ndim >= 1
 
     if use_jax:
-        try:
-            import jax.numpy as jnp
-        except ImportError as exc:
-            raise ImportError("JAX is not installed. Install with: pip install jax jaxlib") from exc
-        from cflibs.radiation.profiles import apply_gaussian_broadening_jax
+        if is_per_line:
+            # JAX broadening does not yet support per-line sigma arrays;
+            # fall back to the NumPy per-line implementation.
+            logger.debug(
+                "JAX broadening does not support per-line sigma; "
+                "falling back to NumPy per-line broadening"
+            )
+        else:
+            try:
+                import jax.numpy as jnp
+            except ImportError as exc:
+                raise ImportError(
+                    "JAX is not installed. Install with: pip install jax jaxlib"
+                ) from exc
+            from cflibs.radiation.profiles import apply_gaussian_broadening_jax
 
-        spectrum = apply_gaussian_broadening_jax(
-            jnp.asarray(wavelength_grid),
-            jnp.asarray(line_wavelengths_arr),
-            jnp.asarray(line_emissivities_arr),
-            float(sigma_nm) if not is_per_line else float(np.mean(sigma_nm)),
-        )
-        return np.array(spectrum)
+            spectrum = apply_gaussian_broadening_jax(
+                jnp.asarray(wavelength_grid),
+                jnp.asarray(line_wavelengths_arr),
+                jnp.asarray(line_emissivities_arr),
+                float(sigma_nm),
+            )
+            return np.array(spectrum)
 
     if is_per_line:
         spectrum = apply_gaussian_broadening_per_line(

@@ -39,8 +39,8 @@ class InstrumentModel:
 
     @property
     def is_resolving_power_mode(self) -> bool:
-        """True if instrument is configured with resolving power R."""
-        return self.resolving_power is not None
+        """True if instrument is configured with a valid resolving power R > 0."""
+        return self.resolving_power is not None and self.resolving_power > 0
 
     def sigma_at_wavelength(self, wavelength_nm: float) -> float:
         """
@@ -58,8 +58,19 @@ class InstrumentModel:
         -------
         float
             Gaussian standard deviation in nm
+
+        Raises
+        ------
+        ValueError
+            If wavelength_nm <= 0 or resolving_power <= 0.
         """
+        if wavelength_nm <= 0:
+            raise ValueError(f"wavelength_nm must be positive; got {wavelength_nm!r}")
         if self.resolving_power is not None:
+            if self.resolving_power <= 0:
+                raise ValueError(
+                    f"resolving_power must be positive; got {self.resolving_power!r}"
+                )
             fwhm = wavelength_nm / self.resolving_power
             return fwhm / 2.355
         return self.resolution_sigma_nm
@@ -81,7 +92,14 @@ class InstrumentModel:
         Returns
         -------
         InstrumentModel
+
+        Raises
+        ------
+        ValueError
+            If resolving_power <= 0.
         """
+        if resolving_power <= 0:
+            raise ValueError(f"resolving_power must be positive; got {resolving_power!r}")
         return cls(
             resolution_fwhm_nm=0.0,
             response_curve=response_curve,

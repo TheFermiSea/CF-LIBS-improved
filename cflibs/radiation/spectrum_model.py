@@ -13,7 +13,6 @@ from cflibs.radiation.emissivity import calculate_spectrum_emissivity
 from cflibs.radiation.profiles import (
     BroadeningMode,
     doppler_width,
-    resolving_power_sigma,
 )
 from cflibs.instrument.convolution import apply_instrument_function
 from cflibs.core.logging_config import get_logger
@@ -100,43 +99,49 @@ class SpectrumModel:
             f"mode={broadening_mode.value}"
         )
 
+    _FALLBACK_MASSES = {
+        "H": 1.008,
+        "He": 4.003,
+        "Li": 6.941,
+        "Be": 9.012,
+        "B": 10.81,
+        "C": 12.01,
+        "N": 14.01,
+        "O": 16.00,
+        "Na": 22.99,
+        "Mg": 24.31,
+        "Al": 26.98,
+        "Si": 28.09,
+        "P": 30.97,
+        "S": 32.07,
+        "K": 39.10,
+        "Ca": 40.08,
+        "Ti": 47.87,
+        "V": 50.94,
+        "Cr": 52.00,
+        "Mn": 54.94,
+        "Fe": 55.85,
+        "Co": 58.93,
+        "Ni": 58.69,
+        "Cu": 63.55,
+        "Zn": 65.38,
+        "Sr": 87.62,
+        "Ba": 137.33,
+        "W": 183.84,
+    }
+
     def _get_element_mass(self, element: str) -> float:
         """Get atomic mass for an element, with fallback."""
         mass = self.atomic_db.get_atomic_mass(element)
         if mass is not None:
             return mass
-        # Fallback to common values
-        _FALLBACK_MASSES = {
-            "H": 1.008,
-            "He": 4.003,
-            "Li": 6.941,
-            "Be": 9.012,
-            "B": 10.81,
-            "C": 12.01,
-            "N": 14.01,
-            "O": 16.00,
-            "Na": 22.99,
-            "Mg": 24.31,
-            "Al": 26.98,
-            "Si": 28.09,
-            "P": 30.97,
-            "S": 32.07,
-            "K": 39.10,
-            "Ca": 40.08,
-            "Ti": 47.87,
-            "V": 50.94,
-            "Cr": 52.00,
-            "Mn": 54.94,
-            "Fe": 55.85,
-            "Co": 58.93,
-            "Ni": 58.69,
-            "Cu": 63.55,
-            "Zn": 65.38,
-            "Sr": 87.62,
-            "Ba": 137.33,
-            "W": 183.84,
-        }
-        return _FALLBACK_MASSES.get(element, 50.0)
+        fallback = self._FALLBACK_MASSES.get(element)
+        if fallback is not None:
+            logger.warning("No DB mass for %s; using fallback %.2f amu", element, fallback)
+            return fallback
+        raise ValueError(
+            f"No atomic mass found for element {element!r} in database or fallback table"
+        )
 
     def _compute_sigma_per_line(self, transitions: list, populations: dict) -> Optional[np.ndarray]:
         """
@@ -155,11 +160,13 @@ class SpectrumModel:
                 continue
 
             if self.broadening_mode == BroadeningMode.NIST_PARITY:
-                sig = resolving_power_sigma(trans.wavelength_nm, self.instrument.resolving_power)
-            else:  # PHYSICAL_DOPPLER
+                sig = self.instrument.sigma_at_wavelength(trans.wavelength_nm)
+            elif self.broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
                 mass = self._get_element_mass(trans.element)
                 fwhm = doppler_width(trans.wavelength_nm, self.plasma.T_e_eV, mass)
                 sig = fwhm / 2.355
+            else:
+                raise ValueError(f"Unsupported broadening mode: {self.broadening_mode!r}")
 
             sigmas.append(sig)
 
@@ -224,17 +231,26 @@ class SpectrumModel:
         # NIST_PARITY: broadening is fully captured in per-line profiles, skip convolution
         # LEGACY and PHYSICAL_DOPPLER: apply downstream instrument convolution
         if self.broadening_mode != BroadeningMode.NIST_PARITY:
-            logger.debug("Applying instrument function...")
-            if self.use_jax:
-                from cflibs.instrument.convolution import apply_instrument_function_jax
-
-                intensity = apply_instrument_function_jax(
-                    self.wavelength, intensity, self.instrument.resolution_sigma_nm
-                )
+            # Determine convolution sigma: use resolving power at midpoint if available,
+            # otherwise fall back to the fixed resolution_sigma_nm.
+            if self.instrument.is_resolving_power_mode:
+                mid_wl = 0.5 * (self.lambda_min + self.lambda_max)
+                sigma_conv = self.instrument.sigma_at_wavelength(mid_wl)
             else:
-                intensity = apply_instrument_function(
-                    self.wavelength, intensity, self.instrument.resolution_sigma_nm
-                )
+                sigma_conv = self.instrument.resolution_sigma_nm
+
+            if sigma_conv > 0:
+                logger.debug("Applying instrument function (sigma=%.4f nm)...", sigma_conv)
+                if self.use_jax:
+                    from cflibs.instrument.convolution import apply_instrument_function_jax
+
+                    intensity = apply_instrument_function_jax(
+                        self.wavelength, intensity, sigma_conv
+                    )
+                else:
+                    intensity = apply_instrument_function(self.wavelength, intensity, sigma_conv)
+            else:
+                logger.debug("Skipping instrument convolution (sigma=0)")
         else:
             logger.debug("Skipping instrument convolution (NIST_PARITY mode)")
 

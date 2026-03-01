@@ -11,7 +11,10 @@ Usage:
 """
 
 import argparse
+import os
 import sys
+
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
@@ -78,7 +81,7 @@ TEMPERATURES_K = [5000, 10000, 15000, 20000]
 def verify_element(
     solver: SahaBoltzmannSolver,
     element: str,
-) -> dict:
+) -> dict[str, dict]:
     """Compare partition functions for one element."""
     ref = NIST_PARTITION_FUNCTIONS.get(element, {})
     if not ref:
@@ -115,7 +118,7 @@ def verify_element(
     return results
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Verify CF-LIBS partition functions vs NIST ASD")
     parser.add_argument("--element", nargs="+", default=["Fe"], help="Element(s) to verify")
     parser.add_argument("--db", default="libs_production.db", help="Atomic database path")

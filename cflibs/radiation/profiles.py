@@ -71,7 +71,16 @@ def resolving_power_sigma(wavelength_nm: float, resolving_power: float) -> float
     -------
     float
         Gaussian standard deviation in nm
+
+    Raises
+    ------
+    ValueError
+        If ``wavelength_nm`` <= 0 or ``resolving_power`` <= 0.
     """
+    if resolving_power <= 0:
+        raise ValueError(f"resolving_power must be positive; got {resolving_power!r}")
+    if wavelength_nm <= 0:
+        raise ValueError(f"wavelength_nm must be positive; got {wavelength_nm!r}")
     fwhm = wavelength_nm / resolving_power
     return fwhm / 2.355
 
@@ -104,7 +113,20 @@ def apply_gaussian_broadening_per_line(
     -------
     array
         Broadened spectrum
+
+    Raises
+    ------
+    ValueError
+        If input array lengths differ or any sigma is <= 0.
     """
+    if not (len(line_wavelengths) == len(line_intensities) == len(sigmas)):
+        raise ValueError(
+            f"Input length mismatch: line_wavelengths={len(line_wavelengths)}, "
+            f"line_intensities={len(line_intensities)}, sigmas={len(sigmas)}"
+        )
+    if len(sigmas) > 0 and np.any(np.asarray(sigmas) <= 0):
+        raise ValueError("All per-line sigma values must be > 0")
+
     spectrum = np.zeros_like(wavelength_grid)
 
     for wl, intensity, sig in zip(line_wavelengths, line_intensities, sigmas):

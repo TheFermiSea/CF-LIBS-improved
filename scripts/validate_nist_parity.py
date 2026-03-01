@@ -14,7 +14,10 @@ Usage:
 """
 
 import argparse
+import os
 import sys
+
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 import numpy as np
 
@@ -73,13 +76,15 @@ def compute_nist_parity_spectrum(
     wl_min: float,
     wl_max: float,
     resolving_power: float,
+    db: AtomicDatabase | None = None,
     db_path: str = "libs_production.db",
 ) -> tuple:
     """Compute spectrum in NIST_PARITY mode."""
     T_K = T_eV / 8.617333262e-5
     density = 1e16  # arbitrary for shape comparison
 
-    db = AtomicDatabase(db_path)
+    if db is None:
+        db = AtomicDatabase(db_path)
     plasma = SingleZoneLTEPlasma(T_e=T_K, n_e=n_e, species={element: density})
     instrument = InstrumentModel.from_resolving_power(resolving_power)
 
@@ -97,7 +102,7 @@ def compute_nist_parity_spectrum(
     return wavelength, intensity, db
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Validate CF-LIBS vs NIST LIBS Simulation")
     parser.add_argument("--element", default="Fe", help="Element symbol")
     parser.add_argument("--T", type=float, default=0.8, help="Electron temperature in eV")
@@ -120,15 +125,16 @@ def main():
     solver = SahaBoltzmannSolver(db)
     frac_results = validate_ionization_fractions(solver, args.element, args.T, args.ne)
 
-    # Compute spectrum
+    # Compute spectrum (reuse db instance)
     print("\n--- Computing spectrum in NIST_PARITY mode ---")
     wavelength, intensity, _ = compute_nist_parity_spectrum(
-        args.element, args.T, args.ne, args.wl_min, args.wl_max, args.resolving_power, args.db
+        args.element, args.T, args.ne, args.wl_min, args.wl_max, args.resolving_power, db=db
     )
 
-    n_lines = np.sum(intensity > intensity.max() * 0.01)
+    peak = intensity.max()
+    n_lines = np.sum(intensity > peak * 0.01) if peak > 0 else 0
     print(f"Spectrum: {len(wavelength)} points, {n_lines} significant lines")
-    print(f"Peak intensity: {intensity.max():.4e}")
+    print(f"Peak intensity: {peak:.4e}")
 
     # Summary
     print("\n--- Summary ---")
@@ -147,7 +153,8 @@ def main():
             import matplotlib.pyplot as plt
 
             fig, ax = plt.subplots(figsize=(12, 5))
-            ax.plot(wavelength, intensity / intensity.max(), "b-", lw=0.8)
+            norm = intensity.max() if intensity.max() > 0 else 1.0
+            ax.plot(wavelength, intensity / norm, "b-", lw=0.8)
             ax.set_xlabel("Wavelength (nm)")
             ax.set_ylabel("Normalized Intensity")
             ax.set_title(
