@@ -1,0 +1,100 @@
+{
+  "version": "v1.0",
+  "benchmark_dir": "output/synthetic_benchmark/postmerge_synth_v1_auto_24",
+  "current_thresholds": {
+    "ALIAS": {
+      "intensity_threshold_factor": 3.0,
+      "detection_threshold": 0.03
+    },
+    "Comb": {
+      "min_correlation": 0.1,
+      "tooth_activation_threshold": 0.5
+    },
+    "Correlation": {
+      "min_confidence": 0.03
+    }
+  },
+  "current_operating_points": {
+    "ALIAS": {
+      "f1": 0.4182,
+      "precision": 0.371,
+      "recall": 0.4792,
+      "fpr": 0.1806
+    },
+    "Comb": {
+      "f1": 0.2857,
+      "precision": 0.3333,
+      "recall": 0.25,
+      "fpr": 0.1111
+    },
+    "Correlation": {
+      "f1": 0.2963,
+      "precision": 0.2667,
+      "recall": 0.3333,
+      "fpr": 0.2037
+    }
+  },
+  "false_positive_sources": {
+    "ALIAS": {
+      "Al": 5,
+      "Co": 6,
+      "Cr": 6,
+      "Mg": 1,
+      "Mn": 14,
+      "Si": 1,
+      "Ti": 2,
+      "V": 4
+    },
+    "Comb": {
+      "Al": 1,
+      "Co": 3,
+      "Cr": 5,
+      "Cu": 1,
+      "Mg": 6,
+      "Mn": 1,
+      "Si": 3,
+      "V": 4
+    },
+    "Correlation": {
+      "Al": 14,
+      "Co": 3,
+      "Cr": 3,
+      "Cu": 8,
+      "Mg": 3,
+      "Mn": 3,
+      "Si": 1,
+      "Ti": 5,
+      "V": 4
+    }
+  },
+  "recommendations": {
+    "ALIAS": {
+      "action": "tighten_threshold",
+      "reason": "FPR=18.1% exceeds 15% gate",
+      "top_fp_elements": {
+        "Mn": 14,
+        "Co": 6,
+        "Cr": 6
+      }
+    },
+    "Comb": {
+      "action": "keep_current",
+      "reason": "FPR=11.1% acceptable",
+      "top_fp_elements": {
+        "Mg": 6,
+        "Cr": 5,
+        "V": 4
+      }
+    },
+    "Correlation": {
+      "action": "tighten_threshold",
+      "reason": "FPR=20.4% exceeds 15% gate",
+      "top_fp_elements": {
+        "Al": 14,
+        "Cu": 8,
+        "Ti": 5
+      }
+    }
+  },
+  "note": "Full Pareto sweep requires parameterized benchmark re-run with threshold grid. This report documents the current single operating point and FP analysis."
+}
