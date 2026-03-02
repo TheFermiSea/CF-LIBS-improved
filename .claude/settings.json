@@ -1,22 +1,41 @@
 {
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(*)"
+    ],
+    "ask": [],
+    "deny": [],
+    "defaultMode": "default"
+  },
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Edit",
         "hooks": [
-          {"type": "command", "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/enforce-branch-before-edit.sh"}
+          {
+            "type": "command",
+            "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/enforce-branch-before-edit.sh"
+          }
         ]
       },
       {
         "matcher": "Write",
         "hooks": [
-          {"type": "command", "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/enforce-branch-before-edit.sh"}
+          {
+            "type": "command",
+            "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/enforce-branch-before-edit.sh"
+          }
         ]
       },
       {
         "matcher": "Bash",
         "hooks": [
-          {"type": "command", "command": ".claude/hooks/validate-epic-close.sh"}
+          {
+            "type": "command",
+            "command": ".claude/hooks/validate-epic-close.sh"
+          }
         ]
       }
     ],
@@ -25,14 +44,20 @@
     "SessionStart": [
       {
         "hooks": [
-          {"type": "command", "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/session-start.sh"}
+          {
+            "type": "command",
+            "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/session-start.sh"
+          }
         ]
       }
     ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          {"type": "command", "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/clarify-vague-request.sh"}
+          {
+            "type": "command",
+            "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/clarify-vague-request.sh"
+          }
         ]
       }
     ]
