@@ -583,18 +583,14 @@ def _select_comb_transitions(
     transitions: List[Transition],
     max_lines: int,
 ) -> List[Transition]:
-    if max_lines <= 0 or len(transitions) <= max_lines:
-        return sorted(
-            transitions,
-            key=lambda t: (_transition_strength(t), -t.wavelength_nm),
-            reverse=True,
-        )
-    transitions_sorted = sorted(
+    sorted_t = sorted(
         transitions,
         key=lambda t: (_transition_strength(t), -t.wavelength_nm),
         reverse=True,
     )
-    return transitions_sorted[:max_lines]
+    if max_lines > 0 and len(sorted_t) > max_lines:
+        return sorted_t[:max_lines]
+    return sorted_t
 
 
 def _build_shift_grid(

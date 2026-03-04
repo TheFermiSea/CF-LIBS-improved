@@ -8,11 +8,12 @@ which takes precedence over any GPU configuration done here.
 """
 
 import os
-import logging
 from dataclasses import dataclass
 from typing import Optional
 
-logger = logging.getLogger("hpc.gpu_config")
+from cflibs.core.logging_config import get_logger
+
+logger = get_logger("hpc.gpu_config")
 
 
 @dataclass
@@ -141,8 +142,6 @@ def pin_to_device(local_rank: int) -> Optional[GPUInfo]:
     try:
         # Derive device_id from SLURM env or local_rank without importing JAX,
         # so CUDA_VISIBLE_DEVICES is set before JAX initialises.
-        import os
-
         gpus_on_node = os.environ.get("SLURM_GPUS_ON_NODE")
         if gpus_on_node is not None:
             device_id = local_rank % int(gpus_on_node)

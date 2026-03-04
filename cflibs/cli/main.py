@@ -232,7 +232,6 @@ def invert_cmd(args):
 
 def dbgen_cmd(args):
     """Database generation command."""
-    from pathlib import Path
     import subprocess
 
     datagen_script = Path(__file__).parent.parent.parent / "datagen_v2.py"

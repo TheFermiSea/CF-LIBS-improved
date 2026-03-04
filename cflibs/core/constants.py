@@ -34,6 +34,9 @@ E_CHARGE = 1.602176634e-19  # C (elementary charge)
 # Atomic Physics Constants
 # ============================================================================
 
+# Proton mass (CODATA 2018)
+M_PROTON = 1.67262192369e-27  # kg
+
 # Rydberg constant
 RYDBERG = 10973731.568160  # m^-1
 

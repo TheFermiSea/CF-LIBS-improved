@@ -29,7 +29,7 @@ except ImportError:
         return f
 
 
-from cflibs.core.constants import C_LIGHT, EV_TO_J
+from cflibs.core.constants import C_LIGHT, EV_TO_J, M_PROTON
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("radiation.profiles")
@@ -197,7 +197,6 @@ def doppler_width(wavelength_nm: float, T_eV: float, mass_amu: float) -> float:
     """
     Calculate Doppler broadening width (FWHM).
     """
-    M_PROTON = 1.6726219e-27  # kg
     mass_kg = mass_amu * M_PROTON
 
     # Doppler FWHM = lambda * sqrt(8kT ln2 / mc^2)
@@ -627,7 +626,6 @@ if HAS_JAX:
         float
             Doppler sigma (standard deviation) in nm
         """
-        M_PROTON = 1.6726219e-27  # kg
         mass_kg = mass_amu * M_PROTON
 
         # sigma = lambda/c * sqrt(2 * kT / m)

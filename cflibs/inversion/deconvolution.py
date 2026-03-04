@@ -31,6 +31,19 @@ except ImportError:
     HAS_JAX = False
     jnp = None
 
+# Lazy-cached import: profiles.py creates Weideman coefficients at import
+# time, so we defer until first use to ensure jax_enable_x64 is already set.
+_voigt_jax_fn = None
+
+
+def _get_voigt_profile_jax():
+    global _voigt_jax_fn
+    if _voigt_jax_fn is None:
+        from cflibs.radiation.profiles import voigt_profile_jax
+
+        _voigt_jax_fn = voigt_profile_jax
+    return _voigt_jax_fn
+
 try:
     from scipy.optimize import curve_fit
     from scipy.special import wofz as scipy_wofz
@@ -187,12 +200,11 @@ if HAS_JAX:
     ) -> jnp.ndarray:
         """Single Voigt profile using the Weideman Faddeeva approximation.
 
-        This imports the ``voigt_profile_jax`` from
-        :mod:`cflibs.radiation.profiles` which is already @jit compiled.
+        Uses a lazily-imported ``voigt_profile_jax`` from
+        :mod:`cflibs.radiation.profiles` to ensure ``jax_enable_x64`` is
+        already set before Weideman coefficients are created.
         """
-        from cflibs.radiation.profiles import voigt_profile_jax
-
-        return voigt_profile_jax(wavelength, center, sigma, gamma, amplitude)
+        return _get_voigt_profile_jax()(wavelength, center, sigma, gamma, amplitude)
 
     def _multi_voigt_jax(wavelength: jnp.ndarray, params: jnp.ndarray, n_peaks: int) -> jnp.ndarray:
         """Sum of *n_peaks* Voigt profiles from a flat parameter vector."""

@@ -22,13 +22,14 @@ Or programmatically::
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-logger = logging.getLogger("hpc.distributed_mcmc")
+from cflibs.core.logging_config import get_logger
+
+logger = get_logger("hpc.distributed_mcmc")
 
 try:
     from mpi4py import MPI

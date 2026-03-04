@@ -433,7 +433,7 @@ pub fn kdet_filter_elements<'py>(
         let n = sorted_densities.len();
         if n == 0 {
             1.0
-        } else if n.is_multiple_of(2) {
+        } else if n % 2 == 0 {
             (sorted_densities[n / 2 - 1] + sorted_densities[n / 2]) / 2.0
         } else {
             sorted_densities[n / 2]

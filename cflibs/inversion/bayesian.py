@@ -103,6 +103,10 @@ from cflibs.core.constants import (
     EV_TO_K,
     EV_TO_J,
     MCWHIRTER_CONST,
+    H_PLANCK,
+    E_CHARGE,
+    M_E,
+    M_PROTON,
 )
 from cflibs.core.logging_config import get_logger
 
@@ -153,11 +157,8 @@ except ImportError:
     dynesty = None
 
 
-# Physical constants
-H_PLANCK = 6.626e-34  # Planck constant [J·s]
-M_PROTON = 1.6726219e-27  # Proton mass [kg]
-E_CHARGE = 1.602e-19  # Elementary charge [C]
-M_ELECTRON = 9.109e-31  # Electron mass [kg]
+# Backward-compat alias used throughout this module
+M_ELECTRON = M_E
 
 # Standard atomic masses for fallback [amu]
 STANDARD_MASSES = {
@@ -2690,11 +2691,11 @@ class TwoZoneMCMCSampler:
         if HAS_ARVIZ and num_chains > 1:
             try:
                 idata = az.from_numpyro(mcmc)
+                rhat_data = az.rhat(idata)
+                ess_data = az.ess(idata)
                 for var in ["T_core_eV", "T_shell_eV", "log_ne"]:
-                    rhat_data = az.rhat(idata)
                     if var in rhat_data:
                         r_hat[var] = float(rhat_data[var].values)
-                    ess_data = az.ess(idata)
                     if var in ess_data:
                         ess[var] = float(ess_data[var].values)
             except Exception as e:

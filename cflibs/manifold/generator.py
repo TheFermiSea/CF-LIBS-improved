@@ -40,7 +40,7 @@ except ImportError:
         return func
 
 
-from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_K, EV_TO_J
+from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_K, EV_TO_J, H_PLANCK, M_PROTON
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
@@ -563,15 +563,12 @@ class ManifoldGenerator:
 
             # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
 
-            H_J = 6.626e-34  # Planck constant in J·s
-
-            epsilon = (H_J * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
+            epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
 
             # --- Proper Voigt Broadening (Phase 2) ---
 
             # Doppler width: sigma = lambda/c * sqrt(2kT/m)
             # Using JAX-compatible doppler_sigma_jax
-            M_PROTON = 1.6726219e-27  # kg
             mass_kg = l_mass_amu * M_PROTON
             sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
 

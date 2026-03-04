@@ -15,6 +15,7 @@ from cflibs.core import constants
 from cflibs.core import units
 from cflibs.core import config
 from cflibs.core import logging_config
+from cflibs.core.platform_config import configure_jax, AcceleratorBackend
 from cflibs.core.cache import (
     LRUCache,
     cached_partition_function,
@@ -53,4 +54,7 @@ __all__ = [
     "DatabaseConnectionPool",
     "get_pool",
     "close_all_pools",
+    # Platform configuration
+    "configure_jax",
+    "AcceleratorBackend",
 ]
