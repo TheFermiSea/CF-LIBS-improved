@@ -9,6 +9,8 @@ results consistent with the pure-Python implementations.
 import pytest
 import numpy as np
 
+from cflibs.plasma.partition import polynomial_partition_function
+
 pytestmark = pytest.mark.requires_rust
 
 try:
@@ -30,8 +32,6 @@ except ImportError:
         HAS_RUST = True
     except ImportError:
         HAS_RUST = False
-
-from cflibs.plasma.partition import polynomial_partition_function
 
 
 @pytest.mark.skipif(not HAS_RUST, reason="cflibs-core not installed")
