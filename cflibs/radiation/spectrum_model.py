@@ -198,7 +198,7 @@ class SpectrumModel:
                 element,
                 wavelength_min=self.lambda_min,
                 wavelength_max=self.lambda_max,
-                min_relative_intensity=10.0,  # Filter weak lines
+                min_relative_intensity=0.01,  # Include weak lines for NIST parity
             )
             all_transitions.extend(transitions)
 

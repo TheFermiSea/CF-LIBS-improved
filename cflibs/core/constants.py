@@ -73,7 +73,7 @@ EV_TO_K = 1.0 / K_TO_EV
 # value.  The partition function ratio U_{z+1}/U_z used with this constant should NOT
 # contain an additional factor of 2 for the free electron.
 # Derivation: (2π × 9.109e-31 × 1.381e-23 / (6.626e-34)^2)^{3/2} × 2 × 1e-6 ≈ 6.04e21
-SAHA_CONST_CM3 = 6.042e21  # cm^-3 (at T=1 K, but scales as T^1.5)
+SAHA_CONST_CM3 = 6.042e21  # cm^-3 eV^-1.5 (pre-factor for T in eV, n_e in cm^-3)
 
 # McWhirter criterion constant for LTE validity
 # n_e >= 1.6e12 * T^(1/2) * (ΔE)^3

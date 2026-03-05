@@ -31,6 +31,25 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.state import SingleZoneLTEPlasma
 
 
+@pytest.fixture(scope="session")
+def production_db():
+    """Session-scoped production database fixture.
+
+    Tries several common paths for the real atomic database.
+    Skips if not found.
+    """
+    candidates = [
+        Path("libs_production.db"),
+        Path("ASD_da/libs_production.db"),
+        Path(__file__).parent.parent / "libs_production.db",
+        Path(__file__).parent.parent / "ASD_da" / "libs_production.db",
+    ]
+    for p in candidates:
+        if p.exists():
+            return AtomicDatabase(str(p))
+    pytest.skip("Production database not found")
+
+
 @pytest.fixture
 def temp_db():
     """Create a temporary atomic database for testing."""

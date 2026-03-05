@@ -50,6 +50,8 @@ def test_solver_fallback():
     db = MagicMock()
     # No coefficients
     db.get_partition_coefficients.return_value = None
+    # Ionization potential for the IP-based energy cutoff
+    db.get_ionization_potential.return_value = 13.6
 
     # Levels: g=1, E=0; g=3, E=1.0
     level1 = MagicMock(g=1, energy_ev=0.0)

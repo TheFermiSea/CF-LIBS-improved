@@ -110,7 +110,11 @@ class SahaBoltzmannSolver(SolverStrategy):
 
     @cached_partition_function
     def calculate_partition_function(
-        self, element: str, ionization_stage: int, T_e_eV: float, max_energy_ev: float = 50.0
+        self,
+        element: str,
+        ionization_stage: int,
+        T_e_eV: float,
+        max_energy_ev: float | None = None,
     ) -> float:
         """
         Calculate partition function for a species.
@@ -123,8 +127,10 @@ class SahaBoltzmannSolver(SolverStrategy):
             Ionization stage
         T_e_eV : float
             Electron temperature in eV
-        max_energy_ev : float
-            Maximum energy level to include (default: 50 eV)
+        max_energy_ev : float or None
+            Maximum energy level to include.  When ``None`` (default), the
+            ionization potential of the species is used as the physical cap
+            (scaled to 98 % of IP to exclude autoionizing levels).
 
         Returns
         -------
@@ -154,6 +160,12 @@ class SahaBoltzmannSolver(SolverStrategy):
                     "No energy levels for %s %s, using approximation", element, ionization_stage
                 )
             return 2.0  # Rough approximation
+
+        # Determine the energy cutoff: use ionization potential when available
+        # to exclude autoionizing states above the continuum.
+        if max_energy_ev is None:
+            ip = self.atomic_db.get_ionization_potential(element, ionization_stage)
+            max_energy_ev = ip * 0.98 if ip else 50.0
 
         # Partition function: U = sum(g_i * exp(-E_i / kT))
         U = 0.0

@@ -144,3 +144,11 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "requires_db: test requires production atomic database",
+    "slow: slow-running test",
+    "nist_parity: NIST parity comparison test",
+    "unit: unit test",
+    "integration: integration test",
+    "requires_jax: test requires JAX",
+]

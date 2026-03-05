@@ -15,8 +15,16 @@ class PartitionFunctionCheck:
     NIST_REF = {
         "Fe": {1: {5000: 25.07, 10000: 41.95, 15000: 64.38, 20000: 98.36},
                2: {5000: 30.42, 10000: 43.38, 15000: 55.02, 20000: 69.80}},
-        "Cu": {1: {5000: 2.03, 10000: 3.81, 15000: 6.55, 20000: 10.16}},
-        "Al": {1: {5000: 5.84, 10000: 5.91, 15000: 6.06, 20000: 6.38}},
+        "Cu": {1: {5000: 2.03, 10000: 3.81, 15000: 6.55, 20000: 10.16},
+               2: {5000: 1.00, 10000: 1.08, 15000: 1.55, 20000: 2.42}},
+        "Al": {1: {5000: 5.84, 10000: 5.91, 15000: 6.06, 20000: 6.38},
+               2: {5000: 1.00, 10000: 1.00, 15000: 1.01, 20000: 1.03}},
+        "Ni": {1: {5000: 23.66, 10000: 35.35, 15000: 60.38, 20000: 89.12},
+               2: {5000: 9.56, 10000: 18.42, 15000: 27.53, 20000: 36.64}},
+        "Ti": {1: {5000: 31.71, 10000: 73.46, 15000: 122.48, 20000: 170.89},
+               2: {5000: 41.07, 10000: 83.93, 15000: 123.03, 20000: 157.61}},
+        "Cr": {1: {5000: 7.06, 10000: 11.49, 15000: 25.99, 20000: 42.48},
+               2: {5000: 6.22, 10000: 11.17, 15000: 19.54, 20000: 27.63}},
     }
     @staticmethod
     def run(solver):
@@ -48,7 +56,7 @@ class IonizationFractionCheck:
                 nist = ref["fractions"].get(stage)
                 if nist is not None:
                     pct = abs(our - nist) / max(nist, 1e-30) * 100
-                    elem_res[str(stage)] = {"cflibs": round(our, 6), "nist": nist, "pct_diff": round(pct, 2), "pass": pct < 20}
+                    elem_res[str(stage)] = {"cflibs": round(our, 6), "nist": nist, "pct_diff": round(pct, 2), "pass": pct < 10}
                 else:
                     elem_res[str(stage)] = {"cflibs": round(our, 6), "nist": None}
             results[elem] = {"conditions": {"T_eV": ref["T_eV"], "n_e": ref["n_e"]}, "stages": elem_res}
@@ -96,7 +104,7 @@ def main():
     args = parser.parse_args()
     report = build_report(args.db, args.output)
     pf = report["partition_functions"]
-    n_ok = sum(1 for e in pf.values() for s in e.values() for v in s.values() if abs(v["pct_diff"]) < 5)
+    n_ok = sum(1 for e in pf.values() for s in e.values() for v in s.values() if abs(v["pct_diff"]) < 5.0)
     n_total = sum(1 for e in pf.values() for s in e.values() for _ in s.values())
     ion = report["ionization_fractions"]
     ion_pass = sum(1 for e in ion.values() for s in e["stages"].values() if s.get("pass", False))
