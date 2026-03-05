@@ -139,8 +139,5 @@ disable_error_code = [
 line-length = 100
 target-version = "py38"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
+# NOTE: pytest configuration lives in pytest.ini (which takes precedence).
+# Do NOT add [tool.pytest.ini_options] here -- it will drift out of sync.

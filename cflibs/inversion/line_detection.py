@@ -5,8 +5,13 @@ Provides a lightweight peak detection + line matching pipeline to convert
 raw spectra into LineObservation objects for classic CF-LIBS solvers.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple, TypedDict
+from typing import Dict, List, Optional, Set, Tuple, TypedDict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cflibs.inversion.deconvolution import VoigtFitResult
 
 import numpy as np
 
@@ -42,7 +47,7 @@ except ImportError:
 
 def _build_observation_from_fit(
     transition: Transition,
-    fit_result: "VoigtFitResult",
+    fit_result: VoigtFitResult,
     ground_state_threshold_ev: float,
 ) -> Optional[Tuple[LineObservation, bool]]:
     """Build a LineObservation from a VoigtFitResult.
@@ -61,8 +66,6 @@ def _build_observation_from_fit(
     Optional[Tuple[LineObservation, bool]]
         (observation, is_resonance) tuple, or None if area is invalid.
     """
-    from cflibs.inversion.deconvolution import VoigtFitResult  # noqa: F811
-
     line_area = fit_result.area
     if line_area <= 0:
         return None
@@ -413,10 +416,10 @@ def detect_line_observations(
     matched_peak_indices: Set[int] = set()
 
     # Optionally run deconvolution on matched peaks
-    deconv_results_by_wl: Optional[Dict[float, "VoigtFitResult"]] = None
+    deconv_results_by_wl: Optional[Dict[float, VoigtFitResult]] = None
     if use_deconvolution:
         try:
-            from cflibs.inversion.deconvolution import deconvolve_peaks, VoigtFitResult
+            from cflibs.inversion.deconvolution import deconvolve_peaks
 
             # Collect all peak wavelengths for deconvolution
             peak_wl_arr = np.array([pw for _, pw in peaks], dtype=float)

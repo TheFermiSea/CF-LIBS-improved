@@ -194,11 +194,17 @@ class SpectrumModel:
         logger.debug("Loading transitions...")
         all_transitions = []
         for element in self.plasma.species.keys():
+            # NIST_PARITY mode includes weak lines; other modes use a
+            # conservative filter to keep runtime and memory in check.
+            if self.broadening_mode == BroadeningMode.NIST_PARITY:
+                min_ri = 0.01
+            else:
+                min_ri = 10.0
             transitions = self.atomic_db.get_transitions(
                 element,
                 wavelength_min=self.lambda_min,
                 wavelength_max=self.lambda_max,
-                min_relative_intensity=10.0,  # Filter weak lines
+                min_relative_intensity=min_ri,
             )
             all_transitions.extend(transitions)
 

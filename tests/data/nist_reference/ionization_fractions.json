@@ -1,0 +1,35 @@
+{
+  "_source": "CF-LIBS Saha-Boltzmann solver with NIST-fitted partition functions",
+  "_description": "Reference ionization fractions at standard LIBS conditions. Fe validated against NIST LIBS Simulation. Other elements computed self-consistently with NIST partition functions.",
+  "_conditions": "n_e in cm^-3, T_eV in eV",
+  "Fe": {
+    "T_eV": 0.8,
+    "n_e": 1e17,
+    "fractions": {"1": 0.27, "2": 0.73, "3": 2.2e-5}
+  },
+  "Cu": {
+    "T_eV": 1.0,
+    "n_e": 1e17,
+    "fractions": {"1": 0.13, "2": 0.87}
+  },
+  "Al": {
+    "T_eV": 1.0,
+    "n_e": 1e17,
+    "fractions": {"1": 0.04, "2": 0.96}
+  },
+  "Ni": {
+    "T_eV": 1.0,
+    "n_e": 1e17,
+    "fractions": {"1": 0.06, "2": 0.94}
+  },
+  "Ti": {
+    "T_eV": 1.0,
+    "n_e": 1e17,
+    "fractions": {"1": 0.014, "2": 0.985}
+  },
+  "Cr": {
+    "T_eV": 1.0,
+    "n_e": 1e17,
+    "fractions": {"1": 0.016, "2": 0.984}
+  }
+}

@@ -5,6 +5,8 @@ import os
 import sys
 from unittest.mock import patch
 
+import pytest
+
 from cflibs.core.platform_config import AcceleratorBackend, configure_jax
 
 
@@ -40,25 +42,29 @@ class TestConfigureJax:
         result = configure_jax(prefer_gpu=False)
         assert result == AcceleratorBackend.CPU
 
+    @pytest.mark.requires_jax
     @patch("cflibs.core.platform_config._platform")
     def test_linux_gpu_exception_falls_back_to_cpu(self, mock_platform):
         """When jax.devices('gpu') raises, gracefully fall back."""
         mock_platform.system.return_value = "Linux"
-        import jax
+        jax = pytest.importorskip("jax")
 
         with patch.object(jax, "devices", side_effect=ValueError("no GPU")):
             result = configure_jax(prefer_gpu=True)
             assert result == AcceleratorBackend.CPU
 
+    @pytest.mark.requires_jax
     def test_enables_x64(self):
         """configure_jax should enable float64 by default."""
         configure_jax(enable_x64=True)
-        import jax
+        jax = pytest.importorskip("jax")
 
         assert jax.config.jax_enable_x64 is True
 
+    @pytest.mark.requires_jax
     def test_warns_if_jax_already_imported(self, caplog):
         """Should warn when JAX is already in sys.modules."""
+        pytest.importorskip("jax")
         assert "jax" in sys.modules
         with caplog.at_level(logging.WARNING, logger="cflibs.core.platform_config"):
             configure_jax()

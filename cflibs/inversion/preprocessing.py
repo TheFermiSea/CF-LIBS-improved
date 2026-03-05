@@ -254,7 +254,7 @@ def estimate_baseline_als(
         z_new = spsolve(W + DTD, w * y)
         # Update asymmetric weights
         w_new = np.where(y > z_new, p, 1 - p)
-        if np.linalg.norm(w_new - w) / max(np.linalg.norm(w), 1e-10) < tol:
+        if float(np.linalg.norm(w_new - w)) / max(float(np.linalg.norm(w)), 1e-10) < tol:
             z = z_new
             break
         w = w_new
