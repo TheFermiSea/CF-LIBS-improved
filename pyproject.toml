@@ -139,16 +139,5 @@ disable_error_code = [
 line-length = 100
 target-version = "py38"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-markers = [
-    "requires_db: test requires production atomic database",
-    "slow: slow-running test",
-    "nist_parity: NIST parity comparison test",
-    "unit: unit test",
-    "integration: integration test",
-    "requires_jax: test requires JAX",
-]
+# NOTE: pytest configuration lives in pytest.ini (which takes precedence).
+# Do NOT add [tool.pytest.ini_options] here -- it will drift out of sync.

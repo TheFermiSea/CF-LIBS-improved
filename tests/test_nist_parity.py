@@ -14,7 +14,6 @@ import pytest
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from cflibs.atomic.database import AtomicDatabase
 from cflibs.core.constants import EV_TO_K
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 
@@ -50,24 +49,6 @@ def _load_ionization_ref() -> dict:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def production_db():
-    """Session-scoped production database fixture.
-
-    Tries several common paths for the production database.
-    """
-    candidates = [
-        Path("libs_production.db"),
-        Path("ASD_da/libs_production.db"),
-        Path(__file__).parent.parent / "libs_production.db",
-        Path(__file__).parent.parent / "ASD_da" / "libs_production.db",
-    ]
-    for path in candidates:
-        if path.exists():
-            return AtomicDatabase(str(path))
-    pytest.skip("Production database not found; tried: " + ", ".join(str(p) for p in candidates))
 
 
 @pytest.fixture(scope="session")

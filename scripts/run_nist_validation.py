@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Consolidated NIST cross-check validation runner for CF-LIBS."""
-import json, os, sys
+import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
+
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
-import numpy as np
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 from cflibs.core.constants import EV_TO_K
