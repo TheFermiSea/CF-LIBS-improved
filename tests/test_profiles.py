@@ -4,6 +4,7 @@ Tests for line profile functions.
 
 import numpy as np
 import pytest
+from cflibs.core.jax_runtime import jax_default_real_dtype
 from cflibs.radiation.profiles import (
     gaussian_profile,
     lorentzian_profile,
@@ -205,6 +206,38 @@ class TestWidemanFaddeeva:
             assert jnp.isfinite(
                 grad
             ).all(), f"NaN/Inf gradient at T={T_eV}eV, log_ne={log_ne}: grad={grad}"
+
+    def test_weideman_real_fallback_accuracy_vs_scipy(self):
+        """Real-arithmetic Weideman path should stay accurate without complex dtypes."""
+        import jax.numpy as jnp
+        from cflibs.radiation.profiles import _faddeeva_weideman_real_parts_jax
+
+        try:
+            from scipy.special import wofz
+        except ImportError:
+            pytest.skip("scipy not available")
+
+        dtype = jax_default_real_dtype()
+        test_points = [
+            (0.5, 0.5),
+            (1.0, 0.1),
+            (2.0, 2.0),
+            (0.1, 0.01),
+            (5.0, 0.5),
+            (0.0, 1.0),
+            (3.0, 0.001),
+        ]
+
+        for x, y in test_points:
+            w_scipy = wofz(x + 1j * y)
+            real, imag = _faddeeva_weideman_real_parts_jax(
+                jnp.asarray(x, dtype=dtype),
+                jnp.asarray(y, dtype=dtype),
+            )
+            w_real = float(real)
+            w_imag = float(imag)
+            rel_err = abs((w_real + 1j * w_imag) - w_scipy) / abs(w_scipy)
+            assert rel_err < 1e-6, f"At z={x}+{y}j: rel_err={rel_err:.2e}"
 
     def test_voigt_jax_matches_numpy(self):
         """Test JAX Voigt profile matches NumPy version."""

@@ -15,6 +15,7 @@ import numpy as np
 import sqlite3
 import tempfile
 from pathlib import Path
+from cflibs.core.jax_runtime import jax_default_real_dtype
 
 # Mark entire module as requiring JAX
 pytestmark = [
@@ -254,6 +255,7 @@ class TestBayesianForwardModel:
 
         assert model.elements == ["Fe", "Cu"]
         assert len(model.wavelength) == 500
+        assert model.wavelength.dtype == jax_default_real_dtype()
         assert model.atomic_data is not None
         assert len(model.atomic_data.wavelength_nm) > 0
 
@@ -1331,6 +1333,7 @@ class TestTwoZoneBayesianForwardModel:
         model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
         assert len(model.elements) == 2
         assert model.wavelength.shape == (100,)
+        assert model.wavelength.dtype == jax_default_real_dtype()
 
     def test_forward_returns_valid_spectrum(self, bayesian_db):
         """Forward model returns a positive spectrum of correct shape."""

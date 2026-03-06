@@ -30,6 +30,12 @@ except ImportError:
 
 
 from cflibs.core.constants import C_LIGHT, EV_TO_J, M_PROTON
+from cflibs.core.jax_runtime import (
+    jax_active_backend,
+    jax_backend_supports_complex,
+    jax_default_complex_dtype,
+    jax_default_real_dtype,
+)
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("radiation.profiles")
@@ -370,8 +376,21 @@ def total_lorentzian_width(
 
 if HAS_JAX:
     x64_enabled = bool(getattr(jax.config, "jax_enable_x64", False))
-    _weideman_dtype = jnp.float64 if x64_enabled else jnp.float32
-    if not x64_enabled:
+    _weideman_backend = jax_active_backend()
+    _weideman_real_dtype = jax_default_real_dtype()
+    _weideman_complex_dtype = jax_default_complex_dtype()
+    _weideman_uses_real_fallback = not jax_backend_supports_complex()
+
+    if _weideman_uses_real_fallback:
+        warnings.warn(
+            "JAX backend "
+            f"{_weideman_backend!r} does not support complex or float64 execution. "
+            "CF-LIBS will evaluate Voigt profiles with a float32 real-arithmetic "
+            "Weideman fallback on this backend.",
+            UserWarning,
+            stacklevel=2,
+        )
+    elif not x64_enabled:
         warnings.warn(
             "JAX x64 mode is disabled. Voigt profile coefficients will use float32 precision. "
             "Enable float64 with jax.config.update('jax_enable_x64', True) before importing "
@@ -384,47 +403,127 @@ if HAS_JAX:
     # Reference: Weideman, SIAM J. Numer. Anal. 31, 1497 (1994)
     # N = 36 terms, provides up to ~15 digits in float64 mode
     _WEIDEMAN_L = 5.0453784915222872
-    _WEIDEMAN_COEFFS = jnp.array(
-        [
-            5.3552841173932895e-14,
-            -8.0527261170976810e-14,
-            -3.2398883441056261e-13,
-            4.4307993809438665e-13,
-            2.0979949804464113e-12,
-            -2.1169169127002517e-12,
-            -1.4312512495461891e-11,
-            6.3463874290909676e-12,
-            9.9393262862192946e-11,
-            3.1971993994865226e-11,
-            -6.6348465239446123e-10,
-            -9.0922385524685665e-10,
-            3.7734430504796621e-09,
-            1.1883887203463527e-08,
-            -1.0962277931636141e-08,
-            -1.1303157199293924e-07,
-            -1.2894842925653411e-07,
-            6.7416556638248690e-07,
-            2.7654086656368491e-06,
-            1.4187058478641208e-06,
-            -2.1741186565542035e-05,
-            -8.8177971418517626e-05,
-            -1.1396630644455730e-04,
-            4.6290316939990987e-04,
-            3.5484447086997187e-03,
-            1.3898253763251489e-02,
-            4.1051043016576978e-02,
-            1.0084293371847958e-01,
-            2.1501636320107403e-01,
-            4.0734241895033424e-01,
-            6.9566219189710010e-01,
-            1.0813580371765887e00,
-            1.5401625788153652e00,
-            2.0193976436113505e00,
-            2.4453784928519209e00,
-            2.7407450274098601e00,
-        ],
-        dtype=_weideman_dtype,
+    _WEIDEMAN_COEFFS = (
+        5.3552841173932895e-14,
+        -8.0527261170976810e-14,
+        -3.2398883441056261e-13,
+        4.4307993809438665e-13,
+        2.0979949804464113e-12,
+        -2.1169169127002517e-12,
+        -1.4312512495461891e-11,
+        6.3463874290909676e-12,
+        9.9393262862192946e-11,
+        3.1971993994865226e-11,
+        -6.6348465239446123e-10,
+        -9.0922385524685665e-10,
+        3.7734430504796621e-09,
+        1.1883887203463527e-08,
+        -1.0962277931636141e-08,
+        -1.1303157199293924e-07,
+        -1.2894842925653411e-07,
+        6.7416556638248690e-07,
+        2.7654086656368491e-06,
+        1.4187058478641208e-06,
+        -2.1741186565542035e-05,
+        -8.8177971418517626e-05,
+        -1.1396630644455730e-04,
+        4.6290316939990987e-04,
+        3.5484447086997187e-03,
+        1.3898253763251489e-02,
+        4.1051043016576978e-02,
+        1.0084293371847958e-01,
+        2.1501636320107403e-01,
+        4.0734241895033424e-01,
+        6.9566219189710010e-01,
+        1.0813580371765887e00,
+        1.5401625788153652e00,
+        2.0193976436113505e00,
+        2.4453784928519209e00,
+        2.7407450274098601e00,
     )
+
+    def _complex_mul_parts(
+        a_real: jnp.ndarray,
+        a_imag: jnp.ndarray,
+        b_real: jnp.ndarray,
+        b_imag: jnp.ndarray,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Multiply two complex numbers represented by real/imaginary parts."""
+        real = a_real * b_real - a_imag * b_imag
+        imag = a_real * b_imag + a_imag * b_real
+        return real, imag
+
+    def _complex_divide_parts(
+        a_real: jnp.ndarray,
+        a_imag: jnp.ndarray,
+        b_real: jnp.ndarray,
+        b_imag: jnp.ndarray,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Divide two complex numbers represented by real/imaginary parts."""
+        denom = b_real * b_real + b_imag * b_imag
+        real = (a_real * b_real + a_imag * b_imag) / denom
+        imag = (a_imag * b_real - a_real * b_imag) / denom
+        return real, imag
+
+    @jit
+    def _faddeeva_weideman_real_parts_jax(
+        x: jnp.ndarray,
+        y: jnp.ndarray,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Real-arithmetic Weideman evaluation for backends without complex support."""
+        dtype = jnp.result_type(x, y, _weideman_real_dtype)
+        x = jnp.asarray(x, dtype=dtype)
+        y = jnp.asarray(y, dtype=dtype)
+
+        L = jnp.asarray(_WEIDEMAN_L, dtype=dtype)
+        inv_sqrt_pi = jnp.asarray(1.0 / np.sqrt(np.pi), dtype=dtype)
+        zero = jnp.zeros_like(x)
+        two = jnp.asarray(2.0, dtype=dtype)
+
+        # Z = (L + i z) / (L - i z), with z = x + i y.
+        z_real, z_imag = _complex_divide_parts(L - y, x, L + y, -x)
+
+        p_real = zero
+        p_imag = zero
+        for coeff in _WEIDEMAN_COEFFS:
+            p_real, p_imag = _complex_mul_parts(p_real, p_imag, z_real, z_imag)
+            p_real = p_real + jnp.asarray(coeff, dtype=dtype)
+
+        denom_real = L + y
+        denom_imag = -x
+        denom_sq_real, denom_sq_imag = _complex_mul_parts(
+            denom_real,
+            denom_imag,
+            denom_real,
+            denom_imag,
+        )
+        term1_real, term1_imag = _complex_divide_parts(
+            two * p_real,
+            two * p_imag,
+            denom_sq_real,
+            denom_sq_imag,
+        )
+        term2_real, term2_imag = _complex_divide_parts(
+            inv_sqrt_pi + zero,
+            zero,
+            denom_real,
+            denom_imag,
+        )
+        return term1_real + term2_real, term1_imag + term2_imag
+
+    @jit
+    def _faddeeva_weideman_complex_jax(z: jnp.ndarray) -> jnp.ndarray:
+        """Complex Weideman evaluation for backends with complex support."""
+        z = jnp.asarray(z, dtype=_weideman_complex_dtype)
+        coeffs = jnp.asarray(_WEIDEMAN_COEFFS, dtype=_weideman_real_dtype)
+        L = jnp.asarray(_WEIDEMAN_L, dtype=_weideman_complex_dtype)
+        onej = jnp.asarray(1j, dtype=_weideman_complex_dtype)
+        inv_sqrt_pi = jnp.asarray(1.0 / np.sqrt(np.pi), dtype=_weideman_real_dtype)
+
+        Z = (L + onej * z) / (L - onej * z)
+        p = jnp.polyval(coeffs, Z)
+        denom = L - onej * z
+        return 2.0 * p / (denom * denom) + inv_sqrt_pi / denom
 
     @jit
     def _faddeeva_weideman_jax(z: jnp.ndarray) -> jnp.ndarray:
@@ -452,19 +551,39 @@ if HAS_JAX:
         Weideman, J.A.C. (1994) "Computation of the Complex Error Function"
         SIAM J. Numer. Anal. 31, 1497-1518.
         """
-        L = _WEIDEMAN_L
+        if _weideman_uses_real_fallback:
+            z = jnp.asarray(z, dtype=_weideman_complex_dtype)
+            real, imag = _faddeeva_weideman_real_parts_jax(jnp.real(z), jnp.imag(z))
+            return real + 1j * imag
+        return _faddeeva_weideman_complex_jax(z)
 
-        # Möbius transformation to unit disk
-        Z = (L + 1j * z) / (L - 1j * z)
+    @jit
+    def _voigt_profile_kernel_jax(
+        diff: jnp.ndarray,
+        sigma: jnp.ndarray,
+        gamma: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Backend-aware Voigt kernel with real-arithmetic Metal fallback."""
+        dtype = jnp.result_type(diff, sigma, gamma, _weideman_real_dtype)
+        diff = jnp.asarray(diff, dtype=dtype)
+        sigma = jnp.maximum(jnp.asarray(sigma, dtype=dtype), jnp.asarray(1e-12, dtype=dtype))
+        gamma = jnp.maximum(jnp.asarray(gamma, dtype=dtype), jnp.asarray(1e-12, dtype=dtype))
 
-        # Polynomial evaluation (coefficients precomputed via FFT)
-        p = jnp.polyval(_WEIDEMAN_COEFFS, Z)
+        sqrt_two = jnp.sqrt(jnp.asarray(2.0, dtype=dtype))
+        z_scale = sigma * sqrt_two
 
-        # Final rational formula
-        denom = L - 1j * z
-        w = 2.0 * p / (denom * denom) + (1.0 / jnp.sqrt(jnp.pi)) / denom
+        if _weideman_uses_real_fallback:
+            w_real, _ = _faddeeva_weideman_real_parts_jax(diff / z_scale, gamma / z_scale)
+        else:
+            onej = jnp.asarray(1j, dtype=_weideman_complex_dtype)
+            z = (jnp.asarray(diff, dtype=_weideman_complex_dtype) + onej * gamma) / jnp.asarray(
+                z_scale,
+                dtype=_weideman_complex_dtype,
+            )
+            w_real = jnp.real(_faddeeva_weideman_complex_jax(z))
 
-        return w
+        norm = sigma * jnp.sqrt(jnp.asarray(2.0 * np.pi, dtype=dtype))
+        return w_real / norm
 
     @jit
     def gaussian_profile_jax(
@@ -599,12 +718,7 @@ if HAS_JAX:
         gamma = jnp.maximum(gamma, 1e-12)
 
         x = wavelength - center
-        z = (x + 1j * gamma) / (sigma * jnp.sqrt(2.0))
-
-        # Use gradient-stable Weideman approximation
-        w_z = _faddeeva_weideman_jax(z)
-
-        profile = jnp.real(w_z) / (sigma * jnp.sqrt(2.0 * jnp.pi))
+        profile = _voigt_profile_kernel_jax(x, sigma, gamma)
         return amplitude * profile
 
     @jit
