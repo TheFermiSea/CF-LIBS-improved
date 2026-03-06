@@ -3,7 +3,14 @@ Tests for plasma state and Saha-Boltzmann solver.
 """
 
 import pytest
-from cflibs.plasma.state import PlasmaState, SingleZoneLTEPlasma
+from cflibs.plasma.state import (
+    PlasmaState,
+    SingleZoneLTEPlasma,
+    mass_fractions_to_number_fractions,
+    mass_fractions_to_species_densities,
+    number_fractions_to_species_densities,
+    species_densities_to_number_fractions,
+)
 from cflibs.plasma import saha_boltzmann as saha_module
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 
@@ -33,6 +40,66 @@ def test_plasma_state_custom_tg():
     plasma = PlasmaState(T_e=10000.0, n_e=1e17, species={"Fe": 1e15}, T_g=8000.0)
     assert plasma.T_g == 8000.0
     assert plasma.T_g_eV < plasma.T_e_eV
+
+
+def test_species_densities_to_number_fractions():
+    fractions = species_densities_to_number_fractions({"Fe": 2.0e15, "Cu": 1.0e15})
+    assert sum(fractions.values()) == pytest.approx(1.0)
+    assert fractions["Fe"] == pytest.approx(2.0 / 3.0)
+    assert fractions["Cu"] == pytest.approx(1.0 / 3.0)
+
+
+def test_number_fractions_to_species_densities():
+    species = number_fractions_to_species_densities(
+        {"Fe": 0.25, "Cu": 0.75},
+        total_number_density_cm3=2.0e17,
+    )
+    assert sum(species.values()) == pytest.approx(2.0e17)
+    assert species["Fe"] == pytest.approx(5.0e16)
+    assert species["Cu"] == pytest.approx(1.5e17)
+
+
+def test_mass_fractions_to_number_fractions():
+    fractions = mass_fractions_to_number_fractions(
+        {"Fe": 0.5, "Cu": 0.5},
+        {"Fe": 55.85, "Cu": 63.55},
+    )
+    assert sum(fractions.values()) == pytest.approx(1.0)
+    assert fractions["Fe"] > fractions["Cu"]
+
+
+def test_mass_fractions_to_species_densities():
+    species = mass_fractions_to_species_densities(
+        {"Fe": 0.5, "Cu": 0.5},
+        total_number_density_cm3=1.0e17,
+        atomic_masses_amu={"Fe": 55.85, "Cu": 63.55},
+    )
+    assert sum(species.values()) == pytest.approx(1.0e17)
+    assert species["Fe"] > species["Cu"]
+
+
+def test_single_zone_lte_plasma_from_number_fractions():
+    plasma = SingleZoneLTEPlasma.from_number_fractions(
+        T_e=10000.0,
+        n_e=1.0e17,
+        number_fractions={"Fe": 0.25, "Cu": 0.75},
+        total_species_density_cm3=2.0e17,
+    )
+    assert plasma.species["Fe"] == pytest.approx(5.0e16)
+    assert plasma.species["Cu"] == pytest.approx(1.5e17)
+    assert plasma.species_number_fractions["Fe"] == pytest.approx(0.25)
+
+
+def test_single_zone_lte_plasma_from_mass_fractions():
+    plasma = SingleZoneLTEPlasma.from_mass_fractions(
+        T_e=10000.0,
+        n_e=1.0e17,
+        mass_fractions={"Fe": 0.5, "Cu": 0.5},
+        total_species_density_cm3=1.0e17,
+        atomic_masses_amu={"Fe": 55.85, "Cu": 63.55},
+    )
+    assert sum(plasma.species.values()) == pytest.approx(1.0e17)
+    assert plasma.species["Fe"] > plasma.species["Cu"]
 
 
 def test_single_zone_lte_plasma_creation(sample_plasma):

@@ -45,6 +45,7 @@ from cflibs.benchmark.loaders import (
     BenchmarkFormat,
     validate_benchmark_file,
 )
+from cflibs.plasma.state import mass_fractions_to_species_densities
 
 
 # =============================================================================
@@ -703,6 +704,19 @@ class TestSyntheticBenchmarkGenerator:
         assert np.isclose(sum(densities.values()), 1.0e17, rtol=1e-10)
         # For equal mass fraction, lighter element has larger number fraction.
         assert densities["Fe"] > densities["Cu"]
+
+    def test_composition_to_number_density_uses_plasma_semantics_helper(self):
+        """Benchmark conversion should agree with the shared plasma-state helper."""
+        densities = SyntheticBenchmarkGenerator._composition_to_number_densities(
+            {"Fe": 0.5, "Cu": 0.5},
+            total_number_density_cm3=1.0e17,
+        )
+        expected = mass_fractions_to_species_densities(
+            {"Fe": 0.5, "Cu": 0.5},
+            total_number_density_cm3=1.0e17,
+            atomic_masses_amu={"Fe": 55.85, "Cu": 63.55},
+        )
+        assert densities == pytest.approx(expected)
 
 
 # =============================================================================

@@ -157,6 +157,23 @@ except ImportError:
     dynesty = None
 
 
+def _resolve_total_species_density_cm3(
+    n_e: float,
+    total_species_density_cm3: Optional[float],
+) -> float:
+    """
+    Resolve heavy-particle density for forward models.
+
+    When no explicit heavy-particle density is provided, preserve the legacy
+    behavior that approximates it with ``n_e``.
+    """
+    if total_species_density_cm3 is None:
+        return n_e
+    if total_species_density_cm3 <= 0.0:
+        raise ValueError("total_species_density_cm3 must be positive")
+    return float(total_species_density_cm3)
+
+
 # Standard atomic masses for fallback [amu]
 STANDARD_MASSES = {
     "H": 1.008,
@@ -243,9 +260,7 @@ def load_atomic_data(
         df = pd.read_sql_query(query, conn, params=params)
 
         if df.empty:
-            raise ValueError(
-                f"No atomic data for elements {elements} in range {wavelength_range}"
-            )
+            raise ValueError(f"No atomic data for elements {elements} in range {wavelength_range}")
 
         el_map = {el: i for i, el in enumerate(elements)}
         df["el_idx"] = df["element"].map(el_map)
@@ -409,15 +424,15 @@ def mcwhirter_log_penalty(
     """
     if HAS_JAX:
         T_K = T_eV * EV_TO_K
-        log10_threshold = jnp.log10(MCWHIRTER_CONST) + 0.5 * jnp.log10(T_K) + 3.0 * jnp.log10(
-            max_delta_E_eV
+        log10_threshold = (
+            jnp.log10(MCWHIRTER_CONST) + 0.5 * jnp.log10(T_K) + 3.0 * jnp.log10(max_delta_E_eV)
         )
         deficit = jnp.maximum(0.0, log10_threshold - log_ne)
         return -scale * deficit**2
     else:
         T_K = T_eV * EV_TO_K
-        log10_threshold = np.log10(MCWHIRTER_CONST) + 0.5 * np.log10(T_K) + 3.0 * np.log10(
-            max_delta_E_eV
+        log10_threshold = (
+            np.log10(MCWHIRTER_CONST) + 0.5 * np.log10(T_K) + 3.0 * np.log10(max_delta_E_eV)
         )
         deficit = max(0.0, log10_threshold - log_ne)
         return -scale * deficit**2
@@ -978,6 +993,7 @@ class BayesianForwardModel:
         T_eV: float,
         log_ne: float,
         concentrations: jnp.ndarray,
+        total_species_density_cm3: Optional[float] = None,
     ) -> jnp.ndarray:
         """
         Compute synthetic spectrum for given plasma parameters.
@@ -989,7 +1005,10 @@ class BayesianForwardModel:
         log_ne : float
             Log10 of electron density [cm^-3]
         concentrations : array
-            Element concentrations (must sum to 1)
+            Element number fractions on a heavy-particle basis (must sum to 1)
+        total_species_density_cm3 : float, optional
+            Total heavy-particle number density in cm^-3. If omitted, the
+            legacy approximation ``total_species_density_cm3 = n_e`` is used.
 
         Returns
         -------
@@ -997,13 +1016,19 @@ class BayesianForwardModel:
             Synthetic spectrum intensity
         """
         n_e = 10.0**log_ne
-        return self._compute_spectrum(T_eV, n_e, concentrations)
+        return self._compute_spectrum(
+            T_eV,
+            n_e,
+            concentrations,
+            total_species_density_cm3=total_species_density_cm3,
+        )
 
     def forward_numpy(
         self,
         T_eV: float,
         log_ne: float,
         concentrations: np.ndarray,
+        total_species_density_cm3: Optional[float] = None,
     ) -> np.ndarray:
         """
         Compute synthetic spectrum using NumPy arrays (for dynesty compatibility).
@@ -1017,7 +1042,10 @@ class BayesianForwardModel:
         log_ne : float
             Log10 of electron density [cm^-3]
         concentrations : np.ndarray
-            Element concentrations (must sum to 1)
+            Element number fractions on a heavy-particle basis (must sum to 1)
+        total_species_density_cm3 : float, optional
+            Total heavy-particle number density in cm^-3. If omitted, the
+            legacy approximation ``total_species_density_cm3 = n_e`` is used.
 
         Returns
         -------
@@ -1025,7 +1053,12 @@ class BayesianForwardModel:
             Synthetic spectrum intensity
         """
         conc_jax = jnp.array(concentrations)
-        result = self.forward(T_eV, log_ne, conc_jax)
+        result = self.forward(
+            T_eV,
+            log_ne,
+            conc_jax,
+            total_species_density_cm3=total_species_density_cm3,
+        )
         return np.array(result)
 
     @staticmethod
@@ -1041,6 +1074,7 @@ class BayesianForwardModel:
         T_eV: float,
         n_e: float,
         concentrations: jnp.ndarray,
+        total_species_density_cm3: Optional[float] = None,
     ) -> jnp.ndarray:
         """
         Compute spectrum with full physics.
@@ -1049,6 +1083,7 @@ class BayesianForwardModel:
         """
         data = self.atomic_data
         T_K = T_eV * EV_TO_K
+        total_species_density = _resolve_total_species_density_cm3(n_e, total_species_density_cm3)
 
         # Partition functions for all elements and stages
         U0 = self._partition_function(T_K, data.partition_coeffs[:, 0])
@@ -1072,9 +1107,10 @@ class BayesianForwardModel:
         pop_fraction = jnp.where(ion_stage == 0, frac_neutral[el_idx], frac_ion[el_idx])
         U_val = jnp.where(ion_stage == 0, U0[el_idx], U1[el_idx])
 
-        # Species number density
+        # Species number density. The heavy-particle inventory can be supplied
+        # independently from n_e; when omitted we preserve the legacy n_e proxy.
         element_conc = concentrations[el_idx]
-        N_species_total = element_conc * n_e
+        N_species_total = element_conc * total_species_density
         N_species = N_species_total * pop_fraction
 
         # Boltzmann upper level population
@@ -2210,6 +2246,7 @@ class TwoZoneBayesianForwardModel:
         T_eV: float,
         n_e: float,
         concentrations,
+        total_species_density_cm3: Optional[float] = None,
     ):
         """Compute emission spectrum and absorption profile for one zone.
 
@@ -2222,6 +2259,7 @@ class TwoZoneBayesianForwardModel:
         """
         data = self.atomic_data
         T_K = T_eV * EV_TO_K
+        total_species_density = _resolve_total_species_density_cm3(n_e, total_species_density_cm3)
 
         U0 = partition_function(T_K, data.partition_coeffs[:, 0])
         U1 = partition_function(T_K, data.partition_coeffs[:, 1])
@@ -2239,23 +2277,19 @@ class TwoZoneBayesianForwardModel:
         U_val = jnp.where(ion_stage == 0, U0[el_idx], U1[el_idx])
 
         element_conc = concentrations[el_idx]
-        N_species = element_conc * n_e * pop_fraction
+        N_species = element_conc * total_species_density * pop_fraction
 
         # Upper level population for emission
         n_upper = N_species * (data.gk / U_val) * jnp.exp(-data.ek_ev / T_eV)
 
         # Emissivity
         epsilon = (
-            (H_PLANCK * C_LIGHT / (4 * jnp.pi * data.wavelength_nm * 1e-9))
-            * data.aki
-            * n_upper
+            (H_PLANCK * C_LIGHT / (4 * jnp.pi * data.wavelength_nm * 1e-9)) * data.aki * n_upper
         )
 
         # Line broadening
         mass_kg = data.mass_amu * M_PROTON
-        sigma_doppler = data.wavelength_nm * jnp.sqrt(
-            2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2)
-        )
+        sigma_doppler = data.wavelength_nm * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
         sigma_inst = self.instrument_fwhm_nm / 2.355
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
@@ -2306,6 +2340,7 @@ class TwoZoneBayesianForwardModel:
         concentrations,
         shell_fraction: float,
         optical_depth_scale: float,
+        total_species_density_cm3: Optional[float] = None,
     ):
         """Compute observed spectrum from two-zone model.
 
@@ -2318,11 +2353,14 @@ class TwoZoneBayesianForwardModel:
         log_ne : float
             ``log_{10}(n_e)`` in cm⁻³ (same for both zones).
         concentrations : array
-            Element concentrations (must sum to 1).
+            Element number fractions on a heavy-particle basis (must sum to 1).
         shell_fraction : float
             Fraction of total plasma length occupied by the shell.
         optical_depth_scale : float
             Scale factor for optical depth (effective path length in cm).
+        total_species_density_cm3 : float, optional
+            Total heavy-particle number density in cm^-3. If omitted, the
+            legacy approximation ``total_species_density_cm3 = n_e`` is used.
 
         Returns
         -------
@@ -2331,8 +2369,18 @@ class TwoZoneBayesianForwardModel:
         """
         n_e = 10.0**log_ne
 
-        I_core, _ = self._compute_zone_spectrum(T_core_eV, n_e, concentrations)
-        I_shell, kappa_shell = self._compute_zone_spectrum(T_shell_eV, n_e, concentrations)
+        I_core, _ = self._compute_zone_spectrum(
+            T_core_eV,
+            n_e,
+            concentrations,
+            total_species_density_cm3=total_species_density_cm3,
+        )
+        I_shell, kappa_shell = self._compute_zone_spectrum(
+            T_shell_eV,
+            n_e,
+            concentrations,
+            total_species_density_cm3=total_species_density_cm3,
+        )
 
         # Optical depth of shell
         tau_shell = kappa_shell * optical_depth_scale * shell_fraction
@@ -2357,11 +2405,18 @@ class TwoZoneBayesianForwardModel:
         concentrations: np.ndarray,
         shell_fraction: float,
         optical_depth_scale: float,
+        total_species_density_cm3: Optional[float] = None,
     ) -> np.ndarray:
         """NumPy wrapper for forward model (dynesty compatibility)."""
         conc_jax = jnp.array(concentrations)
         result = self.forward(
-            T_core_eV, T_shell_eV, log_ne, conc_jax, shell_fraction, optical_depth_scale
+            T_core_eV,
+            T_shell_eV,
+            log_ne,
+            conc_jax,
+            shell_fraction,
+            optical_depth_scale,
+            total_species_density_cm3=total_species_density_cm3,
         )
         return np.array(result)
 
@@ -2645,9 +2700,7 @@ class TwoZoneMCMCSampler:
         observed_jax = jnp.array(observed)
 
         def model(obs):
-            two_zone_bayesian_model(
-                self.forward_model, obs, self.prior_config, self.noise_params
-            )
+            two_zone_bayesian_model(self.forward_model, obs, self.prior_config, self.noise_params)
 
         kernel = NUTS(
             model,
@@ -2736,8 +2789,7 @@ class TwoZoneMCMCSampler:
                 el: float(np.std(conc_flat[:, i])) for i, el in enumerate(self.elements)
             },
             concentrations_q025={
-                el: float(np.percentile(conc_flat[:, i], 2.5))
-                for i, el in enumerate(self.elements)
+                el: float(np.percentile(conc_flat[:, i], 2.5)) for i, el in enumerate(self.elements)
             },
             concentrations_q975={
                 el: float(np.percentile(conc_flat[:, i], 97.5))

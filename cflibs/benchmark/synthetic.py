@@ -32,6 +32,7 @@ from cflibs.benchmark.dataset import (
     SampleType,
     MatrixType,
 )
+from cflibs.plasma.state import mass_fractions_to_species_densities
 
 logger = get_logger("benchmark.synthetic")
 
@@ -535,25 +536,11 @@ class SyntheticBenchmarkGenerator:
         if total_number_density_cm3 <= 0:
             raise ValueError("total_number_density_cm3 must be positive")
 
-        weighted = {}
-        for element, mass_fraction in composition.items():
-            if mass_fraction <= 0:
-                continue
-            if element not in STANDARD_MASSES:
-                raise KeyError(
-                    f"Missing standard atomic mass for element '{element}' in synthetic generator"
-                )
-            mass_amu = STANDARD_MASSES[element]
-            weighted[element] = mass_fraction / max(float(mass_amu), 1e-9)
-
-        total_weighted = sum(weighted.values())
-        if total_weighted <= 0:
-            raise ValueError("composition must contain at least one positive component")
-
-        return {
-            element: total_number_density_cm3 * (value / total_weighted)
-            for element, value in weighted.items()
-        }
+        return mass_fractions_to_species_densities(
+            composition,
+            total_number_density_cm3=total_number_density_cm3,
+            atomic_masses_amu=STANDARD_MASSES,
+        )
 
     def _generate_simplified(
         self,
