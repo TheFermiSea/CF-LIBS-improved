@@ -86,6 +86,57 @@ class IterativeCFLIBSSolver:
         self.pressure_pa = pressure_pa
         self.boltzmann_fitter = BoltzmannPlotFitter(outlier_sigma=2.5)
 
+    def _evaluate_partition_function(
+        self, element: str, ionization_stage: int, T_K: float
+    ) -> float:
+        """Evaluate a partition function with simple production fallbacks."""
+        pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
+        if pf:
+            return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
+        if ionization_stage == 1:
+            return 25.0
+        if ionization_stage == 2:
+            return 15.0
+        return 2.0
+
+    def _compute_saha_ratio(
+        self,
+        element: str,
+        T_K: float,
+        n_e_cm3: float,
+        U_I: float,
+        U_II: float,
+        ip_ev: float,
+    ) -> float:
+        """Compute n_II / n_I using the first Saha ratio."""
+        safe_ne = max(float(n_e_cm3), 1e10)
+        T_eV = max(T_K / EV_TO_K, 0.1)
+        return (SAHA_CONST_CM3 / safe_ne) * (T_eV**1.5) * 2.0 * (U_II / U_I) * np.exp(-ip_ev / T_eV)
+
+    def _compute_abundance_multipliers(
+        self,
+        elements: List[str],
+        T_K: float,
+        n_e_cm3: float,
+        partition_funcs_I: Dict[str, float],
+        partition_funcs_II: Dict[str, float],
+        ips: Dict[str, float],
+    ) -> Dict[str, float]:
+        """
+        Map the neutral-plane intercept back to total elemental abundance.
+
+        The pooled Saha-Boltzmann fit returns q_s proportional to N_I / U_I.
+        Closure must scale by (1 + n_II / n_I) to recover total elemental
+        abundance before normalization.
+        """
+        multipliers: Dict[str, float] = {}
+        for el in elements:
+            U_I = partition_funcs_I.get(el, 25.0)
+            U_II = partition_funcs_II.get(el, 15.0)
+            S = self._compute_saha_ratio(el, T_K, n_e_cm3, U_I, U_II, ips[el])
+            multipliers[el] = 1.0 + max(S, 0.0)
+        return multipliers
+
     def solve(
         self, observations: List[LineObservation], closure_mode: str = "standard", **closure_kwargs
     ) -> CFLIBSResult:
@@ -142,40 +193,26 @@ class IterativeCFLIBSSolver:
 
             # 2. Calculate Partition Functions & Saha Corrections
             partition_funcs = {}  # U_I for each element
+            partition_funcs_II = {}
             corrected_obs_map = defaultdict(list)
 
             for el in elements:
-                # Get coeffs
-                pf_I = self.atomic_db.get_partition_coefficients(el, 1)
-                pf_II = self.atomic_db.get_partition_coefficients(el, 2)
-
-                # Evaluate U(T)
-                # We need U_I and U_II for Saha correction
-                # Fallback to constant if no coeffs (should use database direct sum in robust impl)
-                # For simplicity here, use evaluator if available, else 25/15
-
-                U_I = 25.0
-                if pf_I:
-                    U_I = PartitionFunctionEvaluator.evaluate(T_K, pf_I.coefficients)
-                elif hasattr(self.atomic_db, "get_energy_levels"):
-                    # Fallback to direct sum
-                    # This is slow inside loop, but acceptable for Phase 2b
-                    # Ideally should cache
-                    pass
-
-                U_II = 15.0
-                if pf_II:
-                    U_II = PartitionFunctionEvaluator.evaluate(T_K, pf_II.coefficients)
-
+                U_I = self._evaluate_partition_function(el, 1, T_K)
+                U_II = self._evaluate_partition_function(el, 2, T_K)
                 partition_funcs[el] = U_I
+                partition_funcs_II[el] = U_II
 
                 # Saha correction: map ionic lines to neutral energy plane
 
-                S_raw = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5) * np.exp(-ips[el] / T_eV)
-                S_actual = S_raw * 2.0 * (U_II / U_I)
-
-                correction_term = np.log(S_actual * (U_I / U_II))
-                # Note: ln(S_actual * U_I / U_II) = ln(S_raw * 2)
+                # Standard Saha-Boltzmann linearization for ionic lines:
+                # y* = ln(I λ / gA) - ln(2 * SahaConst * T^(3/2) / n_e)
+                # x* = E_k + IP
+                #
+                # The ionization energy belongs only on the transformed
+                # x-axis. Including exp(-IP/T) in the logarithmic y-shift and
+                # then also adding IP to x double-counts the ionization energy,
+                # which biases the common slope hot and skews composition.
+                correction_term = np.log(2.0 * (SAHA_CONST_CM3 / n_e) * (T_eV**1.5))
 
                 # Apply to observations
                 for obs in obs_by_element[el]:
@@ -198,12 +235,10 @@ class IterativeCFLIBSSolver:
                         # ln(I_new) = ln(I_old) - correction
                         # I_new = I_old * exp(-correction)
                         new_obs.intensity = obs.intensity * np.exp(-correction_term)
-                        # Correct energy?
-                        # Ion lines emit from E_k relative to Ion ground.
-                        # To map to Neutral ground, we usually add IP.
-                        # E_total = E_k + IP.
-                        # Slope should be -1/T over the whole range.
-                        # Yes, we must add IP to E_k for ionic lines to place them on the unified energy scale.
+                        # Ionic transition energies in the database are
+                        # excitation energies relative to the ionic ground
+                        # state. Move them onto the Saha-Boltzmann x-axis by
+                        # adding the first ionization potential once.
                         new_obs.E_k_ev = obs.E_k_ev + ips[el]
 
                     corrected_obs_map[el].append(new_obs)
@@ -275,17 +310,36 @@ class IterativeCFLIBSSolver:
                 q_s = y_bar - slope * x_bar
                 intercepts[el] = q_s
 
+            abundance_multipliers = self._compute_abundance_multipliers(
+                list(intercepts.keys()),
+                T_K,
+                n_e,
+                partition_funcs,
+                partition_funcs_II,
+                ips,
+            )
+
             # 4. Closure
             if closure_mode == "matrix":
                 closure_res = ClosureEquation.apply_matrix_mode(
-                    intercepts, partition_funcs, **closure_kwargs
+                    intercepts,
+                    partition_funcs,
+                    abundance_multipliers=abundance_multipliers,
+                    **closure_kwargs,
                 )
             elif closure_mode == "oxide":
                 closure_res = ClosureEquation.apply_oxide_mode(
-                    intercepts, partition_funcs, **closure_kwargs
+                    intercepts,
+                    partition_funcs,
+                    abundance_multipliers=abundance_multipliers,
+                    **closure_kwargs,
                 )
             else:
-                closure_res = ClosureEquation.apply_standard(intercepts, partition_funcs)
+                closure_res = ClosureEquation.apply_standard(
+                    intercepts,
+                    partition_funcs,
+                    abundance_multipliers=abundance_multipliers,
+                )
 
             concentrations = closure_res.concentrations
 
@@ -301,22 +355,9 @@ class IterativeCFLIBSSolver:
 
             total_eps = 0.0
             for el, C_s in concentrations.items():
-                S_raw = (
-                    (SAHA_CONST_CM3 / n_e)
-                    * ((T_K / EV_TO_K) ** 1.5)
-                    * np.exp(-ips[el] / (T_K / EV_TO_K))
-                )
-                # Use current U values
                 U_I = partition_funcs.get(el, 25.0)
-                # We need U_II again, maybe fetch or cache
-                # For efficiency reuse approximate or previous
-                pf_II = self.atomic_db.get_partition_coefficients(el, 2)
-                if pf_II:
-                    U_II = PartitionFunctionEvaluator.evaluate(T_K, pf_II.coefficients)
-                else:
-                    U_II = 15.0
-
-                S = S_raw * 2.0 * (U_II / U_I)
+                U_II = partition_funcs_II.get(el, 15.0)
+                S = self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, ips[el])
                 eps_s = S / (1.0 + S)
                 total_eps += C_s * eps_s
 
@@ -449,12 +490,22 @@ class IterativeCFLIBSSolver:
 
         # Get partition functions at converged T
         partition_funcs = {}
+        partition_funcs_II = {}
+        ips = {}
         for el in elements:
-            pf = self.atomic_db.get_partition_coefficients(el, 1)
-            if pf:
-                partition_funcs[el] = PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
-            else:
-                partition_funcs[el] = 25.0
+            partition_funcs[el] = self._evaluate_partition_function(el, 1, T_K)
+            partition_funcs_II[el] = self._evaluate_partition_function(el, 2, T_K)
+            ip = self.atomic_db.get_ionization_potential(el, 1)
+            ips[el] = ip if ip is not None else 15.0
+
+        abundance_multipliers = self._compute_abundance_multipliers(
+            list(intercepts_u.keys()),
+            T_K,
+            result.electron_density_cm3,
+            partition_funcs,
+            partition_funcs_II,
+            ips,
+        )
 
         # Propagate through closure
         if closure_mode == "matrix" and "matrix_element" in closure_kwargs:
@@ -463,11 +514,13 @@ class IterativeCFLIBSSolver:
                 partition_funcs,
                 closure_kwargs["matrix_element"],
                 closure_kwargs.get("matrix_fraction", 0.9),
+                abundance_multipliers=abundance_multipliers,
             )
         else:
             concentrations_u = propagate_through_closure_standard(
                 intercepts_u,
                 partition_funcs,
+                abundance_multipliers=abundance_multipliers,
             )
 
         # Extract nominal values and uncertainties
