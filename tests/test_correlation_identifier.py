@@ -116,6 +116,71 @@ def test_correlation_identifier_vector_mode_requires_index(temp_db):
         identifier.identify(wavelength, intensity, mode="vector")
 
 
+def test_correlation_identifier_auto_mode_requires_full_vector_workflow(temp_db):
+    """Auto mode should stay on classic unless the full vector stack is configured."""
+    from cflibs.atomic.database import AtomicDatabase
+
+    class DummyIndex:
+        def search(self, query_embeddings, k=10):  # pragma: no cover - should not be called
+            raise AssertionError("auto mode should not use vector search without full workflow")
+
+    db = AtomicDatabase(temp_db)
+
+    wavelength = np.linspace(370, 380, 500)
+    intensity = np.ones(500)
+
+    identifier = CorrelationIdentifier(db, vector_index=DummyIndex(), elements=["Fe"])
+    result = identifier.identify(wavelength, intensity, mode="auto")
+
+    assert result.parameters["mode"] == "classic"
+
+
+def test_correlation_identifier_vector_mode_returns_detections(temp_db):
+    """Vector mode should aggregate ANN hits into element detections."""
+    from cflibs.atomic.database import AtomicDatabase
+
+    class DummyEmbedder:
+        def transform(self, spectra):
+            return np.asarray([[1.0, 0.0]], dtype=np.float64)
+
+    class DummyIndex:
+        def search(self, query_embeddings, k=10):
+            return (
+                np.asarray([[0.0, 4.0]], dtype=np.float64),
+                np.asarray([[0, 1]], dtype=np.int64),
+            )
+
+    db = AtomicDatabase(temp_db)
+
+    wavelength = np.linspace(370, 380, 1000)
+    intensity = np.zeros_like(wavelength)
+    for wl in [371.99, 373.49, 374.95]:
+        intensity += 1000.0 * np.exp(-0.5 * ((wavelength - wl) / 0.05) ** 2)
+
+    identifier = CorrelationIdentifier(
+        db,
+        vector_index=DummyIndex(),
+        vector_embedder=DummyEmbedder(),
+        library_metadata=[
+            {"elements": ["Fe"]},
+            {"elements": ["H"]},
+        ],
+        elements=["Fe", "H"],
+        top_k=2,
+        min_confidence=0.1,
+        wavelength_tolerance_nm=0.2,
+    )
+
+    result = identifier.identify(wavelength, intensity, mode="vector")
+
+    assert result.parameters["mode"] == "vector"
+    detected_symbols = [element.element for element in result.detected_elements]
+    assert "Fe" in detected_symbols
+    fe = next(element for element in result.all_elements if element.element == "Fe")
+    assert fe.score > 0.5
+    assert fe.n_matched_lines > 0
+
+
 def test_correlation_identifier_matched_lines(temp_db):
     """Test that matched lines are populated."""
     from cflibs.atomic.database import AtomicDatabase

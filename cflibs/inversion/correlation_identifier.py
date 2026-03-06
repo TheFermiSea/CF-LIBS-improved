@@ -5,7 +5,8 @@ Implements classic and vector-accelerated modes for identifying elements
 from experimental spectra using model spectrum correlation matching.
 """
 
-from typing import Any, List, Optional, Tuple
+from collections import defaultdict
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 import math
 import numpy as np
 from scipy.stats import pearsonr
@@ -39,6 +40,15 @@ class CorrelationIdentifier:
         Atomic database for transitions
     vector_index : VectorIndex, optional
         Pre-built vector index for vector mode
+    vector_embedder : object, optional
+        Fitted embedder with ``transform()`` method for vector-mode queries.
+    library_metadata : List[dict], optional
+        Per-spectrum metadata aligned with the vector index. Each item must
+        expose element membership via ``element``, ``elements``, ``species``,
+        or ``composition``.
+    library_spectra : np.ndarray, optional
+        Spectra aligned with ``library_metadata``. When provided, vector mode
+        refines ANN scores with direct spectrum correlation.
     elements : List[str], optional
         Elements to consider (default: None, uses all elements from database)
     wavelength_tolerance_nm : float
@@ -103,6 +113,9 @@ class CorrelationIdentifier:
         self,
         atomic_db: AtomicDatabase,
         vector_index=None,
+        vector_embedder=None,
+        library_metadata: Optional[List[Mapping[str, Any]]] = None,
+        library_spectra: Optional[np.ndarray] = None,
         elements: Optional[List[str]] = None,
         resolving_power: Optional[float] = None,
         wavelength_tolerance_nm: float = 0.1,
@@ -123,6 +136,9 @@ class CorrelationIdentifier:
         self.atomic_db = atomic_db
         self.resolving_power = resolving_power
         self.vector_index = vector_index
+        self.vector_embedder = vector_embedder
+        self.library_metadata = list(library_metadata) if library_metadata is not None else None
+        self.library_spectra = None if library_spectra is None else np.asarray(library_spectra)
         self.elements = elements
         self.wavelength_tolerance_nm = wavelength_tolerance_nm
         self.top_k = top_k
@@ -168,14 +184,16 @@ class CorrelationIdentifier:
         Raises
         ------
         ValueError
-            If mode is "vector" but no vector_index provided
+            If mode is "vector" but the full vector workflow is not configured
         """
         # Resolve mode
         if mode == "auto":
-            mode = "vector" if self.vector_index is not None else "classic"
+            mode = "vector" if self._has_vector_workflow() else "classic"
 
-        if mode == "vector" and self.vector_index is None:
-            raise ValueError("mode='vector' requires vector_index to be provided")
+        if mode == "vector" and not self._has_vector_workflow():
+            raise ValueError(
+                "mode='vector' requires vector_index, vector_embedder, and library_metadata"
+            )
 
         logger.info(f"Running correlation identifier in {mode} mode")
 
@@ -281,27 +299,11 @@ class CorrelationIdentifier:
             self.elements if self.elements is not None else self.atomic_db.get_available_elements()
         )
         for element in elements_to_search:
-            # Get transitions with strength filtering
-            transitions = self.atomic_db.get_transitions(
-                element, wavelength_min=wl_min, wavelength_max=wl_max
-            )
-            # Remove unobservable weak lines
-            transitions = [t for t in transitions if t.A_ki * t.g_k >= self.min_line_strength]
-
+            transitions = self._get_transitions_for_element(element, wl_min, wl_max)
             if not transitions:
                 logger.debug(f"No transitions for {element} in wavelength range")
                 element_scores.append((element, 0.0, 0.0, [], []))
                 continue
-
-            # Cap to strongest lines by estimated emissivity to avoid line-count disparity
-            if len(transitions) > self.max_lines_per_element:
-                kT = KB_EV * self.reference_temperature
-                transitions = sorted(
-                    transitions,
-                    key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT),
-                    reverse=True,
-                )
-                transitions = transitions[: self.max_lines_per_element]
 
             # Compute correlations for each (T, n_e) point
             # Paper (Labutin et al. 2013): correlate only in peak regions, not full spectrum
@@ -369,12 +371,122 @@ class CorrelationIdentifier:
         List[Tuple[str, float, float, List[IdentifiedLine], List[Transition]]]
             List of (element, score, confidence, matched_lines, unmatched_lines)
 
-        Raises
-        ------
-        NotImplementedError
-            Vector mode not yet implemented
+        Notes
+        -----
+        The vector workflow requires:
+        - ``vector_index`` with ``search()``
+        - ``vector_embedder`` with ``transform()``
+        - ``library_metadata`` aligned with the index rows
         """
-        raise NotImplementedError("Vector mode not yet implemented. Use mode='classic'.")
+        if not self._has_vector_workflow():
+            raise ValueError(
+                "Vector mode requires vector_index, vector_embedder, and library_metadata"
+            )
+
+        query_embedding = np.asarray(self.vector_embedder.transform(np.asarray(intensity)[None, :]))
+        distances, indices = self.vector_index.search(query_embedding, k=self.top_k)
+
+        library_metadata = self.library_metadata or []
+        candidate_weights: Dict[str, float] = defaultdict(float)
+        candidate_counts: Dict[str, int] = defaultdict(int)
+        candidate_best_distance: Dict[str, float] = {}
+
+        for distance, neighbor_idx in zip(np.ravel(distances), np.ravel(indices)):
+            idx = int(neighbor_idx)
+            if idx < 0 or idx >= len(library_metadata):
+                continue
+
+            similarity = 1.0 / (1.0 + max(float(distance), 0.0))
+            if self.library_spectra is not None and idx < len(self.library_spectra):
+                candidate_spectrum = np.asarray(self.library_spectra[idx], dtype=np.float64)
+                if candidate_spectrum.shape == intensity.shape:
+                    if np.std(candidate_spectrum) > 1e-12 and np.std(intensity) > 1e-12:
+                        corr, _ = pearsonr(intensity, candidate_spectrum)
+                        similarity = 0.5 * similarity + 0.5 * np.clip((corr + 1.0) / 2.0, 0.0, 1.0)
+
+            for element in self._metadata_elements(library_metadata[idx]):
+                if self.elements is not None and element not in self.elements:
+                    continue
+                candidate_weights[element] += similarity
+                candidate_counts[element] += 1
+                best_distance = candidate_best_distance.get(element, float("inf"))
+                candidate_best_distance[element] = min(best_distance, float(distance))
+
+        if self.elements is not None:
+            elements_to_search = list(self.elements)
+        else:
+            elements_to_search = sorted(candidate_weights.keys())
+
+        if not elements_to_search:
+            return []
+
+        total_weight = sum(candidate_weights.values())
+        wl_min, wl_max = wavelength.min(), wavelength.max()
+        element_scores: List[Tuple[str, float, float, List[Any], List[Any]]] = []
+
+        for element in elements_to_search:
+            score = candidate_weights.get(element, 0.0) / max(total_weight, 1e-12)
+            count_weight = candidate_counts.get(element, 0) / max(self.top_k, 1)
+            best_similarity = 0.0
+            if element in candidate_best_distance:
+                best_similarity = 1.0 / (1.0 + max(candidate_best_distance[element], 0.0))
+            confidence = np.clip(0.4 * score + 0.4 * count_weight + 0.2 * best_similarity, 0.0, 1.0)
+            transitions = self._get_transitions_for_element(element, wl_min, wl_max)
+            matched_lines, unmatched_lines = self._match_lines_to_peaks(
+                element, transitions, wavelength, intensity
+            )
+
+            if score <= 0.0:
+                matched_lines = []
+                unmatched_lines = transitions
+
+            element_scores.append((element, score, confidence, matched_lines, unmatched_lines))
+
+        return element_scores
+
+    def _has_vector_workflow(self) -> bool:
+        """Return True when the full vector-mode workflow is configured."""
+        if self.vector_index is None or self.vector_embedder is None:
+            return False
+        if self.library_metadata is None or len(self.library_metadata) == 0:
+            return False
+        return True
+
+    def _metadata_elements(self, metadata: Mapping[str, Any]) -> List[str]:
+        """Extract element symbols from a library metadata record."""
+        if (
+            "elements" in metadata
+            and not isinstance(metadata["elements"], str)
+            and isinstance(metadata["elements"], Iterable)
+        ):
+            return [str(element) for element in metadata["elements"]]
+        if "element" in metadata:
+            return [str(metadata["element"])]
+        for key in ("species", "composition"):
+            value = metadata.get(key)
+            if isinstance(value, Mapping):
+                return [
+                    str(element) for element, fraction in value.items() if float(fraction) > 0.0
+                ]
+        return []
+
+    def _get_transitions_for_element(
+        self, element: str, wl_min: float, wl_max: float
+    ) -> List[Transition]:
+        """Load and rank transitions for a candidate element."""
+        transitions = self.atomic_db.get_transitions(
+            element, wavelength_min=wl_min, wavelength_max=wl_max
+        )
+        transitions = [t for t in transitions if t.A_ki * t.g_k >= self.min_line_strength]
+        if len(transitions) > self.max_lines_per_element:
+            kT = KB_EV * self.reference_temperature
+            transitions = sorted(
+                transitions,
+                key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT),
+                reverse=True,
+            )
+            transitions = transitions[: self.max_lines_per_element]
+        return transitions
 
     def _generate_model_spectrum(
         self,

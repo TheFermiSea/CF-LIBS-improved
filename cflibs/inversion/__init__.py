@@ -6,6 +6,9 @@ LIBS analysis, including Boltzmann plotting, closure equations, and
 optional Bayesian inference and Monte Carlo uncertainty quantification.
 """
 
+from cflibs.core.logging_config import get_logger
+
+
 # --- Core (always available) ---
 from cflibs.inversion.boltzmann import (
     LineObservation,
@@ -172,6 +175,13 @@ from cflibs.inversion.streaming import (
     create_streaming_pipeline,
 )
 
+logger = get_logger("inversion")
+
+
+def _log_optional_import_failure(component: str, exc: Exception) -> None:
+    logger.debug(f"Optional inversion component '{component}' unavailable: {exc}")
+
+
 # --- Optional availability flags ---
 HAS_HYBRID = False
 HAS_JOINT_OPTIMIZER = False
@@ -191,8 +201,8 @@ try:
     )
 
     HAS_HYBRID = True
-except ImportError:
-    pass
+except Exception as exc:
+    _log_optional_import_failure("hybrid", exc)
 
 # --- Optional: Joint optimization (requires JAX) ---
 try:
@@ -206,8 +216,8 @@ try:
     )
 
     HAS_JOINT_OPTIMIZER = True
-except ImportError:
-    pass
+except Exception as exc:
+    _log_optional_import_failure("joint_optimizer", exc)
 
 # --- Optional: PCA JAX functions (requires JAX) ---
 try:
@@ -218,8 +228,8 @@ try:
     )
 
     HAS_PCA_JAX = True
-except ImportError:
-    pass
+except Exception as exc:
+    _log_optional_import_failure("pca_jax", exc)
 
 # --- Optional: Bayesian inference (requires JAX + NumPyro) ---
 try:
@@ -240,16 +250,16 @@ try:
     )
 
     HAS_BAYESIAN = True
-except ImportError:
-    pass
+except Exception as exc:
+    _log_optional_import_failure("bayesian", exc)
 
 # --- Optional: Nested sampling (requires dynesty) ---
 try:
     from cflibs.inversion.bayesian import NestedSampler, NestedSamplingResult  # noqa: F401
 
     HAS_NESTED = True
-except ImportError:
-    pass
+except Exception as exc:
+    _log_optional_import_failure("nested", exc)
 
 # --- Optional: Uncertainty propagation (requires uncertainties package) ---
 try:
@@ -270,9 +280,9 @@ try:
     from cflibs.inversion.interpretable import InterpretableModel  # noqa: F401
 
     HAS_INTERPRETABLE_ML = True
-except ImportError:
+except Exception as exc:
     # Interpretable ML components are optional
-    pass
+    _log_optional_import_failure("interpretable_ml", exc)
 
 # --- Optional: Physics-Informed Neural Networks (requires JAX + Equinox + Optax) ---
 try:
@@ -293,9 +303,9 @@ try:
     )
 
     HAS_PINN = True
-except ImportError:
+except Exception as exc:
     # PINN components are optional
-    pass
+    _log_optional_import_failure("pinn", exc)
 # --- Public API ---
 __all__ = [
     # Boltzmann plotting

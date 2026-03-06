@@ -142,7 +142,9 @@ def invert_cmd(args):
     cli_min_peak_height = getattr(args, "min_peak_height", None)
     cli_peak_width_nm = getattr(args, "peak_width_nm", None)
     wavelength_tolerance = (
-        cli_tolerance if cli_tolerance is not None else analysis_cfg.get("wavelength_tolerance_nm", 0.1)
+        cli_tolerance
+        if cli_tolerance is not None
+        else analysis_cfg.get("wavelength_tolerance_nm", 0.1)
     )
     min_peak_height = (
         cli_min_peak_height
@@ -150,7 +152,9 @@ def invert_cmd(args):
         else analysis_cfg.get("min_peak_height", 0.01)
     )
     peak_width_nm = (
-        cli_peak_width_nm if cli_peak_width_nm is not None else analysis_cfg.get("peak_width_nm", 0.2)
+        cli_peak_width_nm
+        if cli_peak_width_nm is not None
+        else analysis_cfg.get("peak_width_nm", 0.2)
     )
     min_relative_intensity = analysis_cfg.get("min_relative_intensity")
     resolving_power = (
@@ -232,38 +236,20 @@ def invert_cmd(args):
 
 def dbgen_cmd(args):
     """Database generation command."""
-    import subprocess
-
-    datagen_script = Path(__file__).parent.parent.parent / "datagen_v2.py"
-
-    if not datagen_script.exists():
-        logger.error(f"datagen_v2.py not found at {datagen_script}")
-        print("ERROR: datagen_v2.py script not found.")
-        print("Please ensure datagen_v2.py is in the project root directory.")
-        sys.exit(1)
+    from cflibs.atomic.database_generator import generate_database
 
     logger.info(f"Generating atomic database: {args.db_path}")
     print(f"\nGenerating atomic database: {args.db_path}")
     print("This may take a long time (hours) for all elements.")
     print("The script will fetch data from NIST and cache it locally.\n")
 
-    # Build command
-    cmd = [sys.executable, str(datagen_script)]
-
-    # Note: datagen_v2.py uses hardcoded DB_NAME, so we'd need to modify it
-    # or pass environment variable. For now, just run it and let user know.
-    if args.db_path != "libs_production.db":
-        print("WARNING: datagen_v2.py currently generates 'libs_production.db'.")
-        print("To use a different path, modify datagen_v2.py or rename the file after generation.")
-
     try:
-        result = subprocess.run(cmd, cwd=str(datagen_script.parent))
-        if result.returncode == 0:
-            print("\nDatabase generation complete!")
-            print(f"Database saved to: {args.db_path}")
-        else:
-            logger.error("Database generation failed")
-            sys.exit(1)
+        generate_database(
+            db_path=args.db_path,
+            elements=args.elements,
+        )
+        print("\nDatabase generation complete!")
+        print(f"Database saved to: {args.db_path}")
     except KeyboardInterrupt:
         print("\nDatabase generation interrupted by user.")
         sys.exit(1)

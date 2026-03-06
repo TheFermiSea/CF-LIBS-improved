@@ -61,7 +61,7 @@ def test_invert_cmd_requires_elements():
 
 
 def test_dbgen_cmd_missing_script():
-    """Test database generation command when script is missing."""
+    """Test database generation command when generator setup fails."""
 
     class Args:
         db_path = "test.db"
@@ -69,13 +69,27 @@ def test_dbgen_cmd_missing_script():
 
     args = Args()
 
-    # Mock the path to not exist
-    with patch("cflibs.cli.main.Path") as mock_path:
-        mock_path.return_value.exists.return_value = False
+    with patch("cflibs.atomic.database_generator.generate_database") as mock_generate:
+        mock_generate.side_effect = FileNotFoundError("missing datagen_v2.py")
 
         # Should exit with error
         with pytest.raises(SystemExit):
             dbgen_cmd(args)
+
+
+def test_dbgen_cmd_forwards_args():
+    """Database generation CLI should forward db path and elements to the generator."""
+
+    class Args:
+        db_path = "custom.db"
+        elements = ["Fe", "Cu"]
+
+    args = Args()
+
+    with patch("cflibs.atomic.database_generator.generate_database") as mock_generate:
+        dbgen_cmd(args)
+
+    mock_generate.assert_called_once_with(db_path="custom.db", elements=["Fe", "Cu"])
 
 
 def test_main_no_command(capsys):
