@@ -377,6 +377,29 @@ class TestBayesianForwardModel:
         assert not jnp.allclose(spectrum_low, spectrum_high)
         assert float(jnp.max(spectrum_high)) > float(jnp.max(spectrum_low))
 
+    def test_forward_jit_accepts_explicit_total_species_density(self, bayesian_db):
+        """Explicit heavy-particle density should work under ``jax.jit``."""
+        model = BayesianForwardModel(
+            db_path=bayesian_db,
+            elements=["Fe", "Cu"],
+            wavelength_range=(200, 600),
+            pixels=150,
+        )
+        concentrations = jnp.array([0.8, 0.2])
+
+        @jax.jit
+        def compute(total_species_density_cm3):
+            return model.forward(
+                1.0,
+                17.0,
+                concentrations,
+                total_species_density_cm3=total_species_density_cm3,
+            )
+
+        spectrum = compute(jnp.asarray(2.5e17))
+        assert spectrum.shape == (150,)
+        assert float(jnp.max(spectrum)) > 0.0
+
     def test_forward_concentration_scaling(self, bayesian_db):
         """Test that spectrum scales with concentration."""
         model = BayesianForwardModel(

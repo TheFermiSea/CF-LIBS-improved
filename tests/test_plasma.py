@@ -49,6 +49,11 @@ def test_species_densities_to_number_fractions():
     assert fractions["Cu"] == pytest.approx(1.0 / 3.0)
 
 
+def test_species_densities_to_number_fractions_rejects_negative_components():
+    with pytest.raises(ValueError, match="species cannot contain negative components: Cu"):
+        species_densities_to_number_fractions({"Fe": 0.8, "Cu": -0.2})
+
+
 def test_number_fractions_to_species_densities():
     species = number_fractions_to_species_densities(
         {"Fe": 0.25, "Cu": 0.75},
@@ -66,6 +71,17 @@ def test_mass_fractions_to_number_fractions():
     )
     assert sum(fractions.values()) == pytest.approx(1.0)
     assert fractions["Fe"] > fractions["Cu"]
+
+
+def test_mass_fractions_to_number_fractions_rejects_negative_components():
+    with pytest.raises(
+        ValueError,
+        match="mass_fractions cannot contain negative components: Cu",
+    ):
+        mass_fractions_to_number_fractions(
+            {"Fe": 0.8, "Cu": -0.2},
+            {"Fe": 55.85, "Cu": 63.55},
+        )
 
 
 def test_mass_fractions_to_species_densities():

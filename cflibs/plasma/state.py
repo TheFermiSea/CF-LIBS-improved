@@ -16,6 +16,11 @@ def _normalize_positive_fractions(
     quantity_name: str,
 ) -> Dict[str, float]:
     """Normalize positive fractions to sum to one."""
+    negative_elements = [element for element, value in fractions.items() if float(value) < 0.0]
+    if negative_elements:
+        elements_str = ", ".join(sorted(negative_elements))
+        raise ValueError(f"{quantity_name} cannot contain negative components: {elements_str}")
+
     normalized_input = {
         element: float(value) for element, value in fractions.items() if value > 0.0
     }
@@ -91,6 +96,8 @@ def mass_fractions_to_number_fractions(
     """
     weighted: Dict[str, float] = {}
     for element, mass_fraction in mass_fractions.items():
+        if mass_fraction < 0.0:
+            raise ValueError(f"mass_fractions cannot contain negative components: {element}")
         if mass_fraction <= 0.0:
             continue
         if element not in atomic_masses_amu:
@@ -228,6 +235,27 @@ class SingleZoneLTEPlasma(PlasmaState):
     ) -> "SingleZoneLTEPlasma":
         """
         Build a plasma state from element number fractions.
+
+        Parameters
+        ----------
+        T_e : float
+            Electron temperature in K.
+        n_e : float
+            Electron density in cm^-3.
+        number_fractions : Mapping[str, float]
+            Element number fractions on a heavy-particle basis.
+        total_species_density_cm3 : float
+            Total heavy-particle number density in cm^-3.
+        T_g : float, optional
+            Gas temperature in K. Defaults to ``T_e`` when omitted.
+        pressure : float, optional
+            Pressure in atm.
+
+        Returns
+        -------
+        SingleZoneLTEPlasma
+            Plasma state with element number densities derived from the
+            supplied number fractions.
         """
         species = number_fractions_to_species_densities(
             number_fractions,
@@ -248,6 +276,29 @@ class SingleZoneLTEPlasma(PlasmaState):
     ) -> "SingleZoneLTEPlasma":
         """
         Build a plasma state from element mass fractions.
+
+        Parameters
+        ----------
+        T_e : float
+            Electron temperature in K.
+        n_e : float
+            Electron density in cm^-3.
+        mass_fractions : Mapping[str, float]
+            Element mass fractions.
+        total_species_density_cm3 : float
+            Total heavy-particle number density in cm^-3.
+        atomic_masses_amu : Mapping[str, float]
+            Atomic masses in amu keyed by element symbol.
+        T_g : float, optional
+            Gas temperature in K. Defaults to ``T_e`` when omitted.
+        pressure : float, optional
+            Pressure in atm.
+
+        Returns
+        -------
+        SingleZoneLTEPlasma
+            Plasma state with element number densities derived from the
+            supplied mass fractions.
         """
         species = mass_fractions_to_species_densities(
             mass_fractions,

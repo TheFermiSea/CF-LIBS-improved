@@ -169,9 +169,15 @@ def _resolve_total_species_density_cm3(
     """
     if total_species_density_cm3 is None:
         return n_e
-    if total_species_density_cm3 <= 0.0:
-        raise ValueError("total_species_density_cm3 must be positive")
-    return float(total_species_density_cm3)
+    if np.isscalar(total_species_density_cm3):
+        resolved = float(total_species_density_cm3)
+        if resolved <= 0.0:
+            raise ValueError("total_species_density_cm3 must be positive")
+        return resolved
+    if HAS_JAX:
+        resolved = jnp.asarray(total_species_density_cm3)
+        return jnp.where(resolved > 0.0, resolved, jnp.nan)
+    raise ValueError("total_species_density_cm3 must be a positive scalar")
 
 
 # Standard atomic masses for fallback [amu]
