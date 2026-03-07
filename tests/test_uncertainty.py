@@ -150,6 +150,45 @@ class TestClosurePropagation:
         # Matrix element should have concentration = matrix_fraction
         assert concentrations_u["Fe"].nominal_value == pytest.approx(0.9)
 
+    def test_oxide_closure_normalizes_oxide_weighted_total(self):
+        """Test oxide mode normalizes using the oxide-weighted closure sum."""
+        from cflibs.inversion.uncertainty import propagate_through_closure_oxide
+        from uncertainties import ufloat
+
+        intercepts_u = {
+            "Fe": ufloat(np.log(2.0), 0.1),
+            "Si": ufloat(0.0, 0.1),
+        }
+        partition_funcs = {"Fe": 1.0, "Si": 1.0}
+        oxide_stoichiometry = {"Fe": 2.0, "Si": 1.0}
+
+        concentrations_u = propagate_through_closure_oxide(
+            intercepts_u,
+            partition_funcs,
+            oxide_stoichiometry,
+        )
+
+        oxide_total = sum(
+            concentrations_u[element].nominal_value * oxide_stoichiometry.get(element, 1.0)
+            for element in concentrations_u
+        )
+        assert oxide_total == pytest.approx(1.0, abs=1e-10)
+
+    def test_standard_closure_rejects_invalid_abundance_multiplier(self):
+        """Test invalid abundance multipliers fail fast."""
+        from cflibs.inversion.uncertainty import propagate_through_closure_standard
+        from uncertainties import ufloat
+
+        intercepts_u = {"Fe": ufloat(10.0, 0.5)}
+        partition_funcs = {"Fe": 25.0}
+
+        with pytest.raises(ValueError, match="abundance_multipliers\\['Fe'\\]"):
+            propagate_through_closure_standard(
+                intercepts_u,
+                partition_funcs,
+                abundance_multipliers={"Fe": float("nan")},
+            )
+
     def test_correlation_in_closure(self):
         """Test that correlations affect closure uncertainty properly.
 

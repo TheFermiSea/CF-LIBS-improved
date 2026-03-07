@@ -84,6 +84,14 @@ def test_mass_fractions_to_number_fractions_rejects_negative_components():
         )
 
 
+def test_mass_fractions_to_number_fractions_rejects_non_finite_atomic_mass():
+    with pytest.raises(ValueError, match="Atomic mass for element 'Cu' must be finite"):
+        mass_fractions_to_number_fractions(
+            {"Fe": 0.8, "Cu": 0.2},
+            {"Fe": 55.85, "Cu": float("nan")},
+        )
+
+
 def test_mass_fractions_to_species_densities():
     species = mass_fractions_to_species_densities(
         {"Fe": 0.5, "Cu": 0.5},
