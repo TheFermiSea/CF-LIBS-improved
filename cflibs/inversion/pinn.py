@@ -361,7 +361,7 @@ def saha_residual(
 
     # Expected ratio
     expected_ratio = (
-        2.0 * (U_ion / jnp.maximum(U_neutral, 1.0)) * saha_factor * jnp.exp(-IP_eV / T_safe)
+        (U_ion / jnp.maximum(U_neutral, 1.0)) * saha_factor * jnp.exp(-IP_eV / T_safe)
     )
 
     # Actual ratio

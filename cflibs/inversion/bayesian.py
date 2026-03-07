@@ -1149,7 +1149,7 @@ class BayesianForwardModel:
 
         # Saha ratio: n_ion / n_neutral
         saha_factor = (_JAX_SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
-        ratio_ion_neutral = 2.0 * saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
+        ratio_ion_neutral = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
 
         # Population fractions
         frac_neutral = 1.0 / (1.0 + ratio_ion_neutral)
@@ -2330,7 +2330,7 @@ class TwoZoneBayesianForwardModel:
         IP_I = data.ionization_potentials[:, 0]
 
         saha_factor = (_JAX_SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
-        ratio_ion_neutral = 2.0 * saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
+        ratio_ion_neutral = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
         frac_neutral = 1.0 / (1.0 + ratio_ion_neutral)
         frac_ion = ratio_ion_neutral / (1.0 + ratio_ion_neutral)
 

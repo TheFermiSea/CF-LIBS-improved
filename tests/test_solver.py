@@ -104,7 +104,7 @@ def test_solver_mixed_stage_transform_recovers_temperature(mock_db):
 
     # The classic Saha-Boltzmann transform should subtract only the ionic
     # prefactor from y while carrying IP on the x-axis.
-    saha_offset = np.log(2.0 * (SAHA_CONST_CM3 / n_e) * (T_eV**1.5))
+    saha_offset = np.log((SAHA_CONST_CM3 / n_e) * (T_eV**1.5))
     common_intercept = 8.0
 
     observations = []

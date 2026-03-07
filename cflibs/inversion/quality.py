@@ -257,7 +257,7 @@ class QualityAssessor:
             # Match the classic solver's Saha-Boltzmann transform:
             # move the ionization energy onto x while subtracting only the
             # ionic partition/electron-density prefactor from y.
-            saha_offset = np.log(2.0 * (SAHA_CONST_CM3 / safe_ne_cm3) * (T_eV**1.5))
+            saha_offset = np.log((SAHA_CONST_CM3 / safe_ne_cm3) * (T_eV**1.5))
             stage_pair = stage_pairs.get(el)
             ion_stage = stage_pair[1] if stage_pair is not None else None
             correction = (

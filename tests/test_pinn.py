@@ -235,7 +235,7 @@ class TestPhysicsConstraintFunctions:
 
         # Calculate expected Saha ratio: (n_ion * n_e) / n_neutral = expected_ratio
         saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
-        expected_ratio = 2.0 * (U_ion / U_neutral) * saha_factor * jnp.exp(-IP_eV / T_eV)
+        expected_ratio = (U_ion / U_neutral) * saha_factor * jnp.exp(-IP_eV / T_eV)
 
         # Set populations that satisfy Saha: n_ion = n_neutral * expected_ratio / n_e
         n_neutral = jnp.array([1000.0])

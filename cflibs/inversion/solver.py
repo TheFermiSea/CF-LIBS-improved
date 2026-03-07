@@ -111,7 +111,7 @@ class IterativeCFLIBSSolver:
         """Compute n_II / n_I using the first Saha ratio."""
         safe_ne = max(float(n_e_cm3), 1e10)
         T_eV = max(T_K / EV_TO_K, 0.1)
-        return (SAHA_CONST_CM3 / safe_ne) * (T_eV**1.5) * 2.0 * (U_II / U_I) * np.exp(-ip_ev / T_eV)
+        return (SAHA_CONST_CM3 / safe_ne) * (T_eV**1.5) * (U_II / U_I) * np.exp(-ip_ev / T_eV)
 
     def _compute_abundance_multipliers(
         self,
@@ -212,7 +212,7 @@ class IterativeCFLIBSSolver:
                 # x-axis. Including exp(-IP/T) in the logarithmic y-shift and
                 # then also adding IP to x double-counts the ionization energy,
                 # which biases the common slope hot and skews composition.
-                correction_term = np.log(2.0 * (SAHA_CONST_CM3 / n_e) * (T_eV**1.5))
+                correction_term = np.log((SAHA_CONST_CM3 / n_e) * (T_eV**1.5))
 
                 # Apply to observations
                 for obs in obs_by_element[el]:

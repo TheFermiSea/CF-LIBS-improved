@@ -430,15 +430,12 @@ class ManifoldGenerator:
 
             IP_I = ionization_potentials[lines_el_idx, 0]
 
-            # Saha equation: n1 / n0 = 2/ne * (2pi mkT/h^2)^1.5 * (U1/U0) * exp(-IP/kT)
-
-            # SAHA_CONST_CM3 is (2pi mk/h^2)^1.5 approx 6e21
-
-            # We need the factor 2 for electron spin
+            # Saha equation: n1/n0 = (SAHA_CONST/ne) * T^1.5 * (U1/U0) * exp(-IP/T)
+            # SAHA_CONST_CM3 = 6.042e21 already includes g_e = 2
 
             saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
 
-            ratio_n1_n0 = 2.0 * saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
+            ratio_n1_n0 = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
 
             # Calculate population fractions
 
