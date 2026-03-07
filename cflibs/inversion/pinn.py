@@ -546,8 +546,7 @@ if HAS_JAX and HAS_EQUINOX:
                 T_safe = jnp.maximum(T_eV, 0.1)
                 saha_factor = (SAHA_CONST_CM3 / n_e) * (T_safe**1.5)
                 saha_ratios = (
-                    2.0
-                    * (partition_funcs_ion / jnp.maximum(partition_funcs_neutral, 1.0))
+                    (partition_funcs_ion / jnp.maximum(partition_funcs_neutral, 1.0))
                     * saha_factor
                     * jnp.exp(-self.ionization_potentials / T_safe)
                 )
