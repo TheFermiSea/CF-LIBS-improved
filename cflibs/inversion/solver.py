@@ -205,7 +205,7 @@ class IterativeCFLIBSSolver:
                 # Saha correction: map ionic lines to neutral energy plane
 
                 # Standard Saha-Boltzmann linearization for ionic lines:
-                # y* = ln(I λ / gA) - ln(2 * SahaConst * T^(3/2) / n_e)
+                # y* = ln(I λ / gA) - ln(SahaConst * T^(3/2) / n_e)
                 # x* = E_k + IP
                 #
                 # The ionization energy belongs only on the transformed

@@ -344,7 +344,7 @@ class QualityAssessor:
 
         The Saha ratio at temperature T is:
 
-            S(T) = (C_Saha / n_e) * T_eV^1.5 * exp(-IP / T_eV) * 2 * U_II / U_I
+            S(T) = (C_Saha / n_e) * T_eV^1.5 * exp(-IP / T_eV) * U_II / U_I
 
         The observed II/I intensity ratio is proportional to S(T), so we
         solve for T_saha by bisection on:
@@ -415,7 +415,6 @@ class QualityAssessor:
                     (SAHA_CONST_CM3 / safe_ne_cm3)
                     * (T_eV_local**1.5)
                     * np.exp(-ip / T_eV_local)
-                    * 2.0
                     * (U_II / U_I)
                 )
                 return S
