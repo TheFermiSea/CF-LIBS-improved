@@ -24,6 +24,14 @@ from cflibs.core.logging_config import get_logger
 logger = get_logger("inversion.hybrid")
 
 try:
+    from scipy.optimize import minimize as scipy_minimize
+
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+    scipy_minimize = None
+
+try:
     import jax
     import jax.numpy as jnp
 
@@ -34,6 +42,88 @@ try:
 except ImportError:
     HAS_JAX = False
     jnp = None
+
+
+def _normalize_optimizer_method(method: str) -> str:
+    normalized = method.upper()
+    aliases = {
+        "LBFGSB": "L-BFGS-B",
+        "L_BFGS_B": "L-BFGS-B",
+    }
+    return aliases.get(normalized.replace("-", "_"), normalized)
+
+
+def _hybrid_packed_bounds(bounds: Optional[Dict[str, Tuple[float, float]]], n_elements: int):
+    if bounds is None:
+        return None
+
+    packed_bounds = []
+
+    t_bounds = bounds.get("T_eV")
+    if t_bounds is None:
+        packed_bounds.append((None, None))
+    else:
+        packed_bounds.append((float(np.log(t_bounds[0])), float(np.log(t_bounds[1]))))
+
+    ne_bounds = bounds.get("n_e")
+    if ne_bounds is None:
+        packed_bounds.append((None, None))
+    else:
+        packed_bounds.append((float(np.log(ne_bounds[0])), float(np.log(ne_bounds[1]))))
+
+    packed_bounds.extend([(None, None)] * n_elements)
+    return packed_bounds
+
+
+def _run_optimizer(
+    loss_fn: Callable,
+    x0: jnp.ndarray,
+    method: str,
+    max_iterations: int,
+    bounds=None,
+) -> Tuple[jnp.ndarray, float, bool, int, str]:
+    normalized_method = _normalize_optimizer_method(method)
+
+    if normalized_method == "BFGS":
+        result = jax_minimize(
+            loss_fn,
+            x0,
+            method="BFGS",
+            options={"maxiter": max_iterations},
+        )
+        iterations = int(getattr(result, "nit", max_iterations))
+        return result.x, float(result.fun), bool(result.success), iterations, "jax"
+
+    if not HAS_SCIPY:
+        raise ValueError(
+            f"Optimizer '{normalized_method}' requires SciPy. Install scipy or use method='BFGS'."
+        )
+
+    value_and_grad = jax.value_and_grad(loss_fn)
+
+    def scipy_objective(x_np: np.ndarray):
+        x_jax = jnp.asarray(x_np)
+        value, grad = value_and_grad(x_jax)
+        return float(value), np.asarray(grad, dtype=np.float64)
+
+    scipy_bounds = bounds if normalized_method == "L-BFGS-B" else None
+    result = scipy_minimize(
+        scipy_objective,
+        np.asarray(x0, dtype=np.float64),
+        method=normalized_method,
+        jac=True,
+        bounds=scipy_bounds,
+        options={"maxiter": max_iterations},
+    )
+
+    iterations = int(getattr(result, "nit", 0) or 0)
+    return (
+        jnp.asarray(result.x),
+        float(result.fun),
+        bool(result.success),
+        iterations,
+        "scipy",
+    )
 
 
 @dataclass
@@ -252,6 +342,7 @@ class HybridInverter:
         # Pack parameters into array for optimization
         # [log(T), log(n_e), softmax(concentrations)]
         x0 = self._pack_params(coarse_T, coarse_ne, coarse_conc)
+        packed_bounds = _hybrid_packed_bounds(bounds, self.n_elements)
 
         # Define loss function
         def loss_fn(x):
@@ -262,23 +353,20 @@ class HybridInverter:
 
         # Run optimization
         try:
-            result = jax_minimize(
+            final_x, final_loss, converged, iterations, backend = _run_optimizer(
                 loss_fn,
                 x0,
-                method=method.lower().replace("-", ""),  # JAX uses 'bfgs' not 'L-BFGS-B'
-                options={"maxiter": self.max_iterations},
+                method=method,
+                max_iterations=self.max_iterations,
+                bounds=packed_bounds,
             )
-
-            final_x = result.x
-            final_loss = float(result.fun)
-            converged = result.success
-            iterations = result.nit if hasattr(result, "nit") else self.max_iterations
         except Exception as e:
             logger.warning(f"Optimization failed: {e}, using coarse result")
             final_x = x0
             final_loss = float(loss_fn(x0))
             converged = False
             iterations = 0
+            backend = "fallback"
 
         # Unpack final parameters
         final_T, final_ne, final_conc_arr = self._unpack_params(final_x)
@@ -301,6 +389,7 @@ class HybridInverter:
             converged=converged,
             iterations=iterations,
             method=method,
+            metadata={"optimizer_backend": backend},
         )
 
     def _pack_params(
@@ -469,17 +558,13 @@ class SpectralFitter:
             return jnp.sum(residuals**2)
 
         try:
-            result = jax_minimize(
+            final_x, final_loss, converged, iterations, backend = _run_optimizer(
                 loss_fn,
                 x0,
-                method=method.lower(),
-                options={"maxiter": max_iterations},
+                method=method,
+                max_iterations=max_iterations,
             )
-
-            final_T, final_ne, final_conc = self._unpack(result.x)
-            converged = result.success
-            iterations = result.nit if hasattr(result, "nit") else max_iterations
-            final_loss = float(result.fun)
+            final_T, final_ne, final_conc = self._unpack(final_x)
         except Exception as e:
             logger.warning(f"Fitting failed: {e}")
             final_T = initial_T_eV
@@ -488,6 +573,7 @@ class SpectralFitter:
             converged = False
             iterations = 0
             final_loss = float(loss_fn(x0))
+            backend = "fallback"
 
         return HybridInversionResult(
             temperature_eV=float(final_T),
@@ -501,6 +587,7 @@ class SpectralFitter:
             converged=converged,
             iterations=iterations,
             method=method,
+            metadata={"optimizer_backend": backend},
         )
 
     def _pack(self, T_eV: float, n_e: float, concentrations: Dict[str, float]) -> jnp.ndarray:

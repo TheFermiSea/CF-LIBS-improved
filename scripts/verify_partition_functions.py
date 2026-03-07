@@ -11,8 +11,10 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import sys
+from pathlib import Path
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
@@ -21,111 +23,36 @@ from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 from cflibs.core.constants import EV_TO_K
 
 
-# NIST ASD reference partition function values
-# Source: NIST Atomic Spectra Database (https://www.nist.gov/pml/atomic-spectra-database)
-# These are approximate values from NIST tables for comparison.
-NIST_PARTITION_FUNCTIONS = {
-    "Fe": {
-        1: {  # Fe I (neutral)
-            5000: 25.07,
-            10000: 41.95,
-            15000: 64.38,
-            20000: 98.36,
-        },
-        2: {  # Fe II (singly ionized)
-            5000: 30.42,
-            10000: 43.38,
-            15000: 55.02,
-            20000: 69.80,
-        },
-        3: {  # Fe III (doubly ionized)
-            5000: 23.87,
-            10000: 30.58,
-            15000: 38.55,
-            20000: 47.32,
-        },
-    },
-    "Cu": {
-        1: {
-            5000: 2.03,
-            10000: 3.81,
-            15000: 6.55,
-            20000: 10.16,
-        },
-        2: {
-            5000: 1.00,
-            10000: 1.08,
-            15000: 1.55,
-            20000: 2.42,
-        },
-    },
-    "Al": {
-        1: {
-            5000: 5.84,
-            10000: 5.91,
-            15000: 6.06,
-            20000: 6.38,
-        },
-        2: {
-            5000: 1.00,
-            10000: 1.00,
-            15000: 1.01,
-            20000: 1.03,
-        },
-    },
-    "Ni": {
-        1: {
-            5000: 23.66,
-            10000: 35.35,
-            15000: 60.38,
-            20000: 89.12,
-        },
-        2: {
-            5000: 9.56,
-            10000: 18.42,
-            15000: 27.53,
-            20000: 36.64,
-        },
-    },
-    "Ti": {
-        1: {
-            5000: 31.71,
-            10000: 73.46,
-            15000: 122.48,
-            20000: 170.89,
-        },
-        2: {
-            5000: 41.07,
-            10000: 83.93,
-            15000: 123.03,
-            20000: 157.61,
-        },
-    },
-    "Cr": {
-        1: {
-            5000: 7.06,
-            10000: 11.49,
-            15000: 25.99,
-            20000: 42.48,
-        },
-        2: {
-            5000: 6.22,
-            10000: 11.17,
-            15000: 19.54,
-            20000: 27.63,
-        },
-    },
-}
+ROOT = Path(__file__).resolve().parent.parent
+REFERENCE_FILE = ROOT / "tests" / "data" / "nist_reference" / "partition_functions.json"
 
 TEMPERATURES_K = [5000, 10000, 15000, 20000]
+
+
+def _load_nist_reference() -> dict:
+    """Load NIST partition function reference from the canonical JSON fixture."""
+    if not REFERENCE_FILE.is_file():
+        raise SystemExit(f"NIST reference file not found: {REFERENCE_FILE}")
+    with open(REFERENCE_FILE) as f:
+        data = json.load(f)
+    # Convert to {element: {stage_int: {T_int: U}}} format
+    result = {}
+    for elem, stages in data.items():
+        if elem.startswith("_"):
+            continue
+        result[elem] = {}
+        for stage_str, temps in stages.items():
+            result[elem][int(stage_str)] = {int(t): v for t, v in temps.items()}
+    return result
 
 
 def verify_element(
     solver: SahaBoltzmannSolver,
     element: str,
+    nist_ref: dict,
 ) -> dict[int, dict]:
     """Compare partition functions for one element."""
-    ref = NIST_PARTITION_FUNCTIONS.get(element, {})
+    ref = nist_ref.get(element, {})
     if not ref:
         print(f"  No NIST reference data for {element}")
         return {}
@@ -170,6 +97,7 @@ def main() -> int:
     print(f"Database: {args.db}")
     print(f"Temperatures: {TEMPERATURES_K} K")
 
+    nist_ref = _load_nist_reference()
     db = AtomicDatabase(args.db)
     solver = SahaBoltzmannSolver(db)
 
@@ -178,7 +106,7 @@ def main() -> int:
         print(f"\n{'='*60}")
         print(f"Element: {element}")
         print(f"{'='*60}")
-        all_results[element] = verify_element(solver, element)
+        all_results[element] = verify_element(solver, element, nist_ref)
 
     # Summary
     print(f"\n{'='*60}")

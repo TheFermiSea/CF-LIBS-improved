@@ -7,6 +7,7 @@ The database is required for all CF-LIBS calculations.
 
 import sys
 from pathlib import Path
+import subprocess
 
 # Import the datagen_v2 script functionality
 # This allows us to use it as a module or CLI command
@@ -48,7 +49,6 @@ def generate_database(
     --------
     datagen_v2.py : Standalone script for database generation
     """
-    # Import the datagen_v2 module
     datagen_path = Path(__file__).parent.parent.parent / "datagen_v2.py"
 
     if not datagen_path.exists():
@@ -57,15 +57,27 @@ def generate_database(
             "Please ensure the script is in the project root."
         )
 
-    # For now, we'll recommend using the script directly
-    # In the future, we can refactor datagen_v2.py to be importable
-    import subprocess
-
     print(f"Generating atomic database: {db_path}")
-    print("Note: This may take a long time. Consider using datagen_v2.py directly.")
+    if elements:
+        print(f"Elements: {', '.join(elements)}")
+    print("This may take a long time.")
 
-    # Run the script
-    result = subprocess.run([sys.executable, str(datagen_path)], cwd=str(datagen_path.parent))
+    cmd = [
+        sys.executable,
+        str(datagen_path),
+        "--db-path",
+        db_path,
+        "--max-ionization-stage",
+        str(max_ionization_stage),
+        "--max-upper-energy-ev",
+        str(max_upper_energy_ev),
+        "--min-relative-intensity",
+        str(min_relative_intensity),
+    ]
+    if elements:
+        cmd.extend(["--elements", *elements])
+
+    result = subprocess.run(cmd, cwd=str(datagen_path.parent))
 
     if result.returncode != 0:
         raise RuntimeError("Database generation failed. See error messages above.")

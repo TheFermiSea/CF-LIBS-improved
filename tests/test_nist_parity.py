@@ -26,9 +26,9 @@ ELEMENTS = ["Fe", "Cu", "Al", "Ni", "Ti", "Cr"]
 TEST_TEMPS_K = [5000, 10000, 15000, 20000]
 
 
-def _load_partition_ref() -> dict:
-    """Load NIST partition function reference values."""
-    ref_file = DATA_DIR / "partition_functions.json"
+def _load_nist_json(filename: str) -> dict:
+    """Load a NIST reference JSON file, filtering out metadata keys."""
+    ref_file = DATA_DIR / filename
     if not ref_file.exists():
         pytest.skip(f"Reference file not found: {ref_file}")
     with open(ref_file) as f:
@@ -36,14 +36,8 @@ def _load_partition_ref() -> dict:
     return {k: v for k, v in data.items() if not k.startswith("_")}
 
 
-def _load_ionization_ref() -> dict:
-    """Load NIST ionization fraction reference values."""
-    ref_file = DATA_DIR / "ionization_fractions.json"
-    if not ref_file.exists():
-        pytest.skip(f"Reference file not found: {ref_file}")
-    with open(ref_file) as f:
-        data = json.load(f)
-    return {k: v for k, v in data.items() if not k.startswith("_")}
+# Cache ionization ref at module level to avoid re-reading per parametrized test.
+_IONIZATION_REF: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +58,7 @@ def solver(production_db):
 
 def _partition_function_cases():
     """Generate (element, stage, T_K) test cases from reference data."""
-    ref = _load_partition_ref()
+    ref = _load_nist_json("partition_functions.json")
     cases = []
     for element in ELEMENTS:
         if element not in ref:
@@ -103,9 +97,17 @@ def test_partition_functions(solver, element, stage, T_K, nist_U):
 # ---------------------------------------------------------------------------
 
 
+def _get_ionization_ref() -> dict:
+    """Return cached ionization reference data (loaded once)."""
+    global _IONIZATION_REF
+    if _IONIZATION_REF is None:
+        _IONIZATION_REF = _load_nist_json("ionization_fractions.json")
+    return _IONIZATION_REF
+
+
 def _ionization_fraction_cases():
     """Generate (element) test cases from reference data."""
-    ref = _load_ionization_ref()
+    ref = _get_ionization_ref()
     cases = []
     for element in ELEMENTS:
         if element in ref:
@@ -120,8 +122,7 @@ def test_ionization_fractions(solver, element):
 
     Stages contributing < 1% are skipped.
     """
-    ref = _load_ionization_ref()
-    cond = ref[element]
+    cond = _get_ionization_ref()[element]
     T_eV = cond["T_eV"]
     n_e = cond["n_e"]
     nist_fracs = cond["fractions"]
@@ -169,21 +170,6 @@ def _load_nist_spectrum(csv_path: Path) -> tuple[np.ndarray, np.ndarray]:
     return np.array(wavelengths), np.array(strengths)
 
 
-def _broaden_stick_spectrum(
-    line_wl: np.ndarray,
-    line_strength: np.ndarray,
-    grid: np.ndarray,
-    resolving_power: float,
-) -> np.ndarray:
-    """Broaden stick spectrum onto wavelength grid using Gaussian profiles."""
-    if len(line_wl) == 0:
-        return np.zeros_like(grid)
-    fwhm = np.maximum(line_wl / max(resolving_power, 1e-6), 1e-6)
-    sigma = fwhm / 2.355
-    x = (grid[:, None] - line_wl[None, :]) / sigma[None, :]
-    return np.sum(line_strength[None, :] * np.exp(-0.5 * x * x), axis=1)
-
-
 @pytest.mark.requires_db
 @pytest.mark.slow
 @pytest.mark.nist_parity
@@ -196,7 +182,11 @@ def test_spectral_correlation(production_db, element, csv_path):
     """
     from cflibs.instrument.model import InstrumentModel
     from cflibs.plasma.state import SingleZoneLTEPlasma
-    from cflibs.radiation.profiles import BroadeningMode
+    from cflibs.radiation.profiles import (
+        BroadeningMode,
+        apply_gaussian_broadening_per_line,
+        resolving_power_sigma,
+    )
     from cflibs.radiation.spectrum_model import SpectrumModel
 
     # Load NIST reference
@@ -229,16 +219,19 @@ def test_spectral_correlation(production_db, element, csv_path):
     wl_cflibs, intensity_cflibs = model.compute_spectrum()
 
     # Broaden NIST stick spectrum onto same grid
-    nist_broadened = _broaden_stick_spectrum(nist_wl, nist_strength, wl_cflibs, R)
+    sigmas = np.array([resolving_power_sigma(wl, R) for wl in nist_wl])
+    nist_broadened = apply_gaussian_broadening_per_line(
+        wl_cflibs, nist_wl, nist_strength, sigmas
+    )
 
-    # Normalize both
-    def _normalize(y):
+    # Normalize both to [0, 1] for correlation
+    def _minmax(y: np.ndarray) -> np.ndarray:
         y = y - np.min(y)
         mx = np.max(y)
         return y / mx if mx > 0 else y
 
-    norm_cflibs = _normalize(intensity_cflibs)
-    norm_nist = _normalize(nist_broadened)
+    norm_cflibs = _minmax(intensity_cflibs)
+    norm_nist = _minmax(nist_broadened)
 
     # Pearson correlation
     if np.allclose(norm_cflibs, 0) or np.allclose(norm_nist, 0):

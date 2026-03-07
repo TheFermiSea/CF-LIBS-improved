@@ -195,6 +195,30 @@ class TestHybridInverter:
         # Coarse similarity should be reasonable
         assert result.coarse_similarity > 0.5
 
+    def test_default_lbfgsb_path_performs_real_optimization(self, mock_manifold):
+        """Default hybrid inversion should do real fine tuning instead of falling back."""
+        wavelength = mock_manifold.wavelength
+
+        def forward_model(T_eV, n_e, conc, wl):
+            center = 380.0 + 40.0 * conc[0]
+            sigma = 6.0 + 2.0 * T_eV
+            amplitude = 600.0 * conc[0] + 250.0 * conc[1]
+            return amplitude * jnp.exp(-0.5 * ((wl - center) / sigma) ** 2)
+
+        inverter = HybridInverter(mock_manifold, forward_model=forward_model, max_iterations=30)
+        measured = np.array(
+            forward_model(1.4, 1e17, jnp.array([0.75, 0.25]), jnp.array(wavelength))
+        )
+
+        result = inverter.invert(
+            measured,
+            use_manifold_init=False,
+            initial_guess={"T_eV": 0.8, "n_e": 5e16, "Fe": 0.45, "Cu": 0.55},
+        )
+
+        assert result.iterations > 0
+        assert result.metadata["optimizer_backend"] in {"jax", "scipy"}
+
     def test_invert_without_manifold_init(self, mock_manifold):
         """Test inversion with default initialization (no manifold)."""
         inverter = HybridInverter(mock_manifold)
@@ -312,6 +336,30 @@ class TestSpectralFitter:
         result = fitter.fit(spectrum, uncertainties=uncertainties)
 
         assert result.temperature_eV > 0
+
+    def test_fit_supports_lbfgsb_via_fallback_backend(self):
+        """SpectralFitter should support L-BFGS-B through the fallback backend."""
+        wavelength = np.linspace(300, 600, 100)
+
+        def forward_model(T, ne, conc, wl):
+            center = 420.0 + 20.0 * conc[0]
+            sigma = 8.0 + T
+            return 400.0 * conc[0] * jnp.exp(-0.5 * ((wl - center) / sigma) ** 2)
+
+        fitter = SpectralFitter(forward_model, ["Fe", "Cu"], wavelength)
+        spectrum = np.array(forward_model(1.2, 1e17, jnp.array([0.7, 0.3]), jnp.array(wavelength)))
+
+        result = fitter.fit(
+            spectrum,
+            initial_T_eV=0.9,
+            initial_n_e=8e16,
+            initial_concentrations={"Fe": 0.5, "Cu": 0.5},
+            method="L-BFGS-B",
+            max_iterations=25,
+        )
+
+        assert result.iterations > 0
+        assert result.metadata["optimizer_backend"] == "scipy"
 
 
 @pytest.mark.requires_jax

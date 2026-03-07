@@ -87,13 +87,12 @@ def fit_irwin_polynomial(temperatures_K: np.ndarray, U_values: np.ndarray, degre
     return list(coeffs), max_rel_error, max_key_error
 
 
-def insert_coefficients(db_path: str, element: str, stage: int, coeffs: list, dry_run: bool):
+def insert_coefficients(conn: sqlite3.Connection | None, element: str, stage: int, coeffs: list, dry_run: bool):
     """Insert fitted coefficients into the partition_functions table."""
-    if dry_run:
+    if dry_run or conn is None:
         print(f"  [DRY RUN] Would insert {element} stage {stage}: {coeffs}")
         return
 
-    conn = sqlite3.connect(db_path)
     conn.execute(
         """
         INSERT OR REPLACE INTO partition_functions
@@ -102,8 +101,6 @@ def insert_coefficients(db_path: str, element: str, stage: int, coeffs: list, dr
         """,
         (element, stage, *coeffs, 2000.0, 20000.0, "NIST ASD fit"),
     )
-    conn.commit()
-    conn.close()
 
 
 def main():
@@ -121,41 +118,50 @@ def main():
     results = {}
     all_ok = True
 
-    for element, stages in sorted(nist_data.items()):
-        print(f"\n{'='*50}")
-        print(f"Element: {element}")
-        print(f"{'='*50}")
+    conn = sqlite3.connect(args.db) if not args.dry_run else None
 
-        results[element] = {}
-        for stage_str, temp_values in sorted(stages.items()):
-            stage = int(stage_str)
-            stage_label = "I" * stage
+    try:
+        for element, stages in sorted(nist_data.items()):
+            print(f"\n{'='*50}")
+            print(f"Element: {element}")
+            print(f"{'='*50}")
 
-            temps = np.array([float(t) for t in sorted(temp_values.keys())])
-            U_vals = np.array([temp_values[str(int(t))] for t in temps])
+            results[element] = {}
+            for stage_str, temp_values in sorted(stages.items()):
+                stage = int(stage_str)
+                stage_label = "I" * stage
 
-            coeffs, max_err, max_key_err = fit_irwin_polynomial(temps, U_vals)
+                temps = np.array([float(t) for t in sorted(temp_values.keys())])
+                U_vals = np.array([temp_values[str(int(t))] for t in temps])
 
-            status = "OK" if max_key_err < 0.05 else ("WARN" if max_key_err < 0.10 else "FAIL")
-            if max_key_err >= 0.05:
-                all_ok = False
+                coeffs, max_err, max_key_err = fit_irwin_polynomial(temps, U_vals)
 
-            print(f"\n  {element} {stage_label}:")
-            print(f"    Coefficients: {[f'{c:.8e}' for c in coeffs]}")
-            print(f"    Max relative error (all):  {max_err:.4%}")
-            print(f"    Max relative error (key):  {max_key_err:.4%}  [{status}]")
+                status = "OK" if max_key_err < 0.05 else ("WARN" if max_key_err < 0.10 else "FAIL")
+                if max_key_err >= 0.05:
+                    all_ok = False
 
-            results[element][stage_str] = {
-                "coefficients": coeffs,
-                "max_rel_error": max_err,
-                "max_key_error": max_key_err,
-                "status": status,
-                "t_min": float(temps[0]),
-                "t_max": float(temps[-1]),
-                "n_points": len(temps),
-            }
+                print(f"\n  {element} {stage_label}:")
+                print(f"    Coefficients: {[f'{c:.8e}' for c in coeffs]}")
+                print(f"    Max relative error (all):  {max_err:.4%}")
+                print(f"    Max relative error (key):  {max_key_err:.4%}  [{status}]")
 
-            insert_coefficients(args.db, element, stage, coeffs, args.dry_run)
+                results[element][stage_str] = {
+                    "coefficients": coeffs,
+                    "max_rel_error": max_err,
+                    "max_key_error": max_key_err,
+                    "status": status,
+                    "t_min": float(temps[0]),
+                    "t_max": float(temps[-1]),
+                    "n_points": len(temps),
+                }
+
+                insert_coefficients(conn, element, stage, coeffs, args.dry_run)
+
+        if conn is not None:
+            conn.commit()
+    finally:
+        if conn is not None:
+            conn.close()
 
     # Summary
     print(f"\n{'='*50}")
