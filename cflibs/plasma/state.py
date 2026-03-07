@@ -28,7 +28,7 @@ def _normalize_positive_fractions(
         raise ValueError(f"{quantity_name} cannot contain negative components: {elements_str}")
 
     normalized_input = {
-        element: float(value) for element, value in fractions.items() if value > 0.0
+        element: float(value) for element, value in fractions.items() if float(value) > 0.0
     }
     total = sum(normalized_input.values())
     if total <= 0.0:
@@ -101,7 +101,10 @@ def mass_fractions_to_number_fractions(
         Element number fractions summing to 1.0.
     """
     weighted: Dict[str, float] = {}
-    for element, mass_fraction in mass_fractions.items():
+    for element, raw_mass_fraction in mass_fractions.items():
+        mass_fraction = float(raw_mass_fraction)
+        if not math.isfinite(mass_fraction):
+            raise ValueError(f"Mass fraction for element {element!r} must be finite")
         if mass_fraction < 0.0:
             raise ValueError(f"mass_fractions cannot contain negative components: {element}")
         if mass_fraction == 0.0:
@@ -109,9 +112,11 @@ def mass_fractions_to_number_fractions(
         if element not in atomic_masses_amu:
             raise KeyError(f"Missing atomic mass for element {element!r}")
         atomic_mass = float(atomic_masses_amu[element])
+        if not math.isfinite(atomic_mass):
+            raise ValueError(f"Atomic mass for element {element!r} must be finite")
         if atomic_mass <= 0.0:
             raise ValueError(f"Atomic mass for element {element!r} must be positive")
-        weighted[element] = float(mass_fraction) / atomic_mass
+        weighted[element] = mass_fraction / atomic_mass
     return _normalize_positive_fractions(weighted, "mass_fractions")
 
 

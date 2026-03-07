@@ -11,6 +11,17 @@ from cflibs.core.logging_config import get_logger
 logger = get_logger("inversion.closure")
 
 
+def _validated_abundance_multiplier(
+    abundance_multipliers: Optional[Dict[str, float]],
+    element: str,
+) -> float:
+    """Return a finite positive abundance multiplier for an element."""
+    multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+    if not np.isfinite(multiplier) or multiplier <= 0.0:
+        raise ValueError(f"abundance_multipliers[{element!r}] must be finite and positive")
+    return float(multiplier)
+
+
 @dataclass
 class ClosureResult:
     """
@@ -70,7 +81,7 @@ class ClosureEquation:
                 continue
 
             U_s = partition_funcs[element]
-            multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
             rel_C = multiplier * U_s * np.exp(q_s)
             rel_concentrations[element] = rel_C
             total_measured += rel_C
@@ -115,6 +126,11 @@ class ClosureEquation:
             Element with known concentration
         matrix_fraction : float
             Concentration of matrix element (0.0 to 1.0)
+        abundance_multipliers : Dict[str, float], optional
+            Optional per-element scaling that maps the fitted intercept from
+            the neutral Saha-Boltzmann plane back to total elemental abundance.
+            Keys should match the intercept and partition-function mappings.
+            Defaults to unity for all elements when omitted.
 
         Returns
         -------
@@ -130,9 +146,7 @@ class ClosureEquation:
 
         U_m = partition_funcs[matrix_element]
         q_m = intercepts[matrix_element]
-        matrix_multiplier = (
-            abundance_multipliers.get(matrix_element, 1.0) if abundance_multipliers else 1.0
-        )
+        matrix_multiplier = _validated_abundance_multiplier(abundance_multipliers, matrix_element)
         rel_C_m = matrix_multiplier * U_m * np.exp(q_m)
 
         F = rel_C_m / matrix_fraction
@@ -143,9 +157,7 @@ class ClosureEquation:
         for element, q_s in intercepts.items():
             if element in partition_funcs:
                 U_s = partition_funcs[element]
-                multiplier = (
-                    abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
-                )
+                multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
                 rel_C = multiplier * U_s * np.exp(q_s)
                 total_measured += rel_C
                 concentrations[element] = rel_C / F
@@ -177,8 +189,18 @@ class ClosureEquation:
 
         Parameters
         ----------
+        intercepts : Dict[str, float]
+            Boltzmann plot intercepts q_s for each element.
+        partition_funcs : Dict[str, float]
+            Partition function values U_s(T) for each element.
         oxide_stoichiometry : Dict[str, float]
-            Map of element to oxide conversion factor (e.g. 'Si': 2.139 for SiO2)
+            Map of element to oxide conversion factor (e.g. ``{"Si": 2.139}``
+            for SiO2).
+        abundance_multipliers : Dict[str, float], optional
+            Optional per-element scaling that maps the fitted intercept from
+            the neutral Saha-Boltzmann plane back to total elemental abundance
+            before oxide weighting. Defaults to unity for all elements when
+            omitted.
 
         Returns
         -------
@@ -193,7 +215,7 @@ class ClosureEquation:
                 continue
 
             U_s = partition_funcs[element]
-            multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
             rel_C = multiplier * U_s * np.exp(q_s)
             rel_concentrations[element] = rel_C
 
