@@ -2,6 +2,7 @@
 Plasma state representations and composition conversion helpers.
 """
 
+import math
 from dataclasses import dataclass
 from typing import Dict, Mapping, Optional
 
@@ -16,6 +17,11 @@ def _normalize_positive_fractions(
     quantity_name: str,
 ) -> Dict[str, float]:
     """Normalize positive fractions to sum to one."""
+    non_finite = [el for el, v in fractions.items() if not math.isfinite(float(v))]
+    if non_finite:
+        raise ValueError(
+            f"{quantity_name} contains non-finite values: {', '.join(sorted(non_finite))}"
+        )
     negative_elements = [element for element, value in fractions.items() if float(value) < 0.0]
     if negative_elements:
         elements_str = ", ".join(sorted(negative_elements))
@@ -66,8 +72,8 @@ def number_fractions_to_species_densities(
     Dict[str, float]
         Element number densities in cm^-3.
     """
-    if total_number_density_cm3 <= 0.0:
-        raise ValueError("total_number_density_cm3 must be positive")
+    if not math.isfinite(total_number_density_cm3) or total_number_density_cm3 <= 0.0:
+        raise ValueError("total_number_density_cm3 must be finite and positive")
 
     normalized = _normalize_positive_fractions(number_fractions, "number_fractions")
     return {
