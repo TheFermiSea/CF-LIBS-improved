@@ -3,7 +3,7 @@ Closure equation implementation for CF-LIBS.
 """
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
@@ -35,7 +35,9 @@ class ClosureEquation:
 
     @staticmethod
     def apply_standard(
-        intercepts: Dict[str, float], partition_funcs: Dict[str, float]
+        intercepts: Dict[str, float],
+        partition_funcs: Dict[str, float],
+        abundance_multipliers: Optional[Dict[str, float]] = None,
     ) -> ClosureResult:
         """
         Apply standard closure: sum(C_s) = 1.
@@ -48,6 +50,10 @@ class ClosureEquation:
             Boltzmann plot intercepts q_s for each element
         partition_funcs : Dict[str, float]
             Partition function values U_s(T) for each element
+        abundance_multipliers : Dict[str, float], optional
+            Optional per-element scaling that maps the fitted intercept from
+            the neutral Saha-Boltzmann plane back to total elemental abundance.
+            Defaults to unity for all elements.
 
         Returns
         -------
@@ -64,7 +70,8 @@ class ClosureEquation:
                 continue
 
             U_s = partition_funcs[element]
-            rel_C = U_s * np.exp(q_s)
+            multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+            rel_C = multiplier * U_s * np.exp(q_s)
             rel_concentrations[element] = rel_C
             total_measured += rel_C
 
@@ -90,6 +97,7 @@ class ClosureEquation:
         partition_funcs: Dict[str, float],
         matrix_element: str,
         matrix_fraction: float = 0.9,
+        abundance_multipliers: Optional[Dict[str, float]] = None,
     ) -> ClosureResult:
         """
         Apply matrix closure: One element has fixed concentration.
@@ -114,11 +122,18 @@ class ClosureEquation:
         """
         if matrix_element not in intercepts or matrix_element not in partition_funcs:
             logger.error(f"Matrix element {matrix_element} missing from data")
-            return ClosureEquation.apply_standard(intercepts, partition_funcs)
+            return ClosureEquation.apply_standard(
+                intercepts,
+                partition_funcs,
+                abundance_multipliers=abundance_multipliers,
+            )
 
         U_m = partition_funcs[matrix_element]
         q_m = intercepts[matrix_element]
-        rel_C_m = U_m * np.exp(q_m)
+        matrix_multiplier = (
+            abundance_multipliers.get(matrix_element, 1.0) if abundance_multipliers else 1.0
+        )
+        rel_C_m = matrix_multiplier * U_m * np.exp(q_m)
 
         F = rel_C_m / matrix_fraction
 
@@ -128,7 +143,10 @@ class ClosureEquation:
         for element, q_s in intercepts.items():
             if element in partition_funcs:
                 U_s = partition_funcs[element]
-                rel_C = U_s * np.exp(q_s)
+                multiplier = (
+                    abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+                )
+                rel_C = multiplier * U_s * np.exp(q_s)
                 total_measured += rel_C
                 concentrations[element] = rel_C / F
 
@@ -144,6 +162,7 @@ class ClosureEquation:
         intercepts: Dict[str, float],
         partition_funcs: Dict[str, float],
         oxide_stoichiometry: Dict[str, float],
+        abundance_multipliers: Optional[Dict[str, float]] = None,
     ) -> ClosureResult:
         """
         Apply oxide closure: Elements exist as oxides, sum(Oxides) = 1.
@@ -174,7 +193,8 @@ class ClosureEquation:
                 continue
 
             U_s = partition_funcs[element]
-            rel_C = U_s * np.exp(q_s)
+            multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+            rel_C = multiplier * U_s * np.exp(q_s)
             rel_concentrations[element] = rel_C
 
             factor = oxide_stoichiometry.get(element, 1.0)  # Default to metal if no oxide

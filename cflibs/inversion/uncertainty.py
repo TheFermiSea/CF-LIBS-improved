@@ -209,6 +209,7 @@ def saha_factor_with_uncertainty(
 def propagate_through_closure_standard(
     intercepts_u: Dict[str, "UFloat"],
     partition_funcs: Dict[str, float],
+    abundance_multipliers: Optional[Dict[str, float]] = None,
 ) -> Dict[str, "UFloat"]:
     """
     Apply standard closure equation with uncertainty propagation.
@@ -238,7 +239,8 @@ def propagate_through_closure_standard(
             continue
 
         U_s = partition_funcs[element]
-        rel_C_u = U_s * umath.exp(q_s_u)
+        multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+        rel_C_u = multiplier * U_s * umath.exp(q_s_u)
         rel_concentrations_u[element] = rel_C_u
 
     if not rel_concentrations_u:
@@ -258,6 +260,7 @@ def propagate_through_closure_matrix(
     partition_funcs: Dict[str, float],
     matrix_element: str,
     matrix_fraction: float,
+    abundance_multipliers: Optional[Dict[str, float]] = None,
 ) -> Dict[str, "UFloat"]:
     """
     Apply matrix-mode closure with uncertainty propagation.
@@ -284,11 +287,18 @@ def propagate_through_closure_matrix(
 
     if matrix_element not in intercepts_u or matrix_element not in partition_funcs:
         logger.error(f"Matrix element {matrix_element} missing from data")
-        return propagate_through_closure_standard(intercepts_u, partition_funcs)
+        return propagate_through_closure_standard(
+            intercepts_u,
+            partition_funcs,
+            abundance_multipliers=abundance_multipliers,
+        )
 
     U_m = partition_funcs[matrix_element]
     q_m_u = intercepts_u[matrix_element]
-    rel_C_m_u = U_m * umath.exp(q_m_u)
+    matrix_multiplier = (
+        abundance_multipliers.get(matrix_element, 1.0) if abundance_multipliers else 1.0
+    )
+    rel_C_m_u = matrix_multiplier * U_m * umath.exp(q_m_u)
 
     # F determined by matrix element
     F_u = rel_C_m_u / matrix_fraction
@@ -298,7 +308,8 @@ def propagate_through_closure_matrix(
     for element, q_s_u in intercepts_u.items():
         if element in partition_funcs:
             U_s = partition_funcs[element]
-            rel_C_u = U_s * umath.exp(q_s_u)
+            multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+            rel_C_u = multiplier * U_s * umath.exp(q_s_u)
             concentrations_u[element] = rel_C_u / F_u
 
     return concentrations_u

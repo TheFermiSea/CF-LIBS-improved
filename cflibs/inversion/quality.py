@@ -253,18 +253,15 @@ class QualityAssessor:
         for obs in observations:
             el = obs.element
             ip = ionization_potentials.get(el, 15.0)
-            U_I = partition_funcs_I.get(el, 25.0)
-            U_II = partition_funcs_II.get(el, 15.0)
 
-            # Calculate Saha ratio
-            S_raw = (SAHA_CONST_CM3 / safe_ne_cm3) * (T_eV**1.5) * np.exp(-ip / T_eV)
-            S = S_raw * 2.0 * (U_II / U_I)
+            # Match the classic solver's Saha-Boltzmann transform:
+            # move the ionization energy onto x while subtracting only the
+            # ionic partition/electron-density prefactor from y.
+            saha_offset = np.log(2.0 * (SAHA_CONST_CM3 / safe_ne_cm3) * (T_eV**1.5))
             stage_pair = stage_pairs.get(el)
             ion_stage = stage_pair[1] if stage_pair is not None else None
             correction = (
-                np.log(S * U_I / U_II)
-                if ion_stage is not None and obs.ionization_stage == ion_stage
-                else 0.0
+                saha_offset if ion_stage is not None and obs.ionization_stage == ion_stage else 0.0
             )
 
             y = obs.y_value

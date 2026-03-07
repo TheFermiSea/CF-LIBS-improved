@@ -2,6 +2,8 @@
 Tests for closure equation.
 """
 
+import math
+
 from cflibs.inversion.closure import ClosureEquation
 
 
@@ -59,3 +61,22 @@ def test_oxide_closure():
     res = ClosureEquation.apply_oxide_mode(intercepts, partition_funcs, stoichiometry)
 
     assert abs(res.concentrations["Si"] * 2.139 - 1.0) < 1e-6
+
+
+def test_standard_closure_applies_abundance_multipliers():
+    intercepts = {"Fe": 1.0, "Cu": 1.0}
+    partition_funcs = {"Fe": 10.0, "Cu": 10.0}
+    abundance_multipliers = {"Fe": 3.0, "Cu": 1.0}
+
+    res = ClosureEquation.apply_standard(
+        intercepts,
+        partition_funcs,
+        abundance_multipliers=abundance_multipliers,
+    )
+
+    expected_fe = 3.0 * 10.0 * math.exp(1.0)
+    expected_cu = 1.0 * 10.0 * math.exp(1.0)
+    expected_total = expected_fe + expected_cu
+
+    assert res.concentrations["Fe"] == expected_fe / expected_total
+    assert res.concentrations["Cu"] == expected_cu / expected_total

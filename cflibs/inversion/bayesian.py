@@ -108,6 +108,7 @@ from cflibs.core.constants import (
     M_E,
     M_PROTON,
 )
+from cflibs.core.jax_runtime import jax_default_real_dtype
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("inversion.bayesian")
@@ -117,8 +118,7 @@ try:
     from jax import jit
 
     HAS_JAX = True
-    # Import gradient-stable Faddeeva from profiles
-    from cflibs.radiation.profiles import _faddeeva_weideman_jax
+    from cflibs.radiation.profiles import _voigt_profile_kernel_jax
 except ImportError:
     HAS_JAX = False
     jnp = None
@@ -126,7 +126,7 @@ except ImportError:
     def jit(f):
         return f
 
-    _faddeeva_weideman_jax = None
+    _voigt_profile_kernel_jax = None
 
 try:
     import numpyro
@@ -155,6 +155,62 @@ try:
 except ImportError:
     HAS_DYNESTY = False
     dynesty = None
+
+if HAS_JAX:
+    _JAX_REAL_DTYPE = jax_default_real_dtype()
+
+    def _as_jax_real(value: Any) -> Any:
+        """Cast scalars and arrays to the active JAX real dtype."""
+        return jnp.asarray(value, dtype=_JAX_REAL_DTYPE)
+
+    _JAX_SAHA_CONST_CM3 = _as_jax_real(SAHA_CONST_CM3)
+    _JAX_C_LIGHT = _as_jax_real(C_LIGHT)
+    _JAX_EV_TO_K = _as_jax_real(EV_TO_K)
+    _JAX_EV_TO_J = _as_jax_real(EV_TO_J)
+    _JAX_MCWHIRTER_CONST = _as_jax_real(MCWHIRTER_CONST)
+    _JAX_H_PLANCK = _as_jax_real(H_PLANCK)
+    _JAX_E_CHARGE = _as_jax_real(E_CHARGE)
+    _JAX_M_E = _as_jax_real(M_E)
+    _JAX_M_PROTON = _as_jax_real(M_PROTON)
+
+else:
+    _JAX_REAL_DTYPE = None
+
+    def _as_jax_real(value: Any) -> Any:
+        return value
+
+    _JAX_SAHA_CONST_CM3 = SAHA_CONST_CM3
+    _JAX_C_LIGHT = C_LIGHT
+    _JAX_EV_TO_K = EV_TO_K
+    _JAX_EV_TO_J = EV_TO_J
+    _JAX_MCWHIRTER_CONST = MCWHIRTER_CONST
+    _JAX_H_PLANCK = H_PLANCK
+    _JAX_E_CHARGE = E_CHARGE
+    _JAX_M_E = M_E
+    _JAX_M_PROTON = M_PROTON
+
+
+def _resolve_total_species_density_cm3(
+    n_e: float,
+    total_species_density_cm3: Optional[float],
+) -> float:
+    """
+    Resolve heavy-particle density for forward models.
+
+    When no explicit heavy-particle density is provided, preserve the legacy
+    behavior that approximates it with ``n_e``.
+    """
+    if total_species_density_cm3 is None:
+        return n_e
+    if np.isscalar(total_species_density_cm3):
+        resolved = float(total_species_density_cm3)
+        if resolved <= 0.0:
+            raise ValueError("total_species_density_cm3 must be positive")
+        return resolved
+    if HAS_JAX:
+        resolved = _as_jax_real(total_species_density_cm3)
+        return jnp.where(resolved > 0.0, resolved, jnp.nan)
+    raise ValueError("total_species_density_cm3 must be a positive scalar")
 
 
 # Standard atomic masses for fallback [amu]
@@ -243,9 +299,7 @@ def load_atomic_data(
         df = pd.read_sql_query(query, conn, params=params)
 
         if df.empty:
-            raise ValueError(
-                f"No atomic data for elements {elements} in range {wavelength_range}"
-            )
+            raise ValueError(f"No atomic data for elements {elements} in range {wavelength_range}")
 
         el_map = {el: i for i, el in enumerate(elements)}
         df["el_idx"] = df["element"].map(el_map)
@@ -361,7 +415,8 @@ def partition_function(T_K: float, coeffs: Any) -> Any:
     """
     if HAS_JAX:
         log_T = jnp.log(T_K)
-        powers = jnp.array([1.0, log_T, log_T**2, log_T**3, log_T**4])
+        one = jnp.ones_like(log_T)
+        powers = jnp.stack([one, log_T, log_T**2, log_T**3, log_T**4])
         log_U = jnp.sum(coeffs * powers, axis=-1)
         return jnp.exp(log_U)
     else:
@@ -408,16 +463,18 @@ def mcwhirter_log_penalty(
         Log-penalty ≤ 0.  Zero means the criterion is satisfied.
     """
     if HAS_JAX:
-        T_K = T_eV * EV_TO_K
-        log10_threshold = jnp.log10(MCWHIRTER_CONST) + 0.5 * jnp.log10(T_K) + 3.0 * jnp.log10(
-            max_delta_E_eV
+        T_K = _as_jax_real(T_eV) * _JAX_EV_TO_K
+        log10_threshold = (
+            jnp.log10(_JAX_MCWHIRTER_CONST)
+            + 0.5 * jnp.log10(T_K)
+            + 3.0 * jnp.log10(_as_jax_real(max_delta_E_eV))
         )
         deficit = jnp.maximum(0.0, log10_threshold - log_ne)
         return -scale * deficit**2
     else:
         T_K = T_eV * EV_TO_K
-        log10_threshold = np.log10(MCWHIRTER_CONST) + 0.5 * np.log10(T_K) + 3.0 * np.log10(
-            max_delta_E_eV
+        log10_threshold = (
+            np.log10(MCWHIRTER_CONST) + 0.5 * np.log10(T_K) + 3.0 * np.log10(max_delta_E_eV)
         )
         deficit = max(0.0, log10_threshold - log_ne)
         return -scale * deficit**2
@@ -956,9 +1013,16 @@ class BayesianForwardModel:
 
         # Create wavelength grid
         if wavelength_grid is not None:
-            self.wavelength = jnp.array(wavelength_grid)
+            self.wavelength = _as_jax_real(wavelength_grid)
         else:
-            self.wavelength = jnp.linspace(wavelength_range[0], wavelength_range[1], pixels)
+            wl_min = _as_jax_real(wavelength_range[0])
+            wl_max = _as_jax_real(wavelength_range[1])
+            self.wavelength = jnp.linspace(
+                wl_min,
+                wl_max,
+                pixels,
+                dtype=_JAX_REAL_DTYPE,
+            )
 
         # Load atomic data (using shared utility)
         self.atomic_data = load_atomic_data(db_path, elements, wavelength_range)
@@ -978,6 +1042,7 @@ class BayesianForwardModel:
         T_eV: float,
         log_ne: float,
         concentrations: jnp.ndarray,
+        total_species_density_cm3: Optional[float] = None,
     ) -> jnp.ndarray:
         """
         Compute synthetic spectrum for given plasma parameters.
@@ -989,21 +1054,33 @@ class BayesianForwardModel:
         log_ne : float
             Log10 of electron density [cm^-3]
         concentrations : array
-            Element concentrations (must sum to 1)
+            Element number fractions on a heavy-particle basis (must sum to 1)
+        total_species_density_cm3 : float, optional
+            Total heavy-particle number density in cm^-3. If omitted, the
+            legacy approximation ``total_species_density_cm3 = n_e`` is used.
 
         Returns
         -------
         array
             Synthetic spectrum intensity
         """
-        n_e = 10.0**log_ne
-        return self._compute_spectrum(T_eV, n_e, concentrations)
+        T_eV = _as_jax_real(T_eV)
+        log_ne = _as_jax_real(log_ne)
+        concentrations = _as_jax_real(concentrations)
+        n_e = jnp.power(_as_jax_real(10.0), log_ne)
+        return self._compute_spectrum(
+            T_eV,
+            n_e,
+            concentrations,
+            total_species_density_cm3=total_species_density_cm3,
+        )
 
     def forward_numpy(
         self,
         T_eV: float,
         log_ne: float,
         concentrations: np.ndarray,
+        total_species_density_cm3: Optional[float] = None,
     ) -> np.ndarray:
         """
         Compute synthetic spectrum using NumPy arrays (for dynesty compatibility).
@@ -1017,15 +1094,23 @@ class BayesianForwardModel:
         log_ne : float
             Log10 of electron density [cm^-3]
         concentrations : np.ndarray
-            Element concentrations (must sum to 1)
+            Element number fractions on a heavy-particle basis (must sum to 1)
+        total_species_density_cm3 : float, optional
+            Total heavy-particle number density in cm^-3. If omitted, the
+            legacy approximation ``total_species_density_cm3 = n_e`` is used.
 
         Returns
         -------
         np.ndarray
             Synthetic spectrum intensity
         """
-        conc_jax = jnp.array(concentrations)
-        result = self.forward(T_eV, log_ne, conc_jax)
+        conc_jax = _as_jax_real(concentrations)
+        result = self.forward(
+            T_eV,
+            log_ne,
+            conc_jax,
+            total_species_density_cm3=total_species_density_cm3,
+        )
         return np.array(result)
 
     @staticmethod
@@ -1041,6 +1126,7 @@ class BayesianForwardModel:
         T_eV: float,
         n_e: float,
         concentrations: jnp.ndarray,
+        total_species_density_cm3: Optional[float] = None,
     ) -> jnp.ndarray:
         """
         Compute spectrum with full physics.
@@ -1048,7 +1134,11 @@ class BayesianForwardModel:
         Uses Saha-Boltzmann populations, Voigt profiles, and Stark broadening.
         """
         data = self.atomic_data
-        T_K = T_eV * EV_TO_K
+        T_eV = _as_jax_real(T_eV)
+        n_e = _as_jax_real(n_e)
+        concentrations = _as_jax_real(concentrations)
+        T_K = T_eV * _JAX_EV_TO_K
+        total_species_density = _resolve_total_species_density_cm3(n_e, total_species_density_cm3)
 
         # Partition functions for all elements and stages
         U0 = self._partition_function(T_K, data.partition_coeffs[:, 0])
@@ -1058,7 +1148,7 @@ class BayesianForwardModel:
         IP_I = data.ionization_potentials[:, 0]
 
         # Saha ratio: n_ion / n_neutral
-        saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
+        saha_factor = (_JAX_SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
         ratio_ion_neutral = 2.0 * saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
 
         # Population fractions
@@ -1072,9 +1162,10 @@ class BayesianForwardModel:
         pop_fraction = jnp.where(ion_stage == 0, frac_neutral[el_idx], frac_ion[el_idx])
         U_val = jnp.where(ion_stage == 0, U0[el_idx], U1[el_idx])
 
-        # Species number density
+        # Species number density. The heavy-particle inventory can be supplied
+        # independently from n_e; when omitted we preserve the legacy n_e proxy.
         element_conc = concentrations[el_idx]
-        N_species_total = element_conc * n_e
+        N_species_total = element_conc * total_species_density
         N_species = N_species_total * pop_fraction
 
         # Boltzmann upper level population
@@ -1082,13 +1173,17 @@ class BayesianForwardModel:
 
         # Line emissivity: epsilon = (hc / 4pi * lambda) * A * n_upper
         epsilon = (
-            (H_PLANCK * C_LIGHT / (4 * jnp.pi * data.wavelength_nm * 1e-9)) * data.aki * n_upper
+            (_JAX_H_PLANCK * _JAX_C_LIGHT / (4 * jnp.pi * data.wavelength_nm * _as_jax_real(1e-9)))
+            * data.aki
+            * n_upper
         )
 
         # --- Line Broadening ---
         # Doppler width
-        mass_kg = data.mass_amu * M_PROTON
-        sigma_doppler = data.wavelength_nm * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
+        mass_kg = data.mass_amu * _JAX_M_PROTON
+        sigma_doppler = data.wavelength_nm * jnp.sqrt(
+            _as_jax_real(2.0) * T_eV * _JAX_EV_TO_J / (mass_kg * _JAX_C_LIGHT**2)
+        )
 
         # Instrument broadening
         sigma_inst = self.instrument_fwhm_nm / 2.355
@@ -1112,12 +1207,7 @@ class BayesianForwardModel:
         # --- Voigt Profile (Weideman rational approximation) ---
         # Uses branch-free implementation for gradient stability during MCMC
         diff = self.wavelength[:, None] - data.wavelength_nm[None, :]
-        z = (diff + 1j * gamma_stark) / (sigma_total * jnp.sqrt(2.0))
-
-        # Gradient-stable Weideman approximation (no branching)
-        w_z = _faddeeva_weideman_jax(z)
-
-        profile = jnp.real(w_z) / (sigma_total * jnp.sqrt(2.0 * jnp.pi))
+        profile = _voigt_profile_kernel_jax(diff, sigma_total[None, :], gamma_stark[None, :])
 
         # Sum line contributions
         intensity = jnp.sum(epsilon * profile, axis=1)
@@ -1341,7 +1431,7 @@ class MCMCSampler:
         """
         import jax.random as random
 
-        observed_jax = jnp.array(observed)
+        observed_jax = _as_jax_real(observed)
         n_elements = len(self.elements)
 
         # Create model function
@@ -2193,9 +2283,16 @@ class TwoZoneBayesianForwardModel:
         self.instrument_fwhm_nm = instrument_fwhm_nm
 
         if wavelength_grid is not None:
-            self.wavelength = jnp.array(wavelength_grid)
+            self.wavelength = _as_jax_real(wavelength_grid)
         else:
-            self.wavelength = jnp.linspace(wavelength_range[0], wavelength_range[1], pixels)
+            wl_min = _as_jax_real(wavelength_range[0])
+            wl_max = _as_jax_real(wavelength_range[1])
+            self.wavelength = jnp.linspace(
+                wl_min,
+                wl_max,
+                pixels,
+                dtype=_JAX_REAL_DTYPE,
+            )
 
         self.atomic_data = load_atomic_data(db_path, elements, wavelength_range)
 
@@ -2210,6 +2307,7 @@ class TwoZoneBayesianForwardModel:
         T_eV: float,
         n_e: float,
         concentrations,
+        total_species_density_cm3: Optional[float] = None,
     ):
         """Compute emission spectrum and absorption profile for one zone.
 
@@ -2221,13 +2319,17 @@ class TwoZoneBayesianForwardModel:
             Frequency-dependent absorption coefficient κ(λ) in cm⁻¹.
         """
         data = self.atomic_data
-        T_K = T_eV * EV_TO_K
+        T_eV = _as_jax_real(T_eV)
+        n_e = _as_jax_real(n_e)
+        concentrations = _as_jax_real(concentrations)
+        T_K = T_eV * _JAX_EV_TO_K
+        total_species_density = _resolve_total_species_density_cm3(n_e, total_species_density_cm3)
 
         U0 = partition_function(T_K, data.partition_coeffs[:, 0])
         U1 = partition_function(T_K, data.partition_coeffs[:, 1])
         IP_I = data.ionization_potentials[:, 0]
 
-        saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
+        saha_factor = (_JAX_SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
         ratio_ion_neutral = 2.0 * saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
         frac_neutral = 1.0 / (1.0 + ratio_ion_neutral)
         frac_ion = ratio_ion_neutral / (1.0 + ratio_ion_neutral)
@@ -2239,22 +2341,22 @@ class TwoZoneBayesianForwardModel:
         U_val = jnp.where(ion_stage == 0, U0[el_idx], U1[el_idx])
 
         element_conc = concentrations[el_idx]
-        N_species = element_conc * n_e * pop_fraction
+        N_species = element_conc * total_species_density * pop_fraction
 
         # Upper level population for emission
         n_upper = N_species * (data.gk / U_val) * jnp.exp(-data.ek_ev / T_eV)
 
         # Emissivity
         epsilon = (
-            (H_PLANCK * C_LIGHT / (4 * jnp.pi * data.wavelength_nm * 1e-9))
+            (_JAX_H_PLANCK * _JAX_C_LIGHT / (4 * jnp.pi * data.wavelength_nm * _as_jax_real(1e-9)))
             * data.aki
             * n_upper
         )
 
         # Line broadening
-        mass_kg = data.mass_amu * M_PROTON
+        mass_kg = data.mass_amu * _JAX_M_PROTON
         sigma_doppler = data.wavelength_nm * jnp.sqrt(
-            2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2)
+            _as_jax_real(2.0) * T_eV * _JAX_EV_TO_J / (mass_kg * _JAX_C_LIGHT**2)
         )
         sigma_inst = self.instrument_fwhm_nm / 2.355
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
@@ -2273,9 +2375,7 @@ class TwoZoneBayesianForwardModel:
 
         # Voigt profile
         diff = self.wavelength[:, None] - data.wavelength_nm[None, :]
-        z = (diff + 1j * gamma_stark) / (sigma_total * jnp.sqrt(2.0))
-        w_z = _faddeeva_weideman_jax(z)
-        profile = jnp.real(w_z) / (sigma_total * jnp.sqrt(2.0 * jnp.pi))
+        profile = _voigt_profile_kernel_jax(diff, sigma_total[None, :], gamma_stark[None, :])
 
         # Emission spectrum
         intensity = jnp.sum(epsilon * profile, axis=1)
@@ -2290,7 +2390,7 @@ class TwoZoneBayesianForwardModel:
         # κ₀ = (π e² / m_e c) × f × n_lower  [cm⁻¹ at line center]
         # With f stored in data.f_osc
         f_osc = data.f_osc if data.f_osc is not None else jnp.ones_like(data.aki) * 1e-2
-        kappa_0 = (jnp.pi * E_CHARGE**2 / (M_E * C_LIGHT)) * f_osc * n_lower
+        kappa_0 = (jnp.pi * _JAX_E_CHARGE**2 / (_JAX_M_E * _JAX_C_LIGHT)) * f_osc * n_lower
 
         # Distribute over Voigt profile: κ(λ) = Σ κ₀ × φ(λ)
         absorption = jnp.sum(kappa_0 * profile, axis=1)
@@ -2306,6 +2406,7 @@ class TwoZoneBayesianForwardModel:
         concentrations,
         shell_fraction: float,
         optical_depth_scale: float,
+        total_species_density_cm3: Optional[float] = None,
     ):
         """Compute observed spectrum from two-zone model.
 
@@ -2318,21 +2419,40 @@ class TwoZoneBayesianForwardModel:
         log_ne : float
             ``log_{10}(n_e)`` in cm⁻³ (same for both zones).
         concentrations : array
-            Element concentrations (must sum to 1).
+            Element number fractions on a heavy-particle basis (must sum to 1).
         shell_fraction : float
             Fraction of total plasma length occupied by the shell.
         optical_depth_scale : float
             Scale factor for optical depth (effective path length in cm).
+        total_species_density_cm3 : float, optional
+            Total heavy-particle number density in cm^-3. If omitted, the
+            legacy approximation ``total_species_density_cm3 = n_e`` is used.
 
         Returns
         -------
         array
             Synthetic observed spectrum.
         """
-        n_e = 10.0**log_ne
+        T_core_eV = _as_jax_real(T_core_eV)
+        T_shell_eV = _as_jax_real(T_shell_eV)
+        log_ne = _as_jax_real(log_ne)
+        concentrations = _as_jax_real(concentrations)
+        shell_fraction = _as_jax_real(shell_fraction)
+        optical_depth_scale = _as_jax_real(optical_depth_scale)
+        n_e = jnp.power(_as_jax_real(10.0), log_ne)
 
-        I_core, _ = self._compute_zone_spectrum(T_core_eV, n_e, concentrations)
-        I_shell, kappa_shell = self._compute_zone_spectrum(T_shell_eV, n_e, concentrations)
+        I_core, _ = self._compute_zone_spectrum(
+            T_core_eV,
+            n_e,
+            concentrations,
+            total_species_density_cm3=total_species_density_cm3,
+        )
+        I_shell, kappa_shell = self._compute_zone_spectrum(
+            T_shell_eV,
+            n_e,
+            concentrations,
+            total_species_density_cm3=total_species_density_cm3,
+        )
 
         # Optical depth of shell
         tau_shell = kappa_shell * optical_depth_scale * shell_fraction
@@ -2357,11 +2477,18 @@ class TwoZoneBayesianForwardModel:
         concentrations: np.ndarray,
         shell_fraction: float,
         optical_depth_scale: float,
+        total_species_density_cm3: Optional[float] = None,
     ) -> np.ndarray:
         """NumPy wrapper for forward model (dynesty compatibility)."""
-        conc_jax = jnp.array(concentrations)
+        conc_jax = _as_jax_real(concentrations)
         result = self.forward(
-            T_core_eV, T_shell_eV, log_ne, conc_jax, shell_fraction, optical_depth_scale
+            T_core_eV,
+            T_shell_eV,
+            log_ne,
+            conc_jax,
+            shell_fraction,
+            optical_depth_scale,
+            total_species_density_cm3=total_species_density_cm3,
         )
         return np.array(result)
 
@@ -2642,12 +2769,10 @@ class TwoZoneMCMCSampler:
         """
         import jax.random as random
 
-        observed_jax = jnp.array(observed)
+        observed_jax = _as_jax_real(observed)
 
         def model(obs):
-            two_zone_bayesian_model(
-                self.forward_model, obs, self.prior_config, self.noise_params
-            )
+            two_zone_bayesian_model(self.forward_model, obs, self.prior_config, self.noise_params)
 
         kernel = NUTS(
             model,
@@ -2736,8 +2861,7 @@ class TwoZoneMCMCSampler:
                 el: float(np.std(conc_flat[:, i])) for i, el in enumerate(self.elements)
             },
             concentrations_q025={
-                el: float(np.percentile(conc_flat[:, i], 2.5))
-                for i, el in enumerate(self.elements)
+                el: float(np.percentile(conc_flat[:, i], 2.5)) for i, el in enumerate(self.elements)
             },
             concentrations_q975={
                 el: float(np.percentile(conc_flat[:, i], 97.5))

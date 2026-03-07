@@ -8,6 +8,7 @@ import numpy as np
 from cflibs.inversion.solver import IterativeCFLIBSSolver, LineObservation
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.structures import PartitionFunction
+from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3
 
 
 @pytest.fixture
@@ -90,3 +91,58 @@ def test_solver_multielement(mock_db):
     assert abs(res.temperature_K - 11604.0) < 500.0
     assert abs(res.concentrations["A"] - 0.5) < 0.05
     assert abs(res.concentrations["B"] - 0.5) < 0.05
+
+
+def test_solver_mixed_stage_transform_recovers_temperature(mock_db):
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=10)
+
+    T_eV = 1.0
+    T_K = T_eV * EV_TO_K
+    n_e = 1.0e17
+    ip = 7.0
+    wavelength_nm = 500.0
+
+    # The classic Saha-Boltzmann transform should subtract only the ionic
+    # prefactor from y while carrying IP on the x-axis.
+    saha_offset = np.log(2.0 * (SAHA_CONST_CM3 / n_e) * (T_eV**1.5))
+    common_intercept = 8.0
+
+    observations = []
+
+    for E_k in [1.0, 2.0, 3.0]:
+        y = common_intercept - E_k / T_eV
+        intensity = np.exp(y) / wavelength_nm
+        observations.append(
+            LineObservation(
+                wavelength_nm=wavelength_nm,
+                intensity=intensity,
+                intensity_uncertainty=max(intensity * 0.01, 1e-8),
+                element="A",
+                ionization_stage=1,
+                E_k_ev=E_k,
+                g_k=1,
+                A_ki=1.0,
+            )
+        )
+
+    for E_k in [4.0, 5.0, 6.0]:
+        y = common_intercept + saha_offset - (ip + E_k) / T_eV
+        intensity = np.exp(y) / wavelength_nm
+        observations.append(
+            LineObservation(
+                wavelength_nm=wavelength_nm,
+                intensity=intensity,
+                intensity_uncertainty=max(intensity * 0.01, 1e-8),
+                element="A",
+                ionization_stage=2,
+                E_k_ev=E_k,
+                g_k=1,
+                A_ki=1.0,
+            )
+        )
+
+    res = solver.solve(observations)
+
+    assert res.converged
+    assert res.temperature_K == pytest.approx(T_K, rel=0.08)
+    assert res.concentrations["A"] == pytest.approx(1.0, abs=1e-8)

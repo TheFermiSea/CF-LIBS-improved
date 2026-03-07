@@ -15,6 +15,7 @@ import numpy as np
 import sqlite3
 import tempfile
 from pathlib import Path
+from cflibs.core.jax_runtime import jax_default_real_dtype
 
 # Mark entire module as requiring JAX
 pytestmark = [
@@ -254,6 +255,7 @@ class TestBayesianForwardModel:
 
         assert model.elements == ["Fe", "Cu"]
         assert len(model.wavelength) == 500
+        assert model.wavelength.dtype == jax_default_real_dtype()
         assert model.atomic_data is not None
         assert len(model.atomic_data.wavelength_nm) > 0
 
@@ -323,6 +325,82 @@ class TestBayesianForwardModel:
 
         # Spectra should be different
         assert not jnp.allclose(spectrum_low, spectrum_high)
+
+    def test_forward_explicit_total_species_density_preserves_legacy_default(self, bayesian_db):
+        """Explicitly passing n_e-equivalent heavy density should match legacy behavior."""
+        model = BayesianForwardModel(
+            db_path=bayesian_db,
+            elements=["Fe", "Cu"],
+            wavelength_range=(200, 600),
+            pixels=300,
+        )
+
+        T_eV = 1.0
+        log_ne = 17.0
+        concentrations = jnp.array([0.8, 0.2])
+        n_e = 10.0**log_ne
+
+        spectrum_default = model.forward(T_eV, log_ne, concentrations)
+        spectrum_explicit = model.forward(
+            T_eV,
+            log_ne,
+            concentrations,
+            total_species_density_cm3=n_e,
+        )
+
+        np.testing.assert_allclose(spectrum_default, spectrum_explicit, rtol=1e-6, atol=1e-12)
+
+    def test_forward_allows_decoupled_total_species_density(self, bayesian_db):
+        """Changing heavy-particle density at fixed n_e should change the spectrum."""
+        model = BayesianForwardModel(
+            db_path=bayesian_db,
+            elements=["Fe", "Cu"],
+            wavelength_range=(200, 600),
+            pixels=300,
+        )
+
+        T_eV = 1.0
+        log_ne = 17.0
+        concentrations = jnp.array([0.8, 0.2])
+
+        spectrum_low = model.forward(
+            T_eV,
+            log_ne,
+            concentrations,
+            total_species_density_cm3=2.5e16,
+        )
+        spectrum_high = model.forward(
+            T_eV,
+            log_ne,
+            concentrations,
+            total_species_density_cm3=2.5e17,
+        )
+
+        assert not jnp.allclose(spectrum_low, spectrum_high)
+        assert float(jnp.max(spectrum_high)) > float(jnp.max(spectrum_low))
+
+    def test_forward_jit_accepts_explicit_total_species_density(self, bayesian_db):
+        """Explicit heavy-particle density should work under ``jax.jit``."""
+        model = BayesianForwardModel(
+            db_path=bayesian_db,
+            elements=["Fe", "Cu"],
+            wavelength_range=(200, 600),
+            pixels=150,
+        )
+        concentrations = jnp.array([0.8, 0.2])
+
+        @jax.jit
+        def compute(total_species_density_cm3):
+            return model.forward(
+                1.0,
+                17.0,
+                concentrations,
+                total_species_density_cm3=total_species_density_cm3,
+            )
+
+        spectrum = compute(jnp.asarray(2.5e17))
+        assert spectrum.shape == (150,)
+        assert float(jnp.max(spectrum)) > 0.0
 
     def test_forward_concentration_scaling(self, bayesian_db):
         """Test that spectrum scales with concentration."""
@@ -1238,9 +1316,7 @@ class TestSharedUtilities:
 
     def test_bayesian_forward_model_uses_shared_loader(self, bayesian_db):
         """BayesianForwardModel still works after refactoring to shared loader."""
-        model = BayesianForwardModel(
-            bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100
-        )
+        model = BayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
         conc = jnp.array([0.7, 0.3])
         spectrum = model.forward(1.0, 17.0, conc)
         assert spectrum.shape == (100,)
@@ -1254,19 +1330,16 @@ class TestTwoZoneBayesianForwardModel:
         """Two-zone model initialises without error."""
         from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
 
-        model = TwoZoneBayesianForwardModel(
-            bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100
-        )
+        model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
         assert len(model.elements) == 2
         assert model.wavelength.shape == (100,)
+        assert model.wavelength.dtype == jax_default_real_dtype()
 
     def test_forward_returns_valid_spectrum(self, bayesian_db):
         """Forward model returns a positive spectrum of correct shape."""
         from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
 
-        model = TwoZoneBayesianForwardModel(
-            bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100
-        )
+        model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
         conc = jnp.array([0.7, 0.3])
         spectrum = model.forward(
             T_core_eV=1.2,
@@ -1284,9 +1357,7 @@ class TestTwoZoneBayesianForwardModel:
         """High optical depth should reduce peak intensity (self-reversal)."""
         from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
 
-        model = TwoZoneBayesianForwardModel(
-            bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=200
-        )
+        model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=200)
         conc = jnp.array([0.7, 0.3])
 
         # Low optical depth → strong peaks
@@ -1304,9 +1375,7 @@ class TestTwoZoneBayesianForwardModel:
         model_2z = TwoZoneBayesianForwardModel(
             bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100
         )
-        model_1z = BayesianForwardModel(
-            bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100
-        )
+        model_1z = BayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
         conc = jnp.array([0.7, 0.3])
 
         # Two-zone with essentially zero optical depth
@@ -1319,15 +1388,62 @@ class TestTwoZoneBayesianForwardModel:
         assert float(jnp.max(s_2z)) > 0
         assert float(jnp.max(s_1z)) > 0
 
+    def test_two_zone_explicit_total_species_density_preserves_legacy_default(self, bayesian_db):
+        """Explicitly passing n_e-equivalent heavy density should match legacy behavior."""
+        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
+
+        model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
+        conc = jnp.array([0.7, 0.3])
+        n_e = 10.0**17.0
+
+        spectrum_default = model.forward(1.2, 0.8, 17.0, conc, 0.3, 1.0)
+        spectrum_explicit = model.forward(
+            1.2,
+            0.8,
+            17.0,
+            conc,
+            0.3,
+            1.0,
+            total_species_density_cm3=n_e,
+        )
+
+        np.testing.assert_allclose(spectrum_default, spectrum_explicit, rtol=1e-6, atol=1e-12)
+
+    def test_two_zone_allows_decoupled_total_species_density(self, bayesian_db):
+        """Changing heavy-particle density at fixed n_e should change the two-zone spectrum."""
+        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
+
+        model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
+        conc = jnp.array([0.7, 0.3])
+
+        spectrum_low = model.forward(
+            1.2,
+            0.8,
+            17.0,
+            conc,
+            0.3,
+            1.0,
+            total_species_density_cm3=2.5e16,
+        )
+        spectrum_high = model.forward(
+            1.2,
+            0.8,
+            17.0,
+            conc,
+            0.3,
+            1.0,
+            total_species_density_cm3=2.5e17,
+        )
+
+        assert not jnp.allclose(spectrum_low, spectrum_high)
+
     def test_jit_stable(self, bayesian_db):
         """Forward model is JIT-compatible (no errors under JIT)."""
         import jax
 
         from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
 
-        model = TwoZoneBayesianForwardModel(
-            bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=50
-        )
+        model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=50)
         conc = jnp.array([0.7, 0.3])
 
         @jax.jit
@@ -1343,9 +1459,7 @@ class TestTwoZoneBayesianForwardModel:
 
         from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
 
-        model = TwoZoneBayesianForwardModel(
-            bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=50
-        )
+        model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=50)
         conc = jnp.array([0.7, 0.3])
 
         def loss(T_core):
@@ -1457,9 +1571,7 @@ class TestTwoZoneMCMCSampler:
             TwoZoneMCMCResult,
         )
 
-        model = TwoZoneBayesianForwardModel(
-            bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=50
-        )
+        model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=50)
         conc = jnp.array([0.7, 0.3])
         observed = model.forward_numpy(1.2, 0.8, 17.0, conc, 0.3, 1.0)
 
