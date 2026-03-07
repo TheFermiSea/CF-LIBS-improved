@@ -257,7 +257,7 @@ class QualityAssessor:
             # Match the classic solver's Saha-Boltzmann transform:
             # move the ionization energy onto x while subtracting only the
             # ionic partition/electron-density prefactor from y.
-            saha_offset = np.log(2.0 * (SAHA_CONST_CM3 / safe_ne_cm3) * (T_eV**1.5))
+            saha_offset = np.log((SAHA_CONST_CM3 / safe_ne_cm3) * (T_eV**1.5))
             stage_pair = stage_pairs.get(el)
             ion_stage = stage_pair[1] if stage_pair is not None else None
             correction = (
@@ -344,7 +344,7 @@ class QualityAssessor:
 
         The Saha ratio at temperature T is:
 
-            S(T) = (C_Saha / n_e) * T_eV^1.5 * exp(-IP / T_eV) * 2 * U_II / U_I
+            S(T) = (C_Saha / n_e) * T_eV^1.5 * exp(-IP / T_eV) * U_II / U_I
 
         The observed II/I intensity ratio is proportional to S(T), so we
         solve for T_saha by bisection on:
@@ -415,7 +415,6 @@ class QualityAssessor:
                     (SAHA_CONST_CM3 / safe_ne_cm3)
                     * (T_eV_local**1.5)
                     * np.exp(-ip / T_eV_local)
-                    * 2.0
                     * (U_II / U_I)
                 )
                 return S

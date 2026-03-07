@@ -380,8 +380,8 @@ class GoldenSpectrumGenerator:
         from cflibs.core.constants import SAHA_CONST_CM3
 
         T_eV = temperature_K / EV_TO_K
-        # S = (SAHA_CONST / n_e) × T^1.5 × exp(-IP/kT) × 2
-        S = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5) * np.exp(-ip_eV / T_eV) * 2.0
+        # S = (SAHA_CONST / n_e) × T_eV^1.5 × exp(-IP/T_eV)
+        S = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5) * np.exp(-ip_eV / T_eV)
         return S
 
 
