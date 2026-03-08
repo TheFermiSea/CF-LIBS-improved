@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 
-from cflibs.core.constants import KB_EV, EV_TO_K, SAHA_CONST_CM3
+from cflibs.core.constants import KB, KB_EV, EV_TO_K, SAHA_CONST_CM3
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.boltzmann import LineObservation
 
@@ -444,8 +444,6 @@ class GoldenSpectrumGenerator:
         float
             Self-consistent electron density in cm^-3
         """
-        from cflibs.core.constants import KB
-
         T_eV = temperature_K / EV_TO_K
         n_e = n_e_guess
 

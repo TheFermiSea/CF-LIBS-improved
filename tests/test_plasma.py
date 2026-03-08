@@ -336,29 +336,28 @@ def test_three_stage_ionization_coupling(atomic_db):
     assert (
         3 in result and result[3] > 0
     ), f"Expected 3-stage ionization at T=2 eV, n_e=1e15; got stages {list(result.keys())}"
-    if 3 in result:
-        n_I = result[1]
-        n_II = result[2]
-        n_III = result[3]
+    n_I = result[1]
+    n_II = result[2]
+    n_III = result[3]
 
-        # Recompute S1 and S2
-        import numpy as np
-        from cflibs.core.constants import SAHA_CONST_CM3
+    # Recompute S1 and S2
+    import numpy as np
+    from cflibs.core.constants import SAHA_CONST_CM3
 
-        U_I = solver.calculate_partition_function("Fe", 1, T_eV)
-        U_II = solver.calculate_partition_function("Fe", 2, T_eV)
-        U_III = solver.calculate_partition_function("Fe", 3, T_eV)
-        ip_I = atomic_db.get_ionization_potential("Fe", 1)
-        ip_II = atomic_db.get_ionization_potential("Fe", 2)
+    U_I = solver.calculate_partition_function("Fe", 1, T_eV)
+    U_II = solver.calculate_partition_function("Fe", 2, T_eV)
+    U_III = solver.calculate_partition_function("Fe", 3, T_eV)
+    ip_I = atomic_db.get_ionization_potential("Fe", 1)
+    ip_II = atomic_db.get_ionization_potential("Fe", 2)
 
-        S1 = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5) * (U_II / U_I) * np.exp(-ip_I / T_eV)
-        S2 = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5) * (U_III / U_II) * np.exp(-ip_II / T_eV)
+    S1 = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5) * (U_II / U_I) * np.exp(-ip_I / T_eV)
+    S2 = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5) * (U_III / U_II) * np.exp(-ip_II / T_eV)
 
-        # Verify n_I = n_total / (1 + S1 + S1*S2)
-        expected_n_I = n_total / (1.0 + S1 + S1 * S2)
-        assert n_I == pytest.approx(expected_n_I, rel=1e-10)
-        assert n_II == pytest.approx(S1 * n_I, rel=1e-10)
-        assert n_III == pytest.approx(S2 * n_II, rel=1e-10)
+    # Verify n_I = n_total / (1 + S1 + S1*S2)
+    expected_n_I = n_total / (1.0 + S1 + S1 * S2)
+    assert n_I == pytest.approx(expected_n_I, rel=1e-10)
+    assert n_II == pytest.approx(S1 * n_I, rel=1e-10)
+    assert n_III == pytest.approx(S2 * n_II, rel=1e-10)
 
 
 if __name__ == "__main__":
