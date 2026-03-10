@@ -246,8 +246,15 @@ class LTEValidator:
         # Determine delta_E_eV
         if delta_E_eV is None:
             if observations is not None and len(observations) > 0:
-                energies = [o.E_k_ev for o in observations]
-                delta_E_eV = float(np.max(energies) - np.min(energies))
+                # McWhirter criterion uses the largest gap between *adjacent*
+                # energy levels, not the total span.  Sort unique E_k values
+                # and take the maximum consecutive difference.
+                energies = sorted({o.E_k_ev for o in observations})
+                if len(energies) >= 2:
+                    gaps = [energies[i + 1] - energies[i] for i in range(len(energies) - 1)]
+                    delta_E_eV = float(max(gaps))
+                else:
+                    delta_E_eV = float(energies[0]) if energies else 2.0
                 delta_E_eV = max(delta_E_eV, 0.1)  # floor to avoid degenerate case
             else:
                 delta_E_eV = 2.0  # conservative default

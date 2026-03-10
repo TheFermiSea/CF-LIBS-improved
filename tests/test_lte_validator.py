@@ -94,16 +94,16 @@ class TestValidate:
         assert len(report.warnings) > 0
 
     def test_delta_e_extracted_from_observations(self):
-        """When delta_E_eV is not given, it should be computed from observations."""
+        """When delta_E_eV is not given, uses max adjacent gap (not total span)."""
         from unittest.mock import MagicMock
 
-        # Create mock observations with E_k_ev values
+        # Energies [1, 3, 5] eV: adjacent gaps are [2, 2] -> max adjacent gap = 2.0 eV
+        # (NOT the total span 5-1=4 eV)
         obs = [MagicMock(E_k_ev=1.0), MagicMock(E_k_ev=3.0), MagicMock(E_k_ev=5.0)]
         validator = LTEValidator()
         report = validator.validate(T_K=10000.0, n_e_cm3=1e17, observations=obs)
 
-        # delta_E = 5.0 - 1.0 = 4.0 eV
-        expected_required = MCWHIRTER_C * (10000.0**0.5) * (4.0**3)
+        expected_required = MCWHIRTER_C * (10000.0**0.5) * (2.0**3)
         assert report.mcwhirter.n_e_required == pytest.approx(expected_required, rel=1e-4)
 
     def test_with_temporal_check(self):

@@ -501,8 +501,17 @@ class IterativeCFLIBSSolver:
             ip = self.atomic_db.get_ionization_potential(el, 1)
             ips[el] = ip if ip is not None else 15.0
 
+        # Apply IPD if enabled (must match the effective_ips used in solve())
+        if self.apply_ipd:
+            from cflibs.plasma.saha_boltzmann import ionization_potential_lowering
+
+            delta_chi = ionization_potential_lowering(n_e, T_K)
+            effective_ips = {el: max(ip - delta_chi, 0.0) for el, ip in ips.items()}
+        else:
+            effective_ips = ips
+
         # Apply Saha correction so intercepts match those from solve()
-        corrected_obs_map = self._apply_saha_correction(obs_by_element, T_K, n_e, ips)
+        corrected_obs_map = self._apply_saha_correction(obs_by_element, T_K, n_e, effective_ips)
 
         # Get partition functions at converged T
         partition_funcs = {}
@@ -517,7 +526,7 @@ class IterativeCFLIBSSolver:
             n_e,
             partition_funcs,
             partition_funcs_II,
-            ips,
+            effective_ips,
         )
 
         # Fit per-element Boltzmann plots on Saha-corrected observations
