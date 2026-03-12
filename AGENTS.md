@@ -10,9 +10,10 @@
 ## Build, Test, and Development Commands
 - `uv venv --python 3.12` creates a virtual environment with `uv`.
 - `pip install -e ".[dev]"` installs the project in editable mode with dev tools.
-- `uv pip install -e ".[local]"` installs local dev extras (JAX Metal, hdf5, dev tools).
+- `uv pip install -e ".[local]"` installs local dev extras (JAX CPU, hdf5, dev tools).
 - `uv pip install -e ".[cluster]"` installs cluster extras (JAX CUDA, hdf5, mpi4py).
 - `pytest tests/ -v` runs the full test suite.
+- `pytest tests/ -v --benchmark-only` runs benchmark-only tests (used in CI performance workflow).
 - `JAX_PLATFORMS=cpu pytest tests/` forces CPU backend for tests.
 - `pytest tests/test_plasma.py -v` runs a single test file.
 - `pytest tests/test_solver.py::test_name -v` runs a single test function.
@@ -26,6 +27,7 @@
 - `ruff check cflibs/ tests/` runs linting.
 - `ruff check --fix cflibs/` auto-fixes lint issues where possible.
 - `mypy cflibs/` runs type checks.
+- `sphinx-build -b html docs docs/_build/html` builds documentation locally.
 
 ## CLI Workflows
 
@@ -56,9 +58,17 @@
 - `cflibs generate-manifold examples/manifold_config_example.yaml --progress` builds a spectral manifold.
 - `python datagen_v2.py` generates the atomic database (long-running).
 - `nohup python datagen_v2.py &` runs database generation in the background.
+- `python scripts/validate_nist_parity.py --element Fe --T 0.8 --ne 1e17 --wl-min 220 --wl-max 265 --resolving-power 1000` runs NIST parity validation.
+- `python scripts/run_nist_validation.py --db ASD_da/libs_production.db --output output/validation/nist_crosscheck_report.json` runs consolidated NIST cross-check reporting.
+- `python scripts/validate_real_data.py --datasets steel_245nm FeNi_380nm --no-plots` validates element ID pipelines against real datasets.
+- `python scripts/calibrate_alias.py --db-path ASD_da/libs_production.db --data-dir data --output-dir output/calibration` grid-searches ALIAS thresholds on labeled data.
+- `python scripts/generate_model_library.py chunk --chunk-id 0 --n-chunks 8 --output-dir output/model_library` generates one model-library chunk.
+- `python scripts/generate_model_library.py consolidate --output-dir output/model_library` merges chunk outputs into one library.
+- `python scripts/generate_model_library.py build-index --output-dir output/model_library` builds FAISS search index for the library.
+- `python scripts/generate_model_library.py submit --n-chunks 32 --output-dir output/model_library` emits/submits SLURM array jobs for cluster generation.
 - Multi-node manifold generation:
-  - `mpirun -np 3 --hostfile hosts.txt python generate_manifold.py`.
-  - `srun -N 3 --gpus-per-node=1 python generate_manifold.py` (SLURM).
+  - `mpirun -np 3 --hostfile hosts.txt python manifold-generator.py`.
+  - `srun -N 3 --gpus-per-node=1 python manifold-generator.py` (SLURM).
 
 ## Commit & Pull Request Guidelines
 - Commit messages: short imperative summary (<=50 chars) with optional body explaining what/why.
