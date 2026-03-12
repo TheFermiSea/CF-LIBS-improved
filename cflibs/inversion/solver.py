@@ -497,6 +497,7 @@ class IterativeCFLIBSSolver:
         # Import uncertainty utilities (will raise ImportError if not available)
         from cflibs.inversion.uncertainty import (
             create_boltzmann_uncertainties,
+            propagate_through_closure_oxide,
             propagate_through_closure_standard,
             propagate_through_closure_matrix,
             extract_values_and_uncertainties,
@@ -584,6 +585,13 @@ class IterativeCFLIBSSolver:
                 partition_funcs,
                 closure_kwargs["matrix_element"],
                 closure_kwargs.get("matrix_fraction", 0.9),
+                abundance_multipliers=abundance_multipliers,
+            )
+        elif closure_mode == "oxide":
+            concentrations_u = propagate_through_closure_oxide(
+                intercepts_u,
+                partition_funcs,
+                closure_kwargs.get("oxide_stoichiometry", {}),
                 abundance_multipliers=abundance_multipliers,
             )
         else:

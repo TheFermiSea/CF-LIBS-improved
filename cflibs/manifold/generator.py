@@ -430,8 +430,8 @@ class ManifoldGenerator:
 
             IP_I = ionization_potentials[lines_el_idx, 0]
 
-            # Saha equation: n1/n0 = (SAHA_CONST/ne) * T^1.5 * (U1/U0) * exp(-IP/T)
-            # SAHA_CONST_CM3 = 6.042e21 already includes g_e = 2
+            # Saha equation: n1 / n0 = (SAHA_CONST/ne) * T^1.5 * (U1/U0) * exp(-IP/T)
+            # SAHA_CONST_CM3 already includes the free-electron degeneracy factor g_e = 2.
 
             saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
 

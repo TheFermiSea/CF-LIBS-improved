@@ -16,8 +16,15 @@ from cflibs.inversion.alias_identifier import ALIASIdentifier
 from cflibs.inversion.element_id import to_line_observations
 from cflibs.inversion.line_detection import detect_line_observations
 from cflibs.inversion.solver import IterativeCFLIBSSolver
-from cflibs.plasma.state import SingleZoneLTEPlasma
+from cflibs.plasma.state import SingleZoneLTEPlasma, mass_fractions_to_number_fractions
 from cflibs.radiation.spectrum_model import SpectrumModel
+
+TEST_MASS_FRACTIONS = {"Fe": 0.6, "Cu": 0.4}
+TEST_ATOMIC_MASSES = {"Fe": 55.845, "Cu": 63.546}
+EXPECTED_NUMBER_FRACTIONS = mass_fractions_to_number_fractions(
+    TEST_MASS_FRACTIONS,
+    TEST_ATOMIC_MASSES,
+)
 
 EXPECTED_LINES = {
     ("Fe", 1, 371.99),
@@ -73,6 +80,23 @@ def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE partition_functions (
+            element TEXT,
+            sp_num INTEGER,
+            a0 REAL,
+            a1 REAL,
+            a2 REAL,
+            a3 REAL,
+            a4 REAL,
+            t_min REAL,
+            t_max REAL,
+            source TEXT,
+            PRIMARY KEY (element, sp_num)
+        )
+        """
+    )
 
     line_rows = [
         ("Fe", 1, 371.99, 1.5e7, 0.0, 3.33, 9, 11, 1000),
@@ -116,6 +140,19 @@ def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
             ("Cu", 2, 20.292, 63.546),
         ],
     )
+    conn.executemany(
+        """
+        INSERT INTO partition_functions (
+            element, sp_num, a0, a1, a2, a3, a4, t_min, t_max, source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            ("Fe", 1, float(np.log(25.0)), 0.0, 0.0, 0.0, 0.0, 1000.0, 20000.0, "test"),
+            ("Fe", 2, float(np.log(40.0)), 0.0, 0.0, 0.0, 0.0, 1000.0, 20000.0, "test"),
+            ("Cu", 1, float(np.log(2.0)), 0.0, 0.0, 0.0, 0.0, 1000.0, 20000.0, "test"),
+            ("Cu", 2, 0.0, 0.0, 0.0, 0.0, 0.0, 1000.0, 20000.0, "test"),
+        ],
+    )
 
     conn.commit()
     conn.close()
@@ -126,9 +163,9 @@ def _simulate_fe_cu_spectrum(atomic_db: AtomicDatabase) -> tuple[np.ndarray, np.
     plasma = SingleZoneLTEPlasma.from_mass_fractions(
         T_e=12000.0,
         n_e=1.0e17,
-        mass_fractions={"Fe": 0.6, "Cu": 0.4},
+        mass_fractions=TEST_MASS_FRACTIONS,
         total_species_density_cm3=3.0e16,
-        atomic_masses_amu={"Fe": 55.845, "Cu": 63.546},
+        atomic_masses_amu=TEST_ATOMIC_MASSES,
     )
     model = SpectrumModel(
         plasma=plasma,
@@ -199,16 +236,23 @@ def test_full_pipeline_recovers_multistage_sample(tmp_path: Path):
     recovered = solver.solve(detected.observations)
 
     assert recovered.converged
-    # Mixed-stage recovery is more sensitive to the corrected ionic-line weighting
-    # than the pure detector-path composition check, so keep temperature tolerance
-    # at 10% for this noisy end-to-end spectrum.
+    # The partition-function fixture makes the composition check physically
+    # meaningful, but temperature remains noise-sensitive in this synthetic run.
     assert recovered.temperature_K == pytest.approx(12000.0, rel=0.10)
-    assert recovered.concentrations["Fe"] == pytest.approx(0.6, abs=0.05)
-    assert recovered.concentrations["Cu"] == pytest.approx(0.4, abs=0.05)
+    assert recovered.concentrations["Fe"] == pytest.approx(
+        EXPECTED_NUMBER_FRACTIONS["Fe"], abs=0.05
+    )
+    assert recovered.concentrations["Cu"] == pytest.approx(
+        EXPECTED_NUMBER_FRACTIONS["Cu"], abs=0.05
+    )
 
     recovered_from_alias = solver.solve(to_line_observations(alias_result))
 
     assert recovered_from_alias.converged
     assert recovered_from_alias.temperature_K == pytest.approx(12000.0, rel=0.10)
-    assert recovered_from_alias.concentrations["Fe"] == pytest.approx(0.6, abs=0.07)
-    assert recovered_from_alias.concentrations["Cu"] == pytest.approx(0.4, abs=0.07)
+    assert recovered_from_alias.concentrations["Fe"] == pytest.approx(
+        EXPECTED_NUMBER_FRACTIONS["Fe"], abs=0.05
+    )
+    assert recovered_from_alias.concentrations["Cu"] == pytest.approx(
+        EXPECTED_NUMBER_FRACTIONS["Cu"], abs=0.05
+    )

@@ -86,6 +86,17 @@ def check_uncertainties_available() -> None:
         )
 
 
+def _validated_abundance_multiplier(
+    abundance_multipliers: Optional[Dict[str, float]],
+    element: str,
+) -> float:
+    """Return a finite positive abundance multiplier for an element."""
+    multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+    if not np.isfinite(multiplier) or multiplier <= 0.0:
+        raise ValueError(f"abundance_multipliers[{element!r}] must be finite and positive")
+    return float(multiplier)
+
+
 def create_boltzmann_uncertainties(
     slope: float,
     intercept: float,
@@ -223,6 +234,10 @@ def propagate_through_closure_standard(
         Boltzmann intercepts with uncertainties for each element
     partition_funcs : Dict[str, float]
         Partition function values U_s(T) for each element
+    abundance_multipliers : Optional[Dict[str, float]]
+        Optional per-element scaling that maps neutral-plane intercepts back
+        to total elemental abundance. Defaults to ``None``, which applies a
+        multiplier of 1.0 for every element.
 
     Returns
     -------
@@ -239,7 +254,7 @@ def propagate_through_closure_standard(
             continue
 
         U_s = partition_funcs[element]
-        multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+        multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
         rel_C_u = multiplier * U_s * umath.exp(q_s_u)
         rel_concentrations_u[element] = rel_C_u
 
@@ -277,6 +292,10 @@ def propagate_through_closure_matrix(
         Element with known concentration
     matrix_fraction : float
         Known concentration of matrix element
+    abundance_multipliers : Optional[Dict[str, float]]
+        Optional per-element scaling that maps neutral-plane intercepts back
+        to total elemental abundance. Defaults to ``None``, which applies a
+        multiplier of 1.0 for every element.
 
     Returns
     -------
@@ -295,9 +314,7 @@ def propagate_through_closure_matrix(
 
     U_m = partition_funcs[matrix_element]
     q_m_u = intercepts_u[matrix_element]
-    matrix_multiplier = (
-        abundance_multipliers.get(matrix_element, 1.0) if abundance_multipliers else 1.0
-    )
+    matrix_multiplier = _validated_abundance_multiplier(abundance_multipliers, matrix_element)
     rel_C_m_u = matrix_multiplier * U_m * umath.exp(q_m_u)
 
     # F determined by matrix element
@@ -308,11 +325,67 @@ def propagate_through_closure_matrix(
     for element, q_s_u in intercepts_u.items():
         if element in partition_funcs:
             U_s = partition_funcs[element]
-            multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
+            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
             rel_C_u = multiplier * U_s * umath.exp(q_s_u)
             concentrations_u[element] = rel_C_u / F_u
 
     return concentrations_u
+
+
+def propagate_through_closure_oxide(
+    intercepts_u: Dict[str, "UFloat"],
+    partition_funcs: Dict[str, float],
+    oxide_stoichiometry: Dict[str, float],
+    abundance_multipliers: Optional[Dict[str, float]] = None,
+) -> Dict[str, "UFloat"]:
+    """
+    Apply oxide-mode closure with uncertainty propagation.
+
+    Parameters
+    ----------
+    intercepts_u : Dict[str, UFloat]
+        Boltzmann intercepts with uncertainties for each element.
+    partition_funcs : Dict[str, float]
+        Partition function values U_s(T) for each element.
+    oxide_stoichiometry : Dict[str, float]
+        Map of element to oxide conversion factor.
+    abundance_multipliers : Optional[Dict[str, float]]
+        Optional per-element scaling that maps neutral-plane intercepts back
+        to total elemental abundance. Defaults to ``None``, which applies a
+        multiplier of 1.0 for every element.
+
+    Returns
+    -------
+    Dict[str, UFloat]
+        Concentrations with propagated uncertainties.
+    """
+    check_uncertainties_available()
+
+    rel_concentrations_u: Dict[str, "UFloat"] = {}
+    total_oxide_rel_u = None
+
+    for element, q_s_u in intercepts_u.items():
+        if element not in partition_funcs:
+            logger.warning(f"Missing partition function for {element}")
+            continue
+
+        U_s = partition_funcs[element]
+        multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
+        rel_C_u = multiplier * U_s * umath.exp(q_s_u)
+        rel_concentrations_u[element] = rel_C_u
+
+        oxide_factor = oxide_stoichiometry.get(element, 1.0)
+        weighted_rel = rel_C_u * oxide_factor
+        total_oxide_rel_u = (
+            weighted_rel if total_oxide_rel_u is None else total_oxide_rel_u + weighted_rel
+        )
+
+    if not rel_concentrations_u or total_oxide_rel_u is None:
+        return {}
+
+    return {
+        element: rel_C_u / total_oxide_rel_u for element, rel_C_u in rel_concentrations_u.items()
+    }
 
 
 def extract_values_and_uncertainties(

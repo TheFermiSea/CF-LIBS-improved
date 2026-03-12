@@ -402,6 +402,29 @@ class TestBayesianForwardModel:
         assert spectrum.shape == (150,)
         assert float(jnp.max(spectrum)) > 0.0
 
+    def test_forward_jit_accepts_closed_over_scalar_total_species_density(self, bayesian_db):
+        """Closed-over Python scalars should also work under ``jax.jit``."""
+        model = BayesianForwardModel(
+            db_path=bayesian_db,
+            elements=["Fe", "Cu"],
+            wavelength_range=(200, 600),
+            pixels=150,
+        )
+        concentrations = jnp.array([0.8, 0.2])
+
+        @jax.jit
+        def compute():
+            return model.forward(
+                1.0,
+                17.0,
+                concentrations,
+                total_species_density_cm3=2.5e17,
+            )
+
+        spectrum = compute()
+        assert spectrum.shape == (150,)
+        assert float(jnp.max(spectrum)) > 0.0
+
     def test_forward_concentration_scaling(self, bayesian_db):
         """Test that spectrum scales with concentration."""
         model = BayesianForwardModel(
