@@ -1616,6 +1616,11 @@ class NoiseModel:
 
 ### Round-Trip Validation (`round_trip.py`)
 
+Current validator defaults target synthetic recovery of ±5% in temperature,
+±20% in electron density, and ±10% in concentration. The concentration
+default was tightened from 15% to 10% in March 2026; callers that need the
+legacy threshold should pass `concentration_tolerance=0.15` explicitly.
+
 ```python
 class RoundTripValidator:
     """

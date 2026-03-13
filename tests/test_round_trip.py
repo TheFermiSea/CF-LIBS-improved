@@ -10,7 +10,7 @@ These tests verify the complete forward-inverse pipeline:
 Target tolerances (from ROADMAP.md):
 - Temperature: ±5%
 - Electron density: ±20%
-- Concentrations: ±15%
+- Concentrations: ±10%
 """
 
 import pytest
@@ -230,7 +230,7 @@ class TestRoundTripValidator:
 
         assert validator.temperature_tolerance == 0.05
         assert validator.density_tolerance == 0.20
-        assert validator.concentration_tolerance == 0.15
+        assert validator.concentration_tolerance == 0.10
 
     @pytest.mark.requires_db
     @pytest.mark.slow

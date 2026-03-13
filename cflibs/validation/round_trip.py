@@ -619,7 +619,11 @@ class RoundTripValidator:
     density_tolerance : float
         Fractional tolerance for electron density (default: 0.20 = 20%)
     concentration_tolerance : float
-        Fractional tolerance for concentrations (default: 0.15 = 15%)
+        Fractional tolerance for concentrations (default: 0.10 = 10%)
+        This default was tightened from 0.15 in March 2026 to align the
+        round-trip validator with the Phase 7 synthetic recovery target. Pass
+        ``concentration_tolerance=0.15`` explicitly to preserve the earlier
+        behavior in existing workflows.
     """
 
     def __init__(
@@ -627,8 +631,20 @@ class RoundTripValidator:
         atomic_db,
         temperature_tolerance: float = 0.05,
         density_tolerance: float = 0.20,
-        concentration_tolerance: float = 0.15,
+        concentration_tolerance: float = 0.10,
     ):
+        """
+        Create a RoundTripValidator that performs end-to-end validation of CF-LIBS by generating synthetic spectra, adding noise, and running the inversion within specified tolerances.
+        
+        Parameters:
+            atomic_db: Atomic database used to query transition and partition-function data for spectrum generation and inversion.
+            temperature_tolerance (float): Allowed fractional error for recovered temperature (e.g., 0.05 = 5%).
+            density_tolerance (float): Allowed fractional error for recovered electron density (e.g., 0.20 = 20%).
+            concentration_tolerance (float): Allowed fractional error for recovered elemental concentrations (e.g., 0.10 = 10%). The default is tightened to 0.10; pass 0.15 to preserve the prior, less strict behavior.
+        
+        Behavior:
+            Stores the provided tolerances and atomic database reference and initializes a GoldenSpectrumGenerator and a NoiseModel used by validation runs.
+        """
         self.atomic_db = atomic_db
         self.temperature_tolerance = temperature_tolerance
         self.density_tolerance = density_tolerance

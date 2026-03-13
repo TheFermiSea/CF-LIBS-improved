@@ -150,7 +150,9 @@ def temperature_from_slope(slope_u: "UFloat") -> "UFloat":
     """
     Calculate temperature with uncertainty from Boltzmann slope.
 
-    T = -1 / (kB * slope)
+    For Boltzmann plots in this codebase, the fitted slope is
+
+        m = -1 / (k_B[eV/K] * T[K])
 
     Parameters
     ----------
@@ -163,14 +165,7 @@ def temperature_from_slope(slope_u: "UFloat") -> "UFloat":
         Temperature in Kelvin with propagated uncertainty
     """
     check_uncertainties_available()
-    from cflibs.core.constants import EV_TO_K
-
-    # Temperature in eV
-    T_eV_u = -1.0 / (KB_EV * slope_u)
-    # Convert to Kelvin
-    T_K_u = T_eV_u * EV_TO_K
-
-    return T_K_u
+    return -1.0 / (KB_EV * slope_u)
 
 
 def saha_factor_with_uncertainty(

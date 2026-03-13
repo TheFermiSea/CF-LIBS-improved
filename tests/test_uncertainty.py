@@ -78,13 +78,12 @@ class TestTemperatureFromSlope:
         """Test temperature calculation from slope."""
         from cflibs.inversion.uncertainty import temperature_from_slope
         from uncertainties import ufloat
-        from cflibs.core.constants import KB_EV, EV_TO_K
+        from cflibs.core.constants import KB_EV
 
-        # slope = -1/(kB * T_eV)
-        # For T = 10000 K = 0.862 eV, slope = -1.16
+        # slope = -1 / (k_B[eV/K] * T[K])
+        # For T = 10000 K, slope ≈ -1.16 eV^-1
         T_expected_K = 10000.0
-        T_expected_eV = T_expected_K / EV_TO_K
-        slope = -1.0 / (KB_EV * T_expected_eV)
+        slope = -1.0 / (KB_EV * T_expected_K)
 
         slope_u = ufloat(slope, 0.01)
         T_K_u = temperature_from_slope(slope_u)
@@ -970,3 +969,66 @@ class TestSolveWithUncertaintyConsistency:
 
         result = solver.solve_with_uncertainty(obs)
         assert result.temperature_uncertainty_K > 0.0
+
+    def test_mixed_stage_multi_element_uncertainty_is_bounded(self, mock_db):
+        """solve_with_uncertainty() should keep mixed-stage T uncertainty bounded."""
+        from cflibs.inversion.solver import IterativeCFLIBSSolver, LineObservation
+        from cflibs.core.constants import SAHA_CONST_CM3
+
+        rng = np.random.default_rng(123)
+        T_eV = 1.0
+        n_e_init = 1.0e17
+        wavelength_nm = 500.0
+        saha_offset = np.log((SAHA_CONST_CM3 / n_e_init) * (T_eV**1.5))
+        solver = IterativeCFLIBSSolver(mock_db, max_iterations=15)
+
+        observations = []
+        for element, intercept in [("A", 8.0), ("B", 7.5)]:
+            for E_k in [1.0, 2.0, 3.0, 4.0]:
+                intensity = np.exp(intercept - E_k / T_eV) / wavelength_nm
+                sigma = max(intensity * 0.02, 1e-12)
+                noisy_intensity = max(intensity + rng.normal(0.0, sigma), 1e-12)
+                observations.append(
+                    LineObservation(
+                        wavelength_nm,
+                        noisy_intensity,
+                        sigma,
+                        element,
+                        1,
+                        E_k,
+                        1,
+                        1.0,
+                    )
+                )
+
+            for E_k in [4.5, 5.5, 6.5, 7.5]:
+                intensity = np.exp(intercept + saha_offset - (7.0 + E_k) / T_eV) / wavelength_nm
+                sigma = max(intensity * 0.02, 1e-12)
+                noisy_intensity = max(intensity + rng.normal(0.0, sigma), 1e-12)
+                observations.append(
+                    LineObservation(
+                        wavelength_nm,
+                        noisy_intensity,
+                        sigma,
+                        element,
+                        2,
+                        E_k,
+                        1,
+                        1.0,
+                    )
+                )
+
+        result_det = solver.solve(observations)
+        result_uq = solver.solve_with_uncertainty(observations)
+
+        for element in result_det.concentrations:
+            assert result_det.concentrations[element] == pytest.approx(
+                result_uq.concentrations[element], abs=0.02
+            )
+            assert result_uq.concentration_uncertainties[element] > 0.0
+
+        assert result_uq.boltzmann_covariance is not None
+        assert result_uq.boltzmann_covariance.shape == (2, 2)
+        assert result_uq.quality_metrics["boltzmann_covariance_element"] == "A"
+        assert result_uq.temperature_uncertainty_K > 0.0
+        assert result_uq.temperature_uncertainty_K < 0.5 * result_uq.temperature_K
