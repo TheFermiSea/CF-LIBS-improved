@@ -635,13 +635,13 @@ class RoundTripValidator:
     ):
         """
         Create a RoundTripValidator that performs end-to-end validation of CF-LIBS by generating synthetic spectra, adding noise, and running the inversion within specified tolerances.
-        
+
         Parameters:
             atomic_db: Atomic database used to query transition and partition-function data for spectrum generation and inversion.
             temperature_tolerance (float): Allowed fractional error for recovered temperature (e.g., 0.05 = 5%).
             density_tolerance (float): Allowed fractional error for recovered electron density (e.g., 0.20 = 20%).
             concentration_tolerance (float): Allowed fractional error for recovered elemental concentrations (e.g., 0.10 = 10%). The default is tightened to 0.10; pass 0.15 to preserve the prior, less strict behavior.
-        
+
         Behavior:
             Stores the provided tolerances and atomic database reference and initializes a GoldenSpectrumGenerator and a NoiseModel used by validation runs.
         """

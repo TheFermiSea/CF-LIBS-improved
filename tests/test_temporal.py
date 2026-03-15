@@ -29,7 +29,6 @@ from cflibs.inversion.temporal import (
 )
 from cflibs.inversion.boltzmann import LineObservation
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

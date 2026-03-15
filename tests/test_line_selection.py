@@ -20,7 +20,6 @@ from cflibs.inversion.line_selection import (
 )
 from cflibs.inversion.boltzmann import LineObservation
 
-
 # ==============================================================================
 # LineSelector Initialization Tests
 # ==============================================================================

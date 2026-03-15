@@ -22,7 +22,6 @@ from cflibs.inversion.pls import (
     build_pls_calibration,
 )
 
-
 # --- Fixtures ---
 
 

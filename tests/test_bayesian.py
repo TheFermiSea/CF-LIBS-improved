@@ -47,8 +47,7 @@ def bayesian_db():
     conn = sqlite3.connect(db_path)
 
     # Create tables
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE lines (
             id INTEGER PRIMARY KEY,
             element TEXT,
@@ -63,22 +62,18 @@ def bayesian_db():
             stark_w REAL,
             stark_alpha REAL
         )
-    """
-    )
+    """)
 
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE species_physics (
             element TEXT,
             sp_num INTEGER,
             ip_ev REAL,
             PRIMARY KEY (element, sp_num)
         )
-    """
-    )
+    """)
 
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE partition_functions (
             element TEXT,
             sp_num INTEGER,
@@ -89,8 +84,7 @@ def bayesian_db():
             a4 REAL,
             PRIMARY KEY (element, sp_num)
         )
-    """
-    )
+    """)
 
     # Insert Fe spectral lines with Stark parameters
     lines_data = [

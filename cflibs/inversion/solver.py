@@ -252,9 +252,9 @@ class IterativeCFLIBSSolver:
     ) -> Optional[_CommonSlopeFit]:
         """
         Compute a pooled Boltzmann slope common to multiple elements by fitting a single weighted linear slope to per-element centered Boltzmann data.
-        
+
         For each element with at least two valid corrected observations, this routine computes weighted means in the Boltzmann plane, centers the element's points by those means, and pools the centered points across elements to fit a single slope. The result includes the fitted slope, its variance (accounting for one common slope plus one intercept per contributing element), per-element intercepts, per-element statistics (original values, weights, and means), and an R² goodness-of-fit metric.
-        
+
         Returns:
             _CommonSlopeFit | None: A _CommonSlopeFit with fields:
                 - slope: fitted common slope
@@ -347,12 +347,12 @@ class IterativeCFLIBSSolver:
     ) -> CFLIBSResult:
         """
         Estimate plasma temperature, electron density, and elemental concentrations from spectral line observations using the iterative CF-LIBS algorithm.
-        
+
         Parameters:
             observations (List[LineObservation]): Spectral line observations to invert; lines are grouped by element.
             closure_mode (str): Closure method for converting Boltzmann intercepts to concentrations. One of "standard", "matrix", or "oxide".
             **closure_kwargs: Additional keyword arguments forwarded to the chosen closure method (for example, a matrix_element for "matrix" mode).
-        
+
         Returns:
             CFLIBSResult: Final inversion result containing:
                 - temperature_K: Estimated plasma temperature (Kelvin).
@@ -547,23 +547,23 @@ class IterativeCFLIBSSolver:
     ) -> CFLIBSResult:
         """
         Compute plasma parameters while propagating measurement and fit uncertainties.
-        
+
         Performs uncertainty propagation through the pooled Boltzmann fit, Saha
         correction, and the chosen closure equation, returning the same result
         structure as solve() augmented with uncertainty fields.
-        
+
         Parameters:
             observations (List[LineObservation]): Spectral lines with intensity uncertainties.
             closure_mode (str): Closure algorithm to use ('standard', 'matrix', or 'oxide').
             **closure_kwargs: Arguments passed to the chosen closure routine (e.g. 'matrix_element',
                 'matrix_fraction', or 'oxide_stoichiometry').
-        
+
         Returns:
             CFLIBSResult: Solver result including populated uncertainty fields:
                 - temperature_uncertainty_K: estimated standard deviation of temperature (K)
                 - concentration_uncertainties: per-element concentration uncertainties
                 - boltzmann_covariance: selected 2x2 covariance matrix for slope/intercept (or None)
-        
+
         Raises:
             ImportError: If the external `uncertainties`-based utilities are not available.
         """

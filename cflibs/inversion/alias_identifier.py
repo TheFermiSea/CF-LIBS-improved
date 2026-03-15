@@ -1472,10 +1472,7 @@ class ALIASIdentifier:
         # reduce to k_rate × k_shift via the blend formula.
         if N_matched > 0:
             N_X = N_matched
-            k_det = k_rate * (
-                (1.0 / N_X) * k_shift
-                + ((N_X - 1.0) / N_X) * k_sim
-            )
+            k_det = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
         else:
             k_det = 0.0
 

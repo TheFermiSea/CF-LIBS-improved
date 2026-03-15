@@ -360,9 +360,7 @@ def saha_residual(
     saha_factor = (SAHA_CONST_CM3 / n_e_cm3) * (T_safe**1.5)
 
     # Expected ratio
-    expected_ratio = (
-        (U_ion / jnp.maximum(U_neutral, 1.0)) * saha_factor * jnp.exp(-IP_eV / T_safe)
-    )
+    expected_ratio = (U_ion / jnp.maximum(U_neutral, 1.0)) * saha_factor * jnp.exp(-IP_eV / T_safe)
 
     # Actual ratio
     actual_ratio = (n_ion * n_e_cm3) / jnp.maximum(n_neutral, 1e-30)

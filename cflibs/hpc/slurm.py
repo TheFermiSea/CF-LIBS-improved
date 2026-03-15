@@ -611,11 +611,13 @@ def create_distributed_mcmc_job(
         lines.append("")
 
     # JAX environment variables
-    lines.extend([
-        "# JAX configuration",
-        "export JAX_ENABLE_X64=True",
-        "export XLA_PYTHON_CLIENT_MEM_FRACTION=0.9",
-    ])
+    lines.extend(
+        [
+            "# JAX configuration",
+            "export JAX_ENABLE_X64=True",
+            "export XLA_PYTHON_CLIENT_MEM_FRACTION=0.9",
+        ]
+    )
     if gpus_per_task > 0:
         lines.append("export JAX_PLATFORMS=gpu")
     else:
@@ -627,29 +629,31 @@ def create_distributed_mcmc_job(
     db_path_repr = repr(db_path)
     observed_path_repr = repr(observed_path)
     output_dir_repr = repr(output_dir)
-    lines.extend([
-        "# Run distributed MCMC",
-        f"mpirun -n {ntasks} python -c \"",
-        "import numpy as np",
-        "from cflibs.inversion.bayesian import BayesianForwardModel, bayesian_model",
-        "from cflibs.hpc.distributed_mcmc import DistributedMCMCSampler, DistributedMCMCConfig",
-        "",
-        f"model = BayesianForwardModel({db_path_repr}, {elements!r}, ({wl_min}, {wl_max}))",
-        f"observed = np.load({observed_path_repr})",
-        "config = DistributedMCMCConfig(",
-        f"    chains_per_rank={chains_per_rank},",
-        f"    num_warmup={num_warmup},",
-        f"    num_samples={num_samples},",
-        f"    use_gpu={use_gpu},",
-        ")",
-        "sampler = DistributedMCMCSampler(model, bayesian_model, config=config)",
-        "result = sampler.run(observed)",
-        "if result is not None:",
-        f"    np.savez({output_dir_repr} + '/mcmc_result.npz', **result.samples)",
-        "    print(f'R-hat: {{result.r_hat}}')",
-        "    print(f'ESS: {{result.ess}}')",
-        "\"",
-    ])
+    lines.extend(
+        [
+            "# Run distributed MCMC",
+            f'mpirun -n {ntasks} python -c "',
+            "import numpy as np",
+            "from cflibs.inversion.bayesian import BayesianForwardModel, bayesian_model",
+            "from cflibs.hpc.distributed_mcmc import DistributedMCMCSampler, DistributedMCMCConfig",
+            "",
+            f"model = BayesianForwardModel({db_path_repr}, {elements!r}, ({wl_min}, {wl_max}))",
+            f"observed = np.load({observed_path_repr})",
+            "config = DistributedMCMCConfig(",
+            f"    chains_per_rank={chains_per_rank},",
+            f"    num_warmup={num_warmup},",
+            f"    num_samples={num_samples},",
+            f"    use_gpu={use_gpu},",
+            ")",
+            "sampler = DistributedMCMCSampler(model, bayesian_model, config=config)",
+            "result = sampler.run(observed)",
+            "if result is not None:",
+            f"    np.savez({output_dir_repr} + '/mcmc_result.npz', **result.samples)",
+            "    print(f'R-hat: {{result.r_hat}}')",
+            "    print(f'ESS: {{result.ess}}')",
+            '"',
+        ]
+    )
 
     script_content = "\n".join(lines) + "\n"
 

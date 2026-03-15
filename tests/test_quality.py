@@ -17,7 +17,6 @@ from cflibs.inversion.quality import (
 )
 from cflibs.inversion.boltzmann import LineObservation
 
-
 # ==============================================================================
 # QualityMetrics Dataclass Tests
 # ==============================================================================

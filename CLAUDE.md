@@ -98,6 +98,25 @@ python scripts/generate_model_library.py submit --n-chunks 32 --output-dir outpu
 - **`InstrumentModelProtocol`** (Protocol): structural typing for instrument models
 - **`SingleZoneLTEPlasma`** (`plasma/state.py`): core plasma state with composition conversion helpers (mass fractions ↔ number fractions ↔ number densities)
 
+### Advanced Inversion Modules
+
+The `cflibs/inversion/` package contains several advanced modules beyond the core solver. The table below highlights higher-level analysis and advanced features. For core utilities like line detection, preprocessing, and Boltzmann fitting, see the full module list in cflibs/inversion/.
+
+| Module | Role |
+|--------|------|
+| `closure.py` | `ClosureEquation` with three modes: **standard** (ΣC_s = 1 normalization), **matrix** (inter-element correction factors before normalization), **oxide** (converts metal concentrations to oxide wt% before closure, for geological samples) |
+| `joint_optimizer.py` | Replaces iterative closure with direct optimization: softmax parameterization ensures Σc_i = 1 by construction, jointly optimizes T, n_e, and concentrations via L-BFGS-B |
+| `bayesian.py` | NumPyro-based Bayesian inference: MCMC (NUTS) and nested sampling (via dynesty) for posterior distributions over T, n_e, and compositions with full uncertainty quantification |
+| `streaming.py` | Real-time spectral processing: ring-buffer accumulation, running-average Boltzmann fits, DAQ interface integration for live plasma monitoring |
+| `temporal.py` | Time-resolved LIBS analysis: gate-delay sweep processing, temporal evolution of T and n_e, optimal integration window selection |
+| `pinn.py` | Physics-Informed Neural Network: neural surrogate for the forward model trained with physics loss terms (Saha-Boltzmann consistency, closure constraint) |
+| `matrix_effects.py` | Inter-element matrix effect corrections: empirical correction factors and physics-based models for non-ideal plasma interactions |
+| `quality.py` | Quality metrics for inversion results: residual diagnostics, Boltzmann plot R², line-by-line fit quality |
+| `pca.py` | Principal Component Analysis for spectral dimensionality reduction |
+| `pls.py` | Partial Least Squares regression for rapid chemometric predictions |
+| `transfer.py` | Transfer learning / calibration transfer between instruments |
+| `hybrid.py` | Hybrid CF-LIBS + chemometric approaches |
+
 ### JAX Integration
 
 JAX is optional throughout — code gracefully degrades if unavailable. Three backends: `jax-cpu`, `jax-metal` (Apple Silicon; no float64 or complex support), `jax-cuda`. Backend detection in `cflibs/core/jax_runtime.py`. Manifold generation is the primary JAX consumer.

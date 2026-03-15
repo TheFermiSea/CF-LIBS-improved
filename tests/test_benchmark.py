@@ -47,7 +47,6 @@ from cflibs.benchmark.loaders import (
 )
 from cflibs.plasma.state import mass_fractions_to_species_densities
 
-
 # =============================================================================
 # Test fixtures
 # =============================================================================

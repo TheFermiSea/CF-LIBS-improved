@@ -10,7 +10,24 @@ CF‑LIBS is intended as a *foundation* for serious research and engineering wor
 - Synthetic spectral generation and forward modeling
 - Bayesian and deterministic inversion of LIBS signals
 
-> **Status**: Early design & scaffolding. This README documents the *intended* production‑grade architecture and physics model the project will grow into.
+> **Status**: Active development — Phase 3 (Advanced Inversion & Uncertainty). Phases 0-2 are complete. Core Phase 3 components (forward model, inversion pipeline, Bayesian inference, manifold generation) are implemented; multi-zone models and sensitivity analysis are still in progress. Current work focuses on Compositional Data Analysis (CoDa) for closure modernization, atomic database augmentation (STARK-B, VALD), and Mars PDS real-data validation.
+
+## Current Features
+
+- **Forward model**: Single-zone LTE plasma → Saha-Boltzmann equilibrium → line emissivity → Gaussian/Doppler/resolving-power broadening → instrument convolution
+- **Inversion pipeline**: Iterative CF-LIBS solver with Boltzmann fitting, Saha correction, multi-element common-slope fit, closure equation, charge/pressure balance
+- **Line identification**: ALIAS cross-correlation, spectral comb matching, correlation-based identification
+- **Closure modes**: Standard (ΣC=1), matrix-effect corrected, oxide closure
+- **Self-absorption correction**: Curve-of-growth based optical depth correction
+- **Uncertainty quantification**: Analytical (via Boltzmann covariance matrix), Monte Carlo, and Bayesian (NumPyro/MCMC) approaches
+- **Streaming analysis**: Real-time spectral processing with DAQ interface
+- **Temporal analysis**: Time-resolved LIBS with gate-delay optimization
+- **PINN module**: Physics-informed neural network for plasma parameter inference
+- **Matrix effects**: Correction models for inter-element interference
+- **Joint optimizer**: Softmax-parameterized concentration optimization
+- **Manifold generation**: JAX-accelerated pre-computation over parameter grids (HDF5/Zarr storage, FAISS indexing)
+- **Atomic database**: SQLite-backed with NIST ASD data, connection pooling, query caching
+- **Validation**: Round-trip golden spectrum tests, NIST parity checks, real-data validation
 
 ---
 
@@ -426,9 +443,9 @@ Key numerical decisions will focus on:
 
 ---
 
-## Usage Examples (Planned API)
+## Usage Examples
 
-> Note: These are *design sketches* of the intended API. Actual function and class names may evolve.
+> Note: These examples illustrate the core API. Class and function names shown here are implemented; see `cflibs/` for the full public interface.
 
 ### Forward Model: Single‑Zone LTE Plasma
 
@@ -496,18 +513,18 @@ print("species densities:", result.species)
 
 ## Development Roadmap
 
-This section details the **stepwise path** from the current empty scaffold to a **full CF‑LIBS physics and inversion engine**.
+This section tracks the **stepwise path** to a **full CF‑LIBS physics and inversion engine**. Phases 0-2 are complete; Phase 3 is in progress.
 
 ### Phase 0 – Scaffold & Core Utilities
 
 **Goal:** Establish a stable base for development.
 
-- [ ] Basic package structure (`cflibs.*` namespace) and packaging
-- [ ] Constants and units module
-- [ ] Minimal logger and configuration system
-- [ ] CI pipeline (tests, lint, type checking)
-- [ ] Documentation skeleton (API docs, user guide structure)
-- [ ] Simple CLI entry point stub
+- [x] Basic package structure (`cflibs.*` namespace) and packaging
+- [x] Constants and units module
+- [x] Minimal logger and configuration system
+- [x] CI pipeline (tests, lint, type checking)
+- [x] Documentation skeleton (API docs, user guide structure)
+- [x] Simple CLI entry point stub
 
 **Deliverable:** Importable `cflibs` package with tests and documentation infrastructure.
 
@@ -517,16 +534,16 @@ This section details the **stepwise path** from the current empty scaffold to a 
 
 **Goal:** Get a **first working forward model** for a simple LTE, optically thin, single‑zone plasma.
 
-- [ ] Implement atomic level and transition representations
-- [ ] Provide a small, bundled atomic dataset for testing
-- [ ] Saha–Boltzmann solver (single element, multiple ion stages)
-- [ ] Line emissivity with Gaussian broadening only
-- [ ] Homogeneous, optically thin slab intensity
+- [x] Implement atomic level and transition representations
+- [x] Provide a small, bundled atomic dataset for testing
+- [x] Saha–Boltzmann solver (single element, multiple ion stages)
+- [x] Line emissivity with Gaussian broadening only
+- [x] Homogeneous, optically thin slab intensity
   $$
   I_\lambda(\lambda) = \epsilon_\lambda(\lambda) L
   $$
-- [ ] Simple instrument convolution (Gaussian kernel)
-- [ ] Basic forward‑model API & one CLI command
+- [x] Simple instrument convolution (Gaussian kernel)
+- [x] Basic forward‑model API & one CLI command
 
 **Deliverable:** Ability to generate synthetic LIBS spectra from a YAML config file.
 
@@ -536,16 +553,16 @@ This section details the **stepwise path** from the current empty scaffold to a 
 
 **Goal:** Evolve the core into a **reliable, extensible physics engine**.
 
-- [ ] Multi‑species, multi‑ion Saha–Boltzmann equilibrium
-- [ ] Partition functions with interpolation tables over $T_e$
-- [ ] Full line profile model:
-  - [ ] Voigt profile (Doppler + Lorentzian)
-  - [ ] Line‑by‑line Stark parameters and density scaling
-- [ ] Electron‑density‑dependent Stark broadening
-- [ ] Instrument response curves from measured data
-- [ ] Modular, pluggable atomic data loaders
-- [ ] Optimization of spectrum calculations (vectorization, JIT as appropriate)
-- [ ] Extensive validation against benchmark spectra from literature or experiment
+- [x] Multi‑species, multi‑ion Saha–Boltzmann equilibrium
+- [x] Partition functions with interpolation tables over $T_e$
+- [x] Full line profile model:
+  - [x] Voigt profile (Doppler + Lorentzian)
+  - [x] Line‑by‑line Stark parameters and density scaling
+- [x] Electron‑density‑dependent Stark broadening
+- [x] Instrument response curves from measured data
+- [x] Modular, pluggable atomic data loaders
+- [x] Optimization of spectrum calculations (vectorization, JIT as appropriate)
+- [x] Extensive validation against benchmark spectra from literature or experiment
 
 **Deliverable:** Production‑ready forward model suitable for research‑grade studies.
 
@@ -555,15 +572,15 @@ This section details the **stepwise path** from the current empty scaffold to a 
 
 **Goal:** Implement **calibration‑free LIBS inversion** and robust diagnostics.
 
-- [ ] Boltzmann plot generation and fitting
-- [ ] Stark line fitting for $n_e$
-- [ ] Multi‑parameter nonlinear least‑squares inversion (e.g., Levenberg–Marquardt)
+- [x] Boltzmann plot generation and fitting
+- [x] Stark line fitting for $n_e$
+- [x] Multi‑parameter nonlinear least‑squares inversion (e.g., Levenberg–Marquardt)
 - [ ] Support for multi‑zone parametric models (e.g., two‑temperature zones)
-- [ ] Bayesian inversion layer:
-  - [ ] MCMC / nested sampling wrappers
-  - [ ] Priors on plasma parameters
-  - [ ] Posterior diagnostics and credible intervals
-- [ ] Propagation of atomic data uncertainties (where available)
+- [x] Bayesian inversion layer:
+  - [x] MCMC / nested sampling wrappers
+  - [x] Priors on plasma parameters
+  - [x] Posterior diagnostics and credible intervals
+- [x] Propagation of atomic data uncertainties (where available)
 - [ ] Tools for sensitivity analysis (e.g., derivatives of spectra wrt. parameters)
 
 **Deliverable:** A robust CF‑LIBS inversion suite with uncertainty quantification.

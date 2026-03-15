@@ -25,7 +25,6 @@ from cflibs.inversion.matrix_effects import (
 )
 from cflibs.inversion.solver import CFLIBSResult
 
-
 # ============================================================================
 # MatrixType Enum Tests
 # ============================================================================

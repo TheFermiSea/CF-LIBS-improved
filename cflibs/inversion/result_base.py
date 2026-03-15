@@ -12,7 +12,6 @@ The mixins eliminate code duplication while maintaining consistent output format
 from typing import Dict, Optional, Tuple
 import numpy as np
 
-
 # Table formatting constants
 TABLE_WIDTH = 70
 TABLE_SEP = "-" * TABLE_WIDTH

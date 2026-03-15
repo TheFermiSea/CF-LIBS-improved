@@ -68,9 +68,7 @@ class InstrumentModel:
             raise ValueError(f"wavelength_nm must be positive; got {wavelength_nm!r}")
         if self.resolving_power is not None:
             if self.resolving_power <= 0:
-                raise ValueError(
-                    f"resolving_power must be positive; got {self.resolving_power!r}"
-                )
+                raise ValueError(f"resolving_power must be positive; got {self.resolving_power!r}")
             fwhm = wavelength_nm / self.resolving_power
             return fwhm / 2.355
         return self.resolution_sigma_nm

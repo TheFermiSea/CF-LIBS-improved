@@ -44,6 +44,7 @@ def _get_voigt_profile_jax():
         _voigt_jax_fn = voigt_profile_jax
     return _voigt_jax_fn
 
+
 try:
     from scipy.optimize import curve_fit
     from scipy.special import wofz as scipy_wofz

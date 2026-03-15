@@ -115,9 +115,7 @@ def calculate_spectrum_emissivity(
     if not is_per_line:
         sigma_scalar = float(sigma_nm)
         if not np.isfinite(sigma_scalar) or sigma_scalar <= 0:
-            raise ValueError(
-                f"scalar sigma_nm must be finite and positive; got {sigma_scalar!r}"
-            )
+            raise ValueError(f"scalar sigma_nm must be finite and positive; got {sigma_scalar!r}")
 
     if use_jax:
         if is_per_line:

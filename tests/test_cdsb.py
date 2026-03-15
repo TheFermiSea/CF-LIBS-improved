@@ -24,7 +24,6 @@ from cflibs.inversion.cdsb import (
 from cflibs.inversion.boltzmann import FitMethod
 from cflibs.atomic.structures import Transition
 
-
 # =============================================================================
 # Test Fixtures and Helpers
 # =============================================================================

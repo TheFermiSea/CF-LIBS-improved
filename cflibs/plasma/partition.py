@@ -151,7 +151,5 @@ class PartitionFunctionEvaluator:
         for s in range(n_species):
             coeffs_s = list(coefficients[s])
             for t in range(n_temps):
-                result[s, t] = polynomial_partition_function(
-                    float(temperatures[t]), coeffs_s
-                )
+                result[s, t] = polynomial_partition_function(float(temperatures[t]), coeffs_s)
         return result

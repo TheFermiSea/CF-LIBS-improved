@@ -700,16 +700,14 @@ class TestCreatePINNFromDatabase:
         os.close(fd)
 
         conn = sqlite3.connect(db_path)
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE species_physics (
                 element TEXT,
                 sp_num INTEGER,
                 ip_ev REAL,
                 PRIMARY KEY (element, sp_num)
             )
-        """
-        )
+        """)
         conn.executemany(
             """
             INSERT INTO species_physics (element, sp_num, ip_ev) VALUES (?, ?, ?)

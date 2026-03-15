@@ -28,7 +28,6 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.structures import PartitionFunction
 from cflibs.core.constants import SAHA_CONST_CM3
 
-
 # ---------------------------------------------------------------------------
 # Shared fixture: minimal mock database
 # ---------------------------------------------------------------------------

@@ -220,9 +220,7 @@ def test_spectral_correlation(production_db, element, csv_path):
 
     # Broaden NIST stick spectrum onto same grid
     sigmas = np.array([resolving_power_sigma(wl, R) for wl in nist_wl])
-    nist_broadened = apply_gaussian_broadening_per_line(
-        wl_cflibs, nist_wl, nist_strength, sigmas
-    )
+    nist_broadened = apply_gaussian_broadening_per_line(wl_cflibs, nist_wl, nist_strength, sigmas)
 
     # Normalize both to [0, 1] for correlation
     def _minmax(y: np.ndarray) -> np.ndarray:

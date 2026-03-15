@@ -147,9 +147,7 @@ class TestCombRustParity:
 
     def test_scan_comb_shifts_multiple_elements(self):
         """Test scoring with multiple elements, checking F1 ranking."""
-        peak_wavelengths = np.array(
-            [400.0, 410.0, 420.0, 500.0, 510.0], dtype=np.float64
-        )
+        peak_wavelengths = np.array([400.0, 410.0, 420.0, 500.0, 510.0], dtype=np.float64)
         # Element A: matches 3 out of 3 peaks at 400, 410, 420
         transition_wavelengths_a = [400.0, 410.0, 420.0]
         # Element B: matches 2 out of 5 peaks at 500, 510
@@ -181,9 +179,7 @@ class TestKdetRustParity:
 
     def test_kdet_filter_basic(self):
         """Test kdet filter with elements that should pass/fail."""
-        peak_wavelengths = np.array(
-            [400.0, 410.0, 420.0, 500.0, 510.0], dtype=np.float64
-        )
+        peak_wavelengths = np.array([400.0, 410.0, 420.0, 500.0, 510.0], dtype=np.float64)
         # Element A: 3 transitions matching 3 peaks
         # Element B: 1 transition matching 1 peak (sparse, should fail)
         transition_wavelengths = [
@@ -213,9 +209,7 @@ class TestKdetRustParity:
 
     def test_kdet_filter_all_pass(self):
         """Test when all elements meet the threshold."""
-        peak_wavelengths = np.array(
-            [400.0, 410.0, 500.0, 510.0], dtype=np.float64
-        )
+        peak_wavelengths = np.array([400.0, 410.0, 500.0, 510.0], dtype=np.float64)
         transition_wavelengths = [
             [400.0, 410.0],
             [500.0, 510.0],
@@ -280,9 +274,9 @@ class TestPartitionRustParity:
         # Compare with Python implementation
         for t_idx, temp in enumerate(temperatures):
             expected = polynomial_partition_function(float(temp), list(coefficients[0]))
-            assert abs(result[0, t_idx] - expected) / expected < 1e-10, (
-                f"Mismatch at T={temp}: rust={result[0, t_idx]}, python={expected}"
-            )
+            assert (
+                abs(result[0, t_idx] - expected) / expected < 1e-10
+            ), f"Mismatch at T={temp}: rust={result[0, t_idx]}, python={expected}"
 
     def test_batch_partition_functions_multiple_species(self):
         """Test batch evaluation for multiple species."""
@@ -302,12 +296,10 @@ class TestPartitionRustParity:
 
         for s in range(3):
             for t_idx, temp in enumerate(temperatures):
-                expected = polynomial_partition_function(
-                    float(temp), list(coefficients[s])
-                )
-                assert abs(result[s, t_idx] - expected) / expected < 1e-10, (
-                    f"Mismatch at species={s}, T={temp}"
-                )
+                expected = polynomial_partition_function(float(temp), list(coefficients[s]))
+                assert (
+                    abs(result[s, t_idx] - expected) / expected < 1e-10
+                ), f"Mismatch at species={s}, T={temp}"
 
     def test_batch_partition_functions_low_temperature(self):
         """Test edge case with T <= 1 (should return 1.0)."""
@@ -318,9 +310,9 @@ class TestPartitionRustParity:
 
         assert result.shape == (1, 3)
         for t_idx in range(3):
-            assert result[0, t_idx] == 1.0, (
-                f"Expected 1.0 for T={temperatures[t_idx]}, got {result[0, t_idx]}"
-            )
+            assert (
+                result[0, t_idx] == 1.0
+            ), f"Expected 1.0 for T={temperatures[t_idx]}, got {result[0, t_idx]}"
 
     def test_batch_partition_functions_identity(self):
         """Test with zero coefficients (should give U=1.0 for all T)."""
@@ -360,7 +352,5 @@ class TestPartitionRustParity:
         assert result.shape == (2, 2)
         for s in range(2):
             for t_idx, temp in enumerate(temperatures):
-                expected = polynomial_partition_function(
-                    float(temp), list(coefficients[s])
-                )
+                expected = polynomial_partition_function(float(temp), list(coefficients[s]))
                 assert abs(result[s, t_idx] - expected) / expected < 1e-10

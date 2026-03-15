@@ -117,8 +117,7 @@ class TestManifoldConfig:
     def test_config_from_file(self, tmp_path):
         """Test loading config from YAML file."""
         config_file = tmp_path / "config.yaml"
-        config_file.write_text(
-            """
+        config_file.write_text("""
 manifold:
   db_path: test.db
   output_path: test.h5
@@ -130,8 +129,7 @@ manifold:
   temperature_steps: 10
   density_range: [1e16, 1e19]
   density_steps: 5
-"""
-        )
+""")
 
         config = ManifoldConfig.from_file(config_file)
 

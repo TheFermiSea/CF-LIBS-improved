@@ -29,8 +29,7 @@ def interpretable_db():
     conn = sqlite3.connect(db_path)
 
     # Create tables
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE lines (
             id INTEGER PRIMARY KEY,
             element TEXT,
@@ -43,8 +42,7 @@ def interpretable_db():
             gk INTEGER,
             rel_int REAL
         )
-    """
-    )
+    """)
 
     # Insert Fe spectral lines
     fe_lines = [

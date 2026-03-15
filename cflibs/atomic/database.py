@@ -112,8 +112,7 @@ class AtomicDatabase(AtomicDataSource):
         )
         if not cursor.fetchone():
             logger.info("Migrating schema: Creating partition_functions table")
-            cursor.execute(
-                """
+            cursor.execute("""
                 CREATE TABLE partition_functions (
                     element TEXT,
                     sp_num INTEGER,
@@ -127,8 +126,7 @@ class AtomicDatabase(AtomicDataSource):
                     source TEXT,
                     PRIMARY KEY (element, sp_num)
                 )
-            """
-            )
+            """)
 
         # 3. Check species_physics table for atomic_mass
         cursor.execute("PRAGMA table_info(species_physics)")
@@ -165,35 +163,29 @@ class AtomicDatabase(AtomicDataSource):
     def _populate_energy_levels(cursor: sqlite3.Cursor):
         """Extract unique energy levels from the lines table."""
         # Lower levels (INSERT OR IGNORE for idempotent migration)
-        cursor.execute(
-            """
+        cursor.execute("""
             INSERT OR IGNORE INTO energy_levels (element, sp_num, g_level, energy_ev)
             SELECT DISTINCT element, sp_num, CAST(gi AS INTEGER), ROUND(ei_ev, 8)
             FROM lines
             WHERE gi IS NOT NULL AND ei_ev IS NOT NULL
-        """
-        )
+        """)
         # Upper levels (avoid duplicates)
-        cursor.execute(
-            """
+        cursor.execute("""
             INSERT OR IGNORE INTO energy_levels (element, sp_num, g_level, energy_ev)
             SELECT DISTINCT element, sp_num, CAST(gk AS INTEGER), ROUND(ek_ev, 8)
             FROM lines
             WHERE gk IS NOT NULL AND ek_ev IS NOT NULL
-        """
-        )
+        """)
         # Deduplicate by (element, sp_num, g_level, energy_ev) so distinct levels
         # (different g_level or energy) are preserved for partition-function sums
-        cursor.execute(
-            """
+        cursor.execute("""
             DELETE FROM energy_levels
             WHERE rowid NOT IN (
                 SELECT MIN(rowid)
                 FROM energy_levels
                 GROUP BY element, sp_num, g_level, ROUND(energy_ev, 8)
             )
-        """
-        )
+        """)
         cursor.execute("SELECT COUNT(*) FROM energy_levels")
         n = cursor.fetchone()[0]
         logger.info(f"Populated {n} energy levels from lines table")

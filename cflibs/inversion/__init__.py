@@ -8,7 +8,6 @@ optional Bayesian inference and Monte Carlo uncertainty quantification.
 
 from cflibs.core.logging_config import get_logger
 
-
 # --- Core (always available) ---
 from cflibs.inversion.boltzmann import (
     LineObservation,

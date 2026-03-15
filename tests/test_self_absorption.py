@@ -26,7 +26,6 @@ from cflibs.inversion.self_absorption import (
 )
 from cflibs.inversion.boltzmann import LineObservation
 
-
 # ==============================================================================
 # Helper Functions
 # ==============================================================================

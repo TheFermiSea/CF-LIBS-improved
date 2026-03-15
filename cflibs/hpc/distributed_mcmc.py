@@ -222,9 +222,7 @@ class DistributedMCMCSampler:
         )
 
         mcmc.run(rng_key, observed_jax)
-        local_samples = {
-            k: np.array(v) for k, v in mcmc.get_samples(group_by_chain=True).items()
-        }
+        local_samples = {k: np.array(v) for k, v in mcmc.get_samples(group_by_chain=True).items()}
 
         # Gather all samples to rank 0
         all_samples_list = self.comm.gather(local_samples, root=0)

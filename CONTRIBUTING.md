@@ -310,37 +310,36 @@ Longer explanation if needed. Explain what and why, not how.
 
 ### High Priority
 
-1. **Phase 2 Features**:
-   - Voigt profile implementation
-   - Stark broadening
-   - Improved partition functions
+1. **Closure Modernization (CoDa)**:
+   - Aitchison distance / simplex geometry for compositional quality metrics
+   - ILR-transformed concentration space for Boltzmann fitting
+   - Bayesian Model Averaging across closure variants (standard/matrix/oxide)
 
-2. **Phase 3 Features**:
-   - Inversion algorithms
-   - Boltzmann plot fitting
-   - Uncertainty quantification
+2. **Atomic Database Augmentation**:
+   - STARK-B Stark broadening parameter ingestion
+   - Expanded partition function coverage (Z=1-92, stages I-III)
+   - A_ki transition probability uncertainties and NIST accuracy grades
 
-3. **Testing**:
-   - Increase test coverage
-   - Add integration tests
-   - Add performance benchmarks
+3. **Real-Data Validation**:
+   - ChemCam/SuperCam PDS data ingestion and parsing
+   - End-to-end validation against labeled Mars spectra
 
 ### Medium Priority
 
-1. **Documentation**:
-   - More examples
-   - Tutorial notebooks
-   - API documentation improvements
+1. **Database Backends**:
+   - VALD data source via AtomicDataSource ABC
+   - Kentucky Atomic Line List for forbidden/intercombination transitions
+   - VAMDC-TAP unified query client
 
-2. **Performance**:
-   - Optimize hot paths
-   - Add JAX support
-   - Parallel processing
+2. **Documentation**:
+   - API reference for inversion module
+   - Tutorial notebooks for Bayesian inference
+   - Example workflows for streaming/temporal analysis
 
-3. **Features**:
+3. **Advanced Features**:
+   - Dirichlet prior for Bayesian closure
+   - Dark element residual category for missing-mass detection
    - Multi-zone plasma models
-   - Continuum emission
-   - Advanced instrument models
 
 ### Always Welcome
 

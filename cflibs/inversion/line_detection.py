@@ -688,8 +688,7 @@ def _scan_comb_shifts_dispatch_rust(
     peak_wavelengths = np.array([p[1] for p in peaks], dtype=np.float64)
     element_names = list(transitions_by_element.keys())
     transition_wls = [
-        sorted([t.wavelength_nm for t in transitions_by_element[el]])
-        for el in element_names
+        sorted([t.wavelength_nm for t in transitions_by_element[el]]) for el in element_names
     ]
 
     result = _scan_comb_shifts_rust(
@@ -729,8 +728,10 @@ def _scan_comb_shifts_dispatch_rust(
             )
         passed = list(result.get(passed_key, []))
         total_matches = result.get(matches_key, 0)
-        total_f1 = result.get(f1_key, 0.0) if f1_key else sum(
-            s.f1_score for s in scores.values() if s.passes
+        total_f1 = (
+            result.get(f1_key, 0.0)
+            if f1_key
+            else sum(s.f1_score for s in scores.values() if s.passes)
         )
         return {
             "shift_nm": float(shift),
@@ -741,11 +742,16 @@ def _scan_comb_shifts_dispatch_rust(
         }
 
     best = _build_summary(
-        "best_shift", "best_scores", "best_total_matches",
-        "best_passed_elements", "best_total_f1",
+        "best_shift",
+        "best_scores",
+        "best_total_matches",
+        "best_passed_elements",
+        "best_total_f1",
     )
     fallback = _build_summary(
-        "fallback_shift", "fallback_scores", "fallback_total_matches",
+        "fallback_shift",
+        "fallback_scores",
+        "fallback_total_matches",
         "fallback_passed_elements",
     )
     return best, fallback

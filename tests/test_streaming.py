@@ -30,7 +30,6 @@ from cflibs.inversion.streaming import (
 from cflibs.inversion.solver import CFLIBSResult
 from cflibs.inversion.boltzmann import LineObservation
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
