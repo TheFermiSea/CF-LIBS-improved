@@ -465,6 +465,39 @@ class AtomicDataUncertainty:
             return self.per_line_uncertainties[wavelength_nm]
         return self.default_A_uncertainty
 
+    @classmethod
+    def from_transitions(cls, transitions: List[Any]) -> "AtomicDataUncertainty":
+        """Build from Transition objects that carry aki_uncertainty.
+
+        Parameters
+        ----------
+        transitions : list of Transition
+            Transitions with optional ``aki_uncertainty`` attribute.
+
+        Returns
+        -------
+        AtomicDataUncertainty
+            Instance with per-line uncertainties populated from the database.
+        """
+        per_line: Dict[float, float] = {}
+        uncertainties_found = []
+        for t in transitions:
+            unc = getattr(t, "aki_uncertainty", None)
+            if unc is not None:
+                per_line[t.wavelength_nm] = unc
+                uncertainties_found.append(unc)
+
+        # Compute a sensible default from the median of available values
+        if uncertainties_found:
+            default = float(np.median(uncertainties_found))
+        else:
+            default = 0.10  # Grade B fallback
+
+        return cls(
+            default_A_uncertainty=default,
+            per_line_uncertainties=per_line if per_line else None,
+        )
+
 
 @dataclass
 class MonteCarloResult:

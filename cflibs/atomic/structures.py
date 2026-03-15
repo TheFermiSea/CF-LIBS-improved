@@ -65,6 +65,10 @@ class Transition:
         Stark shift coefficient
     is_resonance : Optional[bool]
         Boolean flag for ground-state transitions
+    aki_uncertainty : Optional[float]
+        Fractional uncertainty in A_ki (0-1), derived from NIST accuracy grade
+    accuracy_grade : Optional[str]
+        NIST accuracy grade (AAA/AA/A/B/C/D/E) for transition probability
     """
 
     element: str
@@ -80,6 +84,8 @@ class Transition:
     stark_alpha: Optional[float] = None
     stark_shift: Optional[float] = None
     is_resonance: Optional[bool] = False
+    aki_uncertainty: Optional[float] = None
+    accuracy_grade: Optional[str] = None
 
     @property
     def energy_diff_ev(self) -> float:

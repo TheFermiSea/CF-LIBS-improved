@@ -176,7 +176,9 @@ class BenchmarkCorpus:
         self.delta_lambda = delta_lambda
         self.temperatures_K = list(temperatures_K)
         self.electron_densities_cm3 = list(electron_densities_cm3)
-        self.snr_values = list(snr_values) if snr_values is not None else [None]
+        self.snr_values: List[Optional[float]] = (
+            list(snr_values) if snr_values is not None else [None]
+        )
         self.seed = seed
 
         if compositions is None:
@@ -388,9 +390,7 @@ class BenchmarkCorpus:
                 A_ki = 10.0**log_A
                 boltzmann = np.exp(-E_k / T_eV)
                 peak_intensity = fraction * g_k * A_ki * boltzmann
-                intensity += peak_intensity * np.exp(
-                    -0.5 * ((wl - wl_center) / sigma_nm) ** 2
-                )
+                intensity += peak_intensity * np.exp(-0.5 * ((wl - wl_center) / sigma_nm) ** 2)
 
         # Normalize to have a reasonable max (like real spectra)
         max_val = intensity.max()

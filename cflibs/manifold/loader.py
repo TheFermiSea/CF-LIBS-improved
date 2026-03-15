@@ -145,7 +145,7 @@ class ManifoldLoader:
 
         self.spectra = _DatasetView(self.root["spectra"])
         self.params = _DatasetView(self.root["params"])
-        self.wavelength = np.asarray(self.root["wavelength"][:], dtype=np.float32)
+        self.wavelength = np.asarray(self.root["wavelength"], dtype=np.float32)
 
         attrs = self.root.attrs
         self.elements = _normalize_string_list(attrs.get("elements", []))
