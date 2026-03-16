@@ -256,6 +256,58 @@ def get_expected_elements(mineral_name: str) -> Set[str]:
 # ============================================================================
 
 
+def _get_nnls_identifier(db: AtomicDatabase, cache: dict):
+    """Get or create the SpectralNNLSIdentifier with basis library (cached)."""
+    if "nnls_identifier" not in cache:
+        import tempfile
+
+        from cflibs.manifold.basis_library import BasisLibrary, BasisLibraryConfig, BasisLibraryGenerator
+
+        tmp_dir = tempfile.mkdtemp()
+        basis_path = str(Path(tmp_dir) / "benchmark_basis.h5")
+
+        print("  Generating basis library for spectral_nnls (one-time)...")
+        cfg = BasisLibraryConfig(
+            db_path=str(db.db_path),
+            output_path=basis_path,
+            wavelength_range=(200.0, 900.0),
+            pixels=4096,
+            temperature_range=(4000.0, 12000.0),
+            temperature_steps=30,
+            density_range=(1e15, 5e17),
+            density_steps=10,
+            instrument_fwhm_nm=0.1,  # Match Aalto spectrometer resolution
+        )
+        gen = BasisLibraryGenerator(cfg)
+        gen.generate()
+
+        lib = BasisLibrary(basis_path)
+
+        # Build FAISS index
+        try:
+            from cflibs.manifold.basis_index import BasisIndex
+
+            idx = BasisIndex(n_components=20)
+            idx.build_from_library(lib)
+        except ImportError:
+            idx = None
+
+        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+
+        cache["nnls_identifier"] = SpectralNNLSIdentifier(
+            basis_library=lib,
+            basis_index=idx,
+            detection_snr=2.0,
+        )
+        print(f"  Basis library ready: {lib.n_elements} elements, {lib.n_grid} grid points")
+
+    return cache["nnls_identifier"]
+
+
+# Module-level cache for the NNLS identifier (avoid re-generating per spectrum)
+_nnls_cache: dict = {}
+
+
 def run_element_identification(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -294,6 +346,12 @@ def run_element_identification(
             if result and result.detected_elements:
                 return {d.element for d in result.detected_elements}
 
+        elif method == "spectral_nnls":
+            ident = _get_nnls_identifier(db, _nnls_cache)
+            result = ident.identify(wavelength, intensity)
+            if result and result.detected_elements:
+                return {d.element for d in result.detected_elements}
+
     except Exception as e:
         logger.debug("Identification failed with %s: %s", method, e)
 
@@ -326,6 +384,9 @@ def run_element_identification_full(
 
             identifier = CorrelationIdentifier(db)
             result = identifier.identify(wavelength, intensity)
+        elif method == "spectral_nnls":
+            ident = _get_nnls_identifier(db, _nnls_cache)
+            result = ident.identify(wavelength, intensity)
         else:
             return []
 
@@ -511,7 +572,7 @@ def main():
     print(f"Total: {len(spectra)} spectra for benchmark")
 
     # Run benchmarks
-    methods = ["alias", "comb", "correlation"]
+    methods = ["alias", "comb", "correlation", "spectral_nnls"]
     results = {}
 
     for method in methods:
