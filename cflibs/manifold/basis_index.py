@@ -178,6 +178,13 @@ class BasisIndex:
         if not self.is_built:
             raise RuntimeError("Must call build_from_library() before estimate_plasma_params()")
 
+        # Narrow Optional types (guaranteed non-None after is_built check)
+        assert self.vector_index is not None
+        assert self._elements is not None
+        assert self._element_indices is not None
+        assert self._grid_indices is not None
+        assert self._params is not None
+
         # Embed the observed spectrum
         spec_2d = spectrum.reshape(1, -1)
         embedding = self.embedder.transform(spec_2d)
@@ -231,6 +238,13 @@ class BasisIndex:
         if not HAS_H5PY:
             raise ImportError("h5py is required for saving")
 
+        # Narrow Optional types (guaranteed non-None after is_built check)
+        assert self.vector_index is not None
+        assert self._element_indices is not None
+        assert self._grid_indices is not None
+        assert self._params is not None
+        assert self._elements is not None
+
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -244,6 +258,7 @@ class BasisIndex:
 
             # Embedder: PCA components + mean
             pca_result = self.embedder.pca_pipeline.result_
+            assert pca_result is not None
             f.create_dataset("pca_components", data=pca_result.components)
             f.create_dataset("pca_mean", data=pca_result.mean)
 
