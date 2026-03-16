@@ -234,9 +234,9 @@ def test_max_lines_per_element_parameter(atomic_db):
 
 
 def test_default_detection_threshold(atomic_db):
-    """Test that default detection_threshold is 0.01."""
+    """Test that default detection_threshold is 0.02."""
     identifier = ALIASIdentifier(atomic_db)
-    assert identifier.detection_threshold == 0.01
+    assert identifier.detection_threshold == 0.02
 
 
 # ---------------------------------------------------------------------------

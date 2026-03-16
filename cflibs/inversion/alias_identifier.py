@@ -6,14 +6,14 @@ in LIBS spectra through a 7-step process: peak detection, theoretical emissivity
 calculation, line fusion, matching, threshold determination, scoring, and decision.
 """
 
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Set
 from collections import defaultdict
 import math
 import numpy as np
 from scipy.optimize import nnls
 from scipy.signal import find_peaks
 from scipy.special import erf
-from scipy.stats import binom
+from scipy.stats import binom, linregress
 
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
@@ -39,6 +39,13 @@ class ALIASIdentifier:
     6. Score computation (k_sim, k_rate, k_shift)
     7. Decision and confidence level calculation
 
+    Thread-safety
+    -------------
+    ``identify()`` mutates instance state (``_effective_R``,
+    ``_global_wl_shift``, ``_estimated_T``), so a single instance is
+    **not** safe for concurrent calls. Create one instance per thread or
+    guard calls with an external lock.
+
     Parameters
     ----------
     atomic_db : AtomicDatabase
@@ -63,7 +70,20 @@ class ALIASIdentifier:
     elements : Optional[List[str]], optional
         List of elements to search for. If None, uses default common LIBS elements:
         ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"] (default: None)
+    max_screening_candidates : int, optional
+        Maximum number of candidates retained by fast screening (default: 20)
+    relative_cl_threshold : float, optional
+        CL must be >= max_CL * relative_cl_threshold to count as detected.
+        Set to 0 to disable the relative threshold (default: 0.1)
     """
+
+    # Temperature bounds for physics validation
+    _T_ESTIMATE_MIN_K = 3000.0
+    _T_ESTIMATE_MAX_K = 30000.0
+    # Consistency check uses a wider range because its purpose is only to
+    # flag grossly unphysical fits, not to narrow the estimate.
+    _T_CONSISTENCY_MIN_K = 3000.0
+    _T_CONSISTENCY_MAX_K = 50000.0
 
     # Crustal abundance in log10(ppm) — from CRC Handbook / USGS
     CRUSTAL_ABUNDANCE_LOG_PPM = {
@@ -115,11 +135,13 @@ class ALIASIdentifier:
         T_steps: int = 7,
         n_e_steps: int = 3,
         intensity_threshold_factor: float = 3.0,
-        detection_threshold: float = 0.01,
+        detection_threshold: float = 0.02,
         chance_window_scale: float = 0.4,
         elements: Optional[List[str]] = None,
         max_lines_per_element: int = 20,
         reference_temperature: float = 10000.0,
+        max_screening_candidates: int = 20,
+        relative_cl_threshold: float = 0.1,
     ):
         self.atomic_db = atomic_db
         if not (np.isfinite(resolving_power) and resolving_power > 0):
@@ -135,6 +157,8 @@ class ALIASIdentifier:
         self.elements = elements
         self.max_lines_per_element = max_lines_per_element
         self.reference_temperature = reference_temperature
+        self.max_screening_candidates = max_screening_candidates
+        self.relative_cl_threshold = relative_cl_threshold
 
         # Create Saha-Boltzmann solver
         self.solver = SahaBoltzmannSolver(atomic_db)
@@ -143,6 +167,16 @@ class ALIASIdentifier:
         self.T_grid_K = np.linspace(T_range_K[0], T_range_K[1], T_steps)
         self.n_e_grid_cm3 = np.linspace(n_e_range_cm3[0], n_e_range_cm3[1], n_e_steps)
 
+        # Set during identify() by auto-calibration
+        self._effective_R: Optional[float] = None
+        self._global_wl_shift: float = 0.0
+
+        # Ubiquitous atmospheric/ablation contaminants always tested
+        self._always_test: Set[str] = {"H"}
+
+        # Estimated plasma temperature (set by _estimate_plasma_temperature)
+        self._estimated_T: Optional[float] = None
+
     def identify(
         self, wavelength: np.ndarray, intensity: np.ndarray
     ) -> ElementIdentificationResult:
@@ -150,12 +184,14 @@ class ALIASIdentifier:
         Identify elements in experimental spectrum with cross-element peak
         competition.
 
-        Three-phase algorithm:
-        1. Score all elements independently (same as before).
-        2. Global peak competition: each disputed experimental peak is
-           assigned to the element with the highest initial confidence
-           level (CL).  Losers have their match revoked.
-        3. Rescore elements that lost peaks and build final results.
+        Enhanced multi-phase algorithm:
+        0. Baseline correction + peak detection
+        0a. Wavelength auto-calibration (estimate global shift + effective R)
+        0b. Plasma temperature estimation (for adaptive emissivities)
+        0c. Fast screening (restrict candidate elements)
+        1. Score screened elements independently
+        2. Global peak competition
+        3. Rescore, Boltzmann consistency check, build results
 
         Parameters
         ----------
@@ -169,11 +205,24 @@ class ALIASIdentifier:
         ElementIdentificationResult
             Complete identification result with detected/rejected elements
         """
-        # Step 1: Detect peaks
+        # Step 0: Baseline correction — ALL scoring uses corrected intensities
+        # so that cosine similarity, NNLS, and P_SNR measure peak heights above
+        # continuum rather than absolute intensity that is dominated by the
+        # Bremsstrahlung background.
+        baseline = estimate_baseline(wavelength, intensity)
+        corrected_intensity = np.maximum(intensity - baseline, 0.0)
+
+        # Step 1: Detect peaks (uses its own internal baseline correction)
         peaks = self._detect_peaks(wavelength, intensity)
 
         wl_min = np.min(wavelength)
         wl_max = np.max(wavelength)
+
+        # Step 0a: Auto-calibrate wavelength (estimate global shift + effective R)
+        self._auto_calibrate_wavelength(peaks, wl_min, wl_max)
+
+        # Step 0b: Estimate plasma temperature from detected peaks
+        self._estimate_plasma_temperature(peaks, corrected_intensity, wl_min, wl_max)
 
         # Get elements to search
         if self.elements is None:
@@ -190,12 +239,23 @@ class ALIASIdentifier:
         else:
             search_elements = self.elements
 
+        # Step 0c: Fast screening — restrict to elements with strong-line matches
+        # Skip screening when user explicitly provided a short element list
+        if self.elements is not None and len(self.elements) <= 10:
+            screened = search_elements
+        else:
+            screened = self._fast_screening(search_elements, peaks, wl_min, wl_max)
+
         # ── Phase 1: Independent scoring ──────────────────────────────
-        global_p_snr = self._compute_p_snr(intensity, peaks)
+        # Use corrected_intensity throughout scoring so continuum doesn't
+        # dominate cosine similarity and NNLS attribution.
+        global_p_snr = self._compute_p_snr(corrected_intensity, peaks)
         candidates: List[dict] = []
 
-        for element in search_elements:
-            element_lines = self._compute_element_emissivities(element, wl_min, wl_max)
+        for element in screened:
+            element_lines = self._compute_element_emissivities(
+                element, wl_min, wl_max, T_estimated=self._estimated_T
+            )
             if not element_lines:
                 continue
 
@@ -219,7 +279,7 @@ class ALIASIdentifier:
                 matched_mask,
                 matched_peak_idx,
                 wavelength_shifts,
-                intensity,
+                corrected_intensity,
                 peaks,
                 emissivity_threshold,
             )
@@ -236,7 +296,7 @@ class ALIASIdentifier:
                 k_rate,
                 k_shift,
                 N_expected,
-                intensity,
+                corrected_intensity,
                 peaks,
                 element=element,
                 P_maj=P_maj,
@@ -270,7 +330,7 @@ class ALIASIdentifier:
         #   P_local — local explanation score (what fraction of claimed
         #             peaks' intensity does this element actually explain?)
         if candidates and peaks:
-            peak_intensities_arr = np.array([intensity[p[0]] for p in peaks])
+            peak_intensities_arr = np.array([corrected_intensity[p[0]] for p in peaks])
             A = self._build_nnls_templates(candidates, peaks)
             P_mix_arr, P_local_arr, _ = self._compute_nnls_attribution(A, peak_intensities_arr)
             for i, cand in enumerate(candidates):
@@ -327,7 +387,7 @@ class ALIASIdentifier:
                     matched_mask,
                     matched_peak_idx,
                     wavelength_shifts,
-                    intensity,
+                    corrected_intensity,
                     peaks,
                     emissivity_threshold,
                 )
@@ -344,7 +404,7 @@ class ALIASIdentifier:
                     k_rate,
                     k_shift,
                     N_expected,
-                    intensity,
+                    corrected_intensity,
                     peaks,
                     element=element,
                     P_maj=P_maj,
@@ -387,22 +447,33 @@ class ALIASIdentifier:
                 fused_lines,
                 matched_mask,
                 matched_peak_idx,
-                intensity,
+                corrected_intensity,
                 peaks,
             )
 
-            # Post-CL discriminators with raised floors to prevent
-            # minor elements from being crushed when their peaks overlap
-            # with dominant-element emission.
+            # Post-CL discriminators — suppress false positives whose peaks
+            # ride on a dominant element's lines.
 
-            # Gate 1: P_local — ramp from 0.25 (floor) to 1.0
-            CL *= float(np.clip(2.0 * P_local, 0.25, 1.0))
+            # Gate 1: P_local — soft ramp with 0.25 floor
+            CL *= float(np.clip(P_local + 0.25, 0.25, 1.0))
 
-            # Gate 2: P_mix — linear ramp (0.25 at P_mix=0, 1.0 at P_mix=1)
-            CL *= 0.25 + 0.75 * min(P_mix, 1.0)
+            # Gate 2: P_mix — moderate gate, 0.2 floor
+            # True minor elements have P_mix ~0.02-0.10, FPs have ~0.000-0.005
+            CL *= float(np.clip(0.2 + 8.0 * P_mix, 0.2, 1.0))
 
             # Gate 3: R_rat — soft consistency check (0.5 min, 1.0 max)
             CL *= 0.5 + 0.5 * R_rat
+
+            # Gate 4: Boltzmann consistency — verify matched lines follow
+            # ln(I·λ/gA) vs E_k with physically reasonable temperature
+            boltz_factor = self._boltzmann_consistency_check(
+                fused_lines,
+                matched_mask,
+                matched_peak_idx,
+                corrected_intensity,
+                peaks,
+            )
+            CL *= boltz_factor
 
             detected = CL >= self.detection_threshold
 
@@ -420,7 +491,7 @@ class ALIASIdentifier:
                             wavelength_th_nm=line_data["wavelength_nm"],
                             element=element,
                             ionization_stage=trans.ionization_stage,
-                            intensity_exp=intensity[peaks[pidx][0]],
+                            intensity_exp=corrected_intensity[peaks[pidx][0]],
                             emissivity_th=line_data["avg_emissivity"],
                             transition=trans,
                             correlation=k_sim,
@@ -458,10 +529,24 @@ class ALIASIdentifier:
                     "p_chance": p_chance,
                     "fill_factor": fill_factor,
                     "N_penalty": 0.5 if N_expected == 2 else 1.0,
+                    "boltzmann_factor": boltz_factor,
+                    "effective_R": self._effective_R,
+                    "global_wl_shift": self._global_wl_shift,
+                    "estimated_T": self._estimated_T,
                 },
             )
 
             all_element_ids.append(element_id)
+
+        # Apply relative threshold: element CL must be >= max_CL * relative_cl_threshold
+        # This prevents spurious detections when one element dominates.
+        # Set self.relative_cl_threshold = 0 to disable.
+        if all_element_ids and self.relative_cl_threshold > 0:
+            max_CL = max(e.confidence for e in all_element_ids)
+            relative_threshold = max_CL * self.relative_cl_threshold
+            for e in all_element_ids:
+                if e.confidence < relative_threshold:
+                    e.detected = False
 
         # Split into detected/rejected
         detected_elements = [e for e in all_element_ids if e.detected]
@@ -487,6 +572,9 @@ class ALIASIdentifier:
             algorithm="alias",
             parameters={
                 "resolving_power": self.resolving_power,
+                "effective_R": self._effective_R,
+                "global_wl_shift_nm": self._global_wl_shift,
+                "estimated_T_K": self._estimated_T,
                 "T_min_K": self.T_range_K[0],
                 "T_max_K": self.T_range_K[1],
                 "n_e_min_cm3": self.n_e_range_cm3[0],
@@ -546,8 +634,333 @@ class ALIASIdentifier:
 
         return peaks
 
+    def _auto_calibrate_wavelength(
+        self,
+        peaks: List[Tuple[int, float]],
+        wl_min: float,
+        wl_max: float,
+    ) -> None:
+        """
+        Auto-calibrate wavelength offset and effective resolving power.
+
+        Compares detected peak positions to the strongest NIST reference
+        lines across common LIBS elements to estimate:
+        1. Global wavelength shift (median offset from best matches)
+        2. Effective resolving power (from distribution of offsets)
+
+        Sets self._global_wl_shift and self._effective_R.
+        """
+        if not peaks:
+            self._global_wl_shift = 0.0
+            self._effective_R = self.resolving_power
+            return
+
+        peak_wls = np.array([p[1] for p in peaks])
+
+        # Get strong reference lines from common LIBS elements
+        reference_elements = ["Fe", "Ca", "Mg", "Ti", "Al", "Cu", "Na", "Si", "Cr", "Mn"]
+        kT_ref = KB_EV * self.reference_temperature
+
+        ref_lines = []
+        for el in reference_elements:
+            for ion_stage in [1, 2]:
+                try:
+                    trans = self.atomic_db.get_transitions(
+                        el, ion_stage, wavelength_min=wl_min, wavelength_max=wl_max
+                    )
+                    if trans:
+                        for t in trans:
+                            strength = t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref)
+                            ref_lines.append((t.wavelength_nm, strength, el))
+                except (KeyError, ValueError, AttributeError):
+                    continue
+
+        if not ref_lines:
+            self._global_wl_shift = 0.0
+            self._effective_R = self.resolving_power
+            return
+
+        # Take top 30 strongest reference lines
+        ref_lines.sort(key=lambda x: x[1], reverse=True)
+        top_refs = ref_lines[:30]
+
+        # For each reference line, find the nearest peak using a generous
+        # initial tolerance (R=1000, ~0.4nm at 400nm)
+        offsets = []
+        for ref_wl, _strength, _el in top_refs:
+            dists = peak_wls - ref_wl
+            abs_dists = np.abs(dists)
+            generous_tol = ref_wl / 1000.0  # R=1000
+            within = abs_dists <= generous_tol
+            if np.any(within):
+                best_idx = np.argmin(abs_dists)
+                offsets.append(float(dists[best_idx]))
+
+        if len(offsets) < 3:
+            self._global_wl_shift = 0.0
+            self._effective_R = self.resolving_power
+            return
+
+        # Global shift = median offset
+        self._global_wl_shift = float(np.median(offsets))
+
+        # Effective R: estimate from MAD of offsets after shift correction
+        corrected_offsets = np.array(offsets) - self._global_wl_shift
+        mad = float(np.median(np.abs(corrected_offsets)))
+        # The matching tolerance delta_lambda = mean_wl / R
+        # We want delta_lambda ~ 3*MAD to capture 99% of real matches
+        mean_wl = 0.5 * (wl_min + wl_max)
+        if mad > 0:
+            estimated_R = mean_wl / (3.0 * mad)
+            # Clamp to reasonable range [500, nominal R]
+            self._effective_R = float(np.clip(estimated_R, 500.0, self.resolving_power))
+        else:
+            # Perfect calibration — use nominal R
+            self._effective_R = self.resolving_power
+
+    def _estimate_plasma_temperature(
+        self,
+        peaks: List[Tuple[int, float]],
+        corrected_intensity: np.ndarray,
+        wl_min: float,
+        wl_max: float,
+    ) -> None:
+        """
+        Estimate plasma temperature from Boltzmann slope of strong detected peaks.
+
+        Uses Fe I lines preferentially (most common in LIBS). Falls back to any
+        transition metal with enough matched lines.
+
+        Sets self._estimated_T (K), or None if estimation fails.
+        """
+        if len(peaks) < 3:
+            self._estimated_T = None
+            return
+
+        peak_wls = np.array([p[1] for p in peaks])
+        peak_intensities = np.array([corrected_intensity[p[0]] for p in peaks])
+
+        # Try to match strong lines from Fe I, Ti I, Cr I, Ca I etc.
+        probe_elements = ["Fe", "Ti", "Cr", "Ca", "Mn", "Ni"]
+        delta_lambda = 0.5 * (wl_min + wl_max) / max(self._effective_R or self.resolving_power, 500)
+
+        for probe_el in probe_elements:
+            try:
+                transitions = self.atomic_db.get_transitions(
+                    probe_el, 1, wavelength_min=wl_min, wavelength_max=wl_max
+                )
+                if not transitions:
+                    continue
+            except (KeyError, ValueError, AttributeError):
+                continue
+
+            # Filter to lines with known A_ki and g_k
+            good_trans = [t for t in transitions if t.A_ki > 0 and t.g_k > 0 and t.E_k_ev > 0]
+            if len(good_trans) < 4:
+                continue
+
+            # Sort by expected strength and take top 15
+            kT_ref = KB_EV * self.reference_temperature
+            good_trans.sort(
+                key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref),
+                reverse=True,
+            )
+            good_trans = good_trans[:15]
+
+            # Match to peaks
+            E_k_vals = []
+            y_vals = []
+            shift = self._global_wl_shift
+
+            for t in good_trans:
+                wl_shifted = t.wavelength_nm + shift
+                dists = np.abs(peak_wls - wl_shifted)
+                best_idx = int(np.argmin(dists))
+                if dists[best_idx] <= delta_lambda:
+                    I_obs = peak_intensities[best_idx]
+                    if I_obs > 0 and t.A_ki > 0 and t.g_k > 0:
+                        y = math.log(I_obs * t.wavelength_nm / (t.g_k * t.A_ki))
+                        E_k_vals.append(t.E_k_ev)
+                        y_vals.append(y)
+
+            if len(E_k_vals) < 4:
+                continue
+
+            # Fit Boltzmann slope: y = -1/(kT) * E_k + const
+            E_k_arr = np.array(E_k_vals)
+            y_arr = np.array(y_vals)
+
+            try:
+                result = linregress(E_k_arr, y_arr)
+                slope = result.slope
+                r_sq = result.rvalue**2
+
+                if abs(slope) < 1e-10:
+                    continue
+                if slope < 0 and r_sq > 0.3:
+                    T_K = -1.0 / (slope * KB_EV)
+                    if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
+                        self._estimated_T = float(T_K)
+                        return
+            except (ValueError, ZeroDivisionError):
+                continue
+
+        # Fallback: no T estimate
+        self._estimated_T = None
+
+    def _fast_screening(
+        self,
+        all_elements: List[str],
+        peaks: List[Tuple[int, float]],
+        wl_min: float,
+        wl_max: float,
+    ) -> List[str]:
+        """
+        Fast screening to restrict candidate elements.
+
+        Two-stage approach:
+        1. For each element, compute a quick screening score based on how many
+           of its top-10 lines match peaks, weighted by line strength.
+        2. Pass the top max_screening_candidates scoring elements.
+
+        Always-test elements bypass screening.
+
+        Returns list of elements that passed screening.
+        """
+        if not peaks:
+            return list(self._always_test & set(all_elements))
+
+        peak_wls = np.array([p[1] for p in peaks])
+        eff_R = self._effective_R or self.resolving_power
+        mean_wl = 0.5 * (wl_min + wl_max)
+        delta_lambda = mean_wl / eff_R
+        screening_tol = 2.0 * delta_lambda
+        shift = self._global_wl_shift
+
+        kT_ref = KB_EV * self.reference_temperature
+        element_scores = []
+
+        for element in all_elements:
+            if element in self._always_test:
+                continue
+
+            # Get all lines and compute strengths
+            lines_with_strength = []
+            for ion_stage in [1, 2]:
+                try:
+                    trans = self.atomic_db.get_transitions(
+                        element, ion_stage, wavelength_min=wl_min, wavelength_max=wl_max
+                    )
+                    if trans:
+                        for t in trans:
+                            strength = t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref)
+                            lines_with_strength.append((t.wavelength_nm, strength))
+                except (KeyError, ValueError, AttributeError):
+                    continue
+
+            if not lines_with_strength:
+                continue
+
+            lines_with_strength.sort(key=lambda x: x[1], reverse=True)
+            top10 = lines_with_strength[:10]
+
+            # Compute screening score: sum of strengths for matched lines
+            # divided by total strength (strength-weighted match rate)
+            total_strength = sum(s for _, s in top10)
+            matched_strength = 0.0
+            n_matched = 0
+            for wl_th, strength in top10:
+                wl_shifted = wl_th + shift
+                dists = np.abs(peak_wls - wl_shifted)
+                if np.min(dists) <= screening_tol:
+                    matched_strength += strength
+                    n_matched += 1
+
+            if n_matched >= 1 and total_strength > 0:
+                score = matched_strength / total_strength
+                element_scores.append((element, score, n_matched))
+
+        # Sort by screening score, take top max_screening_candidates
+        element_scores.sort(key=lambda x: x[1], reverse=True)
+        passed = list(self._always_test & set(all_elements))
+        for element, score, n_matched in element_scores[: self.max_screening_candidates]:
+            if element not in passed:
+                passed.append(element)
+
+        return passed
+
+    def _boltzmann_consistency_check(
+        self,
+        fused_lines: List[dict],
+        matched_mask: np.ndarray,
+        matched_peak_idx: np.ndarray,
+        intensity: np.ndarray,
+        peaks: List[Tuple[int, float]],
+    ) -> float:
+        """
+        Boltzmann consistency check for matched lines.
+
+        For elements with >=3 matched lines, fit ln(I*lambda/(g*A)) vs E_k.
+        Slope should give physical temperature (3000-50000K) with reasonable R^2.
+
+        Returns a factor in [0.5, 1.0] to multiply into CL.
+        """
+        matched_indices = np.nonzero(matched_mask)[0]
+        if len(matched_indices) < 3:
+            return 1.0  # Not enough lines to check, neutral
+
+        E_k_vals = []
+        y_vals = []
+
+        for i in matched_indices:
+            trans = fused_lines[i]["transition"]
+            pidx = int(matched_peak_idx[i])
+            if pidx < 0 or pidx >= len(peaks):
+                continue
+            I_obs = intensity[peaks[pidx][0]]
+            if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
+                continue
+
+            y = math.log(I_obs * trans.wavelength_nm / (trans.g_k * trans.A_ki))
+            E_k_vals.append(trans.E_k_ev)
+            y_vals.append(y)
+
+        if len(E_k_vals) < 3:
+            return 1.0
+
+        E_k_arr = np.array(E_k_vals)
+        y_arr = np.array(y_vals)
+
+        # Need some spread in E_k for meaningful fit
+        if np.ptp(E_k_arr) < 0.5:
+            return 1.0  # All same energy level, can't fit
+
+        try:
+            result = linregress(E_k_arr, y_arr)
+            slope = result.slope
+            r_sq = result.rvalue**2
+        except (ValueError, ZeroDivisionError):
+            return 1.0
+
+        # Check physical validity
+        if slope >= 0:
+            # Positive slope = anti-Boltzmann → likely false positive
+            return 0.5
+
+        T_K = -1.0 / (slope * KB_EV)
+        if T_K < self._T_CONSISTENCY_MIN_K or T_K > self._T_CONSISTENCY_MAX_K:
+            # Unphysical temperature
+            return 0.5
+
+        # Scale by R^2: good fit → 1.0, poor fit → 0.7
+        return float(0.7 + 0.3 * min(r_sq, 1.0))
+
     def _compute_element_emissivities(
-        self, element: str, wl_min: float, wl_max: float
+        self,
+        element: str,
+        wl_min: float,
+        wl_max: float,
+        T_estimated: Optional[float] = None,
     ) -> List[dict]:
         """
         Compute theoretical emissivities for element over (T, n_e) grid.
@@ -599,9 +1012,17 @@ class ALIASIdentifier:
         line_data = []
         total_density = 1e15  # Arbitrary reference density
 
+        # When T_estimated is available, use a narrow grid around that T
+        # instead of the full T range. This makes emissivities reflect the
+        # actual plasma conditions rather than averaged-out values.
+        if T_estimated is not None:
+            T_grid = np.array([T_estimated])
+        else:
+            T_grid = self.T_grid_K
+
         # Precompute stage densities for all (T, n_e) grid points
         grid_stage_densities = {}
-        for T_K in self.T_grid_K:
+        for T_K in T_grid:
             for n_e in self.n_e_grid_cm3:
                 T_eV = T_K * KB_EV
                 try:
@@ -616,7 +1037,7 @@ class ALIASIdentifier:
         for transition in transitions:
             emissivities = []
 
-            for T_K in self.T_grid_K:
+            for T_K in T_grid:
                 for n_e in self.n_e_grid_cm3:
                     T_eV = T_K * KB_EV
 
@@ -680,9 +1101,10 @@ class ALIASIdentifier:
         # Sort by wavelength
         sorted_lines = sorted(line_data, key=lambda x: x["wavelength_nm"])
 
-        # Resolution element at mean wavelength
+        # Resolution element at mean wavelength — use effective R if available
         mean_wl = np.mean(wavelength_nm)
-        delta_lambda = mean_wl / self.resolving_power
+        eff_R = self._effective_R or self.resolving_power
+        delta_lambda = mean_wl / eff_R
 
         # Group lines within delta_lambda
         fused = []
@@ -739,6 +1161,11 @@ class ALIASIdentifier:
         """
         Match theoretical lines to experimental peaks.
 
+        Uses auto-calibrated global wavelength shift and effective resolving
+        power from _auto_calibrate_wavelength(). Two-pass strategy:
+        - Pass 1: tight tolerance (delta_lambda from effective R)
+        - Pass 2: for unmatched strong lines, wider tolerance (2x delta_lambda)
+
         Parameters
         ----------
         fused_lines : List[dict]
@@ -763,34 +1190,40 @@ class ALIASIdentifier:
 
         peak_wavelengths = np.array([p[1] for p in peaks])
 
-        # Resolution element for matching window
+        # Use auto-calibrated shift and effective R
+        global_shift = self._global_wl_shift
+        eff_R = self._effective_R or self.resolving_power
         mean_wl = np.mean([line["wavelength_nm"] for line in fused_lines])
-        delta_lambda = mean_wl / self.resolving_power
+        delta_lambda = mean_wl / eff_R
 
-        # Estimate global wavelength offset from strongest peaks
+        # Additionally refine per-element shift from top 10 lines
         sorted_by_emissivity = sorted(fused_lines, key=lambda x: x["avg_emissivity"], reverse=True)
-        top_lines = sorted_by_emissivity[: min(5, len(sorted_by_emissivity))]
+        top_lines = sorted_by_emissivity[: min(10, len(sorted_by_emissivity))]
 
-        shifts = []
+        per_element_shifts = []
         for line in top_lines:
-            wl_th = line["wavelength_nm"]
+            wl_th = line["wavelength_nm"] + global_shift
             distances = np.abs(peak_wavelengths - wl_th)
             if len(distances) > 0:
                 min_dist = np.min(distances)
-                if min_dist <= delta_lambda:  # within one resolution element
+                if min_dist <= 1.5 * delta_lambda:
                     closest_idx = np.argmin(distances)
-                    shifts.append(peak_wavelengths[closest_idx] - wl_th)
+                    per_element_shifts.append(peak_wavelengths[closest_idx] - line["wavelength_nm"])
 
-        global_shift = np.median(shifts) if shifts else 0.0
+        # Use per-element shift if enough matches, else fall back to global
+        if len(per_element_shifts) >= 2:
+            element_shift = float(np.median(per_element_shifts))
+        else:
+            element_shift = global_shift
 
         matched_mask = np.zeros(n, dtype=bool)
         wavelength_shifts = np.zeros(n)
         matched_peak_idx = np.full(n, -1, dtype=int)
 
+        # Pass 1: tight tolerance
         for i, line in enumerate(fused_lines):
-            wl_th = line["wavelength_nm"] + global_shift  # Apply correction
+            wl_th = line["wavelength_nm"] + element_shift
 
-            # Find peaks within +/- delta_lambda
             distances = np.abs(peak_wavelengths - wl_th)
             within_window = distances <= delta_lambda
 
@@ -798,7 +1231,28 @@ class ALIASIdentifier:
                 matched_mask[i] = True
                 closest_idx = int(np.argmin(distances))
                 matched_peak_idx[i] = closest_idx
-                # Shift relative to uncorrected wavelength
+                wavelength_shifts[i] = peak_wavelengths[closest_idx] - line["wavelength_nm"]
+
+        # Pass 2: for unmatched strong lines, try wider tolerance (2x)
+        # "strong" = above median emissivity of all lines
+        emissivities = np.array([line["avg_emissivity"] for line in fused_lines])
+        emiss_median = np.median(emissivities) if len(emissivities) > 0 else 0.0
+        wide_tol = 2.0 * delta_lambda
+
+        for i, line in enumerate(fused_lines):
+            if matched_mask[i]:
+                continue  # Already matched
+            if emissivities[i] < emiss_median:
+                continue  # Only retry strong lines
+
+            wl_th = line["wavelength_nm"] + element_shift
+            distances = np.abs(peak_wavelengths - wl_th)
+            within_wide = distances <= wide_tol
+
+            if np.any(within_wide):
+                matched_mask[i] = True
+                closest_idx = int(np.argmin(distances))
+                matched_peak_idx[i] = closest_idx
                 wavelength_shifts[i] = peak_wavelengths[closest_idx] - line["wavelength_nm"]
 
         # Enforce one-to-one: each experimental peak is assigned to at most

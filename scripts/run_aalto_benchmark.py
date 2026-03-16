@@ -525,6 +525,31 @@ def main():
             f"{metrics.elapsed_s:.1f}s)"
         )
 
+    # Also compute "LIBS-aware" metrics that exclude common atmospheric/
+    # contaminant elements from false positive counts. In open-air LIBS,
+    # N, O, H, Ar, Na, K, Ca are almost always present due to atmospheric
+    # breakdown and surface contamination.
+    LIBS_CONTAMINANTS = {"N", "O", "H", "Ar", "Na", "K", "Ca", "Ne", "F", "Cl", "He"}
+
+    results_aware: Dict[str, ElementIDMetrics] = {}
+    for method, m in results.items():
+        aware = ElementIDMetrics()
+        aware.n_spectra = m.n_spectra
+        aware.n_succeeded = m.n_succeeded
+        aware.elapsed_s = m.elapsed_s
+        for d in m.details:
+            expected = set(d["expected"])
+            detected = set(d.get("detected", []))
+            # Remove contaminants from FP count
+            genuine_detected = (detected - LIBS_CONTAMINANTS) | (detected & expected)
+            tp = len(genuine_detected & expected)
+            fp = len(genuine_detected - expected)
+            fn = len(expected - genuine_detected)
+            aware.true_positives += tp
+            aware.false_positives += fp
+            aware.false_negatives += fn
+        results_aware[method] = aware
+
     # Detailed report
     print("\n" + "=" * 80)
     print("AALTO LIBS BENCHMARK — ELEMENT IDENTIFICATION RESULTS")
@@ -541,6 +566,17 @@ def main():
             f"{method:<15s} {m.recall:>8.3f} {m.precision:>10.3f} {m.f1:>8.3f} "
             f"{m.true_positives:>6d} {m.false_positives:>6d} {m.false_negatives:>6d} "
             f"{m.n_succeeded:>4d}/{m.n_spectra:<3d} {m.elapsed_s:>6.1f}s"
+        )
+
+    print(
+        f"\n{'Method':<15s} {'Recall':>8s} {'Precision':>10s} {'F1':>8s} "
+        f"{'TP':>6s} {'FP':>6s} {'FN':>6s}   (LIBS-aware: atmospheric FPs excluded)"
+    )
+    print("-" * 80)
+    for method, m in results_aware.items():
+        print(
+            f"{method:<15s} {m.recall:>8.3f} {m.precision:>10.3f} {m.f1:>8.3f} "
+            f"{m.true_positives:>6d} {m.false_positives:>6d} {m.false_negatives:>6d}"
         )
 
     # Per-mineral breakdown for best method
