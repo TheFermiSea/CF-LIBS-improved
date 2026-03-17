@@ -62,7 +62,6 @@ class SweepResult:
     intensity_threshold_factor: float
     detection_threshold: float
     chance_window_scale: float
-    min_relative_intensity: float
     max_lines_per_element: int
     tp: int
     fp: int
@@ -154,7 +153,6 @@ def _score_one(
     intensity_threshold_factor: float,
     detection_threshold: float,
     chance_window_scale: float,
-    min_relative_intensity: float,
     max_lines_per_element: int,
 ) -> Tuple[int, int, int, int, bool]:
     identifier = ALIASIdentifier(
@@ -164,7 +162,6 @@ def _score_one(
         intensity_threshold_factor=float(intensity_threshold_factor),
         detection_threshold=float(detection_threshold),
         chance_window_scale=float(chance_window_scale),
-        min_relative_intensity=float(min_relative_intensity),
         max_lines_per_element=int(max_lines_per_element),
     )
     result = identifier.identify(case.wavelength, case.spectrum)
@@ -185,7 +182,6 @@ def run_sweep(
     intensity_threshold_factors: Iterable[float],
     detection_thresholds: Iterable[float],
     chance_window_scales: Iterable[float],
-    min_relative_intensities: Iterable[float],
     max_lines_per_element: Iterable[int],
     max_combinations: Optional[int] = None,
 ) -> List[SweepResult]:
@@ -193,7 +189,6 @@ def run_sweep(
         intensity_threshold_factors,
         detection_thresholds,
         chance_window_scales,
-        min_relative_intensities,
         max_lines_per_element,
     )
     if max_combinations is not None and max_combinations > 0:
@@ -202,7 +197,7 @@ def run_sweep(
         combos = list(combo_iter)
 
     results: List[SweepResult] = []
-    for idx, (itf, dt, cws, mri, mle) in enumerate(combos, start=1):
+    for idx, (itf, dt, cws, mle) in enumerate(combos, start=1):
         tp = fp = fn = tn = 0
         exact_matches = 0
         evaluated = 0
@@ -215,23 +210,21 @@ def run_sweep(
                     intensity_threshold_factor=float(itf),
                     detection_threshold=float(dt),
                     chance_window_scale=float(cws),
-                    min_relative_intensity=float(mri),
                     max_lines_per_element=int(mle),
                 )
             except Exception as exc:
                 logger.warning(
                     "Scoring failed for dataset %s with config %s: %s",
                     case.name,
-                    f"itf={itf} dt={dt} cws={cws} mri={mri} mle={mle}",
+                    f"itf={itf} dt={dt} cws={cws} mle={mle}",
                     exc,
                 )
                 logger.debug(
-                    "Traceback for dataset %s config itf=%s dt=%s cws=%s mri=%s mle=%s",
+                    "Traceback for dataset %s config itf=%s dt=%s cws=%s mle=%s",
                     case.name,
                     itf,
                     dt,
                     cws,
-                    mri,
                     mle,
                     exc_info=True,
                 )
@@ -253,7 +246,6 @@ def run_sweep(
                 intensity_threshold_factor=float(itf),
                 detection_threshold=float(dt),
                 chance_window_scale=float(cws),
-                min_relative_intensity=float(mri),
                 max_lines_per_element=int(mle),
                 tp=tp,
                 fp=fp,
@@ -269,7 +261,7 @@ def run_sweep(
         )
         print(
             f"[{idx:>3}/{len(combos)}] "
-            f"itf={itf:.2f} dt={dt:.3f} cws={cws:.2f} mri={mri:.0f} mle={mle} "
+            f"itf={itf:.2f} dt={dt:.3f} cws={cws:.2f} mle={mle} "
             f"-> F1={f1:.3f} P={precision:.3f} R={recall:.3f} FPR={fpr:.3f}"
         )
 
@@ -317,11 +309,10 @@ def main() -> None:
     parser.add_argument("--top-k", type=int, default=15)
     parser.add_argument("--max-combinations", type=int, default=0)
 
-    parser.add_argument("--intensity-threshold-factors", type=str, default="3.5,4.0,4.5")
-    parser.add_argument("--detection-thresholds", type=str, default="0.03,0.04,0.05")
+    parser.add_argument("--intensity-threshold-factors", type=str, default="3.0,3.5,4.0")
+    parser.add_argument("--detection-thresholds", type=str, default="0.02,0.03,0.05")
     parser.add_argument("--chance-window-scales", type=str, default="0.3,0.4,0.5")
-    parser.add_argument("--min-relative-intensities", type=str, default="50,100,200")
-    parser.add_argument("--max-lines-per-element", type=str, default="30,50")
+    parser.add_argument("--max-lines-per-element", type=str, default="20,30,50")
 
     args = parser.parse_args()
     logging.basicConfig(
@@ -352,7 +343,6 @@ def main() -> None:
             intensity_threshold_factors=_parse_float_list(args.intensity_threshold_factors),
             detection_thresholds=_parse_float_list(args.detection_thresholds),
             chance_window_scales=_parse_float_list(args.chance_window_scales),
-            min_relative_intensities=_parse_float_list(args.min_relative_intensities),
             max_lines_per_element=_parse_int_list(args.max_lines_per_element),
             max_combinations=args.max_combinations if args.max_combinations > 0 else None,
         )
@@ -367,8 +357,7 @@ def main() -> None:
             f"{i:>2}. F1={r.f1:.3f} P={r.precision:.3f} R={r.recall:.3f} FPR={r.fpr:.3f} "
             f"exact={r.exact_matches}/{r.datasets_evaluated} "
             f"| itf={r.intensity_threshold_factor:.2f} dt={r.detection_threshold:.3f} "
-            f"cws={r.chance_window_scale:.2f} mri={r.min_relative_intensity:.0f} "
-            f"mle={r.max_lines_per_element}"
+            f"cws={r.chance_window_scale:.2f} mle={r.max_lines_per_element}"
         )
 
     best = results[0]
@@ -377,7 +366,6 @@ def main() -> None:
         f"  intensity_threshold_factor={best.intensity_threshold_factor:.2f}, "
         f"detection_threshold={best.detection_threshold:.3f}, "
         f"chance_window_scale={best.chance_window_scale:.2f}, "
-        f"min_relative_intensity={best.min_relative_intensity:.0f}, "
         f"max_lines_per_element={best.max_lines_per_element}"
     )
 
