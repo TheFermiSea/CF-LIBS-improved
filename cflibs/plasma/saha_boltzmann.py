@@ -3,7 +3,8 @@ Saha-Boltzmann solver for LTE plasma.
 """
 
 import threading
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Protocol, Tuple
+
 import numpy as np
 
 from cflibs.core.constants import C_LIGHT, E_CHARGE, EV_TO_K, J_TO_EV, KB, SAHA_CONST_CM3
@@ -12,6 +13,20 @@ from cflibs.core.abc import SolverStrategy, AtomicDataSource
 from cflibs.core.cache import cached_partition_function
 from cflibs.core.logging_config import get_logger
 from cflibs.plasma.partition import PartitionFunctionEvaluator
+
+
+class IPDModel(Protocol):
+    """Protocol for Ionization Potential Depression (IPD) models."""
+
+    def calculate_lowering(self, n_e_cm3: float, T_K: float) -> float: ...
+
+
+class DebyeHuckelIPD:
+    """Debye-Hückel model for IPD."""
+
+    def calculate_lowering(self, n_e_cm3: float, T_K: float) -> float:
+        return ionization_potential_lowering(n_e_cm3, T_K)
+
 
 logger = get_logger("plasma.saha_boltzmann")
 _MISSING_LEVEL_WARNED: set[tuple[str, int]] = set()
@@ -27,7 +42,7 @@ class SahaBoltzmannSolver(SolverStrategy):
     2. Boltzmann distribution for level populations
     """
 
-    def __init__(self, atomic_db: AtomicDataSource):
+    def __init__(self, atomic_db: AtomicDataSource, ipd_model: Optional[IPDModel] = None):
         """
         Initialize solver.
 
@@ -35,8 +50,12 @@ class SahaBoltzmannSolver(SolverStrategy):
         ----------
         atomic_db : AtomicDatabase
             Atomic database for ionization potentials and energy levels
+        ipd_model : IPDModel, optional
+            Strategy for calculating Ionization Potential Depression.
+            Defaults to Debye-Hückel if None.
         """
         self.atomic_db = atomic_db
+        self.ipd_model = ipd_model if ipd_model is not None else DebyeHuckelIPD()
 
     def solve_ionization_balance(
         self, element: str, T_e_eV: float, n_e_cm3: float, total_density_cm3: float
@@ -71,7 +90,7 @@ class SahaBoltzmannSolver(SolverStrategy):
         # Calculate Ionization Potential Depression (IPD)
         # In high-density LIBS plasmas, IPD lowers the effective ionization energy.
         T_K = T_e_eV * EV_TO_K
-        delta_chi = ionization_potential_lowering(n_e_cm3, T_K)
+        delta_chi = self.ipd_model.calculate_lowering(n_e_cm3, T_K)
 
         eff_ip_I = max(ip_I - delta_chi, 0.0)
 
@@ -272,7 +291,7 @@ class SahaBoltzmannSolver(SolverStrategy):
         ip = self.atomic_db.get_ionization_potential(element, ionization_stage)
         if n_e_cm3 is not None and ip is not None:
             T_K = T_e_eV * EV_TO_K
-            delta_chi = ionization_potential_lowering(n_e_cm3, T_K)
+            delta_chi = self.ipd_model.calculate_lowering(n_e_cm3, T_K)
             max_energy_ev = max(ip - delta_chi, 0.0)
         else:
             max_energy_ev = ip * 0.98 if ip else 50.0
