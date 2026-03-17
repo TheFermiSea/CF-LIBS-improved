@@ -3,7 +3,7 @@ Saha-Boltzmann solver for LTE plasma.
 """
 
 import threading
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 import numpy as np
 
 from cflibs.core.constants import C_LIGHT, E_CHARGE, EV_TO_K, J_TO_EV, KB, SAHA_CONST_CM3
@@ -72,7 +72,7 @@ class SahaBoltzmannSolver(SolverStrategy):
         # In high-density LIBS plasmas, IPD lowers the effective ionization energy.
         T_K = T_e_eV * EV_TO_K
         delta_chi = ionization_potential_lowering(n_e_cm3, T_K)
-        
+
         eff_ip_I = max(ip_I - delta_chi, 0.0)
 
         # Saha equation: n_{z+1} * n_e / n_z = const * T^1.5 * (U_{z+1}/U_z) * exp(-IP/kT)
@@ -80,9 +80,19 @@ class SahaBoltzmannSolver(SolverStrategy):
         # n_II * n_e / n_I = SAHA_CONST * T^1.5 * (U_II/U_I) * exp(-IP_I/kT)
 
         U_I = self.calculate_partition_function(element, 1, T_e_eV, max_energy_ev=eff_ip_I)
-        
+
         eff_ip_II = max(ip_II - delta_chi, 0.0) if ip_II is not None else None
         U_II = self.calculate_partition_function(element, 2, T_e_eV, max_energy_ev=eff_ip_II)
+
+        if U_I <= 0.0 or U_II <= 0.0:
+            logger.warning(
+                "Non-positive partition function for %s (U_I=%g, U_II=%g); "
+                "falling back to neutral-only.",
+                element,
+                U_I,
+                U_II,
+            )
+            return {1: total_density_cm3}
 
         S1 = (SAHA_CONST_CM3 / n_e_cm3) * (T_e_eV**1.5) * (U_II / U_I) * np.exp(-eff_ip_I / T_e_eV)
 
@@ -230,7 +240,12 @@ class SahaBoltzmannSolver(SolverStrategy):
         return {stage: n / total for stage, n in stage_densities.items()}
 
     def solve_level_population(
-        self, element: str, ionization_stage: int, stage_density_cm3: float, T_e_eV: float, n_e_cm3: float = None
+        self,
+        element: str,
+        ionization_stage: int,
+        stage_density_cm3: float,
+        T_e_eV: float,
+        n_e_cm3: Optional[float] = None,
     ) -> Dict[Tuple[str, int, float], float]:
         """
         Solve Boltzmann distribution for level populations.
@@ -262,7 +277,20 @@ class SahaBoltzmannSolver(SolverStrategy):
         else:
             max_energy_ev = ip * 0.98 if ip else 50.0
 
-        U = self.calculate_partition_function(element, ionization_stage, T_e_eV, max_energy_ev=max_energy_ev)
+        U = self.calculate_partition_function(
+            element, ionization_stage, T_e_eV, max_energy_ev=max_energy_ev
+        )
+
+        if U <= 0.0:
+            logger.warning(
+                "Non-positive partition function for %s stage %d at T_e_eV=%g; "
+                "returning empty level populations.",
+                element,
+                ionization_stage,
+                T_e_eV,
+            )
+            return {}
+
         levels = self.atomic_db.get_energy_levels(element, ionization_stage)
 
         populations = {}
@@ -303,7 +331,9 @@ class SahaBoltzmannSolver(SolverStrategy):
             # Solve level populations for each stage
             for stage, stage_density in stage_densities.items():
                 if stage_density > 0:
-                    populations = self.solve_level_population(element, stage, stage_density, T_e_eV, n_e_cm3)
+                    populations = self.solve_level_population(
+                        element, stage, stage_density, T_e_eV, n_e_cm3
+                    )
                     all_populations.update(populations)
 
         logger.debug(f"Solved Saha-Boltzmann for {len(plasma.species)} species")

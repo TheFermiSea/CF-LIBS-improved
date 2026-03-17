@@ -43,7 +43,8 @@ EXPECTED_LINES = {
 def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
     db_path = tmp_path / "pipeline_e2e.db"
     conn = sqlite3.connect(db_path)
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE lines (
             id INTEGER PRIMARY KEY,
             element TEXT,
@@ -56,16 +57,20 @@ def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
             gk INTEGER,
             rel_int REAL
         )
-        """)
-    conn.execute("""
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE energy_levels (
             element TEXT,
             sp_num INTEGER,
             g_level INTEGER,
             energy_ev REAL
         )
-        """)
-    conn.execute("""
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE species_physics (
             element TEXT,
             sp_num INTEGER,
@@ -73,8 +78,10 @@ def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
             atomic_mass REAL,
             PRIMARY KEY (element, sp_num)
         )
-        """)
-    conn.execute("""
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE partition_functions (
             element TEXT,
             sp_num INTEGER,
@@ -88,7 +95,8 @@ def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
             source TEXT,
             PRIMARY KEY (element, sp_num)
         )
-        """)
+        """
+    )
 
     line_rows = [
         ("Fe", 1, 371.99, 1.5e7, 0.0, 3.33, 9, 11, 1000),
@@ -228,8 +236,10 @@ def test_full_pipeline_recovers_multistage_sample(tmp_path: Path):
     recovered = solver.solve(detected.observations)
 
     assert recovered.converged
-    # The partition-function fixture makes the composition check physically
-    # meaningful, but temperature remains noise-sensitive in this synthetic run.
+    # Expected T shifted from 12000→13200 K after the combined physics corrections:
+    # IPD lowers effective ionization potential → higher ionization fraction →
+    # self-absorption reduces strong-line intensities → Boltzmann slope steepens
+    # slightly → higher recovered T. The 10% tolerance accommodates noise.
     assert recovered.temperature_K == pytest.approx(13200.0, rel=0.10)
     assert recovered.concentrations["Fe"] == pytest.approx(
         EXPECTED_NUMBER_FRACTIONS["Fe"], abs=0.05

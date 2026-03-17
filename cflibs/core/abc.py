@@ -69,7 +69,12 @@ class SolverStrategy(ABC):
 
     @abstractmethod
     def solve_level_population(
-        self, element: str, ionization_stage: int, stage_density_cm3: float, T_e_eV: float
+        self,
+        element: str,
+        ionization_stage: int,
+        stage_density_cm3: float,
+        T_e_eV: float,
+        n_e_cm3: Optional[float] = None,
     ) -> Dict[Tuple[str, int, float], float]:
         """Solve level population distribution."""
         pass

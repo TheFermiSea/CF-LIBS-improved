@@ -135,10 +135,14 @@ def test_ionization_fractions(solver, element):
             continue  # Skip negligible stages
         our_f = our_fracs.get(stage, 0.0)
         rel_error = abs(our_f - nist_f) / nist_f
-        # With IPD included, ionization balance is shifted significantly relative to NIST reference
-        assert rel_error < 1.0, (
+        # IPD (Debye-Hückel) shifts ionization balance relative to the NIST
+        # no-IPD reference.  Allow 30% for dominant stages (fraction > 0.3)
+        # and 50% for minority stages where small absolute shifts cause
+        # large relative errors.
+        tol = 0.30 if nist_f > 0.3 else 0.50
+        assert rel_error < tol, (
             f"{element} stage {stage} at T={T_eV} eV, ne={n_e:.0e}: "
-            f"fraction={our_f:.4f} vs NIST={nist_f:.4f} ({rel_error:.1%} error, limit 100%)"
+            f"fraction={our_f:.4f} vs NIST={nist_f:.4f} ({rel_error:.1%} error, limit {tol:.0%})"
         )
 
 

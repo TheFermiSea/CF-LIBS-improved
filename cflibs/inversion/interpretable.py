@@ -875,7 +875,12 @@ class SpectralExplainer:
         n_features : int
             Number of features in local model
         kernel_width : float
-            Width of kernel for weighting samples
+            Width of the exponential kernel for weighting perturbed samples.
+            Distances are normalized to [0, 1] (divided by the max perturbation
+            distance) before applying the kernel, so this parameter operates on
+            a normalized scale. Default 0.25 means perturbations at ~25% of the
+            max distance receive significant weight. This differs from standard
+            LIME which uses raw feature-space distances.
 
         Returns
         -------

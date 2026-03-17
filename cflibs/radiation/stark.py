@@ -77,7 +77,7 @@ def stark_hwhm(
         return w_e
 
     # Ion broadening correction
-    A_ion = stark_A_ref * (n_e_cm3 / REF_NE)**0.25
+    A_ion = stark_A_ref * (n_e_cm3 / REF_NE) ** 0.25
     # For a typical LIBS plasma, the Debye shielding parameter R_D is ~0.5.
     # A full calculation requires Debye length, but 0.5 is a common approximation.
     R_D = 0.5
@@ -223,7 +223,11 @@ if HAS_JAX:
 
     @jit
     def stark_hwhm_jax(
-        n_e_cm3: float, T_eV: float, stark_w_ref: float, stark_alpha: float, stark_A_ref: float = 0.0
+        n_e_cm3: float,
+        T_eV: float,
+        stark_w_ref: float,
+        stark_alpha: float,
+        stark_A_ref: float = 0.0,
     ) -> float:
         """
         JAX-compatible Stark HWHM calculation with ion broadening correction.

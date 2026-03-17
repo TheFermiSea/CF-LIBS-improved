@@ -15,27 +15,27 @@ from cflibs.radiation.profiles import (
     doppler_width,
 )
 from cflibs.instrument.convolution import apply_instrument_function
+from cflibs.core.constants import H_PLANCK, C_LIGHT, KB, EV_TO_K
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("radiation.spectrum_model")
 
-
-from cflibs.core.constants import H_PLANCK, C_LIGHT, KB
 
 def planck_radiance(wavelength_nm: np.ndarray, T_eV: float) -> np.ndarray:
     """
     Calculate spectral radiance of a blackbody in W m^-2 nm^-1 sr^-1.
     """
     wl_m = wavelength_nm * 1e-9
-    T_K = T_eV * 11604.5250061598
-    
+    T_K = T_eV * EV_TO_K
+
     # B_lambda = (2hc^2 / lambda^5) / (exp(hc / (lambda k T)) - 1)
     # Units: W m^-3 sr^-1. To get W m^-2 nm^-1 sr^-1, multiply by 1e-9.
     exponent = (H_PLANCK * C_LIGHT) / (wl_m * KB * T_K)
-    exponent = np.clip(exponent, None, 700.0) # avoid overflow
-    
+    exponent = np.clip(exponent, None, 700.0)  # avoid overflow
+
     B_m3 = (2.0 * H_PLANCK * C_LIGHT**2 / (wl_m**5)) / (np.exp(exponent) - 1.0)
     return B_m3 * 1e-9
+
 
 class SpectrumModel:
     """
@@ -247,14 +247,14 @@ class SpectrumModel:
         # I(lambda) = B(lambda, T) * (1 - exp(-kappa(lambda) * L))
         # From Kirchhoff's law (LTE): epsilon = kappa * B
         # Therefore kappa = epsilon / B
-        
+
         # Calculate Planck blackbody radiance
         B_lambda = planck_radiance(self.wavelength, self.plasma.T_e_eV)
-        
+
         # Calculate absorption coefficient (kappa)
         # Add small epsilon to B_lambda to prevent division by zero
         kappa = emissivity / (B_lambda + 1e-100)
-        
+
         # Radiative transfer equation using expm1 for numerical stability at low kappa
         intensity = B_lambda * (-np.expm1(-kappa * self.path_length_m))
 
