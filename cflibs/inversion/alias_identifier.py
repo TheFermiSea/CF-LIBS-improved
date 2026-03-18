@@ -329,17 +329,78 @@ class ALIASIdentifier:
         #   P_mix  — leave-one-out partial R^2 (global)
         #   P_local — local explanation score (what fraction of claimed
         #             peaks' intensity does this element actually explain?)
+        peak_intensities_arr = None
+        A = None
         if candidates and peaks:
             peak_intensities_arr = np.array([corrected_intensity[p[0]] for p in peaks])
             A = self._build_nnls_templates(candidates, peaks)
             P_mix_arr, P_local_arr, _ = self._compute_nnls_attribution(A, peak_intensities_arr)
+
+            # Sparse NNLS: L1-penalized fit suppresses diffuse FPs
+            # (Black et al. 2024: standard NNLS overfits → many small
+            # non-zero coefficients for absent elements)
+            # Higher alpha at low RP where blending causes more false sharing
+            sparse_alpha = 0.05 if self.resolving_power < 1000 else 0.01
+            sparse_c, _ = self._compute_sparse_nnls_scores(
+                A, peak_intensities_arr, alpha=sparse_alpha
+            )
+            # Noise floor: coefficient must exceed 10% of median to be
+            # considered significant — elements below this are noise
+            nonzero_c = sparse_c[sparse_c > 0]
+            nnls_noise = float(np.median(nonzero_c) * 0.1) if len(nonzero_c) > 0 else 0.0
+
             for i, cand in enumerate(candidates):
                 cand["P_mix"] = float(P_mix_arr[i])
                 cand["P_local"] = float(P_local_arr[i])
+                cand["sparse_nnls_coeff"] = float(sparse_c[i])
+                cand["nnls_significant"] = float(sparse_c[i]) > nnls_noise
         else:
             for cand in candidates:
                 cand["P_mix"] = 1.0
                 cand["P_local"] = 1.0
+                cand["sparse_nnls_coeff"] = 0.0
+                cand["nnls_significant"] = False
+
+        # ── Phase 1.75: Iron-group pre-subtraction (ChemCam-style) ────
+        # At low RP, Fe/Mn/Cr/Ti create a dense pseudo-continuum that
+        # inflates other elements' NNLS ownership scores.  Subtract
+        # their predicted contribution from peak intensities and
+        # recompute P_local for non-iron-group elements so the gate
+        # discriminates on the residual, not the raw spectrum.
+        _IRON_GROUP = {"Fe", "Mn", "Cr", "Ti"}
+        if candidates and peaks and A is not None and self.resolving_power < 2000:
+            ig_indices = [i for i, c in enumerate(candidates) if c["element"] in _IRON_GROUP]
+            if ig_indices and peak_intensities_arr is not None:
+                ig_contribution = np.zeros_like(peak_intensities_arr)
+                c_nnls = np.zeros(len(candidates))
+                # Re-solve NNLS to get coefficients
+                try:
+                    from scipy.optimize import nnls as _nnls
+
+                    c_nnls, _ = _nnls(A, peak_intensities_arr)
+                except Exception:
+                    pass
+                for idx in ig_indices:
+                    ig_contribution += c_nnls[idx] * A[:, idx]
+
+                # Compute residual peak intensities
+                residual_peaks = np.maximum(peak_intensities_arr - ig_contribution, 0.0)
+                residual_total = float(np.sum(residual_peaks))
+
+                if residual_total > 0:
+                    # Recompute P_local for non-iron-group elements against residual
+                    for i, cand in enumerate(candidates):
+                        if cand["element"] in _IRON_GROUP:
+                            continue
+                        claimed = A[:, i] > 1e-6
+                        if not np.any(claimed):
+                            continue
+                        obs_residual = np.sum(residual_peaks[claimed])
+                        if obs_residual <= 0:
+                            cand["P_local"] = 0.0
+                            continue
+                        elem_contrib = np.sum(A[claimed, i] * c_nnls[i])
+                        cand["P_local"] = float(np.clip(elem_contrib / obs_residual, 0.0, 1.0))
 
         # ── Phase 2: Global peak competition ──────────────────────────
         # Only active at RP >= 2000 where peaks are narrow enough for
@@ -459,7 +520,15 @@ class ALIASIdentifier:
 
             # Hard rejection: negligible NNLS ownership means this element's
             # peaks are fully explained by other elements.
-            if P_local < 0.05:
+            # Adaptive threshold: line-rich elements (Fe, Ca, Mn) overlap
+            # heavily at low RP, driving P_local artificially low even for
+            # true positives.  Use a softer threshold for them.
+            # Strong multi-line evidence (high match rate + decent k_sim)
+            # can bypass P_local entirely — the element matched most of
+            # its lines with consistent intensities.
+            p_local_threshold = 0.01 if N_expected >= 10 else 0.05
+            high_match_evidence = N_expected >= 5 and N_matched >= 0.7 * N_expected and k_sim > 0.3
+            if P_local < p_local_threshold and not high_match_evidence:
                 CL = 0.0
 
             # Gate 2: P_mix — moderate gate, 0.2 floor
@@ -480,7 +549,21 @@ class ALIASIdentifier:
             )
             CL *= boltz_factor
 
-            detected = CL >= self.detection_threshold
+            # Gate 5: Sparse NNLS significance (primary discriminator at low RP)
+            # At RP<2000, peak-matching CL cannot discriminate (TP/FP overlap).
+            # The sparse NNLS coefficient is the strongest false-positive
+            # suppressor: elements zeroed out by L1 penalty are truly absent.
+            nnls_sig = cand.get("nnls_significant", True)
+            if not nnls_sig and self.resolving_power < 2000:
+                CL = 0.0
+
+            # Adaptive detection threshold: elements with few expected
+            # lines have higher false-match rates at low RP and need a
+            # proportionally higher CL to be considered detected.
+            adaptive_dt = self.detection_threshold
+            if N_expected > 0 and N_expected < 10:
+                adaptive_dt *= min(3.0, math.sqrt(10.0 / N_expected))
+            detected = CL >= adaptive_dt
 
             # Create IdentifiedLine objects for matched lines
             # Reuse peak indices from matching to avoid re-selection outside window
@@ -535,6 +618,8 @@ class ALIASIdentifier:
                     "fill_factor": fill_factor,
                     "N_penalty": min(1.0, math.sqrt(N_expected / 5.0)) if N_expected > 0 else 0.0,
                     "boltzmann_factor": boltz_factor,
+                    "sparse_nnls_coeff": cand.get("sparse_nnls_coeff", 0.0),
+                    "nnls_significant": cand.get("nnls_significant", True),
                     "effective_R": self._effective_R,
                     "global_wl_shift": self._global_wl_shift,
                     "estimated_T": self._estimated_T,
@@ -1790,6 +1875,70 @@ class ALIASIdentifier:
         return P_mix, P_local, c
 
     @staticmethod
+    def _compute_sparse_nnls_scores(
+        A: np.ndarray,
+        peak_intensities: np.ndarray,
+        alpha: float = 0.01,
+        l1_ratio: float = 0.9,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Sparse NNLS via ElasticNet with non-negativity constraint.
+
+        Standard NNLS distributes signal across correlated endmembers,
+        producing many small non-zero coefficients for absent elements
+        (Black et al. 2024). The L1 penalty enforces sparsity, driving
+        truly absent elements to zero.
+
+        Parameters
+        ----------
+        A : np.ndarray
+            Template matrix (n_peaks, n_candidates).
+        peak_intensities : np.ndarray
+            Observed peak intensities (n_peaks,).
+        alpha : float
+            Regularization strength (higher = sparser).
+        l1_ratio : float
+            L1 vs L2 mix (1.0 = pure lasso, 0.0 = pure ridge).
+
+        Returns
+        -------
+        Tuple[np.ndarray, float]
+            (coefficients, residual_norm) — sparse non-negative coefficients
+            and the norm of the fit residual.
+        """
+        n_cands = A.shape[1]
+        if n_cands == 0 or np.all(A == 0) or np.all(peak_intensities == 0):
+            return np.zeros(n_cands), 0.0
+
+        try:
+            from sklearn.linear_model import ElasticNet
+
+            # Normalize columns for stable regularization
+            col_norms = np.linalg.norm(A, axis=0)
+            col_norms[col_norms == 0] = 1.0
+            A_norm = A / col_norms
+
+            model = ElasticNet(
+                alpha=alpha,
+                l1_ratio=l1_ratio,
+                positive=True,
+                fit_intercept=False,
+                max_iter=2000,
+            )
+            model.fit(A_norm, peak_intensities)
+            # Rescale coefficients back
+            sparse_c = model.coef_ / col_norms
+            residual = float(np.linalg.norm(peak_intensities - A @ sparse_c))
+        except Exception:
+            # Fallback to standard NNLS
+            from scipy.optimize import nnls as _nnls
+
+            sparse_c, residual = _nnls(A, peak_intensities)
+            residual = float(residual)
+
+        return sparse_c, residual
+
+    @staticmethod
     def _compute_ratio_consistency(
         fused_lines: List[dict],
         matched_mask: np.ndarray,
@@ -2034,10 +2183,21 @@ class ALIASIdentifier:
         # CL = k_det × P_SNR × P_maj × P_ab
         CL = k_det * P_SNR * P_maj * P_ab
 
-        # Fix 2: Hard gate — reject if too few lines matched.
-        # Exception: elements with N_expected <= 1 (e.g., H-alpha, Na D)
-        # can detect on a single matched line.
-        if N_matched < 2 and N_expected >= 2:
-            CL = 0.0
+        # Hard gate — reject if too few lines matched.
+        # At RP<1000, matching 2 lines by chance is trivial for elements
+        # with few expected lines (Na, K). Require enough matches to be
+        # statistically meaningful.
+        if N_expected <= 1:
+            # Single-line elements (H-alpha): 1 match is sufficient
+            pass
+        elif N_expected <= 4:
+            # Sparse elements (Na, K, Li): require ALL lines matched
+            # AND elevated CL to pass — chance matching 2/2 is too easy
+            if N_matched < N_expected:
+                CL = 0.0
+        else:
+            # Normal elements: require at least 3 matched lines
+            if N_matched < 3:
+                CL = 0.0
 
         return k_det, CL

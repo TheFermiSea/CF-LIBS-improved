@@ -147,6 +147,162 @@ def _select_cases(
     return cases
 
 
+# ---------------------------------------------------------------------------
+# Aalto LIBS benchmark data (Pörö et al.)
+# ---------------------------------------------------------------------------
+# Major metallic/semi-metallic elements per mineral from standard formulae.
+# Excludes O, H, C, N, S, F, Cl, B (weak/ambiguous LIBS emission in air).
+MINERAL_COMPOSITIONS: Dict[str, List[str]] = {
+    "adularia": ["K", "Al", "Si"],
+    "almandine": ["Fe", "Al", "Si"],
+    "apatite": ["Ca"],
+    "augite": ["Ca", "Mg", "Fe", "Si"],
+    "biotite": ["K", "Mg", "Fe", "Al", "Si"],
+    "chalcopyrite": ["Cu", "Fe"],
+    "cordierite": ["Mg", "Fe", "Al", "Si"],
+    "corundum": ["Al"],
+    "diopside": ["Ca", "Mg", "Si"],
+    "fluorite": ["Ca"],
+    "galena": ["Pb"],
+    "garnet": ["Fe", "Al", "Si", "Ca"],
+    "gypsum": ["Ca"],
+    "hematite": ["Fe"],
+    "hornblende": ["Ca", "Mg", "Fe", "Al", "Si"],
+    "hypersthene": ["Mg", "Fe", "Si"],
+    "kaolinite": ["Al", "Si"],
+    "kyanite": ["Al", "Si"],
+    "lepidolite": ["K", "Li", "Al", "Si"],
+    "magnesite": ["Mg"],
+    "magnetite": ["Fe"],
+    "microcline": ["K", "Al", "Si"],
+    "molybdenite": ["Mo"],
+    "muscovite": ["K", "Al", "Si"],
+    "olivine": ["Mg", "Fe", "Si"],
+    "orthoclase": ["K", "Al", "Si"],
+    "pentlandite": ["Fe", "Ni"],
+    "phlogopite": ["K", "Mg", "Al", "Si"],
+    "plagioclase": ["Na", "Ca", "Al", "Si"],
+    "pyrite": ["Fe"],
+    "pyrrhotite": ["Fe"],
+    "quartz": ["Si"],
+    "scapolite": ["Na", "Ca", "Al", "Si"],
+    "serpentine": ["Mg", "Si"],
+    "siderite": ["Fe"],
+    "sphene": ["Ca", "Ti", "Si"],
+    "spodumene": ["Li", "Al", "Si"],
+    "staurolite": ["Fe", "Al", "Si"],
+    "talc": ["Mg", "Si"],
+    "topaz": ["Al", "Si"],
+    "tourmaline": ["Na", "Fe", "Al", "Si"],
+    "tremolite": ["Ca", "Mg", "Si"],
+    "wollastonite": ["Ca", "Si"],
+    "zircon": ["Zr", "Si"],
+}
+
+# Broad search list for Aalto benchmarks — all elements the DB likely covers.
+AALTO_SEARCH_ELEMENTS = [
+    "Fe",
+    "Ca",
+    "Mg",
+    "Si",
+    "Al",
+    "Ti",
+    "Na",
+    "K",
+    "Mn",
+    "Cr",
+    "Ni",
+    "Cu",
+    "Co",
+    "V",
+    "Li",
+    "Sr",
+    "Ba",
+    "Zn",
+    "Pb",
+    "Mo",
+    "Zr",
+    "Sn",
+]
+
+
+def _load_aalto_csv(path: str) -> Tuple[np.ndarray, np.ndarray]:
+    """Load a 2-column (wavelength, spectrum) Aalto CSV file."""
+    data = np.loadtxt(path, delimiter=",", skiprows=1)
+    return data[:, 0], data[:, 1]
+
+
+def _select_aalto_cases(data_dir: Path) -> List[DatasetCase]:
+    """Build benchmark cases from Aalto LIBS element and mineral spectra."""
+    aalto_dir = data_dir / "aalto_libs"
+    if not aalto_dir.exists():
+        return []
+
+    cases: List[DatasetCase] = []
+
+    # Pure element spectra — ground truth is the element itself
+    elem_dir = aalto_dir / "elements"
+    if elem_dir.exists():
+        for csv_path in sorted(elem_dir.glob("*_spectrum.csv")):
+            element = csv_path.stem.replace("_spectrum", "")
+            if element not in AALTO_SEARCH_ELEMENTS:
+                continue
+            try:
+                wl, sp = _load_aalto_csv(str(csv_path))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Skipping Aalto element %s: %s", element, exc)
+                continue
+            cases.append(
+                DatasetCase(
+                    name=f"aalto_elem_{element}",
+                    path=csv_path,
+                    elements=AALTO_SEARCH_ELEMENTS,
+                    expected={element},
+                    resolving_power=600.0,
+                    wavelength=wl,
+                    spectrum=sp,
+                )
+            )
+
+    # Mineral spectra — ground truth from MINERAL_COMPOSITIONS
+    mineral_dir = aalto_dir / "minerals"
+    if mineral_dir.exists():
+        for csv_path in sorted(mineral_dir.glob("*_spectrum.csv")):
+            # Extract mineral name: e.g. "augite4_spectrum.csv" → "augite"
+            stem = csv_path.stem.replace("_spectrum", "")
+            # Strip trailing digits and sample IDs (e.g. "augite4", "adulariaE11")
+            mineral = stem.rstrip("0123456789")
+            if mineral.endswith("E"):
+                mineral = mineral[:-1]
+            mineral = mineral.lower()
+            if mineral not in MINERAL_COMPOSITIONS:
+                logger.warning("Unknown mineral %s from %s, skipping", mineral, csv_path.name)
+                continue
+            expected = set(MINERAL_COMPOSITIONS[mineral])
+            # Only include expected elements that are in our search list
+            expected &= set(AALTO_SEARCH_ELEMENTS)
+            if not expected:
+                continue
+            try:
+                wl, sp = _load_aalto_csv(str(csv_path))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Skipping Aalto mineral %s: %s", csv_path.name, exc)
+                continue
+            cases.append(
+                DatasetCase(
+                    name=f"aalto_{stem}",
+                    path=csv_path,
+                    elements=AALTO_SEARCH_ELEMENTS,
+                    expected=expected,
+                    resolving_power=600.0,
+                    wavelength=wl,
+                    spectrum=sp,
+                )
+            )
+
+    return cases
+
+
 def _score_one(
     db: AtomicDatabase,
     case: DatasetCase,
@@ -308,6 +464,16 @@ def main() -> None:
     parser.add_argument("--datasets", nargs="+", default=None)
     parser.add_argument("--top-k", type=int, default=15)
     parser.add_argument("--max-combinations", type=int, default=0)
+    parser.add_argument(
+        "--include-aalto",
+        action="store_true",
+        help="Include Aalto LIBS element and mineral spectra in the benchmark.",
+    )
+    parser.add_argument(
+        "--aalto-only",
+        action="store_true",
+        help="Run ONLY Aalto LIBS spectra (skip lab datasets).",
+    )
 
     parser.add_argument("--intensity-threshold-factors", type=str, default="3.0,3.5,4.0")
     parser.add_argument("--detection-thresholds", type=str, default="0.02,0.03,0.05")
@@ -328,7 +494,13 @@ def main() -> None:
     if not data_dir.exists():
         raise FileNotFoundError(f"Data dir not found: {data_dir}")
 
-    cases = _select_cases(data_dir=data_dir, selected_datasets=args.datasets)
+    cases: List[DatasetCase] = []
+    if not args.aalto_only:
+        cases.extend(_select_cases(data_dir=data_dir, selected_datasets=args.datasets))
+    if args.include_aalto or args.aalto_only:
+        aalto_cases = _select_aalto_cases(data_dir=data_dir)
+        cases.extend(aalto_cases)
+        logger.info("Added %d Aalto benchmark cases", len(aalto_cases))
     if not cases:
         raise RuntimeError("No labeled datasets available for calibration.")
 
