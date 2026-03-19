@@ -22,7 +22,7 @@ The Mars LIBS instruments illustrate the state of the art. ChemCam and SuperCam 
 
 Recent work has begun to address this gap. Jahoda *et al.* [25] benchmarked multi-method mineral classification using CNN for Raman and cosine similarity for LIBS on the RRUFF and NIST databases, finding that static LIBS peak-matching achieved only 6.44% mineral identification accuracy — a result that validates the fundamental limitations of template-based approaches without temperature adaptation. Zeng *et al.* [26] proposed a hybrid SVM + peak-seeking algorithm for metal element identification on simulated alloy LIBS spectra, achieving 74.5% accuracy for general elements — a significant improvement over standalone SVM (8%) but still below the threshold for reliable CF-LIBS analysis. For quantitative analysis, ensemble CNNs have achieved RMSE 54% lower than PLS on the ChemCam calibration dataset [27], while SVM-PLSR sub-models reduce RMSEP by 34.8–62.4% across eight oxides [28]. Janovszky *et al.* [29] demonstrated >92% mineral classification accuracy using random forests and LDA on granitoid rocks at RP ~1000. However, no published study systematically benchmarks element *identification* (as opposed to classification or quantification) at RP < 1000 with precision, recall, and F₁ metrics.
 
-In this work, we evaluate five distinct algorithmic pathways for element identification on 74 mineral and elemental LIBS spectra at RP = 300–1100. Our goals are to determine which approach maximizes identification precision while maintaining adequate recall, and to establish quantitative performance baselines that enable direct comparison with published methods across the resolving power spectrum.
+In this context, the present study makes four contributions. First, to our knowledge, it provides the first benchmark on real low-resolution LIBS spectra (RP < 1000) that evaluates blind multi-label element identification using precision, recall, and F₁ rather than mineral-classification accuracy or quantitative error metrics alone. Second, it tests full-spectrum NNLS decomposition specifically as a method for blind element identification on real LIBS spectra, extending prior multivariate and unmixing-style LIBS work from compositional estimation to explicit detection decisions. Third, it evaluates a two-stage hybrid architecture in which NNLS supplies a high-recall candidate set and ALIAS supplies line-level confirmation; to our knowledge, no prior LIBS study combines these two components in this specific screening-plus-confirmation form. Fourth, the present Aalto benchmark establishes a quantitative low-resolution baseline and provides the low-RP anchor for a planned systematic performance-versus-resolving-power study spanning Aalto, MarSCoDe, SuperCam, and ChemCam datasets. Our immediate goal is therefore not to claim a final solution to low-RP LIBS identification, but to determine which current pathway is most promising and to quantify where the RP < 1000 regime remains limiting.
 
 ---
 
@@ -41,9 +41,13 @@ The effective resolving power was estimated from isolated peak FWHM measurements
 
 The element search list contains 22 elements: Fe, Ca, Mg, Si, Al, Ti, Na, K, Mn, Cr, Ni, Cu, Co, V, Li, Sr, Ba, Zn, Pb, Mo, Zr, Sn — encompassing the major rock-forming and common trace elements in geological samples.
 
+For the 13 pure-element targets, the reference label set is the nominal single-element composition of the high-purity metallic sample. For the 61 mineral spectra, however, the reference label set is a proxy ground truth derived from the nominal stoichiometric formula of the reported mineral species rather than from specimen-specific quantitative assay. This choice is appropriate for a benchmark built from library metadata, but it has important limitations: natural samples may contain impurities, solid-solution substitutions, hydration, weathering products, surface contamination, and trace constituents not captured by the idealized formula; conversely, some formula-listed elements may be present below the LIBS detection limit or may emit too weakly under the present acquisition conditions to support reliable identification. Accordingly, false positives and false negatives should be interpreted relative to the declared formula-based composition, not as proof of absolute chemical absence or presence at the individual-specimen level.
+
 ### B. Scoring Methodology
 
 Each algorithm produces a set of detected elements per spectrum. Scoring follows standard information retrieval metrics computed against the ground-truth element set: True Positive (TP), False Positive (FP), False Negative (FN), and True Negative (TN). Precision, recall, F₁, and false positive rate (FPR) are computed globally (micro-averaged) across all 74 spectra. An "exact match" requires the detected set to equal the expected set exactly.
+
+Each pathway ultimately outputs a binary detection decision over the same 22-element evaluation universe defined above. For the ALIAS pathway, the candidate set is exactly this 22-element search list. For the NNLS, hybrid, and forward-model pathways, the spectral fit is performed using the full 76-element basis library described in Section II-C so that unresolved structure and interference from additional emitters can be absorbed by physically plausible basis components. However, coefficients assigned to elements outside the 22-element search list are treated as latent nuisance components rather than reported detections. Only the 22 scored elements are thresholded, reported, and used to compute all metrics. Thus, the decomposition may use a superset of elements for spectral fidelity, but all detection decisions and all comparative metrics are defined on the same 22-element candidate universe for every pathway.
 
 ### C. Basis Library Generation
 
@@ -98,7 +102,13 @@ This pathway pre-processes the spectrum with multi-peak Voigt deconvolution [15]
 
 NNLS decomposition with a concentration-based detection criterion: each element's coefficient is normalized to a fractional concentration (*c*ᵢ / Σ*c*ⱼ). Elements above a threshold are detected. Swept parameters: concentration threshold ∈ {0.001, 0.005, 0.01, 0.02, 0.05}, continuum degree ∈ {2, 3}.
 
-### E. Computational Complexity
+### E. Evaluation Protocol
+
+The results reported in Section III are single-pass point estimates on the full Aalto benchmark and should therefore be interpreted as preliminary screening results. For confirmatory evaluation, and for the planned expanded multi-instrument benchmark, hyperparameters will be selected within a nested grouped cross-validation design. On the Aalto dataset, the outer loop will use grouped leave-one-out validation because of the small sample size; on larger datasets, the outer loop will use 5-fold grouped stratified cross-validation. Grouping will be defined at the specimen/target level, or at the mineral-species level where appropriate, so that replicate or near-replicate spectra do not appear in both training and test folds. All threshold selection, model selection, and feature selection will be performed using only the inner training folds, and final performance estimates will be computed only from the held-out outer folds.
+
+To quantify uncertainty, all aggregate metrics will be reported with 95% bootstrap confidence intervals computed from spectrum-level resampling of the outer-fold predictions. Pairwise algorithm comparisons on matched spectra will use McNemar tests for binary outcomes such as exact-match success or per-element detection decisions, with multiplicity correction across pairwise tests. When comparing more than two algorithms across the same benchmark, algorithm ranks will be assessed with a Friedman omnibus test followed, when significant, by Nemenyi post-hoc comparisons [34]. In addition to micro-averaged precision, recall, and F₁, we will report macro-F₁, per-spectrum Jaccard index, Hamming loss, false positives per spectrum, exact-match rate, and per-element precision and recall with support counts. Results will also be stratified by spectrum type (pure elements versus minerals) and by label cardinality, i.e., the number of ground-truth elements present in a spectrum, to separate single-label behavior from increasingly difficult multi-label mineral identification.
+
+### F. Computational Complexity
 
 The computational cost of each pathway scales differently with the number of elements *E*, detected peaks *P*, spectral pixels *N*, basis library elements *M*, peak groups *G*, and peaks per group *K*:
 
@@ -132,11 +142,11 @@ Table II presents the best configuration for each pathway, ranked by F₁ score.
 
 Key observations:
 
-1. **NNLS has near-perfect recall (*R* = 0.94) but unacceptable precision (*P* = 0.29)**: It detects nearly every true element but also flags 7–8 spurious elements per spectrum. False positive elements include O, Na, V, Mg, K, Pb, and Hg — elements with many lines in the 200–900 nm range.
+1. **NNLS has near-perfect recall (*R* = 0.94) but unacceptable precision (*P* = 0.29)**: It detects nearly every true element but also flags many spurious elements per spectrum within the 22-element evaluation universe. The most persistent false positives are Na, V, Mg, K, and Pb — elements with dense line forests in the 200–900 nm range. (The 76-element basis also absorbs signal from non-scored emitters such as O, N, and H, but these are treated as nuisance components and do not enter the scoring.)
 
 2. **ALIAS has moderate precision (*P* = 0.50) and moderate recall (*R* = 0.63)**: Precision is limited by Mn (30 FP), Na (20 FP), and Mg (15 FP). Recall is limited by Fe (15 FN), Si (17 FN), and Ca (14 FN).
 
-3. **The hybrid intersection effectively gates NNLS false positives**: The ALIAS confirmation suppresses O, H, N, and rare-earth false positives that plague pure NNLS. Mn and Na false positives persist because these elements pass both stages.
+3. **The hybrid intersection effectively gates NNLS false positives**: By requiring ALIAS confirmation of NNLS candidates, the intersection mode suppresses the many marginal detections that inflate NNLS false-positive counts within the 22-element evaluation universe. Mn and Na false positives persist because these elements pass both stages — NNLS assigns non-negligible coefficients (they genuinely have many lines), and ALIAS confirms chance peak matches.
 
 4. **Voigt deconvolution provides no net benefit**: At RP < 1000, peak overlap is so severe that the Voigt fitting problem is underdetermined for groups of 3+ peaks.
 
@@ -271,17 +281,11 @@ The hybrid identifier's performance suggests a recommended pipeline: (1) hybrid 
 
 We have presented the first systematic benchmark of five element identification algorithms for CF-LIBS at low resolving power (RP = 300–1100) on 74 mineral and elemental spectra. The principal findings are:
 
-1. The hybrid NNLS+ALIAS identifier achieves the best overall performance (*P* = 0.604, *R* = 0.713, *F*₁ = 0.654, 16/74 exact matches), representing a 17% *F*₁ improvement over ALIAS.
+We have benchmarked five element-identification pathways for CF-LIBS on 74 elemental and mineral spectra acquired at low resolving power (RP = 300–1100). Within this dataset, the two-stage hybrid NNLS+ALIAS identifier provided the best overall balance of precision and recall (*P* = 0.604, *R* = 0.713, *F*₁ = 0.654, 16/74 exact matches), improving on the ALIAS baseline while avoiding the very high false-positive burden of unconstrained NNLS.
 
-2. Full-spectrum NNLS has excellent recall (*R* = 0.94) but poor precision (*P* = 0.29), insufficient for reliable identification alone.
+Several conclusions follow from this benchmark. First, full-spectrum NNLS is valuable as a high-recall screening stage, but not as a standalone detector under the present thresholding scheme. Second, conventional peak-matching remains vulnerable to coincidence-driven false positives in the low-RP regime, especially for line-rich or contamination-prone elements such as Mn and Na. Third, combining global spectral fitting with line-level confirmation provides a measurable advantage over either strategy alone on the present dataset. Fourth, Voigt pre-deconvolution did not improve identification performance under these conditions, suggesting that unresolved blending at RP < 1000 remains a primary obstacle rather than a preprocessing nuisance.
 
-3. Peak-matching precision is fundamentally limited to *P* ≈ 0.50 at RP < 1000 by chance coincidence rates.
-
-4. Voigt deconvolution provides no net benefit at RP < 1000 because the deconvolution problem is underdetermined.
-
-5. The hybrid method achieves *P* = 1.00 for Si, Al, Fe, Li, Co, and Ni — nearly half of all true positive detections.
-
-6. Reaching *P* > 80% at RP < 1000 requires machine learning classifiers or higher-RP instrumentation (RP > 3000).
+Taken together, these results are best viewed as a benchmark and a quantitative negative result for blind low-resolution LIBS element identification: at RP < 1000, currently available physics-based identification pathways remain useful but materially error-prone, and the dominant failure modes can now be stated quantitatively rather than anecdotally. To our knowledge, this study provides the first precision/recall/F₁ characterization of blind multi-label element identification on real LIBS spectra in this low-RP regime. The benchmark therefore establishes a reference point for future work on resolution-matched basis libraries, contaminant-aware decision rules, cross-instrument validation, and learned post-classifiers built on top of physics-based features.
 
 ---
 
