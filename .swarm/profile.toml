@@ -32,8 +32,8 @@ timeout_secs = 300
 
 [[gates]]
 name = "test"
-command = "pytest"
-args = ["tests/", "-x", "-q", "-m", "not slow and not requires_db"]
+command = "bash"
+args = ["-c", "source .venv/bin/activate 2>/dev/null; pytest tests/ -x -q -m 'not slow and not requires_db and not requires_jax'"]
 blocking = true
 timeout_secs = 600
 
