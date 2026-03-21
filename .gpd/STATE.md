@@ -62,6 +62,13 @@ None yet.
 - Ionization Potential Depression: Debye-Huckel: delta_chi = e^2/lambda_D where lambda_D = sqrt(kT/(4*pi*n_e*e^2)) in Gaussian CGS. Equivalently delta_chi = e^2 * sqrt(4*pi*n_e*e^2/kT). Implementation: saha_boltzmann.py:440-443
 - Partition Function: U(T) = sum_k g_k * exp(-E_k/kT), truncated at the LOWERED ionization potential (IP - delta_chi_DH) when IPD is applied. Implementation: saha_boltzmann.py:294-295
 - Closure Equation: CF-LIBS closure uses NUMBER/MOLE fractions internally (sum C_s = 1). Mass fractions are computed for output via C_mass = C_mole * AW / sum(C_mole * AW). See closure.py for standard/matrix/oxide modes.
+- Energy Reference: All energies (E_k, E_i) are positive above ground state of each ionization stage. E_k >= E_i >= 0 always.
+- Spectral Domain: Wavelength-domain in nm throughout. Line profiles phi_lambda are normalized over wavelength (integral phi_lambda dlambda = 1). NOT frequency-domain.
+- Stark Width: Transition.stark_w is HWHM at reference n_e = 1e16 cm^-3. stark.py scales linearly: gamma_stark = stark_w * (n_e / 1e16). Full-width = 2 * gamma.
+- Self Absorption Model: Two models coexist: (1) escape-factor with tau ~ A*lambda^3*n_i*L in SelfAbsorptionCorrector, (2) curve-of-growth in CDSBPlotter. CAUTION: f_ik prefactor in self_absorption.py uses Angstrom-based 1.4992e-16 but lambda_cm — possible 1e8 units bug.
+- Saha Form: 3-stage closed-form: explicit S1=n_II*n_e/n_I, optional S2=n_III*n_e/n_II, then n_total=n_I+n_II+n_III. NOT a general iterative all-stage solver. Inversion uses only S1 (2-stage).
+- Emissivity Units: SI output: W/m^3/sr (line-integrated). NOT W/cm^3/sr. Populations converted cm^-3 -> m^-3 at emissivity.py:44. Docstring at emissivity.py:33 claims W/m^3/nm which is WRONG for line-integrated form.
+- Partition Function Warning: KNOWN INCONSISTENCY: polynomial PF path (saha_boltzmann.py:179-185) ignores lowered IP (max_energy_ev). Only level-summation path (saha_boltzmann.py:205-214) honors IPD truncation. This means IPD affects Saha exponential but not U(T) when polynomial coefficients exist.
 
 ### Propagated Uncertainties
 
