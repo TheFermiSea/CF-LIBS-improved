@@ -17,7 +17,6 @@ from typing import Dict, Tuple
 
 import numpy as np
 
-
 # Minimum value used to replace zeros/negatives before log transforms.
 _EPSILON = 1e-12
 

@@ -20,7 +20,6 @@ import numpy as np
 from cflibs.benchmarks.corpus import BenchmarkSpectrum
 from cflibs.benchmarks.metrics import aitchison_distance, per_element_error, rmse_composition
 
-
 # ---------------------------------------------------------------------------
 # Accuracy tiers
 # ---------------------------------------------------------------------------

@@ -443,9 +443,7 @@ class ClosureEquation:
             total_measured += rel_C
 
         if total_measured == 0 or len(elements) < 2:
-            logger.error(
-                "ILR closure requires at least 2 elements with non-zero concentration"
-            )
+            logger.error("ILR closure requires at least 2 elements with non-zero concentration")
             return ClosureResult({}, 0.0, 0.0, "ilr")
 
         # Normalize to simplex, then round-trip through ILR
@@ -527,9 +525,7 @@ class ClosureEquation:
                 )
                 continue
             U_s = partition_funcs[element]
-            multiplier = _validated_abundance_multiplier(
-                abundance_multipliers, element
-            )
+            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
             raw_concentrations[element] = multiplier * U_s * np.exp(q_s)
 
         raw_sum = sum(raw_concentrations.values())
@@ -567,10 +563,7 @@ class ClosureEquation:
 
         # --- 3. Normalize detected elements to (1 - residual) -------------
         detected_budget = 1.0 - residual
-        concentrations = {
-            el: c / raw_sum * detected_budget
-            for el, c in raw_concentrations.items()
-        }
+        concentrations = {el: c / raw_sum * detected_budget for el, c in raw_concentrations.items()}
 
         return DirichletResidualResult(
             concentrations=concentrations,
