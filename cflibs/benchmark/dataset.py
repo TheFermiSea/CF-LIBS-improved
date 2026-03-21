@@ -425,7 +425,9 @@ class BenchmarkSpectrum:
             self.rp_estimate = mean_wl / float(self.conditions.spectral_resolution_nm)
 
         if self.label_cardinality is None:
-            self.label_cardinality = sum(1 for v in self.true_composition.values() if float(v) > 0.0)
+            self.label_cardinality = sum(
+                1 for v in self.true_composition.values() if float(v) > 0.0
+            )
 
         # Validate composition sums approximately to 1 for supervised spectra only.
         total = sum(self.true_composition.values())
@@ -847,6 +849,7 @@ class BenchmarkDataset:
 
     def _resolve_field_value(self, spectrum: BenchmarkSpectrum, field_name: str) -> Any:
         """Resolve dotted attribute paths on spectrum objects."""
+
         def _invalid_field_error(part: str) -> ValueError:
             return ValueError(
                 "Unknown metadata field "
@@ -944,7 +947,9 @@ class BenchmarkDataset:
             groups.setdefault(group_value, []).append(spectrum.spectrum_id)
         return groups
 
-    def _group_strata(self, groups: Dict[str, List[str]], stratify_by: Optional[str]) -> Dict[str, str]:
+    def _group_strata(
+        self, groups: Dict[str, List[str]], stratify_by: Optional[str]
+    ) -> Dict[str, str]:
         """Assign one stratum label per group."""
         strata: Dict[str, str] = {}
         if stratify_by is None:
@@ -1137,7 +1142,11 @@ class BenchmarkDataset:
                 train_ids=train_ids,
                 test_ids=list(test_ids),
                 description=f"Leave-one-group-out split holding out {group_value}",
-                metadata={"group_by": group_by, "held_out_group": group_value, "fold_index": fold_idx - 1},
+                metadata={
+                    "group_by": group_by,
+                    "held_out_group": group_value,
+                    "fold_index": fold_idx - 1,
+                },
             )
             self.splits[split.name] = split
             splits.append(split)

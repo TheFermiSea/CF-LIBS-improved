@@ -276,11 +276,15 @@ def _load_hdf5(path: Path) -> "BenchmarkDataset":
                 group_id=_decode_string_optional(spec_group.attrs.get("group_id")),
                 specimen_id=_decode_string_optional(spec_group.attrs.get("specimen_id")),
                 instrument_id=_decode_string_optional(spec_group.attrs.get("instrument_id")),
-                truth_type=_decode_string(spec_group.attrs.get("truth_type", TruthType.ASSAY.value)),
+                truth_type=_decode_string(
+                    spec_group.attrs.get("truth_type", TruthType.ASSAY.value)
+                ),
                 rp_estimate=spec_group.attrs.get("rp_estimate"),
                 label_cardinality=spec_group.attrs.get("label_cardinality"),
                 spectrum_kind=_decode_string_optional(spec_group.attrs.get("spectrum_kind")),
-                annotations=json.loads(_decode_string(spec_group.attrs.get("annotations_json", "{}"))),
+                annotations=json.loads(
+                    _decode_string(spec_group.attrs.get("annotations_json", "{}"))
+                ),
             )
             spectra.append(spectrum)
 
