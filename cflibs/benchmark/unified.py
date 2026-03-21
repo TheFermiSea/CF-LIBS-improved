@@ -76,7 +76,9 @@ def _load_repo_script_module(module_name: str) -> Any:
             f"Unified benchmark helper '{module_name}' requires {script_path} to be present."
         )
 
-    spec = importlib.util.spec_from_file_location(f"_cflibs_repo_scripts_{module_name}", script_path)
+    spec = importlib.util.spec_from_file_location(
+        f"_cflibs_repo_scripts_{module_name}", script_path
+    )
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load helper module from {script_path}")
 
@@ -97,9 +99,7 @@ def _select_aalto_cases_lazy(data_dir: Path):
 
 def _estimate_effective_rp_lazy(wavelength_nm: np.ndarray, intensity: np.ndarray) -> float:
     return float(
-        _load_repo_script_module("calibrate_alias")._estimate_effective_rp(
-            wavelength_nm, intensity
-        )
+        _load_repo_script_module("calibrate_alias")._estimate_effective_rp(wavelength_nm, intensity)
     )
 
 
@@ -185,7 +185,9 @@ def _clone_spectrum(spectrum: BenchmarkSpectrum, **updates: Any) -> BenchmarkSpe
     return BenchmarkSpectrum.from_dict(payload)
 
 
-def subset_dataset(dataset: BenchmarkDataset, spectrum_ids: Sequence[str], name: str) -> BenchmarkDataset:
+def subset_dataset(
+    dataset: BenchmarkDataset, spectrum_ids: Sequence[str], name: str
+) -> BenchmarkDataset:
     spectra = [dataset.get_spectrum(spec_id) for spec_id in spectrum_ids]
     return BenchmarkDataset(
         name=name,
@@ -392,7 +394,9 @@ def _load_manifest_rows(manifest_path: Path) -> Dict[str, Dict[str, Any]]:
     return manifest
 
 
-def load_manifest_synthetic_dataset(corpus_path: Path, manifest_path: Optional[Path] = None) -> BenchmarkDataset:
+def load_manifest_synthetic_dataset(
+    corpus_path: Path, manifest_path: Optional[Path] = None
+) -> BenchmarkDataset:
     """Load the manifest-backed synthetic ID benchmark corpus."""
     dataset = load_benchmark(corpus_path)
     if manifest_path is None:
@@ -483,7 +487,10 @@ def build_inner_splits(train_dataset: BenchmarkDataset) -> List[DataSplit]:
 class IDWorkflowSpec:
     name: str
     parameter_grid: List[Dict[str, Any]]
-    build_predictor: Callable[["UnifiedBenchmarkContext", List[str], Dict[str, Any]], Callable[[BenchmarkSpectrum], ElementIdentificationResult]]
+    build_predictor: Callable[
+        ["UnifiedBenchmarkContext", List[str], Dict[str, Any]],
+        Callable[[BenchmarkSpectrum], ElementIdentificationResult],
+    ]
     config_name: Callable[[Dict[str, Any]], str]
 
 
@@ -493,7 +500,10 @@ class CompositionWorkflowSpec:
     parameter_grid: List[Dict[str, Any]]
     fit_predictor: Callable[
         ["UnifiedBenchmarkContext", Sequence[BenchmarkSpectrum], Dict[str, Any]],
-        Callable[[BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]],
+        Callable[
+            [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]],
+            Dict[str, Any],
+        ],
     ]
     config_name: Callable[[Dict[str, Any]], str]
     requires_training: bool = False
@@ -614,9 +624,7 @@ class UnifiedBenchmarkContext:
             raise FileNotFoundError("No basis libraries found in basis_dir")
 
         target_fwhm = 0.5 if rp_estimate is None or rp_estimate <= 0 else 550.0 / float(rp_estimate)
-        selected_fwhm, selected_path = min(
-            basis_files, key=lambda item: abs(item[0] - target_fwhm)
-        )
+        selected_fwhm, selected_path = min(basis_files, key=lambda item: abs(item[0] - target_fwhm))
         cache_key = str(selected_path.resolve())
         if cache_key not in self._basis_cache:
             self._basis_cache[cache_key] = BasisLibrary(str(selected_path))
@@ -626,8 +634,18 @@ class UnifiedBenchmarkContext:
 def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     if quick:
         return [
-            {"detection_threshold": 0.03, "intensity_threshold_factor": 3.0, "chance_window_scale": 0.3, "max_lines_per_element": 30},
-            {"detection_threshold": 0.05, "intensity_threshold_factor": 3.0, "chance_window_scale": 0.4, "max_lines_per_element": 30},
+            {
+                "detection_threshold": 0.03,
+                "intensity_threshold_factor": 3.0,
+                "chance_window_scale": 0.3,
+                "max_lines_per_element": 30,
+            },
+            {
+                "detection_threshold": 0.05,
+                "intensity_threshold_factor": 3.0,
+                "chance_window_scale": 0.4,
+                "max_lines_per_element": 30,
+            },
         ]
     configs: List[Dict[str, Any]] = []
     for dt in [0.02, 0.03, 0.05]:
@@ -646,7 +664,13 @@ def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
 
 def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     if quick:
-        return [{"min_correlation": 0.08, "tooth_activation_threshold": 0.35, "relative_threshold_scale": 1.4}]
+        return [
+            {
+                "min_correlation": 0.08,
+                "tooth_activation_threshold": 0.35,
+                "relative_threshold_scale": 1.4,
+            }
+        ]
     configs: List[Dict[str, Any]] = []
     for min_correlation in [0.05, 0.08]:
         for tooth_activation_threshold in [0.30, 0.35, 0.40]:
@@ -663,7 +687,9 @@ def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
 
 def _correlation_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     if quick:
-        return [{"min_confidence": 0.008, "relative_threshold_scale": 1.2, "min_line_strength": 1000.0}]
+        return [
+            {"min_confidence": 0.008, "relative_threshold_scale": 1.2, "min_line_strength": 1000.0}
+        ]
     configs: List[Dict[str, Any]] = []
     for min_confidence in [0.005, 0.008, 0.015]:
         for threshold_scale in [1.0, 1.2]:
@@ -885,7 +911,9 @@ def _build_voigt_alias_predictor(
             if find_peaks is None:
                 cleaned = corrected
             else:
-                threshold = np.percentile(corrected[corrected > 0], 70) if np.any(corrected > 0) else 0.0
+                threshold = (
+                    np.percentile(corrected[corrected > 0], 70) if np.any(corrected > 0) else 0.0
+                )
                 peak_indices, _ = find_peaks(corrected, height=threshold, distance=5)
                 if len(peak_indices) == 0:
                     cleaned = corrected
@@ -949,7 +977,9 @@ def _build_nnls_concentration_predictor(
             concentration = float(element.metadata.get("concentration_estimate", 0.0))
             element.detected = concentration >= threshold
         result.detected_elements = [element for element in result.all_elements if element.detected]
-        result.rejected_elements = [element for element in result.all_elements if not element.detected]
+        result.rejected_elements = [
+            element for element in result.all_elements if not element.detected
+        ]
         result.algorithm = "nnls_concentration_threshold"
         result.parameters["concentration_threshold"] = threshold
         result.parameters["basis_fwhm_nm"] = basis_fwhm
@@ -962,14 +992,49 @@ def _build_nnls_concentration_predictor(
 
 def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]:
     return {
-        "alias": IDWorkflowSpec("alias", _alias_workflow_configs(quick), _build_alias_predictor, _config_name),
-        "comb": IDWorkflowSpec("comb", _comb_workflow_configs(quick), _build_comb_predictor, _config_name),
-        "correlation": IDWorkflowSpec("correlation", _correlation_workflow_configs(quick), _build_correlation_predictor, _config_name),
-        "spectral_nnls": IDWorkflowSpec("spectral_nnls", _nnls_workflow_configs(quick), _build_nnls_predictor, _config_name),
-        "hybrid_intersect": IDWorkflowSpec("hybrid_intersect", _hybrid_workflow_configs(True, quick), _build_hybrid_predictor, _config_name),
-        "hybrid_union": IDWorkflowSpec("hybrid_union", _hybrid_workflow_configs(False, quick), _build_hybrid_predictor, _config_name),
-        "voigt_alias": IDWorkflowSpec("voigt_alias", [{"detection_threshold": 0.03}] if quick else [{"detection_threshold": 0.03}, {"detection_threshold": 0.05}], _build_voigt_alias_predictor, _config_name),
-        "nnls_concentration_threshold": IDWorkflowSpec("nnls_concentration_threshold", _nnls_concentration_configs(quick), _build_nnls_concentration_predictor, _config_name),
+        "alias": IDWorkflowSpec(
+            "alias", _alias_workflow_configs(quick), _build_alias_predictor, _config_name
+        ),
+        "comb": IDWorkflowSpec(
+            "comb", _comb_workflow_configs(quick), _build_comb_predictor, _config_name
+        ),
+        "correlation": IDWorkflowSpec(
+            "correlation",
+            _correlation_workflow_configs(quick),
+            _build_correlation_predictor,
+            _config_name,
+        ),
+        "spectral_nnls": IDWorkflowSpec(
+            "spectral_nnls", _nnls_workflow_configs(quick), _build_nnls_predictor, _config_name
+        ),
+        "hybrid_intersect": IDWorkflowSpec(
+            "hybrid_intersect",
+            _hybrid_workflow_configs(True, quick),
+            _build_hybrid_predictor,
+            _config_name,
+        ),
+        "hybrid_union": IDWorkflowSpec(
+            "hybrid_union",
+            _hybrid_workflow_configs(False, quick),
+            _build_hybrid_predictor,
+            _config_name,
+        ),
+        "voigt_alias": IDWorkflowSpec(
+            "voigt_alias",
+            (
+                [{"detection_threshold": 0.03}]
+                if quick
+                else [{"detection_threshold": 0.03}, {"detection_threshold": 0.05}]
+            ),
+            _build_voigt_alias_predictor,
+            _config_name,
+        ),
+        "nnls_concentration_threshold": IDWorkflowSpec(
+            "nnls_concentration_threshold",
+            _nnls_concentration_configs(quick),
+            _build_nnls_concentration_predictor,
+            _config_name,
+        ),
     }
 
 
@@ -977,7 +1042,9 @@ def _fit_iterative_pipeline(
     _context: UnifiedBenchmarkContext,
     _train_spectra: Sequence[BenchmarkSpectrum],
     config: Dict[str, Any],
-) -> Callable[[BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]]:
+) -> Callable[
+    [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
+]:
     def predictor(
         spectrum: BenchmarkSpectrum,
         candidate_elements: Sequence[str],
@@ -1011,7 +1078,9 @@ def _fit_joint_optimizer_pipeline(
     _context: UnifiedBenchmarkContext,
     _train_spectra: Sequence[BenchmarkSpectrum],
     _config: Dict[str, Any],
-) -> Callable[[BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]]:
+) -> Callable[
+    [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
+]:
     def predictor(
         spectrum: BenchmarkSpectrum,
         candidate_elements: Sequence[str],
@@ -1029,7 +1098,9 @@ def _fit_hybrid_manifold_pipeline(
     _context: UnifiedBenchmarkContext,
     _train_spectra: Sequence[BenchmarkSpectrum],
     _config: Dict[str, Any],
-) -> Callable[[BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]]:
+) -> Callable[
+    [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
+]:
     def predictor(
         spectrum: BenchmarkSpectrum,
         candidate_elements: Sequence[str],
@@ -1047,7 +1118,9 @@ def _fit_pls_pipeline(
     _context: UnifiedBenchmarkContext,
     train_spectra: Sequence[BenchmarkSpectrum],
     config: Dict[str, Any],
-) -> Callable[[BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]]:
+) -> Callable[
+    [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
+]:
     from cflibs.inversion.pls import PLSRegression
 
     train_spectra = [spec for spec in train_spectra if spec.truth_type != TruthType.BLIND]
@@ -1060,7 +1133,9 @@ def _fit_pls_pipeline(
         [[spec.true_composition.get(el, 0.0) for el in elements] for spec in train_spectra],
         dtype=float,
     )
-    max_components = min(int(config["n_components"]), X_train.shape[0] - 1, X_train.shape[1], len(elements))
+    max_components = min(
+        int(config["n_components"]), X_train.shape[0] - 1, X_train.shape[1], len(elements)
+    )
     max_components = max(max_components, 1)
     pls = PLSRegression(n_components=max_components)
     pls.fit(X_train, Y_train)
@@ -1104,9 +1179,15 @@ def build_composition_workflow_registry(quick: bool = False) -> Dict[str, Compos
         )
 
     return {
-        "iterative": CompositionWorkflowSpec("iterative", iterative_configs, _fit_iterative_pipeline, _config_name),
-        "joint_softmax": CompositionWorkflowSpec("joint_softmax", [{}], _fit_joint_optimizer_pipeline, _config_name),
-        "hybrid_manifold": CompositionWorkflowSpec("hybrid_manifold", [{}], _fit_hybrid_manifold_pipeline, _config_name),
+        "iterative": CompositionWorkflowSpec(
+            "iterative", iterative_configs, _fit_iterative_pipeline, _config_name
+        ),
+        "joint_softmax": CompositionWorkflowSpec(
+            "joint_softmax", [{}], _fit_joint_optimizer_pipeline, _config_name
+        ),
+        "hybrid_manifold": CompositionWorkflowSpec(
+            "hybrid_manifold", [{}], _fit_hybrid_manifold_pipeline, _config_name
+        ),
         "pls": CompositionWorkflowSpec(
             "pls",
             [{"n_components": 3}, {"n_components": 10}] if not quick else [{"n_components": 3}],
@@ -1142,14 +1223,21 @@ def _score_identification(
     predicted_elements = sorted({element.element for element in result.detected_elements})
     candidate_elements = list(getattr(result, "parameters", {}).get("candidate_elements", []))
     if not candidate_elements:
-        candidate_elements = list(result.parameters.get("elements", [])) if hasattr(result, "parameters") else []
+        candidate_elements = (
+            list(result.parameters.get("elements", [])) if hasattr(result, "parameters") else []
+        )
     if not candidate_elements:
         candidate_elements = list(spectrum.annotations.get("candidate_elements", []))
     if not candidate_elements:
         candidate_elements = list(spectrum.true_composition.keys()) or []
     if not candidate_elements:
         candidate_elements = list(predicted_elements)
-    evaluated_space = set(candidate_elements or predicted_elements or true_elements or spectrum.true_composition.keys())
+    evaluated_space = set(
+        candidate_elements
+        or predicted_elements
+        or true_elements
+        or spectrum.true_composition.keys()
+    )
 
     if spectrum.truth_type == TruthType.BLIND:
         return IDEvaluationRecord(
@@ -1336,7 +1424,9 @@ def tune_id_workflow(
         score = float(np.mean(fold_scores)) if fold_scores else 0.0
         tie = float(np.mean(precisions)) if precisions else 0.0
         config_name = workflow.config_name(config)
-        scores.append({"config_name": config_name, "mean_inner_f1": score, "mean_inner_precision": tie})
+        scores.append(
+            {"config_name": config_name, "mean_inner_f1": score, "mean_inner_precision": tie}
+        )
         if score > best_score or (math.isclose(score, best_score) and tie > best_tiebreak):
             best_score = score
             best_tiebreak = tie
@@ -1358,7 +1448,9 @@ def _coerce_composition_prediction(
         }
     total = sum(float(value) for value in concentrations.values())
     if total > 0:
-        concentrations = {element: float(value) / total for element, value in concentrations.items()}
+        concentrations = {
+            element: float(value) / total for element, value in concentrations.items()
+        }
     return concentrations
 
 
@@ -1418,9 +1510,15 @@ def _build_composition_success_record(
         ),
         closure_residual=abs(sum(concentrations.values()) - 1.0),
         error_tier=_composition_error_tier(aitchison),
-        per_element_absolute_error={element: float(errors[0]) for element, errors in per_element.items()},
-        per_element_relative_error={element: float(errors[1]) for element, errors in per_element.items()},
-        annotations={key: value for key, value in prediction.items() if key not in {"concentrations"}},
+        per_element_absolute_error={
+            element: float(errors[0]) for element, errors in per_element.items()
+        },
+        per_element_relative_error={
+            element: float(errors[1]) for element, errors in per_element.items()
+        },
+        annotations={
+            key: value for key, value in prediction.items() if key not in {"concentrations"}
+        },
     )
 
 
@@ -1471,7 +1569,9 @@ def evaluate_composition_workflow(
     id_config_name: str,
     id_predictor: Callable[[BenchmarkSpectrum], ElementIdentificationResult],
     composition_workflow: CompositionWorkflowSpec,
-    composition_predictor: Callable[[BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]],
+    composition_predictor: Callable[
+        [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
+    ],
     outer_split_id: str,
     tuning_split_id: Optional[str],
     composition_config_name: str,
@@ -1484,9 +1584,13 @@ def evaluate_composition_workflow(
         start = time.perf_counter()
         try:
             id_result = id_predictor(spectrum)
-            candidate_elements = sorted({element.element for element in id_result.detected_elements})
+            candidate_elements = sorted(
+                {element.element for element in id_result.detected_elements}
+            )
             if not candidate_elements:
-                raise ValueError("No identified candidate elements available for composition estimation")
+                raise ValueError(
+                    "No identified candidate elements available for composition estimation"
+                )
             prediction = composition_predictor(spectrum, candidate_elements, id_result)
             concentrations = _coerce_composition_prediction(prediction, candidate_elements)
             if not concentrations:
@@ -1580,7 +1684,9 @@ def tune_composition_workflow(
                 tuning_split_id=tuning_split_id,
                 composition_config_name=workflow.config_name(config),
             )
-            scored = [record for record in records if record.scored and record.aitchison is not None]
+            scored = [
+                record for record in records if record.scored and record.aitchison is not None
+            ]
             if not scored:
                 failed_folds += 1
                 continue
@@ -1645,20 +1751,50 @@ def _compute_workflow_aggregates(
         "micro_precision": micro_precision,
         "micro_recall": micro_recall,
         "micro_f1": _safe_ratio(2 * micro_precision * micro_recall, micro_precision + micro_recall),
-        "macro_precision": float(np.mean([record.precision for record in workflow_records])) if workflow_records else 0.0,
-        "macro_recall": float(np.mean([record.recall for record in workflow_records])) if workflow_records else 0.0,
-        "macro_f1": float(np.mean([record.f1 for record in workflow_records])) if workflow_records else 0.0,
+        "macro_precision": (
+            float(np.mean([record.precision for record in workflow_records]))
+            if workflow_records
+            else 0.0
+        ),
+        "macro_recall": (
+            float(np.mean([record.recall for record in workflow_records]))
+            if workflow_records
+            else 0.0
+        ),
+        "macro_f1": (
+            float(np.mean([record.f1 for record in workflow_records])) if workflow_records else 0.0
+        ),
         "fpr": _safe_ratio(fp, fp + tn),
-        "exact_match_rate": float(np.mean([record.exact_match for record in workflow_records])) if workflow_records else 0.0,
-        "jaccard": float(np.mean([record.jaccard for record in workflow_records])) if workflow_records else 0.0,
-        "hamming_loss": float(np.mean([record.hamming_loss for record in workflow_records])) if workflow_records else 0.0,
-        "false_positives_per_spectrum": float(
-            np.mean([record.false_positives_per_spectrum for record in workflow_records])
-        )
-        if workflow_records
-        else 0.0,
-        "latency_mean_s": float(np.mean([record.elapsed_seconds for record in workflow_records])) if workflow_records else 0.0,
-        "latency_p95_s": float(np.percentile([record.elapsed_seconds for record in workflow_records], 95)) if workflow_records else 0.0,
+        "exact_match_rate": (
+            float(np.mean([record.exact_match for record in workflow_records]))
+            if workflow_records
+            else 0.0
+        ),
+        "jaccard": (
+            float(np.mean([record.jaccard for record in workflow_records]))
+            if workflow_records
+            else 0.0
+        ),
+        "hamming_loss": (
+            float(np.mean([record.hamming_loss for record in workflow_records]))
+            if workflow_records
+            else 0.0
+        ),
+        "false_positives_per_spectrum": (
+            float(np.mean([record.false_positives_per_spectrum for record in workflow_records]))
+            if workflow_records
+            else 0.0
+        ),
+        "latency_mean_s": (
+            float(np.mean([record.elapsed_seconds for record in workflow_records]))
+            if workflow_records
+            else 0.0
+        ),
+        "latency_p95_s": (
+            float(np.percentile([record.elapsed_seconds for record in workflow_records], 95))
+            if workflow_records
+            else 0.0
+        ),
         "bootstrap_f1": bootstrap_ci([record.f1 for record in workflow_records]),
         "bootstrap_precision": bootstrap_ci([record.precision for record in workflow_records]),
     }
@@ -1669,17 +1805,27 @@ def _compute_per_element_stats(
 ) -> Dict[str, Dict[str, float]]:
     element_summary: Dict[str, Dict[str, float]] = {}
     element_names = sorted(
-        {element for record in workflow_records for element in (record.true_elements + record.predicted_elements)}
+        {
+            element
+            for record in workflow_records
+            for element in (record.true_elements + record.predicted_elements)
+        }
     )
     for element in element_names:
         el_tp = sum(
-            1 for record in workflow_records if element in record.true_elements and element in record.predicted_elements
+            1
+            for record in workflow_records
+            if element in record.true_elements and element in record.predicted_elements
         )
         el_fp = sum(
-            1 for record in workflow_records if element not in record.true_elements and element in record.predicted_elements
+            1
+            for record in workflow_records
+            if element not in record.true_elements and element in record.predicted_elements
         )
         el_fn = sum(
-            1 for record in workflow_records if element in record.true_elements and element not in record.predicted_elements
+            1
+            for record in workflow_records
+            if element in record.true_elements and element not in record.predicted_elements
         )
         support = sum(1 for record in workflow_records if element in record.true_elements)
         element_summary[element] = {
@@ -1699,7 +1845,11 @@ def _compute_id_stratified_buckets(
     for field_name in field_names:
         buckets: Dict[str, List[IDEvaluationRecord]] = {}
         for record in workflow_records:
-            key = _rp_bucket(record.rp_estimate) if field_name == "rp_bucket" else str(getattr(record, field_name))
+            key = (
+                _rp_bucket(record.rp_estimate)
+                if field_name == "rp_bucket"
+                else str(getattr(record, field_name))
+            )
             buckets.setdefault(key, []).append(record)
         stratified[field_name] = {
             key: {
@@ -1742,15 +1892,23 @@ def summarize_id_records(records: Sequence[IDEvaluationRecord]) -> Dict[str, Any
 def _compute_composition_overall(
     pair_records: Sequence[CompositionEvaluationRecord],
 ) -> Dict[str, Any]:
-    aitchisons = [float(record.aitchison) for record in pair_records if record.aitchison is not None]
+    aitchisons = [
+        float(record.aitchison) for record in pair_records if record.aitchison is not None
+    ]
     rmses = [float(record.rmse) for record in pair_records if record.rmse is not None]
-    closure_residuals = [float(record.closure_residual) for record in pair_records if record.closure_residual is not None]
+    closure_residuals = [
+        float(record.closure_residual)
+        for record in pair_records
+        if record.closure_residual is not None
+    ]
     temperature_errors = [
         float(record.temperature_error_frac)
         for record in pair_records
         if record.temperature_error_frac is not None
     ]
-    ne_errors = [float(record.ne_error_frac) for record in pair_records if record.ne_error_frac is not None]
+    ne_errors = [
+        float(record.ne_error_frac) for record in pair_records if record.ne_error_frac is not None
+    ]
     tier_distribution: Dict[str, int] = {}
     for record in pair_records:
         if record.error_tier is not None:
@@ -1761,11 +1919,23 @@ def _compute_composition_overall(
         "median_aitchison": float(np.median(aitchisons)) if aitchisons else float("inf"),
         "p95_aitchison": float(np.percentile(aitchisons, 95)) if aitchisons else float("inf"),
         "mean_rmse": float(np.mean(rmses)) if rmses else float("inf"),
-        "mean_closure_residual": float(np.mean(closure_residuals)) if closure_residuals else float("inf"),
-        "mean_temperature_error_frac": float(np.mean(temperature_errors)) if temperature_errors else None,
+        "mean_closure_residual": (
+            float(np.mean(closure_residuals)) if closure_residuals else float("inf")
+        ),
+        "mean_temperature_error_frac": (
+            float(np.mean(temperature_errors)) if temperature_errors else None
+        ),
         "mean_ne_error_frac": float(np.mean(ne_errors)) if ne_errors else None,
-        "latency_mean_s": float(np.mean([record.elapsed_seconds for record in pair_records])) if pair_records else 0.0,
-        "latency_p95_s": float(np.percentile([record.elapsed_seconds for record in pair_records], 95)) if pair_records else 0.0,
+        "latency_mean_s": (
+            float(np.mean([record.elapsed_seconds for record in pair_records]))
+            if pair_records
+            else 0.0
+        ),
+        "latency_p95_s": (
+            float(np.percentile([record.elapsed_seconds for record in pair_records], 95))
+            if pair_records
+            else 0.0
+        ),
         "bootstrap_aitchison": bootstrap_ci(aitchisons),
         "tier_distribution": tier_distribution,
     }
@@ -1779,7 +1949,8 @@ def _compute_composition_per_element(
             element
             for record in pair_records
             for element in (
-                list(record.per_element_absolute_error.keys()) + list(record.per_element_relative_error.keys())
+                list(record.per_element_absolute_error.keys())
+                + list(record.per_element_relative_error.keys())
             )
         }
     )
@@ -1812,14 +1983,20 @@ def _compute_composition_stratified_buckets(
     for field_name in field_names:
         buckets: Dict[str, List[CompositionEvaluationRecord]] = {}
         for record in pair_records:
-            bucket_key = _rp_bucket(record.rp_estimate) if field_name == "rp_bucket" else str(getattr(record, field_name))
+            bucket_key = (
+                _rp_bucket(record.rp_estimate)
+                if field_name == "rp_bucket"
+                else str(getattr(record, field_name))
+            )
             buckets.setdefault(bucket_key, []).append(record)
         stratified[field_name] = {
             bucket_key: {
                 "mean_aitchison": float(
                     np.mean([rec.aitchison for rec in bucket_records if rec.aitchison is not None])
                 ),
-                "mean_rmse": float(np.mean([rec.rmse for rec in bucket_records if rec.rmse is not None])),
+                "mean_rmse": float(
+                    np.mean([rec.rmse for rec in bucket_records if rec.rmse is not None])
+                ),
                 "n_spectra": len(bucket_records),
             }
             for bucket_key, bucket_records in buckets.items()
@@ -1858,8 +2035,16 @@ def mcnemar_test(
 ) -> Dict[str, float]:
     if chi2 is None:
         return {"b": 0, "c": 0, "chi2": float("nan"), "p_value": float("nan")}
-    left_map = {(record.outer_split_id, record.spectrum_id): record for record in left_records if record.scored}
-    right_map = {(record.outer_split_id, record.spectrum_id): record for record in right_records if record.scored}
+    left_map = {
+        (record.outer_split_id, record.spectrum_id): record
+        for record in left_records
+        if record.scored
+    }
+    right_map = {
+        (record.outer_split_id, record.spectrum_id): record
+        for record in right_records
+        if record.scored
+    }
     keys = sorted(set(left_map) & set(right_map))
     b = c = 0
     for key in keys:
@@ -1954,17 +2139,23 @@ def _write_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
             writer.writerow(normalized)
 
 
-def _plot_per_element_heatmap(per_element: Dict[str, Dict[str, Dict[str, float]]], output_path: Path) -> None:
+def _plot_per_element_heatmap(
+    per_element: Dict[str, Dict[str, Dict[str, float]]], output_path: Path
+) -> None:
     import matplotlib.pyplot as plt
 
     workflows = sorted(per_element.keys())
-    elements = sorted({element for workflow in workflows for element in per_element[workflow].keys()})
+    elements = sorted(
+        {element for workflow in workflows for element in per_element[workflow].keys()}
+    )
     if not workflows or not elements:
         return
     data = np.zeros((len(elements), len(workflows)), dtype=float)
     for workflow_idx, workflow in enumerate(workflows):
         for element_idx, element in enumerate(elements):
-            data[element_idx, workflow_idx] = float(per_element.get(workflow, {}).get(element, {}).get("precision", 0.0))
+            data[element_idx, workflow_idx] = float(
+                per_element.get(workflow, {}).get(element, {}).get("precision", 0.0)
+            )
 
     fig, ax = plt.subplots(figsize=(max(8, len(workflows) * 1.2), max(6, len(elements) * 0.3)))
     image = ax.imshow(data, cmap="RdYlGn", vmin=0.0, vmax=1.0, aspect="auto")
@@ -2016,7 +2207,12 @@ def _plot_metric_vs_rp(
         if not points:
             continue
         points.sort(key=lambda item: item[0])
-        ax.plot([point[0] for point in points], [point[1] for point in points], marker="o", label=workflow)
+        ax.plot(
+            [point[0] for point in points],
+            [point[1] for point in points],
+            marker="o",
+            label=workflow,
+        )
     ax.set_xscale("log")
     ax.set_xlabel("Resolving Power (bucket midpoint)")
     ax.set_ylabel(metric_name.replace("_", " ").title())
@@ -2062,7 +2258,9 @@ def _write_failure_table(records: Sequence[IDEvaluationRecord], output_path: Pat
                 "note": "Selected basis FWHM differs materially from RP-implied target",
             }
         )
-        label_caveats = sum(1 for record in workflow_records if record.truth_type == TruthType.FORMULA_PROXY.value)
+        label_caveats = sum(
+            1 for record in workflow_records if record.truth_type == TruthType.FORMULA_PROXY.value
+        )
         rows.append(
             {
                 "workflow": workflow,
@@ -2098,7 +2296,9 @@ class UnifiedBenchmarkRunner:
             if max_outer_folds is not None:
                 outer_splits = outer_splits[: int(max_outer_folds)]
             for outer_split in outer_splits:
-                train_dataset = subset_dataset(dataset, outer_split.train_ids, f"{dataset.name}_{outer_split.name}_train")
+                train_dataset = subset_dataset(
+                    dataset, outer_split.train_ids, f"{dataset.name}_{outer_split.name}_train"
+                )
                 test_spectra = [dataset.get_spectrum(spec_id) for spec_id in outer_split.test_ids]
                 for workflow_name in workflow_names:
                     workflow = self.id_registry[workflow_name]
@@ -2120,7 +2320,9 @@ class UnifiedBenchmarkRunner:
                             "inner_scores": tuning_scores,
                         }
                     )
-                    predictor = workflow.build_predictor(self.context, list(dataset.elements), best_config)
+                    predictor = workflow.build_predictor(
+                        self.context, list(dataset.elements), best_config
+                    )
                     records.extend(
                         evaluate_id_workflow(
                             test_spectra,
@@ -2151,7 +2353,9 @@ class UnifiedBenchmarkRunner:
             if max_outer_folds is not None:
                 outer_splits = outer_splits[: int(max_outer_folds)]
             for outer_split in outer_splits:
-                train_dataset = subset_dataset(dataset, outer_split.train_ids, f"{dataset.name}_{outer_split.name}_train")
+                train_dataset = subset_dataset(
+                    dataset, outer_split.train_ids, f"{dataset.name}_{outer_split.name}_train"
+                )
                 test_spectra = [dataset.get_spectrum(spec_id) for spec_id in outer_split.test_ids]
                 for id_workflow_name in id_workflow_names:
                     id_workflow = self.id_registry[id_workflow_name]
@@ -2173,10 +2377,17 @@ class UnifiedBenchmarkRunner:
                             "inner_scores": tuning_scores,
                         }
                     )
-                    id_predictor = id_workflow.build_predictor(self.context, list(dataset.elements), best_config)
+                    id_predictor = id_workflow.build_predictor(
+                        self.context, list(dataset.elements), best_config
+                    )
                     for composition_name in composition_workflow_names:
                         composition_workflow = self.composition_registry[composition_name]
-                        composition_config, composition_config_name, composition_tuning_split_id, composition_scores = tune_composition_workflow(
+                        (
+                            composition_config,
+                            composition_config_name,
+                            composition_tuning_split_id,
+                            composition_scores,
+                        ) = tune_composition_workflow(
                             self.context,
                             composition_workflow,
                             train_dataset,
@@ -2199,7 +2410,11 @@ class UnifiedBenchmarkRunner:
                         )
                         composition_predictor = composition_workflow.fit_predictor(
                             self.context,
-                            [spec for spec in train_dataset.spectra if spec.truth_type != TruthType.BLIND],
+                            [
+                                spec
+                                for spec in train_dataset.spectra
+                                if spec.truth_type != TruthType.BLIND
+                            ],
                             composition_config,
                         )
                         records.extend(
@@ -2274,10 +2489,20 @@ class UnifiedBenchmarkRunner:
             ],
         )
         latency_rows = [
-            {"kind": "identification", "workflow": workflow, "latency_mean_s": metrics["latency_mean_s"], "latency_p95_s": metrics["latency_p95_s"]}
+            {
+                "kind": "identification",
+                "workflow": workflow,
+                "latency_mean_s": metrics["latency_mean_s"],
+                "latency_p95_s": metrics["latency_p95_s"],
+            }
             for workflow, metrics in sorted(id_summary["overall"].items())
         ] + [
-            {"kind": "composition", "workflow": workflow_pair, "latency_mean_s": metrics["latency_mean_s"], "latency_p95_s": metrics["latency_p95_s"]}
+            {
+                "kind": "composition",
+                "workflow": workflow_pair,
+                "latency_mean_s": metrics["latency_mean_s"],
+                "latency_p95_s": metrics["latency_p95_s"],
+            }
             for workflow_pair, metrics in sorted(composition_summary["overall"].items())
         ]
         _write_csv(outputs["latency_table_csv"], latency_rows)
@@ -2285,7 +2510,11 @@ class UnifiedBenchmarkRunner:
 
         statistics: Dict[str, Any] = {"mcnemar": {}, "friedman_nemenyi": {}}
         by_workflow_records = {
-            workflow: [record for record in id_records if record.workflow_name == workflow and record.scored]
+            workflow: [
+                record
+                for record in id_records
+                if record.workflow_name == workflow and record.scored
+            ]
             for workflow in sorted({record.workflow_name for record in id_records})
         }
         workflows = sorted(by_workflow_records.keys())
@@ -2318,7 +2547,9 @@ class UnifiedBenchmarkRunner:
 
         _plot_per_element_heatmap(id_summary["per_element"], outputs["per_element_heatmap_png"])
         _plot_precision_recall(id_summary["overall"], outputs["precision_recall_png"])
-        _plot_metric_vs_rp(id_summary["stratified"]["rp_bucket"], "micro_f1", outputs["f1_vs_rp_png"])
+        _plot_metric_vs_rp(
+            id_summary["stratified"]["rp_bucket"], "micro_f1", outputs["f1_vs_rp_png"]
+        )
         _plot_metric_vs_rp(
             id_summary["stratified"]["rp_bucket"],
             "micro_precision",
