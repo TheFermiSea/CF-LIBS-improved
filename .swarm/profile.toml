@@ -41,6 +41,16 @@ args = ["-c", "[ -f .venv/bin/activate ] && source .venv/bin/activate; pytest te
 blocking = false
 timeout_secs = 600
 
+# GPD physics convention check (advisory).
+# Validates that code changes don't drift from locked conventions:
+# unit system, Saha equation form, emissivity formula, etc.
+[[gates]]
+name = "physics"
+command = "bash"
+args = ["-c", "~/.gpd/venv/bin/gpd convention check --cwd . 2>&1 || true"]
+blocking = false
+timeout_secs = 30
+
 # Auto-fix commands run before LLM delegation to handle trivial issues.
 
 [[auto_fix]]
