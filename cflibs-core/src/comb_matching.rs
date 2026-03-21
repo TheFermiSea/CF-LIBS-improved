@@ -24,9 +24,8 @@ fn count_matches(peaks: &[f64], transitions: &[f64], tolerance: f64, shift: f64)
         let right_ok = idx < transitions.len()
             && !used[idx]
             && (transitions[idx] - shifted).abs() <= tolerance;
-        let left_ok = idx > 0
-            && !used[idx - 1]
-            && (transitions[idx - 1] - shifted).abs() <= tolerance;
+        let left_ok =
+            idx > 0 && !used[idx - 1] && (transitions[idx - 1] - shifted).abs() <= tolerance;
 
         let chosen = match (right_ok, left_ok) {
             (true, true) => {
