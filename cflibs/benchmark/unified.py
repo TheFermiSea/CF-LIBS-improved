@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass, field
 import csv
 import importlib.util
 import json
+import sys
 import math
 import re
 import time
@@ -80,6 +81,7 @@ def _load_repo_script_module(module_name: str) -> Any:
         raise ImportError(f"Could not load helper module from {script_path}")
 
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     _SCRIPT_MODULE_CACHE[module_name] = module
     return module
@@ -1325,7 +1327,10 @@ def tune_id_workflow(
                 tuning_split_id=tuning_split_id,
                 config_name=workflow.config_name(config),
             )
-            summary = summarize_id_records(records)["overall"][workflow.name]
+            overall = summarize_id_records(records)["overall"]
+            if workflow.name not in overall:
+                continue
+            summary = overall[workflow.name]
             fold_scores.append(float(summary["micro_f1"]))
             precisions.append(float(summary["micro_precision"]))
         score = float(np.mean(fold_scores)) if fold_scores else 0.0
