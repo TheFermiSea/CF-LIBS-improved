@@ -101,7 +101,7 @@ class BoltzmannFitResult:
         Coefficient of determination (goodness of fit)
     n_points : int
         Number of points used in final fit
-    rejected_points : List[int]
+    rejected_points : list[int]
         Indices of rejected outlier points
     slope : float
         Slope of Boltzmann plot = -1/(kB*T)
@@ -201,7 +201,7 @@ class BoltzmannPlotFitter:
 
         Parameters
         ----------
-        observations : List[LineObservation]
+        observations : list[LineObservation]
             List of line observations
 
         Returns
@@ -634,7 +634,7 @@ class BoltzmannPlotFitter:
 
         Parameters
         ----------
-        observations : List[LineObservation]
+        observations : list[LineObservation]
             Data points
         result : BoltzmannFitResult
             Fit result
