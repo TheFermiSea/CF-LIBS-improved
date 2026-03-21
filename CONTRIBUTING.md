@@ -41,25 +41,25 @@ CF-LIBS is committed to providing a welcoming and inclusive environment. Please 
 ### Install in Development Mode
 
 ```bash
-pip install -e ".[dev]"
+just setup
 ```
 
 This installs:
 - The package in editable mode
-- Development dependencies (pytest, black, mypy, ruff)
+- Development dependencies (pytest, black, mypy, ruff, ty)
+- A consistent command surface through `just`
 
 ### Verify Setup
 
 ```bash
-# Run tests
-pytest tests/ -v
+# Stable local quality gate
+just check
 
-# Check code style
-black --check cflibs/
-ruff check cflibs/
+# Full pytest suite
+just test
 
-# Type checking
-mypy cflibs/
+# Experimental next-generation type check
+just typecheck-ty
 ```
 
 ---
@@ -75,27 +75,39 @@ mypy cflibs/
 
 ### Code Formatting
 
-We use `black` for code formatting:
+We currently use `black` for repo formatting commands:
 
 ```bash
-black cflibs/
+just fmt
+```
+
+We are evaluating Ruff's formatter for a future repo-wide migration:
+
+```bash
+just fmt-ruff-check
 ```
 
 ### Linting
 
-We use `ruff` for linting:
+We use `ruff` for the stable lint gate:
 
 ```bash
-ruff check cflibs/
-ruff check --fix cflibs/  # Auto-fix issues
+just lint
+just lint-fix  # Auto-fix issues
 ```
 
 ### Type Checking
 
-We use `mypy` for type checking:
+We use `mypy` for the stable type-check gate:
 
 ```bash
-mypy cflibs/
+just typecheck
+```
+
+We are also evaluating `ty` in advisory mode:
+
+```bash
+just typecheck-ty
 ```
 
 ### Example Code Style
@@ -173,13 +185,16 @@ def test_temperature_conversion():
 
 ```bash
 # Run all tests
-pytest tests/ -v
+just test
 
 # Run specific test file
 pytest tests/test_constants.py -v
 
 # Run with coverage
 pytest tests/ --cov=cflibs --cov-report=html
+
+# Run the fast local slice used by `just check`
+just test-fast
 ```
 
 ### Test Coverage
@@ -416,4 +431,3 @@ By contributing, you agree that your contributions will be licensed under the MI
 ---
 
 Thank you for contributing to CF-LIBS! 🎉
-

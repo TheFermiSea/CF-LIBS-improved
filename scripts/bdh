@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    printf 'scripts/bdh: must run inside a git checkout\n' >&2
+    exit 1
+}
+
+local_beadhub="$repo_root/.beadhub"
+local_aw_config="$repo_root/.aw/config.yaml"
+local_aw_context="$repo_root/.aw/context"
+bootstrap="$repo_root/scripts/beadhub-bootstrap.sh"
+
+if [[ ! -f "$local_beadhub" || ! -f "$local_aw_config" || ! -f "$local_aw_context" ]]; then
+    bash "$bootstrap" --quiet
+    if [[ ! -f "$local_beadhub" || ! -f "$local_aw_config" || ! -f "$local_aw_context" ]]; then
+        printf 'scripts/bdh: BeadHub is not initialized in this repo/worktree (missing .beadhub or .aw files)\n' >&2
+        printf 'scripts/bdh: run scripts/beadhub-bootstrap.sh to initialize BeadHub\n' >&2
+        exit 1
+    fi
+fi
+
+beadhub_api_key=$(python3 - "$local_aw_config" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+text = config_path.read_text()
+match = re.search(r'(?m)^\s*api_key:\s*"?([^"\n]+)"?\s*$', text)
+if not match:
+    raise SystemExit("scripts/bdh: could not find api_key in local AW config")
+print(match.group(1))
+PY
+)
+
+exec env \
+    AW_CONFIG_PATH="$local_aw_config" \
+    BEADHUB_API_KEY="$beadhub_api_key" \
+    bdh --:local-config "$local_beadhub" "$@"
