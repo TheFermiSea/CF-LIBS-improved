@@ -33,7 +33,10 @@ def calculate_line_emissivity(
     Returns
     -------
     float
-        Spectral emissivity in W m^-3 nm^-1
+        Line-integrated emissivity in W m^-3 sr^-1 (total power per unit
+        volume per steradian for this transition). To obtain spectral
+        emissivity (per nm), multiply by a normalized line profile
+        φ_λ(λ) — this is done by ``calculate_spectrum_emissivity()``.
     """
     if wavelength_nm is None:
         wavelength_nm = transition.wavelength_nm

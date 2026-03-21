@@ -815,14 +815,17 @@ class MultipletLine:
         Rearranging:
             f_ik = (m_e c / 8 pi^2 e^2) * (g_k / g_i) * lambda^2 * A_ki
 
-        Using atomic units (CGS):
-            f_ik = 1.4992e-16 * (g_k / g_i) * lambda[cm]^2 * A_ki[s^-1]
+        In Gaussian CGS (lambda in cm):
+            f_ik = 1.4992 * (g_k / g_i) * lambda[cm]^2 * A_ki[s^-1]
+
+        Note: the prefactor m_e*c/(8*pi^2*e^2) evaluates to 1.4992 in CGS
+        with lambda in cm. The value 1.4992e-16 sometimes seen in literature
+        is for lambda in Angstroms (1 cm = 1e8 Angstrom, squared = 1e16).
         """
         lambda_cm = self.wavelength_nm * 1e-7
-        # Conversion factor from CGS atomic physics
-        # f = (m_e * c * lambda^2 * A) / (8 * pi^2 * e^2) * (g_k / g_i)
-        # = 1.4992e-16 * lambda[cm]^2 * A[s^-1] * (g_k / g_i)
-        f_ik = 1.4992e-16 * (lambda_cm**2) * self.A_ki * (self.g_k / self.g_i)
+        # Prefactor: m_e * c / (8 * pi^2 * e^2) = 1.4992 [CGS, lambda in cm]
+        # Verified: m_e=9.109e-28g, c=2.998e10cm/s, e=4.803e-10esu
+        f_ik = 1.4992 * (lambda_cm**2) * self.A_ki * (self.g_k / self.g_i)
         return f_ik
 
     @property
@@ -1000,10 +1003,12 @@ class CurveOfGrowthAnalyzer:
         """
         Calculate absorption oscillator strength from Einstein A coefficient.
 
-        f_ik = 1.4992e-16 * lambda[cm]^2 * A_ki[s^-1] * (g_k / g_i)
+        f_ik = 1.4992 * lambda[cm]^2 * A_ki[s^-1] * (g_k / g_i)
+
+        Prefactor is m_e*c/(8*pi^2*e^2) = 1.4992 in CGS with lambda in cm.
         """
         lambda_cm = wavelength_nm * 1e-7
-        return 1.4992e-16 * (lambda_cm**2) * A_ki * (g_k / g_i)
+        return 1.4992 * (lambda_cm**2) * A_ki * (g_k / g_i)
 
     def fit(
         self,

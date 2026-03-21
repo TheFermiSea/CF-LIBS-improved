@@ -141,7 +141,7 @@ class ClosureResult:
     Result of applying the closure equation.
     """
 
-    concentrations: Dict[str, float]  # element -> mass/molar fraction (sum=1)
+    concentrations: Dict[str, float]  # element -> number (mole) fraction (sum=1)
     experimental_factor: float  # The eliminated factor F (scaling factor)
     total_measured: float  # Sum of relative concentrations before normalization
     mode: str  # Mode used ('standard', 'matrix', 'oxide')

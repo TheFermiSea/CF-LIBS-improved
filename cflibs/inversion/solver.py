@@ -33,7 +33,10 @@ class CFLIBSResult:
     electron_density_uncertainty_cm3 : float
         1-sigma uncertainty in electron density (0 if not computed)
     concentrations : Dict[str, float]
-        Element concentrations (mass fractions, sum to 1)
+        Element concentrations (number/mole fractions, sum to 1).
+        These are the internal CF-LIBS closure fractions used in
+        Saha-Boltzmann algebra. Convert to mass fractions via
+        C_mass_i = C_i * AW_i / sum(C_j * AW_j).
     concentration_uncertainties : Dict[str, float]
         1-sigma uncertainties in concentrations
     iterations : int
