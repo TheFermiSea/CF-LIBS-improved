@@ -13,9 +13,11 @@ References:
     - Huber, P.J. (1981): Robust Statistics
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+
 import numpy as np
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
@@ -122,13 +124,13 @@ class BoltzmannFitResult:
     intercept_uncertainty: float
     r_squared: float
     n_points: int
-    rejected_points: List[int]  # Indices of rejected points
+    rejected_points: list[int]  # Indices of rejected points
     slope: float
     slope_uncertainty: float
     fit_method: str = "sigma_clip"
     n_iterations: int = 1
-    inlier_mask: Optional[np.ndarray] = field(default=None, repr=False)
-    covariance_matrix: Optional[np.ndarray] = field(default=None, repr=False)
+    inlier_mask: np.ndarray | None = field(default=None, repr=False)
+    covariance_matrix: np.ndarray | None = field(default=None, repr=False)
 
 
 class BoltzmannPlotFitter:
@@ -154,7 +156,7 @@ class BoltzmannPlotFitter:
         max_iterations: int = 5,
         method: FitMethod = FitMethod.SIGMA_CLIP,
         ransac_min_samples: int = 2,
-        ransac_residual_threshold: Optional[float] = None,
+        ransac_residual_threshold: float | None = None,
         ransac_max_trials: int = 100,
         huber_epsilon: float = 1.35,
     ):
@@ -189,7 +191,7 @@ class BoltzmannPlotFitter:
         self.ransac_max_trials = ransac_max_trials
         self.huber_epsilon = huber_epsilon
 
-    def fit(self, observations: List[LineObservation]) -> BoltzmannFitResult:
+    def fit(self, observations: list[LineObservation]) -> BoltzmannFitResult:
         """
         Perform robust linear regression on Boltzmann plot data.
 
@@ -567,7 +569,7 @@ class BoltzmannPlotFitter:
         indices: np.ndarray,
         method: str,
         n_iterations: int,
-        covariance_matrix: Optional[np.ndarray] = None,
+        covariance_matrix: np.ndarray | None = None,
     ) -> BoltzmannFitResult:
         """Create BoltzmannFitResult with temperature calculation.
 
@@ -625,8 +627,8 @@ class BoltzmannPlotFitter:
         )
 
     def plot(
-        self, observations: List[LineObservation], result: BoltzmannFitResult, ax=None
-    ) -> Optional[object]:
+        self, observations: list[LineObservation], result: BoltzmannFitResult, ax=None
+    ) -> object | None:
         """
         Plot the Boltzmann plot.
 
