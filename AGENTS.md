@@ -30,6 +30,17 @@
 - `mypy cflibs/` runs type checks.
 - `sphinx-build -b html docs docs/_build/html` builds documentation locally.
 
+## Swarm Quality-Gate Workflow
+- `.swarm/profile.toml` defines the beefcake-loop gate order used for autonomous verification.
+- Gate parity command sequence:
+  - `ruff check cflibs/ tests/`
+  - `black --check cflibs/`
+  - `mypy cflibs/` (advisory/non-blocking in swarm profile)
+  - `pytest tests/ -x -q -m "not slow and not requires_db"`
+- Auto-fix sequence in `.swarm/profile.toml`:
+  - `black cflibs/`
+  - `ruff check --fix cflibs/`
+
 ## CLI Workflows
 
 - `cflibs generate-db` generates the atomic database via the CLI.
@@ -105,7 +116,6 @@
 
    ```bash
    git pull --rebase
-   bdh :force-sync  # only needed when you changed beads state; bdh mutations auto-sync
    git push
    git status  # MUST show "up to date with origin"
    ```
@@ -120,92 +130,16 @@
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 
-<!-- BEADHUB:START -->
-## BeadHub Coordination Rules
-
-This project uses `bdh` for multi-agent coordination and issue tracking, `bdh` is a wrapper on top of `bd` (beads). Commands starting with : like `bdh :status` are managed by `bdh`. Other commands are sent to `bd`.
-
-`.beadhub` is per-worktree and is intentionally gitignored. New worktrees do
-not inherit the root checkout's BeadHub identity, so before using `bdh` in a
-fresh worktree you must bootstrap it:
-
-```bash
-test -f .beadhub || bdh :init --project cf-libs --role developer --update
-```
-
-In this repo's local OSS setup, the BeadHub server uses `http://localhost:8000`
-as the API base (with endpoints under `/v1`). Do not append `/api` unless you
-are intentionally switching this workspace to BeadHub Cloud or another server
-that expects that base path.
-
-You are expected to work and coordinate with a team of agents. ALWAYS prioritize the team vs your particular task.
-
-You will see notifications telling you that other agents have written mails or chat messages, or are waiting for you. NEVER ignore notifications. It is rude towards your fellow agents. Do not be rude.
-
-Your goal is for the team to succeed in the shared project.
-
-The active project policy as well as the expected behaviour associated to your role is shown via `bdh :policy`.
-
-## Start Here (Every Session)
-
-```bash
-bdh :policy    # READ CAREFULLY and follow diligently
-bdh :status    # who am I? (alias/workspace/role) + team status
-bdh ready      # find unblocked work
-```
-
-Use `bdh :help` for bdh-specific help.
-
-## Rules
-
-- Always use `bdh` (not `bd`) so work is coordinated
-- Default to mail (`bdh :aweb mail list|open|send`) for coordination; use chat (`bdh :aweb chat pending|open|send-and-wait|send-and-leave|history|extend-wait`) when you need a conversation with another agent.
-- Respond immediately to WAITING notifications — someone is blocked.
-- Notifications are for YOU, the agent, not for the human.
-- Don't overwrite the work of other agents without coordinating first.
-- ALWAYS check what other agents are working on with bdh :status which will tell you which beads they have claimed and what files they are working on (reservations).
-- `bdh` derives your identity from the `.beadhub` file in the current worktree. If you run it from another directory you will be impersonating another agent, do not do that.
-- Prioritize good communication — your goal is for the team to succeed
-
-## Using mail
-
-Mail is fire-and-forget — use it for status updates, handoffs, and non-blocking questions.
-
-```bash
-bdh :aweb mail send <alias> "message"                         # Send a message
-bdh :aweb mail send <alias> "message" --subject "API design"  # With subject
-bdh :aweb mail list                                           # Check your inbox
-bdh :aweb mail open <alias>                                   # Read & acknowledge
-```
-
-## Using chat
-
-Chat sessions are persistent per participant pair. Use `--start-conversation` when initiating a new exchange (longer wait timeout).
-
-**Starting a conversation:**
-
-```bash
-bdh :aweb chat send-and-wait <alias> "question" --start-conversation
-```
-
-**Replying (when someone is waiting for you):**
-
-```bash
-bdh :aweb chat send-and-wait <alias> "response"
-```
-
-**Final reply (you don't need their answer):**
-
-```bash
-bdh :aweb chat send-and-leave <alias> "thanks, got it"
-```
-
-**Other commands:**
-
-```bash
-bdh :aweb chat pending          # List conversations with unread messages
-bdh :aweb chat open <alias>     # Read unread messages
-bdh :aweb chat history <alias>  # Full conversation history
-bdh :aweb chat extend-wait <alias> "need more time"  # Ask for patience
-```
-<!-- BEADHUB:END -->
+## Beads Coordination (Native `bd`)
+- Use native `bd` issue tracking commands; do not rely on BeadHub/`bdh` wrappers in this repo.
+- Session start workflow:
+  - `bd prime`
+  - `bd memories`
+  - `bd ready`
+- Per-task context workflow:
+  - `bd show <BEAD_ID>`
+  - `bd comments <BEAD_ID>`
+  - `bd update <BEAD_ID> --status in_progress`
+- Progress and completion updates:
+  - `bd comment <BEAD_ID> "Completed X, working on Y"`
+  - `bd update <BEAD_ID> --status inreview`

@@ -25,6 +25,24 @@ pytest tests/ -v
 JAX_PLATFORMS=cpu pytest tests/    # force CPU backend
 ```
 
+## Swarm Quality-Gate Workflow (`.swarm/profile.toml`)
+
+For beefcake-loop parity, run gates in this order:
+
+```bash
+ruff check cflibs/ tests/
+black --check cflibs/
+mypy cflibs/                                  # advisory/non-blocking in swarm profile
+pytest tests/ -x -q -m "not slow and not requires_db"
+```
+
+Auto-fix sequence configured in `.swarm/profile.toml`:
+
+```bash
+black cflibs/
+ruff check --fix cflibs/
+```
+
 ## Running Tests
 
 ```bash
@@ -169,7 +187,6 @@ Short imperative summary (<=50 chars), optional body explaining what/why. Recent
 
    ```bash
    git pull --rebase
-   bdh :force-sync  # only needed when you changed beads state; bdh mutations auto-sync
    git push
    git status  # MUST show "up to date with origin"
    ```
@@ -183,3 +200,17 @@ Short imperative summary (<=50 chars), optional body explaining what/why. Recent
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
+
+## Beads Workflow (Native `bd`)
+
+- Use native `bd` commands for issue tracking and session context.
+- Session start:
+  - `bd prime`
+  - `bd memories`
+  - `bd ready`
+- Task execution:
+  - `bd show <BEAD_ID>`
+  - `bd comments <BEAD_ID>`
+  - `bd update <BEAD_ID> --status in_progress`
+  - `bd comment <BEAD_ID> "Completed X, working on Y"`
+  - `bd update <BEAD_ID> --status inreview`
