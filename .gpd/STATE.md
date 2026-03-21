@@ -65,10 +65,10 @@ None yet.
 - Energy Reference: All energies (E_k, E_i) are positive above ground state of each ionization stage. E_k >= E_i >= 0 always.
 - Spectral Domain: Wavelength-domain in nm throughout. Line profiles phi_lambda are normalized over wavelength (integral phi_lambda dlambda = 1). NOT frequency-domain.
 - Stark Width: Transition.stark_w is HWHM at reference n_e = 1e16 cm^-3. stark.py scales linearly: gamma_stark = stark_w * (n_e / 1e16). Full-width = 2 * gamma.
-- Self Absorption Model: Two models coexist: (1) escape-factor with tau ~ A*lambda^3*n_i*L in SelfAbsorptionCorrector, (2) curve-of-growth in CDSBPlotter. CAUTION: f_ik prefactor in self_absorption.py uses Angstrom-based 1.4992e-16 but lambda_cm — possible 1e8 units bug.
+- Self Absorption Model: Two models: (1) escape-factor with empirical tau ~ 1e-25 * A_ki * lambda_cm^3 * n_i * L (NOT using f_ik), (2) curve-of-growth in CDSBPlotter. Note: oscillator_strength property has a latent 1e16 prefactor error (Angstrom constant with cm lambda) but it only affects log_gf deltas where the error cancels.
 - Saha Form: 3-stage closed-form: explicit S1=n_II*n_e/n_I, optional S2=n_III*n_e/n_II, then n_total=n_I+n_II+n_III. NOT a general iterative all-stage solver. Inversion uses only S1 (2-stage).
 - Emissivity Units: SI output: W/m^3/sr (line-integrated). NOT W/cm^3/sr. Populations converted cm^-3 -> m^-3 at emissivity.py:44. Docstring at emissivity.py:33 claims W/m^3/nm which is WRONG for line-integrated form.
-- Partition Function Warning: KNOWN INCONSISTENCY: polynomial PF path (saha_boltzmann.py:179-185) ignores lowered IP (max_energy_ev). Only level-summation path (saha_boltzmann.py:205-214) honors IPD truncation. This means IPD affects Saha exponential but not U(T) when polynomial coefficients exist.
+- Partition Function Warning: DESIGN CHOICE: polynomial PF path uses pre-tabulated coefficients with natural IP truncation built in. IPD correction is NOT applied to polynomial path (would require non-trivial correction factor). Level-summation fallback correctly truncates at lowered IP. This is an acceptable approximation when delta_chi << IP.
 
 ### Propagated Uncertainties
 
