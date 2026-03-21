@@ -48,6 +48,14 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/brian/.gpd/venv/bin/python .claude/hooks/check_update.py"
+          }
+        ]
       }
     ],
     "SubagentStop": [],
@@ -71,5 +79,9 @@
     "ask": [],
     "defaultMode": "default",
     "deny": []
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "/home/brian/.gpd/venv/bin/python .claude/hooks/statusline.py"
   }
 }

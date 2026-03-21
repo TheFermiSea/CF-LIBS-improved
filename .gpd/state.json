@@ -1,0 +1,70 @@
+{
+  "project_reference": {
+    "project_md_updated": null,
+    "core_research_question": null,
+    "current_focus": null
+  },
+  "project_contract": null,
+  "position": {
+    "current_phase": null,
+    "current_phase_name": null,
+    "total_phases": null,
+    "current_plan": null,
+    "total_plans_in_phase": null,
+    "status": null,
+    "last_activity": null,
+    "last_activity_desc": null,
+    "progress_percent": 0,
+    "paused_at": null
+  },
+  "active_calculations": [],
+  "intermediate_results": [],
+  "open_questions": [],
+  "performance_metrics": {
+    "rows": []
+  },
+  "decisions": [],
+  "approximations": [],
+  "convention_lock": {
+    "metric_signature": null,
+    "fourier_convention": null,
+    "natural_units": null,
+    "gauge_choice": null,
+    "regularization_scheme": null,
+    "renormalization_scheme": null,
+    "coordinate_system": null,
+    "spin_basis": null,
+    "state_normalization": null,
+    "coupling_convention": null,
+    "index_positioning": null,
+    "time_ordering": null,
+    "commutation_convention": null,
+    "levi_civita_sign": null,
+    "generator_normalization": null,
+    "covariant_derivative_sign": null,
+    "gamma_matrix_convention": null,
+    "creation_annihilation_order": null,
+    "custom_conventions": {
+      "unit_system": "SI with eV for temperature and energy, cm^-3 for number densities",
+      "temperature_unit": "eV (electron-volt), T_e_eV; Kelvin used as T_K when explicitly noted",
+      "density_unit": "cm^-3 for number densities (n_e, n_i), g/cm^3 for mass density",
+      "wavelength_unit": "nm (nanometers) for spectral wavelengths",
+      "boltzmann_constant": "KB_EV = 8.617333e-5 eV/K (cflibs.core.constants)",
+      "saha_equation": "n_{i+1}*n_e/n_i = (2*U_{i+1}/U_i) * (2*pi*m_e*kT/h^2)^{3/2} * exp(-chi/kT)",
+      "boltzmann_distribution": "n_k/n_total = g_k * exp(-E_k / kT) / U(T) where U(T) is partition function",
+      "emissivity_formula": "epsilon = hc/(4*pi*lambda) * A_ki * n_k [W/cm^3/sr]",
+      "line_profile": "Voigt = Gaussian(Doppler) convolved Lorentzian(Stark+natural); sigma for Gaussian, gamma (HWHM) for Lorentzian",
+      "ionization_potential_depression": "Debye-Huckel model: delta_chi = e^2 * sqrt(4*pi*n_e / kT) in CGS",
+      "partition_function": "U(T) = sum_k g_k * exp(-E_k/kT), truncated at ionization potential",
+      "closure_equation": "sum(C_s) = 1 normalization of mass fractions; oxide mode available for geological samples"
+    }
+  },
+  "propagated_uncertainties": [],
+  "pending_todos": [],
+  "blockers": [],
+  "session": {
+    "last_date": null,
+    "stopped_at": null,
+    "resume_file": null
+  }
+}
