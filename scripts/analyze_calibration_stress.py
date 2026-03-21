@@ -40,7 +40,6 @@ class ShiftAnalysis:
 def main():
     """CLI entry point."""
     import argparse
-    import csv
     parser = argparse.ArgumentParser(description="Calibration stress analysis")
     parser.add_argument("--bench-dir", type=Path, default=Path("output/synthetic_benchmark/postmerge_synth_v1_auto_24"))
     parser.add_argument("--output", type=Path, default=Path("output/validation/calibration_stress_report.json"))

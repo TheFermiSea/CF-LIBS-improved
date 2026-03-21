@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 import json
 
-from cflibs.benchmark.dataset import BenchmarkDataset
+from cflibs.benchmark.dataset import BenchmarkDataset, TruthType
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
@@ -272,6 +272,15 @@ def _load_hdf5(path: Path) -> "BenchmarkDataset":
                 plasma_temperature_K=spec_group.attrs.get("plasma_temperature_K"),
                 electron_density_cm3=spec_group.attrs.get("electron_density_cm3"),
                 quality_flag=spec_group.attrs.get("quality_flag", 0),
+                dataset_id=_decode_string_optional(spec_group.attrs.get("dataset_id")),
+                group_id=_decode_string_optional(spec_group.attrs.get("group_id")),
+                specimen_id=_decode_string_optional(spec_group.attrs.get("specimen_id")),
+                instrument_id=_decode_string_optional(spec_group.attrs.get("instrument_id")),
+                truth_type=_decode_string(spec_group.attrs.get("truth_type", TruthType.ASSAY.value)),
+                rp_estimate=spec_group.attrs.get("rp_estimate"),
+                label_cardinality=spec_group.attrs.get("label_cardinality"),
+                spectrum_kind=_decode_string_optional(spec_group.attrs.get("spectrum_kind")),
+                annotations=json.loads(_decode_string(spec_group.attrs.get("annotations_json", "{}"))),
             )
             spectra.append(spectrum)
 
@@ -294,6 +303,9 @@ def _load_hdf5(path: Path) -> "BenchmarkDataset":
                     validation_ids=validation_ids,
                     description=_decode_string(split_group.attrs.get("description", "")),
                     random_seed=split_group.attrs.get("random_seed"),
+                    metadata=json.loads(
+                        _decode_string(split_group.attrs.get("metadata_json", "{}"))
+                    ),
                 )
 
     return BenchmarkDataset(
@@ -361,6 +373,23 @@ def _save_hdf5(
             if spectrum.electron_density_cm3 is not None:
                 spec_group.attrs["electron_density_cm3"] = spectrum.electron_density_cm3
             spec_group.attrs["quality_flag"] = spectrum.quality_flag
+            if spectrum.dataset_id is not None:
+                spec_group.attrs["dataset_id"] = spectrum.dataset_id
+            if spectrum.group_id is not None:
+                spec_group.attrs["group_id"] = spectrum.group_id
+            if spectrum.specimen_id is not None:
+                spec_group.attrs["specimen_id"] = spectrum.specimen_id
+            if spectrum.instrument_id is not None:
+                spec_group.attrs["instrument_id"] = spectrum.instrument_id
+            spec_group.attrs["truth_type"] = spectrum.truth_type.value
+            if spectrum.rp_estimate is not None:
+                spec_group.attrs["rp_estimate"] = spectrum.rp_estimate
+            if spectrum.label_cardinality is not None:
+                spec_group.attrs["label_cardinality"] = spectrum.label_cardinality
+            if spectrum.spectrum_kind is not None:
+                spec_group.attrs["spectrum_kind"] = spectrum.spectrum_kind
+            if spectrum.annotations:
+                spec_group.attrs["annotations_json"] = json.dumps(spectrum.annotations)
 
             # Write composition
             comp_group = spec_group.create_group("composition")
@@ -429,6 +458,8 @@ def _save_hdf5(
                 split_group.attrs["description"] = split.description
                 if split.random_seed is not None:
                     split_group.attrs["random_seed"] = split.random_seed
+                if split.metadata:
+                    split_group.attrs["metadata_json"] = json.dumps(split.metadata)
 
 
 def _create_dataset(

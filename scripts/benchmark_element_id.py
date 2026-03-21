@@ -11,7 +11,8 @@ Pathways:
   spectral_nnls  – Full-spectrum NNLS decomposition
   hybrid         – Two-stage NNLS screening + ALIAS confirmation
   voigt_alias    – Voigt deconvolution + ALIAS on cleaned spectrum
-  forward_model  – JointOptimizer forward-model fitting
+  nnls_concentration_threshold
+                 – NNLS concentration-threshold proxy for forward-model fitting
 
 Usage:
   JAX_PLATFORMS=cpu python scripts/benchmark_element_id.py \
@@ -441,13 +442,15 @@ def make_voigt_alias_configs(
     return configs
 
 
-def make_forward_model_configs(
+def make_nnls_concentration_configs(
     db: AtomicDatabase,
     basis_lib_path: Optional[Path],
 ) -> List[Tuple[str, Dict, Callable]]:
-    """Generate forward-model fitting pathway configurations."""
+    """Generate NNLS concentration-threshold pathway configurations."""
     if basis_lib_path is None or not basis_lib_path.exists():
-        logger.warning("No basis library found — skipping forward_model pathway")
+        logger.warning(
+            "No basis library found — skipping nnls_concentration_threshold pathway"
+        )
         return []
 
     from cflibs.manifold.basis_library import BasisLibrary
@@ -456,7 +459,7 @@ def make_forward_model_configs(
     basis = BasisLibrary(str(basis_lib_path))
     configs = []
 
-    # Forward model via NNLS with concentration thresholding
+    # Forward-model proxy via NNLS with concentration thresholding.
     # (lighter-weight than full JointOptimizer but captures the key idea)
     for conc_threshold in [0.001, 0.005, 0.01, 0.02, 0.05]:
         for cdeg in [2, 3]:
@@ -464,11 +467,11 @@ def make_forward_model_configs(
                 "concentration_threshold": conc_threshold,
                 "continuum_degree": cdeg,
             }
-            name = f"fwd_ct={conc_threshold}_cdeg={cdeg}"
+            name = f"nnls_ct={conc_threshold}_cdeg={cdeg}"
 
             def make_fn(cfg=config):
                 def identify(wl, sp):
-                    # Use NNLS decomposition as proxy for forward model
+                    # Use NNLS decomposition as proxy for forward-model fitting.
                     identifier = SpectralNNLSIdentifier(
                         basis_library=basis,
                         detection_snr=0.0,  # Disable SNR, use concentration
@@ -486,7 +489,7 @@ def make_forward_model_configs(
 
                     result.detected_elements = [e for e in result.all_elements if e.detected]
                     result.rejected_elements = [e for e in result.all_elements if not e.detected]
-                    result.algorithm = "forward_model_nnls"
+                    result.algorithm = "nnls_concentration_threshold"
                     result.parameters["concentration_threshold"] = ct
                     return result
 
@@ -572,7 +575,13 @@ def print_comparison_table(results: List[PathwayResult]) -> None:
     )
     print("-" * 95)
 
-    for pathway in ["alias", "spectral_nnls", "hybrid", "voigt_alias", "forward_model"]:
+    for pathway in [
+        "alias",
+        "spectral_nnls",
+        "hybrid",
+        "voigt_alias",
+        "nnls_concentration_threshold",
+    ]:
         r = best_per_pathway.get(pathway)
         if r is None:
             continue
@@ -605,7 +614,14 @@ def print_comparison_table(results: List[PathwayResult]) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
-ALL_PATHWAYS = ["alias", "spectral_nnls", "hybrid", "voigt_alias", "forward_model"]
+LEGACY_PATHWAY_ALIASES = {"forward_model": "nnls_concentration_threshold"}
+ALL_PATHWAYS = [
+    "alias",
+    "spectral_nnls",
+    "hybrid",
+    "voigt_alias",
+    "nnls_concentration_threshold",
+]
 
 
 def main() -> None:
@@ -637,8 +653,11 @@ def main() -> None:
         "--pathways",
         nargs="+",
         default=ALL_PATHWAYS,
-        choices=ALL_PATHWAYS,
-        help="Pathways to benchmark (default: all).",
+        choices=ALL_PATHWAYS + list(LEGACY_PATHWAY_ALIASES),
+        help=(
+            "Pathways to benchmark (default: all). "
+            "The legacy forward_model alias maps to nnls_concentration_threshold."
+        ),
     )
     parser.add_argument(
         "--quick",
@@ -663,6 +682,7 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",
     )
+    args.pathways = [LEGACY_PATHWAY_ALIASES.get(pathway, pathway) for pathway in args.pathways]
 
     db_path = Path(args.db_path)
     data_dir = Path(args.data_dir)
@@ -719,8 +739,8 @@ def main() -> None:
                 configs = make_hybrid_configs(db, primary_basis)
             elif pathway == "voigt_alias":
                 configs = make_voigt_alias_configs(db)
-            elif pathway == "forward_model":
-                configs = make_forward_model_configs(db, primary_basis)
+            elif pathway == "nnls_concentration_threshold":
+                configs = make_nnls_concentration_configs(db, primary_basis)
             else:
                 logger.warning("Unknown pathway: %s", pathway)
                 continue

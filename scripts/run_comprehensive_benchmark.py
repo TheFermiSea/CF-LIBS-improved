@@ -32,18 +32,17 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from cflibs.atomic.database import AtomicDatabase
-from cflibs.benchmarks.metrics import aitchison_distance
-from cflibs.core.constants import EV_TO_K, KB_EV
-from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import BoltzmannPlotFitter, FitMethod, LineObservation
-from cflibs.inversion.closure import ClosureEquation
-from cflibs.inversion.solver import IterativeCFLIBSSolver, CFLIBSResult
-from cflibs.plasma.partition import polynomial_partition_function
-from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
-from cflibs.radiation.spectrum_model import SpectrumModel
-from cflibs.plasma.state import SingleZoneLTEPlasma
-from cflibs.instrument.model import InstrumentModel
+from cflibs.atomic.database import AtomicDatabase  # noqa: E402
+from cflibs.benchmarks.metrics import aitchison_distance  # noqa: E402
+from cflibs.core.constants import EV_TO_K  # noqa: E402
+from cflibs.core.logging_config import get_logger  # noqa: E402
+from cflibs.inversion.boltzmann import BoltzmannPlotFitter, FitMethod, LineObservation  # noqa: E402
+from cflibs.inversion.closure import ClosureEquation  # noqa: E402
+from cflibs.inversion.solver import IterativeCFLIBSSolver  # noqa: E402
+from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver  # noqa: E402
+from cflibs.radiation.spectrum_model import SpectrumModel  # noqa: E402
+from cflibs.plasma.state import SingleZoneLTEPlasma  # noqa: E402
+from cflibs.instrument.model import InstrumentModel  # noqa: E402
 
 logger = get_logger("comprehensive_benchmark")
 
@@ -116,7 +115,6 @@ def generate_forward_model_spectra(
 
         for T_K in temperatures_K:
             for n_e in electron_densities:
-                T_eV = T_K / EV_TO_K
                 # Convert mass fractions to number densities (approximate)
                 total_density = n_e * 10  # rough total atom density
 
@@ -633,7 +631,7 @@ def main():
     # Per-element accuracy for best pipeline
     best = min(results, key=lambda x: x.mean_aitchison)
     print(f"\nBest pipeline: {best.pipeline_name}")
-    print(f"\nPer-element mean absolute error:")
+    print("\nPer-element mean absolute error:")
     for el in sorted(best.per_element_errors.keys()):
         errs = best.per_element_errors[el]
         print(

@@ -9,7 +9,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
+from matplotlib.patches import FancyBboxPatch
 import numpy as np
 
 FIGURE_DIR = Path(__file__).resolve().parent.parent / "docs" / "reports" / "figures"
@@ -261,8 +261,8 @@ def fig4_hybrid_architecture() -> None:
         fontsize=13, fontweight="bold", pad=15,
     )
 
-    bw, bh = 2.0, 0.7  # box width, height
     bw_sm = 1.7
+    bh = 0.65
 
     # Row positions (top to bottom)
     y_input = 5.8
@@ -366,7 +366,6 @@ def fig5_rp_distribution() -> None:
     x_kde = np.linspace(250, 1150, 300)
     kde_vals = kde(x_kde)
     # Scale KDE to match histogram counts
-    bin_width = bin_edges[1] - bin_edges[0]
     ax2 = ax.twinx()
     ax2.plot(x_kde, kde_vals, color="#d94801", linewidth=2, label="KDE")
     ax2.set_ylabel("Density", fontsize=10, color="#d94801")
@@ -380,7 +379,6 @@ def fig5_rp_distribution() -> None:
         ax.text(rp_val + 10, y_top * 0.72, label, fontsize=8, color="0.25", va="top")
 
     # Median annotation
-    median_val = np.median(samples)
     ax.set_xlabel("Effective Resolving Power", fontsize=11)
     ax.set_ylabel("Count", fontsize=11)
     ax.set_title("Resolving Power Distribution (Aalto Datasets)", fontsize=12, fontweight="bold")

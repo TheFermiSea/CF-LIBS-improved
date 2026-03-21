@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 """
-Validation script for CF-LIBS element identification on real experimental data.
+Legacy/reference validation script for CF-LIBS element identification on real experimental data.
+
+This remains available as a smoke-check and exploratory validator for
+representative spectra, but it is no longer the authoritative benchmark
+entrypoint.
 
 Tests ALIAS, Comb, and Correlation algorithms on LIBS spectra from data/ directory.
 Generates comparison tables and plots showing algorithm performance.
@@ -446,6 +450,9 @@ BENCHMARK_CRITERIA = {
 def select_representative_spectrum(data: np.ndarray, dataset_name: str) -> np.ndarray:
     """
     Select a representative 1D spectrum from multi-dimensional data.
+
+    This helper is used by the legacy/reference validation script to collapse
+    multidimensional inputs into a single smoke-test spectrum.
 
     For 3D spatial datasets (steel, Fe, Ni), averages over a 3x3 neighborhood
     around the center to improve SNR. For line scan datasets, uses single pixel.
@@ -1015,7 +1022,7 @@ def report_depth_scan_robustness(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Validate element identification on real LIBS data"
+        description="Legacy/reference validation of element identification on real LIBS data"
     )
     parser.add_argument(
         "--data-dir",
@@ -1121,6 +1128,11 @@ def main():
     )
 
     args = parser.parse_args()
+
+    print(
+        "NOTE: This is a legacy/reference validation script. "
+        "Use the unified benchmark runner for current benchmark reporting."
+    )
 
     # Validate paths
     data_dir = Path(args.data_dir)

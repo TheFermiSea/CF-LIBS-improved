@@ -58,9 +58,17 @@ class ParetoAnalyzer:
             fps = fp_sources.get(algo, {})
             top_fp = sorted(fps.items(), key=lambda x: -x[1])[:3]
             if ops.get("fpr", 0) > 0.15:
-                rec = {"action": "tighten_threshold", "reason": f"FPR={ops.get("fpr",0):.1%} exceeds 15% gate", "top_fp_elements": dict(top_fp)}
+                rec = {
+                    "action": "tighten_threshold",
+                    "reason": f"FPR={ops.get('fpr', 0):.1%} exceeds 15% gate",
+                    "top_fp_elements": dict(top_fp),
+                }
             else:
-                rec = {"action": "keep_current", "reason": f"FPR={ops.get("fpr",0):.1%} acceptable", "top_fp_elements": dict(top_fp)}
+                rec = {
+                    "action": "keep_current",
+                    "reason": f"FPR={ops.get('fpr', 0):.1%} acceptable",
+                    "top_fp_elements": dict(top_fp),
+                }
             recommendations[algo] = rec
         report = {
             "version": "v1.0",
@@ -76,7 +84,7 @@ class ParetoAnalyzer:
         output_path.write_text(json.dumps(report, indent=2))
         print(f"Report: {output_path}")
         for algo, rec in recommendations.items():
-            print(f"  {algo}: {rec["action"]} ({rec["reason"]})")
+            print(f"  {algo}: {rec['action']} ({rec['reason']})")
         return report
 def main():
     import argparse

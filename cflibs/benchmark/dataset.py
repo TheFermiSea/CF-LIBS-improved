@@ -19,7 +19,7 @@ References
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
@@ -133,6 +133,15 @@ class MatrixType(Enum):
     LIQUID = "liquid"
     AEROSOL = "aerosol"
     OTHER = "other"
+
+
+class TruthType(Enum):
+    """Ground-truth provenance for a benchmark spectrum."""
+
+    FORMULA_PROXY = "formula_proxy"
+    ASSAY = "assay"
+    SYNTHETIC = "synthetic"
+    BLIND = "blind"
 
 
 @dataclass
@@ -344,6 +353,24 @@ class BenchmarkSpectrum:
         Estimated electron density if known
     quality_flag : int
         Quality flag (0=good, 1=marginal, 2=poor, -1=excluded)
+    dataset_id : str, optional
+        Source dataset identifier used in multi-dataset studies
+    group_id : str, optional
+        Group key for leakage-safe split construction
+    specimen_id : str, optional
+        Physical specimen or synthetic parent identifier
+    instrument_id : str, optional
+        Instrument or acquisition pipeline identifier
+    truth_type : TruthType
+        Provenance of the ground truth labels
+    rp_estimate : float, optional
+        Estimated resolving power for this spectrum
+    label_cardinality : int, optional
+        Number of positive labels represented in ``true_composition``
+    spectrum_kind : str, optional
+        Coarse category such as ``mineral`` or ``pure_element``
+    annotations : Dict[str, Any]
+        Additional benchmark-specific metadata
 
     Notes
     -----
@@ -362,6 +389,15 @@ class BenchmarkSpectrum:
     plasma_temperature_K: Optional[float] = None
     electron_density_cm3: Optional[float] = None
     quality_flag: int = 0
+    dataset_id: Optional[str] = None
+    group_id: Optional[str] = None
+    specimen_id: Optional[str] = None
+    instrument_id: Optional[str] = None
+    truth_type: TruthType = TruthType.ASSAY
+    rp_estimate: Optional[float] = None
+    label_cardinality: Optional[int] = None
+    spectrum_kind: Optional[str] = None
+    annotations: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Validate and convert arrays."""
@@ -381,9 +417,19 @@ class BenchmarkSpectrum:
             if len(self.intensity_uncertainty) != len(self.intensity):
                 raise ValueError("Intensity uncertainty must match intensity array length")
 
-        # Validate composition sums approximately to 1
+        if isinstance(self.truth_type, str):
+            self.truth_type = TruthType(self.truth_type)
+
+        if self.rp_estimate is None and self.conditions.spectral_resolution_nm > 0:
+            mean_wl = float(np.mean(self.wavelength_nm))
+            self.rp_estimate = mean_wl / float(self.conditions.spectral_resolution_nm)
+
+        if self.label_cardinality is None:
+            self.label_cardinality = sum(1 for v in self.true_composition.values() if float(v) > 0.0)
+
+        # Validate composition sums approximately to 1 for supervised spectra only.
         total = sum(self.true_composition.values())
-        if abs(total - 1.0) > 0.05:
+        if self.truth_type != TruthType.BLIND and self.true_composition and abs(total - 1.0) > 0.05:
             logger.warning(
                 f"Spectrum {self.spectrum_id}: composition sums to {total:.4f}, " "expected ~1.0"
             )
@@ -441,6 +487,15 @@ class BenchmarkSpectrum:
             "plasma_temperature_K": self.plasma_temperature_K,
             "electron_density_cm3": self.electron_density_cm3,
             "quality_flag": self.quality_flag,
+            "dataset_id": self.dataset_id,
+            "group_id": self.group_id,
+            "specimen_id": self.specimen_id,
+            "instrument_id": self.instrument_id,
+            "truth_type": self.truth_type.value,
+            "rp_estimate": self.rp_estimate,
+            "label_cardinality": self.label_cardinality,
+            "spectrum_kind": self.spectrum_kind,
+            "annotations": self.annotations,
         }
 
     @classmethod
@@ -462,6 +517,15 @@ class BenchmarkSpectrum:
             plasma_temperature_K=d.get("plasma_temperature_K"),
             electron_density_cm3=d.get("electron_density_cm3"),
             quality_flag=d.get("quality_flag", 0),
+            dataset_id=d.get("dataset_id"),
+            group_id=d.get("group_id"),
+            specimen_id=d.get("specimen_id"),
+            instrument_id=d.get("instrument_id"),
+            truth_type=d.get("truth_type", TruthType.ASSAY.value),
+            rp_estimate=d.get("rp_estimate"),
+            label_cardinality=d.get("label_cardinality"),
+            spectrum_kind=d.get("spectrum_kind"),
+            annotations=d.get("annotations", {}),
         )
 
 
@@ -484,6 +548,8 @@ class DataSplit:
         Description of split rationale
     random_seed : int, optional
         Random seed used for split (for reproducibility)
+    metadata : Dict[str, Any]
+        Extra split metadata (grouping field, parent split, fold index, etc.)
     """
 
     name: str
@@ -492,6 +558,7 @@ class DataSplit:
     validation_ids: Optional[List[str]] = None
     description: str = ""
     random_seed: Optional[int] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def train_size(self) -> int:
@@ -517,6 +584,7 @@ class DataSplit:
             "validation_ids": self.validation_ids,
             "description": self.description,
             "random_seed": self.random_seed,
+            "metadata": self.metadata,
         }
 
     @classmethod
@@ -777,6 +845,181 @@ class BenchmarkDataset:
         self.splits[name] = split
         return split
 
+    def _resolve_field_value(self, spectrum: BenchmarkSpectrum, field_name: str) -> Any:
+        """Resolve dotted attribute paths on spectrum objects."""
+        def _invalid_field_error(part: str) -> ValueError:
+            return ValueError(
+                "Unknown metadata field "
+                f"'{field_name}' while resolving '{part}' for spectrum '{spectrum.spectrum_id}'"
+            )
+
+        value: Any = spectrum
+        for part in field_name.split("."):
+            try:
+                if isinstance(value, dict):
+                    if part not in value:
+                        raise _invalid_field_error(part)
+                    value = value[part]
+                else:
+                    value = getattr(value, part)
+            except AttributeError as exc:
+                raise _invalid_field_error(part) from exc
+        return value
+
+    def _assign_groups_to_folds(
+        self,
+        groups: Dict[str, List[str]],
+        group_keys: Sequence[str],
+        strata: Dict[str, str],
+        n_folds: int,
+        rng: np.random.Generator,
+        stratify_by: Optional[str],
+    ) -> List[List[str]]:
+        folds: List[List[str]] = [[] for _ in range(n_folds)]
+        fold_sizes = [0] * n_folds
+
+        if stratify_by is None:
+            keys = list(group_keys)
+            rng.shuffle(keys)
+            for idx, key in enumerate(keys):
+                fold_idx = idx % n_folds
+                folds[fold_idx].append(key)
+                fold_sizes[fold_idx] += len(groups[key])
+            return folds
+
+        grouped_keys: Dict[str, List[str]] = {}
+        for key, stratum in strata.items():
+            grouped_keys.setdefault(stratum, []).append(key)
+
+        for keys in grouped_keys.values():
+            rng.shuffle(keys)
+            keys.sort(key=lambda key: len(groups[key]), reverse=True)
+            for key in keys:
+                fold_idx = min(range(n_folds), key=lambda idx: (fold_sizes[idx], len(folds[idx])))
+                folds[fold_idx].append(key)
+                fold_sizes[fold_idx] += len(groups[key])
+        return folds
+
+    def _build_group_fold_split(
+        self,
+        fold_idx: int,
+        test_group_keys: Sequence[str],
+        groups: Dict[str, List[str]],
+        name_prefix: str,
+        group_by: str,
+        stratify_by: Optional[str],
+        random_seed: int,
+        n_folds: int,
+    ) -> DataSplit:
+        test_ids: List[str] = []
+        train_ids: List[str] = []
+        test_group_set = set(test_group_keys)
+        for key, spectrum_ids in groups.items():
+            if key in test_group_set:
+                test_ids.extend(spectrum_ids)
+            else:
+                train_ids.extend(spectrum_ids)
+        split = DataSplit(
+            name=f"{name_prefix}_{fold_idx + 1}",
+            train_ids=train_ids,
+            test_ids=test_ids,
+            description=f"Grouped fold {fold_idx + 1}/{n_folds} by {group_by}",
+            random_seed=random_seed,
+            metadata={
+                "group_by": group_by,
+                "stratify_by": stratify_by,
+                "fold_index": fold_idx,
+                "n_folds": n_folds,
+            },
+        )
+        self.splits[split.name] = split
+        return split
+
+    def _group_spectrum_ids(self, group_by: str) -> Dict[str, List[str]]:
+        """Group spectrum IDs by a metadata field."""
+        groups: Dict[str, List[str]] = {}
+        for spectrum in self.spectra:
+            raw_value = self._resolve_field_value(spectrum, group_by)
+            group_value = str(raw_value) if raw_value not in (None, "") else spectrum.spectrum_id
+            groups.setdefault(group_value, []).append(spectrum.spectrum_id)
+        return groups
+
+    def _group_strata(self, groups: Dict[str, List[str]], stratify_by: Optional[str]) -> Dict[str, str]:
+        """Assign one stratum label per group."""
+        strata: Dict[str, str] = {}
+        if stratify_by is None:
+            for group_value in groups:
+                strata[group_value] = "__all__"
+            return strata
+
+        for group_value, spectrum_ids in groups.items():
+            representative = self._id_to_spectrum[spectrum_ids[0]]
+            raw_value = self._resolve_field_value(representative, stratify_by)
+            strata[group_value] = str(raw_value) if raw_value not in (None, "") else "__missing__"
+        return strata
+
+    def create_grouped_random_split(
+        self,
+        name: str,
+        group_by: str = "group_id",
+        train_fraction: float = 0.7,
+        test_fraction: float = 0.3,
+        validation_fraction: float = 0.0,
+        random_seed: int = 42,
+        stratify_by: Optional[str] = None,
+    ) -> DataSplit:
+        """
+        Create a leakage-safe random split that keeps groups intact.
+        """
+        total = train_fraction + test_fraction + validation_fraction
+        if abs(total - 1.0) > 0.01:
+            raise ValueError(f"Fractions must sum to 1.0, got {total}")
+
+        rng = np.random.default_rng(random_seed)
+        groups = self._group_spectrum_ids(group_by)
+        strata = self._group_strata(groups, stratify_by)
+
+        train_ids: List[str] = []
+        test_ids: List[str] = []
+        val_ids: List[str] = []
+
+        grouped_keys: Dict[str, List[str]] = {}
+        for group_value, stratum in strata.items():
+            grouped_keys.setdefault(stratum, []).append(group_value)
+
+        for stratum, keys in grouped_keys.items():
+            _ = stratum
+            keys = list(keys)
+            rng.shuffle(keys)
+            n_groups = len(keys)
+            n_train = int(round(n_groups * train_fraction))
+            n_val = int(round(n_groups * validation_fraction))
+            if n_groups > 1:
+                n_train = min(max(n_train, 1), n_groups - 1)
+            n_remaining = max(n_groups - n_train, 0)
+            n_val = min(n_val, n_remaining)
+            train_keys = keys[:n_train]
+            val_keys = keys[n_train : n_train + n_val]
+            test_keys = keys[n_train + n_val :]
+            for key in train_keys:
+                train_ids.extend(groups[key])
+            for key in val_keys:
+                val_ids.extend(groups[key])
+            for key in test_keys:
+                test_ids.extend(groups[key])
+
+        split = DataSplit(
+            name=name,
+            train_ids=train_ids,
+            test_ids=test_ids,
+            validation_ids=val_ids if val_ids else None,
+            description=f"Grouped random split by {group_by}, seed={random_seed}",
+            random_seed=random_seed,
+            metadata={"group_by": group_by, "stratify_by": stratify_by},
+        )
+        self.splits[name] = split
+        return split
+
     def create_kfold_splits(
         self,
         n_folds: int = 5,
@@ -825,6 +1068,79 @@ class BenchmarkDataset:
             self.splits[split.name] = split
             splits.append(split)
 
+        return splits
+
+    def create_grouped_kfold_splits(
+        self,
+        n_folds: int = 5,
+        random_seed: int = 42,
+        group_by: str = "group_id",
+        stratify_by: Optional[str] = None,
+        name_prefix: str = "group_fold",
+    ) -> List[DataSplit]:
+        """
+        Create grouped k-fold splits, optionally stratified by a metadata field.
+        """
+        if n_folds < 2:
+            raise ValueError("n_folds must be at least 2")
+
+        rng = np.random.default_rng(random_seed)
+        groups = self._group_spectrum_ids(group_by)
+        group_keys = list(groups.keys())
+        if len(group_keys) < n_folds:
+            raise ValueError(
+                f"Need at least {n_folds} groups for grouped k-fold, got {len(group_keys)}"
+            )
+
+        strata = self._group_strata(groups, stratify_by)
+        folds = self._assign_groups_to_folds(groups, group_keys, strata, n_folds, rng, stratify_by)
+
+        splits: List[DataSplit] = []
+        for fold_idx, test_group_keys in enumerate(folds):
+            splits.append(
+                self._build_group_fold_split(
+                    fold_idx,
+                    test_group_keys,
+                    groups,
+                    name_prefix,
+                    group_by,
+                    stratify_by,
+                    random_seed,
+                    n_folds,
+                )
+            )
+
+        return splits
+
+    def create_grouped_loocv_splits(
+        self,
+        group_by: str = "group_id",
+        name_prefix: str = "group_loocv",
+    ) -> List[DataSplit]:
+        """
+        Create leave-one-group-out cross-validation splits.
+        """
+        groups = self._group_spectrum_ids(group_by)
+        if len(groups) < 2:
+            raise ValueError("Need at least two groups for grouped LOOCV")
+
+        splits: List[DataSplit] = []
+        for fold_idx, (group_value, test_ids) in enumerate(sorted(groups.items()), start=1):
+            train_ids = [
+                spectrum_id
+                for other_group, spectrum_ids in groups.items()
+                if other_group != group_value
+                for spectrum_id in spectrum_ids
+            ]
+            split = DataSplit(
+                name=f"{name_prefix}_{fold_idx}",
+                train_ids=train_ids,
+                test_ids=list(test_ids),
+                description=f"Leave-one-group-out split holding out {group_value}",
+                metadata={"group_by": group_by, "held_out_group": group_value, "fold_index": fold_idx - 1},
+            )
+            self.splits[split.name] = split
+            splits.append(split)
         return splits
 
     def filter_by_quality(self, max_flag: int = 0) -> "BenchmarkDataset":

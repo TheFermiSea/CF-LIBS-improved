@@ -46,39 +46,22 @@ References
 - NIST Standard Reference Materials program
 """
 
-from cflibs.benchmark.dataset import (
-    BenchmarkSpectrum,
-    InstrumentalConditions,
-    SampleMetadata,
-    BenchmarkDataset,
-    DataSplit,
-)
+from importlib import import_module
 
-from cflibs.benchmark.metrics import (
-    BenchmarkMetrics,
-    EvaluationResult,
-    ElementMetrics,
-    MetricType,
-)
-
-from cflibs.benchmark.synthetic import (
-    SyntheticBenchmarkGenerator,
-    CompositionRange,
-    ConditionVariation,
-)
-from cflibs.benchmark.synthetic_corpus import (
-    CorpusRecipe,
-    PerturbationAxes,
-    build_synthetic_id_corpus,
-    default_axes,
-    default_recipes,
-)
-
-from cflibs.benchmark.loaders import (
-    load_benchmark,
-    save_benchmark,
-    BenchmarkFormat,
-)
+_LAZY_ATTRIBUTE_GROUPS = {
+    "cflibs.benchmark.synthetic_eval": [
+        "CalibrationOptions",
+        "compute_binary_metrics",
+        "run_synthetic_benchmark",
+    ],
+    "cflibs.benchmark.unified": [
+        "UnifiedBenchmarkContext",
+        "UnifiedBenchmarkRunner",
+        "build_composition_workflow_registry",
+        "build_id_workflow_registry",
+        "load_default_datasets",
+    ],
+}
 
 __all__ = [
     # Core data structures
@@ -101,6 +84,11 @@ __all__ = [
     "build_synthetic_id_corpus",
     "default_axes",
     "default_recipes",
+    "UnifiedBenchmarkContext",
+    "UnifiedBenchmarkRunner",
+    "build_composition_workflow_registry",
+    "build_id_workflow_registry",
+    "load_default_datasets",
     "CalibrationOptions",
     "compute_binary_metrics",
     "run_synthetic_benchmark",
@@ -110,13 +98,54 @@ __all__ = [
     "BenchmarkFormat",
 ]
 
+_ATTRIBUTE_EXPORT_GROUPS = {
+    "cflibs.benchmark.dataset": [
+        "BenchmarkSpectrum",
+        "InstrumentalConditions",
+        "SampleMetadata",
+        "BenchmarkDataset",
+        "DataSplit",
+    ],
+    "cflibs.benchmark.metrics": [
+        "BenchmarkMetrics",
+        "EvaluationResult",
+        "ElementMetrics",
+        "MetricType",
+    ],
+    "cflibs.benchmark.synthetic": [
+        "SyntheticBenchmarkGenerator",
+        "CompositionRange",
+        "ConditionVariation",
+    ],
+    "cflibs.benchmark.synthetic_corpus": [
+        "CorpusRecipe",
+        "PerturbationAxes",
+        "build_synthetic_id_corpus",
+        "default_axes",
+        "default_recipes",
+    ],
+    "cflibs.benchmark.loaders": ["load_benchmark", "save_benchmark", "BenchmarkFormat"],
+}
+
+_MODULE_EXPORTS = {
+    attr_name: (module_name, attr_name)
+    for module_name, attr_names in _ATTRIBUTE_EXPORT_GROUPS.items()
+    for attr_name in attr_names
+}
+
 
 def __getattr__(name: str):
-    """Lazy-load heavy synthetic benchmark evaluation helpers."""
-    if name in {"CalibrationOptions", "compute_binary_metrics", "run_synthetic_benchmark"}:
-        from cflibs.benchmark import synthetic_eval as _synthetic_eval
-
-        value = getattr(_synthetic_eval, name)
+    """Lazy-load benchmark exports so lightweight submodules remain importable."""
+    if name in _MODULE_EXPORTS:
+        module_name, attr_name = _MODULE_EXPORTS[name]
+        module = import_module(module_name)
+        value = getattr(module, attr_name)
         globals()[name] = value
         return value
+    for module_name, attr_names in _LAZY_ATTRIBUTE_GROUPS.items():
+        if name in attr_names:
+            module = import_module(module_name)
+            value = getattr(module, name)
+            globals()[name] = value
+            return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

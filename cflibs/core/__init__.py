@@ -11,22 +11,7 @@ This module provides:
 - Connection pooling
 """
 
-from cflibs.core import constants
-from cflibs.core import units
-from cflibs.core import config
-from cflibs.core import logging_config
-from cflibs.core.platform_config import configure_jax, AcceleratorBackend
-from cflibs.core.cache import (
-    LRUCache,
-    cached_partition_function,
-    cached_transitions,
-    cached_ionization,
-    get_cache_stats,
-    clear_all_caches,
-)
-from cflibs.core.abc import AtomicDataSource, SolverStrategy, PlasmaModel, InstrumentModelInterface
-from cflibs.core.factory import SolverFactory, PlasmaModelFactory, InstrumentFactory
-from cflibs.core.pool import DatabaseConnectionPool, get_pool, close_all_pools
+from importlib import import_module
 
 __all__ = [
     # Modules
@@ -58,3 +43,51 @@ __all__ = [
     "configure_jax",
     "AcceleratorBackend",
 ]
+
+_MODULE_EXPORTS = {
+    "constants": "cflibs.core.constants",
+    "units": "cflibs.core.units",
+    "config": "cflibs.core.config",
+    "logging_config": "cflibs.core.logging_config",
+}
+
+_ATTRIBUTE_EXPORT_GROUPS = {
+    "cflibs.core.platform_config": ["configure_jax", "AcceleratorBackend"],
+    "cflibs.core.cache": [
+        "LRUCache",
+        "cached_partition_function",
+        "cached_transitions",
+        "cached_ionization",
+        "get_cache_stats",
+        "clear_all_caches",
+    ],
+    "cflibs.core.abc": [
+        "AtomicDataSource",
+        "SolverStrategy",
+        "PlasmaModel",
+        "InstrumentModelInterface",
+    ],
+    "cflibs.core.factory": ["SolverFactory", "PlasmaModelFactory", "InstrumentFactory"],
+    "cflibs.core.pool": ["DatabaseConnectionPool", "get_pool", "close_all_pools"],
+}
+
+_ATTRIBUTE_EXPORTS = {
+    attr_name: (module_name, attr_name)
+    for module_name, attr_names in _ATTRIBUTE_EXPORT_GROUPS.items()
+    for attr_name in attr_names
+}
+
+
+def __getattr__(name: str):
+    """Lazy-load core exports to avoid importing optional stacks eagerly."""
+    if name in _MODULE_EXPORTS:
+        module = import_module(_MODULE_EXPORTS[name])
+        globals()[name] = module
+        return module
+    if name in _ATTRIBUTE_EXPORTS:
+        module_name, attr_name = _ATTRIBUTE_EXPORTS[name]
+        module = import_module(module_name)
+        value = getattr(module, attr_name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

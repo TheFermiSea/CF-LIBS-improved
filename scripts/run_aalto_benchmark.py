@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """
-Benchmark CF-LIBS against validated Aalto University LIBS spectral library.
+Legacy/reference benchmark against the Aalto University LIBS spectral library.
+
+This script is preserved for compatibility and ad hoc comparisons, but the
+unified benchmark runner is the current authoritative workflow for reporting.
 
 Uses 74 real LIBS spectra (13 pure elements + 61 minerals) from
 https://users.aalto.fi/~lainei1/pages/elements/
@@ -41,8 +44,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from cflibs.atomic.database import AtomicDatabase
-from cflibs.core.logging_config import get_logger
+from cflibs.atomic.database import AtomicDatabase  # noqa: E402
+from cflibs.core.logging_config import get_logger  # noqa: E402
 
 logger = get_logger("aalto_benchmark")
 
@@ -513,11 +516,18 @@ def evaluate_element_id(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Aalto LIBS benchmark")
+    parser = argparse.ArgumentParser(
+        description="Legacy/reference Aalto LIBS benchmark (superseded by the unified benchmark)."
+    )
     parser.add_argument("--db", default="libs_production.db")
     parser.add_argument("--data-dir", default="data/aalto_libs")
     parser.add_argument("--output-dir", default="output/aalto_benchmark")
     args = parser.parse_args()
+
+    print(
+        "NOTE: This is a legacy/reference benchmark script. "
+        "Use the unified benchmark runner for current reporting."
+    )
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

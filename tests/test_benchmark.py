@@ -23,6 +23,7 @@ from cflibs.benchmark.dataset import (
     SampleType,
     MatrixType,
     DataSplit,
+    TruthType,
     SUPPORTED_ELEMENTS,
 )
 from cflibs.benchmark.metrics import (
@@ -286,6 +287,44 @@ class TestBenchmarkSpectrum:
         assert restored.spectrum_id == sample_spectrum.spectrum_id
         assert np.allclose(restored.wavelength_nm, sample_spectrum.wavelength_nm)
         assert restored.true_composition == sample_spectrum.true_composition
+
+    def test_to_dict_from_dict_preserves_new_benchmark_metadata(
+        self, sample_conditions, sample_metadata
+    ):
+        """Test round-trip serialization of grouped benchmark metadata."""
+        wavelength = np.linspace(200.0, 800.0, 16)
+        intensity = np.linspace(1.0, 2.0, 16)
+
+        spectrum = BenchmarkSpectrum(
+            spectrum_id="meta_spectrum",
+            wavelength_nm=wavelength,
+            intensity=intensity,
+            true_composition={"Fe": 0.6, "Cu": 0.4},
+            conditions=sample_conditions,
+            metadata=sample_metadata,
+            dataset_id="aalto_libs",
+            group_id="mineral_group_01",
+            specimen_id="specimen_01",
+            instrument_id="instrument_a",
+            truth_type=TruthType.FORMULA_PROXY,
+            rp_estimate=1234.5,
+            label_cardinality=2,
+            spectrum_kind="mineral",
+            annotations={"expected_elements": ["Fe", "Cu"], "source": "fixture"},
+        )
+
+        d = spectrum.to_dict()
+        restored = BenchmarkSpectrum.from_dict(d)
+
+        assert restored.dataset_id == "aalto_libs"
+        assert restored.group_id == "mineral_group_01"
+        assert restored.specimen_id == "specimen_01"
+        assert restored.instrument_id == "instrument_a"
+        assert restored.truth_type == TruthType.FORMULA_PROXY
+        assert restored.rp_estimate == 1234.5
+        assert restored.label_cardinality == 2
+        assert restored.spectrum_kind == "mineral"
+        assert restored.annotations == {"expected_elements": ["Fe", "Cu"], "source": "fixture"}
 
 
 # =============================================================================
@@ -829,6 +868,7 @@ class TestDataSplit:
             test_ids=["c"],
             description="Test split",
             random_seed=42,
+            metadata={"group_by": "group_id", "fold_index": 1},
         )
 
         d = split.to_dict()
@@ -837,6 +877,7 @@ class TestDataSplit:
         assert restored.name == split.name
         assert restored.train_ids == split.train_ids
         assert restored.random_seed == split.random_seed
+        assert restored.metadata == {"group_by": "group_id", "fold_index": 1}
 
 
 # =============================================================================
