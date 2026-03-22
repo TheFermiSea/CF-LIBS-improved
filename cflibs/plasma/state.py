@@ -126,7 +126,7 @@ def mass_fractions_to_species_densities(
     mass_fractions: Mapping[str, float],
     total_number_density_cm3: float,
     atomic_masses_amu: Mapping[str, float],
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Convert mass fractions directly to element number densities.
 
@@ -141,7 +141,7 @@ def mass_fractions_to_species_densities(
 
     Returns
     -------
-    Dict[str, float]
+    dict[str, float]
         Element number densities in cm^-3.
     """
     number_fractions = mass_fractions_to_number_fractions(mass_fractions, atomic_masses_amu)
@@ -161,19 +161,19 @@ class PlasmaState:
         Gas/ion temperature in K (optional, defaults to T_e)
     n_e : float
         Electron density in cm^-3
-    species : Dict[str, float]
+    species : dict[str, float]
         Element number densities in cm^-3 (key: element symbol). These are
         heavy-particle densities and are distinct from mass fractions, number
         fractions, and electron density.
-    pressure : Optional[float]
+    pressure : float | None
         Pressure in atm (optional)
     """
 
     T_e: float  # K
     n_e: float  # cm^-3
-    species: Dict[str, float]  # cm^-3
-    T_g: Optional[float] = None
-    pressure: Optional[float] = None
+    species: dict[str, float]  # cm^-3
+    T_g: float | None = None
+    pressure: float | None = None
 
     @property
     def T_e_eV(self) -> float:
@@ -193,7 +193,7 @@ class PlasmaState:
         return float(sum(self.species.values()))
 
     @property
-    def species_number_fractions(self) -> Dict[str, float]:
+    def species_number_fractions(self) -> dict[str, float]:
         """Element number fractions implied by ``species``."""
         return species_densities_to_number_fractions(self.species)
 
@@ -210,9 +210,9 @@ class SingleZoneLTEPlasma(PlasmaState):
         self,
         T_e: float,
         n_e: float,
-        species: Dict[str, float],
-        T_g: Optional[float] = None,
-        pressure: Optional[float] = None,
+        species: dict[str, float],
+        T_g: float | None = None,
+        pressure: float | None = None,
     ):
         """
         Initialize single-zone LTE plasma.
@@ -223,7 +223,7 @@ class SingleZoneLTEPlasma(PlasmaState):
             Electron temperature in K
         n_e : float
             Electron density in cm^-3
-        species : Dict[str, float]
+        species : dict[str, float]
             Element number densities in cm^-3
         T_g : float, optional
             Gas temperature in K (defaults to T_e)
@@ -243,8 +243,8 @@ class SingleZoneLTEPlasma(PlasmaState):
         n_e: float,
         number_fractions: Mapping[str, float],
         total_species_density_cm3: float,
-        T_g: Optional[float] = None,
-        pressure: Optional[float] = None,
+        T_g: float | None = None,
+        pressure: float | None = None,
     ) -> "SingleZoneLTEPlasma":
         """
         Build a plasma state from element number fractions.
@@ -284,8 +284,8 @@ class SingleZoneLTEPlasma(PlasmaState):
         mass_fractions: Mapping[str, float],
         total_species_density_cm3: float,
         atomic_masses_amu: Mapping[str, float],
-        T_g: Optional[float] = None,
-        pressure: Optional[float] = None,
+        T_g: float | None = None,
+        pressure: float | None = None,
     ) -> "SingleZoneLTEPlasma":
         """
         Build a plasma state from element mass fractions.
