@@ -790,8 +790,8 @@ if HAS_JAX:
         wavelength_grid: jnp.ndarray,
         line_wavelengths: jnp.ndarray,
         line_intensities: jnp.ndarray,
-        sigmas: Union[float, jnp.ndarray],
-        gammas: Union[float, jnp.ndarray],
+        sigmas: float | jnp.ndarray,
+        gammas: float | jnp.ndarray,
     ) -> jnp.ndarray:
         """JAX-compatible Voigt broadening."""
         sigmas_arr = jnp.asarray(sigmas)
