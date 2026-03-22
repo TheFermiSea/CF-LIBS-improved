@@ -3,10 +3,12 @@ Line profile functions for spectral broadening.
 Includes Gaussian, Lorentzian, and Voigt profiles.
 """
 
+from __future__ import annotations
+
 import numpy as np
 import warnings
+from collections.abc import Callable
 from enum import Enum
-from typing import Union, Callable
 
 try:
     from scipy.special import wofz as scipy_wofz
@@ -147,8 +149,8 @@ def _raise_jax_missing() -> None:
 
 
 def gaussian_profile(
-    wavelength: Union[float, np.ndarray], center: float, sigma: float, amplitude: float = 1.0
-) -> Union[float, np.ndarray]:
+    wavelength: float | np.ndarray, center: float, sigma: float, amplitude: float = 1.0
+) -> float | np.ndarray:
     """
     Calculate Gaussian line profile.
 
@@ -174,8 +176,8 @@ def gaussian_profile(
 
 
 def lorentzian_profile(
-    wavelength: Union[float, np.ndarray], center: float, gamma: float, amplitude: float = 1.0
-) -> Union[float, np.ndarray]:
+    wavelength: float | np.ndarray, center: float, gamma: float, amplitude: float = 1.0
+) -> float | np.ndarray:
     """
     Calculate Lorentzian line profile.
 
@@ -242,12 +244,12 @@ def voigt_fwhm(sigma: float, gamma: float) -> float:
 
 
 def voigt_profile(
-    wavelength: Union[float, np.ndarray],
+    wavelength: float | np.ndarray,
     center: float,
     sigma: float,
     gamma: float,
     amplitude: float = 1.0,
-) -> Union[float, np.ndarray]:
+) -> float | np.ndarray:
     """
     Calculate Voigt profile.
 
@@ -314,8 +316,8 @@ def apply_voigt_broadening(
     wavelength_grid: np.ndarray,
     line_wavelengths: np.ndarray,
     line_intensities: np.ndarray,
-    sigmas: Union[float, np.ndarray],
-    gammas: Union[float, np.ndarray],
+    sigmas: float | np.ndarray,
+    gammas: float | np.ndarray,
 ) -> np.ndarray:
     """
     Apply Voigt broadening to spectral lines.
@@ -788,8 +790,8 @@ if HAS_JAX:
         wavelength_grid: jnp.ndarray,
         line_wavelengths: jnp.ndarray,
         line_intensities: jnp.ndarray,
-        sigmas: Union[float, jnp.ndarray],
-        gammas: Union[float, jnp.ndarray],
+        sigmas: float | jnp.ndarray,
+        gammas: float | jnp.ndarray,
     ) -> jnp.ndarray:
         """JAX-compatible Voigt broadening."""
         sigmas_arr = jnp.asarray(sigmas)
