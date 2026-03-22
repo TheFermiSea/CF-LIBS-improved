@@ -2,9 +2,11 @@
 Plasma state representations and composition conversion helpers.
 """
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
-from typing import Dict, Mapping, Optional
+from typing import Mapping
 
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
@@ -15,7 +17,7 @@ logger = get_logger("plasma.state")
 def _normalize_positive_fractions(
     fractions: Mapping[str, float],
     quantity_name: str,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Normalize positive fractions to sum to one."""
     non_finite = [el for el, v in fractions.items() if not math.isfinite(float(v))]
     if non_finite:
@@ -36,7 +38,7 @@ def _normalize_positive_fractions(
     return {element: value / total for element, value in normalized_input.items()}
 
 
-def species_densities_to_number_fractions(species: Mapping[str, float]) -> Dict[str, float]:
+def species_densities_to_number_fractions(species: Mapping[str, float]) -> dict[str, float]:
     """
     Convert element number densities to normalized number fractions.
 
@@ -47,7 +49,7 @@ def species_densities_to_number_fractions(species: Mapping[str, float]) -> Dict[
 
     Returns
     -------
-    Dict[str, float]
+    dict[str, float]
         Element number fractions summing to 1.0.
     """
     return _normalize_positive_fractions(species, "species")
@@ -56,7 +58,7 @@ def species_densities_to_number_fractions(species: Mapping[str, float]) -> Dict[
 def number_fractions_to_species_densities(
     number_fractions: Mapping[str, float],
     total_number_density_cm3: float,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Convert number fractions to element number densities.
 
@@ -69,7 +71,7 @@ def number_fractions_to_species_densities(
 
     Returns
     -------
-    Dict[str, float]
+    dict[str, float]
         Element number densities in cm^-3.
     """
     if not math.isfinite(total_number_density_cm3) or total_number_density_cm3 <= 0.0:
@@ -84,7 +86,7 @@ def number_fractions_to_species_densities(
 def mass_fractions_to_number_fractions(
     mass_fractions: Mapping[str, float],
     atomic_masses_amu: Mapping[str, float],
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Convert mass fractions to number fractions.
 
@@ -97,10 +99,10 @@ def mass_fractions_to_number_fractions(
 
     Returns
     -------
-    Dict[str, float]
+    dict[str, float]
         Element number fractions summing to 1.0.
     """
-    weighted: Dict[str, float] = {}
+    weighted: dict[str, float] = {}
     for element, raw_mass_fraction in mass_fractions.items():
         mass_fraction = float(raw_mass_fraction)
         if not math.isfinite(mass_fraction):
@@ -124,7 +126,7 @@ def mass_fractions_to_species_densities(
     mass_fractions: Mapping[str, float],
     total_number_density_cm3: float,
     atomic_masses_amu: Mapping[str, float],
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Convert mass fractions directly to element number densities.
 
@@ -139,7 +141,7 @@ def mass_fractions_to_species_densities(
 
     Returns
     -------
-    Dict[str, float]
+    dict[str, float]
         Element number densities in cm^-3.
     """
     number_fractions = mass_fractions_to_number_fractions(mass_fractions, atomic_masses_amu)
@@ -159,19 +161,19 @@ class PlasmaState:
         Gas/ion temperature in K (optional, defaults to T_e)
     n_e : float
         Electron density in cm^-3
-    species : Dict[str, float]
+    species : dict[str, float]
         Element number densities in cm^-3 (key: element symbol). These are
         heavy-particle densities and are distinct from mass fractions, number
         fractions, and electron density.
-    pressure : Optional[float]
+    pressure : float | None
         Pressure in atm (optional)
     """
 
     T_e: float  # K
     n_e: float  # cm^-3
-    species: Dict[str, float]  # cm^-3
-    T_g: Optional[float] = None
-    pressure: Optional[float] = None
+    species: dict[str, float]  # cm^-3
+    T_g: float | None = None
+    pressure: float | None = None
 
     @property
     def T_e_eV(self) -> float:
@@ -191,7 +193,7 @@ class PlasmaState:
         return float(sum(self.species.values()))
 
     @property
-    def species_number_fractions(self) -> Dict[str, float]:
+    def species_number_fractions(self) -> dict[str, float]:
         """Element number fractions implied by ``species``."""
         return species_densities_to_number_fractions(self.species)
 
@@ -208,9 +210,9 @@ class SingleZoneLTEPlasma(PlasmaState):
         self,
         T_e: float,
         n_e: float,
-        species: Dict[str, float],
-        T_g: Optional[float] = None,
-        pressure: Optional[float] = None,
+        species: dict[str, float],
+        T_g: float | None = None,
+        pressure: float | None = None,
     ):
         """
         Initialize single-zone LTE plasma.
@@ -221,7 +223,7 @@ class SingleZoneLTEPlasma(PlasmaState):
             Electron temperature in K
         n_e : float
             Electron density in cm^-3
-        species : Dict[str, float]
+        species : dict[str, float]
             Element number densities in cm^-3
         T_g : float, optional
             Gas temperature in K (defaults to T_e)
@@ -241,8 +243,8 @@ class SingleZoneLTEPlasma(PlasmaState):
         n_e: float,
         number_fractions: Mapping[str, float],
         total_species_density_cm3: float,
-        T_g: Optional[float] = None,
-        pressure: Optional[float] = None,
+        T_g: float | None = None,
+        pressure: float | None = None,
     ) -> "SingleZoneLTEPlasma":
         """
         Build a plasma state from element number fractions.
@@ -282,8 +284,8 @@ class SingleZoneLTEPlasma(PlasmaState):
         mass_fractions: Mapping[str, float],
         total_species_density_cm3: float,
         atomic_masses_amu: Mapping[str, float],
-        T_g: Optional[float] = None,
-        pressure: Optional[float] = None,
+        T_g: float | None = None,
+        pressure: float | None = None,
     ) -> "SingleZoneLTEPlasma":
         """
         Build a plasma state from element mass fractions.
