@@ -1,0 +1,835 @@
+% DERV-05: Batch Forward Model with JAX vmap Decomposition for CF-LIBS
+% ASSERT_CONVENTION: natural_units=SI_eV_cm3_nm, metric_signature=null, fourier_convention=null, coupling_convention=null, renormalization_scheme=null, gauge_choice=null
+% Custom conventions: wavelength_unit=nm, line_profile=Voigt(sigma_Gaussian,gamma_HWHM_Lorentzian), spectral_domain=wavelength, stark_width=HWHM_at_1e16, emissivity_units=W/m^3/sr, temperature_unit=eV, density_unit=cm^-3, composition=number_fractions_sum1
+%
+% This derivation composes:
+%   DERV-01: Voigt profile via Weideman N=36 Faddeeva (Section 4 of derv01)
+%   DERV-02: Boltzmann populations and emissivity (Sections 1-2 of derv02)
+%   DERV-03: Saha ionization balance (Section 1 of derv03)
+%   DERV-04: Softmax closure constraint (Section 2 of derv04)
+%
+% References:
+%   [T10]  Tognoni et al. (2010) Spectrochim. Acta B 65, 1-14
+%   [K22]  Kawahara et al. (2022) arXiv:2105.14782 (ExoJAX)
+%   [W94]  Weideman (1994) SIAM J. Numer. Anal. 31(5), 1497-1518
+%   [JAX]  Bradbury et al. (2018) JAX: composable transformations
+
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,physics,booktabs,hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{algorithm,algorithmic}
+
+\newcommand{\TeV}{T_\mathrm{eV}}
+\newcommand{\ne}{n_\mathrm{e}}
+\newcommand{\Sconst}{S_\mathrm{const}}
+\newcommand{\wfn}{w}
+
+\title{DERV-05: Batch Forward Model with JAX \texttt{vmap} Decomposition\\
+       for GPU-Accelerated Manifold Generation}
+\author{CF-LIBS Research Project}
+\date{Phase 01 --- Physics Formalization}
+
+\begin{document}
+\maketitle
+
+\tableofcontents
+
+%% ====================================================================
+\section{Forward Model Physics}
+\label{sec:forward-model}
+%% ====================================================================
+
+The CF-LIBS forward model maps plasma parameters to a synthetic emission spectrum:
+\begin{equation}
+  \label{eq:forward-map}
+  f\colon (\TeV,\;\ne,\;C_1,\ldots,C_{N_\mathrm{el}};\;\lambda_\mathrm{grid})
+  \;\longmapsto\; S(\lambda).
+\end{equation}
+Here $\TeV$ is the electron temperature [eV], $\ne$ is the electron density
+[cm$^{-3}$], $\{C_s\}$ are dimensionless number fractions satisfying
+$\sum_s C_s = 1$ (DERV-04), and $\lambda_\mathrm{grid}$ is the shared
+wavelength array [nm]. The output $S(\lambda)$ is the spectral radiance
+[W\,m$^{-3}$\,sr$^{-1}$\,nm$^{-1}$].
+
+This pipeline follows Tognoni et al.\ [T10] and decomposes into four
+sequential stages. For the GPU implementation, we formalize each stage
+as a pure function with explicit array shapes, then batch via
+\texttt{jax.vmap} [JAX] for manifold generation. The architecture
+parallels ExoJAX [K22], which demonstrated that vmap-based spectral
+forward models achieve GPU-saturating throughput for $\sim$10$^4$ lines.
+
+%% --------------------------------------------------------------------
+\subsection{Stage 1: Saha Ionization Balance (from DERV-03)}
+\label{sec:stage1}
+%% --------------------------------------------------------------------
+
+Given $(\TeV, \ne)$ and per-element ionization potentials $\chi_z^{(s)}$,
+compute the Saha ratios for each element $s$ at each ionization stage $z$
+(Eq.~\eqref{eq:saha-ratio} of DERV-03):
+\begin{equation}
+  \label{eq:saha-ratio}
+  S_z^{(s)} = \frac{\Sconst}{\ne}\,\TeV^{3/2}\,
+    \frac{U_{z+1}^{(s)}(\TeV)}{U_z^{(s)}(\TeV)}\,
+    \exp\!\Bigl(-\frac{\chi_z^{(s)}}{\TeV}\Bigr),
+\end{equation}
+where $\Sconst = 6.042\times10^{21}$\,cm$^{-3}$\,eV$^{-3/2}$
+(\texttt{SAHA\_CONST\_CM3} with $T$ in eV) and $U_z^{(s)}$ is the
+partition function evaluated via polynomial coefficients:
+$\ln U = \sum_{n=0}^4 a_n (\ln T_K)^n$.
+% DIMENSION CHECK: [S_z] = [cm^-3 eV^-3/2] / [cm^-3] * [eV^3/2] * [dim-less] * [dim-less] = dim-less. PASSED.
+
+The 3-stage (I, II, III) ion fractions are:
+\begin{align}
+  f_\mathrm{I}^{(s)}   &= \frac{1}{1 + S_1^{(s)} + S_1^{(s)} S_2^{(s)}}, \label{eq:fI}\\
+  f_\mathrm{II}^{(s)}  &= S_1^{(s)}\,f_\mathrm{I}^{(s)}, \label{eq:fII}\\
+  f_\mathrm{III}^{(s)} &= S_2^{(s)}\,f_\mathrm{II}^{(s)}. \label{eq:fIII}
+\end{align}
+% DIMENSION CHECK: f_I, f_II, f_III all dimensionless, sum to 1. PASSED.
+
+\textbf{Note:} In the \emph{forward} model, $\ne$ is an \emph{input} parameter.
+The Anderson-accelerated charge-balance iteration (DERV-03) is used only in the
+\emph{inversion} problem where $\ne$ must be found self-consistently.
+
+The species number density for element $s$, stage $z$ is:
+\begin{equation}
+  \label{eq:n-species}
+  n_{s,z} = C_s \cdot n_\mathrm{total} \cdot f_z^{(s)}(\TeV, \ne)
+  \quad [\mathrm{cm}^{-3}],
+\end{equation}
+where $n_\mathrm{total}$ is the total heavy-particle number density. In the
+manifold generator, the product $C_s \cdot n_\mathrm{total}$ is parameterized as
+$C_s \cdot \ne$ (following the existing codebase, which uses $n_e$ as a proxy
+for total density under the quasi-neutrality assumption).
+% DIMENSION CHECK: [n_{s,z}] = dim-less * cm^-3 * dim-less = cm^-3. PASSED.
+
+%% --------------------------------------------------------------------
+\subsection{Stage 2: Boltzmann Level Populations (from DERV-02)}
+\label{sec:stage2}
+%% --------------------------------------------------------------------
+
+For each spectral line $l$ with upper level $k$ in element $s$,
+ionization stage $z$:
+\begin{equation}
+  \label{eq:boltzmann-pop}
+  n_k^{(l)} = n_{s,z} \cdot \frac{g_k^{(l)}}{U_z^{(s)}(\TeV)}
+    \cdot \exp\!\left(-\frac{E_k^{(l)}}{\TeV}\right)
+  \quad [\mathrm{cm}^{-3}],
+\end{equation}
+where $g_k$ is the statistical weight and $E_k$ [eV] is the upper-level
+energy above the ground state of ionization stage $z$.
+% DIMENSION CHECK: [n_k] = cm^-3 * [dim-less] / [dim-less] * [dim-less] = cm^-3. PASSED.
+
+This is the Boltzmann distribution (Eq.~\eqref{eq:boltzmann_pop} of DERV-02)
+applied per line. The partition function $U_z^{(s)}$ appears in both Stage~1
+(Saha ratios) and Stage~2 (Boltzmann factors) and must be evaluated
+\emph{once} and reused.
+
+%% --------------------------------------------------------------------
+\subsection{Stage 3: Line Emissivities}
+\label{sec:stage3}
+%% --------------------------------------------------------------------
+
+The line-integrated volumetric emissivity for line $l$ is:
+\begin{equation}
+  \label{eq:emissivity}
+  \varepsilon_l = \frac{hc}{4\pi\lambda_l}\,A_{ki}^{(l)}\,n_k^{(l)}
+  \quad [\mathrm{W\,m}^{-3}\,\mathrm{sr}^{-1}],
+\end{equation}
+where $h = 6.626\times10^{-34}$\,J\,s, $c = 2.998\times10^8$\,m/s,
+$\lambda_l$ is in meters (converted from nm via $\times 10^{-9}$),
+$A_{ki}$ is the Einstein A-coefficient [s$^{-1}$], and $n_k$ must be
+in m$^{-3}$ (converted from cm$^{-3}$ via $\times 10^6$).
+% DIMENSION CHECK:
+%   [hc / (4pi * lambda)] = [J*s * m/s] / [m] = [J]
+%   * [A_ki] = [s^-1] -> [J/s] = [W]
+%   * [n_k] = [m^-3] -> [W/m^3]
+%   / [4pi sr] -> [W m^-3 sr^-1]. PASSED.
+
+Combining Stages 1--3, the emissivity for line $l$ of element $s$, stage $z$ is:
+\begin{equation}
+  \label{eq:emissivity-combined}
+  \varepsilon_l = \frac{hc}{4\pi\lambda_l}\,A_{ki}^{(l)}
+    \cdot \underbrace{C_s \cdot \ne \cdot f_z^{(s)}}_{\text{species density}}
+    \cdot \frac{g_k^{(l)}}{U_z^{(s)}} \cdot \exp\!\left(-\frac{E_k^{(l)}}{\TeV}\right)
+    \cdot 10^6,
+\end{equation}
+where the $10^6$ factor converts the population from cm$^{-3}$ to m$^{-3}$.
+
+%% SELF-CRITIQUE CHECKPOINT (step 3):
+%% 1. SIGN CHECK: No sign changes; all quantities positive. PASSED.
+%% 2. FACTOR CHECK: 10^6 conversion cm^-3 -> m^-3. 4*pi for sr. h, c. All explicit. PASSED.
+%% 3. CONVENTION CHECK: gamma=HWHM, sigma=std dev, T in eV, n_e in cm^-3, lambda in nm. Consistent with lock. PASSED.
+%% 4. DIMENSION CHECK: [epsilon] = W m^-3 sr^-1. PASSED.
+
+%% --------------------------------------------------------------------
+\subsection{Stage 4: Voigt Broadening and Spectrum Assembly (from DERV-01)}
+\label{sec:stage4}
+%% --------------------------------------------------------------------
+
+For each line $l$, the broadening parameters are:
+
+\paragraph{Doppler width (Gaussian $\sigma$):}
+\begin{equation}
+  \label{eq:sigma-doppler}
+  \sigma_{D,l} = \frac{\lambda_l}{c}\,\sqrt{\frac{k_B T_K}{M_l}}
+  \quad [\mathrm{nm}],
+\end{equation}
+where $T_K = \TeV / k_{B,\mathrm{eV}}$ is the temperature in Kelvin and $M_l$ is
+the atomic mass [kg] of the emitting atom. This is Eq.~\eqref{eq:sigma_doppler}
+of DERV-01.
+% DIMENSION CHECK: [nm] * sqrt([J/K * K] / [kg * (m/s)^2]) = [nm] * sqrt(dim-less) = [nm]. PASSED.
+
+\paragraph{Stark width (Lorentzian HWHM $\gamma$):}
+\begin{equation}
+  \label{eq:gamma-stark}
+  \gamma_{S,l} = w_{s,l} \cdot \frac{\ne}{10^{16}\,\mathrm{cm}^{-3}}
+  \quad [\mathrm{nm}],
+\end{equation}
+where $w_{s,l}$ is the tabulated Stark width parameter (HWHM at reference
+$\ne = 10^{16}$\,cm$^{-3}$). This is Eq.~\eqref{eq:gamma_stark} of DERV-01.
+% DIMENSION CHECK: [nm] * [cm^-3] / [cm^-3] = [nm]. PASSED.
+
+\paragraph{Voigt profile (from DERV-01 Section 3, Weideman N=36):}
+The normalized Voigt profile for line $l$ at wavelength $\lambda$ is:
+\begin{equation}
+  \label{eq:voigt-profile}
+  V_l(\lambda) = \frac{\operatorname{Re}[\wfn(z_l)]}{\sigma_{D,l}\sqrt{2\pi}}
+  \quad [\mathrm{nm}^{-1}],
+\end{equation}
+where the dimensionless argument is:
+\begin{equation}
+  \label{eq:z-voigt}
+  z_l = \frac{(\lambda - \lambda_l) + i\gamma_{S,l}}{\sigma_{D,l}\sqrt{2}},
+\end{equation}
+and $\wfn(z)$ is the Faddeeva function computed via the Weideman N=36
+rational approximation (DERV-01 Section~3). The profile integrates to unity:
+$\int_{-\infty}^{\infty} V_l(\lambda)\,d\lambda = 1$.
+% DIMENSION CHECK: [V] = [dim-less] / ([nm] * [dim-less]) = [nm^-1]. PASSED.
+
+\paragraph{Spectrum assembly.}
+The synthetic spectrum is the sum of all line contributions:
+\begin{equation}
+  \label{eq:spectrum}
+  \boxed{S(\lambda) = \sum_{l=1}^{N_\mathrm{lines}}
+    \varepsilon_l \cdot V_l(\lambda)
+  \quad [\mathrm{W\,m}^{-3}\,\mathrm{sr}^{-1}\,\mathrm{nm}^{-1}].}
+\end{equation}
+% DIMENSION CHECK: [S] = [W m^-3 sr^-1] * [nm^-1] = [W m^-3 sr^-1 nm^-1]. PASSED.
+
+This is a weighted sum of $N_\mathrm{lines}$ Voigt profiles, with weights
+equal to the line emissivities. The full dimensional chain is:
+\begin{equation}
+  \label{eq:dim-chain}
+  \underbrace{[\TeV]}_\mathrm{eV}
+  \;\xrightarrow{\text{Stage 1}}\;
+  \underbrace{[n_{s,z}]}_\mathrm{cm^{-3}}
+  \;\xrightarrow{\text{Stage 2}}\;
+  \underbrace{[n_k]}_\mathrm{cm^{-3}}
+  \;\xrightarrow{\text{Stage 3}}\;
+  \underbrace{[\varepsilon_l]}_\mathrm{W\,m^{-3}\,sr^{-1}}
+  \;\xrightarrow{\text{Stage 4}}\;
+  \underbrace{[S(\lambda)]}_\mathrm{W\,m^{-3}\,sr^{-1}\,nm^{-1}}.
+\end{equation}
+The cm$^{-3}$ $\to$ m$^{-3}$ conversion ($\times 10^6$) occurs at the
+Stage~3 boundary.
+
+
+%% ====================================================================
+\section{Array Shapes and \texttt{vmap} Decomposition}
+\label{sec:vmap}
+%% ====================================================================
+
+%% --------------------------------------------------------------------
+\subsection{Shape Taxonomy}
+\label{sec:shapes}
+%% --------------------------------------------------------------------
+
+\begin{center}
+\begin{tabular}{cll}
+\toprule
+\textbf{Symbol} & \textbf{Description} & \textbf{Typical range} \\
+\midrule
+$B$           & Batch dimension (parameter combinations)  & 16--128 \\
+$N_\mathrm{el}$  & Number of elements                    & 3--15 \\
+$N_\mathrm{st}$  & Max ionization stages per element     & 3 (I, II, III) \\
+$N_\mathrm{lines}$ & Total spectral lines (all elements) & 500--10\,000 \\
+$N_\mathrm{wl}$  & Wavelength grid points                & 1\,000--20\,000 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%% --------------------------------------------------------------------
+\subsection{Input Arrays}
+\label{sec:inputs}
+%% --------------------------------------------------------------------
+
+\paragraph{Batched inputs (vary per parameter combination):}
+\begin{align}
+  \TeV &\colon (B,) && \text{electron temperature [eV]}, \label{eq:T-shape}\\
+  \ne   &\colon (B,) && \text{electron density [cm$^{-3}$]}, \label{eq:ne-shape}\\
+  C     &\colon (B, N_\mathrm{el}) && \text{composition vector [dim-less]}. \label{eq:C-shape}
+\end{align}
+
+\paragraph{Static inputs (shared across batch):}
+\begin{align}
+  \lambda_\mathrm{grid} &\colon (N_\mathrm{wl},)
+    && \text{wavelength grid [nm]}, \label{eq:wl-shape}\\
+  \lambda_l &\colon (N_\mathrm{lines},)
+    && \text{line center wavelengths [nm]}, \\
+  A_{ki} &\colon (N_\mathrm{lines},)
+    && \text{Einstein A-coefficients [s$^{-1}$]}, \\
+  E_k &\colon (N_\mathrm{lines},)
+    && \text{upper-level energies [eV]}, \\
+  g_k &\colon (N_\mathrm{lines},)
+    && \text{statistical weights [dim-less]}, \\
+  \mathrm{el\_idx} &\colon (N_\mathrm{lines},)
+    && \text{element index (int)}, \\
+  z_\mathrm{stage} &\colon (N_\mathrm{lines},)
+    && \text{ionization stage index (int)}, \\
+  w_s &\colon (N_\mathrm{lines},)
+    && \text{Stark width parameter [nm]}, \\
+  M_\mathrm{amu} &\colon (N_\mathrm{lines},)
+    && \text{atomic mass [amu]}, \\
+  \text{pf\_coeffs} &\colon (N_\mathrm{el}, N_\mathrm{st}, 5)
+    && \text{partition function coefficients}, \label{eq:pf-shape}\\
+  \chi &\colon (N_\mathrm{el}, N_\mathrm{st})
+    && \text{ionization potentials [eV]}. \label{eq:ip-shape}
+\end{align}
+
+%% --------------------------------------------------------------------
+\subsection{Single-Spectrum Function}
+\label{sec:single-spectrum}
+%% --------------------------------------------------------------------
+
+The single-spectrum computation has the signature:
+\begin{equation}
+  \label{eq:single-sig}
+  \texttt{single\_spectrum}(\TeV, \ne, C, \lambda_\mathrm{grid},
+  \mathrm{atomic\_data}) \to S \colon (N_\mathrm{wl},)
+\end{equation}
+where $\TeV$ is scalar, $\ne$ is scalar, $C$ is $(N_\mathrm{el},)$,
+and $\mathrm{atomic\_data}$ is a tuple of all static arrays.
+
+Internally, the four stages produce:
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+\textbf{Stage} & \textbf{Operation} & \textbf{Output} & \textbf{Shape} \\
+\midrule
+1. Saha    & Ion fraction per element-stage & $f_z^{(s)}$  & $(N_\mathrm{el}, N_\mathrm{st})$ \\
+2. Boltzmann & Upper-level population per line & $n_k^{(l)}$ & $(N_\mathrm{lines},)$ \\
+3. Emissivity & Line-integrated emissivity      & $\varepsilon_l$ & $(N_\mathrm{lines},)$ \\
+4. Voigt   & Broadened spectrum               & $S(\lambda)$ & $(N_\mathrm{wl},)$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Element-to-line mapping.}
+The integer array $\mathrm{el\_idx}\colon (N_\mathrm{lines},)$ maps each line
+to its parent element index. This enables efficient gathering:
+\begin{align}
+  C_\mathrm{per\_line} &= C[\mathrm{el\_idx}] &&\colon (N_\mathrm{lines},), \label{eq:gather-C}\\
+  f_{z,\mathrm{per\_line}} &= f_z[\mathrm{el\_idx}, z_\mathrm{stage}]
+    &&\colon (N_\mathrm{lines},), \label{eq:gather-fz}\\
+  U_\mathrm{per\_line} &= U[\mathrm{el\_idx}, z_\mathrm{stage}]
+    &&\colon (N_\mathrm{lines},). \label{eq:gather-U}
+\end{align}
+All three gather operations use JAX advanced indexing and are fully
+differentiable (straight-through for integer indices in the forward pass;
+gradients flow through the gathered values, not the indices).
+
+%% --------------------------------------------------------------------
+\subsection{\texttt{vmap} Decomposition}
+\label{sec:vmap-spec}
+%% --------------------------------------------------------------------
+
+The batch forward model applies \texttt{vmap} over the outermost
+$(B,)$ dimension of the plasma parameters:
+\begin{equation}
+  \label{eq:vmap-def}
+  \boxed{
+  \texttt{batch\_spectrum} =
+  \texttt{jit}\!\left(\texttt{vmap}\!\left(
+    \texttt{single\_spectrum},\;
+    \texttt{in\_axes} = (0,\; 0,\; 0,\; \texttt{None},\; \texttt{None})
+  \right)\right)
+  }
+\end{equation}
+with the \texttt{in\_axes} specification:
+\begin{center}
+\begin{tabular}{lcl}
+\toprule
+\textbf{Argument} & \textbf{in\_axes} & \textbf{Meaning} \\
+\midrule
+$\TeV\colon (B,)$                        & \texttt{0} & Map over batch dim \\
+$\ne\colon (B,)$                          & \texttt{0} & Map over batch dim \\
+$C\colon (B, N_\mathrm{el})$             & \texttt{0} & Map over batch dim \\
+$\lambda_\mathrm{grid}\colon (N_\mathrm{wl},)$ & \texttt{None} & Broadcast (shared) \\
+$\mathrm{atomic\_data}$ (tuple)           & \texttt{None} & Broadcast (shared) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The output shape is $(B, N_\mathrm{wl})$: one spectrum per parameter combination.
+
+\paragraph{Why single-level vmap suffices.}
+Within each single-spectrum call, the line-level parallelism
+($N_\mathrm{lines}$ and $N_\mathrm{wl}$ dimensions) is handled by
+broadcasting, not by nested vmap:
+\begin{itemize}
+  \item Stages 1--3 operate on $(N_\mathrm{lines},)$ arrays via
+    element-wise operations. These compile to fused XLA kernels
+    that already exploit GPU parallelism over the line dimension.
+  \item Stage 4 uses the broadcasting outer product:
+\end{itemize}
+\begin{align}
+  \mathrm{diff} &= \lambda_\mathrm{grid}[:,\texttt{None}]
+    - \lambda_l[\texttt{None},:] &&\colon (N_\mathrm{wl}, N_\mathrm{lines}), \label{eq:diff}\\
+  \mathrm{profiles} &= \texttt{voigt\_kernel}(\mathrm{diff},\,\sigma_D,\,\gamma_S)
+    &&\colon (N_\mathrm{wl}, N_\mathrm{lines}), \label{eq:profiles}\\
+  S &= \sum_l \varepsilon_l \cdot \mathrm{profiles}_{:,l}
+    = \mathrm{profiles} \cdot \varepsilon
+    &&\colon (N_\mathrm{wl},). \label{eq:matvec}
+\end{align}
+The final reduction (Eq.~\ref{eq:matvec}) is a matrix-vector product
+$S = P\,\varepsilon$ where $P \in \mathbb{R}^{N_\mathrm{wl} \times N_\mathrm{lines}}$.
+XLA may recognize this as a GEMV and dispatch to cuBLAS.
+
+\paragraph{No nested vmap needed.}
+A nested \texttt{vmap(vmap(...))} pattern (e.g., vmapping over lines inside
+a vmap over batch) would prevent XLA from fusing the broadcasting pattern
+in Stage~4 and would increase memory usage by materializing per-line
+intermediate arrays. The single-level vmap + broadcasting design is
+strictly superior for this workload.
+
+%% SELF-CRITIQUE CHECKPOINT (step 6):
+%% 1. SIGN CHECK: No sign ambiguities. All positive quantities. PASSED.
+%% 2. FACTOR CHECK: No new factors introduced. Using DERV-01/02/03 results. PASSED.
+%% 3. CONVENTION CHECK: gamma=HWHM, sigma=std dev, T_eV, n_e cm^-3, lambda nm. PASSED.
+%% 4. DIMENSION CHECK: batch_spectrum output (B, N_wl) of [W m^-3 sr^-1 nm^-1]. PASSED.
+
+
+%% ====================================================================
+\section{Memory Budget Analysis}
+\label{sec:memory}
+%% ====================================================================
+
+%% --------------------------------------------------------------------
+\subsection{Dominant Memory Consumer}
+\label{sec:dominant}
+%% --------------------------------------------------------------------
+
+The \emph{profile matrix} in Stage~4 (Eq.~\ref{eq:profiles}) is
+the dominant memory consumer. Its size per spectrum is:
+\begin{equation}
+  \label{eq:mem-profile}
+  M_\mathrm{profile} = N_\mathrm{wl} \times N_\mathrm{lines} \times d_\mathrm{bytes},
+\end{equation}
+where $d_\mathrm{bytes} = 8$ for \texttt{float64} and $d_\mathrm{bytes} = 4$ for
+\texttt{float32}.
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Configuration} & $N_\mathrm{wl}$ & $N_\mathrm{lines}$ & \textbf{Per-spectrum} \\
+\midrule
+Reference (float64)  & 10\,000 & 5\,000 & 400\,MB \\
+Reference (float32)  & 10\,000 & 5\,000 & 200\,MB \\
+Compact (float64)    &  5\,000 & 2\,000 &  80\,MB \\
+Compact (float32)    &  5\,000 & 2\,000 &  40\,MB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%% --------------------------------------------------------------------
+\subsection{Batch Memory Scaling}
+\label{sec:batch-scaling}
+%% --------------------------------------------------------------------
+
+With \texttt{vmap} over batch dimension $B$, XLA \emph{may} materialize
+all $B$ copies of the profile matrix simultaneously.
+
+\paragraph{Worst case (full materialization):}
+\begin{equation}
+  \label{eq:mem-worst}
+  M_\mathrm{worst} = B \times N_\mathrm{wl} \times N_\mathrm{lines} \times d_\mathrm{bytes}.
+\end{equation}
+
+\begin{center}
+\begin{tabular}{lcrrr}
+\toprule
+$B$ & dtype & $M_\mathrm{worst}$ & V100S 16\,GB & Verdict \\
+\midrule
+64  & float64 & 25.6\,GB & $>16$\,GB & \textbf{OOM} \\
+32  & float64 & 12.8\,GB & 3.2\,GB headroom & OK \\
+64  & float32 & 12.8\,GB & 3.2\,GB headroom & OK \\
+32  & float32 &  6.4\,GB & 9.6\,GB headroom & Comfortable \\
+16  & float64 &  6.4\,GB & 9.6\,GB headroom & Comfortable \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Optimistic case (XLA op fusion):}
+XLA's compiler may fuse the profile computation and the reduction
+over lines (the matrix-vector product $S = P\varepsilon$) into a single
+kernel that never materializes the full $(N_\mathrm{wl}, N_\mathrm{lines})$
+matrix. In this case, the memory per spectrum is:
+\begin{equation}
+  \label{eq:mem-fused}
+  M_\mathrm{fused} = \mathcal{O}(N_\mathrm{wl} + N_\mathrm{lines}) \times d_\mathrm{bytes},
+\end{equation}
+which is negligible ($\sim$120\,KB per spectrum for the reference config).
+\textbf{This cannot be guaranteed without XLA profiling} and is listed
+as an uncertainty marker.
+
+%% --------------------------------------------------------------------
+\subsection{Ancillary Memory}
+\label{sec:ancillary}
+%% --------------------------------------------------------------------
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Array} & \textbf{Size} & \textbf{Comment} \\
+\midrule
+Atomic data ($\sim$10 arrays)
+  & $N_\mathrm{lines} \times 10 \times 4 \approx 200$\,KB & Negligible \\
+Partition coefficients
+  & $N_\mathrm{el} \times N_\mathrm{st} \times 5 \times 4 \approx 1$\,KB & Negligible \\
+Ion fractions (batched)
+  & $B \times N_\mathrm{el} \times N_\mathrm{st} \times 8 \approx 15$\,KB & Negligible \\
+Line populations (batched)
+  & $B \times N_\mathrm{lines} \times 8 \approx 2.5$\,MB & Negligible \\
+Emissivities (batched)
+  & $B \times N_\mathrm{lines} \times 8 \approx 2.5$\,MB & Negligible \\
+\midrule
+\textbf{Total ancillary}
+  & $<$ 10\,MB & $\ll M_\mathrm{profile}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%% --------------------------------------------------------------------
+\subsection{Maximum Batch Size Formula}
+\label{sec:max-batch}
+%% --------------------------------------------------------------------
+
+\begin{equation}
+  \label{eq:max-batch}
+  \boxed{B_\mathrm{max} = \left\lfloor
+    \frac{M_\mathrm{GPU} - M_\mathrm{overhead}}{N_\mathrm{wl} \times N_\mathrm{lines} \times d_\mathrm{bytes}}
+  \right\rfloor}
+\end{equation}
+
+For V100S with $M_\mathrm{GPU} = 16 \times 10^9$ bytes and
+$M_\mathrm{overhead} = 2 \times 10^9$ bytes (JAX runtime + XLA workspace):
+\begin{align}
+  B_\mathrm{max}^\mathrm{(f64)} &= \left\lfloor \frac{14 \times 10^9}{10^4 \times 5 \times 10^3 \times 8} \right\rfloor
+    = \left\lfloor \frac{1.4 \times 10^{10}}{4 \times 10^8} \right\rfloor
+    = \lfloor 35 \rfloor = 35, \label{eq:Bmax-f64}\\
+  B_\mathrm{max}^\mathrm{(f32)} &= \left\lfloor \frac{14 \times 10^9}{10^4 \times 5 \times 10^3 \times 4} \right\rfloor
+    = \left\lfloor \frac{1.4 \times 10^{10}}{2 \times 10^8} \right\rfloor
+    = \lfloor 70 \rfloor = 70. \label{eq:Bmax-f32}
+\end{align}
+
+\paragraph{Recommended batch sizes for V100S (16\,GB HBM2):}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Scenario} & \textbf{dtype} & \textbf{Recommended $B$} \\
+\midrule
+Manifold generation (forward only) & float64 & 32 \\
+Manifold generation (forward only) & float32 & 64 \\
+With autodiff (gradient checkpointing) & float64 & 16 \\
+Conservative (guaranteed headroom) & float64 & 16 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Float64 vs float32 tradeoff:} DERV-01 established that the
+Weideman N=36 approximation requires float64 for $<10^{-13}$ accuracy
+across all Voigt parameters. In float32, wing errors of 0.1--1\% appear
+for $|z| > 20$ (outside the typical LIBS regime). For manifold generation
+where relative accuracy of $\sim$0.1\% is sufficient, float32 is acceptable
+for the profile matrix while float64 is used for the Weideman coefficients.
+The V100S has a 2:1 float64:float32 throughput ratio, so float32 roughly
+doubles effective throughput.
+
+%% SELF-CRITIQUE CHECKPOINT (step 9):
+%% 1. SIGN CHECK: All memory quantities positive. PASSED.
+%% 2. FACTOR CHECK: 10^9 for GB, 10^6 for MB consistently applied. PASSED.
+%% 3. CONVENTION CHECK: N/A for memory analysis. PASSED.
+%% 4. DIMENSION CHECK: [M] = [count] * [count] * [bytes/count] = [bytes]. PASSED.
+
+
+%% ====================================================================
+\section{XLA Compilation and Fusion}
+\label{sec:xla}
+%% ====================================================================
+
+\paragraph{First-call compilation overhead.}
+JAX's JIT compilation traces the full computation graph at the first call
+and compiles it to an XLA HLO program. For $N_\mathrm{lines} > 1000$,
+expect 30--120 seconds of compilation time. Subsequent calls with the
+\emph{same input shapes} execute the cached binary and incur no compilation
+overhead.
+
+\paragraph{Shape polymorphism.}
+JAX traces by \emph{shape}, not by value. Changing $B$, $N_\mathrm{wl}$, or
+$N_\mathrm{lines}$ triggers recompilation. For manifold generation, these
+dimensions must be fixed at the start of the run.
+
+\paragraph{XLA fusion opportunities.}
+\begin{itemize}
+  \item \textbf{Stages 1--3} (populations $\to$ emissivities):
+    All operations are element-wise on $(N_\mathrm{lines},)$ arrays
+    (exponentials, multiplications, divisions, gather operations).
+    XLA can fuse the entire Saha $\to$ Boltzmann $\to$ emissivity chain
+    into a single GPU kernel, avoiding $N_\mathrm{lines}$-sized
+    intermediate writes to HBM.
+  \item \textbf{Stage 4} (broadening + summation):
+    The broadcasting outer product (Eq.~\ref{eq:diff}) followed by
+    the Weideman rational evaluation (Eq.~\ref{eq:profiles}) followed by
+    the weighted reduction (Eq.~\ref{eq:matvec}) is mathematically
+    equivalent to a matrix-vector multiply $S = P\varepsilon$.
+    XLA may:
+    \begin{enumerate}
+      \item Fuse the profile computation and reduction, yielding
+        $\mathcal{O}(N_\mathrm{wl})$ memory (best case), or
+      \item Materialize $P$ as an $(N_\mathrm{wl}, N_\mathrm{lines})$ matrix
+        and dispatch a GEMV (worst case for memory, best case for compute).
+    \end{enumerate}
+  \item \textbf{Cross-stage fusion:}
+    XLA can potentially fuse the emissivity computation (Stage~3) into
+    the profile weighting (Stage~4), computing
+    $\varepsilon_l \cdot V_l(\lambda)$ per element without writing
+    $\varepsilon_l$ to a separate buffer.
+\end{itemize}
+
+\paragraph{Device placement.}
+All computation runs on GPU. Data transfer to device occurs once at
+initialization (atomic data arrays). Per batch, only the parameter
+triple $(\TeV, \ne, C)$ is transferred:
+\begin{equation}
+  M_\mathrm{transfer} = B \times (2 + N_\mathrm{el}) \times d_\mathrm{bytes},
+\end{equation}
+which is $\sim$1\,KB for $B = 64$, $N_\mathrm{el} = 10$ --- negligible
+compared to GPU$\leftrightarrow$HBM bandwidth.
+
+
+%% ====================================================================
+\section{Connection to Manifold Generation}
+\label{sec:manifold}
+%% ====================================================================
+
+The manifold generator (existing: \texttt{cflibs/manifold/generator.py},
+class \texttt{ManifoldGenerator}) produces a pre-computed lookup table of
+synthetic spectra over a parameter grid.
+
+\paragraph{Grid construction.}
+\begin{itemize}
+  \item $T$ grid: $N_T$ linearly spaced points in $[T_\mathrm{min}, T_\mathrm{max}]$.
+  \item $\ne$ grid: $N_{n_e}$ log-spaced points in $[n_{e,\mathrm{min}}, n_{e,\mathrm{max}}]$.
+  \item Composition grid: $N_\mathrm{comp}$ points sampled from the simplex
+    $\Delta^{N_\mathrm{el}-1}$ (Dirichlet or uniform grid).
+\end{itemize}
+Total manifold points:
+\begin{equation}
+  \label{eq:manifold-points}
+  N_\mathrm{manifold} = N_T \times N_{n_e} \times N_\mathrm{comp}.
+\end{equation}
+For a typical grid ($N_T = 50$, $N_{n_e} = 50$, $N_\mathrm{comp} = 1000$):
+$N_\mathrm{manifold} = 2.5\times10^6$.
+
+\paragraph{Batch processing.}
+The manifold points are chunked into batches of size $B$:
+\begin{equation}
+  \label{eq:n-chunks}
+  N_\mathrm{chunks} = \lceil N_\mathrm{manifold} / B \rceil.
+\end{equation}
+Each chunk produces a $(B, N_\mathrm{wl})$ output block written to
+HDF5 or Zarr with chunked I/O.
+
+\paragraph{Total computation.}
+The dominant cost is Stage~4 (Voigt evaluation):
+\begin{equation}
+  \label{eq:total-flops}
+  \mathrm{FLOPs}_\mathrm{total} \approx N_\mathrm{manifold} \times N_\mathrm{wl}
+    \times N_\mathrm{lines} \times F_\mathrm{Voigt},
+\end{equation}
+where $F_\mathrm{Voigt} = 236$ FLOPs per Voigt evaluation (from DERV-01).
+For the reference configuration:
+$2.5\times10^6 \times 10^4 \times 5\times10^3 \times 236 \approx 3 \times 10^{16}$ FLOPs.
+
+\paragraph{Storage.}
+\begin{equation}
+  M_\mathrm{storage} = N_\mathrm{manifold} \times N_\mathrm{wl} \times d_\mathrm{bytes}.
+\end{equation}
+For the reference configuration in float32:
+$2.5\times10^6 \times 10^4 \times 4 = 100$\,GB. Use HDF5/Zarr with
+gzip compression (typically 3--5$\times$ compression for smooth spectra).
+
+\paragraph{Relation to existing code.}
+The existing \texttt{ManifoldGenerator.\_compute\_spectrum\_snapshot}
+(lines 500--690 of \texttt{generator.py}) implements a version of this
+four-stage pipeline using the Humlicek W4 Faddeeva approximation. The
+derivation here formalizes the mathematical structure and specifies the
+upgrade to Weideman N=36 (DERV-01) for improved accuracy and AD compatibility.
+The existing \texttt{batch\_spectrum} closure (line 821) already uses
+\texttt{vmap(\ldots, in\_axes=0)} which matches Eq.~\eqref{eq:vmap-def},
+confirming architectural consistency.
+
+
+%% ====================================================================
+\section{Limiting Cases}
+\label{sec:limits}
+%% ====================================================================
+
+%% --------------------------------------------------------------------
+\subsection{Single Line ($N_\mathrm{lines} = 1$)}
+%% --------------------------------------------------------------------
+
+The spectrum reduces to:
+\begin{equation}
+  S(\lambda) = \varepsilon_1 \cdot V_1(\lambda - \lambda_1;\;\sigma_{D,1},\;\gamma_{S,1}).
+\end{equation}
+The profile matrix is $(N_\mathrm{wl}, 1)$ --- a column vector. The
+``sum over lines'' is trivially a multiplication. Shape consistency:
+$S\colon (N_\mathrm{wl},) = (N_\mathrm{wl}, 1) \cdot (1,) \to (N_\mathrm{wl},)$
+via \texttt{jnp.sum(..., axis=1)} or equivalently $P\varepsilon$ with
+$P \in \mathbb{R}^{N_\mathrm{wl}\times 1}$ and $\varepsilon \in \mathbb{R}^1$.
+\textbf{Verified: consistent with single-Voigt profile from DERV-01.}
+
+%% --------------------------------------------------------------------
+\subsection{Single Element ($N_\mathrm{el} = 1$)}
+%% --------------------------------------------------------------------
+
+The composition vector is $C = [1.0]$ (one element). The element-to-line
+mapping $\mathrm{el\_idx}$ is identically 0 for all lines, so the
+gather $C[\mathrm{el\_idx}] = 1.0$ everywhere. The forward model reduces
+to the standard single-element CF-LIBS model:
+\begin{equation}
+  S(\lambda) = \sum_l \frac{hc}{4\pi\lambda_l}\,A_{ki}^{(l)}\,
+    \ne \cdot f_z^{(l)} \cdot \frac{g_k^{(l)}}{U_z}\,
+    \exp\!\left(-\frac{E_k^{(l)}}{\TeV}\right)
+    \cdot V_l(\lambda) \cdot 10^6.
+\end{equation}
+This matches the Tognoni et al.\ [T10] formulation for a single-element
+plasma. \textbf{Verified: reduces to standard CF-LIBS forward model.}
+
+%% --------------------------------------------------------------------
+\subsection{Batch Size $B = 1$}
+%% --------------------------------------------------------------------
+
+The \texttt{vmap} over a singleton batch dimension is a no-op: the traced
+function is called once with the scalar parameters. The output shape is
+$(1, N_\mathrm{wl})$ which can be squeezed to $(N_\mathrm{wl},)$ to match
+the single-spectrum output. Numerically:
+\begin{equation}
+  \texttt{batch\_spectrum}(\TeV[0], \ne[0], C[0])[0]
+  \equiv \texttt{single\_spectrum}(\TeV[0], \ne[0], C[0])
+\end{equation}
+to machine precision (vmap introduces no numerical changes, only
+shape transformations). \textbf{Verified: shape and value consistency.}
+
+%% --------------------------------------------------------------------
+\subsection{Zero Stark Width ($\gamma_S = 0$)}
+%% --------------------------------------------------------------------
+
+When $\gamma_{S,l} = 0$ for all lines, the Voigt argument becomes
+$z_l = (\lambda - \lambda_l)/(\sigma_{D,l}\sqrt{2})$, which is
+purely real. From DERV-01 Sec.~5.1:
+\begin{equation}
+  \wfn(x) = e^{-x^2} \quad \text{for } x \in \mathbb{R},
+\end{equation}
+so the profile reduces to:
+\begin{equation}
+  V_l(\lambda) = \frac{e^{-(\lambda-\lambda_l)^2/(2\sigma_{D,l}^2)}}{\sigma_{D,l}\sqrt{2\pi}}
+  = G(\lambda - \lambda_l;\;\sigma_{D,l}),
+\end{equation}
+which is a pure Gaussian (Doppler broadening only).
+\textbf{Verified: recovers Gaussian limit from DERV-01.}
+
+%% --------------------------------------------------------------------
+\subsection{Zero Doppler Width ($\sigma_D \to 0$)}
+%% --------------------------------------------------------------------
+
+When $\sigma_{D,l} \to 0$, from DERV-01 Sec.~5.2, the Faddeeva function
+asymptotic gives $\wfn(z) \to i/(\sqrt{\pi}\,z)$ for $|z| \to \infty$,
+and the $\sigma_G$ factors cancel exactly:
+\begin{equation}
+  V_l(\lambda) \to \frac{1}{\pi}\,\frac{\gamma_{S,l}}{(\lambda - \lambda_l)^2 + \gamma_{S,l}^2}
+  = L(\lambda - \lambda_l;\;\gamma_{S,l}),
+\end{equation}
+which is a pure Lorentzian (Stark broadening only). The cancellation of
+$\sigma_G$ in the limit is essential for numerical stability and was verified
+in DERV-01. \textbf{Verified: recovers Lorentzian limit from DERV-01.}
+
+%% --------------------------------------------------------------------
+\subsection{$T \to 0$ Limit}
+%% --------------------------------------------------------------------
+
+As $\TeV \to 0$:
+\begin{itemize}
+  \item Saha ratios $S_z \propto \TeV^{3/2} \exp(-\chi_z/\TeV) \to 0$,
+    so $f_\mathrm{I} \to 1$ (all atoms in ground ionization stage).
+  \item Boltzmann factors $\exp(-E_k/\TeV) \to 0$ for all $E_k > 0$.
+    Only lines with $E_k = 0$ (transitions from the ground state) survive.
+  \item Partition function $U \to g_0$ (ground-state degeneracy).
+\end{itemize}
+Thus $S(\lambda) \to 0$ for most lines; only ground-state transitions
+(if any exist in the database) contribute. This is physically correct:
+at zero temperature, only ground-state atoms exist and can only emit
+via stimulated processes (not thermal emission).
+\textbf{Verified: correct thermal freezeout behavior.}
+
+\paragraph{$\ne \to 0$ limit (outside model validity).}
+The Saha ratios $S_z \propto 1/\ne \to \infty$, driving all species to
+the highest ionization stage. Physically, $\ne \to 0$ means no plasma
+exists, so this regime is outside the LTE validity range
+($\ne > 10^{16}$\,cm$^{-3}$ from the McWhirter criterion). The forward
+model returns a mathematically valid but physically meaningless result.
+Implementations should clamp $\ne \geq n_{e,\mathrm{min}}$ to avoid this.
+
+
+%% ====================================================================
+\section{Validation Criteria}
+\label{sec:validation}
+%% ====================================================================
+
+These criteria are designed for Phase~4 implementation testing.
+
+\begin{enumerate}
+  \item \textbf{Batch vs sequential parity:}
+    For all $i \in \{1, \ldots, B\}$:
+    \begin{equation}
+      \frac{|\texttt{batch}[i] - \texttt{single}(T_i, n_{e,i}, C_i)|}
+           {|\texttt{single}(T_i, n_{e,i}, C_i)|} < 10^{-12}.
+    \end{equation}
+    \texttt{vmap} must not change the numerical result.
+
+  \item \textbf{Memory budget:}
+    Actual GPU memory usage (measured via \texttt{jax.local\_devices()[0].memory\_stats()}
+    or \texttt{nvidia-smi}) within $\pm 20\%$ of Eq.~\eqref{eq:mem-worst} or
+    Eq.~\eqref{eq:mem-fused}, depending on XLA behavior.
+
+  \item \textbf{Compilation:}
+    JIT compilation succeeds for $(B=64, N_\mathrm{wl}=10000, N_\mathrm{lines}=5000)$
+    in float32 (or $B=32$ in float64) without OOM on V100S.
+
+  \item \textbf{Dimensional chain:}
+    Verify $S(\lambda)$ has units W\,m$^{-3}$\,sr$^{-1}$\,nm$^{-1}$
+    by tracking units through all four stages
+    (Eq.~\ref{eq:dim-chain}).
+
+  \item \textbf{Known result:}
+    For a single Fe\,I line at $\TeV = 1$\,eV, $\ne = 10^{17}$\,cm$^{-3}$,
+    the emissivity and Voigt FWHM from the batch model match the existing
+    CPU forward model (\texttt{SpectrumModel.compute\_spectrum}) to $< 0.1\%$.
+
+  \item \textbf{Limiting cases:}
+    Verify all six limiting cases in Section~\ref{sec:limits} produce
+    the expected reduced forms.
+\end{enumerate}
+
+\end{document}
