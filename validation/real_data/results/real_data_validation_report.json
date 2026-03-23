@@ -1,0 +1,509 @@
+{
+  "validation_phase": "04-02",
+  "timestamp": "2026-03-23T23:41:38Z",
+  "data_mode": "synthetic_fallback",
+  "references": {
+    "fabre_2011": "Fabre et al. (2011), J. Anal. At. Spectrom. -- CCCT certified compositions",
+    "wiens_2013": "Wiens et al. (2013), Spectrochim. Acta B -- ChemCam instrument"
+  },
+  "aalto": {
+    "n_spectra": 74,
+    "n_pure_elements": 13,
+    "n_minerals": 61,
+    "gpu_cpu_parity": {
+      "all_elements_match": true,
+      "pass_rate": 1.0,
+      "max_T_relative_error": 1.0282306967625151e-14,
+      "max_ne_relative_error": 2.4945734450091506e-09,
+      "max_concentration_error": 1.9622818564059996e-16
+    },
+    "element_detection": {
+      "note": "Element detection not available without atomic DB. Expected elements listed from mineral formulas.",
+      "mean_recall": null,
+      "mean_precision": null
+    }
+  },
+  "ccct": {
+    "n_targets": 6,
+    "targets": [
+      "CCCT1",
+      "CCCT2",
+      "CCCT3",
+      "CCCT4",
+      "CCCT5",
+      "CCCT9"
+    ],
+    "gpu_cpu_parity": {
+      "all_elements_match": true,
+      "n_passed": 6,
+      "n_total": 6,
+      "max_T_relative_error": 9.414797776936994e-14,
+      "max_ne_relative_error": 1.6337936357582055e-09,
+      "max_concentration_error": 2.0438795228589344e-16
+    },
+    "composition_accuracy": {
+      "major_element_detection_rate": 1.0,
+      "major_detected": 19,
+      "major_total": 19,
+      "note": "Forward-model round-trip test. Detection = whether the forward model generates emission lines for the element. Quantitative composition recovery requires full inversion pipeline (needs atomic DB).",
+      "per_target": {
+        "CCCT1": {
+          "data_mode": "synthetic_forward",
+          "all_kernels_passed": true,
+          "certified": {
+            "Si": 0.347,
+            "Al": 0.08,
+            "Na": 0.03,
+            "K": 0.039,
+            "Fe": 0.007,
+            "Ca": 0.003,
+            "Mg": 0.001
+          },
+          "detectable_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Na",
+            "Si"
+          ],
+          "major_elements": [
+            "Al",
+            "Si"
+          ],
+          "detected_lines": {
+            "Si": 3,
+            "Al": 3,
+            "Na": 3,
+            "K": 3,
+            "Fe": 5,
+            "Ca": 4,
+            "Mg": 4
+          },
+          "composition_recovery": {
+            "Si": {
+              "certified_wf": 0.347,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Al": {
+              "certified_wf": 0.08,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Na": {
+              "certified_wf": 0.03,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "K": {
+              "certified_wf": 0.039,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Fe": {
+              "certified_wf": 0.007,
+              "lines_generated": 5,
+              "detectable": true
+            },
+            "Ca": {
+              "certified_wf": 0.003,
+              "lines_generated": 4,
+              "detectable": true
+            },
+            "Mg": {
+              "certified_wf": 0.001,
+              "lines_generated": 4,
+              "detectable": true
+            }
+          }
+        },
+        "CCCT2": {
+          "data_mode": "synthetic_forward",
+          "all_kernels_passed": true,
+          "certified": {
+            "Si": 0.243,
+            "Al": 0.083,
+            "Ca": 0.069,
+            "Mg": 0.053,
+            "Fe": 0.053,
+            "Na": 0.016,
+            "K": 0.003,
+            "Ti": 0.003
+          },
+          "detectable_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Na",
+            "Si",
+            "Ti"
+          ],
+          "major_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "detected_lines": {
+            "Si": 3,
+            "Al": 3,
+            "Ca": 4,
+            "Mg": 4,
+            "Fe": 5,
+            "Na": 3,
+            "K": 3,
+            "Ti": 5
+          },
+          "composition_recovery": {
+            "Si": {
+              "certified_wf": 0.243,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Al": {
+              "certified_wf": 0.083,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Ca": {
+              "certified_wf": 0.069,
+              "lines_generated": 4,
+              "detectable": true
+            },
+            "Mg": {
+              "certified_wf": 0.053,
+              "lines_generated": 4,
+              "detectable": true
+            },
+            "Fe": {
+              "certified_wf": 0.053,
+              "lines_generated": 5,
+              "detectable": true
+            },
+            "Na": {
+              "certified_wf": 0.016,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "K": {
+              "certified_wf": 0.003,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Ti": {
+              "certified_wf": 0.003,
+              "lines_generated": 5,
+              "detectable": true
+            }
+          }
+        },
+        "CCCT3": {
+          "data_mode": "synthetic_forward",
+          "all_kernels_passed": true,
+          "certified": {
+            "Si": 0.207,
+            "Al": 0.049,
+            "Mg": 0.11,
+            "Fe": 0.086,
+            "Ca": 0.053,
+            "Na": 0.009,
+            "K": 0.002,
+            "Ti": 0.005
+          },
+          "detectable_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Na",
+            "Si",
+            "Ti"
+          ],
+          "major_elements": [
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "detected_lines": {
+            "Si": 3,
+            "Al": 3,
+            "Mg": 4,
+            "Fe": 5,
+            "Ca": 4,
+            "Na": 3,
+            "K": 3,
+            "Ti": 5
+          },
+          "composition_recovery": {
+            "Si": {
+              "certified_wf": 0.207,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Al": {
+              "certified_wf": 0.049,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Mg": {
+              "certified_wf": 0.11,
+              "lines_generated": 4,
+              "detectable": true
+            },
+            "Fe": {
+              "certified_wf": 0.086,
+              "lines_generated": 5,
+              "detectable": true
+            },
+            "Ca": {
+              "certified_wf": 0.053,
+              "lines_generated": 4,
+              "detectable": true
+            },
+            "Na": {
+              "certified_wf": 0.009,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "K": {
+              "certified_wf": 0.002,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Ti": {
+              "certified_wf": 0.005,
+              "lines_generated": 5,
+              "detectable": true
+            }
+          }
+        },
+        "CCCT4": {
+          "data_mode": "synthetic_forward",
+          "all_kernels_passed": true,
+          "certified": {
+            "Si": 0.232,
+            "Al": 0.05,
+            "Fe": 0.127,
+            "Mg": 0.049,
+            "Ca": 0.068,
+            "Na": 0.01,
+            "K": 0.001,
+            "Ti": 0.004
+          },
+          "detectable_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Na",
+            "Si",
+            "Ti"
+          ],
+          "major_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Si"
+          ],
+          "detected_lines": {
+            "Si": 3,
+            "Al": 3,
+            "Fe": 5,
+            "Mg": 4,
+            "Ca": 4,
+            "Na": 3,
+            "K": 3,
+            "Ti": 5
+          },
+          "composition_recovery": {
+            "Si": {
+              "certified_wf": 0.232,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Al": {
+              "certified_wf": 0.05,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Fe": {
+              "certified_wf": 0.127,
+              "lines_generated": 5,
+              "detectable": true
+            },
+            "Mg": {
+              "certified_wf": 0.049,
+              "lines_generated": 4,
+              "detectable": true
+            },
+            "Ca": {
+              "certified_wf": 0.068,
+              "lines_generated": 4,
+              "detectable": true
+            },
+            "Na": {
+              "certified_wf": 0.01,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "K": {
+              "certified_wf": 0.001,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Ti": {
+              "certified_wf": 0.004,
+              "lines_generated": 5,
+              "detectable": true
+            }
+          }
+        },
+        "CCCT5": {
+          "data_mode": "synthetic_forward",
+          "all_kernels_passed": true,
+          "certified": {
+            "Si": 0.27,
+            "Al": 0.107,
+            "Ca": 0.034,
+            "Na": 0.035,
+            "K": 0.023,
+            "Fe": 0.017,
+            "Mg": 0.012,
+            "Ti": 0.005
+          },
+          "detectable_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Na",
+            "Si",
+            "Ti"
+          ],
+          "major_elements": [
+            "Al",
+            "Si"
+          ],
+          "detected_lines": {
+            "Si": 3,
+            "Al": 3,
+            "Ca": 4,
+            "Na": 3,
+            "K": 3,
+            "Fe": 5,
+            "Mg": 4,
+            "Ti": 5
+          },
+          "composition_recovery": {
+            "Si": {
+              "certified_wf": 0.27,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Al": {
+              "certified_wf": 0.107,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Ca": {
+              "certified_wf": 0.034,
+              "lines_generated": 4,
+              "detectable": true
+            },
+            "Na": {
+              "certified_wf": 0.035,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "K": {
+              "certified_wf": 0.023,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Fe": {
+              "certified_wf": 0.017,
+              "lines_generated": 5,
+              "detectable": true
+            },
+            "Mg": {
+              "certified_wf": 0.012,
+              "lines_generated": 4,
+              "detectable": true
+            },
+            "Ti": {
+              "certified_wf": 0.005,
+              "lines_generated": 5,
+              "detectable": true
+            }
+          }
+        },
+        "CCCT9": {
+          "data_mode": "synthetic_forward",
+          "all_kernels_passed": true,
+          "certified": {
+            "Ti": 0.895,
+            "Al": 0.061,
+            "V": 0.04,
+            "Fe": 0.004
+          },
+          "detectable_elements": [
+            "Al",
+            "Fe",
+            "Ti",
+            "V"
+          ],
+          "major_elements": [
+            "Al",
+            "Ti"
+          ],
+          "detected_lines": {
+            "Ti": 5,
+            "Al": 3,
+            "V": 3,
+            "Fe": 5
+          },
+          "composition_recovery": {
+            "Ti": {
+              "certified_wf": 0.895,
+              "lines_generated": 5,
+              "detectable": true
+            },
+            "Al": {
+              "certified_wf": 0.061,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "V": {
+              "certified_wf": 0.04,
+              "lines_generated": 3,
+              "detectable": true
+            },
+            "Fe": {
+              "certified_wf": 0.004,
+              "lines_generated": 5,
+              "detectable": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "summary": {
+    "gpu_cpu_parity_passed": true,
+    "aalto_all_passed": true,
+    "ccct_all_passed": true,
+    "ccct_major_detection_passed": true,
+    "ccct9_ti_dominant": true,
+    "total_spectra_validated": 80
+  },
+  "elapsed_s": 4.207385622197762
+}
