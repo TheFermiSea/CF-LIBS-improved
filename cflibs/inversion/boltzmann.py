@@ -287,6 +287,7 @@ class BoltzmannPlotFitter:
             intercept = c
 
             # Calculate R^2
+
             y_pred = m * x + c
             r_squared = self._compute_r_squared(y, y_pred, weights)
 
