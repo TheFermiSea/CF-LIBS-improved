@@ -292,6 +292,7 @@ class BoltzmannPlotFitter:
             r_squared = self._compute_r_squared(y, y_pred, weights)
 
             # Check for outliers
+
             residuals = y - y_pred
             std_res = np.std(residuals)
             if std_res == 0:
