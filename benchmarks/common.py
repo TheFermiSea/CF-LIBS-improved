@@ -12,9 +12,7 @@ import json
 import os
 import platform
 import subprocess
-import sys
 import time
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -52,9 +50,7 @@ def hardware_metadata() -> dict[str, Any]:
         meta["jax_version"] = jax.__version__
         meta["jax_backend"] = jax.default_backend()
         devices = jax.devices()
-        meta["jax_devices"] = [
-            {"id": d.id, "kind": str(d.device_kind)} for d in devices
-        ]
+        meta["jax_devices"] = [{"id": d.id, "kind": str(d.device_kind)} for d in devices]
     except ImportError:
         meta["jax_version"] = "N/A"
         meta["jax_backend"] = "N/A"
@@ -164,8 +160,6 @@ def benchmark_function(
 def _block_until_ready(result: Any) -> None:
     """Call block_until_ready() on JAX arrays to ensure GPU sync."""
     try:
-        import jax.numpy as jnp
-
         if hasattr(result, "block_until_ready"):
             result.block_until_ready()
         elif isinstance(result, (tuple, list)):
@@ -174,9 +168,7 @@ def _block_until_ready(result: Any) -> None:
         elif hasattr(result, "__dict__"):
             # Handle dataclasses/namedtuples with JAX array fields
             for val in (
-                result._asdict().values()
-                if hasattr(result, "_asdict")
-                else vars(result).values()
+                result._asdict().values() if hasattr(result, "_asdict") else vars(result).values()
             ):
                 if hasattr(val, "block_until_ready"):
                     val.block_until_ready()
