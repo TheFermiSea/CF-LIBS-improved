@@ -1,0 +1,2571 @@
+{
+  "metadata": {
+    "benchmark": "VALD-06a",
+    "description": "Aalto mineral GPU vs CPU kernel parity",
+    "timestamp": "2026-03-23T23:39:21Z",
+    "jax_version": "0.9.2",
+    "jax_devices": [
+      "TFRT_CPU_0"
+    ],
+    "n_spectra": 74,
+    "n_pure_elements": 13,
+    "n_minerals": 61,
+    "data_dir": "data/aalto_libs",
+    "db_available": null,
+    "mode": "kernel_parity",
+    "source": "Aalto University LIBS Spectral Library",
+    "elapsed_s": 7.550481646088883
+  },
+  "gpu_cpu_parity": {
+    "all_elements_match": true,
+    "n_passed": 74,
+    "n_total": 74,
+    "pass_rate": 1.0,
+    "per_kernel": {
+      "boltzmann_fit": {
+        "n_tested": 74,
+        "n_passed": 74,
+        "max_relative_error": 1.0282306967625151e-14,
+        "mean_relative_error": 1.4175853706422977e-15,
+        "median_relative_error": 8.464424842195038e-16
+      },
+      "voigt_profile": {
+        "n_tested": 74,
+        "n_passed": 74,
+        "max_relative_error": 4.483755517947897e-16,
+        "mean_relative_error": 4.3120801940625617e-16,
+        "median_relative_error": 4.483755517947897e-16
+      },
+      "softmax_closure": {
+        "n_tested": 74,
+        "n_passed": 74,
+        "max_relative_error": 1.9622818564059996e-16,
+        "mean_relative_error": 1.3482482113385576e-17,
+        "median_relative_error": 0.0
+      },
+      "charge_balance": {
+        "n_tested": 74,
+        "n_passed": 74,
+        "max_relative_error": 2.4945734450091506e-09,
+        "mean_relative_error": 1.179951752119278e-09,
+        "median_relative_error": 1.2178844637594374e-09
+      }
+    }
+  },
+  "element_detection": {
+    "note": "Element detection not available without atomic DB. Expected elements listed from mineral formulas.",
+    "mean_recall": null,
+    "mean_precision": null
+  },
+  "per_spectrum": [
+    {
+      "label": "pure_Al",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 14,
+      "expected_elements": [
+        "Al"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 7.73358231711514e-16,
+          "max_absolute_error": 3.637978807091713e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 3.8770750571460914e-10,
+          "max_absolute_error": 36990432.0
+        }
+      }
+    },
+    {
+      "label": "pure_Co",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 20,
+      "expected_elements": [
+        "Co"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.9579791150508263e-16,
+          "max_absolute_error": 4.3655745685100555e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.4589787976597095e-09,
+          "max_absolute_error": 105239376.0
+        }
+      }
+    },
+    {
+      "label": "pure_Cr",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 20,
+      "expected_elements": [
+        "Cr"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 7.638902765438781e-16,
+          "max_absolute_error": 1.1102230246251565e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.6451905604387636e-10,
+          "max_absolute_error": 14696192.0
+        }
+      }
+    },
+    {
+      "label": "pure_Cu",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 14,
+      "expected_elements": [
+        "Cu"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 6.546270147290645e-16,
+          "max_absolute_error": 2.9103830456733704e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 9.229950806652761e-10,
+          "max_absolute_error": 69237504.0
+        }
+      }
+    },
+    {
+      "label": "pure_Fe",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.416438777592323e-15,
+          "max_absolute_error": 1.3096723705530167e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "pure_Mg",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 15,
+      "expected_elements": [
+        "Mg"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.0980975856414996e-16,
+          "max_absolute_error": 1.1102230246251565e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.6784441505906844e-09,
+          "max_absolute_error": 128387520.0
+        }
+      }
+    },
+    {
+      "label": "pure_Mn",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 20,
+      "expected_elements": [
+        "Mn"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.557230729767714e-15,
+          "max_absolute_error": 4.3655745685100555e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 6.589075329012633e-10,
+          "max_absolute_error": 52919936.0
+        }
+      }
+    },
+    {
+      "label": "pure_Ni",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ni"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.97505536559134e-16,
+          "max_absolute_error": 1.4551915228366852e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.5077361491148121e-09,
+          "max_absolute_error": 115603584.0
+        }
+      }
+    },
+    {
+      "label": "pure_Pb",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 19,
+      "expected_elements": [
+        "Pb"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 4.601539031655696e-16,
+          "max_absolute_error": 2.1827872842550278e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 5.884644074740694e-10,
+          "max_absolute_error": 47359248.0
+        }
+      }
+    },
+    {
+      "label": "pure_Sn",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 20,
+      "expected_elements": [
+        "Sn"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 9.475442492748077e-16,
+          "max_absolute_error": 4.3655745685100555e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.2704716600931252e-09,
+          "max_absolute_error": 103882912.0
+        }
+      }
+    },
+    {
+      "label": "pure_Ti",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ti"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.9430886378758792e-15,
+          "max_absolute_error": 1.3096723705530167e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 3.1469217471393835e-10,
+          "max_absolute_error": 27902736.0
+        }
+      }
+    },
+    {
+      "label": "pure_V",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 20,
+      "expected_elements": [
+        "V"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 9.586430266454169e-15,
+          "max_absolute_error": 2.3865140974521637e-09
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.3165634142565715e-10,
+          "max_absolute_error": 11788752.0
+        }
+      }
+    },
+    {
+      "label": "pure_Zn",
+      "source": "pure_element",
+      "mineral_name": null,
+      "n_peaks": 11,
+      "expected_elements": [
+        "Zn"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.4801134490968786e-16,
+          "max_absolute_error": 2.220446049250313e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 2.4945734450091506e-09,
+          "max_absolute_error": 101990200.0
+        }
+      }
+    },
+    {
+      "label": "mineral_adulariaE11",
+      "source": "mineral",
+      "mineral_name": "adulariae",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.3894755159189977e-15,
+          "max_absolute_error": 6.548361852765083e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_adulariaE44",
+      "source": "mineral",
+      "mineral_name": "adulariae",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.625391711002341e-16,
+          "max_absolute_error": 4.440892098500626e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_almandine26",
+      "source": "mineral",
+      "mineral_name": "almandine",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Al",
+        "Fe",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.930803975847567e-16,
+          "max_absolute_error": 1.4551915228366852e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.5314753846242528e-09,
+          "max_absolute_error": 117464400.0
+        }
+      }
+    },
+    {
+      "label": "mineral_apatite35",
+      "source": "mineral",
+      "mineral_name": "apatite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ca",
+        "P"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 6.804153808403401e-16,
+          "max_absolute_error": 8.731149137020111e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.946744516197138e-10,
+          "max_absolute_error": 10566512.0
+        }
+      }
+    },
+    {
+      "label": "mineral_apatite41",
+      "source": "mineral",
+      "mineral_name": "apatite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ca",
+        "P"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.3982880357900377e-15,
+          "max_absolute_error": 3.92901711165905e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.946744516197138e-10,
+          "max_absolute_error": 10566512.0
+        }
+      }
+    },
+    {
+      "label": "mineral_augite12",
+      "source": "mineral",
+      "mineral_name": "augite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Al",
+        "Ca",
+        "Fe",
+        "Mg",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.9522863917167077e-16,
+          "max_absolute_error": 7.275957614183426e-12
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.058182837319609e-09,
+          "max_absolute_error": 84524480.0
+        }
+      }
+    },
+    {
+      "label": "mineral_augite25",
+      "source": "mineral",
+      "mineral_name": "augite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Al",
+        "Ca",
+        "Fe",
+        "Mg",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.76431835117304e-16,
+          "max_absolute_error": 1.4551915228366852e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 1.464717719809279e-17,
+          "max_absolute_error": 6.938893903907228e-18
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.058182837319609e-09,
+          "max_absolute_error": 84524480.0
+        }
+      }
+    },
+    {
+      "label": "mineral_augite4",
+      "source": "mineral",
+      "mineral_name": "augite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Al",
+        "Ca",
+        "Fe",
+        "Mg",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.646023485597826e-15,
+          "max_absolute_error": 1.382431946694851e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 7.97218687895108e-17,
+          "max_absolute_error": 2.7755575615628914e-17
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.058182837319609e-09,
+          "max_absolute_error": 84524480.0
+        }
+      }
+    },
+    {
+      "label": "mineral_biotiteE60",
+      "source": "mineral",
+      "mineral_name": "biotitee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.4007907320901719e-15,
+          "max_absolute_error": 2.9103830456733704e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_chalcopyrite331",
+      "source": "mineral",
+      "mineral_name": "chalcopyrite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Cu",
+        "Fe",
+        "S"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 6.645094293477108e-16,
+          "max_absolute_error": 5.820766091346741e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 1.6985452556990466e-17,
+          "max_absolute_error": 1.3877787807814457e-17
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 7.857749531446371e-10,
+          "max_absolute_error": 44338696.0
+        }
+      }
+    },
+    {
+      "label": "mineral_chalcopyrite68",
+      "source": "mineral",
+      "mineral_name": "chalcopyrite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Cu",
+        "Fe",
+        "S"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.0282306967625151e-14,
+          "max_absolute_error": 3.2014213502407074e-09
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 1.154371019700351e-16,
+          "max_absolute_error": 5.551115123125783e-17
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 7.857749531446371e-10,
+          "max_absolute_error": 44338696.0
+        }
+      }
+    },
+    {
+      "label": "mineral_cordierite16",
+      "source": "mineral",
+      "mineral_name": "cordierite",
+      "n_peaks": 13,
+      "expected_elements": [
+        "Al",
+        "Fe",
+        "Mg",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 4.67941656173615e-16,
+          "max_absolute_error": 7.275957614183426e-12
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 4.895213559404705e-10,
+          "max_absolute_error": 37520448.0
+        }
+      }
+    },
+    {
+      "label": "mineral_cordieriteE15",
+      "source": "mineral",
+      "mineral_name": "cordieritee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.80480653372536e-16,
+          "max_absolute_error": 2.220446049250313e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_corundumE21",
+      "source": "mineral",
+      "mineral_name": "corundume",
+      "n_peaks": 14,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 8.524212757687501e-16,
+          "max_absolute_error": 2.9103830456733704e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_diopside5",
+      "source": "mineral",
+      "mineral_name": "diopside",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ca",
+        "Mg",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.1379422507235796e-15,
+          "max_absolute_error": 8.731149137020111e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 7.248387551403039e-10,
+          "max_absolute_error": 56707232.0
+        }
+      }
+    },
+    {
+      "label": "mineral_fluorite39",
+      "source": "mineral",
+      "mineral_name": "fluorite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ca"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.8868478714750956e-15,
+          "max_absolute_error": 2.6193447411060333e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 7.879224723477746e-11,
+          "max_absolute_error": 7464736.0
+        }
+      }
+    },
+    {
+      "label": "mineral_fluoriteE13",
+      "source": "mineral",
+      "mineral_name": "fluoritee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 4.0732077290803933e-16,
+          "max_absolute_error": 4.440892098500626e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_galenaE27",
+      "source": "mineral",
+      "mineral_name": "galenae",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 9.003615306105018e-16,
+          "max_absolute_error": 1.4551915228366852e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_garnetE17",
+      "source": "mineral",
+      "mineral_name": "garnete",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.80587185865602e-15,
+          "max_absolute_error": 1.7462298274040222e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_garnetE33",
+      "source": "mineral",
+      "mineral_name": "garnete",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 8.092751210867256e-16,
+          "max_absolute_error": 3.637978807091713e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_gypsum42",
+      "source": "mineral",
+      "mineral_name": "gypsum",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ca",
+        "S"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 6.639035212003603e-16,
+          "max_absolute_error": 7.275957614183426e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 4.3162630083768105e-10,
+          "max_absolute_error": 23766384.0
+        }
+      }
+    },
+    {
+      "label": "mineral_hematite37",
+      "source": "mineral",
+      "mineral_name": "hematite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_hornblendeE29",
+      "source": "mineral",
+      "mineral_name": "hornblendee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 4.955992080557885e-16,
+          "max_absolute_error": 2.1827872842550278e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_hyperstheneE7",
+      "source": "mineral",
+      "mineral_name": "hypersthenee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.024945570913457e-16,
+          "max_absolute_error": 2.220446049250313e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_kaolinite9",
+      "source": "mineral",
+      "mineral_name": "kaolinite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Al",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.9533726981222555e-16,
+          "max_absolute_error": 7.275957614183426e-12
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 6.748663672853538e-10,
+          "max_absolute_error": 53586096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_kyanite14",
+      "source": "mineral",
+      "mineral_name": "kyanite",
+      "n_peaks": 16,
+      "expected_elements": [
+        "Al",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.6248851506925831e-15,
+          "max_absolute_error": 6.548361852765083e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 6.748663672853538e-10,
+          "max_absolute_error": 53586096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_kyaniteE20",
+      "source": "mineral",
+      "mineral_name": "kyanitee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 7.404116330545163e-16,
+          "max_absolute_error": 3.637978807091713e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_lepidolite31",
+      "source": "mineral",
+      "mineral_name": "lepidolite",
+      "n_peaks": 18,
+      "expected_elements": [
+        "Al",
+        "K",
+        "Li",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.8166380412956767e-15,
+          "max_absolute_error": 5.4569682106375694e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 5.416840108772219e-17,
+          "max_absolute_error": 2.7755575615628914e-17
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 3.4575729120699256e-10,
+          "max_absolute_error": 30534464.0
+        }
+      }
+    },
+    {
+      "label": "mineral_magnesiteE46",
+      "source": "mineral",
+      "mineral_name": "magnesitee",
+      "n_peaks": 16,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 9.8065995054715e-16,
+          "max_absolute_error": 7.275957614183426e-12
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 1.9622818564059996e-16,
+          "max_absolute_error": 1.1102230246251565e-16
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_magnetite20",
+      "source": "mineral",
+      "mineral_name": "magnetite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.6970057754990384e-15,
+          "max_absolute_error": 1.1641532182693481e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_microcline23",
+      "source": "mineral",
+      "mineral_name": "microcline",
+      "n_peaks": 17,
+      "expected_elements": [
+        "Al",
+        "K",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.874936883955789e-16,
+          "max_absolute_error": 7.275957614183426e-12
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 3.227568837932539e-10,
+          "max_absolute_error": 27569504.0
+        }
+      }
+    },
+    {
+      "label": "mineral_microclineE16",
+      "source": "mineral",
+      "mineral_name": "microclinee",
+      "n_peaks": 17,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 8.050086198699276e-16,
+          "max_absolute_error": 1.0913936421275139e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_molybdenite40",
+      "source": "mineral",
+      "mineral_name": "molybdenite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Mo",
+        "S"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.6057063961937235e-15,
+          "max_absolute_error": 1.3096723705530167e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.0628582511868589e-09,
+          "max_absolute_error": 55500976.0
+        }
+      }
+    },
+    {
+      "label": "mineral_muscoviteE22",
+      "source": "mineral",
+      "mineral_name": "muscovitee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.3412896877110272e-15,
+          "max_absolute_error": 4.3655745685100555e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_muscoviteE35",
+      "source": "mineral",
+      "mineral_name": "muscovitee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.5338308658380314e-16,
+          "max_absolute_error": 1.1102230246251565e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_olivine6",
+      "source": "mineral",
+      "mineral_name": "olivine",
+      "n_peaks": 19,
+      "expected_elements": [
+        "Fe",
+        "Mg",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 7.28045287290221e-16,
+          "max_absolute_error": 2.1827872842550278e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.6872902633175904e-09,
+          "max_absolute_error": 120669416.0
+        }
+      }
+    },
+    {
+      "label": "mineral_orthoclase7",
+      "source": "mineral",
+      "mineral_name": "orthoclase",
+      "n_peaks": 19,
+      "expected_elements": [
+        "Al",
+        "K",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.1434509060316527e-15,
+          "max_absolute_error": 1.8189894035458565e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 3.227568837932539e-10,
+          "max_absolute_error": 27569504.0
+        }
+      }
+    },
+    {
+      "label": "mineral_pentlandite331",
+      "source": "mineral",
+      "mineral_name": "pentlandite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe",
+        "Ni",
+        "S"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.0290759694957158e-15,
+          "max_absolute_error": 2.1827872842550278e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 4.4763480387289226e-10,
+          "max_absolute_error": 25464688.0
+        }
+      }
+    },
+    {
+      "label": "mineral_pentlandite68",
+      "source": "mineral",
+      "mineral_name": "pentlandite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe",
+        "Ni",
+        "S"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.0641476870423524e-15,
+          "max_absolute_error": 5.820766091346741e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 1.206427961574933e-16,
+          "max_absolute_error": 5.551115123125783e-17
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 4.4763480387289226e-10,
+          "max_absolute_error": 25464688.0
+        }
+      }
+    },
+    {
+      "label": "mineral_phlogopiteE45",
+      "source": "mineral",
+      "mineral_name": "phlogopitee",
+      "n_peaks": 15,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.5768721947461782e-15,
+          "max_absolute_error": 5.093170329928398e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_plagioclaseE2",
+      "source": "mineral",
+      "mineral_name": "plagioclasee",
+      "n_peaks": 17,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.5348154399566602e-15,
+          "max_absolute_error": 5.093170329928398e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_plagioclaseE8",
+      "source": "mineral",
+      "mineral_name": "plagioclasee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 5.868971491903006e-16,
+          "max_absolute_error": 2.1827872842550278e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_pyriteE32",
+      "source": "mineral",
+      "mineral_name": "pyritee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.589312526391055e-15,
+          "max_absolute_error": 2.6193447411060333e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_pyrrhotite68",
+      "source": "mineral",
+      "mineral_name": "pyrrhotite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe",
+        "S"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 6.8473647592673644e-15,
+          "max_absolute_error": 1.1350493878126144e-09
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 7.889371174286056e-10,
+          "max_absolute_error": 37279952.0
+        }
+      }
+    },
+    {
+      "label": "mineral_pyrrhotiteE10",
+      "source": "mineral",
+      "mineral_name": "pyrrhotitee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.879122914402007e-15,
+          "max_absolute_error": 2.0372681319713593e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_quartz12",
+      "source": "mineral",
+      "mineral_name": "quartz",
+      "n_peaks": 9,
+      "expected_elements": [
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.499770817462045e-15,
+          "max_absolute_error": 9.458744898438454e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 8.699175243408818e-10,
+          "max_absolute_error": 57982584.0
+        }
+      }
+    },
+    {
+      "label": "mineral_quartzE26",
+      "source": "mineral",
+      "mineral_name": "quartze",
+      "n_peaks": 11,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.995842727682677e-16,
+          "max_absolute_error": 1.4551915228366852e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_scapolite28",
+      "source": "mineral",
+      "mineral_name": "scapolite",
+      "n_peaks": 15,
+      "expected_elements": [
+        "Al",
+        "Ca",
+        "Na",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 5.941346919931729e-16,
+          "max_absolute_error": 2.1827872842550278e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 8.505914649367625e-11,
+          "max_absolute_error": 7437824.0
+        }
+      }
+    },
+    {
+      "label": "mineral_scapolite36",
+      "source": "mineral",
+      "mineral_name": "scapolite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Al",
+        "Ca",
+        "Na",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.9258446054202236e-15,
+          "max_absolute_error": 1.8917489796876907e-10
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 1.5631376894245574e-16,
+          "max_absolute_error": 5.551115123125783e-17
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 8.505914649367625e-11,
+          "max_absolute_error": 7437824.0
+        }
+      }
+    },
+    {
+      "label": "mineral_serpentineE18",
+      "source": "mineral",
+      "mineral_name": "serpentinee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.1271722367723194e-15,
+          "max_absolute_error": 8.731149137020111e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 7.263653926593618e-18,
+          "max_absolute_error": 6.938893903907228e-18
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_sideriteE40",
+      "source": "mineral",
+      "mineral_name": "sideritee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.9351245457743346e-15,
+          "max_absolute_error": 9.458744898438454e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_sphene45",
+      "source": "mineral",
+      "mineral_name": "sphene",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ca",
+        "Si",
+        "Ti"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 9.000222170020012e-16,
+          "max_absolute_error": 5.820766091346741e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.1652972674257496e-09,
+          "max_absolute_error": 95805024.0
+        }
+      }
+    },
+    {
+      "label": "mineral_spodumene19",
+      "source": "mineral",
+      "mineral_name": "spodumene",
+      "n_peaks": 18,
+      "expected_elements": [
+        "Al",
+        "Li",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.6516498768777014e-16,
+          "max_absolute_error": 8.881784197001252e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 3.736462931623496e-16,
+          "max_absolute_error": 2.220446049250313e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 5.373266568135228e-10,
+          "max_absolute_error": 45665120.0
+        }
+      }
+    },
+    {
+      "label": "mineral_staurolite30",
+      "source": "mineral",
+      "mineral_name": "staurolite",
+      "n_peaks": 19,
+      "expected_elements": [
+        "Al",
+        "Fe",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 4.0909161809748223e-16,
+          "max_absolute_error": 2.1827872842550278e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.5314753846242528e-09,
+          "max_absolute_error": 117464400.0
+        }
+      }
+    },
+    {
+      "label": "mineral_talc38",
+      "source": "mineral",
+      "mineral_name": "talc",
+      "n_peaks": 16,
+      "expected_elements": [
+        "Mg",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 2.4708799619085777e-16,
+          "max_absolute_error": 2.220446049250313e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 1.8260528749143335e-16,
+          "max_absolute_error": 1.1102230246251565e-16
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.6267733516741894e-09,
+          "max_absolute_error": 116160976.0
+        }
+      }
+    },
+    {
+      "label": "mineral_topaz27",
+      "source": "mineral",
+      "mineral_name": "topaz",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Al",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 8.743428423039515e-16,
+          "max_absolute_error": 5.093170329928398e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 6.748663672853538e-10,
+          "max_absolute_error": 53586096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_tourmaline34",
+      "source": "mineral",
+      "mineral_name": "tourmaline",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Al",
+        "B",
+        "Fe",
+        "Mg",
+        "Na",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.5035552571056985e-16,
+          "max_absolute_error": 2.220446049250313e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 5.368998262960522e-17,
+          "max_absolute_error": 1.3877787807814457e-17
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 8.458017148698999e-10,
+          "max_absolute_error": 65348576.0
+        }
+      }
+    },
+    {
+      "label": "mineral_tremolite18",
+      "source": "mineral",
+      "mineral_name": "tremolite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ca",
+        "Fe",
+        "Mg",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.2488641748200523e-15,
+          "max_absolute_error": 6.548361852765083e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 5.517647962033283e-10,
+          "max_absolute_error": 42225824.0
+        }
+      }
+    },
+    {
+      "label": "mineral_wollastonite30",
+      "source": "mineral",
+      "mineral_name": "wollastonite",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Ca",
+        "Si"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 3.851748608456833e-16,
+          "max_absolute_error": 6.661338147750939e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 8.816270878137961e-10,
+          "max_absolute_error": 69779856.0
+        }
+      }
+    },
+    {
+      "label": "mineral_wollastoniteE25",
+      "source": "mineral",
+      "mineral_name": "wollastonitee",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Fe"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 8.404636926702576e-16,
+          "max_absolute_error": 2.220446049250313e-16
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 1.8162325045075576e-09,
+          "max_absolute_error": 130293096.0
+        }
+      }
+    },
+    {
+      "label": "mineral_zircon17",
+      "source": "mineral",
+      "mineral_name": "zircon",
+      "n_peaks": 20,
+      "expected_elements": [
+        "Si",
+        "Zr"
+      ],
+      "all_passed": true,
+      "error": null,
+      "kernels": {
+        "boltzmann_fit": {
+          "passed": "True",
+          "max_relative_error": 1.018757702582755e-15,
+          "max_absolute_error": 5.820766091346741e-11
+        },
+        "voigt_profile": {
+          "passed": true,
+          "max_relative_error": 4.483755517947897e-16,
+          "max_absolute_error": 2.6645352591003757e-15
+        },
+        "softmax_closure": {
+          "passed": true,
+          "max_relative_error": 0.0,
+          "max_absolute_error": 0.0
+        },
+        "charge_balance": {
+          "passed": "True",
+          "max_relative_error": 8.607443868624004e-10,
+          "max_absolute_error": 66785904.0
+        }
+      }
+    }
+  ]
+}
