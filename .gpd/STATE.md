@@ -4,20 +4,20 @@
 
 See: .gpd/PROJECT.md
 
-**Core research question:** [Not set]
-**Current focus:** [Not set]
+**Core research question:** What is the optimal computational architecture for real-time CF-LIBS multi-element plasma diagnostics, and how do GPU-accelerated implementations compare to existing tools?
+**Current focus:** Physics formalization of 5 GPU optimization targets
 
 ## Current Position
 
-**Current Phase:** —
-**Current Phase Name:** —
-**Total Phases:** —
-**Current Plan:** —
-**Total Plans in Phase:** —
-**Status:** —
-**Last Activity:** —
+**Current Phase:** 1
+**Current Phase Name:** Physics Formalization
+**Total Phases:** 7
+**Current Plan:** --
+**Total Plans in Phase:** --
+**Status:** Ready to plan
+**Last Activity:** 2026-03-23
 
-**Progress:** [░░░░░░░░░░] 0%
+**Progress:** [#.........] 0%
 
 ## Active Calculations
 
@@ -29,7 +29,9 @@ None yet.
 
 ## Open Questions
 
-None yet.
+1. Should the paper include a roofline model analysis?
+2. What is the minimum batch size where GPU overtakes CPU?
+3. Is mixed-precision (float16/bfloat16) worth exploring for Voigt profiles?
 
 ## Performance Metrics
 
@@ -41,7 +43,13 @@ None yet.
 
 ### Decisions
 
-None yet.
+| ID | Decision | Date |
+|----|----------|------|
+| DEC-01 | JAX as sole GPU framework | 2026-03-23 |
+| DEC-02 | V100S as benchmark target | 2026-03-23 |
+| DEC-03 | JQSRT as target venue | 2026-03-23 |
+| DEC-04 | 5 optimization targets spanning full pipeline | 2026-03-23 |
+| DEC-05 | Zaghloul 2024 as Voigt reference implementation | 2026-03-23 |
 
 ### Active Approximations
 
@@ -84,6 +92,6 @@ None
 
 ## Session Continuity
 
-**Last session:** —
-**Stopped at:** —
-**Resume file:** —
+**Last session:** 2026-03-23
+**Stopped at:** Project initialization complete. Ready to begin Phase 1 planning.
+**Resume file:** --
