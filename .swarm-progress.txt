@@ -30,3 +30,18 @@
 [2026-03-23 08:55:38 UTC] [1feeb72a] [ITER:4] [FEATURE_START] [CF-LIBS-improved-upb] Iteration 4, tier: Worker
 [2026-03-23 08:56:30 UTC] [1feeb72a] [ITER:4] [ERROR] Agent failed: PromptCancelled: Runtime adapter: write deadline exceeded: 9 turns with no edit_file/write_file (limit: 8). Write code now.
 [2026-03-23 08:56:30 UTC] [1feeb72a] [ITER:5] [FEATURE_START] [CF-LIBS-improved-upb] Iteration 5, tier: Council
+[2026-03-23 14:21:08 UTC] [d6f52806] [ITER:0] [SESSION_START] Processing issue: CF-LIBS-improved-f37 — Add from __future__ import annotations to cflibs/inversion/boltzmann.py. Add from __future__ import annotations as the first import after the module docstring. Then replace typing.List with list, typing.Optional with X | None, typing.Dict with dict, typing.Tuple with tuple. Run: ruff check cflibs/inversion/boltzmann.py --select UP006,UP007,FA100 to verify.
+[2026-03-23 14:21:20 UTC] [d6f52806] [ITER:1] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 1, tier: Worker
+[2026-03-23 14:21:39 UTC] [d6f52806] [ITER:1] [ERROR] Agent failed: PromptCancelled: Runtime adapter: write deadline exceeded: 9 turns with no edit_file/write_file (limit: 8). Write code now.
+[2026-03-23 14:21:40 UTC] [d6f52806] [ITER:2] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 2, tier: Worker
+[2026-03-23 14:22:03 UTC] [d6f52806] [ITER:2] [ERROR] Agent failed: PromptCancelled: Runtime adapter: write deadline exceeded: 9 turns with no edit_file/write_file (limit: 8). Write code now.
+[2026-03-23 14:22:04 UTC] [d6f52806] [ITER:3] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 3, tier: Worker
+[2026-03-23 14:22:26 UTC] [d6f52806] [ITER:3] [ERROR] Agent failed: PromptCancelled: Runtime adapter: write deadline exceeded: 9 turns with no edit_file/write_file (limit: 8). Write code now.
+[2026-03-23 14:22:27 UTC] [d6f52806] [ITER:4] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 4, tier: Worker
+[2026-03-23 14:23:02 UTC] [d6f52806] [ITER:4] [ERROR] Agent failed: PromptCancelled: Runtime adapter: write deadline exceeded: 9 turns with no edit_file/write_file (limit: 8). Write code now.
+[2026-03-23 14:23:03 UTC] [d6f52806] [ITER:5] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 5, tier: Worker
+[2026-03-23 14:23:35 UTC] [d6f52806] [ITER:5] [ERROR] Agent failed: PromptCancelled: Runtime adapter: write deadline exceeded: 9 turns with no edit_file/write_file (limit: 8). Write code now.
+[2026-03-23 14:23:36 UTC] [d6f52806] [ITER:6] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 6, tier: Worker
+[2026-03-23 14:23:57 UTC] [d6f52806] [ITER:6] [ERROR] Agent failed: PromptCancelled: Runtime adapter: write deadline exceeded: 9 turns with no edit_file/write_file (limit: 8). Write code now.
+[2026-03-23 14:23:58 UTC] [d6f52806] [ITER:7] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 7, tier: Worker
+[2026-03-23 14:24:07 UTC] [deb6b67f] [ITER:6] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 6, tier: Council
