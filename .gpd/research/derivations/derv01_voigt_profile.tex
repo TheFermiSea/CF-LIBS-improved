@@ -1,0 +1,415 @@
+% DERV-01: GPU-Optimized Voigt Profile Formulation for CF-LIBS
+% ASSERT_CONVENTION: natural_units=SI_eV_cm3_nm, metric_signature=null, fourier_convention=null, coupling_convention=null, renormalization_scheme=null, gauge_choice=null
+% Custom conventions: wavelength_unit=nm, line_profile=Voigt(sigma_Gaussian,gamma_HWHM_Lorentzian), spectral_domain=wavelength, stark_width=HWHM_at_1e16
+%
+% References:
+%   [W94]  Weideman (1994) SIAM J. Numer. Anal. 31(5), 1497-1518
+%   [Z24]  Zaghloul (2024) arXiv:2411.00917
+%   [OL77] Olivero & Longbothum (1977) JQSRT 17, 233-236
+%   [H82]  Humlicek (1982) JQSRT 27, 437
+%   [K22]  Kawahara et al. (2022) arXiv:2105.14782 (ExoJAX)
+
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,physics,booktabs,hyperref}
+\usepackage[margin=1in]{geometry}
+
+\newcommand{\wfn}{w}  % Faddeeva function
+\newcommand{\re}{\operatorname{Re}}
+\newcommand{\im}{\operatorname{Im}}
+\newcommand{\erfc}{\operatorname{erfc}}
+
+\title{DERV-01: GPU-Optimized Voigt Profile Formulation\\
+       for Calibration-Free LIBS}
+\author{CF-LIBS Research Project}
+\date{Phase 01 -- Physics Formalization}
+
+\begin{document}
+\maketitle
+
+%% ============================================================
+\section{Physics Motivation}
+\label{sec:motivation}
+
+In a laser-induced plasma under local thermodynamic equilibrium (LTE),
+each spectral emission line is broadened by two independent mechanisms:
+
+\paragraph{Doppler broadening (Gaussian).}
+Thermal motion of emitting atoms produces a Gaussian line shape with
+standard deviation
+\begin{equation}
+  \sigma_D = \frac{\lambda_0}{c}\sqrt{\frac{k_B T}{M_{\text{atom}}}},
+  \label{eq:sigma_doppler}
+\end{equation}
+% DIMENSION CHECK: [nm] * [1] * sqrt([eV * J/eV] / [kg * (m/s)^2]) = [nm] * sqrt([J]/[J]) = [nm]. OK.
+where $\lambda_0$ is the line center wavelength [nm], $c$ is the speed of light,
+$T$ is the plasma temperature, and $M_{\text{atom}}$ is the atomic mass.
+The corresponding FWHM is $\text{FWHM}_G = 2\sqrt{2\ln 2}\;\sigma_D \approx 2.3548\,\sigma_D$.
+
+\paragraph{Stark + natural broadening (Lorentzian).}
+Collisional (Stark) broadening by charged particles and the natural linewidth
+produce a Lorentzian profile characterized by $\gamma$ = half-width at half-maximum (HWHM) [nm].
+The Stark HWHM scales linearly with electron density:
+\begin{equation}
+  \gamma_{\text{Stark}} = w_s \cdot \frac{n_e}{10^{16}\,\text{cm}^{-3}},
+  \label{eq:gamma_stark}
+\end{equation}
+% DIMENSION CHECK: [nm] = [nm] * [cm^-3]/[cm^-3]. OK.
+where $w_s$ is the tabulated Stark width parameter (HWHM at reference density $10^{16}$\,cm$^{-3}$).
+The total Lorentzian HWHM is $\gamma = \gamma_{\text{natural}} + \gamma_{\text{Stark}} + \gamma_{\text{vdW}}$,
+with $\text{FWHM}_L = 2\gamma$.
+
+\paragraph{Voigt profile.}
+The convolution of Gaussian and Lorentzian profiles gives the Voigt function:
+\begin{equation}
+  V(\lambda) = \int_{-\infty}^{\infty} G(\lambda')\,L(\lambda - \lambda')\,d\lambda',
+  \label{eq:voigt_conv}
+\end{equation}
+where
+\begin{align}
+  G(\lambda') &= \frac{1}{\sigma_G\sqrt{2\pi}}
+    \exp\!\left(-\frac{\lambda'^2}{2\sigma_G^2}\right), \label{eq:gaussian} \\[4pt]
+  L(\Delta\lambda) &= \frac{1}{\pi}\,\frac{\gamma}{\Delta\lambda^2 + \gamma^2}. \label{eq:lorentzian}
+\end{align}
+% DIMENSION CHECK: G: [1/(nm * 1)] * [1] = [nm^-1]. L: [1] * [nm]/[nm^2] = [nm^-1]. Both integrate to 1 over nm. OK.
+
+This convolution is expressible via the Faddeeva function. Define the
+dimensionless Voigt argument:
+\begin{equation}
+  \boxed{z = \frac{(\lambda - \lambda_0) + i\gamma}{\sigma_G\sqrt{2}},}
+  \label{eq:z_voigt}
+\end{equation}
+% DIMENSION CHECK: [z] = ([nm] + i*[nm]) / ([nm]*[1]) = dimensionless. OK.
+where $\im(z) = \gamma / (\sigma_G\sqrt{2}) \geq 0$ for physical widths.
+Then
+\begin{equation}
+  \boxed{V(\lambda) = \frac{\re[\wfn(z)]}{\sigma_G\sqrt{2\pi}},}
+  \label{eq:voigt_faddeeva}
+\end{equation}
+% DIMENSION CHECK: [V] = [1] / [nm] = [nm^-1]. Integrates to 1. OK.
+where $\wfn(z)$ is the Faddeeva function (see \S\ref{sec:faddeeva}).
+
+\paragraph{Width conventions (LOCKED).}
+Throughout this document and the codebase:
+\begin{itemize}
+  \item $\gamma$ = Lorentzian \textbf{HWHM} [nm]. $\text{FWHM}_L = 2\gamma$.
+  \item $\sigma_G$ = Gaussian \textbf{standard deviation} [nm]. $\text{FWHM}_G = 2.3548\,\sigma_G$.
+\end{itemize}
+These match the convention lock in \texttt{.gpd/state.json} and the codebase
+(\texttt{profiles.py}, \texttt{boltzmann.py}).
+
+
+%% ============================================================
+\section{Faddeeva Function and Algorithms}
+\label{sec:faddeeva}
+
+\subsection{Definition and Properties}
+
+The Faddeeva function (also called the complex error function or plasma dispersion
+function) is defined for all $z \in \mathbb{C}$ with $\im(z) \geq 0$ by
+\begin{equation}
+  \wfn(z) = e^{-z^2}\,\erfc(-iz),
+  \label{eq:faddeeva_def}
+\end{equation}
+where $\erfc$ is the complementary error function. Equivalently,
+\begin{equation}
+  \wfn(z) = \frac{i}{\pi}\int_{-\infty}^{\infty} \frac{e^{-t^2}}{z - t}\,dt,
+  \qquad \im(z) > 0.
+  \label{eq:faddeeva_integral}
+\end{equation}
+The function $\wfn(z)$ is analytic in the upper half-plane $\im(z) > 0$ and continuous
+on the real axis. For physical Voigt profiles, $\im(z) = \gamma/(\sigma_G\sqrt{2}) > 0$,
+so we are always in the analyticity domain.
+
+Key properties:
+\begin{align}
+  |\wfn(z)| &\leq 1 \quad \text{for } \im(z) \geq 0, \label{eq:w_bound} \\
+  \wfn(0)   &= 1, \label{eq:w_zero} \\
+  \frac{d\wfn}{dz} &= -2z\,\wfn(z) + \frac{2i}{\sqrt{\pi}}, \label{eq:w_deriv}
+\end{align}
+where Eq.~\eqref{eq:w_deriv} enables exact gradient verification for JAX autodiff.
+
+
+\subsection{Weideman $N=36$ Rational Approximation}
+\label{sec:weideman}
+
+The Weideman algorithm~[W94] maps the upper half-plane to the unit disk via the
+M\"obius transformation
+\begin{equation}
+  Z = \frac{L + iz}{L - iz},
+  \label{eq:moebius}
+\end{equation}
+where $L = \sqrt{N/\sqrt{2}}$ is an optimal scaling parameter. For $N = 36$:
+\begin{equation}
+  L = \sqrt{36/\sqrt{2}} = \sqrt{18\sqrt{2}} \approx 5.0454.
+  \label{eq:L_value}
+\end{equation}
+
+The approximation takes the form
+\begin{equation}
+  \boxed{\wfn(z) \approx \frac{1}{\sqrt{\pi}}\,\frac{L}{L - iz}
+    + \frac{2}{(L - iz)^2} \sum_{n=0}^{N-1} c_n\,Z^n,}
+  \label{eq:weideman_approx}
+\end{equation}
+where the $N = 36$ real coefficients $\{c_n\}$ are pre-computed via the procedure
+in~[W94, Table~I]. These coefficients are stored in
+\texttt{profiles.py} (lines 412--449) and span a dynamic range of
+$\sim 10^{14}$ (from $c_0 \approx 5.36 \times 10^{-14}$ to $c_{35} \approx 2.74$).
+
+\paragraph{Algorithm structure.}
+Given input $z$ (complex, $\im(z) \geq 0$):
+\begin{enumerate}
+  \item Compute $Z = (L + iz)/(L - iz)$ --- one complex division.
+  \item Evaluate $P(Z) = \sum_{n=0}^{N-1} c_n Z^n$ via Horner's method --- $N-1 = 35$ multiply-adds.
+  \item Compute $d = L - iz$ and return $\wfn(z) = (1/\sqrt{\pi})/d + 2P(Z)/d^2$.
+\end{enumerate}
+Total: $\sim 36$ complex multiply-adds $+$ 2 complex divisions. The entire computation
+is a \textbf{single polynomial evaluation with no branches or conditionals}.
+All threads in a GPU warp execute identical instructions --- there is no warp divergence.
+
+\paragraph{Complexity per Voigt evaluation.}
+Each complex multiply-add costs $\sim 6$ real FLOPs ($4$ multiplications, $2$ additions).
+Total: $\sim 36 \times 6 + 20 \approx 236$ real FLOPs per Voigt evaluation.
+
+
+\subsection{Comparison: Humlicek W4 Algorithm}
+\label{sec:humlicek}
+
+The Humlicek W4 algorithm~[H82] divides the complex plane into 4 regions and uses
+different rational approximations in each. In NumPy, this is implemented via
+conditional branching (\texttt{np.where}). However, in JAX:
+
+\textbf{Critical pitfall:} \texttt{jnp.where} evaluates \emph{all} branches during
+automatic differentiation (AD), because JAX traces both paths to build the computation
+graph. In Region~4 ($s < 5.5$, $y < 0.195|x| - 0.176$), the expression contains
+$e^{u}$ where $u = t^2$ can be large, causing \texttt{exp} overflow and producing
+\texttt{NaN} gradients even when Region~4 is not selected at the given input.
+
+This makes Humlicek W4 \textbf{unsuitable for JAX autodiff applications}
+(MCMC sampling, gradient-based optimization, adjoint methods). The deprecated
+implementation in \texttt{profiles.py} (\texttt{\_faddeeva\_humlicek\_jax}) documents
+this failure mode. The Weideman algorithm avoids this entirely because it is branch-free.
+
+
+\subsection{Comparison: Zaghloul (2024)}
+\label{sec:zaghloul}
+
+Zaghloul~[Z24] proposes a Chebyshev sub-interval approach achieving $\sim 10^{-13}$
+relative accuracy across the complex plane. While comparable in accuracy to
+Weideman $N=36$ in float64, the implementation requires multiple sub-interval
+selections (introducing mild branching) and is more complex to implement.
+The marginal accuracy improvement over Weideman does not justify the added
+complexity for the CF-LIBS application. We retain Zaghloul as an
+\textbf{accuracy reference} for validation (Phase~4).
+
+
+%% ============================================================
+\section{Error Analysis}
+\label{sec:error}
+
+\paragraph{Float64 accuracy.}
+Per~[W94, Table~1], the Weideman $N=36$ approximation achieves
+$|\wfn_{\text{approx}}(z) - \wfn_{\text{exact}}(z)|/|\wfn_{\text{exact}}(z)| < 10^{-13}$
+for all $z$ with $\im(z) \geq 0$ in IEEE 754 float64 arithmetic.
+
+\paragraph{Float32 limitations.}
+The 36 coefficients span 14 orders of magnitude. In float32
+($\sim 7$ significant digits), the small coefficients ($c_0$ through $c_{10}$)
+are effectively rounded to zero, reducing the effective polynomial order to
+$N_{\text{eff}} \approx 20$. This produces $0.1$--$1\%$ relative errors in the
+far wings ($|x| > 20$). For typical LIBS parameters
+($T \sim 0.5$--$2$\,eV, $n_e \sim 10^{15}$--$10^{18}$\,cm$^{-3}$),
+the Voigt parameter $y = \gamma/(\sigma_G\sqrt{2})$ ranges from $\sim 0.01$ to $\sim 100$
+and $|x|$ is typically $< 50$, so float32 errors are small near line center
+but non-negligible in the wings.
+
+\textbf{Conclusion:} Float64 is required for publication-quality results.
+On V100S GPUs, float64 throughput is 7.8~TFLOPS (1:2 ratio versus float32 at 15.7~TFLOPS),
+making float64 viable for production workloads.
+
+
+%% ============================================================
+\section{JAX Parallelization Strategy}
+\label{sec:jax}
+
+The synthetic spectrum is a sum of Voigt-broadened emission lines:
+\begin{equation}
+  S(\lambda) = \sum_{\ell=1}^{N_{\text{lines}}} \varepsilon_\ell\;
+    V\!\left(\lambda - \lambda_\ell;\;\sigma_\ell,\;\gamma_\ell\right),
+  \label{eq:spectrum_sum}
+\end{equation}
+where $\varepsilon_\ell$ is the line-integrated emissivity [W/m$^3$/sr],
+$\lambda_\ell$ is the line center, and $(\sigma_\ell, \gamma_\ell)$ are
+per-line broadening widths.
+
+\subsection{Broadcasting Approach (Preferred)}
+
+Form the wavelength difference array via outer subtraction:
+\begin{equation}
+  \Delta_{ij} = \lambda_i^{\text{grid}} - \lambda_j^{\text{line}},
+  \qquad \text{shape: } (N_{\text{wl}},\; N_{\text{lines}}).
+  \label{eq:diff_array}
+\end{equation}
+This is implemented as \texttt{wl\_grid[:, None] - line\_wl[None, :]}.
+The Voigt kernel is evaluated element-wise on this $(N_{\text{wl}}, N_{\text{lines}})$
+array, and the spectrum is obtained by summing over axis~1 (lines):
+\begin{equation}
+  S(\lambda_i) = \sum_{j=1}^{N_{\text{lines}}} \varepsilon_j \cdot
+    V(\Delta_{ij};\;\sigma_j,\;\gamma_j).
+  \label{eq:broadcast_sum}
+\end{equation}
+
+This maps to a single fused element-wise + reduction operation on GPU,
+analogous to a GEMM. No explicit loops or \texttt{vmap} required for
+the single-spectrum case.
+
+\subsection{Batch Forward Model (Phase 3)}
+
+For manifold pre-computation, we generate $B$ spectra simultaneously with
+varying plasma parameters $(T_b, n_{e,b}, C_b)$ for $b = 1, \ldots, B$.
+The additional batch dimension is handled by \texttt{jax.vmap}:
+\begin{equation}
+  \texttt{vmap(forward\_model, in\_axes=(0, 0, 0))}(T, n_e, C),
+  \label{eq:vmap_batch}
+\end{equation}
+where $T$, $n_e$, $C$ have leading batch dimension $B$.
+Each batch element independently computes its own line emissivities and widths,
+then evaluates the $(N_{\text{wl}}, N_{\text{lines}})$ Voigt array.
+
+\subsection{Memory Budget}
+
+Per spectrum: $(N_{\text{wl}} \times N_{\text{lines}}) \times 8$\,bytes (float64).
+For $N_{\text{wl}} = 10{,}000$ and $N_{\text{lines}} = 5{,}000$:
+$50 \times 10^6 \times 8 = 400$\,MB. This constrains the batch size $B$ on a
+32\,GB V100S to $B \leq \lfloor 32{,}000 / 400 \rfloor \approx 80$
+(reserving memory for parameters and intermediates). Practical batch sizes of
+$B = 32$--$64$ are safe.
+
+\paragraph{FLOP count per spectrum.}
+$N_{\text{wl}} \times N_{\text{lines}} \times 236 \approx 10{,}000 \times 5{,}000 \times 236
+= 1.18 \times 10^{10}$ FLOPs. At 7.8~TFLOPS (V100S float64): $\sim 1.5$\,ms per spectrum.
+
+
+%% ============================================================
+\section{Limiting Cases}
+\label{sec:limits}
+
+% SELF-CRITIQUE CHECKPOINT (post-derivation):
+% 1. SIGN CHECK: No sign ambiguities in this section; all limits are positive-definite profiles.
+% 2. FACTOR CHECK: Factors of sqrt(2), sqrt(pi) must be tracked carefully in each limit.
+% 3. CONVENTION CHECK: gamma = HWHM, sigma = std dev throughout. Confirmed.
+% 4. DIMENSION CHECK: All limiting profiles are [nm^-1]. Verified below.
+
+\subsection{Pure Gaussian Limit ($\gamma \to 0$)}
+
+When $\gamma \to 0$, the Voigt argument becomes purely real:
+$z = (\lambda - \lambda_0)/(\sigma_G\sqrt{2}) \equiv x$ (real).
+On the real axis, $\wfn(x) = e^{-x^2}\,\erfc(-ix)$. For real $x$:
+\begin{equation}
+  \re[\wfn(x)] = e^{-x^2},
+  \label{eq:w_real_axis}
+\end{equation}
+since $\erfc(-ix)$ is real-valued for real $x$ and equals $1$ at $x=0$,
+and $\re[e^{-x^2}\erfc(-ix)] = e^{-x^2}$ (the Dawson function contributes only
+to the imaginary part). Therefore:
+\begin{equation}
+  V(\lambda) \xrightarrow{\gamma \to 0}
+    \frac{e^{-x^2}}{\sigma_G\sqrt{2\pi}}
+  = \frac{1}{\sigma_G\sqrt{2\pi}}\exp\!\left(-\frac{(\lambda - \lambda_0)^2}{2\sigma_G^2}\right)
+  = G(\lambda).
+  \label{eq:gaussian_limit}
+\end{equation}
+% DIMENSION CHECK: [nm^-1]. Matches Eq.(3). OK.
+This is the normalized Gaussian profile (Eq.~\ref{eq:gaussian}). $\checkmark$
+
+
+\subsection{Pure Lorentzian Limit ($\sigma_G \to 0$)}
+
+When $\sigma_G \to 0$ with $\gamma$ fixed, $\im(z) = \gamma/(\sigma_G\sqrt{2}) \to +\infty$.
+For $|z| \to \infty$ in the upper half-plane, the asymptotic expansion of $\wfn(z)$ is
+\begin{equation}
+  \wfn(z) \xrightarrow{|z|\to\infty} \frac{i}{\sqrt{\pi}\,z}
+    + \frac{i}{2\sqrt{\pi}\,z^3} + \cdots
+  \label{eq:w_asymptotic}
+\end{equation}
+Taking the leading term and $z = [(\lambda - \lambda_0) + i\gamma]/(\sigma_G\sqrt{2})$:
+\begin{equation}
+  \re[\wfn(z)] \approx \re\!\left[\frac{i}{\sqrt{\pi}\,z}\right]
+  = \re\!\left[\frac{i\,\sigma_G\sqrt{2}}{\sqrt{\pi}\,[(\lambda-\lambda_0) + i\gamma]}\right].
+  \label{eq:w_leading}
+\end{equation}
+Multiplying numerator and denominator by the conjugate:
+\begin{equation}
+  \re[\wfn(z)] \approx \frac{\sigma_G\sqrt{2}}{\sqrt{\pi}}
+    \cdot \frac{\gamma}{(\lambda-\lambda_0)^2 + \gamma^2}.
+  \label{eq:w_lorentzian}
+\end{equation}
+% Factor tracking: numerator has sigma_G * sqrt(2) * gamma. Denominator has sqrt(pi) * [nm^2].
+Substituting into Eq.~\eqref{eq:voigt_faddeeva}:
+\begin{equation}
+  V(\lambda) = \frac{\re[\wfn(z)]}{\sigma_G\sqrt{2\pi}}
+  \approx \frac{\sigma_G\sqrt{2}\;\gamma}
+       {\sqrt{\pi}\,[(\lambda-\lambda_0)^2+\gamma^2]\;\sigma_G\sqrt{2\pi}}
+  = \frac{\gamma}{\pi\,[(\lambda-\lambda_0)^2+\gamma^2]}
+  = L(\lambda).
+  \label{eq:lorentzian_limit}
+\end{equation}
+% DIMENSION CHECK: [nm] / ([nm^2]) = [nm^-1]. OK.
+% FACTOR CHECK: sigma_G cancels. sqrt(2)/sqrt(2*pi) = 1/sqrt(pi). Then gamma/(sqrt(pi)*pi*...) ...
+%   Let me recheck: sqrt(2)/(sqrt(pi)*sqrt(2*pi)) = sqrt(2)/(sqrt(pi)*sqrt(2)*sqrt(pi)) = 1/pi. OK.
+The $\sigma_G$ cancels exactly, recovering the normalized Lorentzian (Eq.~\ref{eq:lorentzian}). $\checkmark$
+
+
+\subsection{Far-Wing Asymptotic ($|z| \to \infty$)}
+
+For large detuning $|\lambda - \lambda_0| \gg \sigma_G, \gamma$, we have $|z| \to \infty$
+and $\wfn(z) \to i/(\sqrt{\pi}\,z)$ (Eq.~\ref{eq:w_asymptotic}). The Voigt profile then
+falls off as a Lorentzian, $V \propto \gamma / [(\lambda - \lambda_0)^2 + \gamma^2]$,
+regardless of the Gaussian width. This is the well-known result that Voigt wings
+are dominated by the Lorentzian component. $\checkmark$
+
+
+\subsection{Voigt FWHM Approximation}
+
+The Olivero--Longbothum empirical formula~[OL77] gives the Voigt FWHM to $0.02\%$ accuracy:
+\begin{equation}
+  \boxed{f_V \approx 0.5346\,f_L + \sqrt{0.2166\,f_L^2 + f_G^2},}
+  \label{eq:voigt_fwhm}
+\end{equation}
+where $f_G = 2.3548\,\sigma_G$ and $f_L = 2\gamma$. This formula is used for
+fast width estimation and validation (cf.\ \texttt{voigt\_fwhm()} in \texttt{profiles.py}).
+% DIMENSION CHECK: All terms are [nm]. OK.
+
+
+%% ============================================================
+\section{Validation Criteria}
+\label{sec:validation}
+
+The following quantitative tests define acceptance for the implementation (Phase~4):
+
+\begin{enumerate}
+  \item \textbf{Accuracy:}
+    $|\wfn_{\text{Weideman}}(z) - \wfn_{\text{scipy}}(z)| / |\wfn_{\text{scipy}}(z)| < 10^{-6}$
+    for 1000 test points spanning the LIBS regime
+    ($y \in [0.001, 100]$, $x \in [-100, 100]$).
+
+  \item \textbf{Gradient:}
+    Compare $\partial \wfn / \partial z$ from \texttt{jax.grad} against the exact relation
+    $\wfn'(z) = 2[i/\sqrt{\pi} - z\,\wfn(z)]$ (Eq.~\ref{eq:w_deriv}).
+    Relative agreement $< 10^{-10}$ in float64.
+
+  \item \textbf{Normalization:}
+    $\left|\int V(\lambda)\,d\lambda - 1\right| < 10^{-10}$
+    by numerical quadrature (Simpson's rule on dense grid, $\Delta\lambda = 0.001$\,nm,
+    range $\pm 50\sigma_G$).
+
+  \item \textbf{Limiting cases:}
+    Verify $|V(\lambda) - G(\lambda)|/|G(\lambda)| < 10^{-10}$
+    when $\gamma/\sigma_G < 10^{-8}$, and similarly for the Lorentzian limit.
+\end{enumerate}
+
+\textbf{Note:} Simulated timing numbers and fabricated accuracy comparisons are
+\emph{forbidden} in this formalization phase (forbidden proxy FP-01).
+All numerical validation is deferred to Phase~4.
+
+
+\end{document}
