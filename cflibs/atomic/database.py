@@ -2,10 +2,11 @@
 Atomic database interface for loading and querying atomic data.
 """
 
+from __future__ import annotations
+
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Union
 import pandas as pd
 
 from cflibs.atomic.structures import Transition, EnergyLevel, SpeciesPhysics, PartitionFunction
@@ -28,7 +29,7 @@ class AtomicDatabase(AtomicDataSource):
     - `partition_functions`: Partition function coefficients
     """
 
-    db_path: Union[str, Path]
+    db_path: str | Path
 
     def __init__(self, db_path: str):
         """
@@ -310,11 +311,11 @@ class AtomicDatabase(AtomicDataSource):
     def get_transitions(
         self,
         element: str,
-        ionization_stage: Optional[int] = None,
-        wavelength_min: Optional[float] = None,
-        wavelength_max: Optional[float] = None,
-        min_relative_intensity: Optional[float] = None,
-    ) -> List[Transition]:
+        ionization_stage: int | None = None,
+        wavelength_min: float | None = None,
+        wavelength_max: float | None = None,
+        min_relative_intensity: float | None = None,
+    ) -> list[Transition]:
         """
         Get transitions for an element.
 
@@ -425,7 +426,7 @@ class AtomicDatabase(AtomicDataSource):
         logger.debug(f"Retrieved {len(transitions)} transitions for {element}")
         return transitions
 
-    def get_energy_levels(self, element: str, ionization_stage: int) -> List[EnergyLevel]:
+    def get_energy_levels(self, element: str, ionization_stage: int) -> list[EnergyLevel]:
         """
         Get energy levels for a species.
 
@@ -464,7 +465,7 @@ class AtomicDatabase(AtomicDataSource):
         return levels
 
     @cached_ionization
-    def get_ionization_potential(self, element: str, ionization_stage: int) -> Optional[float]:
+    def get_ionization_potential(self, element: str, ionization_stage: int) -> float | None:
         """
         Get ionization potential for a species.
 
@@ -491,7 +492,7 @@ class AtomicDatabase(AtomicDataSource):
             res = cur.fetchone()
             return float(res[0]) if res else None
 
-    def get_atomic_mass(self, element: str) -> Optional[float]:
+    def get_atomic_mass(self, element: str) -> float | None:
         """
         Get atomic mass for an element.
 
@@ -522,7 +523,7 @@ class AtomicDatabase(AtomicDataSource):
 
     def get_partition_coefficients(
         self, element: str, ionization_stage: int
-    ) -> Optional[PartitionFunction]:
+    ) -> PartitionFunction | None:
         """
         Get partition function coefficients for a species.
 
