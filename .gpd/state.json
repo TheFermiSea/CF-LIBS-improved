@@ -4,7 +4,427 @@
     "core_research_question": "What is the optimal computational architecture for real-time CF-LIBS multi-element plasma diagnostics via GPU acceleration?",
     "current_focus": "Phase 1 \u2014 Physics Formalization"
   },
-  "project_contract": null,
+  "project_contract": {
+    "schema_version": 1,
+    "scope": {
+      "question": "What is the optimal computational architecture for real-time Calibration-Free LIBS multi-element plasma diagnostics, and how do GPU-accelerated implementations of the Voigt profile, Boltzmann fitting, iterative solver, manifold lookup, and batch forward model compare to existing tools?",
+      "in_scope": [
+        "GPU-accelerated Voigt profile via Faddeeva/Humlicek/Zaghloul with JAX vmap",
+        "Vectorized Boltzmann plot fitting across elements via batched matmul",
+        "Anderson-accelerated Saha-Boltzmann iterative solver",
+        "Softmax closure for composition simplex constraint",
+        "Batch forward model with vmap over spectra",
+        "Before/after benchmarks on V100S GPUs (vasp-01/02/03)",
+        "Publication-quality paper targeting JQSRT",
+        "Beamer slide deck for 20-min talk",
+        "arXiv submission (physics.comp-ph primary, cs.CE secondary)"
+      ],
+      "out_of_scope": [
+        "Non-LTE plasma modeling extensions",
+        "Multi-zone plasma models",
+        "Neural network surrogate models (PINN)",
+        "Bayesian inference acceleration",
+        "Streaming/temporal LIBS analysis acceleration",
+        "Porting to non-NVIDIA GPUs (AMD ROCm, Intel)",
+        "MPI-distributed multi-GPU scaling"
+      ],
+      "unresolved_questions": [
+        "Optimal Anderson acceleration mixing depth M for CF-LIBS Saha-Boltzmann coupling",
+        "Whether FAISS GPU index outperforms CPU at the 1M-100M point manifold scales typical in CF-LIBS",
+        "Whether JIT compilation overhead is amortized for typical LIBS batch sizes (100-1000 spectra)"
+      ]
+    },
+    "context_intake": {
+      "must_read_refs": [
+        "ref-exojax",
+        "ref-helosk",
+        "ref-zaghloul2024",
+        "ref-evans2018"
+      ],
+      "must_include_prior_outputs": [
+        "cflibs/benchmark/unified.py \u2014 existing benchmark framework",
+        "cflibs/manifold/ \u2014 existing JAX manifold generator"
+      ],
+      "user_asserted_anchors": [
+        "No existing GPU-accelerated CF-LIBS code \u2014 this is novel",
+        "ExoJAX proved JAX spectral models work on GPU for exoplanets, not LIBS",
+        "Zaghloul 2024 provides SOTA Voigt algorithm"
+      ],
+      "known_good_baselines": [
+        "Current CPU implementation in cflibs/ (58K LOC production pipeline)",
+        "Existing benchmark framework in cflibs/benchmark/unified.py"
+      ],
+      "context_gaps": [
+        "NotebookLM KB CF-LIBS Algorithmic Optimization Research (ID: 9170d55e) has Gemini Deep Research report \u2014 not yet ingested into GPD"
+      ],
+      "crucial_inputs": [
+        "7 figures: pipeline architecture, Voigt throughput, Boltzmann speedup, Anderson convergence, FAISS latency, batch scaling, end-to-end benchmark",
+        "All benchmark data MUST come from actual execution on V100S GPUs \u2014 NEVER fabricate results",
+        "Conventions: T [K], n_e [cm^-3], C_i dimensionless sum-to-1, lambda [nm], E [eV], A_ki [s^-1]"
+      ]
+    },
+    "approach_policy": {
+      "formulations": [
+        "JAX jit/vmap for GPU kernel acceleration",
+        "Faddeeva function for Voigt profile via scipy.special.wofz reference, Humlicek W4 or Zaghloul 2024 Chebyshev for GPU",
+        "Weighted least-squares Boltzmann fitting with batched matmul",
+        "Anderson acceleration with configurable mixing depth M=1..10",
+        "Softmax parameterization for composition closure (compare with ILR transform)"
+      ],
+      "allowed_estimator_families": [
+        "direct GPU kernel benchmarks",
+        "end-to-end pipeline timing"
+      ],
+      "forbidden_estimator_families": [
+        "simulated or fabricated benchmark data"
+      ],
+      "allowed_fit_families": [
+        "physically motivated Voigt profile models",
+        "LTE Boltzmann population models"
+      ],
+      "forbidden_fit_families": [
+        "ad-hoc curve fits without physical basis"
+      ],
+      "stop_and_rethink_conditions": [
+        "GPU overhead exceeds compute savings for typical batch sizes",
+        "Accuracy degradation exceeds 1e-6 relative error vs reference Voigt implementation",
+        "Anderson acceleration diverges for standard CF-LIBS parameter ranges"
+      ]
+    },
+    "observables": [
+      {
+        "id": "obs-voigt-throughput",
+        "name": "Voigt profile throughput",
+        "kind": "curve",
+        "definition": "Profiles/sec vs grid size for GPU vs CPU implementations",
+        "regime": null,
+        "units": null
+      },
+      {
+        "id": "obs-boltzmann-speedup",
+        "name": "Boltzmann fitting speedup",
+        "kind": "curve",
+        "definition": "Fitting time vs element count for vectorized vs sequential",
+        "regime": null,
+        "units": null
+      },
+      {
+        "id": "obs-anderson-convergence",
+        "name": "Anderson acceleration convergence",
+        "kind": "curve",
+        "definition": "Iteration count vs mixing depth M=1..10 for Saha-Boltzmann solver",
+        "regime": null,
+        "units": null
+      },
+      {
+        "id": "obs-faiss-latency",
+        "name": "FAISS query latency",
+        "kind": "curve",
+        "definition": "Query latency at 1M/10M/100M manifold points, CPU vs GPU",
+        "regime": null,
+        "units": null
+      },
+      {
+        "id": "obs-batch-scaling",
+        "name": "Batch forward model scaling",
+        "kind": "curve",
+        "definition": "Spectra/sec vs batch size for GPU batch forward model",
+        "regime": null,
+        "units": null
+      },
+      {
+        "id": "obs-e2e-benchmark",
+        "name": "End-to-end pipeline benchmark",
+        "kind": "scalar",
+        "definition": "Total pipeline speedup factor GPU vs CPU for representative workload",
+        "regime": null,
+        "units": null
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim-gpu-speedup",
+        "statement": "GPU-accelerated CF-LIBS pipeline via JAX achieves significant speedup over CPU for all 5 algorithmic kernels while maintaining numerical accuracy",
+        "observables": [
+          "obs-voigt-throughput",
+          "obs-boltzmann-speedup",
+          "obs-anderson-convergence",
+          "obs-faiss-latency",
+          "obs-batch-scaling",
+          "obs-e2e-benchmark"
+        ],
+        "deliverables": [
+          "deliv-paper",
+          "deliv-benchmarks"
+        ],
+        "acceptance_tests": [
+          "test-accuracy",
+          "test-speedup",
+          "test-e2e"
+        ],
+        "references": [
+          "ref-exojax",
+          "ref-helosk",
+          "ref-zaghloul2024",
+          "ref-evans2018"
+        ]
+      },
+      {
+        "id": "claim-novel-implementation",
+        "statement": "This is the first GPU-accelerated CF-LIBS implementation, filling a gap between GPU spectral codes for other domains (ExoJAX, HELIOS-K) and CPU-only LIBS tools",
+        "observables": [],
+        "deliverables": [
+          "deliv-paper"
+        ],
+        "acceptance_tests": [
+          "test-novelty"
+        ],
+        "references": [
+          "ref-exojax",
+          "ref-helosk"
+        ]
+      }
+    ],
+    "deliverables": [
+      {
+        "id": "deliv-paper",
+        "kind": "report",
+        "path": "paper/",
+        "description": "Publication-quality paper for JQSRT with 7 figures",
+        "must_contain": [
+          "pipeline architecture figure",
+          "Voigt throughput curve",
+          "Boltzmann speedup curve",
+          "Anderson convergence plot",
+          "FAISS latency comparison",
+          "batch scaling curve",
+          "end-to-end benchmark summary"
+        ]
+      },
+      {
+        "id": "deliv-benchmarks",
+        "kind": "dataset",
+        "path": "benchmarks/",
+        "description": "Complete benchmark dataset from V100S GPU runs for all 5 kernels",
+        "must_contain": [
+          "raw timing data",
+          "accuracy verification data",
+          "hardware configuration metadata"
+        ]
+      },
+      {
+        "id": "deliv-slides",
+        "kind": "report",
+        "path": "slides/",
+        "description": "Beamer slide deck for 20-min talk with speaker notes and backup slides",
+        "must_contain": [
+          "key results figures",
+          "speaker notes",
+          "backup slides"
+        ]
+      }
+    ],
+    "acceptance_tests": [
+      {
+        "id": "test-accuracy",
+        "subject": "claim-gpu-speedup",
+        "kind": "benchmark",
+        "procedure": "Compare GPU Voigt profiles against Zaghloul 2024 reference implementation; verify relative error < 1e-6",
+        "pass_condition": "Relative error < 1e-6 for all test cases across parameter space",
+        "evidence_required": [
+          "deliv-benchmarks",
+          "ref-zaghloul2024"
+        ],
+        "automation": "automated"
+      },
+      {
+        "id": "test-speedup",
+        "subject": "claim-gpu-speedup",
+        "kind": "benchmark",
+        "procedure": "Run all 5 kernel benchmarks on V100S GPUs and measure wall-clock speedup vs CPU baseline",
+        "pass_condition": "Measurable speedup (>1x) for each kernel at production-relevant problem sizes",
+        "evidence_required": [
+          "deliv-benchmarks"
+        ],
+        "automation": "automated"
+      },
+      {
+        "id": "test-e2e",
+        "subject": "claim-gpu-speedup",
+        "kind": "benchmark",
+        "procedure": "Run full CF-LIBS pipeline on representative multi-element spectrum batch and compare GPU vs CPU total time",
+        "pass_condition": "End-to-end GPU pipeline completes faster than CPU for batch sizes >= 100",
+        "evidence_required": [
+          "deliv-benchmarks"
+        ],
+        "automation": "automated"
+      },
+      {
+        "id": "test-novelty",
+        "subject": "claim-novel-implementation",
+        "kind": "other",
+        "procedure": "Literature search confirming no prior GPU-accelerated CF-LIBS implementation exists",
+        "pass_condition": "No published GPU CF-LIBS code found in literature survey",
+        "evidence_required": [
+          "ref-exojax",
+          "ref-helosk"
+        ],
+        "automation": "hybrid"
+      }
+    ],
+    "references": [
+      {
+        "id": "ref-exojax",
+        "kind": "paper",
+        "locator": "ExoJAX: arXiv:2105.14782",
+        "aliases": [
+          "ExoJAX"
+        ],
+        "role": "benchmark",
+        "why_it_matters": "Proved JAX spectral models work on GPU \u2014 closest prior art from exoplanet spectroscopy",
+        "applies_to": [
+          "claim-gpu-speedup",
+          "claim-novel-implementation"
+        ],
+        "carry_forward_to": [
+          "planning",
+          "execution",
+          "verification",
+          "writing"
+        ],
+        "must_surface": true,
+        "required_actions": [
+          "read",
+          "compare",
+          "cite"
+        ]
+      },
+      {
+        "id": "ref-helosk",
+        "kind": "paper",
+        "locator": "HELIOS-K: arXiv:2101.02005",
+        "aliases": [
+          "HELIOS-K"
+        ],
+        "role": "benchmark",
+        "why_it_matters": "CUDA opacity calculator \u2014 demonstrates GPU advantage for line-by-line spectral computation, but not Python/JAX",
+        "applies_to": [
+          "claim-novel-implementation"
+        ],
+        "carry_forward_to": [
+          "planning",
+          "writing"
+        ],
+        "must_surface": true,
+        "required_actions": [
+          "read",
+          "cite"
+        ]
+      },
+      {
+        "id": "ref-zaghloul2024",
+        "kind": "paper",
+        "locator": "Zaghloul 2024: arXiv:2411.00917",
+        "aliases": [
+          "Zaghloul 2024"
+        ],
+        "role": "benchmark",
+        "why_it_matters": "SOTA Voigt profile algorithm \u2014 Chebyshev approximation is the accuracy reference for GPU Voigt implementation",
+        "applies_to": [
+          "claim-gpu-speedup"
+        ],
+        "carry_forward_to": [
+          "planning",
+          "execution",
+          "verification",
+          "writing"
+        ],
+        "must_surface": true,
+        "required_actions": [
+          "read",
+          "compare",
+          "cite"
+        ]
+      },
+      {
+        "id": "ref-evans2018",
+        "kind": "paper",
+        "locator": "Evans et al. 2018: arXiv:1810.08455",
+        "aliases": [
+          "Evans 2018",
+          "Anderson acceleration"
+        ],
+        "role": "method",
+        "why_it_matters": "Theory and convergence analysis for Anderson acceleration applied to fixed-point iterations",
+        "applies_to": [
+          "claim-gpu-speedup"
+        ],
+        "carry_forward_to": [
+          "planning",
+          "execution",
+          "writing"
+        ],
+        "must_surface": true,
+        "required_actions": [
+          "read",
+          "cite"
+        ]
+      }
+    ],
+    "forbidden_proxies": [
+      {
+        "id": "fp-fabricated-benchmarks",
+        "subject": "claim-gpu-speedup",
+        "proxy": "Simulated or estimated benchmark numbers without actual GPU execution",
+        "reason": "Benchmark data MUST come from real V100S runs \u2014 fabricated data invalidates all claims"
+      },
+      {
+        "id": "fp-isolated-kernel",
+        "subject": "claim-gpu-speedup",
+        "proxy": "Single-kernel speedup without end-to-end pipeline measurement",
+        "reason": "Individual kernel speedups may not translate to pipeline improvement due to data transfer overhead"
+      },
+      {
+        "id": "fp-qualitative-speedup",
+        "subject": "claim-gpu-speedup",
+        "proxy": "Qualitative claim of faster without quantitative timing data and error bars",
+        "reason": "Publication requires rigorous quantitative benchmarks with reproducible methodology"
+      }
+    ],
+    "links": [
+      {
+        "id": "link-benchmarks-paper",
+        "source": "deliv-benchmarks",
+        "target": "deliv-paper",
+        "relation": "supports",
+        "verified_by": [
+          "test-accuracy",
+          "test-speedup",
+          "test-e2e"
+        ]
+      }
+    ],
+    "uncertainty_markers": {
+      "weakest_anchors": [
+        "Real-time claim depends on V100S hardware \u2014 generalizability to other GPUs untested",
+        "JAX JIT compilation overhead may dominate for small batch sizes"
+      ],
+      "unvalidated_assumptions": [
+        "LTE assumption holds for all target plasma conditions",
+        "Single-precision arithmetic sufficient for Voigt profile on GPU (float64 availability on V100S)",
+        "FAISS GPU index memory fits V100S 32GB for 100M point manifold"
+      ],
+      "competing_explanations": [
+        "CPU vectorization (NumPy/SciPy with MKL) may close the gap for moderate problem sizes",
+        "CUDA C++ direct implementation could outperform JAX Python overhead"
+      ],
+      "disconfirming_observations": [
+        "GPU overhead exceeds compute savings for typical LIBS batch sizes (100-1000 spectra)",
+        "Accuracy degradation on GPU exceeds acceptable tolerance for quantitative spectroscopy",
+        "Anderson acceleration shows no convergence improvement over simple iteration for CF-LIBS parameter ranges"
+      ]
+    }
+  },
   "position": {
     "current_phase": "01",
     "current_phase_name": "Physics Formalization",
@@ -19,7 +439,11 @@
   },
   "active_calculations": [],
   "intermediate_results": [],
-  "open_questions": [],
+  "open_questions": [
+    "Optimal Anderson acceleration mixing depth M for CF-LIBS Saha-Boltzmann coupling",
+    "Whether FAISS GPU index outperforms CPU at the 1M-100M point manifold scales typical in CF-LIBS",
+    "Whether JIT compilation overhead is amortized for typical LIBS batch sizes (100-1000 spectra)"
+  ],
   "performance_metrics": {
     "rows": []
   },
