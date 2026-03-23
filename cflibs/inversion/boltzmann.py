@@ -287,7 +287,12 @@ class BoltzmannPlotFitter:
             intercept = c
 
             # Calculate R^2
-            y_pred = m * x + c
+
+[...417 lines truncated. DO NOT paste truncated content into edit_file. Use read_file with start_line/end_line.]
+[...417 lines truncated. DO NOT paste truncated content into edit_file. Use read_file with start_line/end_line.]
+[...417 lines truncated. DO NOT paste truncated content into edit_file. Use read_file with start_line/end_line.]
+[...417 lines truncated. DO NOT paste truncated content into edit_file. Use read_file with start_line/end_line.]
+[...417 lines truncated. DO NOT paste truncated content into edit_file. Use read_file with start_line/end_line.]            y_pred = m * x + c
             r_squared = self._compute_r_squared(y, y_pred, weights)
 
             # Check for outliers
