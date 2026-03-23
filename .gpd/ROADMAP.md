@@ -92,7 +92,7 @@ Plans:
 
 **Dependencies:** Phase 2 (implementations), Phase 3 (benchmark infrastructure reused for validation)
 
-**Requirements:** VALD-01, VALD-02, VALD-03, VALD-04, VALD-05
+**Requirements:** VALD-01, VALD-02, VALD-03, VALD-04, VALD-05, VALD-06
 
 **Success Criteria:**
 1. Voigt relative error < 1e-6 across full parameter space vs Zaghloul 2024
@@ -100,9 +100,16 @@ Plans:
 3. Anderson solver reaches same fixed point as Picard iteration (residual < 1e-12)
 4. Softmax closure sum-to-1 verified to machine precision
 5. Batch forward model matches sequential to < 1e-12 relative error over 1000 test cases
+6. GPU and CPU pipelines produce identical results on real LIBS data (Aalto minerals + ChemCam CCCT)
+
+**Plans:** 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md -- Numerical accuracy validation for all 5 GPU kernels (VALD-01..05)
+- [ ] 04-02-PLAN.md -- Real-data validation on Aalto minerals and ChemCam CCCT (VALD-06)
 
 **Contract Coverage:**
-- Claims: GPU accuracy matches CPU reference
+- Claims: GPU accuracy matches CPU reference; real-data parity verified
 - Deliverables: Validation reports, test results, accuracy tables for paper
 - Anchors: ANC-VOIGT, ANC-BOLTZ, ANC-ANDER, ANC-CLOSE, ANC-BATCH
 
