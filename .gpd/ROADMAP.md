@@ -43,6 +43,13 @@
 4. Code passes ruff/black/mypy quality gates
 5. GPU codepaths gracefully degrade to CPU when JAX GPU is unavailable
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 02-01-PLAN.md -- Voigt profile batch API + Boltzmann WLS kernel (IMPL-01, IMPL-02)
+- [ ] 02-02-PLAN.md -- Anderson-accelerated solver + softmax closure (IMPL-03, IMPL-04)
+- [ ] 02-03-PLAN.md -- Batch forward model + integration testing (IMPL-05)
+
 **Contract Coverage:**
 - Claims: GPU implementations exist and are correct
 - Deliverables: Python modules in `cflibs/` with JAX kernels
