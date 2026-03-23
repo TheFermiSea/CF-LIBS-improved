@@ -1,0 +1,560 @@
+% DERV-04: Softmax vs ILR Compositional Closure for CF-LIBS
+% ASSERT_CONVENTION: natural_units=none, unit_system=SI_eV_cm3, composition=number_fractions_sum1
+%
+% References:
+%   Egozcue et al. (2003) Math. Geology 35(3), 279-300
+%   Aitchison (1986) The Statistical Analysis of Compositional Data
+%
+% Codebase references:
+%   cflibs/inversion/joint_optimizer.py (softmax parameterization)
+%   cflibs/inversion/closure.py (ILR transform, Helmert basis)
+
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\newcommand{\CC}{\mathbf{C}}
+\newcommand{\ttheta}{\boldsymbol{\theta}}
+\newcommand{\zz}{\mathbf{z}}
+\newcommand{\JJ}{\mathbf{J}}
+\newcommand{\VV}{\mathbf{V}}
+\newcommand{\ones}{\mathbf{1}}
+
+\title{Softmax vs.\ Isometric Log-Ratio Parameterization\\
+for CF-LIBS Compositional Closure}
+\author{CF-LIBS GPU Optimization Project --- DERV-04}
+\date{}
+
+\begin{document}
+\maketitle
+
+%% ====================================================================
+\section{Physics Motivation}
+\label{sec:motivation}
+%% ====================================================================
+
+In Calibration-Free LIBS, element concentrations are determined from
+Boltzmann plot intercepts:
+%
+\begin{equation}
+  \label{eq:raw-concentration}
+  C_s \propto U_s(T)\,\exp(q_s),
+\end{equation}
+%
+where $U_s(T)$ is the partition function and $q_s$ is the intercept
+from the Boltzmann plot of element $s$.
+
+The \emph{closure constraint} $\sum_{s=1}^D C_s = 1$ (number fractions)
+eliminates the unknown experimental factor $F$ and confines the
+composition to the $(D{-}1)$-dimensional probability simplex:
+%
+\begin{equation}
+  \label{eq:simplex}
+  \Delta^{D-1}
+  = \bigl\{\CC \in \mathbb{R}^D : C_i \ge 0,\;\textstyle\sum_{i=1}^D C_i = 1\bigr\}.
+\end{equation}
+%
+% DIMENSION CHECK: C_i are dimensionless number fractions. PASSED.
+
+For gradient-based joint optimization (jointly fitting $T$, $\ne$, and
+$\{C_s\}$), we need a differentiable map from unconstrained parameters
+to $\Delta^{D-1}$.  Two standard approaches are:
+
+\begin{itemize}
+  \item \textbf{Softmax} (overparameterized): $\mathbb{R}^D \to \Delta^{D-1}$.
+    Already implemented in \texttt{joint\_optimizer.py}.
+  \item \textbf{ILR} (minimal parameterization):
+    $\mathbb{R}^{D-1} \to \Delta^{D-1}$.
+    Already implemented in \texttt{closure.py} via Helmert basis.
+\end{itemize}
+
+
+%% ====================================================================
+\section{Softmax Parameterization}
+\label{sec:softmax}
+%% ====================================================================
+
+\subsection{Definition}
+
+Given unconstrained parameters $\ttheta = (\theta_1, \ldots, \theta_D) \in \mathbb{R}^D$:
+%
+\begin{equation}
+  \label{eq:softmax}
+  C_i = \frac{\exp(\theta_i)}{\sum_{j=1}^D \exp(\theta_j)},
+  \qquad i = 1, \ldots, D.
+\end{equation}
+%
+% DIMENSION CHECK: [theta_i] = dimensionless.  exp(dim-less) = dim-less.
+% [C_i] = dim-less / dim-less = dimensionless.  PASSED.
+
+\paragraph{Log-sum-exp stabilization.}
+To prevent overflow for large $|\theta_i|$, define
+$\theta_{\max} = \max_j \theta_j$ and compute:
+%
+\begin{equation}
+  \label{eq:logsumexp}
+  C_i = \frac{\exp(\theta_i - \theta_{\max})}
+             {\sum_{j=1}^D \exp(\theta_j - \theta_{\max})}.
+\end{equation}
+%
+This is numerically stable for $|\theta_i| < 700$ (float64 exp limit).
+The shift does not change the result since
+$\exp(\theta_i - c)/\sum_j \exp(\theta_j - c) = \exp(\theta_i)/\sum_j \exp(\theta_j)$
+for any constant $c$.
+
+\paragraph{Shift symmetry.}
+The softmax is invariant under $\ttheta \to \ttheta + c\,\ones$:
+%
+\begin{equation}
+  C_i(\ttheta + c\,\ones) = C_i(\ttheta) \quad \forall\,c \in \mathbb{R}.
+\end{equation}
+%
+This means the map $\mathbb{R}^D \to \Delta^{D-1}$ is $D$-to-$(D{-}1)$:
+one degree of freedom is redundant.
+
+\subsection{Jacobian}
+
+The Jacobian $\JJ_\mathrm{sm} \in \mathbb{R}^{D \times D}$ with entries
+$J_{ij} = \partial C_i / \partial \theta_j$ is:
+%
+\begin{equation}
+  \label{eq:softmax-jacobian}
+  \boxed{
+    J_{ij}^\mathrm{sm} = C_i\,(\delta_{ij} - C_j),
+  }
+\end{equation}
+%
+or in matrix form:
+%
+\begin{equation}
+  \label{eq:softmax-jacobian-matrix}
+  \JJ_\mathrm{sm} = \mathrm{diag}(\CC) - \CC\,\CC^T.
+\end{equation}
+%
+% DIMENSION CHECK: [J_ij] = [C_i] * [delta_ij - C_j] = dim-less. PASSED.
+
+\paragraph{Derivation.}
+Let $Z = \sum_j \exp(\theta_j)$.  Then $C_i = \exp(\theta_i)/Z$.
+%
+\begin{align}
+  \frac{\partial C_i}{\partial \theta_j}
+  &= \frac{\delta_{ij}\,\exp(\theta_i)\,Z - \exp(\theta_i)\,\exp(\theta_j)}{Z^2}
+  \nonumber\\
+  &= \frac{\exp(\theta_i)}{Z}\Bigl(\delta_{ij} - \frac{\exp(\theta_j)}{Z}\Bigr)
+  = C_i\,(\delta_{ij} - C_j).
+  \label{eq:jacobian-derivation}
+\end{align}
+
+% SELF-CRITIQUE CHECKPOINT (step 1):
+% 1. SIGN CHECK: Minus sign in (delta_ij - C_j) correct from quotient rule.
+% 2. FACTOR CHECK: No spurious factors introduced.
+% 3. CONVENTION CHECK: C_i = number fractions, sum to 1.
+% 4. DIMENSION CHECK: All dimensionless. PASSED.
+
+\subsection{Rank and null space}
+
+The null space of $\JJ_\mathrm{sm}$ is spanned by $\ones = (1,\ldots,1)^T$:
+%
+\begin{equation}
+  \JJ_\mathrm{sm}\,\ones
+  = \mathrm{diag}(\CC)\,\ones - \CC\,\CC^T\,\ones
+  = \CC - \CC\,\underbrace{(\CC^T\,\ones)}_{=\,1}
+  = \CC - \CC = \mathbf{0}.
+\end{equation}
+%
+$\therefore$ $\mathrm{rank}(\JJ_\mathrm{sm}) = D - 1$, corresponding to the
+shift symmetry.
+
+\subsection{Condition number analysis}
+
+The nonzero eigenvalues of $\JJ_\mathrm{sm} = \mathrm{diag}(\CC) - \CC\CC^T$
+are the eigenvalues of $\mathrm{diag}(\CC)$ projected onto the orthogonal
+complement of $\CC$.
+
+\paragraph{Uniform composition $C_i = 1/D$.}
+$\JJ_\mathrm{sm} = (1/D)(I - \ones\ones^T/D)$.  The $D-1$ nonzero
+eigenvalues are all $1/D$.
+%
+\begin{equation}
+  \sigma_\mathrm{min} = \sigma_\mathrm{max} = \frac{1}{D},
+  \qquad
+  \kappa(\JJ_\mathrm{sm})\big|_\mathrm{uniform} = 1.
+\end{equation}
+
+\paragraph{Extreme composition ($C_1 \to 1$, $C_{i\ne 1} \to 0$).}
+The largest nonzero singular value is $\sigma_\mathrm{max} \approx C_1(1-C_1) \approx \epsilon$
+where $\epsilon = 1 - C_1 \ll 1$.  The smallest nonzero singular value is
+$\sigma_\mathrm{min} \sim \min_i C_i$, which can be exponentially small.
+The condition number grows as $\kappa \sim C_\mathrm{max}/C_\mathrm{min}$.
+
+\subsection{Inverse mapping}
+
+Given $\CC \in \Delta^{D-1}$ (with $C_i > 0$), the inverse is:
+%
+\begin{equation}
+  \label{eq:softmax-inverse}
+  \theta_i = \log(C_i) + c,
+\end{equation}
+%
+where $c \in \mathbb{R}$ is an arbitrary constant (the shift freedom).
+A common choice is $c = 0$, yielding $\theta_i = \log C_i$.  This
+matches the \texttt{\_pack\_params} implementation in
+\texttt{joint\_optimizer.py} (line 523).
+
+\subsection{Hessian structure}
+
+For an objective $L(\CC(\ttheta))$, the chain rule gives:
+%
+\begin{equation}
+  \frac{\partial L}{\partial \theta_i}
+  = \sum_j \frac{\partial L}{\partial C_j}\,
+    C_j\,(\delta_{ij} - C_i)
+  = C_i\,\Bigl(\frac{\partial L}{\partial C_i}
+    - \sum_j C_j\,\frac{\partial L}{\partial C_j}\Bigr).
+  \label{eq:softmax-gradient}
+\end{equation}
+%
+% DIMENSION CHECK: [dL/dtheta] = [L] * [dim-less] = [L]. PASSED.
+%
+This is the ``centered gradient'': the raw gradient minus its
+$\CC$-weighted mean.  JAX computes this automatically via autodiff.
+
+
+%% ====================================================================
+\section{ILR (Isometric Log-Ratio) Parameterization}
+\label{sec:ilr}
+%% ====================================================================
+
+\subsection{Centered log-ratio (CLR)}
+
+The CLR transform maps $\CC \in \Delta^{D-1}$ to the hyperplane
+$\sum_i \mathrm{clr}_i = 0$ in $\mathbb{R}^D$:
+%
+\begin{equation}
+  \label{eq:clr}
+  \mathrm{clr}(\CC)_i = \log C_i - \frac{1}{D}\sum_{j=1}^D \log C_j.
+\end{equation}
+%
+% DIMENSION CHECK: log(dim-less) = dim-less.  [clr_i] = dim-less.  PASSED.
+
+\subsection{ILR via Helmert basis}
+
+The ILR transform projects CLR coordinates onto a $(D{-}1)$-dimensional
+orthonormal basis, removing the redundant zero-sum constraint:
+%
+\begin{equation}
+  \label{eq:ilr}
+  \zz = \mathrm{clr}(\CC)\,\VV \in \mathbb{R}^{D-1},
+\end{equation}
+%
+where $\VV \in \mathbb{R}^{D \times (D-1)}$ is the Helmert contrast
+matrix~\cite{egozcue-2003}.
+
+\paragraph{Helmert basis construction.}
+For $j = 1, \ldots, D-1$:
+%
+\begin{equation}
+  \label{eq:helmert}
+  V_{ij} = \begin{cases}
+    \dfrac{1}{\sqrt{j(j+1)}}     & \text{if } i < j+1, \\[6pt]
+    \dfrac{-j}{\sqrt{j(j+1)}}    & \text{if } i = j+1, \\[4pt]
+    0                             & \text{if } i > j+1.
+  \end{cases}
+\end{equation}
+%
+(Using 1-based indexing for components, matching the codebase
+\texttt{\_helmert\_basis} in \texttt{closure.py}.)
+
+\paragraph{Orthonormality.}
+$\VV^T\VV = I_{D-1}$ by construction.  Each column of $\VV$ sums to
+zero: $\ones^T \VV = \mathbf{0}^T$.  This ensures the ILR coordinates are
+orthogonal to the redundant CLR direction.
+
+\paragraph{Verification for $D = 3$.}
+%
+\begin{equation}
+  \VV = \begin{pmatrix}
+    1/\sqrt{2} & 1/\sqrt{6} \\
+    -1/\sqrt{2} & 1/\sqrt{6} \\
+    0 & -2/\sqrt{6}
+  \end{pmatrix}.
+\end{equation}
+%
+Check: $\VV^T\VV = \begin{pmatrix} 1 & 0 \\ 0 & 1 \end{pmatrix}$. $\checkmark$
+
+\subsection{Inverse ILR}
+
+Given $\zz \in \mathbb{R}^{D-1}$, recover $\CC$:
+%
+\begin{align}
+  \mathrm{clr} &= \zz\,\VV^T \in \mathbb{R}^D, \label{eq:ilr-inv-clr}\\
+  C_i &= \frac{\exp(\mathrm{clr}_i)}{\sum_j \exp(\mathrm{clr}_j)}.
+  \label{eq:ilr-inv}
+\end{align}
+%
+Note: the inverse naturally uses the softmax of the CLR coordinates.
+This matches \texttt{ilr\_inverse} in \texttt{closure.py} (line 123-124).
+
+\subsection{Jacobian}
+
+The full ILR Jacobian $\JJ_\mathrm{ilr} = \partial \CC / \partial \zz
+\in \mathbb{R}^{D \times (D-1)}$ is the composition:
+%
+\begin{equation}
+  \label{eq:ilr-jacobian}
+  \boxed{
+    \JJ_\mathrm{ilr}
+    = \bigl(\mathrm{diag}(\CC) - \CC\,\CC^T\bigr)\,\VV
+    = \JJ_\mathrm{sm}\,\VV.
+  }
+\end{equation}
+%
+% Derivation: dC_i/dz_k = sum_j (dC_i/d(clr_j)) * V_{jk}.
+% The CLR-to-simplex map is the softmax of clr, so dC_i/d(clr_j) = J^sm_{ij}.
+% Therefore dC_i/dz_k = sum_j J^sm_{ij} V_{jk} = (J_sm * V)_{ik}.
+
+% DIMENSION CHECK: [J_ilr] = dim-less * dim-less = dim-less. PASSED.
+
+\paragraph{Rank.}
+$\JJ_\mathrm{ilr}$ has rank $D-1$ because $\JJ_\mathrm{sm}$ has rank
+$D-1$ and $\VV$ has $D-1$ columns with $\ones^T\VV = \mathbf{0}^T$
+(so $\VV$ maps entirely into the row space of $\JJ_\mathrm{sm}$).
+
+\subsection{Condition number analysis}
+
+\paragraph{Uniform composition.}
+$\JJ_\mathrm{sm} = (1/D)(I - \ones\ones^T/D)$ and $\VV^T\VV = I_{D-1}$,
+so the singular values of $\JJ_\mathrm{ilr} = (1/D)(I - \ones\ones^T/D)\VV$
+are all $1/D$ (the Helmert rotation preserves the spectrum on the
+orthogonal complement of $\ones$).
+%
+\begin{equation}
+  \kappa(\JJ_\mathrm{ilr})\big|_\mathrm{uniform} = 1.
+\end{equation}
+
+\paragraph{Near boundaries ($C_i \to 0$).}
+The ILR transform requires $C_i > 0$ strictly, since $\log(0) = -\infty$.
+As $C_i \to 0$, the CLR coordinates diverge logarithmically, and the
+Jacobian develops a singularity.  This is \emph{worse} than softmax:
+softmax naturally excludes $C_i = 0$ (since $\exp(\theta_i) > 0$ always),
+and the approach is smooth as $\theta_i \to -\infty$.  ILR requires
+explicit clamping ($C_i \ge \epsilon$) to avoid numerical breakdown.
+
+% SELF-CRITIQUE CHECKPOINT (step 2):
+% 1. SIGN CHECK: Minus in J_sm = diag(C) - CC^T verified in Sec 2.
+% 2. FACTOR CHECK: No spurious factors. Helmert normalization 1/sqrt(j(j+1)) correct.
+% 3. CONVENTION CHECK: Compositions are number fractions (sum=1). Consistent.
+% 4. DIMENSION CHECK: All quantities dimensionless. PASSED.
+
+
+%% ====================================================================
+\section{Comparison}
+\label{sec:comparison}
+%% ====================================================================
+
+\begin{table}[h]
+\centering
+\caption{Softmax vs.\ ILR for CF-LIBS compositional closure.}
+\label{tab:comparison}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Property}        & \textbf{Softmax}                    & \textbf{ILR} \\
+\midrule
+Parameters               & $D$ (overparameterized)              & $D-1$ (minimal) \\
+Domain                   & $\mathbb{R}^D \to \Delta^{D-1}$     & $\mathbb{R}^{D-1} \to \Delta^{D-1}$ \\
+Boundary behavior        & Smooth ($C_i \to 0$ as $\theta_i \to -\infty$) & Singular ($\log$ diverges at $C_i = 0$) \\
+Jacobian rank            & $D-1$ (null space: $\ones$)          & $D-1$ (full rank) \\
+$\kappa$ at uniform      & $1$                                  & $1$ (isometric) \\
+$\kappa$ at boundary     & $\sim C_\mathrm{max}/C_\mathrm{min}$ & $\sim 0$ ($\log$ singularity) \\
+JIT compatible           & Yes (\texttt{exp}, \texttt{sum})     & Yes (\texttt{log}, \texttt{matmul}, \texttt{exp}) \\
+Autodiff                 & Clean (no branches)                  & Clean (no branches) \\
+Implementation           & 1 line (\texttt{jax.nn.softmax})     & $\sim$10 lines (Helmert + CLR + project) \\
+Codebase                 & \texttt{joint\_optimizer.py}         & \texttt{closure.py} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+%% ====================================================================
+\section{Gradient Flow Analysis}
+\label{sec:gradient}
+%% ====================================================================
+
+For an objective function $L(\CC)$ optimized via L-BFGS-B over
+$\ttheta$ (softmax) or $\zz$ (ILR):
+
+\paragraph{Softmax gradient.}
+From Eq.~\eqref{eq:softmax-gradient}:
+%
+\begin{equation}
+  \frac{\partial L}{\partial \theta_i}
+  = C_i\,\biggl(\frac{\partial L}{\partial C_i}
+    - \sum_j C_j\,\frac{\partial L}{\partial C_j}\biggr).
+\end{equation}
+%
+The gradient magnitude scales as
+$\|\partial L/\partial\ttheta\| \sim \max(C_i)\,\|\partial L/\partial\CC\|$,
+since the spectral norm of $\JJ_\mathrm{sm}$ is $\max(C_i)(1 - \max(C_i))
+\le \max(C_i)$.
+
+\paragraph{ILR gradient.}
+%
+\begin{equation}
+  \frac{\partial L}{\partial \zz}
+  = \VV^T\,\bigl(\mathrm{diag}(\CC) - \CC\CC^T\bigr)\,
+    \frac{\partial L}{\partial \CC}.
+  \label{eq:ilr-gradient}
+\end{equation}
+%
+This is the same Jacobian as softmax, composed with the Helmert rotation.
+The scaling is identical.
+
+\paragraph{Practical conclusion.}
+Gradient flow is comparable for both parameterizations.  For typical
+LIBS compositions (major element at 50--90\%, minor elements 0.1--10\%),
+the Jacobian condition number $\kappa \sim C_\mathrm{max}/C_\mathrm{min}
+\sim 10$--$1000$.  Softmax has slightly better conditioning near simplex
+boundaries because it avoids the logarithmic singularity.
+
+
+%% ====================================================================
+\section{Limiting Cases}
+\label{sec:limits}
+%% ====================================================================
+
+\subsection{$D = 1$: Trivial (single element)}
+
+\textbf{Softmax:}
+$C_1 = \exp(\theta_1)/\exp(\theta_1) = 1$, identically, for any
+$\theta_1$.  The Jacobian is $J_{11} = C_1(1 - C_1) = 0$
+(zero-dimensional simplex). $\checkmark$
+
+\textbf{ILR:}
+$\zz$ is the empty vector ($\mathbb{R}^0$).  The Helmert basis $\VV$
+is empty.  $C_1 = 1$.  $\checkmark$
+
+\subsection{$D = 2$: Sigmoid}
+
+\textbf{Softmax:}
+%
+\begin{align}
+  C_1 &= \frac{\exp(\theta_1)}{\exp(\theta_1) + \exp(\theta_2)}
+       = \frac{1}{1 + \exp(\theta_2 - \theta_1)}
+       = \sigma(\theta_1 - \theta_2),
+  \label{eq:sigmoid}
+\end{align}
+%
+where $\sigma(x) = 1/(1+e^{-x})$ is the logistic sigmoid.
+$C_2 = 1 - C_1 = \sigma(\theta_2 - \theta_1)$. $\checkmark$
+
+\textbf{ILR:}
+$\zz = z_1 \in \mathbb{R}^1$.  The Helmert basis is
+$\VV = (1/\sqrt{2},\;-1/\sqrt{2})^T$.
+%
+\begin{align}
+  \mathrm{clr}_1 &= z_1/\sqrt{2}, \quad
+  \mathrm{clr}_2 = -z_1/\sqrt{2}. \nonumber\\
+  C_1 &= \frac{\exp(z_1/\sqrt{2})}{\exp(z_1/\sqrt{2}) + \exp(-z_1/\sqrt{2})}
+       = \sigma(\sqrt{2}\,z_1).
+\end{align}
+%
+Setting $\theta_1 - \theta_2 = \sqrt{2}\,z_1$ shows the two
+parameterizations are related by a simple scaling. $\checkmark$
+
+\subsection{Uniform: $\theta_i = c$ for all $i$}
+
+\textbf{Softmax:}
+$C_i = e^c / (D\,e^c) = 1/D$ for all $i$. $\checkmark$
+
+\textbf{ILR:}
+$\zz = \mathbf{0}$ maps to $\mathrm{clr} = \mathbf{0}$, hence
+$C_i = 1/D$. $\checkmark$
+
+\subsection{ILR round-trip identity}
+
+For any $\CC \in \Delta^{D-1}$ with $C_i > 0$:
+%
+\begin{equation}
+  \mathrm{ilr\_inverse}\bigl(\mathrm{ilr}(\CC)\bigr) = \CC.
+\end{equation}
+%
+\textbf{Proof:}
+$\mathrm{ilr}(\CC) = \mathrm{clr}(\CC)\,\VV$.
+Then $\mathrm{ilr\_inverse}(\zz) = \mathrm{softmax}(\zz\,\VV^T)
+= \mathrm{softmax}(\mathrm{clr}(\CC)\,\VV\VV^T)$.
+Since $\VV\VV^T$ is the projector onto the orthogonal complement of
+$\ones/\sqrt{D}$ in $\mathbb{R}^D$, and $\mathrm{clr}(\CC)$ already lies
+in this complement ($\ones^T\,\mathrm{clr} = 0$), we have
+$\mathrm{clr}(\CC)\,\VV\VV^T = \mathrm{clr}(\CC)$.
+Therefore
+$\mathrm{softmax}(\mathrm{clr}(\CC)) = \mathrm{softmax}(\log\CC - \bar{\log\CC}\,\ones)
+= \mathrm{softmax}(\log\CC) = \CC$.
+$\checkmark$
+
+This matches the \texttt{ilr\_inverse(ilr\_transform(simplex))} round-trip
+in \texttt{closure.py} (line 452--453).
+
+% SELF-CRITIQUE CHECKPOINT (step 3):
+% 1. SIGN CHECK: All signs verified in sigmoid derivation and ILR D=2 case.
+% 2. FACTOR CHECK: sqrt(2) factor in ILR D=2 case verified from Helmert basis.
+% 3. CONVENTION CHECK: Compositions are number fractions (sum=1). Consistent.
+% 4. DIMENSION CHECK: All dimensionless throughout. PASSED.
+
+
+%% ====================================================================
+\section{Recommendation and Validation}
+\label{sec:recommendation}
+%% ====================================================================
+
+\subsection{Primary recommendation}
+
+\textbf{Softmax for the GPU pipeline} because:
+\begin{enumerate}
+  \item No boundary singularity: graceful behavior as $C_i \to 0$.
+  \item Simpler implementation: \texttt{jax.nn.softmax} (1 line).
+  \item Already implemented and tested in \texttt{joint\_optimizer.py}.
+  \item Well-conditioned for typical LIBS compositions ($D = 2$--$15$
+    elements, major element at 50--90\%).
+\end{enumerate}
+
+\textbf{ILR for diagnostic/analysis} where Aitchison geometry matters:
+\begin{itemize}
+  \item Visualizing composition trajectories (ILR preserves Euclidean
+    distances in compositional space).
+  \item PCA in composition space (standard PCA in ILR coordinates is
+    equivalent to compositional PCA).
+  \item Statistical analysis of compositional uncertainty distributions.
+\end{itemize}
+
+\subsection{Validation criteria (Phase 4)}
+
+\begin{enumerate}
+  \item $\sum_i \mathrm{softmax}(\ttheta)_i = 1$ to machine precision
+    ($< 10^{-15}$) for random $\ttheta \in [-100, 100]^D$.
+  \item $\mathrm{ilr\_inverse}(\mathrm{ilr}(\CC)) = \CC$ to machine
+    precision for random $\CC$ on the simplex.
+  \item The Jacobian $\JJ_\mathrm{sm}$ has exactly $D-1$ nonzero
+    singular values (verified numerically for $D = 2, \ldots, 15$).
+  \item JAX \texttt{grad(loss)(theta)} matches finite-difference
+    gradient to relative error $< 10^{-6}$.
+\end{enumerate}
+
+
+%% ====================================================================
+\begin{thebibliography}{9}
+
+\bibitem{egozcue-2003}
+J.J.~Egozcue, V.~Pawlowsky-Glahn, G.~Mateu-Figueras, and
+C.~Barcel\'o-Vidal,
+``Isometric logratio transformations for compositional data analysis,''
+\emph{Math. Geology} \textbf{35}(3), 279--300 (2003).
+
+\bibitem{aitchison-1986}
+J.~Aitchison,
+\emph{The Statistical Analysis of Compositional Data},
+Chapman and Hall, London (1986).
+
+\end{thebibliography}
+
+\end{document}
