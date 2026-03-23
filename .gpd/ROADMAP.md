@@ -72,6 +72,13 @@ Plans:
 4. FAISS latency measured at 1M/10M/100M scale
 5. End-to-end pipeline timing with component breakdown
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 03-01-PLAN.md -- Voigt throughput + Boltzmann fitting + Anderson convergence benchmarks (BENCH-01, BENCH-02, BENCH-03)
+- [ ] 03-02-PLAN.md -- FAISS query latency + batch forward model throughput (BENCH-04, BENCH-05)
+- [ ] 03-03-PLAN.md -- End-to-end pipeline benchmark + analysis/figure-data script (BENCH-06)
+
 **Contract Coverage:**
 - Claims: Quantitative performance comparison GPU vs CPU
 - Deliverables: Benchmark scripts, raw data (CSV/JSON), 7 figure datasets

@@ -2,22 +2,23 @@
 
 ## Project Reference
 
-See: .gpd/PROJECT.md
+See: .gpd/PROJECT.md (updated 2026-03-23)
 
-**Core research question:** What is the optimal computational architecture for real-time CF-LIBS multi-element plasma diagnostics, and how do GPU-accelerated implementations compare to existing tools?
-**Current focus:** Physics formalization of 5 GPU optimization targets
+**Core research question:** What is the optimal computational architecture for real-time CF-LIBS multi-element plasma diagnostics via GPU acceleration?
+**Current focus:** Phase 1 — Physics Formalization
 
 ## Current Position
 
-**Current Phase:** 1
+**Current Phase:** 01
 **Current Phase Name:** Physics Formalization
 **Total Phases:** 7
-**Current Plan:** --
-**Total Plans in Phase:** --
+**Current Plan:** —
+**Total Plans in Phase:** 0
 **Status:** Ready to plan
 **Last Activity:** 2026-03-23
+**Last Activity Description:** Project initialized
 
-**Progress:** [#.........] 0%
+**Progress:** [░░░░░░░░░░] 0%
 
 ## Active Calculations
 
@@ -29,9 +30,9 @@ None yet.
 
 ## Open Questions
 
-1. Should the paper include a roofline model analysis?
-2. What is the minimum batch size where GPU overtakes CPU?
-3. Is mixed-precision (float16/bfloat16) worth exploring for Voigt profiles?
+- Optimal Anderson acceleration mixing depth M for CF-LIBS Saha-Boltzmann coupling
+- Whether FAISS GPU index outperforms CPU at the 1M-100M point manifold scales typical in CF-LIBS
+- Whether JIT compilation overhead is amortized for typical LIBS batch sizes (100-1000 spectra)
 
 ## Performance Metrics
 
@@ -43,13 +44,7 @@ None yet.
 
 ### Decisions
 
-| ID | Decision | Date |
-|----|----------|------|
-| DEC-01 | JAX as sole GPU framework | 2026-03-23 |
-| DEC-02 | V100S as benchmark target | 2026-03-23 |
-| DEC-03 | JQSRT as target venue | 2026-03-23 |
-| DEC-04 | 5 optimization targets spanning full pipeline | 2026-03-23 |
-| DEC-05 | Zaghloul 2024 as Voigt reference implementation | 2026-03-23 |
+None yet.
 
 ### Active Approximations
 
@@ -92,6 +87,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-23
-**Stopped at:** Project initialization complete. Ready to begin Phase 1 planning.
-**Resume file:** --
+**Last session:** —
+**Stopped at:** —
+**Resume file:** —
