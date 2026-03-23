@@ -1,0 +1,131 @@
+{
+  "test_id": "VALD-01",
+  "kernel": "voigt",
+  "passed": true,
+  "threshold": 1e-06,
+  "max_relative_error": 6.811073261129783e-08,
+  "mean_relative_error": 2.4732195751722667e-09,
+  "n_grid_points": 400,
+  "n_edge_cases": 10,
+  "zaghloul_comparison": "scipy.special.wofz used as reference (Poppe-Wijers algorithm 680)",
+  "parameter_sweep": {
+    "max_error": 6.811073261129783e-08,
+    "mean_error": 2.4732195751722667e-09,
+    "std_error": 8.911635326429809e-09,
+    "n_tests": 400
+  },
+  "edge_cases": [
+    {
+      "name": "pure_lorentzian",
+      "x": 0.0,
+      "y": 1.0,
+      "ref_value": 0.427583576155807,
+      "jax_value": 0.42758357615580694,
+      "relative_error": 1.2982526534421925e-16,
+      "has_nan": false,
+      "has_inf": false
+    },
+    {
+      "name": "pure_gaussian_limit",
+      "x": 0.0,
+      "y": 1e-08,
+      "ref_value": 0.9999999887162083,
+      "jax_value": 0.9999999887162082,
+      "relative_error": 1.110223037152682e-16,
+      "has_nan": false,
+      "has_inf": false
+    },
+    {
+      "name": "origin",
+      "x": 0.0,
+      "y": 1e-10,
+      "ref_value": 0.9999999998871619,
+      "jax_value": 0.9999999998871616,
+      "relative_error": 3.330669074251296e-16,
+      "has_nan": false,
+      "has_inf": false
+    },
+    {
+      "name": "far_wing",
+      "x": 1000.0,
+      "y": 1.0,
+      "ref_value": 5.64189865642407e-07,
+      "jax_value": 5.641898656424427e-07,
+      "relative_error": 6.343102597340287e-14,
+      "has_nan": false,
+      "has_inf": false
+    },
+    {
+      "name": "narrow_lorentzian",
+      "x": 5.0,
+      "y": 1e-06,
+      "ref_value": 2.4094339157716628e-08,
+      "jax_value": 2.4094338510471935e-08,
+      "relative_error": 2.686293605961708e-08,
+      "has_nan": false,
+      "has_inf": false
+    },
+    {
+      "name": "very_narrow_lorentzian",
+      "x": 5.0,
+      "y": 1e-10,
+      "ref_value": 1.6295988986349367e-11,
+      "jax_value": 1.6295347016193062e-11,
+      "relative_error": 3.939436611319223e-05,
+      "has_nan": false,
+      "has_inf": false
+    },
+    {
+      "name": "large_both",
+      "x": 50.0,
+      "y": 50.0,
+      "ref_value": 0.005642459855719653,
+      "jax_value": 0.005642459855719667,
+      "relative_error": 2.4595279652272246e-15,
+      "has_nan": false,
+      "has_inf": false
+    },
+    {
+      "name": "moderate",
+      "x": 3.0,
+      "y": 3.0,
+      "ref_value": 0.09640250558304467,
+      "jax_value": 0.09640250558304453,
+      "relative_error": 1.439567127833583e-15,
+      "has_nan": false,
+      "has_inf": false
+    },
+    {
+      "name": "asymmetric_large_x",
+      "x": 100.0,
+      "y": 0.1,
+      "ref_value": 5.642736686785443e-06,
+      "jax_value": 5.642736686782362e-06,
+      "relative_error": 5.461013038810816e-13,
+      "has_nan": false,
+      "has_inf": false
+    },
+    {
+      "name": "asymmetric_large_y",
+      "x": 0.1,
+      "y": 100.0,
+      "ref_value": 0.005641608142791168,
+      "jax_value": 0.005641608142791169,
+      "relative_error": 1.5374370499247028e-16,
+      "has_nan": false,
+      "has_inf": false
+    }
+  ],
+  "spectrum_parity": {
+    "n_wavelengths": 500,
+    "n_lines": 6,
+    "max_relative_error": 5.4709970072893077e-14,
+    "mean_relative_error": 1.2462420712782135e-14,
+    "max_absolute_error": 9.604264050722122e-10,
+    "has_nan": false,
+    "has_inf": false
+  },
+  "has_nan": false,
+  "has_inf": false,
+  "elapsed_seconds": 0.51
+}

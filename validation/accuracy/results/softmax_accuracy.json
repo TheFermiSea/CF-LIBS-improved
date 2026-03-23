@@ -1,0 +1,249 @@
+{
+  "test_id": "VALD-04",
+  "kernel": "softmax",
+  "passed": true,
+  "threshold": 1e-15,
+  "sum_constraint": {
+    "max_deviation": 4.440892098500626e-16,
+    "mean_deviation": 5.4511950509095185e-17,
+    "n_tests": 1000
+  },
+  "round_trip": {
+    "max_error": 4.440892098500626e-16
+  },
+  "edge_cases": [
+    {
+      "name": "extreme_spread",
+      "D": 3,
+      "theta": [
+        500.0,
+        -500.0,
+        0.0
+      ],
+      "C": [
+        1.0,
+        0.0,
+        7.124576406741286e-218
+      ],
+      "sum_deviation": 0.0,
+      "has_nan": false,
+      "has_inf": false,
+      "all_positive": true
+    },
+    {
+      "name": "single_element",
+      "D": 1,
+      "theta": [
+        0.0
+      ],
+      "C": [
+        1.0
+      ],
+      "sum_deviation": 0.0,
+      "has_nan": false,
+      "has_inf": false,
+      "all_positive": true
+    },
+    {
+      "name": "uniform_2",
+      "D": 2,
+      "theta": [
+        0.0,
+        0.0
+      ],
+      "C": [
+        0.5,
+        0.5
+      ],
+      "sum_deviation": 0.0,
+      "has_nan": false,
+      "has_inf": false,
+      "all_positive": true
+    },
+    {
+      "name": "uniform_10",
+      "D": 10,
+      "theta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "C": [
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1
+      ],
+      "sum_deviation": 0.0,
+      "has_nan": false,
+      "has_inf": false,
+      "all_positive": true
+    },
+    {
+      "name": "uniform_20",
+      "D": 20,
+      "theta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "C": [
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05
+      ],
+      "sum_deviation": 2.220446049250313e-16,
+      "has_nan": false,
+      "has_inf": false,
+      "all_positive": true
+    },
+    {
+      "name": "one_dominant",
+      "D": 4,
+      "theta": [
+        100.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "C": [
+        1.0,
+        3.7200759760208356e-44,
+        3.7200759760208356e-44,
+        3.7200759760208356e-44
+      ],
+      "sum_deviation": 0.0,
+      "has_nan": false,
+      "has_inf": false,
+      "all_positive": true
+    },
+    {
+      "name": "near_degenerate",
+      "D": 3,
+      "theta": [
+        1e-15,
+        1e-15,
+        1e-15
+      ],
+      "C": [
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333
+      ],
+      "sum_deviation": 0.0,
+      "has_nan": false,
+      "has_inf": false,
+      "all_positive": true
+    },
+    {
+      "name": "large_negative",
+      "D": 3,
+      "theta": [
+        -1000.0,
+        -999.0,
+        -998.0
+      ],
+      "C": [
+        0.09003057317038048,
+        0.24472847105479764,
+        0.6652409557748219
+      ],
+      "sum_deviation": 0.0,
+      "has_nan": false,
+      "has_inf": false,
+      "all_positive": true
+    },
+    {
+      "name": "mixed_extreme",
+      "D": 5,
+      "theta": [
+        1000.0,
+        -1000.0,
+        500.0,
+        -500.0,
+        0.0
+      ],
+      "C": [
+        1.0,
+        0.0,
+        7.124576406741286e-218,
+        0.0,
+        0.0
+      ],
+      "sum_deviation": 0.0,
+      "has_nan": false,
+      "has_inf": false,
+      "all_positive": true
+    }
+  ],
+  "gradient_check": [
+    {
+      "D": 2,
+      "grad_sum_norm": 1.4613299249550475e-17,
+      "grad_c0_finite": true,
+      "jacobian_error": 4.163336342344337e-17
+    },
+    {
+      "D": 5,
+      "grad_sum_norm": 0.0,
+      "grad_c0_finite": true,
+      "jacobian_error": 2.7755575615628914e-17
+    },
+    {
+      "D": 10,
+      "grad_sum_norm": 0.0,
+      "grad_c0_finite": true,
+      "jacobian_error": 6.938893903907228e-18
+    }
+  ],
+  "has_nan": false,
+  "has_inf": false,
+  "elapsed_seconds": 3.63
+}

@@ -1,0 +1,29 @@
+{
+  "test_id": "VALD-02",
+  "kernel": "boltzmann",
+  "passed": true,
+  "threshold": 1e-10,
+  "slope_error": {
+    "max": 5.650725876451921e-14,
+    "mean": 3.3058956541742168e-15,
+    "std": 4.1578874256462434e-15
+  },
+  "intercept_error": {
+    "max": 5.1309946893090234e-15,
+    "mean": 9.037142988260794e-16,
+    "std": 8.284391468556498e-16
+  },
+  "cpu_vs_gpu": {
+    "method_jax": "closed-form 5-sum WLS (batched_boltzmann_fit)",
+    "method_cpu": "closed-form 5-sum WLS (NumPy reference)",
+    "n_tests": 1000,
+    "max_lines": 50,
+    "T_range_K": [
+      5000,
+      30000
+    ]
+  },
+  "has_nan": false,
+  "has_inf": false,
+  "elapsed_seconds": 0.31
+}
