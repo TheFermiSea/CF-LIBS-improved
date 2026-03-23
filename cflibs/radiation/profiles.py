@@ -812,6 +812,73 @@ if HAS_JAX:
         )
         return jnp.sum(profiles, axis=0)
 
+    @jit
+    def voigt_spectrum_jax(
+        wl_grid: jnp.ndarray,
+        line_centers: jnp.ndarray,
+        line_intensities: jnp.ndarray,
+        sigmas: jnp.ndarray | float,
+        gammas: jnp.ndarray | float,
+    ) -> jnp.ndarray:
+        """
+        Compute a full spectrum from multiple Voigt-broadened lines via broadcasting.
+
+        Uses an outer-product broadcasting approach: the wavelength grid and line
+        parameters are broadcast to produce an (N_wl, N_lines) profile matrix,
+        which is then contracted with line intensities to yield the final spectrum.
+
+        This is the GPU-optimized batch API for spectrum synthesis following
+        DERV-01 Eq. (01-01.1) and the broadcasting pattern from DERV-05.
+
+        # ASSERT_CONVENTION: gamma = HWHM [nm], sigma = std dev [nm], V(lambda) = [nm^-1]
+
+        Parameters
+        ----------
+        wl_grid : jnp.ndarray, shape (N_wl,)
+            Wavelength grid in nm.
+        line_centers : jnp.ndarray, shape (N_lines,)
+            Line center wavelengths in nm.
+        line_intensities : jnp.ndarray, shape (N_lines,)
+            Integrated line intensities (areas).
+        sigmas : jnp.ndarray or float, shape (N_lines,) or scalar
+            Gaussian standard deviations in nm. Scalar broadcasts to all lines.
+        gammas : jnp.ndarray or float, shape (N_lines,) or scalar
+            Lorentzian HWHMs in nm. Scalar broadcasts to all lines.
+
+        Returns
+        -------
+        jnp.ndarray, shape (N_wl,)
+            Summed spectrum on the wavelength grid.
+
+        References
+        ----------
+        Weideman, J.A.C. (1994) SIAM J. Numer. Anal. 31, 1497-1518.
+        Zaghloul, M.R. (2024) arXiv:2411.00917 (accuracy reference).
+        """
+        # Ensure float64 arrays
+        wl_grid = jnp.asarray(wl_grid, dtype=_weideman_real_dtype)
+        line_centers = jnp.asarray(line_centers, dtype=_weideman_real_dtype)
+        line_intensities = jnp.asarray(line_intensities, dtype=_weideman_real_dtype)
+
+        # Handle scalar vs array sigmas/gammas
+        sigmas_arr = jnp.asarray(sigmas, dtype=_weideman_real_dtype)
+        gammas_arr = jnp.asarray(gammas, dtype=_weideman_real_dtype)
+        if sigmas_arr.ndim == 0:
+            sigmas_arr = jnp.broadcast_to(sigmas_arr, line_centers.shape)
+        if gammas_arr.ndim == 0:
+            gammas_arr = jnp.broadcast_to(gammas_arr, line_centers.shape)
+
+        # Broadcasting outer product: (N_wl, 1) - (1, N_lines) -> (N_wl, N_lines)
+        diff = wl_grid[:, None] - line_centers[None, :]
+
+        # Voigt profile for each (wavelength, line) pair: (N_wl, N_lines)
+        profiles = _voigt_profile_kernel_jax(diff, sigmas_arr[None, :], gammas_arr[None, :])
+
+        # Weight by intensities and sum over lines: (N_wl,)
+        spectrum = jnp.sum(line_intensities[None, :] * profiles, axis=1)
+
+        return spectrum
+
 else:
 
     def voigt_profile_jax(*args, **kwargs):
@@ -830,4 +897,7 @@ else:
         _raise_jax_missing()
 
     def apply_voigt_broadening_jax(*args, **kwargs):
+        _raise_jax_missing()
+
+    def voigt_spectrum_jax(*args, **kwargs):
         _raise_jax_missing()
