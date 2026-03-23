@@ -2,6 +2,7 @@ use plugin_api::prelude::*;
 
 mod module;
 mod py_interface;
+mod gpu_faiss;
 
 use module::CflibsModule;
 
