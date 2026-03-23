@@ -1,0 +1,344 @@
+{
+  "benchmark": "boltzmann_fitting",
+  "hardware": {
+    "cpu_model": "x86_64",
+    "python_version": "3.11.2",
+    "platform": "Linux-6.17.2-1-pve-x86_64-with-glibc2.36",
+    "timestamp_utc": "2026-03-23T21:32:59.212215+00:00",
+    "numpy_version": "2.4.3",
+    "jax_version": "0.9.2",
+    "jax_backend": "cpu",
+    "jax_devices": [
+      {
+        "id": 0,
+        "kind": "cpu"
+      }
+    ],
+    "jax_platforms_env": "cpu",
+    "gpu_model": "N/A",
+    "gpu_driver": "N/A",
+    "cuda_version": "N/A"
+  },
+  "parameters": {
+    "element_counts": [
+      1,
+      2,
+      3,
+      5,
+      7,
+      10,
+      15,
+      20
+    ],
+    "lines_per_element": [
+      10,
+      25,
+      50,
+      100
+    ],
+    "n_warmup": 3,
+    "n_runs": 10,
+    "noise_std": 0.1,
+    "T_range_K": [
+      8000,
+      15000
+    ],
+    "E_k_range_eV": [
+      0,
+      10
+    ]
+  },
+  "results": [
+    {
+      "element_count": 1,
+      "lines_per_element": 10,
+      "cpu_time_ms_mean": 0.06894953548908234,
+      "cpu_time_ms_std": 0.012297136856685676,
+      "gpu_time_ms_mean": 0.038587977178394794,
+      "gpu_time_ms_std": 0.0014210958876155427,
+      "speedup": 1.786813938712673
+    },
+    {
+      "element_count": 1,
+      "lines_per_element": 25,
+      "cpu_time_ms_mean": 0.060725072398781776,
+      "cpu_time_ms_std": 0.008415652143579883,
+      "gpu_time_ms_mean": 0.039215036667883396,
+      "gpu_time_ms_std": 0.002736501239917898,
+      "speedup": 1.54851499727182
+    },
+    {
+      "element_count": 1,
+      "lines_per_element": 50,
+      "cpu_time_ms_mean": 0.06945573259145021,
+      "cpu_time_ms_std": 0.011853119871456954,
+      "gpu_time_ms_mean": 0.17829230055212975,
+      "gpu_time_ms_std": 0.18194774056664761,
+      "speedup": 0.3895610319478855
+    },
+    {
+      "element_count": 1,
+      "lines_per_element": 100,
+      "cpu_time_ms_mean": 0.07278691045939922,
+      "cpu_time_ms_std": 0.00901115129217928,
+      "gpu_time_ms_mean": 0.1680276356637478,
+      "gpu_time_ms_std": 0.15026693187268547,
+      "speedup": 0.4331841614736421
+    },
+    {
+      "element_count": 2,
+      "lines_per_element": 10,
+      "cpu_time_ms_mean": 0.10564555414021015,
+      "cpu_time_ms_std": 0.005610333348432666,
+      "gpu_time_ms_mean": 0.03757632803171873,
+      "gpu_time_ms_std": 0.0010941833748472247,
+      "speedup": 2.811492225930995
+    },
+    {
+      "element_count": 2,
+      "lines_per_element": 25,
+      "cpu_time_ms_mean": 0.10849747341126204,
+      "cpu_time_ms_std": 0.007504405816965499,
+      "gpu_time_ms_mean": 0.04159933887422085,
+      "gpu_time_ms_std": 0.006996779831514353,
+      "speedup": 2.60815379156177
+    },
+    {
+      "element_count": 2,
+      "lines_per_element": 50,
+      "cpu_time_ms_mean": 0.1285940408706665,
+      "cpu_time_ms_std": 0.03628227093021322,
+      "gpu_time_ms_mean": 0.05899420939385891,
+      "gpu_time_ms_std": 0.009488010390718515,
+      "speedup": 2.179773950560861
+    },
+    {
+      "element_count": 2,
+      "lines_per_element": 100,
+      "cpu_time_ms_mean": 0.1335249049589038,
+      "cpu_time_ms_std": 0.007541920584579052,
+      "gpu_time_ms_mean": 0.061988760717213154,
+      "gpu_time_ms_std": 0.004536404154788774,
+      "speedup": 2.1540179770334777
+    },
+    {
+      "element_count": 3,
+      "lines_per_element": 10,
+      "cpu_time_ms_mean": 0.1729325857013464,
+      "cpu_time_ms_std": 0.05073134705436679,
+      "gpu_time_ms_mean": 0.038094702176749706,
+      "gpu_time_ms_std": 0.0013462462964342178,
+      "speedup": 4.539544236334577
+    },
+    {
+      "element_count": 3,
+      "lines_per_element": 25,
+      "cpu_time_ms_mean": 0.15574570279568434,
+      "cpu_time_ms_std": 0.006511940436408729,
+      "gpu_time_ms_mean": 0.0605002511292696,
+      "gpu_time_ms_std": 0.025924617354695118,
+      "speedup": 2.5742984514709835
+    },
+    {
+      "element_count": 3,
+      "lines_per_element": 50,
+      "cpu_time_ms_mean": 0.163545785471797,
+      "cpu_time_ms_std": 0.014222012537493991,
+      "gpu_time_ms_mean": 0.06133613642305136,
+      "gpu_time_ms_std": 0.005485194965315702,
+      "speedup": 2.6663855112062973
+    },
+    {
+      "element_count": 3,
+      "lines_per_element": 100,
+      "cpu_time_ms_mean": 0.18506268970668316,
+      "cpu_time_ms_std": 0.011590219861187887,
+      "gpu_time_ms_mean": 0.06206710822880268,
+      "gpu_time_ms_std": 0.011818160007059389,
+      "speedup": 2.981654776382888
+    },
+    {
+      "element_count": 5,
+      "lines_per_element": 10,
+      "cpu_time_ms_mean": 0.2551598008722067,
+      "cpu_time_ms_std": 0.025794157333734902,
+      "gpu_time_ms_mean": 0.10360253509134054,
+      "gpu_time_ms_std": 0.007684799111300612,
+      "speedup": 2.462872174384986
+    },
+    {
+      "element_count": 5,
+      "lines_per_element": 25,
+      "cpu_time_ms_mean": 0.2555845305323601,
+      "cpu_time_ms_std": 0.00810746932684821,
+      "gpu_time_ms_mean": 0.1105921808630228,
+      "gpu_time_ms_std": 0.0068273692757974385,
+      "speedup": 2.3110542584282863
+    },
+    {
+      "element_count": 5,
+      "lines_per_element": 50,
+      "cpu_time_ms_mean": 0.2647389890626073,
+      "cpu_time_ms_std": 0.016270615523816492,
+      "gpu_time_ms_mean": 0.1274879090487957,
+      "gpu_time_ms_std": 0.005793132822735759,
+      "speedup": 2.076581152188158
+    },
+    {
+      "element_count": 5,
+      "lines_per_element": 100,
+      "cpu_time_ms_mean": 0.3121718531474471,
+      "cpu_time_ms_std": 0.00973084809627314,
+      "gpu_time_ms_mean": 0.10640851687639952,
+      "gpu_time_ms_std": 0.02684407204182265,
+      "speedup": 2.9337111568809404
+    },
+    {
+      "element_count": 7,
+      "lines_per_element": 10,
+      "cpu_time_ms_mean": 0.3836340503767133,
+      "cpu_time_ms_std": 0.0812802433643676,
+      "gpu_time_ms_mean": 0.05153736565262079,
+      "gpu_time_ms_std": 0.012933316105443574,
+      "speedup": 7.443804034582133
+    },
+    {
+      "element_count": 7,
+      "lines_per_element": 25,
+      "cpu_time_ms_mean": 0.35150633193552494,
+      "cpu_time_ms_std": 0.004194230661406638,
+      "gpu_time_ms_mean": 0.05287423264235258,
+      "gpu_time_ms_std": 0.011070529762225547,
+      "speedup": 6.647970369861524
+    },
+    {
+      "element_count": 7,
+      "lines_per_element": 50,
+      "cpu_time_ms_mean": 0.3632226027548313,
+      "cpu_time_ms_std": 0.00853641348521315,
+      "gpu_time_ms_mean": 0.06072549149394035,
+      "gpu_time_ms_std": 0.011736447300075857,
+      "speedup": 5.981385968544633
+    },
+    {
+      "element_count": 7,
+      "lines_per_element": 100,
+      "cpu_time_ms_mean": 0.43628779239952564,
+      "cpu_time_ms_std": 0.013142087634781587,
+      "gpu_time_ms_mean": 0.0594001729041338,
+      "gpu_time_ms_std": 0.014705973066580311,
+      "speedup": 7.344890950126567
+    },
+    {
+      "element_count": 10,
+      "lines_per_element": 10,
+      "cpu_time_ms_mean": 0.4809182835742831,
+      "cpu_time_ms_std": 0.005098396738356886,
+      "gpu_time_ms_mean": 0.05120260175317526,
+      "gpu_time_ms_std": 0.009675401133083768,
+      "speedup": 9.392457943691497
+    },
+    {
+      "element_count": 10,
+      "lines_per_element": 25,
+      "cpu_time_ms_mean": 0.5000991746783257,
+      "cpu_time_ms_std": 0.010623886342900552,
+      "gpu_time_ms_mean": 0.04872677382081747,
+      "gpu_time_ms_std": 0.004174201142297121,
+      "speedup": 10.263334414819578
+    },
+    {
+      "element_count": 10,
+      "lines_per_element": 50,
+      "cpu_time_ms_mean": 0.5168526666238904,
+      "cpu_time_ms_std": 0.01200947959547826,
+      "gpu_time_ms_mean": 0.05325272213667631,
+      "gpu_time_ms_std": 0.006484217773568117,
+      "speedup": 9.705657211238083
+    },
+    {
+      "element_count": 10,
+      "lines_per_element": 100,
+      "cpu_time_ms_mean": 0.6125668529421091,
+      "cpu_time_ms_std": 0.0074025906811504985,
+      "gpu_time_ms_mean": 0.05940988194197416,
+      "gpu_time_ms_std": 0.007830941196765388,
+      "speedup": 10.31085794010507
+    },
+    {
+      "element_count": 15,
+      "lines_per_element": 10,
+      "cpu_time_ms_mean": 0.7171435980126262,
+      "cpu_time_ms_std": 0.004345631768667961,
+      "gpu_time_ms_mean": 0.04615071229636669,
+      "gpu_time_ms_std": 0.004968210813461451,
+      "speedup": 15.539166403485494
+    },
+    {
+      "element_count": 15,
+      "lines_per_element": 25,
+      "cpu_time_ms_mean": 0.7409533020108938,
+      "cpu_time_ms_std": 0.012939057889490336,
+      "gpu_time_ms_mean": 0.05405633710324764,
+      "gpu_time_ms_std": 0.008014078374311655,
+      "speedup": 13.707057150314727
+    },
+    {
+      "element_count": 15,
+      "lines_per_element": 50,
+      "cpu_time_ms_mean": 0.7636712864041328,
+      "cpu_time_ms_std": 0.0067197495437507394,
+      "gpu_time_ms_mean": 0.0711304834112525,
+      "gpu_time_ms_std": 0.029640468458796632,
+      "speedup": 10.736202676830448
+    },
+    {
+      "element_count": 15,
+      "lines_per_element": 100,
+      "cpu_time_ms_mean": 0.9020769968628883,
+      "cpu_time_ms_std": 0.0362722379203347,
+      "gpu_time_ms_mean": 0.06255344487726688,
+      "gpu_time_ms_std": 0.004854008724023612,
+      "speedup": 14.420900377793908
+    },
+    {
+      "element_count": 20,
+      "lines_per_element": 10,
+      "cpu_time_ms_mean": 0.9615521878004074,
+      "cpu_time_ms_std": 0.018205791667145185,
+      "gpu_time_ms_mean": 0.05231848917901516,
+      "gpu_time_ms_std": 0.017633440737873693,
+      "speedup": 18.37882176815771
+    },
+    {
+      "element_count": 20,
+      "lines_per_element": 25,
+      "cpu_time_ms_mean": 1.0082610649988055,
+      "cpu_time_ms_std": 0.037870848015715684,
+      "gpu_time_ms_mean": 0.05215562414377928,
+      "gpu_time_ms_std": 0.005037454867962936,
+      "speedup": 19.331780254787024
+    },
+    {
+      "element_count": 20,
+      "lines_per_element": 50,
+      "cpu_time_ms_mean": 1.0176045820116997,
+      "cpu_time_ms_std": 0.02714793393118644,
+      "gpu_time_ms_mean": 0.0618011225014925,
+      "gpu_time_ms_std": 0.003458284239901955,
+      "speedup": 16.46579448434977
+    },
+    {
+      "element_count": 20,
+      "lines_per_element": 100,
+      "cpu_time_ms_mean": 1.2323941104114056,
+      "cpu_time_ms_std": 0.10573155080564882,
+      "gpu_time_ms_mean": 0.07283478043973446,
+      "gpu_time_ms_std": 0.00849345210247095,
+      "speedup": 16.920406747585695
+    }
+  ],
+  "references": {
+    "method_ref": "Tognoni et al. (2010) Spectrochim. Acta B 65"
+  }
+}
