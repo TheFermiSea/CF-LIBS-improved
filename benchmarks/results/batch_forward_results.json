@@ -1,0 +1,108 @@
+{
+  "benchmark": "batch_forward_model",
+  "hardware": {
+    "cpu_model": "x86_64",
+    "python_version": "3.11.2",
+    "platform": "Linux-6.17.2-1-pve-x86_64-with-glibc2.36",
+    "timestamp_utc": "2026-03-23T21:34:49.326713+00:00",
+    "numpy_version": "2.4.3",
+    "jax_version": "0.9.2",
+    "jax_backend": "cpu",
+    "jax_devices": [
+      {
+        "id": 0,
+        "kind": "cpu"
+      }
+    ],
+    "jax_platforms_env": "cpu",
+    "gpu_model": "N/A",
+    "gpu_driver": "N/A",
+    "cuda_version": "N/A"
+  },
+  "parameters": {
+    "batch_sizes": [
+      1,
+      5,
+      10,
+      50,
+      100
+    ],
+    "n_lines": 50,
+    "n_wl": 4096,
+    "n_elements": 5,
+    "n_runs_default": 10,
+    "n_runs_large": 3
+  },
+  "results": [
+    {
+      "batch_size": 1,
+      "estimated_memory_gb": 0.0016,
+      "cpu_total_time_ms_mean": 7.5907,
+      "cpu_total_time_ms_std": 2.9208,
+      "cpu_per_spectrum_ms": 7.5907,
+      "cpu_throughput_spectra_per_sec": 131.74,
+      "gpu_total_time_ms_mean": 6.5378,
+      "gpu_total_time_ms_std": 1.486,
+      "gpu_per_spectrum_ms": 6.5378,
+      "gpu_throughput_spectra_per_sec": 152.96,
+      "gpu_transfer_time_ms": 0.3445,
+      "speedup": 1.16
+    },
+    {
+      "batch_size": 5,
+      "estimated_memory_gb": 0.0082,
+      "cpu_total_time_ms_mean": 27.5118,
+      "cpu_total_time_ms_std": 1.2337,
+      "cpu_per_spectrum_ms": 5.5024,
+      "cpu_throughput_spectra_per_sec": 181.74,
+      "gpu_total_time_ms_mean": 51.4391,
+      "gpu_total_time_ms_std": 3.9641,
+      "gpu_per_spectrum_ms": 10.2878,
+      "gpu_throughput_spectra_per_sec": 97.2,
+      "gpu_transfer_time_ms": 0.3215,
+      "speedup": 0.53
+    },
+    {
+      "batch_size": 10,
+      "estimated_memory_gb": 0.0164,
+      "cpu_total_time_ms_mean": 61.9541,
+      "cpu_total_time_ms_std": 4.8118,
+      "cpu_per_spectrum_ms": 6.1954,
+      "cpu_throughput_spectra_per_sec": 161.41,
+      "gpu_total_time_ms_mean": 92.9928,
+      "gpu_total_time_ms_std": 4.3296,
+      "gpu_per_spectrum_ms": 9.2993,
+      "gpu_throughput_spectra_per_sec": 107.54,
+      "gpu_transfer_time_ms": 0.3242,
+      "speedup": 0.67
+    },
+    {
+      "batch_size": 50,
+      "estimated_memory_gb": 0.0819,
+      "cpu_total_time_ms_mean": 294.2891,
+      "cpu_total_time_ms_std": 18.0436,
+      "cpu_per_spectrum_ms": 5.8858,
+      "cpu_throughput_spectra_per_sec": 169.9,
+      "gpu_total_time_ms_mean": 532.3931,
+      "gpu_total_time_ms_std": 121.1969,
+      "gpu_per_spectrum_ms": 10.6479,
+      "gpu_throughput_spectra_per_sec": 93.92,
+      "gpu_transfer_time_ms": 0.323,
+      "speedup": 0.55
+    },
+    {
+      "batch_size": 100,
+      "estimated_memory_gb": 0.1638,
+      "cpu_total_time_ms_mean": 591.0357,
+      "cpu_total_time_ms_std": 22.4083,
+      "cpu_per_spectrum_ms": 5.9104,
+      "cpu_throughput_spectra_per_sec": 169.19,
+      "gpu_total_time_ms_mean": 956.8643,
+      "gpu_total_time_ms_std": 111.7851,
+      "gpu_per_spectrum_ms": 9.5686,
+      "gpu_throughput_spectra_per_sec": 104.51,
+      "gpu_transfer_time_ms": 0.3246,
+      "speedup": 0.62
+    }
+  ]
+}
