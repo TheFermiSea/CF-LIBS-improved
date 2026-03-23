@@ -1,0 +1,4 @@
+batch_size,cpu_total_ms,gpu_total_ms,speedup,cpu_saha_ms,cpu_voigt_ms,cpu_assembly_ms,cpu_boltzmann_ms,cpu_closure_ms,gpu_transfer_ms,gpu_forward_ms,gpu_boltzmann_ms,gpu_closure_ms
+1,8.5027,,,3.222,4.0275,0.8055,0.3637,0.0138,,,,
+10,77.6954,,,29.5753,36.9692,7.3938,3.2671,0.1261,,,,
+100,607.1176,,,232.2802,290.3503,58.0701,22.1512,1.138,,,,

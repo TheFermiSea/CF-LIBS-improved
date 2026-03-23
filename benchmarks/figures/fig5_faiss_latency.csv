@@ -1,0 +1,4 @@
+db_size,cpu_flat_ms,cpu_ivf_ms,gpu_flat_ms,gpu_ivf_ms,recall_ivf
+1000,0.3136,0.5452,,,0.88
+10000,1.9013,1.0241,,,0.7
+100000,18.8908,2.97,,,0.56
