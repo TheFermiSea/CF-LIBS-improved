@@ -7,6 +7,7 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
+
 import pandas as pd
 
 from cflibs.atomic.structures import Transition, EnergyLevel, SpeciesPhysics, PartitionFunction
@@ -334,8 +335,8 @@ class AtomicDatabase(AtomicDataSource):
 
         Returns
         -------
-        List[Transition]
-            List of transition objects
+        list[Transition]
+            list of transition objects
         """
         # Check if new columns exist in the actual query execution (though schema check should have fixed it)
         # We select all relevant columns.
@@ -348,7 +349,7 @@ class AtomicDatabase(AtomicDataSource):
             FROM lines
             WHERE element = ?
         """
-        params: List[Any] = [element]
+        params: list[object] = [element]
 
         if ionization_stage is not None:
             query += " AND sp_num = ?"
@@ -439,8 +440,8 @@ class AtomicDatabase(AtomicDataSource):
 
         Returns
         -------
-        List[EnergyLevel]
-            List of energy level objects
+        list[EnergyLevel]
+            list of energy level objects
         """
         query = """
             SELECT g_level, energy_ev
@@ -560,7 +561,7 @@ class AtomicDatabase(AtomicDataSource):
             source=res[7],
         )
 
-    def get_species_physics(self, element: str, ionization_stage: int) -> Optional[SpeciesPhysics]:
+    def get_species_physics(self, element: str, ionization_stage: int) -> SpeciesPhysics | None:
         """
         Get physical properties for a species.
 
@@ -601,7 +602,7 @@ class AtomicDatabase(AtomicDataSource):
 
     def get_stark_parameters(
         self, element: str, ionization_stage: int, wavelength_nm: float, tolerance_nm: float = 0.01
-    ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    ) -> tuple[float | None, float | None, float | None]:
         """
         Get Stark broadening parameters for a specific line.
 
@@ -618,7 +619,7 @@ class AtomicDatabase(AtomicDataSource):
 
         Returns
         -------
-        Tuple[float, float, float]
+        tuple[float, float, float]
             (stark_w, stark_alpha, stark_shift) or (None, None, None)
         """
         query = """
@@ -645,7 +646,7 @@ class AtomicDatabase(AtomicDataSource):
 
         return (stark_w, stark_alpha, stark_shift)
 
-    def get_available_elements(self) -> List[str]:
+    def get_available_elements(self) -> list[str]:
         """Get list of elements available in the database."""
         query = "SELECT DISTINCT element FROM lines ORDER BY element"
         with self._get_connection() as conn:
