@@ -18,3 +18,5 @@
 [2026-03-23 02:27:17 UTC] [aad26b6b] [ITER:3] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 3, tier: Worker
 [2026-03-23 02:53:07 UTC] [aad26b6b] [ITER:3] [ERROR] Agent failed: PromptCancelled: Runtime adapter: max tool calls (15) exceeded
 [2026-03-23 02:53:07 UTC] [aad26b6b] [ITER:4] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 4, tier: Worker
+[2026-03-23 02:53:48 UTC] [aad26b6b] [ITER:4] [ERROR] Agent failed: PromptCancelled: Runtime adapter: write deadline exceeded: 9 turns with no edit_file/write_file (limit: 8). Write code now.
+[2026-03-23 02:53:48 UTC] [aad26b6b] [ITER:5] [FEATURE_START] [CF-LIBS-improved-f37] Iteration 5, tier: Council
