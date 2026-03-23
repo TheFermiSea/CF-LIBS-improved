@@ -1,0 +1,123 @@
+{
+  "benchmark": "end_to_end_pipeline",
+  "hardware": {
+    "cpu_model": "x86_64",
+    "python_version": "3.11.2",
+    "platform": "Linux-6.17.2-1-pve-x86_64-with-glibc2.36",
+    "timestamp_utc": "2026-03-23T21:43:54.038716+00:00",
+    "numpy_version": "2.4.3",
+    "jax_version": "0.9.2",
+    "jax_backend": "cpu",
+    "jax_devices": [
+      {
+        "id": 0,
+        "kind": "cpu"
+      }
+    ],
+    "jax_platforms_env": "cpu",
+    "gpu_model": "N/A",
+    "gpu_driver": "N/A",
+    "cuda_version": "N/A"
+  },
+  "parameters": {
+    "batch_sizes": [
+      1,
+      10,
+      100
+    ],
+    "n_elements": 5,
+    "n_lines": 50,
+    "n_wl": 4096,
+    "n_runs": 5,
+    "pipeline_stages": [
+      "data_prep",
+      "saha_boltzmann",
+      "boltzmann_fit",
+      "voigt_profiles",
+      "assembly",
+      "closure"
+    ]
+  },
+  "results": [
+    {
+      "batch_size": 1,
+      "cpu_total_ms_mean": 8.5027,
+      "cpu_total_ms_std": 2.1846,
+      "cpu_component_breakdown": {
+        "data_prep": 0.003,
+        "saha_boltzmann": 3.222,
+        "boltzmann_fit": 0.3637,
+        "voigt_profiles": 4.0275,
+        "assembly": 0.8055,
+        "closure": 0.0138
+      },
+      "cpu_component_sum_ms": 8.4355,
+      "cpu_component_ratio": 0.9921,
+      "gpu_total_ms_mean": null,
+      "gpu_total_ms_std": null,
+      "gpu_compute_ms_mean": null,
+      "gpu_transfer_ms_mean": null,
+      "gpu_component_breakdown": {},
+      "speedup": null,
+      "speedup_no_transfer": null,
+      "crossover_note": "GPU not tested"
+    },
+    {
+      "batch_size": 10,
+      "cpu_total_ms_mean": 77.6954,
+      "cpu_total_ms_std": 12.1971,
+      "cpu_component_breakdown": {
+        "data_prep": 0.131,
+        "saha_boltzmann": 29.5753,
+        "boltzmann_fit": 3.2671,
+        "voigt_profiles": 36.9692,
+        "assembly": 7.3938,
+        "closure": 0.1261
+      },
+      "cpu_component_sum_ms": 77.4625,
+      "cpu_component_ratio": 0.997,
+      "gpu_total_ms_mean": null,
+      "gpu_total_ms_std": null,
+      "gpu_compute_ms_mean": null,
+      "gpu_transfer_ms_mean": null,
+      "gpu_component_breakdown": {},
+      "speedup": null,
+      "speedup_no_transfer": null,
+      "crossover_note": "GPU not tested"
+    },
+    {
+      "batch_size": 100,
+      "cpu_total_ms_mean": 607.1176,
+      "cpu_total_ms_std": 18.7422,
+      "cpu_component_breakdown": {
+        "data_prep": 0.1996,
+        "saha_boltzmann": 232.2802,
+        "boltzmann_fit": 22.1512,
+        "voigt_profiles": 290.3503,
+        "assembly": 58.0701,
+        "closure": 1.138
+      },
+      "cpu_component_sum_ms": 604.1894,
+      "cpu_component_ratio": 0.9952,
+      "gpu_total_ms_mean": null,
+      "gpu_total_ms_std": null,
+      "gpu_compute_ms_mean": null,
+      "gpu_transfer_ms_mean": null,
+      "gpu_component_breakdown": {},
+      "speedup": null,
+      "speedup_no_transfer": null,
+      "crossover_note": "GPU not tested"
+    }
+  ],
+  "summary": {
+    "crossover_batch_size": "GPU not faster at any tested batch size",
+    "max_speedup": 0.0,
+    "max_speedup_batch_size": null,
+    "bottleneck_cpu": "voigt_profiles",
+    "bottleneck_gpu": "unknown"
+  },
+  "references": {
+    "exojax": "Kawahara et al. (2022) arXiv:2105.14782",
+    "note": "ExoJAX reports ~10000 spectra/sec on V100 for similar spectral models"
+  }
+}
