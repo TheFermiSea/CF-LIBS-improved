@@ -45,7 +45,6 @@ if HAS_FAISS:
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import hardware_metadata, save_results, print_table  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -88,9 +87,7 @@ def generate_vectors(n: int, d: int, seed: int = 42) -> np.ndarray:
     return vectors
 
 
-def compute_recall_at_1(
-    gt_indices: np.ndarray, test_indices: np.ndarray
-) -> float:
+def compute_recall_at_1(gt_indices: np.ndarray, test_indices: np.ndarray) -> float:
     """Compute recall@1: fraction of queries where the top-1 result matches ground truth.
 
     Parameters
@@ -162,9 +159,7 @@ def benchmark_single_size(
     arr = np.array(search_times)
     result["cpu_flat_search_ms_mean"] = round(float(np.mean(arr)) * 1000, 4)
     result["cpu_flat_search_ms_std"] = round(float(np.std(arr)) * 1000, 4)
-    result["cpu_flat_per_query_us"] = round(
-        float(np.mean(arr)) / n_queries * 1e6, 4
-    )
+    result["cpu_flat_per_query_us"] = round(float(np.mean(arr)) / n_queries * 1e6, 4)
     print(f"{result['cpu_flat_search_ms_mean']:.3f} +/- {result['cpu_flat_search_ms_std']:.3f} ms")
 
     # -----------------------------------------------------------------------
@@ -208,12 +203,8 @@ def benchmark_single_size(
     arr_ivf = np.array(search_times_ivf)
     result["cpu_ivf_search_ms_mean"] = round(float(np.mean(arr_ivf)) * 1000, 4)
     result["cpu_ivf_search_ms_std"] = round(float(np.std(arr_ivf)) * 1000, 4)
-    result["cpu_ivf_per_query_us"] = round(
-        float(np.mean(arr_ivf)) / n_queries * 1e6, 4
-    )
-    result["cpu_ivf_recall_at_1"] = round(
-        compute_recall_at_1(gt_indices, ivf_indices), 4
-    )
+    result["cpu_ivf_per_query_us"] = round(float(np.mean(arr_ivf)) / n_queries * 1e6, 4)
+    result["cpu_ivf_recall_at_1"] = round(compute_recall_at_1(gt_indices, ivf_indices), 4)
     result["cpu_ivf_nlist"] = nlist
     result["cpu_ivf_nprobe"] = nprobe
     print(
@@ -243,15 +234,9 @@ def benchmark_single_size(
                 search_times_gpu.append(time.perf_counter() - t0)
 
             arr_gpu = np.array(search_times_gpu)
-            result["gpu_flat_search_ms_mean"] = round(
-                float(np.mean(arr_gpu)) * 1000, 4
-            )
-            result["gpu_flat_search_ms_std"] = round(
-                float(np.std(arr_gpu)) * 1000, 4
-            )
-            result["gpu_flat_per_query_us"] = round(
-                float(np.mean(arr_gpu)) / n_queries * 1e6, 4
-            )
+            result["gpu_flat_search_ms_mean"] = round(float(np.mean(arr_gpu)) * 1000, 4)
+            result["gpu_flat_search_ms_std"] = round(float(np.std(arr_gpu)) * 1000, 4)
+            result["gpu_flat_per_query_us"] = round(float(np.mean(arr_gpu)) / n_queries * 1e6, 4)
             result["gpu_flat_transfer_s"] = round(transfer_time, 4)
             print(
                 f"{result['gpu_flat_search_ms_mean']:.3f} +/- "
@@ -287,15 +272,9 @@ def benchmark_single_size(
                 search_times_gpu_ivf.append(time.perf_counter() - t0)
 
             arr_gpu_ivf = np.array(search_times_gpu_ivf)
-            result["gpu_ivf_search_ms_mean"] = round(
-                float(np.mean(arr_gpu_ivf)) * 1000, 4
-            )
-            result["gpu_ivf_search_ms_std"] = round(
-                float(np.std(arr_gpu_ivf)) * 1000, 4
-            )
-            result["gpu_ivf_per_query_us"] = round(
-                float(np.mean(arr_gpu_ivf)) / n_queries * 1e6, 4
-            )
+            result["gpu_ivf_search_ms_mean"] = round(float(np.mean(arr_gpu_ivf)) * 1000, 4)
+            result["gpu_ivf_search_ms_std"] = round(float(np.std(arr_gpu_ivf)) * 1000, 4)
+            result["gpu_ivf_per_query_us"] = round(float(np.mean(arr_gpu_ivf)) / n_queries * 1e6, 4)
             result["gpu_ivf_recall_at_1"] = round(
                 compute_recall_at_1(gt_indices, gpu_ivf_indices), 4
             )
@@ -329,9 +308,7 @@ def benchmark_single_size(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="FAISS query latency benchmark (BENCH-04)"
-    )
+    parser = argparse.ArgumentParser(description="FAISS query latency benchmark (BENCH-04)")
     parser.add_argument(
         "--output",
         type=str,
@@ -383,12 +360,14 @@ def main() -> None:
         # Skip if estimated memory exceeds 14 GB (V100S has 32 GB but leave margin)
         if mem_gb > 14.0:
             print(f"\n--- db_size = {db_size:,}: SKIPPING (est. {mem_gb:.1f} GB > 14 GB limit) ---")
-            results_list.append({
-                "db_size": db_size,
-                "estimated_memory_gb": round(mem_gb, 3),
-                "skipped": True,
-                "skip_reason": f"estimated memory {mem_gb:.1f} GB exceeds 14 GB limit",
-            })
+            results_list.append(
+                {
+                    "db_size": db_size,
+                    "estimated_memory_gb": round(mem_gb, 3),
+                    "skipped": True,
+                    "skip_reason": f"estimated memory {mem_gb:.1f} GB exceeds 14 GB limit",
+                }
+            )
             continue
 
         entry = benchmark_single_size(
@@ -430,21 +409,59 @@ def main() -> None:
     rows = []
     for r in results_list:
         if r.get("skipped"):
-            rows.append([
-                f"{r['db_size']:,}",
-                "SKIP", "SKIP", "SKIP", "SKIP", "SKIP", "SKIP", "SKIP",
-            ])
+            rows.append(
+                [
+                    f"{r['db_size']:,}",
+                    "SKIP",
+                    "SKIP",
+                    "SKIP",
+                    "SKIP",
+                    "SKIP",
+                    "SKIP",
+                    "SKIP",
+                ]
+            )
             continue
-        rows.append([
-            f"{r['db_size']:,}",
-            f"{r.get('cpu_flat_build_s', 'N/A'):.3f}" if isinstance(r.get("cpu_flat_build_s"), (int, float)) else "N/A",
-            f"{r.get('cpu_flat_search_ms_mean', 'N/A'):.3f}" if isinstance(r.get("cpu_flat_search_ms_mean"), (int, float)) else "N/A",
-            f"{r.get('cpu_ivf_build_s', 'N/A'):.3f}" if isinstance(r.get("cpu_ivf_build_s"), (int, float)) else "N/A",
-            f"{r.get('cpu_ivf_search_ms_mean', 'N/A'):.3f}" if isinstance(r.get("cpu_ivf_search_ms_mean"), (int, float)) else "N/A",
-            f"{r.get('cpu_ivf_recall_at_1', 'N/A'):.4f}" if isinstance(r.get("cpu_ivf_recall_at_1"), (int, float)) else "N/A",
-            f"{r.get('gpu_flat_search_ms_mean', 'N/A'):.3f}" if isinstance(r.get("gpu_flat_search_ms_mean"), (int, float)) else "N/A",
-            f"{r.get('gpu_ivf_search_ms_mean', 'N/A'):.3f}" if isinstance(r.get("gpu_ivf_search_ms_mean"), (int, float)) else "N/A",
-        ])
+        rows.append(
+            [
+                f"{r['db_size']:,}",
+                (
+                    f"{r.get('cpu_flat_build_s', 'N/A'):.3f}"
+                    if isinstance(r.get("cpu_flat_build_s"), (int, float))
+                    else "N/A"
+                ),
+                (
+                    f"{r.get('cpu_flat_search_ms_mean', 'N/A'):.3f}"
+                    if isinstance(r.get("cpu_flat_search_ms_mean"), (int, float))
+                    else "N/A"
+                ),
+                (
+                    f"{r.get('cpu_ivf_build_s', 'N/A'):.3f}"
+                    if isinstance(r.get("cpu_ivf_build_s"), (int, float))
+                    else "N/A"
+                ),
+                (
+                    f"{r.get('cpu_ivf_search_ms_mean', 'N/A'):.3f}"
+                    if isinstance(r.get("cpu_ivf_search_ms_mean"), (int, float))
+                    else "N/A"
+                ),
+                (
+                    f"{r.get('cpu_ivf_recall_at_1', 'N/A'):.4f}"
+                    if isinstance(r.get("cpu_ivf_recall_at_1"), (int, float))
+                    else "N/A"
+                ),
+                (
+                    f"{r.get('gpu_flat_search_ms_mean', 'N/A'):.3f}"
+                    if isinstance(r.get("gpu_flat_search_ms_mean"), (int, float))
+                    else "N/A"
+                ),
+                (
+                    f"{r.get('gpu_ivf_search_ms_mean', 'N/A'):.3f}"
+                    if isinstance(r.get("gpu_ivf_search_ms_mean"), (int, float))
+                    else "N/A"
+                ),
+            ]
+        )
     print_table(headers, rows, title="FAISS Benchmark Summary")
 
 

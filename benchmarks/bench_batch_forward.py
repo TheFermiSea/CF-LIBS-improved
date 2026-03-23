@@ -108,13 +108,15 @@ def make_synthetic_atomic_data(
     mass_amu = np.array([55.85, 63.55, 26.98, 47.87, 58.69])[element_idx]  # Fe,Cu,Al,Ti,Ni
 
     # Ionization potentials [eV] for 3 stages
-    ip = np.array([
-        [7.9, 16.2],   # Fe-like
-        [7.7, 20.3],   # Cu-like
-        [6.0, 18.8],   # Al-like
-        [6.8, 13.6],   # Ti-like
-        [7.6, 18.2],   # Ni-like
-    ])
+    ip = np.array(
+        [
+            [7.9, 16.2],  # Fe-like
+            [7.7, 20.3],  # Cu-like
+            [6.0, 18.8],  # Al-like
+            [6.8, 13.6],  # Ti-like
+            [7.6, 18.2],  # Ni-like
+        ]
+    )
 
     # Partition function coefficients (Irwin polynomial, 5 coeffs per stage)
     pf = np.zeros((n_elements, 3, 5), dtype=np.float64)
@@ -492,15 +494,17 @@ def main() -> None:
                 return f"{val:.{digits}f}"
             return "N/A"
 
-        rows.append([
-            str(r["batch_size"]),
-            fmt(r.get("cpu_per_spectrum_ms")),
-            fmt(r.get("cpu_throughput_spectra_per_sec"), 1),
-            fmt(r.get("gpu_per_spectrum_ms")),
-            fmt(r.get("gpu_throughput_spectra_per_sec"), 1),
-            fmt(r.get("speedup"), 1),
-            fmt(r.get("estimated_memory_gb"), 4),
-        ])
+        rows.append(
+            [
+                str(r["batch_size"]),
+                fmt(r.get("cpu_per_spectrum_ms")),
+                fmt(r.get("cpu_throughput_spectra_per_sec"), 1),
+                fmt(r.get("gpu_per_spectrum_ms")),
+                fmt(r.get("gpu_throughput_spectra_per_sec"), 1),
+                fmt(r.get("speedup"), 1),
+                fmt(r.get("estimated_memory_gb"), 4),
+            ]
+        )
     print_table(headers, rows, title="Batch Forward Model Benchmark Summary")
 
     # Note about ExoJAX comparison
