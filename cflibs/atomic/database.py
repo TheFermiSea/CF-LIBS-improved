@@ -2,10 +2,12 @@
 Atomic database interface for loading and querying atomic data.
 """
 
+from __future__ import annotations
+
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Union
+
 import pandas as pd
 
 from cflibs.atomic.structures import Transition, EnergyLevel, SpeciesPhysics, PartitionFunction
@@ -28,7 +30,7 @@ class AtomicDatabase(AtomicDataSource):
     - `partition_functions`: Partition function coefficients
     """
 
-    db_path: Union[str, Path]
+    db_path: str | Path
 
     def __init__(self, db_path: str):
         """
@@ -310,11 +312,11 @@ class AtomicDatabase(AtomicDataSource):
     def get_transitions(
         self,
         element: str,
-        ionization_stage: Optional[int] = None,
-        wavelength_min: Optional[float] = None,
-        wavelength_max: Optional[float] = None,
-        min_relative_intensity: Optional[float] = None,
-    ) -> List[Transition]:
+        ionization_stage: int | None = None,
+        wavelength_min: float | None = None,
+        wavelength_max: float | None = None,
+        min_relative_intensity: float | None = None,
+    ) -> list[Transition]:
         """
         Get transitions for an element.
 
@@ -333,8 +335,8 @@ class AtomicDatabase(AtomicDataSource):
 
         Returns
         -------
-        List[Transition]
-            List of transition objects
+        list[Transition]
+            list of transition objects
         """
         # Check if new columns exist in the actual query execution (though schema check should have fixed it)
         # We select all relevant columns.
@@ -347,7 +349,7 @@ class AtomicDatabase(AtomicDataSource):
             FROM lines
             WHERE element = ?
         """
-        params: List[Any] = [element]
+        params: list[object] = [element]
 
         if ionization_stage is not None:
             query += " AND sp_num = ?"
@@ -425,7 +427,7 @@ class AtomicDatabase(AtomicDataSource):
         logger.debug(f"Retrieved {len(transitions)} transitions for {element}")
         return transitions
 
-    def get_energy_levels(self, element: str, ionization_stage: int) -> List[EnergyLevel]:
+    def get_energy_levels(self, element: str, ionization_stage: int) -> list[EnergyLevel]:
         """
         Get energy levels for a species.
 
@@ -438,8 +440,8 @@ class AtomicDatabase(AtomicDataSource):
 
         Returns
         -------
-        List[EnergyLevel]
-            List of energy level objects
+        list[EnergyLevel]
+            list of energy level objects
         """
         query = """
             SELECT g_level, energy_ev
@@ -464,7 +466,7 @@ class AtomicDatabase(AtomicDataSource):
         return levels
 
     @cached_ionization
-    def get_ionization_potential(self, element: str, ionization_stage: int) -> Optional[float]:
+    def get_ionization_potential(self, element: str, ionization_stage: int) -> float | None:
         """
         Get ionization potential for a species.
 
@@ -491,7 +493,7 @@ class AtomicDatabase(AtomicDataSource):
             res = cur.fetchone()
             return float(res[0]) if res else None
 
-    def get_atomic_mass(self, element: str) -> Optional[float]:
+    def get_atomic_mass(self, element: str) -> float | None:
         """
         Get atomic mass for an element.
 
@@ -522,7 +524,7 @@ class AtomicDatabase(AtomicDataSource):
 
     def get_partition_coefficients(
         self, element: str, ionization_stage: int
-    ) -> Optional[PartitionFunction]:
+    ) -> PartitionFunction | None:
         """
         Get partition function coefficients for a species.
 
@@ -559,7 +561,7 @@ class AtomicDatabase(AtomicDataSource):
             source=res[7],
         )
 
-    def get_species_physics(self, element: str, ionization_stage: int) -> Optional[SpeciesPhysics]:
+    def get_species_physics(self, element: str, ionization_stage: int) -> SpeciesPhysics | None:
         """
         Get physical properties for a species.
 
@@ -600,7 +602,7 @@ class AtomicDatabase(AtomicDataSource):
 
     def get_stark_parameters(
         self, element: str, ionization_stage: int, wavelength_nm: float, tolerance_nm: float = 0.01
-    ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    ) -> tuple[float | None, float | None, float | None]:
         """
         Get Stark broadening parameters for a specific line.
 
@@ -617,7 +619,7 @@ class AtomicDatabase(AtomicDataSource):
 
         Returns
         -------
-        Tuple[float, float, float]
+        tuple[float, float, float]
             (stark_w, stark_alpha, stark_shift) or (None, None, None)
         """
         query = """
@@ -644,7 +646,7 @@ class AtomicDatabase(AtomicDataSource):
 
         return (stark_w, stark_alpha, stark_shift)
 
-    def get_available_elements(self) -> List[str]:
+    def get_available_elements(self) -> list[str]:
         """Get list of elements available in the database."""
         query = "SELECT DISTINCT element FROM lines ORDER BY element"
         with self._get_connection() as conn:
