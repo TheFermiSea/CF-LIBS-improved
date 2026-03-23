@@ -74,15 +74,15 @@ target/
 conductor/setup_state.json
 .serena/
 
-# Beads task tracking (ephemeral)
-.beads/
+# Beads credentials and cache (not the issue data)
+.beads/.beads-credential-key
+.beadhub
+.beadhub-cache/
 .mcp.json
 
 # Git worktrees
 .worktrees/
 
-# Dolt database files (added by bd init)
+# Dolt database files (synced via dolt push/pull, not git)
 .dolt/
-.beadhub
-.beadhub-cache/
 .aw/

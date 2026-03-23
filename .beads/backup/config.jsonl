@@ -1,6 +1,5 @@
 {"key":"auto_compact_enabled","value":"false"}
 {"key":"compact_batch_size","value":"50"}
-{"key":"compact_model","value":"claude-haiku-4-5-20251001"}
 {"key":"compact_parallel_workers","value":"5"}
 {"key":"compact_tier1_days","value":"30"}
 {"key":"compact_tier1_dep_levels","value":"2"}
@@ -8,7 +7,5 @@
 {"key":"compact_tier2_days","value":"90"}
 {"key":"compact_tier2_dep_levels","value":"5"}
 {"key":"compaction_enabled","value":"false"}
-{"key":"issue_prefix","value":"CF-LIBS"}
-{"key":"kv.memory.alias-algorithm-no-l-et-al-2025-is","value":"ALIAS algorithm (Noël et al. 2025) is published in Spectrochimica Acta Part B, NOT arXiv:2501.01057 (that's an unrelated HPC paper). Semantic Scholar ID: 5e3927643fce6f405bf9417b1f8f0f254458436d. The Labutin 2013 correlation method (Analytical Chemistry) generates model spectra at estimated T to correlate with experimental — this is the approach we need to adopt. Jahoda et al. 2020 confirmed that cosine similarity with static NIST peaks achieves only 6.44% mineral accuracy, validating our finding that the VSM approach fundamentally fails without temperature adaptation."}
-{"key":"schema_version","value":"6"}
-{"key":"types.custom","value":"molecule,gate,convoy,merge-request,slot,agent,role,rig,message"}
+{"key":"issue_prefix","value":"CF-LIBS-improved"}
+{"key":"schema_version","value":"9"}

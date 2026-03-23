@@ -1,0 +1,8 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "CF_LIBS_improved",
+  "project_id": "c1837ebe-434e-4b0e-aeef-ae17e2a7cd2d",
+  "last_bd_version": "0.61.0"
+}
