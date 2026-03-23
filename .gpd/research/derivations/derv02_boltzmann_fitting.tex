@@ -1,0 +1,450 @@
+% DERV-02: Batched Weighted Least-Squares Boltzmann Fitting for GPU
+% ASSERT_CONVENTION: natural_units=SI_eV_cm3_nm, metric_signature=null, fourier_convention=null, coupling_convention=null, renormalization_scheme=null, gauge_choice=null
+% Custom conventions: wavelength_unit=nm, boltzmann_plot=y_ln_vs_Ek_eV, temperature_unit=eV_and_K, boltzmann_constant=KB_EV=8.617333e-5_eV/K
+%
+% References:
+%   [T10]  Tognoni et al. (2010) Spectrochim. Acta B 65, 1-14
+%   [H81]  Huber, P.J. (1981) Robust Statistics
+
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,physics,booktabs,hyperref}
+\usepackage[margin=1in]{geometry}
+
+\newcommand{\kbeV}{k_{B,\text{eV}}}
+
+\title{DERV-02: Batched Weighted Least-Squares Boltzmann Fitting\\
+       for GPU-Accelerated CF-LIBS}
+\author{CF-LIBS Research Project}
+\date{Phase 01 -- Physics Formalization}
+
+\begin{document}
+\maketitle
+
+%% ============================================================
+\section{Physics Motivation}
+\label{sec:motivation}
+
+Under LTE, the population of an excited level $k$ of species $s$ (element + ionization stage)
+follows the Boltzmann distribution:
+\begin{equation}
+  n_k = \frac{g_k}{U_s(T)}\,n_{s,\text{total}}\,\exp\!\left(-\frac{E_k}{\kbeV\,T_K}\right),
+  \label{eq:boltzmann_pop}
+\end{equation}
+% DIMENSION CHECK: [n_k] = [1]*[1]*[cm^-3]*exp(-[eV]/([eV/K]*[K])) = [cm^-3]. OK.
+where $g_k$ is the statistical weight, $U_s(T) = \sum_k g_k \exp(-E_k/\kbeV T_K)$
+is the partition function, $n_{s,\text{total}}$ is the total number density of species $s$
+[cm$^{-3}$], $E_k$ is the upper-level energy [eV] measured from the ground state
+of that ionization stage, $\kbeV = 8.617333 \times 10^{-5}$\,eV/K, and $T_K$ is
+the temperature in Kelvin.
+
+The line-integrated emissivity of the transition $k \to i$ is
+\begin{equation}
+  \varepsilon_{ki} = \frac{hc}{4\pi\lambda_{ki}}\,A_{ki}\,n_k
+  \quad [\text{W/m}^3\text{/sr}],
+  \label{eq:emissivity}
+\end{equation}
+% DIMENSION CHECK: [J*m/s]/([nm]*[s^-1]*[cm^-3]) -> need to be careful with unit conversion.
+% [hc/(4pi*lambda)] = [J*m/s / m] = [J/s / (1)] ... this gives [W] per volume per sr after n_k.
+% Actually: [hc/lambda] = [J]. Then *A_ki [s^-1] * n_k [m^-3 after conversion] = [W/m^3]. /4pi = [W/m^3/sr]. OK.
+where $A_{ki}$ [s$^{-1}$] is the Einstein coefficient and $\lambda_{ki}$ [nm] is the
+transition wavelength. The measured intensity $I_{ki}$ is proportional to $\varepsilon_{ki}$
+(with instrument-dependent proportionality constant that cancels in the Boltzmann plot).
+
+Taking the natural logarithm of $I_{ki}\lambda_{ki}/(g_k A_{ki})$:
+\begin{equation}
+  \boxed{y \equiv \ln\!\left(\frac{I_{ki}\,\lambda_{ki}}{g_k\,A_{ki}}\right)
+  = -\frac{E_k}{\kbeV\,T_K} + \underbrace{\ln\!\left(\frac{hc\,C_s\,n_{\text{total}}}{4\pi\,U_s(T)}\,F_{\text{instr}}\right)}_{\displaystyle a},}
+  \label{eq:boltzmann_plot}
+\end{equation}
+where $F_{\text{instr}}$ absorbs the instrument response and $C_s$ is the
+number fraction of species $s$. The argument of the logarithm on the left
+has dimensions that depend on the unit system for $I$, $\lambda$, $g$, $A$;
+since $I$ is measured in arbitrary but consistent units and $\lambda/(g\cdot A)$
+has dimensions [nm/s$^{-1}$] = [nm$\cdot$s], the $y$-value is
+$\ln(\text{quantity with consistent but arbitrary units})$. The intercept $a$
+absorbs all unit-dependent factors. What matters physically is that the
+\textbf{slope} is unit-independent:
+
+\begin{equation}
+  \boxed{b \equiv -\frac{1}{\kbeV\,T_K} \quad [\text{eV}^{-1}].}
+  \label{eq:slope}
+\end{equation}
+% DIMENSION CHECK: [b] = 1/([eV/K]*[K]) = [eV^-1]. OK.
+This is a linear model $y = a + b\,x$ with $x = E_k$ [eV], slope $b$ [eV$^{-1}$],
+and intercept $a$ [same arbitrary units as $y$].
+
+\textbf{Sign convention:} For $T_K > 0$, the slope $b < 0$ (populations decrease
+with energy). A positive slope indicates either population inversion or a fitting error.
+
+
+%% ============================================================
+\section{Weighted Least Squares: Closed-Form Solution}
+\label{sec:wls}
+
+\subsection{Weight Derivation}
+
+The uncertainty in $y_i$ propagates from the intensity uncertainty $\sigma_{I,i}$:
+\begin{equation}
+  \sigma_{y,i} = \left|\frac{\partial y}{\partial I}\right|\sigma_{I,i}
+  = \frac{\sigma_{I,i}}{I_i},
+  \label{eq:sigma_y}
+\end{equation}
+% DIMENSION CHECK: [sigma_y] = [1] (dimensionless). OK since y is a logarithm.
+assuming negligible uncertainty in $\lambda$, $g_k$, and $A_{ki}$.
+The weight for each data point is
+\begin{equation}
+  w_i = \frac{1}{\sigma_{y,i}^2} = \frac{I_i^2}{\sigma_{I,i}^2}.
+  \label{eq:weights}
+\end{equation}
+
+
+\subsection{Normal Equations}
+
+Given $N$ data points $(x_i, y_i, w_i)$ for a single element-stage group,
+the weighted least-squares problem minimizes
+$\chi^2 = \sum_{i=1}^N w_i (y_i - a - b\,x_i)^2$.
+The design matrix is $\mathbf{X} = [\mathbf{1}, \mathbf{x}]$ of shape $(N, 2)$,
+the weight matrix is $\mathbf{W} = \operatorname{diag}(w_1, \ldots, w_N)$,
+and $\boldsymbol{\beta} = (a, b)^T$. The normal equations are
+\begin{equation}
+  (\mathbf{X}^T \mathbf{W} \mathbf{X})\,\boldsymbol{\beta}
+  = \mathbf{X}^T \mathbf{W}\,\mathbf{y}.
+  \label{eq:normal_eq}
+\end{equation}
+
+Define the five weighted sums:
+\begin{equation}
+  S_w = \sum_i w_i, \quad
+  S_{wx} = \sum_i w_i x_i, \quad
+  S_{wy} = \sum_i w_i y_i, \quad
+  S_{wxx} = \sum_i w_i x_i^2, \quad
+  S_{wxy} = \sum_i w_i x_i y_i.
+  \label{eq:sums}
+\end{equation}
+% DIMENSION CHECK:
+% [S_w] = [1] (w is 1/[dimensionless]^2 = dimensionless)
+% [S_wx] = [eV], [S_wy] = [1], [S_wxx] = [eV^2], [S_wxy] = [eV]
+
+The $2 \times 2$ system is
+\begin{equation}
+  \begin{pmatrix} S_w & S_{wx} \\ S_{wx} & S_{wxx} \end{pmatrix}
+  \begin{pmatrix} a \\ b \end{pmatrix}
+  = \begin{pmatrix} S_{wy} \\ S_{wxy} \end{pmatrix}.
+  \label{eq:2x2_system}
+\end{equation}
+
+The determinant is
+\begin{equation}
+  D = S_w\,S_{wxx} - S_{wx}^2.
+  \label{eq:det}
+\end{equation}
+% DIMENSION CHECK: [D] = [1]*[eV^2] - [eV]^2 = [eV^2]. OK.
+
+The closed-form solution:
+\begin{equation}
+  \boxed{b = \frac{S_w\,S_{wxy} - S_{wx}\,S_{wy}}{D}, \qquad
+         a = \frac{S_{wxx}\,S_{wy} - S_{wx}\,S_{wxy}}{D}.}
+  \label{eq:slope_intercept}
+\end{equation}
+% DIMENSION CHECK:
+% [b] = ([1]*[eV] - [eV]*[1]) / [eV^2] = [eV]/[eV^2] = [eV^-1]. OK.
+% [a] = ([eV^2]*[1] - [eV]*[eV]) / [eV^2] = [eV^2]/[eV^2] = [1] (dimensionless). OK.
+
+Temperature recovery:
+\begin{equation}
+  \boxed{T_K = -\frac{1}{b \cdot \kbeV} \quad [\text{K}].}
+  \label{eq:temperature}
+\end{equation}
+% DIMENSION CHECK: [T_K] = 1/([eV^-1]*[eV/K]) = [K]. OK.
+
+\paragraph{Why normal equations, not QR or SVD.}
+For a $2 \times 2$ system, the condition number is
+$\kappa = \lambda_{\max}/\lambda_{\min}$ of $\mathbf{X}^T\mathbf{W}\mathbf{X}$.
+With typical Boltzmann data ($E_k$ spanning $0$--$10$\,eV, weights $\sim 1$--$100$),
+$\kappa \sim 10^2$--$10^3$. The normal equations lose $\sim \log_{10}(\kappa) \approx 2$--$3$
+digits, leaving $\sim 12$--$13$ correct digits in float64. QR factorization would
+add $\sim 3\times$ overhead (Householder reflections) for no practical benefit.
+The 5-sum formulation is optimal for GPU: each sum is a single \texttt{jnp.sum}
+along axis~1.
+
+
+%% ============================================================
+\section{Covariance and Uncertainty Propagation}
+\label{sec:covariance}
+
+The parameter covariance matrix is the inverse of the normal matrix:
+\begin{equation}
+  \operatorname{Cov}(\boldsymbol{\beta})
+  = (\mathbf{X}^T\mathbf{W}\mathbf{X})^{-1}
+  = \frac{1}{D}\begin{pmatrix} S_{wxx} & -S_{wx} \\ -S_{wx} & S_w \end{pmatrix}.
+  \label{eq:covariance}
+\end{equation}
+% DIMENSION CHECK:
+% Cov[0,0] = var(a) = [eV^2]/[eV^2] = dimensionless. OK (a is dimensionless).
+% Cov[1,1] = var(b) = [1]/[eV^2] = [eV^-2]. OK (b has units eV^-1).
+% Cov[0,1] = cov(a,b) = [eV]/[eV^2] = [eV^-1]. OK (product of dimensionless and eV^-1).
+
+The uncertainty in the slope is
+\begin{equation}
+  \sigma_b = \sqrt{\operatorname{Cov}[1,1]} = \sqrt{S_w / D}.
+  \label{eq:sigma_b}
+\end{equation}
+
+Propagating to temperature via $T_K = -1/(b\,\kbeV)$:
+\begin{equation}
+  \sigma_T = \left|\frac{dT}{db}\right|\sigma_b
+  = \frac{1}{\kbeV\,b^2}\,\sigma_b
+  = T_K^2\,\kbeV\,\sigma_b.
+  \label{eq:sigma_T}
+\end{equation}
+% DIMENSION CHECK: [sigma_T] = [K^2]*[eV/K]*[eV^-1] = [K]. OK.
+
+\paragraph{Reduced chi-squared.}
+\begin{equation}
+  \chi^2_{\text{red}} = \frac{1}{N-2}\sum_{i=1}^N w_i\,(y_i - a - b\,x_i)^2.
+  \label{eq:chi2red}
+\end{equation}
+Interpretation: $\chi^2_{\text{red}} \gg 1$ indicates the LTE single-temperature model
+is inadequate (self-absorption, non-LTE effects, or misidentified lines);
+$\chi^2_{\text{red}} \ll 1$ indicates overestimated uncertainties.
+
+
+%% ============================================================
+\section{Batched GPU Formulation}
+\label{sec:batch}
+
+\subsection{Batch Dimension}
+
+In CF-LIBS inversion or manifold generation, Boltzmann fitting is performed for
+each (element, ionization stage) combination per spectrum. For $N_{\text{elem}}$
+elements with $N_{\text{stage}}$ ionization stages each, across $N_{\text{spec}}$
+spectra, the batch size is
+\begin{equation}
+  B = N_{\text{elem}} \times N_{\text{stage}} \times N_{\text{spec}}.
+  \label{eq:batch_size}
+\end{equation}
+Example: 5 elements, 2 stages, 100 spectra $\Rightarrow B = 1000$.
+
+\subsection{Pad-and-Mask Strategy}
+
+Different element-stage groups have different numbers of lines. To enable
+batched computation without Python loops, pad all groups to a common length
+$N_{\max}$:
+\begin{align}
+  \mathbf{x}    &\in \mathbb{R}^{B \times N_{\max}}, \quad
+  \mathbf{y}    \in \mathbb{R}^{B \times N_{\max}}, \quad
+  \mathbf{w}    \in \mathbb{R}^{B \times N_{\max}}, \label{eq:pad_arrays} \\
+  \mathbf{m}    &\in \{0, 1\}^{B \times N_{\max}} \quad \text{(boolean mask)}.
+  \label{eq:mask_array}
+\end{align}
+Padded entries have $m_{bj} = 0$ and are excluded from all sums. The effective
+weights are $\tilde{w}_{bj} = w_{bj} \cdot m_{bj}$.
+
+\subsection{Vectorized Sums}
+
+Each weighted sum becomes a single reduction along axis~1:
+\begin{align}
+  (S_w)_b       &= \sum_{j=1}^{N_{\max}} \tilde{w}_{bj},          & \texttt{jnp.sum(w*m, axis=1)} \label{eq:Sw_batch} \\
+  (S_{wx})_b    &= \sum_{j=1}^{N_{\max}} \tilde{w}_{bj}\,x_{bj},  & \texttt{jnp.sum(w*m*x, axis=1)} \\
+  (S_{wy})_b    &= \sum_{j=1}^{N_{\max}} \tilde{w}_{bj}\,y_{bj},  & \texttt{jnp.sum(w*m*y, axis=1)} \\
+  (S_{wxx})_b   &= \sum_{j=1}^{N_{\max}} \tilde{w}_{bj}\,x_{bj}^2,& \texttt{jnp.sum(w*m*x**2, axis=1)} \\
+  (S_{wxy})_b   &= \sum_{j=1}^{N_{\max}} \tilde{w}_{bj}\,x_{bj}\,y_{bj}. & \texttt{jnp.sum(w*m*x*y, axis=1)} \label{eq:Swxy_batch}
+\end{align}
+All 5 sums have output shape $(B,)$. The determinant, slope, intercept,
+and temperature are then computed element-wise on these $(B,)$ vectors
+using Eqs.~\eqref{eq:det}--\eqref{eq:temperature}. No cross-batch communication occurs.
+
+\subsection{Operation Count}
+
+Per batch element:
+\begin{itemize}
+  \item 5 dot products (reductions over $N_{\max}$ elements): $5 \times 2N_{\max}$ FLOPs.
+  \item 1 determinant: 3 FLOPs.
+  \item 2 divisions (slope, intercept): 2 FLOPs.
+  \item 1 temperature conversion: 2 FLOPs.
+\end{itemize}
+Total: $10N_{\max} + 7$ FLOPs per batch element. For $N_{\max} = 50$:
+$\sim 507$ FLOPs. For the full batch: $507 \times B$ FLOPs.
+At 7.8~TFLOPS (V100S float64): $B = 1000$ fits complete in $\sim 0.065\,\mu$s ---
+entirely memory-bandwidth-limited, not compute-limited.
+
+\subsection{Memory}
+
+$(B \times N_{\max}) \times 8\,\text{bytes} \times 5\,\text{arrays}
+= 1000 \times 50 \times 40 = 2$\,MB. Negligible on GPU.
+
+\subsection{JIT Strategy}
+
+The entire batched computation (sums, determinant, slope, intercept, temperature,
+covariance) is wrapped in a single \texttt{@jax.jit} function. No \texttt{vmap}
+is needed because the batch dimension is handled by array broadcasting along axis~0.
+The JIT compiler fuses all element-wise operations and reductions into a single
+GPU kernel launch.
+
+
+%% ============================================================
+\section{Outlier Rejection}
+\label{sec:outliers}
+
+\subsection{Sigma-Clipping (Recommended for GPU)}
+
+After an initial fit, compute residuals:
+\begin{equation}
+  r_i = y_i - a - b\,x_i.
+  \label{eq:residuals}
+\end{equation}
+Mask out points with $|r_i| > k\,\hat{\sigma}_r$ where $\hat{\sigma}_r$
+is the residual standard deviation and $k = 2.5$ (typical). Update the mask
+$\mathbf{m}$ and refit. This is fully vectorizable in JAX:
+\begin{enumerate}
+  \item Compute all residuals: \texttt{r = y - a[:, None] - b[:, None] * x} (shape $(B, N_{\max})$).
+  \item Compute $\hat{\sigma}_r$ per batch: \texttt{jnp.std(r * m, axis=1)} (shape $(B,)$).
+  \item Update mask: \texttt{m\_new = m \& (abs(r) < k * sigma\_r[:, None])} (shape $(B, N_{\max})$).
+  \item Refit with updated mask.
+\end{enumerate}
+One to two iterations suffice for LIBS data. The entire sigma-clipping loop
+can be unrolled at JIT time for a fixed number of iterations via
+\texttt{jax.lax.fori\_loop} or explicit unrolling.
+
+\subsection{RANSAC (Not Recommended for GPU)}
+
+RANSAC requires random subset sampling and early termination, which are
+inherently sequential and incompatible with JAX's functional JIT model.
+The existing NumPy RANSAC implementation in \texttt{boltzmann.py} is retained
+for CPU-only workflows.
+
+\subsection{Huber M-Estimation (Advanced)}
+
+Iteratively reweighted least squares (IRLS) with Huber weights:
+\begin{equation}
+  w_i^{(\text{Huber})} = \begin{cases}
+    1 & |u_i| \leq \epsilon, \\
+    \epsilon / |u_i| & |u_i| > \epsilon,
+  \end{cases}
+  \label{eq:huber_weights}
+\end{equation}
+where $u_i = r_i / \hat{s}$ is the standardized residual,
+$\hat{s} = 1.4826 \cdot \text{MAD}(r)$ is a robust scale estimate, and
+$\epsilon = 1.35$ gives 95\% efficiency at the Gaussian model~[H81].
+Combined weights are $\tilde{w}_i = w_i \cdot w_i^{(\text{Huber})}$.
+
+IRLS can be implemented in JAX via \texttt{jax.lax.scan} over 5--10 iterations.
+However, the per-iteration median (for MAD) requires sorting, which is $O(N\log N)$
+and less GPU-friendly than the $O(N)$ sums in sigma-clipping.
+\textbf{Recommendation:} Use sigma-clipping for batch sweeps; reserve Huber for
+final single-spectrum refinement.
+
+
+%% ============================================================
+\section{Saha Correction for Multi-Stage Fitting}
+\label{sec:saha}
+
+After fitting each ionization stage independently (yielding intercepts $a_I$, $a_{II}$,
+etc.), the intercepts must be mapped to a common reference plane using the
+Saha equation. For the correction from stage~II to the neutral (stage~I) reference:
+\begin{equation}
+  a_{II,\text{corr}} = a_{II}
+    + \ln\!\left(\frac{n_e}{\Lambda_{\text{Saha}}}\,T_K^{-3/2}\,
+      \frac{U_I(T)}{U_{II}(T)}\,\exp\!\left(\frac{\chi_I}{\kbeV\,T_K}\right)\right),
+  \label{eq:saha_correction}
+\end{equation}
+% DIMENSION CHECK: All terms inside ln must be dimensionless.
+% [n_e/Lambda_Saha * T^{-3/2}] needs Lambda_Saha to have units [cm^-3 * K^{-3/2}].
+% Saha const: (2*pi*m_e*k_B/h^2)^{3/2} has dimensions [K^{-3/2} * m^{-3}] -> convert to cm^-3.
+% Then n_e [cm^-3] / ([cm^-3 * K^{-3/2}]) * T^{-3/2} [K^{-3/2}] = dimensionless. OK.
+% U_I/U_II: dimensionless. exp(eV/(eV/K * K)) = exp(dimensionless). OK.
+where $\chi_I$ is the ionization potential of stage~I [eV],
+$\Lambda_{\text{Saha}} = 2(2\pi m_e k_B / h^2)^{3/2} \approx 4.83 \times 10^{15}$\,cm$^{-3}$\,K$^{-3/2}$
+is the Saha constant (with the factor of 2 for electron spin degeneracy), and
+$U_I$, $U_{II}$ are partition functions.
+
+After Saha correction, all intercepts refer to the same reference plane, and a
+common-slope fit across all stages determines the final temperature.
+The closure equation $\sum_s C_s = 1$ then determines absolute concentrations
+(see Plan~01-02, DERV-04).
+
+
+%% ============================================================
+\section{Limiting Cases}
+\label{sec:limits}
+
+% SELF-CRITIQUE CHECKPOINT (post-derivation):
+% 1. SIGN CHECK: slope b < 0 for T > 0. Verified: b = -1/(k_B*T) < 0. OK.
+% 2. FACTOR CHECK: k_B = 8.617e-5 eV/K. No factors of 2, pi, hbar involved. OK.
+% 3. CONVENTION CHECK: E_k in eV, slope in eV^-1, T in K. Matches project lock. OK.
+% 4. DIMENSION CHECK: All quantities checked inline. OK.
+
+\subsection{Uniform Weights ($w_i = 1$)}
+
+Setting $w_i = 1$ for all $i$, the sums become
+$S_w = N$, $S_{wx} = \sum x_i = N\bar{x}$, $S_{wy} = N\bar{y}$,
+$S_{wxx} = \sum x_i^2$, $S_{wxy} = \sum x_i y_i$.
+The determinant is $D = N\sum x_i^2 - (N\bar{x})^2 = N\sum(x_i - \bar{x})^2$.
+The slope becomes
+\begin{equation}
+  b = \frac{N\sum x_i y_i - N\bar{x}\cdot N\bar{y}}{N\sum(x_i-\bar{x})^2}
+    = \frac{\sum(x_i - \bar{x})(y_i - \bar{y})}{\sum(x_i - \bar{x})^2},
+  \label{eq:ols_slope}
+\end{equation}
+which is the standard ordinary least-squares (OLS) slope formula. $\checkmark$
+
+
+\subsection{Single Element ($N = 2$)}
+
+With exactly 2 points $(x_1, y_1)$ and $(x_2, y_2)$ with equal weights:
+$D = 2(x_1^2 + x_2^2) - (x_1+x_2)^2 = (x_1-x_2)^2$.
+The slope is $b = (y_2 - y_1)/(x_2 - x_1)$, the exact slope through two points.
+The residuals are identically zero, $\chi^2_{\text{red}} = 0/(2-2)$ is undefined
+(zero degrees of freedom), and the covariance matrix is formally infinite.
+This is the standard behavior: two parameters, two data points, no residual
+information for error estimation. $\checkmark$
+
+
+\subsection{Degenerate Case (All $E_k$ Equal)}
+
+If all upper-level energies are identical ($x_i = x_0$ for all $i$), then
+$S_{wx} = S_w\,x_0$ and $S_{wxx} = S_w\,x_0^2$, giving
+$D = S_w \cdot S_w\,x_0^2 - (S_w\,x_0)^2 = 0$.
+The system is singular: no slope can be determined from data at a single
+$E_k$ value.
+
+\textbf{Detection:} Check $|D| < \epsilon_{\text{mach}} \cdot S_w \cdot S_{wxx}$
+before dividing. When detected, return $T = \infty$ (or $\texttt{NaN}$) and flag
+the group as having insufficient energy spread. The existing codebase handles
+this via the \texttt{slope >= 0} check in \texttt{\_create\_result()}. $\checkmark$
+
+
+%% ============================================================
+\section{Validation Criteria}
+\label{sec:validation}
+
+\begin{enumerate}
+  \item \textbf{Synthetic round-trip:}
+    Generate Boltzmann data from known $T = 10{,}000$\,K ($\sim 0.86$\,eV),
+    add Gaussian noise at SNR $= 50$, recover $T$ within $2\sigma_T$.
+    Repeat for 100 noise realizations; $> 95\%$ should fall within $2\sigma_T$.
+
+  \item \textbf{Uniform weights:}
+    With $w_i = 1$, verify that the batched GPU implementation reproduces
+    \texttt{np.polyfit(x, y, 1)} to machine precision ($< 10^{-12}$ relative).
+
+  \item \textbf{Single element:}
+    Fe~I with 10 lines at known $T$: verify slope matches
+    $-1/(\kbeV \cdot T_K)$ within $\sigma_b$.
+
+  \item \textbf{Degenerate detection:}
+    Input with all $E_k = 5.0$\,eV: verify $D = 0$ is detected and
+    $T = \infty$ (not \texttt{NaN}) is returned.
+
+  \item \textbf{Covariance positive-definiteness:}
+    For all batch elements with $N \geq 3$, verify
+    $\operatorname{Cov}[0,0] > 0$, $\operatorname{Cov}[1,1] > 0$, and
+    $\det(\operatorname{Cov}) > 0$.
+\end{enumerate}
+
+\textbf{Note:} Qualitative claims about GPU speedup without derivation of operation
+counts are \emph{forbidden} in this formalization phase (forbidden proxy FP-02).
+Operation counts are derived explicitly in \S\ref{sec:batch}.
+
+
+\end{document}
