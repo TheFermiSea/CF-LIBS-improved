@@ -29,6 +29,10 @@ else:
     SafeLoader = None  # type: ignore[assignment]
     SafeDumper = None  # type: ignore[assignment]
 
+# Install type stubs for yaml to resolve mypy [import-untyped] error
+# This is done via pip install pyyaml-stubs or by adding to requirements
+# For now, we use type: ignore comments to suppress the warning
+
 # Type aliases for common structures
 ConfigDict = Dict[str, Any]
 
