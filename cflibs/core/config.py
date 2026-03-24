@@ -24,7 +24,7 @@ except ImportError:
 
 # Type alias for yaml module to avoid mypy [import-untyped] error when stubs unavailable
 if HAS_YAML:
-    from yaml import SafeLoader, SafeDumper  # type: ignore[import-untyped]
+    from yaml import SafeLoader, SafeDumper  # type: ignore[import-untyped, unused-ignore]
 else:
     SafeLoader = None  # type: ignore[assignment]
     SafeDumper = None  # type: ignore[assignment]
