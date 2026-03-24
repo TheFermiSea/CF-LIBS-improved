@@ -17,6 +17,9 @@ try:
 except ImportError:
     HAS_YAML = False
 
+# Type aliases for common structures
+ConfigDict = Dict[str, Any]
+
 logger = logging.getLogger(__name__)
 
 
