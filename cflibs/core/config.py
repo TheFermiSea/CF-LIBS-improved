@@ -11,7 +11,7 @@ from typing import Dict, Any, Union
 import logging
 
 try:
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
     HAS_YAML = True
 except ImportError:
