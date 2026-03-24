@@ -13,14 +13,14 @@ from pathlib import Path
 
 from typing import Any, Dict, Union
 
+# Type alias for yaml module to avoid mypy [import-untyped] error when stubs unavailable
 try:
     import yaml
+
+    HAS_YAML = True
 except ImportError:
     HAS_YAML = False
-else:
-    HAS_YAML = True
-    # Use Any for yaml module type since stubs are not available
-    yaml: Any = yaml  # type: ignore[assignment]
+    yaml = None  # type: ignore[assignment, import-untyped]
 
 # Type aliases for common structures
 ConfigDict = Dict[str, Any]
