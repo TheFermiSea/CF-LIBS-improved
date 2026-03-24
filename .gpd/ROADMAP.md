@@ -138,6 +138,13 @@ Plans:
 3. Bibliography with all key references
 4. Internal review pass (no physics errors, consistent notation)
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 05-01-PLAN.md -- Manuscript text (abstract, introduction, methods, results, discussion, conclusion, bibliography)
+- [ ] 05-02-PLAN.md -- 7 publication-quality figures from benchmark CSV data
+- [ ] 05-03-PLAN.md -- Assembly, cross-check, and JQSRT format compliance
+
 **Contract Coverage:**
 - Claims: Full publication deliverable
 - Deliverables: LaTeX source, figures, bibliography
