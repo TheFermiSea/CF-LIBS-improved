@@ -1,0 +1,160 @@
+\section{Methods}
+\label{sec:methods}
+
+We describe the mathematical formulation and GPU implementation strategy for each of the five computational kernels.
+Throughout, we adopt the following notation conventions: $\gamma$ denotes the Lorentzian half-width at half-maximum (HWHM) in \si{\nano\metre}, $\sigma$ denotes the Gaussian standard deviation in \si{\nano\metre}, $T$ denotes the electron temperature in \si{\electronvolt} unless subscripted as $T_K$ for Kelvin, $n_e$ denotes the electron density in \si{\per\cubic\centi\metre}, and $\lambda$ denotes wavelength in \si{\nano\metre}.
+Energies $E_k$ are measured in \si{\electronvolt} above the ground state of each ionization stage, and $k_B = \SI{8.617333e-5}{\electronvolt\per\kelvin}$.
+
+\subsection{GPU-Optimized Voigt Profile}
+\label{sec:voigt}
+
+The Voigt profile $V(\lambda)$ describes the spectral line shape arising from the convolution of Gaussian (Doppler) and Lorentzian (Stark broadening plus natural linewidth) contributions.
+In terms of the Faddeeva function $w(z) = e^{-z^2} \operatorname{erfc}(-iz)$, the normalized Voigt profile is
+\begin{equation}
+  V(\lambda) = \frac{\operatorname{Re}[w(z)]}{\sigma \sqrt{2\pi}}, \quad
+  z = \frac{(\lambda - \lambda_0) + i\gamma}{\sigma\sqrt{2}},
+  \label{eq:voigt}
+\end{equation}
+where $\lambda_0$ is the line center wavelength.
+The profile integrates to unity over wavelength and has dimensions of \si{\per\nano\metre}.
+
+Efficient evaluation of $w(z)$ on GPU hardware requires a branch-free algorithm: conditional branches within vectorized operations cause warp divergence on NVIDIA architectures and are incompatible with JAX's automatic differentiation, which evaluates all branches of \texttt{jnp.where} during the forward pass.
+The widely used \citet{Humlicek1982} W4~algorithm employs four piecewise regions selected by conditionals on $|x|$ and $y = \operatorname{Im}(z)$, making it unsuitable for JAX compilation.
+
+We adopt the rational approximation of \citet{Weideman1994} with $N = 36$ terms.
+This algorithm applies a M\"obius transformation $Z = (L + iz)/(L - iz)$ with optimal shift $L \approx 5.0454$, then evaluates a degree-35 polynomial in $Z$:
+\begin{equation}
+  w(z) \approx \frac{1}{\sqrt{\pi}} \frac{L}{L - iz}
+    + \frac{2}{(L - iz)^2} \sum_{n=0}^{35} c_n Z^n,
+  \label{eq:weideman}
+\end{equation}
+where the coefficients $\{c_n\}$ are precomputed constants.
+This formulation is entirely branch-free, requires 236 floating-point operations per evaluation, and achieves a maximum relative error below $10^{-13}$ in 64-bit arithmetic across the entire upper half-plane $\operatorname{Im}(z) \geq 0$ \citep{Weideman1994}.
+\citet{Zaghloul2024} recently proposed an improved algorithm that achieves $10^{-16}$ accuracy, which we use as an accuracy reference; however, its additional computational cost is unnecessary for LIBS applications where the Voigt profile is convolved with an instrument function of finite resolving power.
+
+For a spectrum containing $N_\mathrm{lines}$ emission lines evaluated on a wavelength grid of $N_\mathrm{wl}$ points, the full profile matrix has shape $(N_\mathrm{wl}, N_\mathrm{lines})$.
+Rather than looping over lines, we broadcast the wavelength grid against the line parameter vectors:
+\begin{equation}
+  \mathrm{diff}_{ij} = \lambda_i - \lambda_{0,j}, \quad
+  z_{ij} = \frac{\mathrm{diff}_{ij} + i\gamma_j}{\sigma_j \sqrt{2}},
+  \label{eq:voigt-broadcast}
+\end{equation}
+where $i = 1, \ldots, N_\mathrm{wl}$ and $j = 1, \ldots, N_\mathrm{lines}$.
+The entire $(N_\mathrm{wl}, N_\mathrm{lines})$ grid of Faddeeva evaluations is then executed as a single fused XLA kernel, exploiting the massive parallelism of the GPU.
+
+\subsection{Vectorized Boltzmann Fitting}
+\label{sec:boltzmann}
+
+The Boltzmann plot method \citep{Tognoni2010} estimates the plasma temperature from emission line intensities.
+For a given element and ionization stage, plotting
+\begin{equation}
+  y = \ln\!\left(\frac{I \lambda}{g_k A_{ki}}\right)
+  \quad \text{vs.} \quad
+  x = E_k
+  \label{eq:boltzmann-plot}
+\end{equation}
+yields a linear relationship $y = bx + a$ with slope $b = -1/(k_B T)$ and intercept $a = \ln(hc\, C_s\, n_e\, F_s / (4\pi\, U_z(T)))$, where $I$ is the measured line intensity, $g_k$ is the upper-level degeneracy, $A_{ki}$ is the Einstein~$A$ coefficient, $E_k$ is the upper-level energy, and $F_s$ encodes Saha ionization-stage ratios.
+
+Rather than an iterative regression or matrix factorization, we express the weighted least-squares (WLS) solution in closed form via five dot-product accumulators:
+\begin{equation}
+  S_w = \sum_i w_i, \quad
+  S_{wx} = \sum_i w_i x_i, \quad
+  S_{wy} = \sum_i w_i y_i, \quad
+  S_{wxx} = \sum_i w_i x_i^2, \quad
+  S_{wxy} = \sum_i w_i x_i y_i,
+  \label{eq:boltzmann-sums}
+\end{equation}
+from which the slope and intercept are
+\begin{equation}
+  b = \frac{S_w S_{wxy} - S_{wx} S_{wy}}{S_w S_{wxx} - S_{wx}^2}, \quad
+  a = \frac{S_{wxx} S_{wy} - S_{wx} S_{wxy}}{S_w S_{wxx} - S_{wx}^2}.
+  \label{eq:boltzmann-slope}
+\end{equation}
+The temperature follows as $T_K = -1/(b \cdot k_B)$, and the uncertainty propagates as $\sigma_T = T_K^2 k_B \sigma_b$.
+
+For $D$ elements with varying numbers of emission lines, direct vectorization would require ragged arrays.
+We instead adopt a pad-and-mask strategy: all elements are padded to a common maximum line count $N_\mathrm{max}$, with a binary mask $m_i \in \{0, 1\}$ that zeroes the weight $w_i$ for padded entries.
+The five sums in \cref{eq:boltzmann-sums} are then computed as standard inner products on arrays of shape $(D, N_\mathrm{max})$, requiring $10 N_\mathrm{max} + 7$ floating-point operations per element.
+This pad-and-mask approach maps directly to GPU SIMD execution without requiring \texttt{vmap}---the element dimension $D$ is simply a batch axis over which the five dot products are computed in parallel.
+
+\subsection{Anderson-Accelerated Saha--Boltzmann Solver}
+\label{sec:anderson}
+
+The CF-LIBS inversion requires solving a charge-balance equation self-consistently: given a temperature $T$ and trial electron density $n_e$, the Saha equation determines ionization fractions, from which a new $n_e$ follows via charge neutrality $n_e = \sum_s \sum_{z \geq 1} z \cdot n_{s,z}$.
+This defines a fixed-point problem $n_e = g(n_e)$ where $g$ encapsulates the Saha--Boltzmann system.
+
+Simple Picard iteration $n_e^{(k+1)} = g(n_e^{(k)})$ converges at a rate governed by the spectral radius of $g'(n_e^*)$, which is typically $0.3$--$0.7$ for LIBS-relevant conditions.
+Anderson acceleration \citep{Walker2011} improves upon Picard iteration by maintaining a history of the $m$ most recent iterates and their residuals $r_k = g(n_e^{(k)}) - n_e^{(k)}$, then computing an optimal linear combination:
+\begin{equation}
+  n_e^{(k+1)} = g(n_e^{(k)}) - (\Delta G_k + \Delta R_k)\, \bm{\gamma}_k^*,
+  \label{eq:anderson}
+\end{equation}
+where $\Delta G_k$ and $\Delta R_k$ are matrices of iterate and residual differences over the history window, and $\bm{\gamma}_k^*$ minimizes the residual norm:
+\begin{equation}
+  \bm{\gamma}_k^* = \arg\min_{\bm{\gamma}} \| r_k - \Delta R_k \bm{\gamma} \|^2 + \lambda \|\bm{\gamma}\|^2.
+  \label{eq:anderson-ls}
+\end{equation}
+The Tikhonov regularization parameter $\lambda$ stabilizes the least-squares solve when the history vectors become nearly collinear.
+
+\citet{Toth2015} proved that Anderson acceleration with depth $m$ converges r-linearly at a rate improved by a factor depending on the gain over Picard's contraction constant.
+\citet{Evans2018} showed that for sufficiently smooth fixed-point maps, depth~$m$ Anderson acceleration achieves convergence comparable to GMRES($m$) applied to the linearized residual equation.
+
+In our JAX implementation, the iteration history is maintained as a fixed-size circular buffer within a \texttt{lax.scan} loop, ensuring a static computation graph suitable for JIT compilation.
+The depth $m$ is a compile-time constant (we find $m = 1$ optimal at tolerance $10^{-6}$ for typical LIBS conditions, balancing the overhead of the least-squares solve against the iteration reduction).
+When $m = 0$, the algorithm reduces exactly to Picard iteration, providing a graceful fallback.
+
+\subsection{Softmax Compositional Closure}
+\label{sec:softmax}
+
+CF-LIBS determines elemental compositions subject to the simplex constraint $\sum_{i=1}^D C_i = 1$ with $C_i > 0$.
+Traditional approaches enforce this constraint via explicit normalization after each iteration, which complicates gradient-based optimization and can introduce numerical instability when compositions approach the simplex boundary.
+
+The softmax reparameterization maps unconstrained parameters $\bm{\theta} \in \mathbb{R}^D$ to the probability simplex via
+\begin{equation}
+  C_i = \frac{\exp(\theta_i)}{\sum_{j=1}^D \exp(\theta_j)},
+  \label{eq:softmax}
+\end{equation}
+implemented with the log-sum-exp trick for numerical stability: $\theta_i \leftarrow \theta_i - \max_j \theta_j$ before exponentiation.
+The constraint $\sum_i C_i = 1$ is satisfied exactly by construction, and strict positivity $C_i > 0$ holds for all finite $\bm{\theta}$.
+
+The Jacobian of the softmax map,
+\begin{equation}
+  J_{ij} = \frac{\partial C_i}{\partial \theta_j} = C_i(\delta_{ij} - C_j),
+  \label{eq:softmax-jacobian}
+\end{equation}
+is rank $D - 1$ (the kernel is $\bm{1}$, reflecting the shift invariance $C(\bm{\theta}) = C(\bm{\theta} + c\bm{1})$) and has condition number $\kappa = 1$ at the uniform composition $C_i = 1/D$.
+This Jacobian propagates gradients from any downstream loss function (e.g., spectral residual) back through the compositional constraint, enabling joint optimization of $T$, $n_e$, and $\bm{C}$ via L-BFGS-B or similar quasi-Newton methods.
+
+\subsection{Batch Forward Model}
+\label{sec:batch}
+
+The forward model maps plasma parameters $(T, n_e, \bm{C})$ and a wavelength grid $\bm{\lambda}$ to a synthetic emission spectrum $S(\lambda)$ through four stages:
+\begin{enumerate}
+  \item \textbf{Saha ionization balance}: For each element~$s$, compute the ionization-stage fractions $f_z^{(s)}(T, n_e)$ from the Saha equation using partition functions $U_z(T)$ and ionization potential depression $\Delta\chi_\mathrm{DH}$.
+  \item \textbf{Boltzmann level populations}: For each transition line~$l$ belonging to element~$s$ in stage~$z$, compute the upper-level number density $n_k^{(l)} = C_s \cdot n_e \cdot f_z^{(s)} \cdot g_k^{(l)} \exp(-E_k^{(l)} / T) / U_z^{(s)}(T)$.
+  \item \textbf{Line emissivity}: Compute $\varepsilon_l = (hc / 4\pi\lambda_l) A_{ki}^{(l)} n_k^{(l)}$ in \si{\watt\per\cubic\metre\per\steradian} (with the \si{\per\cubic\centi\metre} to \si{\per\cubic\metre} conversion factor $10^6$).
+  \item \textbf{Voigt broadening and spectrum assembly}: Evaluate the Voigt profile for each line on the wavelength grid via \cref{eq:voigt-broadcast}, then sum:
+    \begin{equation}
+      S(\lambda) = \sum_{l=1}^{N_\mathrm{lines}} \varepsilon_l \cdot V_l(\lambda) \quad [\si{\watt\per\cubic\metre\per\steradian\per\nano\metre}].
+      \label{eq:spectrum}
+    \end{equation}
+\end{enumerate}
+
+For batch computation over $B$ parameter sets $\{(T_b, n_{e,b}, \bm{C}_b)\}_{b=1}^B$---as required for manifold generation or Monte Carlo uncertainty propagation---we apply JAX's \texttt{vmap} transformation at a single level over the batch dimension:
+\begin{equation}
+  \texttt{batch\_spectrum} = \texttt{jit}(\texttt{vmap}(\texttt{single\_spectrum},\; \texttt{in\_axes}=(0, 0, 0, \text{None}, \text{None}))),
+  \label{eq:vmap}
+\end{equation}
+where the first three axes (temperature, electron density, composition) are mapped over the batch, while the wavelength grid and atomic data are broadcast (shared) across all batch elements.
+
+The dominant memory consumer is the profile matrix of shape $(B, N_\mathrm{wl}, N_\mathrm{lines})$.
+The maximum batch size for a given GPU memory budget $M_\mathrm{GPU}$ is
+\begin{equation}
+  B_\mathrm{max} = \left\lfloor \frac{M_\mathrm{GPU} - M_\mathrm{overhead}}{N_\mathrm{wl} \times N_\mathrm{lines} \times d_\mathrm{bytes}} \right\rfloor,
+  \label{eq:bmax}
+\end{equation}
+where $d_\mathrm{bytes} = 8$ for \texttt{float64} and $M_\mathrm{overhead} \approx \SI{2}{\giga\byte}$ accounts for the JAX runtime and XLA workspace.
+
+The batch forward model achieves bit-identical results to sequential single-spectrum evaluation because \texttt{vmap} is a purely semantic transformation---it does not alter the floating-point operations within each spectrum computation, only their scheduling across GPU threads.
+This property provides a strong correctness guarantee: any result obtained in batch mode is numerically identical to the same computation performed sequentially on CPU.
+As reported by \citet{Kawahara2022} for ExoJAX, this \texttt{vmap}-based approach to spectral batch computation is well-suited to GPU architectures where the per-spectrum workload (dominated by the $(N_\mathrm{wl}, N_\mathrm{lines})$ profile matrix) provides sufficient arithmetic intensity to saturate the GPU's compute units.
