@@ -247,11 +247,40 @@ Spot-check of 10 equations and surrounding text:
 
 ---
 
+## Fixes Applied (Task 2)
+
+1. **ISSUE-1 FIXED:** Added Fig 1 (pipeline architecture) to introduction.tex with \label{fig:pipeline} and \Cref reference.
+2. **ISSUE-2 FIXED:** Added Fig 5 (FAISS latency) to results.tex as new subsection 4.6 "FAISS Manifold Query" with \label{fig:faiss-latency} and \Cref reference.
+3. **ISSUE-3 DEFERRED:** Placeholder text ([Affiliation], [repository], [institution]) left for researcher to fill before submission.
+
+---
+
+## Final Status
+
+- **Total discrepancies found:** 2 (both figure-inclusion issues)
+- **Discrepancies fixed:** 2
+- **Remaining issues:** 3 placeholder text items (author-specific, deferred to researcher)
+- **Compilation status:** pdflatex not available on system; manual syntax check passed
+  - elsarticle document class with preprint,12pt,authoryear options: correct
+  - frontmatter structure (\title, \author, \affiliation, \keyword, abstract): correct
+  - elsarticle-harv bibliography style: correct for JQSRT author-year
+  - All \Cref cross-references have matching \label targets
+  - All \cite keys have matching refs.bib entries
+  - booktabs, siunitx, cleveref packages loaded: correct
+  - Required packages: texlive-base, texlive-latex-extra (elsarticle), texlive-science (siunitx)
+- **Estimated page count:** ~18 pages (591 lines LaTeX, 12pt preprint, 7 figures + 1 table)
+- **Figure count:** 7/7 (all referenced in text with \label and \Cref)
+- **Table count:** 1 (accuracy summary, Tab 1)
+- **Equation count:** 13 labeled equations
+- **Section count:** 6 main sections + Data Availability + Acknowledgements
+- **Bibliography entries:** 17 (all cited, none orphaned)
+- **Must-surface references:** 4/4 confirmed cited
+- **Numerical discrepancies:** 0
+
 ## Summary
 
 - **Total numerical claims verified:** 85+
-- **Discrepancies found:** 0
-- **Figure-text issues:** 2 (missing Fig 1 and Fig 5 from manuscript)
+- **Discrepancies found:** 0 numerical, 2 figure-inclusion (both fixed)
 - **Bibliography issues:** 0
 - **Notation issues:** 0
 - **Placeholder text:** 3 instances (author-specific, expected)

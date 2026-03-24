@@ -147,6 +147,20 @@ At $B = 10{,}000$, the GPU encounters an out-of-memory error (\SI{91.6}{\giga\by
   \label{fig:e2e-pipeline}
 \end{figure}
 
+\subsection{FAISS Manifold Query}
+\label{sec:results-faiss}
+
+\Cref{fig:faiss-latency} shows the CPU query latency for nearest-neighbor lookup in the precomputed spectral manifold using FAISS \citep{Johnson2019}.
+GPU FAISS benchmarks returned null results on the V100S test system and are not reported; CPU-only timings are shown for reference.
+% Source: benchmark_summary.json/headline_numbers/faiss_gpu_vs_cpu_speedup_largest = null
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/fig5_faiss.pdf}
+  \caption{FAISS nearest-neighbor query latency (CPU only) as a function of manifold size. GPU FAISS benchmarks were unavailable on the test system.}
+  \label{fig:faiss-latency}
+\end{figure}
+
 \subsection{Accuracy Summary}
 \label{sec:results-accuracy}
 

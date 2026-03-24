@@ -33,7 +33,15 @@ We benchmark each kernel individually and in an end-to-end pipeline on an NVIDIA
 We validate GPU--CPU numerical parity on 74~real LIBS spectra from the Aalto University Spectral Library and 6~synthetic ChemCam Calibration Target (CCCT) spectra.
 
 The remainder of this paper is organized as follows.
+\Cref{fig:pipeline} illustrates the overall pipeline architecture, highlighting the five GPU-accelerated components.
 \Cref{sec:methods} presents the mathematical formulation and GPU implementation strategy for each of the five kernels.
 \Cref{sec:results} reports benchmark timings, accuracy validation, and real-data verification.
 \Cref{sec:discussion} interprets the results in the context of prior GPU spectroscopy work and discusses limitations.
 \Cref{sec:conclusion} summarizes the contributions and outlines future directions.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig1_pipeline.pdf}
+  \caption{Architecture of the GPU-accelerated CF-LIBS pipeline. Five computational kernels (shaded) are implemented in JAX: Voigt profile evaluation, vectorized Boltzmann fitting, Anderson-accelerated Saha--Boltzmann iteration, softmax compositional closure, and the batch forward model. Arrows indicate data flow from measured spectrum to elemental composition.}
+  \label{fig:pipeline}
+\end{figure*}
