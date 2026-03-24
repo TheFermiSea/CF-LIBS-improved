@@ -160,6 +160,11 @@ Plans:
 
 **Requirements:** PAPER-02
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 06-01-PLAN.md -- Beamer slides (20-25 main + backup), speaker notes, compile PDF
+
 **Success Criteria:**
 1. 20-25 slides covering motivation, methods, key results
 2. Speaker notes for each slide
@@ -180,6 +185,11 @@ Plans:
 **Dependencies:** Phase 5 (finalized paper)
 
 **Requirements:** PAPER-03
+
+**Plans:** 1 plan
+
+Plans:
+- [ ] 07-01-PLAN.md -- Build arXiv tarball, test standalone compilation, prepare metadata
 
 **Success Criteria:**
 1. arXiv-compliant tarball (LaTeX + figures + .bbl)
