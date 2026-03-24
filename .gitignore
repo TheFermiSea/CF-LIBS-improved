@@ -86,3 +86,8 @@ conductor/setup_state.json
 # Dolt database files (synced via dolt push/pull, not git)
 .dolt/
 .aw/
+
+# Manuscript and submission (private - not for public repo)
+paper/
+slides/
+arxiv/

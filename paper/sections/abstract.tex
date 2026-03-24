@@ -1,8 +1,0 @@
-\begin{abstract}
-Calibration-Free Laser-Induced Breakdown Spectroscopy (CF-LIBS) enables standardless multi-element analysis by deriving plasma composition directly from the Saha--Boltzmann framework, but its computational intensity limits real-time deployment.
-We present the first GPU-accelerated CF-LIBS implementation, built on the JAX framework for composable function transformations including automatic differentiation, vectorization, and just-in-time compilation to GPU.
-Five core algorithms are optimized: (1)~Voigt profile evaluation via the Weideman $N\!=\!36$ rational approximation to the Faddeeva function, achieving $76\times$ speedup on an NVIDIA V100S GPU at $10^5$ wavelength grid points; (2)~vectorized Boltzmann fitting using closed-form weighted least squares with pad-and-mask batching, achieving $8.8\times$ speedup at 20 elements; (3)~Anderson-accelerated Saha--Boltzmann iteration, reducing the convergence iteration count by $1.6\times$ on average; (4)~softmax compositional closure with exact Jacobian for gradient-based joint optimization; and (5)~a batch forward model producing $10{,}708$ spectra per second at peak throughput, with an end-to-end pipeline speedup of $13.6\times$ at batch size 1000.
-All GPU kernels maintain full numerical precision: the maximum relative error is $6.8 \times 10^{-8}$ for Voigt profiles and the batch forward model is bit-identical to sequential computation.
-Validation on 74~real LIBS spectra from the Aalto University Spectral Library and 6~ChemCam calibration targets confirms machine-precision GPU--CPU parity across all computational kernels.
-The GPU crossover point occurs at batch size 10, above which GPU acceleration enables real-time multi-element plasma diagnostics.
-\end{abstract}
