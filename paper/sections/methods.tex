@@ -31,6 +31,7 @@ This algorithm applies a M\"obius transformation $Z = (L + iz)/(L - iz)$ with op
 where the coefficients $\{c_n\}$ are precomputed constants.
 This formulation is entirely branch-free, requires 236 floating-point operations per evaluation, and achieves a maximum relative error below $10^{-13}$ in 64-bit arithmetic across the entire upper half-plane $\operatorname{Im}(z) \geq 0$ \citep{Weideman1994}.
 \citet{Zaghloul2024} recently proposed an improved algorithm that achieves $10^{-16}$ accuracy, which we use as an accuracy reference; however, its additional computational cost is unnecessary for LIBS applications where the Voigt profile is convolved with an instrument function of finite resolving power.
+The Voigt full-width at half-maximum can be estimated from the Gaussian and Lorentzian widths via the approximation of \citet{Olivero1977}, which is accurate to 0.02\%.
 
 For a spectrum containing $N_\mathrm{lines}$ emission lines evaluated on a wavelength grid of $N_\mathrm{wl}$ points, the full profile matrix has shape $(N_\mathrm{wl}, N_\mathrm{lines})$.
 Rather than looping over lines, we broadcast the wavelength grid against the line parameter vectors:
@@ -106,7 +107,7 @@ When $m = 0$, the algorithm reduces exactly to Picard iteration, providing a gra
 \subsection{Softmax Compositional Closure}
 \label{sec:softmax}
 
-CF-LIBS determines elemental compositions subject to the simplex constraint $\sum_{i=1}^D C_i = 1$ with $C_i > 0$.
+CF-LIBS determines elemental compositions subject to the simplex constraint $\sum_{i=1}^D C_i = 1$ with $C_i > 0$, a structure known in statistics as compositional data \citep{Egozcue2003}.
 Traditional approaches enforce this constraint via explicit normalization after each iteration, which complicates gradient-based optimization and can introduce numerical instability when compositions approach the simplex boundary.
 
 The softmax reparameterization maps unconstrained parameters $\bm{\theta} \in \mathbb{R}^D$ to the probability simplex via
