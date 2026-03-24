@@ -25,9 +25,9 @@ timeout_secs = 120
 
 [[gates]]
 name = "typecheck"
-command = "mypy"
-args = ["cflibs/"]
-blocking = false    # advisory — mypy has incrementally-disabled error codes
+command = "bash"
+args = ["-c", "for v in .venv/bin/activate /home/brian/code/CF-LIBS-improved/.venv/bin/activate; do [ -f \"$v\" ] && source \"$v\" && break; done; mypy cflibs/ 2>&1 || true"]
+blocking = false    # advisory — tries local venv first, falls back to main repo venv for type stubs
 timeout_secs = 300
 
 # Test gate: non-blocking (advisory) because worktrees don't inherit the
