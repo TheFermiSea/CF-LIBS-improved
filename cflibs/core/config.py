@@ -22,6 +22,13 @@ except ImportError:
     HAS_YAML = False
     yaml = None  # type: ignore[assignment, unused-ignore]
 
+# Type alias for yaml module to avoid mypy [import-untyped] error when stubs unavailable
+if HAS_YAML:
+    from yaml import SafeLoader, SafeDumper  # type: ignore[import-untyped]
+else:
+    SafeLoader = None  # type: ignore[assignment]
+    SafeDumper = None  # type: ignore[assignment]
+
 # Type aliases for common structures
 ConfigDict = Dict[str, Any]
 
@@ -62,7 +69,7 @@ def load_config(config_path: Union[str, Path]) -> Dict[str, Any]:
                 raise ImportError(
                     "PyYAML is required for YAML config files. " "Install with: pip install pyyaml"
                 )
-            config = yaml.safe_load(f)
+            config = yaml.safe_load(f)  # type: ignore[attr-defined]
         elif suffix == ".json":
             config = json.load(f)
         else:
@@ -179,7 +186,7 @@ def save_config(config: Dict[str, Any], config_path: Union[str, Path]) -> None:
 
     with open(config_path, "w") as f:
         if suffix in [".yaml", ".yml"]:
-            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)  # type: ignore[attr-defined]
         elif suffix == ".json":
             json.dump(config, f, indent=2)
 
