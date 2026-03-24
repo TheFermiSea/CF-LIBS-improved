@@ -15,10 +15,10 @@ from typing import Any, Dict, Union
 
 try:
     import yaml as yaml  # type: ignore[import-untyped]
-
-    HAS_YAML = True
 except ImportError:
     HAS_YAML = False
+else:
+    HAS_YAML = True
 
 # Type aliases for common structures
 ConfigDict = Dict[str, Any]
