@@ -5,13 +5,10 @@ Provides utilities for loading and validating YAML/JSON configuration files
 for plasma models, instrument settings, and inversion parameters.
 """
 
-import json
-from pathlib import Path
 from typing import Dict, Any, Union
-import logging
 
 try:
-    import yaml
+    import yaml as yaml  # type: ignore[import-untyped]
 
     HAS_YAML = True
 except ImportError:
