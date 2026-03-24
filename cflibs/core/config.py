@@ -19,7 +19,8 @@ except ImportError:
     HAS_YAML = False
 else:
     HAS_YAML = True
-    yaml = yaml  # type: ignore[assignment]
+    # Use Any for yaml module type since stubs are not available
+    yaml: Any = yaml  # type: ignore[assignment]
 
 # Type aliases for common structures
 ConfigDict = Dict[str, Any]
