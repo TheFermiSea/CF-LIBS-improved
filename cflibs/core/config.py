@@ -14,11 +14,12 @@ from pathlib import Path
 from typing import Any, Dict, Union
 
 try:
-    import yaml as yaml  # type: ignore[import-untyped]
+    import yaml  # type: ignore[import-untyped]
 except ImportError:
     HAS_YAML = False
 else:
     HAS_YAML = True
+    yaml = yaml  # type: ignore[assignment]
 
 # Type aliases for common structures
 ConfigDict = Dict[str, Any]
