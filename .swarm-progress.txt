@@ -58,3 +58,10 @@ Fix the 1 occurrence(s). Run `mypy cflibs/core/config.py` to verify the fix.
 [2026-03-24 10:50:56 UTC] [8f335b51] [ITER:1] [FEATURE_START] [CF-LIBS-improved-cov] Iteration 1, tier: Worker
 [2026-03-24 10:53:58 UTC] [8f335b51] [ITER:1] [ERROR] Agent failed: PromptCancelled: Runtime adapter: Post-write read stall: 3 consecutive read-only calls after successful write. Task appears complete — handing off to verifier.
 [2026-03-24 10:53:58 UTC] [8f335b51] [ITER:2] [FEATURE_START] [CF-LIBS-improved-cov] Iteration 2, tier: Worker
+[2026-03-24 11:57:47 UTC] [5b7b4cfc] [ITER:0] [SESSION_START] Processing issue: CF-LIBS-improved-26o — Fix mypy [import-untyped]: Library stubs not installed for "yaml" in cflibs/core/config.py. mypy reports [import-untyped] error at cflibs/core/config.py line(s) 17:
+Library stubs not installed for "yaml"
+
+Fix the 1 occurrence(s). Run `mypy cflibs/core/config.py` to verify the fix.
+[2026-03-24 11:58:23 UTC] [5b7b4cfc] [ITER:1] [FEATURE_START] [CF-LIBS-improved-26o] Iteration 1, tier: Worker
+[2026-03-24 12:02:33 UTC] [5b7b4cfc] [ITER:1] [ERROR] Agent failed: PromptCancelled: Runtime adapter: Post-write read stall: 3 consecutive read-only calls after successful write. Task appears complete — handing off to verifier.
+[2026-03-24 12:02:33 UTC] [5b7b4cfc] [ITER:2] [FEATURE_START] [CF-LIBS-improved-26o] Iteration 2, tier: Worker
