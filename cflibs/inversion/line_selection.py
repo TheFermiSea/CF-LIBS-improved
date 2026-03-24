@@ -52,6 +52,13 @@ Warnings are issued for:
 - Energy spread below minimum for reliable T determination
 - Fewer than min_lines_per_element available
 
+Boltzmann Fitness
+-----------------
+Added functions to assess line suitability for Boltzmann analysis:
+- check_energy_spread(): Warns if E_k spread < 1 eV (unreliable fit)
+- filter_self_absorbed(): Exclude lines with high Aki and low E_k
+- compute_boltzmann_fitness(): Composite score considering all factors
+
 Literature References
 ---------------------
 - Clegg et al. (2017): Line selection strategies for LIBS quantification
