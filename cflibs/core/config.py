@@ -20,7 +20,7 @@ try:
     HAS_YAML = True
 except ImportError:
     HAS_YAML = False
-    yaml = None  # type: ignore[assignment]
+    yaml = None  # type: ignore[assignment, unused-ignore]
 
 # Type aliases for common structures
 ConfigDict = Dict[str, Any]
