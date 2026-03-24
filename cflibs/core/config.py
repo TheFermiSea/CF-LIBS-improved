@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any, Dict, Union
 
 # Type alias for yaml module to avoid mypy [import-untyped] error when stubs unavailable
+# Install type stubs via: pip install pyyaml-stubs
+# For now, we use type: ignore comments to suppress the warning
 try:
     import yaml
 
@@ -21,10 +23,6 @@ try:
 except ImportError:
     HAS_YAML = False
     yaml = None  # type: ignore[assignment, unused-ignore]
-
-# Install type stubs for yaml to resolve mypy [import-untyped] error
-# This is done via pip install pyyaml-stubs or by adding to requirements
-# For now, we use type: ignore comments to suppress the warning
 
 # Type aliases for common structures
 ConfigDict = Dict[str, Any]
@@ -66,7 +64,7 @@ def load_config(config_path: Union[str, Path]) -> Dict[str, Any]:
                 raise ImportError(
                     "PyYAML is required for YAML config files. " "Install with: pip install pyyaml"
                 )
-            config = yaml.safe_load(f)  # type: ignore[attr-defined]
+            config = yaml.safe_load(f)  # type: ignore[attr-defined, union-attr, import-untyped]
 
     logger.info(f"Loaded configuration from {config_path}")
     return config
@@ -173,7 +171,7 @@ def save_config(config: Dict[str, Any], config_path: Union[str, Path]) -> None:
                 "PyYAML is required for YAML config files. " "Install with: pip install pyyaml"
             )
         with open(config_path, "w") as f:
-            yaml.dump(config, f, default_flow_style=False, sort_keys=False)  # type: ignore[attr-defined]
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)  # type: ignore[attr-defined, union-attr, import-untyped]
     elif suffix == ".json":
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
