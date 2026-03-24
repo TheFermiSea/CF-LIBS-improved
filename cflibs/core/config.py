@@ -17,7 +17,7 @@ from typing import Any, Dict, Union
 # Install type stubs via: pip install pyyaml-stubs
 # For now, we use type: ignore comments to suppress the warning
 try:
-    import yaml
+    import yaml  # type: ignore[import-untyped]
 
     HAS_YAML = True
 except ImportError:
