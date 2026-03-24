@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, Union
 
 try:
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 except ImportError:
     HAS_YAML = False
 else:
