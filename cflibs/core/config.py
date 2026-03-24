@@ -64,7 +64,7 @@ def load_config(config_path: Union[str, Path]) -> Dict[str, Any]:
                 raise ImportError(
                     "PyYAML is required for YAML config files. " "Install with: pip install pyyaml"
                 )
-            config = yaml.safe_load(f)  # type: ignore[attr-defined, union-attr, import-untyped]
+            config = yaml.safe_load(f)  # type: ignore[attr-defined, union-attr]
 
     logger.info(f"Loaded configuration from {config_path}")
     return config
@@ -171,7 +171,7 @@ def save_config(config: Dict[str, Any], config_path: Union[str, Path]) -> None:
                 "PyYAML is required for YAML config files. " "Install with: pip install pyyaml"
             )
         with open(config_path, "w") as f:
-            yaml.dump(config, f, default_flow_style=False, sort_keys=False)  # type: ignore[attr-defined, union-attr, import-untyped]
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)  # type: ignore[attr-defined, union-attr]
     elif suffix == ".json":
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
