@@ -22,13 +22,6 @@ except ImportError:
     HAS_YAML = False
     yaml = None  # type: ignore[assignment, unused-ignore]
 
-# Type alias for yaml module to avoid mypy [import-untyped] error when stubs unavailable
-if HAS_YAML:
-    from yaml import SafeLoader, SafeDumper  # type: ignore[import-untyped, unused-ignore]
-else:
-    SafeLoader = None  # type: ignore[assignment]
-    SafeDumper = None  # type: ignore[assignment]
-
 # Install type stubs for yaml to resolve mypy [import-untyped] error
 # This is done via pip install pyyaml-stubs or by adding to requirements
 # For now, we use type: ignore comments to suppress the warning
@@ -74,12 +67,6 @@ def load_config(config_path: Union[str, Path]) -> Dict[str, Any]:
                     "PyYAML is required for YAML config files. " "Install with: pip install pyyaml"
                 )
             config = yaml.safe_load(f)  # type: ignore[attr-defined]
-        elif suffix == ".json":
-            config = json.load(f)
-        else:
-            raise ValueError(
-                f"Unsupported config file format: {suffix}. " "Use .yaml, .yml, or .json"
-            )
 
     logger.info(f"Loaded configuration from {config_path}")
     return config
@@ -185,13 +172,12 @@ def save_config(config: Dict[str, Any], config_path: Union[str, Path]) -> None:
             raise ImportError(
                 "PyYAML is required for YAML config files. " "Install with: pip install pyyaml"
             )
-    elif suffix != ".json":
-        raise ValueError(f"Unsupported config file format: {suffix}. " "Use .yaml, .yml, or .json")
-
-    with open(config_path, "w") as f:
-        if suffix in [".yaml", ".yml"]:
+        with open(config_path, "w") as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)  # type: ignore[attr-defined]
-        elif suffix == ".json":
+    elif suffix == ".json":
+        with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
+    else:
+        raise ValueError(f"Unsupported config file format: {suffix}. " "Use .yaml, .yml, or .json")
 
     logger.info(f"Saved configuration to {config_path}")
