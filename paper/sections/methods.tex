@@ -47,36 +47,177 @@ The entire $(N_\mathrm{wl}, N_\mathrm{lines})$ grid of Faddeeva evaluations is t
 \label{sec:boltzmann}
 
 The Boltzmann plot method \citep{Tognoni2010} estimates the plasma temperature from emission line intensities.
-For a given element and ionization stage, plotting
+For a given element~$s$ in ionization stage~$z$, plotting
 \begin{equation}
-  y = \ln\!\left(\frac{I \lambda}{g_k A_{ki}}\right)
+  y_i = \ln\!\left(\frac{I_i \,\lambda_i}{g_{k,i}\, A_{ki,i}}\right)
   \quad \text{vs.} \quad
-  x = E_k
+  x_i = E_{k,i}
   \label{eq:boltzmann-plot}
 \end{equation}
-yields a linear relationship $y = bx + a$ with slope $b = -1/(k_B T)$ and intercept $a = \ln(hc\, C_s\, n_e\, F_s / (4\pi\, U_z(T)))$, where $I$ is the measured line intensity, $g_k$ is the upper-level degeneracy, $A_{ki}$ is the Einstein~$A$ coefficient, $E_k$ is the upper-level energy, and $F_s$ encodes Saha ionization-stage ratios.
+yields a linear relationship $y = a + bx$ with slope $b = -1/(k_B T)$ and intercept $a = \ln(hc\, C_s\, n_e\, F_s / (4\pi\, U_z(T)))$, where $I_i$ is the measured intensity of line~$i$, $g_{k,i}$ is the upper-level statistical weight, $A_{ki,i}$ is the Einstein spontaneous emission coefficient, $E_{k,i}$ is the upper-level energy, and $F_s$ encodes the Saha ionization-stage ratios for species~$s$.
+The index $i$ runs over the $N_s$ emission lines available for a given element--stage group, where $N_s$ varies from element to element (e.g., 3 lines for Li versus 40+ for Fe in a typical LIBS wavelength window).
 
-Rather than an iterative regression or matrix factorization, we express the weighted least-squares (WLS) solution in closed form via five dot-product accumulators:
+In a conventional CF-LIBS analysis, the Boltzmann fit is performed once per element per iteration of the Saha--Boltzmann loop, typically via a general-purpose least-squares routine such as \texttt{numpy.polyfit}.
+For GPU-accelerated batch computation---where thousands of plasma parameter sets must be evaluated simultaneously during manifold generation or Monte Carlo uncertainty propagation---this sequential, per-element approach becomes the bottleneck.
+We describe here a formulation that fits all $D$ elements simultaneously in a single GPU kernel call, without Python loops or dynamic control flow.
+
+\subsubsection{Closed-Form Weighted Least Squares via Scalar Accumulators}
+\label{sec:boltzmann-wls}
+
+We assign each data point a weight $w_i > 0$ (typically $w_i = 1/\sigma_{y,i}^2$, where $\sigma_{y,i}$ is the propagated intensity uncertainty) and minimize the weighted sum of squared residuals:
+\begin{equation}
+  \chi^2 = \sum_{i=1}^{N} w_i \bigl(y_i - a - b\, x_i\bigr)^2.
+  \label{eq:boltzmann-chi2}
+\end{equation}
+Setting $\partial \chi^2 / \partial a = 0$ and $\partial \chi^2 / \partial b = 0$ produces the $2 \times 2$ \emph{normal equations} \citep[ch.~6]{Bevington2003}:
+\begin{equation}
+  \underbrace{
+  \begin{pmatrix}
+    S_w    & S_{wx} \\
+    S_{wx} & S_{wxx}
+  \end{pmatrix}}_{\displaystyle \bm{X}^\top \bm{W} \bm{X}}
+  \begin{pmatrix} a \\ b \end{pmatrix}
+  =
+  \underbrace{
+  \begin{pmatrix} S_{wy} \\ S_{wxy} \end{pmatrix}}_{\displaystyle \bm{X}^\top \bm{W} \bm{y}},
+  \label{eq:normal-equations}
+\end{equation}
+where we have introduced five \emph{scalar accumulators}:
 \begin{align}
-  S_w &= \sum_i w_i, \quad
-  S_{wx} = \sum_i w_i x_i, \quad
-  S_{wy} = \sum_i w_i y_i, \notag\\
-  S_{wxx} &= \sum_i w_i x_i^2, \quad
-  S_{wxy} = \sum_i w_i x_i y_i,
+  S_w    &= \textstyle\sum_{i=1}^{N} w_i, \quad
+  S_{wx}  = \textstyle\sum_{i=1}^{N} w_i\, x_i, \quad
+  S_{wy}  = \textstyle\sum_{i=1}^{N} w_i\, y_i, \notag\\
+  S_{wxx} &= \textstyle\sum_{i=1}^{N} w_i\, x_i^2, \quad
+  S_{wxy}  = \textstyle\sum_{i=1}^{N} w_i\, x_i\, y_i.
   \label{eq:boltzmann-sums}
 \end{align}
-from which the slope and intercept are
+Here $\bm{X}$ is the $N \times 2$ design matrix with rows $(1,\; x_i)$, $\bm{W} = \operatorname{diag}(w_1,\ldots,w_N)$, and $\bm{y} = (y_1,\ldots,y_N)^\top$.
+For the general $p$-predictor case, solving the normal equations requires $O(p^2 N + p^3)$ operations, and numerical stability demands QR or SVD factorization of the design matrix when $p$ is large or the Gram matrix is ill-conditioned \citep[ch.~15]{Press2007}.
+For $p = 2$ (intercept and slope), the system admits an exact analytic inverse via the adjugate formula, yielding:
 \begin{equation}
-  b = \frac{S_w S_{wxy} - S_{wx} S_{wy}}{S_w S_{wxx} - S_{wx}^2}, \quad
-  a = \frac{S_{wxx} S_{wy} - S_{wx} S_{wxy}}{S_w S_{wxx} - S_{wx}^2}.
+  \begin{pmatrix} a \\ b \end{pmatrix}
+  = \frac{1}{\Delta}
+  \begin{pmatrix}
+    S_{wxx}\, S_{wy} - S_{wx}\, S_{wxy} \\
+    S_w\, S_{wxy} - S_{wx}\, S_{wy}
+  \end{pmatrix},
   \label{eq:boltzmann-slope}
 \end{equation}
-The temperature follows as $T_K = -1/(b \cdot k_B)$, and the uncertainty propagates as $\sigma_T = T_K^2 k_B \sigma_b$.
+where
+\begin{equation}
+  \Delta = S_w\, S_{wxx} - S_{wx}^2
+  \label{eq:boltzmann-det}
+\end{equation}
+is the determinant of the Gram matrix.
+This formulation reduces the entire least-squares solution to five inner products (the accumulators in \cref{eq:boltzmann-sums}), one determinant (3~operations), and two dot-product-style numerator evaluations (4~operations each)---a total of $10N + 11$ floating-point operations per element.
+No matrix is ever explicitly constructed, inverted, or factorized.
 
-For $D$ elements with varying numbers of emission lines, direct vectorization would require ragged arrays.
-We instead adopt a pad-and-mask strategy: all elements are padded to a common maximum line count $N_\mathrm{max}$, with a binary mask $m_i \in \{0, 1\}$ that zeroes the weight $w_i$ for padded entries.
-The five sums in \cref{eq:boltzmann-sums} are then computed as standard inner products on arrays of shape $(D, N_\mathrm{max})$, requiring $10 N_\mathrm{max} + 7$ floating-point operations per element.
-This pad-and-mask approach maps directly to GPU SIMD execution without requiring \texttt{vmap}---the element dimension $D$ is simply a batch axis over which the five dot products are computed in parallel.
+The temperature follows from the slope as
+\begin{equation}
+  T = -\frac{1}{b\, k_B},
+  \label{eq:boltzmann-temperature}
+\end{equation}
+where $k_B = \SI{8.617\,333e-5}{\electronvolt\per\kelvin}$ is the Boltzmann constant.
+
+\subsubsection{Uncertainty Propagation from the Gram Covariance Matrix}
+\label{sec:boltzmann-uncertainty}
+
+The parameter covariance matrix is the inverse of the Gram matrix \citep[ch.~6]{Bevington2003}:
+\begin{equation}
+  \operatorname{Cov}(a, b) = (\bm{X}^\top \bm{W} \bm{X})^{-1}
+  = \frac{1}{\Delta}
+  \begin{pmatrix}
+    S_{wxx}  & -S_{wx} \\
+    -S_{wx}  & S_w
+  \end{pmatrix},
+  \label{eq:boltzmann-covariance}
+\end{equation}
+giving $\operatorname{Var}(b) = S_w / \Delta$ and $\operatorname{Var}(a) = S_{wxx} / \Delta$.
+Because $T = -1/(b\, k_B)$, standard error propagation yields:
+\begin{equation}
+  \sigma_T = \left|\frac{\partial T}{\partial b}\right| \sigma_b
+  = T^2\, k_B \sqrt{\frac{S_w}{\Delta}}\,,
+  \label{eq:boltzmann-sigma-T}
+\end{equation}
+where we have used $|\partial T / \partial b| = 1/(b^2 k_B) = T^2 k_B$.
+Because the five accumulators and the determinant $\Delta$ are already computed for the slope, the uncertainty requires only two additional operations (a division and a square root) per element.
+
+The weighted coefficient of determination,
+\begin{equation}
+  R^2 = 1 - \frac{\sum_i w_i (y_i - a - b\, x_i)^2}{\sum_i w_i (y_i - \bar{y}_w)^2},
+  \quad \bar{y}_w = S_{wy} / S_w,
+  \label{eq:boltzmann-R2}
+\end{equation}
+quantifies the goodness of fit and serves as a diagnostic for non-LTE deviations, self-absorption, or misidentified lines.
+
+\subsubsection{Why the Closed-Form Solution Is Preferred}
+\label{sec:boltzmann-why-closed-form}
+
+For general multi-parameter regression ($p \gg 2$), solving the normal equations directly is inadvisable because the Gram matrix condition number $\kappa(\bm{X}^\top \bm{W} \bm{X}) \approx \kappa(\bm{X})^2$ squares the condition number of the design matrix, potentially losing $2\log_{10}\kappa$ digits of precision \citep[sec.~15.4]{Press2007}.
+QR or SVD factorization avoids this squaring and is the standard recommendation.
+However, for $p = 2$ the condition number is bounded by the ratio of the largest to smallest weighted energy spread: $\kappa \sim S_{wxx} / S_w \sim (\Delta E_k)^2$ for typical Boltzmann data spanning 0--\SI{10}{\electronvolt}.
+This gives $\kappa \sim 10^2$--$10^3$, losing 2--3 digits relative to the data---leaving 12--13 correct digits in \texttt{float64}, far exceeding the ${\sim}1$--$10\%$ physical uncertainties in LIBS line intensities.
+QR or SVD factorization of a $2 \times 2$ system would add ${\sim}3\times$ computational overhead with no practical accuracy benefit.
+
+Equally important for GPU execution: the closed-form solution is \emph{branch-free}.
+Every element follows the same arithmetic path regardless of its data values, eliminating the warp divergence that would arise from iterative solvers or QR pivoting on a GPU.
+The only conditional logic is a guard against degenerate fits ($|\Delta| < 10^{-30}$, indicating that all upper-level energies are identical or only one line is available), which is handled via a branchless \texttt{where} operation that returns $T = 0$ for such cases.
+
+\subsubsection{Pad-and-Mask Batching for Variable-Length Line Lists}
+\label{sec:boltzmann-pad-mask}
+
+A multi-element CF-LIBS analysis requires fitting Boltzmann plots for $D$ element--stage groups simultaneously, where each group has a different number of usable emission lines $N_s$ (e.g., $N_{\mathrm{Li}} = 3$, $N_{\mathrm{Fe}} = 47$).
+On CPU, this is handled by a Python loop over elements.
+On GPU, this variable-length structure poses a vectorization challenge: standard array operations require uniform shapes along the reduction axis.
+
+We resolve this via \emph{pad-and-mask batching}, a standard technique in GPU computing for handling ragged data:
+\begin{enumerate}
+  \item \textbf{Pad to uniform length.} All $D$ line lists are padded with zeros to the maximum line count $N_\mathrm{max} = \max_s N_s$, producing arrays $\bm{x}, \bm{y}, \bm{w} \in \mathbb{R}^{D \times N_\mathrm{max}}$.
+  Padded positions are filled with arbitrary values (we use zero).
+
+  \item \textbf{Construct a binary mask.}
+  A mask array $\bm{m} \in \{0, 1\}^{D \times N_\mathrm{max}}$ indicates valid entries: $m_{s,i} = 1$ if line~$i$ is a real emission line for element~$s$, and $m_{s,i} = 0$ for padded positions.
+
+  \item \textbf{Mask the weights.}
+  The effective weight array is formed by element-wise multiplication:
+  \begin{equation}
+    \tilde{w}_{s,i} = w_{s,i} \cdot m_{s,i}.
+    \label{eq:masked-weights}
+  \end{equation}
+  This sets $\tilde{w}_{s,i} = 0$ for all padded entries, causing them to contribute exactly zero to every accumulator sum---regardless of the $x$ and $y$ values in those positions.
+
+  \item \textbf{Compute accumulators as matrix--vector products.}
+  The five accumulators for all $D$ elements simultaneously are:
+  \begin{equation}
+    S_w^{(s)} = \sum_{i=1}^{N_\mathrm{max}} \tilde{w}_{s,i}, \quad
+    S_{wx}^{(s)} = \sum_{i=1}^{N_\mathrm{max}} \tilde{w}_{s,i}\, x_{s,i}, \quad \ldots
+    \label{eq:batched-accumulators}
+  \end{equation}
+  Each accumulator is a \emph{row-wise reduction} of the $(D, N_\mathrm{max})$ array, producing a vector of length~$D$.
+  In JAX, this is \texttt{jnp.sum(w\_masked * x, axis=1)}.
+\end{enumerate}
+
+\noindent
+The key insight is that weight-zeroing makes padding \emph{mathematically invisible}: a padded entry with $\tilde{w} = 0$ contributes $0 \cdot x = 0$ and $0 \cdot y = 0$ to every accumulator, so the slope, intercept, temperature, uncertainty, and $R^2$ are identical to those obtained from only the valid lines.
+No conditional branching is needed---the mask operates entirely through multiplication.
+
+The total operation count is $10 N_\mathrm{max} + 11$ floating-point operations per element, or $D(10 N_\mathrm{max} + 11)$ for the full batch.
+For a typical multi-element LIBS spectrum with $D = 10$ elements and $N_\mathrm{max} = 50$ lines, the entire batch fit requires 5{,}110 FLOPs---well within the throughput of a single GPU warp.
+The ``wasted'' computation on padded entries ($10(N_\mathrm{max} - N_s)$ operations per element) is negligible on GPU hardware, where the alternative---ragged arrays requiring per-element kernel launches or Python-level control flow---would incur orders-of-magnitude greater overhead from kernel launch latency and host--device synchronization.
+
+\subsubsection{GPU Execution Model}
+\label{sec:boltzmann-gpu}
+
+The complete kernel is implemented as a single JAX \texttt{@jit}-compiled function.
+All inputs ($\bm{x}$, $\bm{y}$, $\bm{w}$, $\bm{m}$) are \texttt{float64} arrays of shape $(D, N_\mathrm{max})$, and all outputs (slope, intercept, $T$, $\sigma_T$, $\sigma_b$, $\sigma_a$, $R^2$, $N_\mathrm{valid}$) are vectors of shape $(D,)$.
+The function contains no Python loops, no conditional branches (only branchless \texttt{jnp.where} guards), and no dynamic shapes---properties required for XLA compilation to a single GPU kernel.
+
+Because the five accumulator sums are independent reductions along axis~1 of identically shaped arrays, they execute as five parallel \texttt{sum} operations on the GPU, with the element dimension~$D$ serving as the natural batch axis.
+This is not a \texttt{vmap} transformation over elements---it is a direct vectorization at the array level, where each element's fit is computed by the same arithmetic applied to different rows of the input arrays.
+The branchless design ensures that all GPU threads within a warp execute the same instruction sequence, avoiding the performance penalty of warp divergence.
+
+Enforcing \texttt{float64} precision is essential: the Gram matrix determinant $\Delta = S_w S_{wxx} - S_{wx}^2$ involves a difference of products that can suffer catastrophic cancellation in \texttt{float32} when the upper-level energies cluster near a common value.
+In \texttt{float64}, the 2--3 digits lost to the condition number of the $2 \times 2$ system leave 12--13 correct digits, far exceeding what the physical measurement uncertainties warrant.
 
 \subsection{Anderson-Accelerated Saha--Boltzmann Solver}
 \label{sec:anderson}
