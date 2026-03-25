@@ -175,6 +175,7 @@ The batch forward model achieves bit-identical results (zero relative error), de
   \centering
   \caption{Numerical accuracy of GPU kernels relative to CPU references. All kernels exceed their target thresholds by at least one order of magnitude.}
   \label{tab:accuracy}
+  \resizebox{\textwidth}{!}{%
   \begin{tabular}{lcccc}
     \toprule
     Kernel & Target & Achieved & $N_\mathrm{tests}$ & Metric \\
@@ -185,7 +186,7 @@ The batch forward model achieves bit-identical results (zero relative error), de
     Softmax closure  & $< 10^{-15}$ & $4.44 \times 10^{-16}$ & 1009 & max $|\sum C_i - 1|$ \\
     Batch forward    & $< 10^{-12}$ & $0.0$ (bit-identical)   & 100  & max rel.\ error \\
     \bottomrule
-  \end{tabular}
+  \end{tabular}}
 \end{table}
 
 \subsubsection{GPU--CPU Parity on Real Spectra}
@@ -213,6 +214,7 @@ A total of 93~configurations were tested across the five pathways.
   \centering
   \caption{Best performance per identification pathway on 74~Aalto LIBS spectra (RP~$= 300$--$1100$), ranked by F$_1$ score. The hybrid NNLS+ALIAS method in intersection mode achieves the highest F$_1$ and the most exact matches. FPR: spurious detection rate (fraction of absent elements incorrectly identified).}
   \label{tab:pathway-comparison}
+  \resizebox{\textwidth}{!}{%
   \begin{tabular}{llcccccc}
     \toprule
     Rank & Pathway & Config & $P$ & $R$ & F$_1$ & FPR & Exact \\
@@ -224,7 +226,7 @@ A total of 93~configurations were tested across the five pathways.
     5 & Forward model      & ct=0.05            & 0.369 & 0.796 & 0.505 & 0.148 & 0/74 \\
     6 & Spectral NNLS      & snr=3.0, cdeg=4    & 0.293 & 0.940 & 0.447 & 0.236 & 2/74 \\
     \bottomrule
-  \end{tabular}
+  \end{tabular}}
 \end{table}
 
 The hybrid NNLS+ALIAS identifier in intersection mode achieves the highest F$_1$ (0.654) with $P = 0.604$ and $R = 0.713$, representing a 17\% F$_1$ improvement over the ALIAS baseline (F$_1 = 0.560$) and the highest number of exact matches (16/74).
@@ -248,6 +250,7 @@ Computational overhead for the hybrid method is modest: 0.39~s per spectrum vers
   \centering
   \caption{Per-element identification performance for the hybrid (nsnr=1.5, adt=0.05, intersect) and ALIAS (dt=0.05, itf=3.5) methods on 74~Aalto spectra. Elements with hybrid $P = 1.00$ are shown in bold. Zn and Zr are undetectable by both methods.}
   \label{tab:per-element}
+  \resizebox{\textwidth}{!}{%
   \begin{tabular}{lccccl}
     \toprule
     Element & Hybrid $P$ & Hybrid $R$ & ALIAS $P$ & ALIAS $R$ & Comment \\
@@ -268,7 +271,7 @@ Computational overhead for the hybrid method is modest: 0.39~s per spectrum vers
     Zn  & 0.00 & 0.00 & 0.00 & 0.00 & Weak LIBS emitter \\
     Zr  & 0.00 & 0.00 & 0.00 & 0.00 & Insufficient database coverage \\
     \bottomrule
-  \end{tabular}
+  \end{tabular}}
 \end{table}
 
 The hybrid method achieves perfect identification specificity ($P = 1.00$) for Si, Al, Fe, Li, Co, and Ni, which together account for approximately 48\% of all confirmed detections.
@@ -336,6 +339,7 @@ The 101-parameter ensemble optimization described in \cref{sec:element-id} fuses
   \centering
   \caption{Comparison of element identification optimization approaches on 74~Aalto spectra. The GPU-accelerated 101-parameter ensemble achieves $F_{\beta=0.5} = 0.914$, a 121\% improvement over the hand-tuned baseline, evaluating $2 \times 10^6$ configurations in 58~seconds.}
   \label{tab:optimization-comparison}
+  \resizebox{\textwidth}{!}{%
   \begin{tabular}{lccccc}
     \toprule
     Method & Params & Best metric & Evals & Runtime & Evals/s \\
@@ -344,7 +348,7 @@ The 101-parameter ensemble optimization described in \cref{sec:element-id} fuses
     GPU CMA-ES (41 params)     & 41   & F$_{\beta} = 0.551$ & $10^6$ & 2~min & 8{,}300 \\
     \textbf{GPU Sep-CMA-ES (101 params)} & \textbf{101} & $\mathbf{F_{\beta} = 0.914}$ & $\mathbf{2 \times 10^6}$ & \textbf{58~s} & \textbf{35{,}300} \\
     \bottomrule
-  \end{tabular}
+  \end{tabular}}
 \end{table}
 
 % Source: full experimental campaign, Sep_CMA_ES 101-param optimization

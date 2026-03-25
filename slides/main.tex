@@ -24,6 +24,7 @@
 \usepackage{siunitx}
 \usepackage{bm}
 \usepackage{tikz}
+\usetikzlibrary{positioning}
 \usepackage{multicol}
 \usepackage{colortbl}  % for \rowcolor in tables
 
@@ -862,7 +863,7 @@
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
       \begin{block}{Why multi-method consensus wins}
-        \begin{itemize}[nosep]
+        \begin{itemize}
           \item \textbf{Each method exploits different spectral info}\\
                 NNLS: Boltzmann envelope; ALIAS: line positions
           \item System learns \textbf{element-specific criteria}:\\
@@ -873,7 +874,7 @@
     \end{column}
     \begin{column}{0.48\textwidth}
       \begin{block}{Computational cost}
-        \begin{itemize}[nosep]
+        \begin{itemize}
           \item 2,048,000 evaluations
           \item \alert{58 seconds} wall time
           \item 45,000 evals/s on V100S
@@ -1035,7 +1036,7 @@
 % ----------------------------------------------------------
 \begin{frame}{Three Contributions}
   \textbf{1. GPU-Accelerated CF-LIBS Pipeline}
-  \begin{itemize}[nosep]
+  \begin{itemize}
     \item Five kernels: Voigt (\alert{76$\times$}), Boltzmann (\alert{8.8$\times$}),
           Anderson (\alert{1.6$\times$}), Softmax, Batch (\alert{10,708} spec/s)
     \item End-to-end: \alert{13.6$\times$} at $B\!=\!1000$ | \alert{Zero accuracy loss} | 100\% parity
@@ -1043,14 +1044,14 @@
 
   \vspace{0.3em}
   \textbf{2. Systematic 5-Pathway Element ID Benchmark}
-  \begin{itemize}[nosep]
+  \begin{itemize}
     \item 93 configs on 74 spectra at RP 300--1100 --- no single algorithm wins
     \item NNLS: best R (0.922) | Hybrid: best P (0.578) | Correlation: ineffective
   \end{itemize}
 
   \vspace{0.3em}
   \textbf{3. GPU-Optimized Multi-Method Consensus Identification}
-  \begin{itemize}[nosep]
+  \begin{itemize}
     \item 101-parameter CMA-ES: \alert{F\textsubscript{$\beta$}(0.5) = 0.914} (+121\% over baseline)
     \item 2M evaluations in 58 s on V100S --- GPU enables systematic exploration
     \item Physically interpretable: learns spectral physics hierarchy per element

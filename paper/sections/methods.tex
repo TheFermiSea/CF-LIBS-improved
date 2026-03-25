@@ -57,14 +57,14 @@ For a given element and ionization stage, plotting
 yields a linear relationship $y = bx + a$ with slope $b = -1/(k_B T)$ and intercept $a = \ln(hc\, C_s\, n_e\, F_s / (4\pi\, U_z(T)))$, where $I$ is the measured line intensity, $g_k$ is the upper-level degeneracy, $A_{ki}$ is the Einstein~$A$ coefficient, $E_k$ is the upper-level energy, and $F_s$ encodes Saha ionization-stage ratios.
 
 Rather than an iterative regression or matrix factorization, we express the weighted least-squares (WLS) solution in closed form via five dot-product accumulators:
-\begin{equation}
-  S_w = \sum_i w_i, \quad
+\begin{align}
+  S_w &= \sum_i w_i, \quad
   S_{wx} = \sum_i w_i x_i, \quad
-  S_{wy} = \sum_i w_i y_i, \quad
-  S_{wxx} = \sum_i w_i x_i^2, \quad
+  S_{wy} = \sum_i w_i y_i, \notag\\
+  S_{wxx} &= \sum_i w_i x_i^2, \quad
   S_{wxy} = \sum_i w_i x_i y_i,
   \label{eq:boltzmann-sums}
-\end{equation}
+\end{align}
 from which the slope and intercept are
 \begin{equation}
   b = \frac{S_w S_{wxy} - S_{wx} S_{wy}}{S_w S_{wxx} - S_{wx}^2}, \quad
@@ -142,14 +142,16 @@ The forward model maps plasma parameters $(T, n_e, \bm{C})$ and a wavelength gri
 \end{enumerate}
 
 For batch computation over $B$ parameter sets $\{(T_b, n_{e,b}, \bm{C}_b)\}_{b=1}^B$---as required for manifold generation or Monte Carlo uncertainty propagation---we apply JAX's \texttt{vmap} transformation at a single level over the batch dimension:
-\begin{equation}
-  \texttt{batch\_spectrum} = \texttt{jit}(\texttt{vmap}(\texttt{single\_spectrum},\; \texttt{in\_axes}=(0, 0, 0, \text{None}, \text{None}))),
+\begin{multline}
+  \texttt{batch\_spectrum} = \texttt{jit}\bigl(\texttt{vmap}\bigl(\texttt{single\_spectrum},\\
+  \texttt{in\_axes}=(0, 0, 0, \text{None}, \text{None})\bigr)\bigr),
   \label{eq:vmap}
-\end{equation}
+\end{multline}
 where the first three axes (temperature, electron density, composition) are mapped over the batch, while the wavelength grid and atomic data are broadcast (shared) across all batch elements.
 
-The dominant memory consumer is the profile matrix of shape $(B, N_\mathrm{wl}, N_\mathrm{lines})$.
-The maximum batch size for a given GPU memory budget $M_\mathrm{GPU}$ is
+The dominant memory consumer is the profile matrix of shape
+$(B,\allowbreak N_\mathrm{wl},\allowbreak N_\mathrm{lines})$.
+The maximum batch size for a given GPU memory budget $M_\mathrm{GPU}$~is
 \begin{equation}
   B_\mathrm{max} = \left\lfloor \frac{M_\mathrm{GPU} - M_\mathrm{overhead}}{N_\mathrm{wl} \times N_\mathrm{lines} \times d_\mathrm{bytes}} \right\rfloor,
   \label{eq:bmax}
@@ -158,7 +160,7 @@ where $d_\mathrm{bytes} = 8$ for \texttt{float64} and $M_\mathrm{overhead} \appr
 
 The batch forward model achieves bit-identical results to sequential single-spectrum evaluation because \texttt{vmap} is a purely semantic transformation---it does not alter the floating-point operations within each spectrum computation, only their scheduling across GPU threads.
 This property provides a strong correctness guarantee: any result obtained in batch mode is numerically identical to the same computation performed sequentially on CPU.
-As reported by \citet{Kawahara2022} for ExoJAX, this \texttt{vmap}-based approach to spectral batch computation is well-suited to GPU architectures where the per-spectrum workload (dominated by the $(N_\mathrm{wl}, N_\mathrm{lines})$ profile matrix) provides sufficient arithmetic intensity to saturate the GPU's compute units.
+As reported by \citet{Kawahara2022} for ExoJAX, this \texttt{vmap}-based approach to spectral batch computation is well-suited to GPU architectures where the per-spectrum workload (dominated by the $(N_\mathrm{wl},\allowbreak N_\mathrm{lines})$ profile matrix) provides sufficient arithmetic intensity to saturate the GPU's compute units.
 
 \subsection{Element Identification Benchmark}
 \label{sec:element-id}
