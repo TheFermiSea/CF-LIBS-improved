@@ -1,10 +1,12 @@
 % GPU-Accelerated CF-LIBS — Conference Talk (20 min)
 % Beamer presentation for JQSRT paper
-\documentclass[aspectratio=169,12pt]{beamer}
+\documentclass[aspectratio=169,10pt]{beamer}
 
 % --- Theme and colors ---
-\usetheme{metropolis}
-\usepackage{appendixnumberbeamer}
+\mode<presentation> {
+\usetheme{Boadilla}
+}
+\setbeamertemplate{navigation symbols}{}
 
 % Colorblind-safe palette (same as paper)
 \definecolor{cbBlue}{HTML}{0072B2}
@@ -13,8 +15,7 @@
 \definecolor{cbYellow}{HTML}{F0E442}
 \definecolor{cbPurple}{HTML}{CC79A7}
 
-\setbeamercolor{frametitle}{bg=cbBlue,fg=white}
-\setbeamercolor{progress bar}{fg=cbOrange}
+\colorlet{beamer@blendedblue}{cbBlue}
 \setbeamercolor{alerted text}{fg=cbOrange}
 
 % --- Packages ---
@@ -29,8 +30,8 @@
 \usepackage{colortbl}  % for \rowcolor in tables
 
 \sisetup{
-  separate-uncertainty = true,
-  multi-part-units = single,
+	separate-uncertainty = true,
+	multi-part-units = single,
 }
 
 % --- Metadata ---
@@ -40,1189 +41,935 @@
 \institute{[Affiliation]}
 \date{2026}
 
+%Add shaded outline slide before each section
+\AtBeginSection[]
+{
+	\begin{frame}
+		\frametitle{Outline}
+		\tableofcontents[currentsection]
+	\end{frame}
+}
+
 % ============================================================
 \begin{document}
 
 % ----------------------------------------------------------
 % SLIDE 1: Title
 % ----------------------------------------------------------
-\begin{frame}[plain]
-  \titlepage
-\note{
-  Good morning. I will present three contributions to GPU-accelerated
-  Calibration-Free LIBS. First, a full GPU pipeline with up to 76 times
-  speedup and zero accuracy loss. Second, a systematic benchmark showing
-  no single element identification algorithm wins at low resolving power.
-  Third, a GPU-optimized 101-parameter multi-method consensus system that
-  achieves F-beta of 0.914 --- a 121 percent improvement over the baseline
-  --- by fusing five algorithms with learned per-element thresholds.
-  Let me start with why this matters.
-}
+\begin{frame}
+	\titlepage
 \end{frame}
+
+% Outline
+\begin{frame}{Outline}
+	\tableofcontents
+\end{frame}
+
+\section{Introduction and Motivation}
 
 % ----------------------------------------------------------
 % SLIDE 2: What is LIBS?
 % ----------------------------------------------------------
 \begin{frame}{What is LIBS?}
-  \begin{columns}[T]
-    \begin{column}{0.55\textwidth}
-      \begin{itemize}
-        \item Focused laser pulse ablates sample surface
-        \item Transient plasma ($T \sim 0.6$--$1.5$ eV, $n_e \sim 10^{15}$--$10^{17}$ cm$^{-3}$)
-        \item Optical emission encodes elemental composition
-        \item Applications: geology, industry, cultural heritage, \alert{planetary science}
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.42\textwidth}
-      \centering
-      \begin{tikzpicture}[scale=0.8, every node/.style={font=\small}]
-        \fill[gray!30, rounded corners] (0,0) rectangle (4,0.5);
-        \node at (2,0.25) {Sample};
-        \draw[->, red, ultra thick] (2,3) -- (2,0.6);
-        \node[red, right] at (2.1,2.2) {Laser};
-        \fill[cbOrange!50] (2,0.5) circle [x radius=1.2, y radius=0.8];
-        \node at (2,0.9) {Plasma};
-        \draw[->, cbBlue, thick] (2.8,1.1) -- (4,2);
-        \node[cbBlue, right] at (3.8,2.1) {Emission};
-      \end{tikzpicture}
-    \end{column}
-  \end{columns}
+	\begin{columns}[T]
+		\begin{column}{0.55\textwidth}
+			\begin{itemize}
+				\item Focused laser pulse ablates sample surface
+				\item Transient plasma ($T \sim 0.6$--$1.5$ eV, $n_e \sim 10^{15}$--$10^{17}$ cm$^{-3}$)
+				\item Optical emission encodes elemental composition
+				\item Applications: geology, industry, cultural heritage, \alert{planetary science}
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.42\textwidth}
+			\centering
+			\begin{tikzpicture}[scale=0.8, every node/.style={font=\small}]
+				\fill[gray!30, rounded corners] (0,0) rectangle (4,0.5);
+				\node at (2,0.25) {Sample};
+				\draw[->, red, ultra thick] (2,3) -- (2,0.6);
+				\node[red, right] at (2.1,2.2) {Laser};
+				\fill[cbOrange!50] (2,0.5) circle [x radius=1.2, y radius=0.8];
+				\node at (2,0.9) {Plasma};
+				\draw[->, cbBlue, thick] (2.8,1.1) -- (4,2);
+				\node[cbBlue, right] at (3.8,2.1) {Emission};
+			\end{tikzpicture}
+		\end{column}
+	\end{columns}
 
-  \vspace{0.5em}
-  \footnotesize NASA's ChemCam \& SuperCam instruments on Mars rovers use LIBS
-\note{
-  LIBS fires a laser at a target, creating a plasma whose emission lines
-  reveal which elements are present and in what concentrations.
-  It is used in geology, industry, and most famously aboard Mars rovers.
-  The question is: can we go from spectrum to composition without calibration standards?
-}
+	\vspace{0.5em}
+	\footnotesize NASA's ChemCam \& SuperCam instruments on Mars rovers use LIBS
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 3: What is CF-LIBS?
 % ----------------------------------------------------------
 \begin{frame}{Calibration-Free LIBS}
-  \begin{block}{The idea: derive composition from plasma physics alone}
-    No matrix-matched standards needed --- use first-principles equations.
-  \end{block}
+	\begin{block}{The idea: derive composition from plasma physics alone}
+		No matrix-matched standards needed --- use first-principles equations.
+	\end{block}
 
-  \vspace{0.5em}
-  \textbf{Three governing equations:}
-  \begin{enumerate}
-    \item \textbf{Boltzmann distribution} $\to$ excited-state populations from $T$
-    \item \textbf{Saha equation} $\to$ ionization ratios from $T$ and $n_e$
-    \item \textbf{Closure} $\to$ $\sum_i C_i = 1$ (all concentrations sum to unity)
-  \end{enumerate}
+	\vspace{0.5em}
+	\textbf{Three governing equations:}
+	\begin{enumerate}
+		\item \textbf{Boltzmann distribution} $\to$ excited-state populations from $T$
+		\item \textbf{Saha equation} $\to$ ionization ratios from $T$ and $n_e$
+		\item \textbf{Closure} $\to$ $\sum_i C_i = 1$ (all concentrations sum to unity)
+	\end{enumerate}
 
-  \vspace{0.5em}
-  \alert{Problem:} Computationally intensive --- $10^4$--$10^5$ transitions,
-  iterative self-consistency, Voigt profile evaluation for every line.
-\note{
-  CF-LIBS eliminates the need for reference standards by using the
-  Boltzmann distribution, Saha equation, and a closure constraint.
-  The catch is that solving this system is computationally expensive:
-  many atomic transitions, iterative solvers, and Voigt profile convolutions.
-  This is the bottleneck we address.
-}
+	\vspace{0.5em}
+	\alert{Problem:} Computationally intensive --- $10^4$--$10^5$ transitions,
+	iterative self-consistency, Voigt profile evaluation for every line.
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 4: Why GPU acceleration?
 % ----------------------------------------------------------
 \begin{frame}{Why GPU Acceleration?}
-  \textbf{Real-time demands:}
-  \begin{itemize}
-    \item Laser repetition: 1--20 Hz, 10--100 spectra accumulated per analysis
-    \item Need hundreds of spectra/second for online monitoring
-    \item Manifold-based inference: $10^6$--$10^8$ synthetic spectra
-  \end{itemize}
+	\textbf{Real-time demands:}
+	\begin{itemize}
+		\item Laser repetition: 1--20 Hz, 10--100 spectra accumulated per analysis
+		\item Need hundreds of spectra/second for online monitoring
+		\item Manifold-based inference: $10^6$--$10^8$ synthetic spectra
+	\end{itemize}
 
-  \vspace{0.5em}
-  \textbf{Prior GPU spectroscopy work:}
-  \begin{itemize}
-    \item \textbf{ExoJAX} (Kawahara+ 2022): $\sim$10k spectra/s on V100 --- exoplanet atmospheres
-    \item \textbf{HELIOS-K} (Grimm+ 2021): CUDA C++ opacity calculator, high throughput
-  \end{itemize}
+	\vspace{0.5em}
+	\textbf{Prior GPU spectroscopy work:}
+	\begin{itemize}
+		\item \textbf{ExoJAX} (Kawahara+ 2022): $\sim$10k spectra/s on V100 --- exoplanet atmospheres
+		\item \textbf{HELIOS-K} (Grimm+ 2021): CUDA C++ opacity calculator, high throughput
+	\end{itemize}
 
-  \vspace{0.3em}
-  \alert{Gap:} No GPU-accelerated CF-LIBS existed.
-  Neither handles the multi-element Saha--Boltzmann chain.
-\note{
-  Real-time LIBS at laser repetition rates and manifold generation
-  over millions of spectra both demand much higher throughput than serial CPU code
-  can provide. ExoJAX and HELIOS-K showed GPUs work for spectral
-  computation, but neither handles the CF-LIBS pipeline.
-  We fill that gap. Let me show you the architecture.
-}
+	\vspace{0.3em}
+	\alert{Gap:} No GPU-accelerated CF-LIBS existed.
+	Neither handles the multi-element Saha--Boltzmann chain.
 \end{frame}
+
+\section{Methods: GPU-Accelerated Kernels}
 
 % ----------------------------------------------------------
 % SLIDE 5: Pipeline architecture
 % ----------------------------------------------------------
 \begin{frame}{Pipeline Architecture}
-  \centering
-  \includegraphics[width=0.88\textwidth]{../paper/figures/fig1_pipeline.pdf}
+	\centering
+	\includegraphics[width=0.88\textwidth]{../paper/figures/fig1_pipeline.pdf}
 
-  \vspace{0.2em}
-  {\small Five GPU-accelerated kernels (shaded) in JAX:
-  \texttt{jit} + \texttt{vmap} + \texttt{grad}}
-\note{
-  Here is the full pipeline. Five computational kernels, shown shaded,
-  are GPU-accelerated via JAX. The key JAX features we exploit are
-  just-in-time compilation, vectorization with vmap, and automatic
-  differentiation with grad. Let me walk through each kernel.
-}
+	\vspace{0.2em}
+	{\small Five GPU-accelerated kernels (shaded) in JAX:
+	\texttt{jit} + \texttt{vmap} + \texttt{grad}}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 6: Why JAX?
 % ----------------------------------------------------------
 \begin{frame}{Why JAX?}
-  \begin{columns}[T]
-    \begin{column}{0.48\textwidth}
-      \textbf{Three key capabilities:}
-      \begin{enumerate}
-        \item \texttt{jit} --- JIT compilation to GPU via XLA
-        \item \texttt{vmap} --- automatic batch vectorization
-        \item \texttt{grad} --- automatic differentiation
-      \end{enumerate}
+	\begin{columns}[T]
+		\begin{column}{0.48\textwidth}
+			\textbf{Three key capabilities:}
+			\begin{enumerate}
+				\item \texttt{jit} --- JIT compilation to GPU via XLA
+				\item \texttt{vmap} --- automatic batch vectorization
+				\item \texttt{grad} --- automatic differentiation
+			\end{enumerate}
 
-      \vspace{1em}
-      \textbf{vs.\ hand-tuned CUDA:}
-      \begin{itemize}
-        \item Python-level development velocity
-        \item Single code path for CPU + GPU
-        \item Free Jacobians for optimization
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.48\textwidth}
-      \begin{exampleblock}{Batch forward model}
-        \texttt{batch\_spectrum =}\\
-        \quad\texttt{jit(vmap(single\_spectrum))}\\[0.5em]
-        One line transforms a single-spectrum\\
-        function into a GPU-parallel batch.
-      \end{exampleblock}
-    \end{column}
-  \end{columns}
-\note{
-  We chose JAX over hand-written CUDA for three reasons.
-  First, jit compiles Python to optimized GPU kernels.
-  Second, vmap gives us batch parallelism for free.
-  Third, grad provides automatic differentiation, so we get exact
-  Jacobians for joint optimization without manual derivation.
-  Now let me describe the five kernels, starting with Voigt profiles.
-}
+			\vspace{1em}
+			\textbf{vs.\ hand-tuned CUDA:}
+			\begin{itemize}
+				\item Python-level development velocity
+				\item Single code path for CPU + GPU
+				\item Free Jacobians for optimization
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.48\textwidth}
+			\begin{exampleblock}{Batch forward model}
+				\texttt{batch\_spectrum =}\\
+				\quad\texttt{jit(vmap(single\_spectrum))}\\[0.5em]
+				One line transforms a single-spectrum\\
+				function into a GPU-parallel batch.
+			\end{exampleblock}
+		\end{column}
+	\end{columns}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 7: Kernel 1 — Voigt profiles
 % ----------------------------------------------------------
 \begin{frame}{Kernel 1: GPU Voigt Profile}
-  \textbf{Challenge:} Evaluate Faddeeva function $w(z)$ on GPU
-  \begin{itemize}
-    \item Standard Humlicek W4 algorithm uses conditional branches\\
-          $\to$ warp divergence, incompatible with \texttt{jit}/\texttt{grad}
-  \end{itemize}
+	\textbf{Challenge:} Evaluate Faddeeva function $w(z)$ on GPU
+	\begin{itemize}
+		\item Standard Humlicek W4 algorithm uses conditional branches\\
+		      $\to$ warp divergence, incompatible with \texttt{jit}/\texttt{grad}
+	\end{itemize}
 
-  \vspace{0.5em}
-  \textbf{Solution:} Weideman $N\!=\!36$ rational approximation
-  \begin{equation*}
-    w(z) \approx \frac{1}{\sqrt{\pi}} \frac{L}{L - iz}
-      + \frac{2}{(L - iz)^2} \sum_{n=0}^{35} c_n Z^n
-  \end{equation*}
+	\vspace{0.5em}
+	\textbf{Solution:} Weideman $N\!=\!36$ rational approximation
+	\begin{equation*}
+		w(z) \approx \frac{1}{\sqrt{\pi}} \frac{L}{L - iz}
+		  + \frac{2}{(L - iz)^2} \sum_{n=0}^{35} c_n Z^n
+	\end{equation*}
 
-  \begin{itemize}
-    \item \alert{Branch-free} --- no conditionals, pure arithmetic
-    \item 236 FLOPs per evaluation
-    \item Max relative error $< 10^{-13}$ in float64
-    \item Full $(N_\text{wl} \times N_\text{lines})$ matrix in a single XLA kernel
-  \end{itemize}
-\note{
-  The Voigt profile is a convolution of Gaussian and Lorentzian shapes.
-  Evaluating it requires the Faddeeva function.
-  The standard Humlicek algorithm branches on input values, causing
-  GPU warp divergence. We use the Weideman N=36 rational approximation,
-  which is entirely branch-free: 236 floating-point operations,
-  no conditionals. The entire wavelength-by-lines matrix is computed
-  as a single fused GPU kernel. Let me show you the speedup.
-}
+	\begin{itemize}
+		\item \alert{Branch-free} --- no conditionals, pure arithmetic
+		\item 236 FLOPs per evaluation
+		\item Max relative error $< 10^{-13}$ in float64
+		\item Full $(N_\text{wl} \times N_\text{lines})$ matrix in a single XLA kernel
+	\end{itemize}
 \end{frame}
 
 % ----------------------------------------------------------
-% SLIDE 8: Voigt results
-% ----------------------------------------------------------
-\begin{frame}{Voigt Profile: 76$\times$ Speedup}
-  \begin{columns}[T]
-    \begin{column}{0.52\textwidth}
-      \centering
-      \includegraphics[width=\textwidth]{../paper/figures/fig2_voigt.pdf}
-    \end{column}
-    \begin{column}{0.45\textwidth}
-      \textbf{Key numbers:}
-      \begin{itemize}
-        \item \alert{76.4$\times$} speedup at $10^5$ grid points
-        \item GPU: $1.1 \times 10^9$ Faddeeva evals/sec
-        \item CPU: $1.5 \times 10^7$ evals/sec
-        \item Crossover at $\sim$500 grid points
-      \end{itemize}
-
-      \vspace{0.5em}
-      \textbf{Accuracy:}\\
-      Max relative error: $5.07 \times 10^{-14}$\\
-      {\small(vs.\ SciPy Poppe--Wijers reference)}
-    \end{column}
-  \end{columns}
-\note{
-  At 100,000 wavelength grid points, the GPU evaluates Faddeeva functions
-  76 times faster than CPU, processing over a billion evaluations per second.
-  The numerical error is 5 times 10 to the minus 14 --- essentially
-  machine precision. The crossover where GPU beats CPU is only 500 grid points,
-  well below any real LIBS spectrum. Next: Boltzmann fitting.
-}
-\end{frame}
-
-% ----------------------------------------------------------
-% SLIDE 9: Kernel 2 — Boltzmann fitting: the problem
+% SLIDE 8: Kernel 2 — Boltzmann fitting: the problem
 % ----------------------------------------------------------
 \begin{frame}{Kernel 2: Vectorized Boltzmann Fitting}
-  \textbf{Boltzmann plot} extracts temperature from line intensities:
-  \begin{equation*}
-    \underbrace{\ln\!\left(\frac{I_i \,\lambda_i}{g_{k,i}\, A_{ki,i}}\right)}_{y_i}
-    = \underbrace{-\frac{1}{k_B T}}_{b}\; E_{k,i} + \text{const}
-    \qquad\Longrightarrow\qquad
-    T = -\frac{1}{b\, k_B}
-  \end{equation*}
+	\textbf{Boltzmann plot} extracts temperature from line intensities:
+	\begin{equation*}
+		\underbrace{\ln\!\left(\frac{I_i \,\lambda_i}{g_{k,i}\, A_{ki,i}}\right)}_{y_i}
+		= \underbrace{-\frac{1}{k_B T}}_{b}\; E_{k,i} + \text{const}
+		\qquad\Longrightarrow\qquad
+		T = -\frac{1}{b\, k_B}
+	\end{equation*}
 
-  \vspace{-0.2em}
-  {\small\textbf{Fit $y = a + bx$ by weighted least squares} --- minimize
-  $\chi^2 = \sum_i w_i(y_i - a - bx_i)^2$.
-  Setting $\partial\chi^2\!/\partial a = 0$, $\partial\chi^2\!/\partial b = 0$ gives the
-  \alert{$2\times 2$ normal equations}:}
-  \begin{equation*}
-    \underbrace{
-    \begin{pmatrix}
-      S_w    & S_{wx} \\
-      S_{wx} & S_{wxx}
-    \end{pmatrix}}_{\bm{X}^\top \bm{W} \bm{X}}
-    \begin{pmatrix} a \\ b \end{pmatrix}
-    =
-    \underbrace{
-    \begin{pmatrix} S_{wy} \\ S_{wxy} \end{pmatrix}}_{\bm{X}^\top \bm{W} \bm{y}}
-  \end{equation*}
+	\vspace{-0.2em}
+	{\small\textbf{Fit $y = a + bx$ by weighted least squares} --- minimize
+	$\chi^2 = \sum_i w_i(y_i - a - bx_i)^2$.
+	Setting $\partial\chi^2\!/\partial a = 0$, $\partial\chi^2\!/\partial b = 0$ gives the
+	\alert{$2\times 2$ normal equations}:}
+	\begin{equation*}
+		\underbrace{
+		\begin{pmatrix}
+			S_w    & S_{wx} \\
+			S_{wx} & S_{wxx}
+		\end{pmatrix}}_{\bm{X}^\top \bm{W} \bm{X}}
+		\begin{pmatrix} a \\ b \end{pmatrix}
+		=
+		\underbrace{
+		\begin{pmatrix} S_{wy} \\ S_{wxy} \end{pmatrix}}_{\bm{X}^\top \bm{W} \bm{y}}
+	\end{equation*}
 
-  \vspace{-0.5em}
-  {\small with \alert{five scalar accumulators}:
-  $S_w\!=\!\sum w_i$,\;
-  $S_{wx}\!=\!\sum w_i x_i$,\;
-  $S_{wy}\!=\!\sum w_i y_i$,\;
-  $S_{wxx}\!=\!\sum w_i x_i^2$,\;
-  $S_{wxy}\!=\!\sum w_i x_i y_i$}
-\note{
-  The Boltzmann plot is the workhorse of CF-LIBS temperature extraction.
-  For each element, you plot the log of the normalized intensity versus
-  the upper-level energy. The slope gives you the temperature.
-  The key insight: for a straight-line fit (two parameters), the normal
-  equations are a 2-by-2 system that can be solved analytically.
-  You never need to construct or invert a matrix --- just compute five
-  scalar sums (dot products) and apply Cramer's rule.
-  This is the standard result from Bevington and Robinson (2003) and
-  Numerical Recipes section 15.2, specialized to two parameters.
-}
+	\vspace{-0.5em}
+	{\small with \alert{five scalar accumulators}:
+	$S_w\!=\!\sum w_i$,\;
+	$S_{wx}\!=\!\sum w_i x_i$,\;
+	$S_{wy}\!=\!\sum w_i y_i$,\;
+	$S_{wxx}\!=\!\sum w_i x_i^2$,\;
+	$S_{wxy}\!=\!\sum w_i x_i y_i$}
 \end{frame}
 
 % ----------------------------------------------------------
-% SLIDE 9b: Boltzmann fitting: the solution
+% SLIDE 8b: Boltzmann fitting: the solution
 % ----------------------------------------------------------
 \begin{frame}{Five Accumulators $\to$ Closed-Form Solution}
-  \textbf{Analytic inverse} via adjugate (Cramer's rule) --- \alert{no matrix factorization}:
-  \begin{equation*}
-    b = \frac{S_w\, S_{wxy} - S_{wx}\, S_{wy}}{\Delta}, \qquad
-    a = \frac{S_{wxx}\, S_{wy} - S_{wx}\, S_{wxy}}{\Delta}, \qquad
-    \Delta = S_w\, S_{wxx} - S_{wx}^2
-  \end{equation*}
+	\textbf{Analytic inverse} via adjugate (Cramer's rule) --- \alert{no matrix factorization}:
+	\begin{equation*}
+		b = \frac{S_w\, S_{wxy} - S_{wx}\, S_{wy}}{\Delta}, \qquad
+		a = \frac{S_{wxx}\, S_{wy} - S_{wx}\, S_{wxy}}{\Delta}, \qquad
+		\Delta = S_w\, S_{wxx} - S_{wx}^2
+	\end{equation*}
 
-  \vspace{-0.3em}
-  {\small\textbf{Uncertainty} from Gram covariance $(\bm{X}^\top\bm{W}\bm{X})^{-1}$:\quad
-    $\sigma_b = \sqrt{S_w / \Delta}$,\quad
-    $\sigma_T = T^2 k_B\, \sigma_b$}
+	\vspace{-0.3em}
+	{\small\textbf{Uncertainty} from Gram covariance $(\bm{X}^\top\bm{W}\bm{X})^{-1}$:\quad
+		$\sigma_b = \sqrt{S_w / \Delta}$,\quad
+		$\sigma_T = T^2 k_B\, \sigma_b$}
 
-  \vspace{0.2em}
-  \begin{columns}[T]
-    \begin{column}{0.48\textwidth}
-      {\small\textbf{Why not QR/SVD?}}
-      \begin{itemize}
-        \item {\small $2{\times}2$ system: $\kappa \sim 10^2$--$10^3$}
-        \item {\small Loses 2--3 digits $\to$ 12--13 correct in \texttt{float64}}
-        \item {\small Physical uncertainties $\sim 1$--$10\%$}
-        \item {\small QR adds $3\times$ cost, zero practical benefit}
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.48\textwidth}
-      {\small\textbf{Why this matters for GPU:}}
-      \begin{itemize}
-        \item {\small \alert{Branch-free}: same path for every element}
-        \item {\small No warp divergence (no pivoting)}
-        \item {\small Only $10 N_\text{max} + 11$ FLOPs/element}
-        \item {\small Degenerate: branchless \texttt{where} $\to$ $T\!=\!0$}
-      \end{itemize}
-    \end{column}
-  \end{columns}
-\note{
-  The closed-form solution reduces the entire Boltzmann fit to five
-  dot products, one determinant, and two numerator evaluations.
-  For a 2-by-2 system, the condition number is only 100 to 1000,
-  losing just 2 to 3 digits in float64. That leaves 12 to 13 correct
-  digits --- far more than the 1 to 10 percent physical uncertainties
-  in LIBS line intensities justify. QR or SVD would triple the compute
-  cost for zero practical accuracy benefit.
-  Critically for GPU: the entire computation is branch-free. Every
-  element follows the exact same instruction sequence, eliminating
-  warp divergence. The only conditional is a branchless where-guard
-  for degenerate fits when all upper-level energies are identical.
-}
+	\vspace{0.2em}
+	\begin{columns}[T]
+		\begin{column}{0.48\textwidth}
+			{\small\textbf{Why not QR/SVD?}}
+			\begin{itemize}
+				\item {\small $2{\times}2$ system: $\kappa \sim 10^2$--$10^3$}
+				\item {\small Loses 2--3 digits $\to$ 12--13 correct in \texttt{float64}}
+				\item {\small Physical uncertainties $\sim 1$--$10\%$}
+				\item {\small QR adds $3\times$ cost, zero practical benefit}
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.48\textwidth}
+			{\small\textbf{Why this matters for GPU:}}
+			\begin{itemize}
+				\item {\small \alert{Branch-free}: same path for every element}
+				\item {\small No warp divergence (no pivoting)}
+				\item {\small Only $10 N_\text{max} + 11$ FLOPs/element}
+				\item {\small Degenerate: branchless \texttt{where} $\to$ $T\!=\!0$}
+			\end{itemize}
+		\end{column}
+	\end{columns}
 \end{frame}
 
 % ----------------------------------------------------------
-% SLIDE 9c: Pad-and-mask batching
+% SLIDE 8c: Pad-and-mask batching
 % ----------------------------------------------------------
 \begin{frame}{Pad-and-Mask: Ragged $\to$ Rectangular $\to$ GPU}
-  {\small\textbf{Problem:} $D$ elements with \emph{different} line counts (Li: 3, Ca: 12, Fe: 47)}
+	{\small\textbf{Problem:} $D$ elements with \emph{different} line counts (Li: 3, Ca: 12, Fe: 47)}
 
-  \vspace{0.1em}
-  {\small\textbf{Solution:} Pad to $N_\text{max}$, mask out padding via weight-zeroing $\tilde{w}_{s,i} = w_{s,i} \cdot m_{s,i}$}
-  \begin{center}
-    \vspace{-0.3em}
-    \begin{tikzpicture}[
-      cell/.style={minimum width=0.5cm, minimum height=0.38cm, font=\tiny, anchor=center},
-      valid/.style={cell, fill=cbBlue!20},
-      padded/.style={cell, fill=gray!15, text=gray},
-      elabel/.style={font=\tiny\bfseries, anchor=east}
-    ]
-      % Labels
-      \node[elabel] at (-0.2, 0)    {Fe};
-      \node[elabel] at (-0.2, -0.5) {Ca};
-      \node[elabel] at (-0.2, -1.0) {Li};
-      % Fe: 5 valid
-      \foreach \i in {0,...,4} { \node[valid] at (0.5*\i+0.25, 0) {$w_{\pgfmathparse{int(\i+1)}\pgfmathresult}$}; }
-      % Ca: 3 valid + 2 padded
-      \foreach \i in {0,...,2} { \node[valid] at (0.5*\i+0.25, -0.5) {$w_{\pgfmathparse{int(\i+1)}\pgfmathresult}$}; }
-      \foreach \i in {3,4} { \node[padded] at (0.5*\i+0.25, -0.5) {$0$}; }
-      % Li: 2 valid + 3 padded
-      \foreach \i in {0,1} { \node[valid] at (0.5*\i+0.25, -1.0) {$w_{\pgfmathparse{int(\i+1)}\pgfmathresult}$}; }
-      \foreach \i in {2,3,4} { \node[padded] at (0.5*\i+0.25, -1.0) {$0$}; }
-      % Arrow and label
-      \draw[->, thick] (3.0, -0.5) -- (3.8, -0.5);
-      \node[font=\tiny, anchor=west] at (3.9, -0.25) {Padded $\to$ zero weight};
-      \node[font=\tiny, anchor=west] at (3.9, -0.7) {$\tilde{w}\!=\!0 \Rightarrow$ invisible to all sums};
-    \end{tikzpicture}
-    \vspace{-0.3em}
-  \end{center}
+	\vspace{0.1em}
+	{\small\textbf{Solution:} Pad to $N_\text{max}$, mask out padding via weight-zeroing $\tilde{w}_{s,i} = w_{s,i} \cdot m_{s,i}$}
+	\begin{center}
+		\vspace{-0.3em}
+		\begin{tikzpicture}[
+			cell/.style={minimum width=0.5cm, minimum height=0.38cm, font=\tiny, anchor=center},
+			valid/.style={cell, fill=cbBlue!20},
+			padded/.style={cell, fill=gray!15, text=gray},
+			elabel/.style={font=\tiny\bfseries, anchor=east}
+		]
+			% Labels
+			\node[elabel] at (-0.2, 0)    {Fe};
+			\node[elabel] at (-0.2, -0.5) {Ca};
+			\node[elabel] at (-0.2, -1.0) {Li};
+			% Fe: 5 valid
+			\foreach \i in {0,...,4} { \node[valid] at (0.5*\i+0.25, 0) {$w_{\pgfmathparse{int(\i+1)}\pgfmathresult}$}; }
+			% Ca: 3 valid + 2 padded
+			\foreach \i in {0,...,2} { \node[valid] at (0.5*\i+0.25, -0.5) {$w_{\pgfmathparse{int(\i+1)}\pgfmathresult}$}; }
+			\foreach \i in {3,4} { \node[padded] at (0.5*\i+0.25, -0.5) {$0$}; }
+			% Li: 2 valid + 3 padded
+			\foreach \i in {0,1} { \node[valid] at (0.5*\i+0.25, -1.0) {$w_{\pgfmathparse{int(\i+1)}\pgfmathresult}$}; }
+			\foreach \i in {2,3,4} { \node[padded] at (0.5*\i+0.25, -1.0) {$0$}; }
+			% Arrow and label
+			\draw[->, thick] (3.0, -0.5) -- (3.8, -0.5);
+			\node[font=\tiny, anchor=west] at (3.9, -0.25) {Padded $\to$ zero weight};
+			\node[font=\tiny, anchor=west] at (3.9, -0.7) {$\tilde{w}\!=\!0 \Rightarrow$ invisible to all sums};
+		\end{tikzpicture}
+		\vspace{-0.3em}
+	\end{center}
 
-  \begin{columns}[T]
-    \begin{column}{0.50\textwidth}
-      {\small\textbf{Implementation:}}
-      \begin{itemize}
-        \item {\small Arrays shape $(D, N_\text{max})$}
-        \item {\small \texttt{jnp.sum(w\_masked * x, axis=1)}}
-        \item {\small Single \texttt{@jit} kernel, \texttt{float64}}
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.46\textwidth}
-      {\small\textbf{Cost analysis:}}
-      \begin{itemize}
-        \item {\small $10\, N_\text{max} + 11$ FLOPs/element}
-        \item {\small $D\!=\!10$, $N_\text{max}\!=\!50$: \alert{5{,}110 FLOPs}}
-        \item {\small Fits in one GPU warp}
-      \end{itemize}
-    \end{column}
-  \end{columns}
-\note{
-  The key challenge for GPU Boltzmann fitting is that each element has
-  a different number of emission lines --- Li might have 3 lines while
-  Fe has 47. GPUs need uniform array shapes.
-  We solve this by padding all elements to the maximum line count and
-  using a binary mask. The mask is applied by multiplying it into the
-  weights: padded entries get weight zero, so they contribute exactly
-  nothing to any of the five accumulator sums. The math is identical
-  to fitting only the valid lines.
-  The entire operation is a single JIT-compiled JAX function. No Python
-  loops, no conditional branches. The element dimension D is just a
-  batch axis --- all five dot products for all D elements execute in
-  parallel. For a typical 10-element LIBS analysis with 50 max lines,
-  the total cost is about 5000 floating-point operations --- trivial
-  for a GPU that can do trillions per second.
-  Float64 is essential: the Gram determinant involves a difference of
-  products that can suffer catastrophic cancellation in float32.
-}
+	\begin{columns}[T]
+		\begin{column}{0.50\textwidth}
+			{\small\textbf{Implementation:}}
+			\begin{itemize}
+				\item {\small Arrays shape $(D, N_\text{max})$}
+				\item {\small \texttt{jnp.sum(w\_masked * x, axis=1)}}
+				\item {\small Single \texttt{@jit} kernel, \texttt{float64}}
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.46\textwidth}
+			{\small\textbf{Cost analysis:}}
+			\begin{itemize}
+				\item {\small $10\, N_\text{max} + 11$ FLOPs/element}
+				\item {\small $D\!=\!10$, $N_\text{max}\!=\!50$: \alert{5{,}110 FLOPs}}
+				\item {\small Fits in one GPU warp}
+			\end{itemize}
+		\end{column}
+	\end{columns}
 \end{frame}
 
 % ----------------------------------------------------------
-% SLIDE 10: Boltzmann results
-% ----------------------------------------------------------
-\begin{frame}{Boltzmann Fitting: 8.8$\times$ Speedup}
-  \begin{columns}[T]
-    \begin{column}{0.52\textwidth}
-      \centering
-      \includegraphics[width=\textwidth]{../paper/figures/fig3_boltzmann.pdf}
-    \end{column}
-    \begin{column}{0.45\textwidth}
-      \textbf{Key numbers:}
-      \begin{itemize}
-        \item \alert{8.8$\times$} speedup at 20 elements
-        \item GPU time nearly constant: $\sim$0.12 ms regardless of $D$
-        \item CPU time scales linearly with $D$
-        \item Break-even at $\sim$3 elements
-      \end{itemize}
-
-      \vspace{0.5em}
-      \textbf{Accuracy:}\\
-      Slope relative error: $5.65 \times 10^{-14}$\\
-      {\small (12--13 correct digits, as predicted\\by condition number analysis)}
-    \end{column}
-  \end{columns}
-\note{
-  At 20 elements, the GPU is 8.8 times faster.
-  The important feature is that GPU time is essentially constant
-  regardless of how many elements you have --- the five accumulator
-  sums for all elements execute in parallel as row-wise reductions.
-  CPU time grows linearly because it loops over elements sequentially.
-  The slope error of 5.65 times 10 to the minus 14 confirms the
-  condition number analysis: we predicted 12 to 13 correct digits
-  from the kappa of 100 to 1000 for the 2-by-2 Gram matrix, and
-  that is exactly what we observe. This is at machine precision for
-  float64, and far exceeds the physical measurement uncertainties.
-  Next: the iterative Saha-Boltzmann solver.
-}
-\end{frame}
-
-% ----------------------------------------------------------
-% SLIDE 11: Kernel 3 — Anderson acceleration
+% SLIDE 9: Kernel 3 — Anderson acceleration
 % ----------------------------------------------------------
 \begin{frame}{Kernel 3: Anderson-Accelerated Saha Solver}
-  \textbf{Fixed-point problem:} $n_e = g(n_e)$ via charge neutrality
+	\textbf{Fixed-point problem:} $n_e = g(n_e)$ via charge neutrality
 
-  \vspace{0.5em}
-  \textbf{Simple Picard iteration:} $n_e^{(k+1)} = g(n_e^{(k)})$
-  \begin{itemize}
-    \item Converges, but rate depends on $|g'(n_e^*)|$
-  \end{itemize}
+	\vspace{0.5em}
+	\textbf{Simple Picard iteration:} $n_e^{(k+1)} = g(n_e^{(k)})$
+	\begin{itemize}
+		\item Converges, but rate depends on $|g'(n_e^*)|$
+	\end{itemize}
 
-  \vspace{0.3em}
-  \textbf{Anderson acceleration:} store $m$ previous iterates, solve least-squares
-  \begin{equation*}
-    n_e^{(k+1)} = g(n_e^{(k)}) - (\Delta G_k + \Delta R_k)\, \bm{\gamma}_k^*
-  \end{equation*}
+	\vspace{0.3em}
+	\textbf{Anderson acceleration:} store $m$ previous iterates, solve least-squares
+	\begin{equation*}
+		n_e^{(k+1)} = g(n_e^{(k)}) - (\Delta G_k + \Delta R_k)\, \bm{\gamma}_k^*
+	\end{equation*}
 
-  \begin{itemize}
-    \item Optimal depth $m = 1$ at tolerance $10^{-6}$
-    \item Implemented via \texttt{lax.scan} --- static computation graph
-    \item Reduces to Picard when $m = 0$ (zero-cost fallback)
-  \end{itemize}
-\note{
-  The Saha-Boltzmann loop requires iterating electron density
-  to self-consistency. Anderson acceleration stores previous iterates
-  and finds an optimal linear combination to accelerate convergence.
-  We implement it with JAX's lax.scan for a static computation graph.
-  At m=0 it falls back to plain Picard iteration at no extra cost.
-}
+	\begin{itemize}
+		\item Optimal depth $m = 1$ at tolerance $10^{-6}$
+		\item Implemented via \texttt{lax.scan} --- static computation graph
+		\item Reduces to Picard when $m = 0$ (zero-cost fallback)
+	\end{itemize}
 \end{frame}
 
 % ----------------------------------------------------------
-% SLIDE 12: Anderson results
-% ----------------------------------------------------------
-\begin{frame}{Anderson Convergence: 1.6$\times$ Iteration Reduction}
-  \begin{columns}[T]
-    \begin{column}{0.52\textwidth}
-      \centering
-      \includegraphics[width=\textwidth]{../paper/figures/fig4_anderson.pdf}
-    \end{column}
-    \begin{column}{0.45\textwidth}
-      \textbf{Key numbers:}
-      \begin{itemize}
-        \item \alert{1.6$\times$} avg.\ iteration reduction
-        \item Hardest case: 7 $\to$ 4 iterations
-        \item Tighter tolerance: $m\!=\!5$ gives $2.9\times$
-      \end{itemize}
-
-      \vspace{0.5em}
-      \textbf{Honest assessment:}\\
-      Modest for typical LIBS plasmas\\
-      (Picard contraction $|g'| \sim 0.3$--$0.7$)\\[0.3em]
-      Most valuable for:
-      \begin{itemize}
-        \item High-$T$ ($>$ 2 eV) plasmas
-        \item Tight tolerances ($< 10^{-10}$)
-      \end{itemize}
-    \end{column}
-  \end{columns}
-\note{
-  Anderson acceleration gives a 1.6x average iteration reduction.
-  This is honest: for typical LIBS conditions, Picard already converges
-  in 3 to 8 steps, so the improvement is modest.
-  The real value is a convergence guarantee for harder conditions ---
-  high temperature, multiply ionized plasmas --- and at tighter
-  tolerances where depth m=5 gives a 2.9x reduction.
-}
-\end{frame}
-
-% ----------------------------------------------------------
-% SLIDE 13: Kernel 4 — Softmax closure
+% SLIDE 10: Kernel 4 — Softmax closure
 % ----------------------------------------------------------
 \begin{frame}{Kernel 4: Softmax Compositional Closure}
-  \textbf{Constraint:} $\sum_{i=1}^D C_i = 1$, \quad $C_i > 0$
+	\textbf{Constraint:} $\sum_{i=1}^D C_i = 1$, \quad $C_i > 0$
 
-  \vspace{0.5em}
-  \textbf{Traditional approach:} Normalize after each iteration\\
-  $\to$ breaks gradient flow, numerically fragile at simplex boundary
+	\vspace{0.5em}
+	\textbf{Traditional approach:} Normalize after each iteration\\
+	$\to$ breaks gradient flow, numerically fragile at simplex boundary
 
-  \vspace{0.5em}
-  \textbf{Softmax reparameterization:}
-  \begin{equation*}
-    C_i = \frac{\exp(\theta_i)}{\sum_{j} \exp(\theta_j)}
-    \qquad\text{(log-sum-exp trick for stability)}
-  \end{equation*}
+	\vspace{0.5em}
+	\textbf{Softmax reparameterization:}
+	\begin{equation*}
+		C_i = \frac{\exp(\theta_i)}{\sum_{j} \exp(\theta_j)}
+		\qquad\text{(log-sum-exp trick for stability)}
+	\end{equation*}
 
-  \begin{itemize}
-    \item Constraint satisfied \alert{exactly by construction}
-    \item Strict positivity for all finite $\bm{\theta}$
-    \item Exact Jacobian: $J_{ij} = C_i(\delta_{ij} - C_j)$
-    \item Enables gradient-based joint optimization of $T$, $n_e$, $\bm{C}$
-  \end{itemize}
+	\begin{itemize}
+		\item Constraint satisfied \alert{exactly by construction}
+		\item Strict positivity for all finite $\bm{\theta}$
+		\item Exact Jacobian: $J_{ij} = C_i(\delta_{ij} - C_j)$
+		\item Enables gradient-based joint optimization of $T$, $n_e$, $\bm{C}$
+	\end{itemize}
 
-  \vspace{0.3em}
-  Accuracy: max deviation $4.44 \times 10^{-16}$ (machine epsilon)
-\note{
-  CF-LIBS compositions must sum to one and be positive.
-  Traditional normalization breaks gradient flow.
-  The softmax reparameterization maps unconstrained parameters
-  to the probability simplex exactly by construction.
-  The analytic Jacobian enables joint gradient-based optimization
-  of temperature, electron density, and all concentrations simultaneously.
-  Accuracy is at machine epsilon.
-}
+	\vspace{0.3em}
+	Accuracy: max deviation $4.44 \times 10^{-16}$ (machine epsilon)
 \end{frame}
 
 % ----------------------------------------------------------
-% SLIDE 14: Kernel 5 — Batch forward model
+% SLIDE 11: Kernel 5 — Batch forward model
 % ----------------------------------------------------------
 \begin{frame}{Kernel 5: Batch Forward Model}
-  {\small\textbf{Forward model:} $(T, n_e, \bm{C}) \to S(\lambda)$ via
-  Saha $\to$ Boltzmann $\to$ emissivity $\to$ Voigt broadening}
+	{\small\textbf{Forward model:} $(T, n_e, \bm{C}) \to S(\lambda)$ via
+	Saha $\to$ Boltzmann $\to$ emissivity $\to$ Voigt broadening}
 
-  \vspace{0.2em}
-  \textbf{Batch via \texttt{vmap}:}
-  \begin{equation*}
-    \texttt{batch\_spectrum} = \texttt{jit}(\texttt{vmap}(\texttt{single\_spectrum}))
-  \end{equation*}
+	\vspace{0.2em}
+	\textbf{Batch via \texttt{vmap}:}
+	\begin{equation*}
+		\texttt{batch\_spectrum} = \texttt{jit}(\texttt{vmap}(\texttt{single\_spectrum}))
+	\end{equation*}
 
-  \vspace{-0.3em}
-  \begin{itemize}
-    \item {\small Wavelength grid and atomic data \alert{shared} (broadcast)}
-    \item {\small $(T, n_e, \bm{C})$ \alert{mapped} over batch dimension}
-    \item {\small Profile matrix: $(B \times N_\text{wl} \times N_\text{lines})$ --- dominant memory cost}
-    \item {\small \texttt{vmap} is a semantic transform: \alert{bit-identical} to sequential}
-  \end{itemize}
-\note{
-  The batch forward model composes all four kernels into a single
-  vectorized pipeline. JAX's vmap maps over the batch dimension
-  while sharing the wavelength grid and atomic database.
-  Because vmap is a purely semantic transformation, it produces
-  bit-identical results to sequential evaluation --- a strong
-  correctness guarantee. Let me show you the throughput numbers.
-}
+	\vspace{-0.3em}
+	\begin{itemize}
+		\item {\small Wavelength grid and atomic data \alert{shared} (broadcast)}
+		\item {\small $(T, n_e, \bm{C})$ \alert{mapped} over batch dimension}
+		\item {\small Profile matrix: $(B \times N_\text{wl} \times N_\text{lines})$ --- dominant memory cost}
+		\item {\small \texttt{vmap} is a semantic transform: \alert{bit-identical} to sequential}
+	\end{itemize}
+\end{frame}
+
+\section{Results: Kernel Benchmarks}
+
+% ----------------------------------------------------------
+% SLIDE 12: Voigt results
+% ----------------------------------------------------------
+\begin{frame}{Voigt Profile: 76$\times$ Speedup}
+	\begin{columns}[T]
+		\begin{column}{0.52\textwidth}
+			\centering
+			\includegraphics[width=\textwidth]{../paper/figures/fig2_voigt.pdf}
+		\end{column}
+		\begin{column}{0.45\textwidth}
+			\textbf{Key numbers:}
+			\begin{itemize}
+				\item \alert{76.4$\times$} speedup at $10^5$ grid points
+				\item GPU: $1.1 \times 10^9$ Faddeeva evals/sec
+				\item CPU: $1.5 \times 10^7$ evals/sec
+				\item Crossover at $\sim$500 grid points
+			\end{itemize}
+
+			\vspace{0.5em}
+			\textbf{Accuracy:}\\
+			Max relative error: $5.07 \times 10^{-14}$\\
+			{\small(vs.\ SciPy Poppe--Wijers reference)}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+% ----------------------------------------------------------
+% SLIDE 13: Boltzmann results
+% ----------------------------------------------------------
+\begin{frame}{Boltzmann Fitting: 8.8$\times$ Speedup}
+	\begin{columns}[T]
+		\begin{column}{0.52\textwidth}
+			\centering
+			\includegraphics[width=\textwidth]{../paper/figures/fig3_boltzmann.pdf}
+		\end{column}
+		\begin{column}{0.45\textwidth}
+			\textbf{Key numbers:}
+			\begin{itemize}
+				\item \alert{8.8$\times$} speedup at 20 elements
+				\item GPU time nearly constant: $\sim$0.12 ms regardless of $D$
+				\item CPU time scales linearly with $D$
+				\item Break-even at $\sim$3 elements
+			\end{itemize}
+
+			\vspace{0.5em}
+			\textbf{Accuracy:}\\
+			Slope relative error: $5.65 \times 10^{-14}$\\
+			{\small (12--13 correct digits, as predicted\\by condition number analysis)}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+% ----------------------------------------------------------
+% SLIDE 14: Anderson results
+% ----------------------------------------------------------
+\begin{frame}{Anderson Convergence: 1.6$\times$ Iteration Reduction}
+	\begin{columns}[T]
+		\begin{column}{0.52\textwidth}
+			\centering
+			\includegraphics[width=\textwidth]{../paper/figures/fig4_anderson.pdf}
+		\end{column}
+		\begin{column}{0.45\textwidth}
+			\textbf{Key numbers:}
+			\begin{itemize}
+				\item \alert{1.6$\times$} avg.\ iteration reduction
+				\item Hardest case: 7 $\to$ 4 iterations
+				\item Tighter tolerance: $m\!=\!5$ gives $2.9\times$
+			\end{itemize}
+
+			\vspace{0.5em}
+			\textbf{Honest assessment:}\\
+			Modest for typical LIBS plasmas\\
+			(Picard contraction $|g'| \sim 0.3$--$0.7$)\\[0.3em]
+			Most valuable for:
+			\begin{itemize}
+				\item High-$T$ ($>$ 2 eV) plasmas
+				\item Tight tolerances ($< 10^{-10}$)
+			\end{itemize}
+		\end{column}
+	\end{columns}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 15: Batch forward results
 % ----------------------------------------------------------
 \begin{frame}{Batch Throughput: 10,708 Spectra/sec}
-  \begin{columns}[T]
-    \begin{column}{0.52\textwidth}
-      \centering
-      \includegraphics[width=\textwidth]{../paper/figures/fig6_batch.pdf}
-    \end{column}
-    \begin{column}{0.45\textwidth}
-      \textbf{Key numbers:}
-      \begin{itemize}
-        \item \alert{10,708} spectra/sec peak ($B\!=\!100$)\\
-              {\scriptsize (sufficient for 1--20 Hz laser rep rate)}
-        \item GPU saturates at $B \geq 50$
-        \item CPU: $\sim$940 spectra/sec (constant)
-        \item 11.3$\times$ speedup at peak
-      \end{itemize}
+	\begin{columns}[T]
+		\begin{column}{0.52\textwidth}
+			\centering
+			\includegraphics[width=\textwidth]{../paper/figures/fig6_batch.pdf}
+		\end{column}
+		\begin{column}{0.45\textwidth}
+			\textbf{Key numbers:}
+			\begin{itemize}
+				\item \alert{10,708} spectra/sec peak ($B\!=\!100$)\\
+				      {\scriptsize (sufficient for 1--20 Hz laser rep rate)}
+				\item GPU saturates at $B \geq 50$
+				\item CPU: $\sim$940 spectra/sec (constant)
+				\item 11.3$\times$ speedup at peak
+			\end{itemize}
 
-      \vspace{0.5em}
-      \textbf{Memory limit:}\\
-      OOM at $B \geq 5000$ on 32 GB V100S\\
-      Chunked execution recovers full throughput
-    \end{column}
-  \end{columns}
-\note{
-  Peak throughput is 10,708 spectra per second at batch size 100.
-  This is comparable to ExoJAX's 10,000 spectra per second
-  on the same GPU, even though our pipeline is more complex.
-  GPU memory limits the maximum batch size to about 5000 on this hardware,
-  but chunked execution handles larger workloads transparently.
-}
+			\vspace{0.5em}
+			\textbf{Memory limit:}\\
+			OOM at $B \geq 5000$ on 32 GB V100S\\
+			Chunked execution recovers full throughput
+		\end{column}
+	\end{columns}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 16: End-to-end pipeline
 % ----------------------------------------------------------
 \begin{frame}{End-to-End Pipeline: 13.6$\times$ Speedup}
-  \begin{columns}[T]
-    \begin{column}{0.52\textwidth}
-      \centering
-      \includegraphics[width=\textwidth]{../paper/figures/fig7_e2e.pdf}
-    \end{column}
-    \begin{column}{0.45\textwidth}
-      \textbf{Key numbers:}
-      \begin{itemize}
-        \item \alert{13.6$\times$} at batch size 1000
-        \item Crossover at $B \geq 10$ ($\sim$10 laser shots)
-        \item At $B\!=\!1$: GPU is $4.8\times$ \emph{slower}
-      \end{itemize}
+	\begin{columns}[T]
+		\begin{column}{0.52\textwidth}
+			\centering
+			\includegraphics[width=\textwidth]{../paper/figures/fig7_e2e.pdf}
+		\end{column}
+		\begin{column}{0.45\textwidth}
+			\textbf{Key numbers:}
+			\begin{itemize}
+				\item \alert{13.6$\times$} at batch size 1000
+				\item Crossover at $B \geq 10$ ($\sim$10 laser shots)
+				\item At $B\!=\!1$: GPU is $4.8\times$ \emph{slower}
+			\end{itemize}
 
-      \vspace{0.5em}
-      \textbf{CPU bottleneck breakdown} ($B\!=\!1000$):
-      \begin{itemize}
-        \item Voigt profiles: 34.7\%
-        \item Saha--Boltzmann: 27.8\%
-        \item Boltzmann fit: 27.8\%
-        \item Closure + prep: $<$1\%
-      \end{itemize}
-    \end{column}
-  \end{columns}
-\note{
-  The end-to-end pipeline achieves 13.6x speedup at batch 1000.
-  The crossover is at batch size 10 --- above that, GPU wins.
-  At batch 1, GPU is slower due to kernel launch overhead.
-  On CPU, Voigt profiles consume 35 percent of the time, followed
-  by Saha-Boltzmann and Boltzmann fitting at 28 percent each.
-  The GPU parallelizes all three bottlenecks simultaneously.
-}
+			\vspace{0.5em}
+			\textbf{CPU bottleneck breakdown} ($B\!=\!1000$):
+			\begin{itemize}
+				\item Voigt profiles: 34.7\%
+				\item Saha--Boltzmann: 27.8\%
+				\item Boltzmann fit: 27.8\%
+				\item Closure + prep: $<$1\%
+			\end{itemize}
+		\end{column}
+	\end{columns}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 17: Accuracy summary
 % ----------------------------------------------------------
 \begin{frame}{Numerical Accuracy: Zero Precision Loss}
-  \centering
-  \begin{tabular}{lccc}
-    \toprule
-    \textbf{Kernel} & \textbf{Threshold} & \textbf{Achieved} & \textbf{$N_\text{tests}$} \\
-    \midrule
-    Voigt profile   & $10^{-6}$  & $6.81 \times 10^{-8}$  & 410  \\
-    Boltzmann fit   & $10^{-10}$ & $5.65 \times 10^{-14}$ & 1000 \\
-    Anderson solver & $10^{-12}$ & $4.05 \times 10^{-13}$ & 60   \\
-    Softmax closure & $10^{-15}$ & $4.44 \times 10^{-16}$ & 1009 \\
-    Batch forward   & $10^{-12}$ & $0.0$ (bit-identical)   & 100  \\
-    \bottomrule
-  \end{tabular}
+	\centering
+	\begin{tabular}{lccc}
+		\toprule
+		\textbf{Kernel} & \textbf{Threshold} & \textbf{Achieved} & \textbf{$N_\text{tests}$} \\
+		\midrule
+		Voigt profile   & $10^{-6}$  & $6.81 \times 10^{-8}$  & 410  \\
+		Boltzmann fit   & $10^{-10}$ & $5.65 \times 10^{-14}$ & 1000 \\
+		Anderson solver & $10^{-12}$ & $4.05 \times 10^{-13}$ & 60   \\
+		Softmax closure & $10^{-15}$ & $4.44 \times 10^{-16}$ & 1009 \\
+		Batch forward   & $10^{-12}$ & $0.0$ (bit-identical)   & 100  \\
+		\bottomrule
+	\end{tabular}
 
-  \vspace{1em}
-  All kernels beat their thresholds by \alert{orders of magnitude}.\\
-  Float64 arithmetic throughout --- no mixed-precision compromises.
-\note{
-  This table summarizes accuracy across all five kernels.
-  Every kernel beats its threshold by orders of magnitude.
-  The batch forward model is bit-identical to sequential computation.
-  We use float64 throughout --- no mixed-precision shortcuts.
-  All numbers verified against SciPy and CPU reference implementations
-  over hundreds to thousands of test cases.
-}
+	\vspace{1em}
+	All kernels beat their thresholds by \alert{orders of magnitude}.\\
+	Float64 arithmetic throughout --- no mixed-precision compromises.
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 18: Real-data validation — Aalto
 % ----------------------------------------------------------
 \begin{frame}{Real-Data Validation}
-  \begin{columns}[T]
-    \begin{column}{0.48\textwidth}
-      \textbf{Aalto University LIBS Library}
-      \begin{itemize}
-        \item 74 spectra (13 pure elements, 61 minerals)
-        \item \alert{100\% GPU--CPU parity} across all kernels
-        \item Per-kernel max errors:
-        \begin{itemize}
-          \item Boltzmann: $1.0 \times 10^{-14}$
-          \item Voigt: $4.5 \times 10^{-16}$
-          \item Softmax: $2.0 \times 10^{-16}$
-          \item Charge balance: $2.5 \times 10^{-9}$
-        \end{itemize}
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.48\textwidth}
-      \textbf{ChemCam CCCT Targets}
-      \begin{itemize}
-        \item 6 calibration targets (CCCT-1 to CCCT-5, CCCT-9)
-        \item Certified compositions (Fabre+ 2011)
-        \item \alert{100\% pass rate} on all kernel parity tests
-        \item 19/19 major elements correctly detected
-      \end{itemize}
-    \end{column}
-  \end{columns}
+	\begin{columns}[T]
+		\begin{column}{0.48\textwidth}
+			\textbf{Aalto University LIBS Library}
+			\begin{itemize}
+				\item 74 spectra (13 pure elements, 61 minerals)
+				\item \alert{100\% GPU--CPU parity} across all kernels
+				\item Per-kernel max errors:
+				\begin{itemize}
+					\item Boltzmann: $1.0 \times 10^{-14}$
+					\item Voigt: $4.5 \times 10^{-16}$
+					\item Softmax: $2.0 \times 10^{-16}$
+					\item Charge balance: $2.5 \times 10^{-9}$
+				\end{itemize}
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.48\textwidth}
+			\textbf{ChemCam CCCT Targets}
+			\begin{itemize}
+				\item 6 calibration targets (CCCT-1 to CCCT-5, CCCT-9)
+				\item Certified compositions (Fabre+ 2011)
+				\item \alert{100\% pass rate} on all kernel parity tests
+				\item 19/19 major elements correctly detected
+			\end{itemize}
+		\end{column}
+	\end{columns}
 
-  \vspace{0.5em}
-  \centering
-  GPU--CPU parity confirmed on \alert{real experimental data}, not just synthetic tests.
-\note{
-  We validated on real data from two independent sources.
-  The Aalto library gives us 74 spectra of pure elements and minerals ---
-  100 percent GPU-CPU parity. The ChemCam calibration targets
-  with certified compositions also show 100 percent pass rate.
-  This confirms the GPU implementation is correct on real-world data,
-  not just synthetic test cases.
-}
+	\vspace{0.5em}
+	\centering
+	GPU--CPU parity confirmed on \alert{real experimental data}, not just synthetic tests.
 \end{frame}
+
+\section{Results: Element Identification}
 
 % ----------------------------------------------------------
 % SLIDE 19: Individual algorithms have tradeoffs
 % ----------------------------------------------------------
 \begin{frame}{Element Identification at Low RP: No Single Method Suffices}
-  {\small\textbf{Problem:} At RP $<$ 1000, every method has critical blind spots
-  \quad(74 Aalto spectra, RP = 300--1100, 22 elements)}
+	{\small\textbf{Problem:} At RP $<$ 1000, every method has critical blind spots
+	\quad(74 Aalto spectra, RP = 300--1100, 22 elements)}
 
-  \vspace{0.2em}
-  \centering
-  {\footnotesize
-  \begin{tabular}{lccl}
-    \toprule
-    \textbf{Algorithm} & \textbf{Recall} & \textbf{Precision} & \textbf{Strength} \\
-    \midrule
-    NNLS decomposition  & \alert{0.922} & 0.336 & Best recall (trace elements) \\
-    Comb matching       & 0.820 & 0.350 & Balanced R/P \\
-    Hybrid NNLS+ALIAS   & 0.731 & \alert{0.578} & Best single-method precision \\
-    ALIAS peak-matching & 0.635 & 0.396 & Line-level confirmation \\
-    Correlation         & 0.102 & 0.212 & Ineffective at low RP \\
-    \bottomrule
-  \end{tabular}}
+	\vspace{0.2em}
+	\centering
+	{\footnotesize
+	\begin{tabular}{lccl}
+		\toprule
+		\textbf{Algorithm} & \textbf{Recall} & \textbf{Precision} & \textbf{Strength} \\
+		\midrule
+		NNLS decomposition  & \alert{0.922} & 0.336 & Best recall (trace elements) \\
+		Comb matching       & 0.820 & 0.350 & Balanced R/P \\
+		Hybrid NNLS+ALIAS   & 0.731 & \alert{0.578} & Best single-method precision \\
+		ALIAS peak-matching & 0.635 & 0.396 & Line-level confirmation \\
+		Correlation         & 0.102 & 0.212 & Ineffective at low RP \\
+		\bottomrule
+	\end{tabular}}
 
-  \vspace{0.3em}
-  \begin{itemize}
-    \item {\small\textbf{NNLS:} Finds almost everything, but $\sim$7 false positives/spectrum}
-    \item {\small\textbf{Hybrid:} Best precision, but misses blended trace elements}
-    \item {\small\textbf{Key insight:} Algorithms fail on \emph{different} elements $\to$ ensemble opportunity}
-  \end{itemize}
-\note{
-  This table shows each algorithm's standalone performance on all 74 Aalto spectra.
-  The fundamental problem: no single algorithm achieves both high precision and
-  high recall. NNLS finds 92 percent of true elements but with terrible precision.
-  The hybrid has the best precision but misses trace elements. Crucially, they
-  fail on different elements --- which creates the opportunity for an ensemble.
-}
+	\vspace{0.3em}
+	\begin{itemize}
+		\item {\small\textbf{NNLS:} Finds almost everything, but $\sim$7 false positives/spectrum}
+		\item {\small\textbf{Hybrid:} Best precision, but misses blended trace elements}
+		\item {\small\textbf{Key insight:} Algorithms fail on \emph{different} elements $\to$ ensemble opportunity}
+	\end{itemize}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 19b: 5-Pathway Benchmark Table (best configs)
 % ----------------------------------------------------------
 \begin{frame}{Systematic Identification Benchmark: Five Spectroscopic Methods}
-  {\small Best configuration per pathway, ranked by F\textsubscript{1} (systematic sweep of 93 configs)}
+	{\small Best configuration per pathway, ranked by F\textsubscript{1} (systematic sweep of 93 configs)}
 
-  \vspace{0.3em}
-  \centering
-  {\small
-  \begin{tabular}{rlcccc}
-    \toprule
-    \textbf{Rank} & \textbf{Pathway} & \textbf{P} & \textbf{R} & \textbf{F\textsubscript{1}} & \textbf{Note} \\
-    \midrule
-    1 & Hybrid NNLS+ALIAS & 0.604 & 0.713 & 0.654 & Best single pathway \\
-    2 & ALIAS peak-matching     & 0.505 & 0.629 & 0.560 & Baseline \\
-    3 & Voigt deconv.\ + ALIAS  & 0.488 & 0.623 & 0.547 & No net benefit \\
-    4 & Forward model           & 0.369 & 0.796 & 0.505 & High R, low P \\
-    5 & Spectral NNLS           & 0.293 & 0.940 & 0.447 & R=0.94, P=0.29 \\
-    \bottomrule
-  \end{tabular}}
+	\vspace{0.3em}
+	\centering
+	{\small
+	\begin{tabular}{rlcccc}
+		\toprule
+		\textbf{Rank} & \textbf{Pathway} & \textbf{P} & \textbf{R} & \textbf{F\textsubscript{1}} & \textbf{Note} \\
+		\midrule
+		1 & Hybrid NNLS+ALIAS & 0.604 & 0.713 & 0.654 & Best single pathway \\
+		2 & ALIAS peak-matching     & 0.505 & 0.629 & 0.560 & Baseline \\
+		3 & Voigt deconv.\ + ALIAS  & 0.488 & 0.623 & 0.547 & No net benefit \\
+		4 & Forward model           & 0.369 & 0.796 & 0.505 & High R, low P \\
+		5 & Spectral NNLS           & 0.293 & 0.940 & 0.447 & R=0.94, P=0.29 \\
+		\bottomrule
+	\end{tabular}}
 
-  \vspace{0.3em}
-  \begin{itemize}
-    \item {\small Hybrid NNLS+ALIAS: \alert{+17\% F\textsubscript{1}} over ALIAS baseline}
-    \item {\small Voigt deconvolution provides \textbf{no net benefit} at RP $<$ 1000}
-    \item {\small Mn and Na intractable across \emph{all} methods}
-  \end{itemize}
+	\vspace{0.3em}
+	\begin{itemize}
+		\item {\small Hybrid NNLS+ALIAS: \alert{+17\% F\textsubscript{1}} over ALIAS baseline}
+		\item {\small Voigt deconvolution provides \textbf{no net benefit} at RP $<$ 1000}
+		\item {\small Mn and Na intractable across \emph{all} methods}
+	\end{itemize}
 
-  \vspace{0.2em}
-  \centering
-  \alert{Can we do better by combining all five?}
-\note{
-  This is the systematic benchmark: 93 configurations across five identification
-  pathways. The hybrid NNLS+ALIAS achieves the best F1 among individual methods.
-  But even the best individual pathway caps at F1 of 0.654. The question is:
-  can we do better by combining all five algorithms? This motivates the
-  GPU-accelerated ensemble optimization.
-}
+	\vspace{0.2em}
+	\centering
+	\alert{Can we do better by combining all five?}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 20: GPU-Optimized Multi-Method Consensus
 % ----------------------------------------------------------
 \begin{frame}{GPU-Optimized Multi-Method Consensus: F\textsubscript{$\beta$}(0.5) = 0.914}
-  \begin{columns}[T]
-    \begin{column}{0.42\textwidth}
-      \textbf{Architecture:}\\[0.2em]
-      \begin{tikzpicture}[
-        node distance=0.5cm,
-        every node/.style={font=\scriptsize, align=center},
-        box/.style={draw, rounded corners, minimum width=2.8cm, minimum height=0.5cm},
-        arrow/.style={->, thick, cbBlue}
-      ]
-        \node[box, fill=cbBlue!10] (alg) {5 algorithms};
-        \node[box, fill=cbOrange!15, below=0.3cm of alg] (fuse) {Learned fusion weights};
-        \node[box, fill=cbPurple!15, below=0.3cm of fuse] (thresh) {Per-element thresholds};
-        \node[font=\small\bfseries, below=0.2cm of thresh, cbGreen] (out) {\alert{F\textsubscript{$\beta$}(0.5) = 0.914}};
-        \draw[arrow] (alg) -- (fuse);
-        \draw[arrow] (fuse) -- (thresh);
-        \draw[arrow] (thresh) -- (out);
-      \end{tikzpicture}
+	\begin{columns}[T]
+		\begin{column}{0.42\textwidth}
+			\textbf{Architecture:}\\[0.2em]
+			\begin{tikzpicture}[
+				node distance=0.5cm,
+				every node/.style={font=\scriptsize, align=center},
+				box/.style={draw, rounded corners, minimum width=2.8cm, minimum height=0.5cm},
+				arrow/.style={->, thick, cbBlue}
+			]
+				\node[box, fill=cbBlue!10] (alg) {5 algorithms};
+				\node[box, fill=cbOrange!15, below=0.3cm of alg] (fuse) {Learned fusion weights};
+				\node[box, fill=cbPurple!15, below=0.3cm of fuse] (thresh) {Per-element thresholds};
+				\node[font=\small\bfseries, below=0.2cm of thresh, cbGreen] (out) {\alert{F\textsubscript{$\beta$}(0.5) = 0.914}};
+				\draw[arrow] (alg) -- (fuse);
+				\draw[arrow] (fuse) -- (thresh);
+				\draw[arrow] (thresh) -- (out);
+			\end{tikzpicture}
 
-      \vspace{0.2em}
-      {\small 101 params via CMA-ES (evosax)\\
-      2M evals in \alert{58~s} on V100S\\
-      \alert{+121\%} over hand-tuned baseline}
-    \end{column}
-    \begin{column}{0.55\textwidth}
-      {\small\textbf{Physically interpretable parameters:}}\\[0.2em]
-      {\footnotesize
-      \begin{tabular}{lcc}
-        \toprule
-        \textbf{Parameter} & \textbf{Value} & \textbf{Meaning} \\
-        \midrule
-        NNLS weight & \alert{2.93} & Dominates fusion \\
-        Threshold$_{\text{default}}$ & 0.90 & Strict (was 0.30) \\
-        \midrule
-        Fe threshold & 0.05 & Easy: low bar \\
-        Si threshold & 0.12 & Easy: low bar \\
-        Mn threshold & 0.93 & Nearly vetoed \\
-        Na threshold & 0.87 & Nearly vetoed \\
-        \bottomrule
-      \end{tabular}}
+			\vspace{0.2em}
+			{\small 101 params via CMA-ES (evosax)\\
+			2M evals in \alert{58~s} on V100S\\
+			\alert{+121\%} over hand-tuned baseline}
+		\end{column}
+		\begin{column}{0.55\textwidth}
+			{\small\textbf{Physically interpretable parameters:}}\\[0.2em]
+			{\footnotesize
+			\begin{tabular}{lcc}
+				\toprule
+				\textbf{Parameter} & \textbf{Value} & \textbf{Meaning} \\
+				\midrule
+				NNLS weight & \alert{2.93} & Dominates fusion \\
+				Threshold$_{\text{default}}$ & 0.90 & Strict (was 0.30) \\
+				\midrule
+				Fe threshold & 0.05 & Easy: low bar \\
+				Si threshold & 0.12 & Easy: low bar \\
+				Mn threshold & 0.93 & Nearly vetoed \\
+				Na threshold & 0.87 & Nearly vetoed \\
+				\bottomrule
+			\end{tabular}}
 
-      \vspace{0.2em}
-      {\footnotesize Optimizer independently discovers
-      Mn/Na are intractable at RP $<$ 1000}
-    \end{column}
-  \end{columns}
-\note{
-  The GPU-optimized ensemble feeds all five identification algorithms into
-  a learned fusion function with per-element thresholds --- 101 parameters
-  total. CMA-ES optimization via evosax evaluated 2 million configurations
-  in 58 seconds on a single V100S. The key insight: GPU acceleration
-  enables optimization, not just inference. The optimized default threshold
-  jumped from 0.30 to 0.90, meaning the baseline was far too permissive.
-  NNLS dominates the fusion with weight 2.93. The per-element thresholds
-  are physically interpretable: Fe, Si, Al have low thresholds because
-  they are reliably identified, while Mn at 0.93 and Na at 0.87 are
-  nearly vetoed --- the optimizer independently discovered these are
-  intractable false positive sources at low resolving power.
-}
+			\vspace{0.2em}
+			{\footnotesize Optimizer independently discovers
+			Mn/Na are intractable at RP $<$ 1000}
+		\end{column}
+	\end{columns}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE: Optimization Convergence
 % ----------------------------------------------------------
 \begin{frame}{CMA-ES Convergence: Random $\to$ 0.914 in 58 Seconds}
-  \begin{columns}[T]
-    \begin{column}{0.55\textwidth}
-      \centering
-      \begin{tikzpicture}[scale=0.72]
-        % Axes
-        \draw[->, thick] (0,0) -- (8.5,0) node[below] {\small Generation};
-        \draw[->, thick] (0,0) -- (0,5.5) node[left, rotate=90, anchor=south] {\small $F_{\beta}(0.5)$};
-        % Y-axis labels
-        \foreach \y/\v in {0/0.4, 1/0.5, 2/0.6, 3/0.7, 4/0.8, 5/0.9} {
-          \draw (0,\y) -- (-0.1,\y) node[left] {\tiny \v};
-        }
-        % X-axis labels
-        \foreach \x/\v in {0/0, 1.6/100, 3.2/200, 4.8/300, 6.4/400, 8/500} {
-          \draw (\x,0) -- (\x,-0.1) node[below] {\tiny \v};
-        }
-        % Convergence curve (schematic)
-        \draw[cbBlue, ultra thick] (0,0.97) -- (0.032,2.54) -- (0.064,2.62)
-          .. controls (0.5,3.2) and (1.5,4.0) .. (3.2,4.8)
-          .. controls (4.0,5.0) and (5.0,5.1) .. (8,5.14);
-        % Key points
-        \fill[cbOrange] (0,0.97) circle (3pt);
-        \node[right, font=\tiny, cbOrange] at (0.1,0.7) {Random init: 0.497};
-        \fill[cbGreen] (0.032,2.54) circle (3pt);
-        \node[right, font=\tiny, cbGreen] at (0.15,2.8) {Gen 1: 0.654};
-        \fill[red] (8,5.14) circle (3pt);
-        \node[left, font=\tiny, red] at (7.9,4.7) {Gen 300: 0.914};
-        % Horizontal reference lines
-        \draw[dashed, gray, thin] (0,2.54) -- (8,2.54);
-        \node[left, font=\tiny, gray] at (0,2.54) {};
-        \node[right, font=\tiny, gray] at (8.1,2.54) {\tiny Manual best};
-      \end{tikzpicture}
-    \end{column}
-    \begin{column}{0.42\textwidth}
-      {\small\textbf{Convergence milestones:}}
-      \begin{itemize}
-        \item {\small Gen 0: random init $\to$ 0.497}
-        \item {\small Gen 1: matches manual best (0.654)}
-        \item {\small Gen $\sim$300: \alert{converged at 0.914}}
-        \item {\small Gradient magnitude $< 0.003$}
-      \end{itemize}
+	\begin{columns}[T]
+		\begin{column}{0.55\textwidth}
+			\centering
+			\begin{tikzpicture}[scale=0.72]
+				% Axes
+				\draw[->, thick] (0,0) -- (8.5,0) node[below] {\small Generation};
+				\draw[->, thick] (0,0) -- (0,5.5) node[left, rotate=90, anchor=south] {\small $F_{\beta}(0.5)$};
+				% Y-axis labels
+				\foreach \y/\v in {0/0.4, 1/0.5, 2/0.6, 3/0.7, 4/0.8, 5/0.9} {
+					\draw (0,\y) -- (-0.1,\y) node[left] {\tiny \v};
+				}
+				% X-axis labels
+				\foreach \x/\v in {0/0, 1.6/100, 3.2/200, 4.8/300, 6.4/400, 8/500} {
+					\draw (\x,0) -- (\x,-0.1) node[below] {\tiny \v};
+				}
+				% Convergence curve (schematic)
+				\draw[cbBlue, ultra thick] (0,0.97) -- (0.032,2.54) -- (0.064,2.62)
+					.. controls (0.5,3.2) and (1.5,4.0) .. (3.2,4.8)
+					.. controls (4.0,5.0) and (5.0,5.1) .. (8,5.14);
+				% Key points
+				\fill[cbOrange] (0,0.97) circle (3pt);
+				\node[right, font=\tiny, cbOrange] at (0.1,0.7) {Random init: 0.497};
+				\fill[cbGreen] (0.032,2.54) circle (3pt);
+				\node[right, font=\tiny, cbGreen] at (0.15,2.8) {Gen 1: 0.654};
+				\fill[red] (8,5.14) circle (3pt);
+				\node[left, font=\tiny, red] at (7.9,4.7) {Gen 300: 0.914};
+				% Horizontal reference lines
+				\draw[dashed, gray, thin] (0,2.54) -- (8,2.54);
+				\node[left, font=\tiny, gray] at (0,2.54) {};
+				\node[right, font=\tiny, gray] at (8.1,2.54) {\tiny Manual best};
+			\end{tikzpicture}
+		\end{column}
+		\begin{column}{0.42\textwidth}
+			{\small\textbf{Convergence milestones:}}
+			\begin{itemize}
+				\item {\small Gen 0: random init $\to$ 0.497}
+				\item {\small Gen 1: matches manual best (0.654)}
+				\item {\small Gen $\sim$300: \alert{converged at 0.914}}
+				\item {\small Gradient magnitude $< 0.003$}
+			\end{itemize}
 
-      \vspace{0.3em}
-      {\small\textbf{Scale:}
-      Pop.\ 4{,}096/gen $\times$ 500 gen = \alert{2M evals}\\
-      35{,}300 evals/s on V100S}
-    \end{column}
-  \end{columns}
-\note{
-  This shows the CMA-ES convergence curve. Starting from random initialization
-  at F-beta 0.497, the optimizer matches the best manual configuration by
-  generation 1 and exceeds it by generation 4. It converges at 0.914 by
-  generation 300, with gradient magnitudes below 0.003 confirming convergence.
-  The population size of 4096 per generation means 2 million total evaluations,
-  all completed in 58 seconds. This is only possible because GPU acceleration
-  enables 35,000 evaluations per second.
-}
+			\vspace{0.3em}
+			{\small\textbf{Scale:}
+			Pop.\ 4{,}096/gen $\times$ 500 gen = \alert{2M evals}\\
+			35{,}300 evals/s on V100S}
+		\end{column}
+	\end{columns}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE: Optimization Progression
 % ----------------------------------------------------------
 \begin{frame}{Optimization Progression: Baseline to GPU Ensemble}
-  \centering
-  {\small
-  \begin{tabular}{lcccl}
-    \toprule
-    \textbf{Stage} & \textbf{Best metric} & \textbf{Params} & \textbf{Evals} & \textbf{Method} \\
-    \midrule
-    Manual grid search & F$_1 = 0.654$ & --- & 93 & Expert-tuned \\
-    GPU CMA-ES (single alg.) & F$_\beta = 0.551$ & 41 & $10^6$ & 2 min \\
-    \alert{GPU Sep-CMA-ES (ensemble)} & \alert{F$_\beta$ = 0.914} & \alert{101} & \alert{$2 \times 10^6$} & \alert{58 s} \\
-    \bottomrule
-  \end{tabular}}
+	\centering
+	{\small
+	\begin{tabular}{lcccl}
+		\toprule
+		\textbf{Stage} & \textbf{Best metric} & \textbf{Params} & \textbf{Evals} & \textbf{Method} \\
+		\midrule
+		Manual grid search & F$_1 = 0.654$ & --- & 93 & Expert-tuned \\
+		GPU CMA-ES (single alg.) & F$_\beta = 0.551$ & 41 & $10^6$ & 2 min \\
+		\alert{GPU Sep-CMA-ES (ensemble)} & \alert{F$_\beta$ = 0.914} & \alert{101} & \alert{$2 \times 10^6$} & \alert{58 s} \\
+		\bottomrule
+	\end{tabular}}
 
-  \vspace{0.4em}
-  \begin{columns}[T]
-    \begin{column}{0.48\textwidth}
-      {\small\textbf{Why multi-method consensus wins:}}
-      \begin{itemize}
-        \item {\small Each method exploits different spectral info}
-        \item {\small System learns element-specific criteria}
-        \item {\small Per-element thresholds reflect spectral physics}
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.48\textwidth}
-      {\small\textbf{Computational cost:}}
-      \begin{itemize}
-        \item {\small 2M evals, \alert{58~s} wall time}
-        \item {\small 45,000 evals/s on V100S}
-        \item {\small JAX-native CMA-ES (evosax)}
-      \end{itemize}
-    \end{column}
-  \end{columns}
-\note{
-  This slide shows the progression of optimization approaches.
-  Manual grid search over 93 configurations found the best F1 of 0.654,
-  but this took hours of expert time. GPU CMA-ES over 41 parameters
-  of a single algorithm plateaued at F-beta 0.551 --- confirming the
-  ceiling for single-algorithm optimization. Expanding to 101 parameters
-  across all five algorithms, Sep-CMA-ES reached F-beta 0.914 in just
-  58 seconds with 2 million evaluations. The key finding: further
-  improvement requires multi-algorithm fusion, not better single-algorithm
-  tuning. No amount of threshold optimization on one algorithm matches
-  what the ensemble achieves by combining complementary information.
-}
+	\vspace{0.4em}
+	\begin{columns}[T]
+		\begin{column}{0.48\textwidth}
+			{\small\textbf{Why multi-method consensus wins:}}
+			\begin{itemize}
+				\item {\small Each method exploits different spectral info}
+				\item {\small System learns element-specific criteria}
+				\item {\small Per-element thresholds reflect spectral physics}
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.48\textwidth}
+			{\small\textbf{Computational cost:}}
+			\begin{itemize}
+				\item {\small 2M evals, \alert{58~s} wall time}
+				\item {\small 45,000 evals/s on V100S}
+				\item {\small JAX-native CMA-ES (evosax)}
+			\end{itemize}
+		\end{column}
+	\end{columns}
 \end{frame}
 
-\begin{frame}{Context: GPU Spectroscopy Landscape}
-  \centering
-  {\small
-  \begin{tabular}{lccl}
-    \toprule
-    \textbf{Code} & \textbf{Throughput} & \textbf{Language} & \textbf{Application} \\
-    \midrule
-    ExoJAX       & $\sim$10,000 spec/s & JAX/Python    & Exoplanet atmospheres \\
-    HELIOS-K     & Higher              & CUDA C++      & Exoplanet opacity \\
-    \alert{This work} & \alert{10,708 spec/s}  & \alert{JAX/Python} & \alert{CF-LIBS} \\
-    \bottomrule
-  \end{tabular}}
+\section{Discussion and Conclusions}
 
-  \vspace{0.5em}
-  \begin{itemize}
-    \item {\small Comparable throughput to ExoJAX despite \emph{more complex} physics
-          (multi-element Saha--Boltzmann chain vs.\ single-species opacity sum)}
-    \item {\small JAX advantage over CUDA C++: automatic differentiation for free
-          $\to$ gradient-based optimization, Bayesian inference via HMC}
-    \item {\small Modest performance cost pays for enormous development flexibility}
-  \end{itemize}
-\note{
-  Our throughput matches ExoJAX even though our pipeline is more complex ---
-  we have a full multi-element Saha-Boltzmann chain, not just an opacity sum.
-  Compared to HELIOS-K's hand-tuned CUDA, JAX trades some raw speed
-  for automatic differentiation --- which gives us gradient-based optimization
-  and Bayesian inference without manually deriving Jacobians.
-  That is a major practical advantage for the CF-LIBS inversion problem.
-}
+\begin{frame}{Context: GPU Spectroscopy Landscape}
+	\centering
+	{\small
+	\begin{tabular}{lccl}
+		\toprule
+		\textbf{Code} & \textbf{Throughput} & \textbf{Language} & \textbf{Application} \\
+		\midrule
+		ExoJAX       & $\sim$10,000 spec/s & JAX/Python    & Exoplanet atmospheres \\
+		HELIOS-K     & Higher              & CUDA C++      & Exoplanet opacity \\
+		\alert{This work} & \alert{10,708 spec/s}  & \alert{JAX/Python} & \alert{CF-LIBS} \\
+		\bottomrule
+	\end{tabular}}
+
+	\vspace{0.5em}
+	\begin{itemize}
+		\item {\small Comparable throughput to ExoJAX despite \emph{more complex} physics
+		      (multi-element Saha--Boltzmann chain vs.\ single-species opacity sum)}
+		\item {\small JAX advantage over CUDA C++: automatic differentiation for free
+		      $\to$ gradient-based optimization, Bayesian inference via HMC}
+		\item {\small Modest performance cost pays for enormous development flexibility}
+	\end{itemize}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 22: Operating regimes
 % ----------------------------------------------------------
 \begin{frame}{When to Use GPU vs.\ CPU}
-  \centering
-  \begin{tikzpicture}[scale=1.0]
-    % Axis
-    \draw[->, thick] (0,0) -- (10,0) node[below] {Batch size $B$};
-    \draw[->, thick] (0,0) -- (0,4.5) node[left, rotate=90, anchor=south] {Speedup};
-    % Crossover line
-    \draw[dashed, gray] (0,2) -- (10,2);
-    \node[left, gray] at (0,2) {1$\times$};
-    % Regions
-    \fill[cbOrange!20] (0,0) rectangle (2.5,4);
-    \fill[cbGreen!20] (2.5,0) rectangle (10,4);
-    \node[cbOrange, font=\bfseries] at (1.25,3.5) {CPU wins};
-    \node[cbGreen, font=\bfseries] at (6.25,3.5) {GPU wins};
-    % Crossover point
-    \draw[cbBlue, ultra thick] (2.5,0) -- (2.5,4);
-    \node[cbBlue, below, font=\bfseries] at (2.5,-0.1) {$B = 10$};
-    % Annotations
-    \node[align=center, font=\small] at (1.25,1.5) {Single\\spectrum\\analysis};
-    \node[align=center, font=\small] at (4.5,1.5) {Real-time\\monitoring};
-    \node[align=center, font=\small] at (8,1.5) {Manifold\\generation};
-  \end{tikzpicture}
+	\centering
+	\begin{tikzpicture}[scale=1.0]
+		% Axis
+		\draw[->, thick] (0,0) -- (10,0) node[below] {Batch size $B$};
+		\draw[->, thick] (0,0) -- (0,4.5) node[left, rotate=90, anchor=south] {Speedup};
+		% Crossover line
+		\draw[dashed, gray] (0,2) -- (10,2);
+		\node[left, gray] at (0,2) {1$\times$};
+		% Regions
+		\fill[cbOrange!20] (0,0) rectangle (2.5,4);
+		\fill[cbGreen!20] (2.5,0) rectangle (10,4);
+		\node[cbOrange, font=\bfseries] at (1.25,3.5) {CPU wins};
+		\node[cbGreen, font=\bfseries] at (6.25,3.5) {GPU wins};
+		% Crossover point
+		\draw[cbBlue, ultra thick] (2.5,0) -- (2.5,4);
+		\node[cbBlue, below, font=\bfseries] at (2.5,-0.1) {$B = 10$};
+		% Annotations
+		\node[align=center, font=\small] at (1.25,1.5) {Single\\spectrum\\analysis};
+		\node[align=center, font=\small] at (4.5,1.5) {Real-time\\monitoring};
+		\node[align=center, font=\small] at (8,1.5) {Manifold\\generation};
+	\end{tikzpicture}
 
-  \vspace{0.5em}
-  \begin{itemize}
-    \item $B < 10$: Use CPU (kernel launch overhead dominates)
-    \item $B = 10$--1000: GPU provides 2.5$\times$--13.6$\times$ speedup
-    \item $B > 5000$: Chunk into sub-batches to fit GPU memory
-  \end{itemize}
-\note{
-  This diagram summarizes when to use GPU versus CPU.
-  Below batch size 10, stick with CPU.
-  Between 10 and 1000, GPU gives 2.5 to 13.6 times speedup ---
-  this is the sweet spot for real-time monitoring.
-  Above 5000, chunk the computation to fit GPU memory.
-  The take-home: GPU acceleration is practical for any batch workload.
-}
+	\vspace{0.5em}
+	\begin{itemize}
+		\item $B < 10$: Use CPU (kernel launch overhead dominates)
+		\item $B = 10$--1000: GPU provides 2.5$\times$--13.6$\times$ speedup
+		\item $B > 5000$: Chunk into sub-batches to fit GPU memory
+	\end{itemize}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 23: Limitations
 % ----------------------------------------------------------
 \begin{frame}{Limitations and Caveats}
-  \begin{itemize}
-    \item {\small\textbf{Hardware-specific:} All numbers from Tesla V100S ---
-          consumer GPUs ($1/32$ float64 rate) would see lower speedups}
-    \item {\small\textbf{LTE assumption:} Single-zone, optically thin, LTE only ---
-          non-LTE and self-absorption not yet GPU-accelerated}
-    \item {\small\textbf{JIT overhead:} 30--120~s first call,
-          amortized over subsequent calls ($<$0.01\% for manifolds)}
-    \item {\small\textbf{Float64 required:} Weideman coefficients span 14 orders of magnitude ---
-          float32 would double throughput but $\sim$0.1--1\% errors}
-    \item {\small\textbf{GPU FAISS:} Not benchmarked (null results on test system)}
-  \end{itemize}
-\note{
-  Some important caveats. These benchmarks are on a V100S ---
-  consumer GPUs would see lower speedups due to poor float64 support.
-  We assume LTE, single zone, optically thin plasmas.
-  JIT compilation takes 30 to 120 seconds on first call, but this
-  is negligible for batch workloads. We require float64 for accuracy.
-  GPU FAISS remains untested and is future work.
-}
+	\begin{itemize}
+		\item {\small\textbf{Hardware-specific:} All numbers from Tesla V100S ---
+		      consumer GPUs ($1/32$ float64 rate) would see lower speedups}
+		\item {\small\textbf{LTE assumption:} Single-zone, optically thin, LTE only ---
+		      non-LTE and self-absorption not yet GPU-accelerated}
+		\item {\small\textbf{JIT overhead:} 30--120~s first call,
+		      amortized over subsequent calls ($<$0.01\% for manifolds)}
+		\item {\small\textbf{Float64 required:} Weideman coefficients span 14 orders of magnitude ---
+		      float32 would double throughput but $\sim$0.1--1\% errors}
+		\item {\small\textbf{GPU FAISS:} Not benchmarked (null results on test system)}
+	\end{itemize}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 24: Future directions
 % ----------------------------------------------------------
 \begin{frame}{Future Directions}
-  \begin{enumerate}
-    \item \textbf{Multi-GPU scaling:} \texttt{pmap} for manifold generation at $10^6$+ spectra
-    \item \textbf{Non-LTE extensions:} Collisional-radiative models on GPU
-    \item \textbf{Mixed-precision:} Float32 profiles + float64 coefficients\\
-          $\to$ $\sim$2$\times$ additional throughput where $\sim$0.1\% accuracy suffices
-    \item \textbf{GPU FAISS:} Complete the GPU inference chain
-    \item \textbf{Edge deployment:} Jetson / Apple Neural Engine for field-portable LIBS
-    \item \textbf{Higher-RP validation:} Validate optimized ensemble on Mechelle 5000
-          (RP $\approx$ 5000) and additional mineral datasets
-    \item \textbf{Cross-instrument transfer:} Determine whether learned per-element
-          thresholds generalize across spectrometer configurations
-  \end{enumerate}
+	\begin{enumerate}
+		\item \textbf{Multi-GPU scaling:} \texttt{pmap} for manifold generation at $10^6$+ spectra
+		\item \textbf{Non-LTE extensions:} Collisional-radiative models on GPU
+		\item \textbf{Mixed-precision:} Float32 profiles + float64 coefficients\\
+		      $\to$ $\sim$2$\times$ additional throughput where $\sim$0.1\% accuracy suffices
+		\item \textbf{GPU FAISS:} Complete the GPU inference chain
+		\item \textbf{Edge deployment:} Jetson / Apple Neural Engine for field-portable LIBS
+		\item \textbf{Higher-RP validation:} Validate optimized ensemble on Mechelle 5000
+		      (RP $\approx$ 5000) and additional mineral datasets
+		\item \textbf{Cross-instrument transfer:} Determine whether learned per-element
+		      thresholds generalize across spectrometer configurations
+	\end{enumerate}
 
-  \vspace{1em}
-  \begin{block}{Open source}
-    Code, benchmarks, and validation data publicly available.
-  \end{block}
-\note{
-  Several directions are ongoing. Multi-GPU scaling for large manifolds.
-  Non-LTE extensions to broaden applicability.
-  Mixed precision for applications where 0.1 percent accuracy is fine.
-  GPU FAISS to complete the inference chain. Edge deployment
-  on embedded GPUs for field-portable instruments.
-  The element identification optimization is largely converged for this
-  dataset, so the key next step is validation on additional datasets
-  and higher resolving power instruments like the Mechelle 5000.
-  We also want to explore transfer learning --- can the optimized
-  thresholds generalize to new spectrometer configurations without
-  a full 2-million-evaluation re-optimization?
-  All code is open source.
-}
+	\vspace{1em}
+	\begin{block}{Open source}
+		Code, benchmarks, and validation data publicly available.
+	\end{block}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 25: Conclusions
 % ----------------------------------------------------------
 \begin{frame}{Three Contributions}
-  {\small
-  \textbf{1. GPU-Accelerated CF-LIBS Pipeline}
-  \begin{itemize}
-    \item Five kernels: Voigt (\alert{76$\times$}), Boltzmann (\alert{8.8$\times$}),
-          Anderson (\alert{1.6$\times$}), Softmax, Batch (\alert{10,708} spec/s)
-    \item End-to-end: \alert{13.6$\times$} at $B\!=\!1000$ | \alert{Zero accuracy loss} | 100\% parity
-  \end{itemize}
+	{\small
+	\textbf{1. GPU-Accelerated CF-LIBS Pipeline}
+	\begin{itemize}
+		\item Five kernels: Voigt (\alert{76$\times$}), Boltzmann (\alert{8.8$\times$}),
+		      Anderson (\alert{1.6$\times$}), Softmax, Batch (\alert{10,708} spec/s)
+		\item End-to-end: \alert{13.6$\times$} at $B\!=\!1000$ | \alert{Zero accuracy loss} | 100\% parity
+	\end{itemize}
 
-  \vspace{0.2em}
-  \textbf{2. Systematic 5-Pathway Element ID Benchmark}
-  \begin{itemize}
-    \item 93 configs on 74 spectra at RP 300--1100 --- no single algorithm wins
-    \item NNLS: best R (0.922) | Hybrid: best P (0.578) | Correlation: ineffective
-  \end{itemize}
+	\vspace{0.2em}
+	\textbf{2. Systematic 5-Pathway Element ID Benchmark}
+	\begin{itemize}
+		\item 93 configs on 74 spectra at RP 300--1100 --- no single algorithm wins
+		\item NNLS: best R (0.922) | Hybrid: best P (0.578) | Correlation: ineffective
+	\end{itemize}
 
-  \vspace{0.2em}
-  \textbf{3. GPU-Optimized Multi-Method Consensus Identification}
-  \begin{itemize}
-    \item 101-parameter CMA-ES: \alert{F\textsubscript{$\beta$}(0.5) = 0.914} (+121\% over baseline)
-    \item 2M evals in 58~s on V100S --- physically interpretable per-element thresholds
-  \end{itemize}
-  }
+	\vspace{0.2em}
+	\textbf{3. GPU-Optimized Multi-Method Consensus Identification}
+	\begin{itemize}
+		\item 101-parameter CMA-ES: \alert{F\textsubscript{$\beta$}(0.5) = 0.914} (+121\% over baseline)
+		\item 2M evals in 58~s on V100S --- physically interpretable per-element thresholds
+	\end{itemize}
+	}
 
-  \vspace{0.3em}
-  \centering
-  {\small\textbf{GPU acceleration enables real-time inference, systematic benchmarking,
-  \emph{and} large-scale parameter optimization for CF-LIBS.}}
-\note{
-  Three co-equal contributions. First, the GPU-accelerated CF-LIBS pipeline:
-  five kernels, up to 76x speedup, zero accuracy loss. Second, a systematic
-  benchmark showing no single algorithm wins at low resolving power --- each
-  has different strengths. Third, a GPU-optimized 101-parameter ensemble
-  that fuses all five algorithms to achieve F-beta 0.914 --- 121 percent
-  over baseline --- with 2 million evaluations in 58 seconds. The ensemble's
-  parameters are physically interpretable: it independently discovers which
-  elements are easy, which are hard, and which are intractable.
-  The unifying theme: GPU acceleration enables not just fast inference but
-  also the systematic exploration needed to solve element identification.
-}
+	\vspace{0.3em}
+	\centering
+	{\small\textbf{GPU acceleration enables real-time inference, systematic benchmarking,
+	\emph{and} large-scale parameter optimization for CF-LIBS.}}
 \end{frame}
 
 % ----------------------------------------------------------
 % SLIDE 26: Thank you
 % ----------------------------------------------------------
-\begin{frame}[standout]
-  Thank you
+\begin{frame}
+	\centering
+	\vspace{2em}
+	{\Large Thank you}
 
-  \vspace{1em}
-  {\large Questions?}
+	\vspace{1em}
+	{\large Questions?}
 
-  \vspace{1.5em}
-  {\normalsize Code: \texttt{github.com/[repository]}}
-\note{
-  Thank you for your attention. I am happy to take questions.
-  The code is publicly available on GitHub.
-}
+	\vspace{1.5em}
+	{\normalsize Code: \texttt{github.com/[repository]}}
 \end{frame}
 
 % ============================================================
@@ -1231,208 +978,163 @@
 \appendix
 
 \begin{frame}{Backup Slides}
-  \centering
-  {\Large Additional detail for Q\&A}
-\note{
-  The following slides provide additional detail for anticipated questions.
-}
+	\centering
+	{\Large Additional detail for Q\&A}
 \end{frame}
 
 % ----------------------------------------------------------
 % BACKUP 1: Full accuracy table
 % ----------------------------------------------------------
 \begin{frame}{Backup: Full Accuracy Table}
-  \centering
-  \begin{tabular}{lcccc}
-    \toprule
-    \textbf{Kernel} & \textbf{Threshold} & \textbf{Achieved} & \textbf{$N_\text{tests}$} & \textbf{Unit} \\
-    \midrule
-    Voigt profile   & $10^{-6}$  & $6.81 \times 10^{-8}$  & 410  & rel.\ error \\
-    Boltzmann fit   & $10^{-10}$ & $5.65 \times 10^{-14}$ & 1000 & rel.\ error (slope) \\
-    Anderson solver & $10^{-12}$ & $4.05 \times 10^{-13}$ & 60   & abs.\ residual \\
-    Softmax closure & $10^{-15}$ & $4.44 \times 10^{-16}$ & 1009 & abs.\ deviation \\
-    Batch forward   & $10^{-12}$ & $0.0$ (bit-identical)   & 100  & rel.\ error \\
-    \bottomrule
-  \end{tabular}
+	\centering
+	\begin{tabular}{lcccc}
+		\toprule
+		\textbf{Kernel} & \textbf{Threshold} & \textbf{Achieved} & \textbf{$N_\text{tests}$} & \textbf{Unit} \\
+		\midrule
+		Voigt profile   & $10^{-6}$  & $6.81 \times 10^{-8}$  & 410  & rel.\ error \\
+		Boltzmann fit   & $10^{-10}$ & $5.65 \times 10^{-14}$ & 1000 & rel.\ error (slope) \\
+		Anderson solver & $10^{-12}$ & $4.05 \times 10^{-13}$ & 60   & abs.\ residual \\
+		Softmax closure & $10^{-15}$ & $4.44 \times 10^{-16}$ & 1009 & abs.\ deviation \\
+		Batch forward   & $10^{-12}$ & $0.0$ (bit-identical)   & 100  & rel.\ error \\
+		\bottomrule
+	\end{tabular}
 
-  \vspace{1em}
-  \textbf{References:}
-  \begin{itemize}
-    \item Voigt: vs.\ SciPy \texttt{wofz} (Poppe--Wijers Algorithm 680)
-    \item Boltzmann: vs.\ NumPy \texttt{lstsq} reference
-    \item Anderson: final residual $|n_e^{(k+1)} - g(n_e^{(k)})|$
-    \item Softmax: $|\sum C_i - 1|$
-    \item Batch: vs.\ sequential \texttt{for}-loop computation
-  \end{itemize}
-\note{
-  This slide gives the full accuracy table with units and reference
-  implementations. Every kernel is compared against an independent
-  CPU reference. The batch forward model achieves exact bit-identity.
-}
+	\vspace{1em}
+	\textbf{References:}
+	\begin{itemize}
+		\item Voigt: vs.\ SciPy \texttt{wofz} (Poppe--Wijers Algorithm 680)
+		\item Boltzmann: vs.\ NumPy \texttt{lstsq} reference
+		\item Anderson: final residual $|n_e^{(k+1)} - g(n_e^{(k)})|$
+		\item Softmax: $|\sum C_i - 1|$
+		\item Batch: vs.\ sequential \texttt{for}-loop computation
+	\end{itemize}
 \end{frame}
 
 % ----------------------------------------------------------
 % BACKUP 2: Anderson convergence detail
 % ----------------------------------------------------------
 \begin{frame}{Backup: Anderson Convergence Detail}
-  \centering
-  \includegraphics[width=0.7\textwidth]{../paper/figures/fig4_anderson.pdf}
+	\centering
+	\includegraphics[width=0.7\textwidth]{../paper/figures/fig4_anderson.pdf}
 
-  \vspace{0.5em}
-  \begin{itemize}
-    \item 10 test conditions: $T = 0.6$--$1.5$ eV, $n_e = 10^{15}$--$10^{17}$ cm$^{-3}$
-    \item $m = 1$ optimal at tol $= 10^{-6}$; $m = 5$ optimal at tighter tolerances
-    \item $m \geq 2$ adds least-squares overhead without reducing iterations at $10^{-6}$
-    \item Convergence proved by Toth \& Kelley (2015): r-linear with improved rate
-  \end{itemize}
-\note{
-  Anderson acceleration was tested across 10 plasma conditions.
-  At standard tolerance, depth m=1 is optimal because the problem
-  is already well-conditioned. For tighter tolerances or harder
-  conditions, deeper history helps significantly.
-}
+	\vspace{0.5em}
+	\begin{itemize}
+		\item 10 test conditions: $T = 0.6$--$1.5$ eV, $n_e = 10^{15}$--$10^{17}$ cm$^{-3}$
+		\item $m = 1$ optimal at tol $= 10^{-6}$; $m = 5$ optimal at tighter tolerances
+		\item $m \geq 2$ adds least-squares overhead without reducing iterations at $10^{-6}$
+		\item Convergence proved by Toth \& Kelley (2015): r-linear with improved rate
+	\end{itemize}
 \end{frame}
 
 % ----------------------------------------------------------
 % BACKUP 3: Batch forward OOM analysis
 % ----------------------------------------------------------
 \begin{frame}{Backup: Memory Scaling and OOM Analysis}
-  \textbf{Dominant memory consumer:} Profile matrix $(B \times N_\text{wl} \times N_\text{lines})$
+	\textbf{Dominant memory consumer:} Profile matrix $(B \times N_\text{wl} \times N_\text{lines})$
 
-  \begin{equation*}
-    B_\text{max} = \left\lfloor \frac{M_\text{GPU} - M_\text{overhead}}{N_\text{wl} \times N_\text{lines} \times 8\;\text{bytes}} \right\rfloor
-  \end{equation*}
+	\begin{equation*}
+		B_\text{max} = \left\lfloor \frac{M_\text{GPU} - M_\text{overhead}}{N_\text{wl} \times N_\text{lines} \times 8\;\text{bytes}} \right\rfloor
+	\end{equation*}
 
-  \vspace{0.5em}
-  \centering
-  \begin{tabular}{rcc}
-    \toprule
-    \textbf{Batch size} & \textbf{Est.\ memory} & \textbf{Status} \\
-    \midrule
-    100   & $\sim$0.16 GB & OK \\
-    1000  & $\sim$1.6 GB  & OK \\
-    5000  & $\sim$8.2 GB  & OOM on 32 GB V100S \\
-    10000 & $\sim$91.6 GB & OOM (E2E pipeline) \\
-    \bottomrule
-  \end{tabular}
+	\vspace{0.5em}
+	\centering
+	\begin{tabular}{rcc}
+		\toprule
+		\textbf{Batch size} & \textbf{Est.\ memory} & \textbf{Status} \\
+		\midrule
+		100   & $\sim$0.16 GB & OK \\
+		1000  & $\sim$1.6 GB  & OK \\
+		5000  & $\sim$8.2 GB  & OOM on 32 GB V100S \\
+		10000 & $\sim$91.6 GB & OOM (E2E pipeline) \\
+		\bottomrule
+	\end{tabular}
 
-  \vspace{0.5em}
-  \textbf{Mitigation:} Chunked execution --- process $B_\text{max}$ at a time, concatenate.\\
-  Full throughput recovered with minimal inter-chunk overhead.
-\note{
-  The profile matrix dominates GPU memory. This table shows the estimated
-  memory for different batch sizes. At 5000, the isolated forward model
-  exceeds memory; the full pipeline hits OOM earlier because of
-  additional intermediate arrays. Chunking is the standard solution.
-}
+	\vspace{0.5em}
+	\textbf{Mitigation:} Chunked execution --- process $B_\text{max}$ at a time, concatenate.\\
+	Full throughput recovered with minimal inter-chunk overhead.
 \end{frame}
 
 % ----------------------------------------------------------
 % BACKUP 4: FAISS CPU-only results
 % ----------------------------------------------------------
 \begin{frame}{Backup: FAISS Manifold Query (CPU Only)}
-  \centering
-  \includegraphics[width=0.65\textwidth]{../paper/figures/fig5_faiss.pdf}
+	\centering
+	\includegraphics[width=0.65\textwidth]{../paper/figures/fig5_faiss.pdf}
 
-  \vspace{0.5em}
-  \begin{itemize}
-    \item FAISS nearest-neighbor search for manifold-based inference
-    \item GPU FAISS benchmarks returned null on V100S test system
-    \item CPU-only latency shown for reference
-    \item GPU FAISS expected to provide significant speedup at $>10^6$ manifold entries
-    \item Completing the GPU inference chain is an active future direction
-  \end{itemize}
-\note{
-  FAISS provides nearest-neighbor search in the precomputed spectral manifold.
-  We could not get GPU FAISS results on our test system --- only CPU
-  timings are available. GPU FAISS acceleration is expected to help
-  at large manifold sizes and remains future work.
-}
+	\vspace{0.5em}
+	\begin{itemize}
+		\item FAISS nearest-neighbor search for manifold-based inference
+		\item GPU FAISS benchmarks returned null on V100S test system
+		\item CPU-only latency shown for reference
+		\item GPU FAISS expected to provide significant speedup at $>10^6$ manifold entries
+		\item Completing the GPU inference chain is an active future direction
+	\end{itemize}
 \end{frame}
 
 % ----------------------------------------------------------
 % BACKUP 5: Derivation highlights
 % ----------------------------------------------------------
 \begin{frame}{Backup: Key Mathematical Details}
-  \textbf{Voigt --- Weideman $N\!=\!36$:}
-  \begin{itemize}
-    \item M\"obius transform: $Z = (L + iz)/(L - iz)$, $L \approx 5.0454$
-    \item Degree-35 polynomial in $Z$, 236 FLOPs
-    \item Branch-free $\to$ no warp divergence, compatible with \texttt{grad}
-  \end{itemize}
+	\textbf{Voigt --- Weideman $N\!=\!36$:}
+	\begin{itemize}
+		\item M\"obius transform: $Z = (L + iz)/(L - iz)$, $L \approx 5.0454$
+		\item Degree-35 polynomial in $Z$, 236 FLOPs
+		\item Branch-free $\to$ no warp divergence, compatible with \texttt{grad}
+	\end{itemize}
 
-  \vspace{0.5em}
-  \textbf{Boltzmann --- Closed-form WLS:}
-  \begin{equation*}
-    b = \frac{S_w S_{wxy} - S_{wx} S_{wy}}{S_w S_{wxx} - S_{wx}^2}, \qquad
-    T = \frac{-1}{b \cdot k_B}
-  \end{equation*}
+	\vspace{0.5em}
+	\textbf{Boltzmann --- Closed-form WLS:}
+	\begin{equation*}
+		b = \frac{S_w S_{wxy} - S_{wx} S_{wy}}{S_w S_{wxx} - S_{wx}^2}, \qquad
+		T = \frac{-1}{b \cdot k_B}
+	\end{equation*}
 
-  \vspace{0.3em}
-  \textbf{Softmax Jacobian:}
-  \begin{equation*}
-    J_{ij} = C_i(\delta_{ij} - C_j) \qquad \text{(rank $D\!-\!1$, $\kappa = 1$ at uniform)}
-  \end{equation*}
-\note{
-  This slide collects the key mathematical details for reference.
-  The Weideman approximation uses a Mobius transform to map the
-  upper half-plane to the unit disk, then evaluates a polynomial.
-  The Boltzmann WLS solution is fully analytic.
-  The softmax Jacobian has condition number 1 at uniform composition.
-}
+	\vspace{0.3em}
+	\textbf{Softmax Jacobian:}
+	\begin{equation*}
+		J_{ij} = C_i(\delta_{ij} - C_j) \qquad \text{(rank $D\!-\!1$, $\kappa = 1$ at uniform)}
+	\end{equation*}
 \end{frame}
 
 % ----------------------------------------------------------
 % BACKUP 6: Per-element analysis and hybrid sweep
 % ----------------------------------------------------------
 \begin{frame}{Backup: Per-Element Analysis and Optimized Thresholds}
-  \centering
-  {\small\textbf{Hybrid P/R vs.\ GPU-Optimized Per-Element Thresholds}}\\[0.3em]
-  {\scriptsize
-  \begin{tabular}{lcccccl}
-    \toprule
-    \textbf{Element} & \textbf{Hybrid P} & \textbf{Hybrid R} & \textbf{ALIAS P} & \textbf{ALIAS R} & \textbf{Opt.\ Thresh.} & \textbf{Interpretation} \\
-    \midrule
-    Fe & \alert{1.00} & 0.44 & 0.91 & 0.40 & \alert{0.05} & Easy: always accept \\
-    Si & \alert{1.00} & 0.95 & 0.96 & 0.60 & \alert{0.12} & Easy: low bar \\
-    Al & \alert{1.00} & 0.90 & 0.76 & 0.76 & \alert{0.07} & Easy: low bar \\
-    Li & \alert{1.00} & 1.00 & 1.00 & 1.00 & 0.43 & Reliable \\
-    Co & \alert{1.00} & 1.00 & 0.33 & 1.00 & 0.51 & Moderate \\
-    Ni & \alert{1.00} & 0.67 & 0.50 & 1.00 & 0.62 & Moderate \\
-    K  & 0.67 & 0.60 & 0.54 & 0.70 & 0.74 & Cautious \\
-    Ca & 0.62 & 0.40 & 0.46 & 0.30 & 0.78 & Cautious \\
-    Na & 0.14 & 0.80 & 0.17 & 0.80 & \alert{0.87} & Nearly vetoed \\
-    Mn & 0.03 & 1.00 & 0.03 & 1.00 & \alert{0.93} & Nearly vetoed \\
-    \bottomrule
-  \end{tabular}}
+	\centering
+	{\small\textbf{Hybrid P/R vs.\ GPU-Optimized Per-Element Thresholds}}\\[0.3em]
+	{\scriptsize
+	\begin{tabular}{lcccccl}
+		\toprule
+		\textbf{Element} & \textbf{Hybrid P} & \textbf{Hybrid R} & \textbf{ALIAS P} & \textbf{ALIAS R} & \textbf{Opt.\ Thresh.} & \textbf{Interpretation} \\
+		\midrule
+		Fe & \alert{1.00} & 0.44 & 0.91 & 0.40 & \alert{0.05} & Easy: always accept \\
+		Si & \alert{1.00} & 0.95 & 0.96 & 0.60 & \alert{0.12} & Easy: low bar \\
+		Al & \alert{1.00} & 0.90 & 0.76 & 0.76 & \alert{0.07} & Easy: low bar \\
+		Li & \alert{1.00} & 1.00 & 1.00 & 1.00 & 0.43 & Reliable \\
+		Co & \alert{1.00} & 1.00 & 0.33 & 1.00 & 0.51 & Moderate \\
+		Ni & \alert{1.00} & 0.67 & 0.50 & 1.00 & 0.62 & Moderate \\
+		K  & 0.67 & 0.60 & 0.54 & 0.70 & 0.74 & Cautious \\
+		Ca & 0.62 & 0.40 & 0.46 & 0.30 & 0.78 & Cautious \\
+		Na & 0.14 & 0.80 & 0.17 & 0.80 & \alert{0.87} & Nearly vetoed \\
+		Mn & 0.03 & 1.00 & 0.03 & 1.00 & \alert{0.93} & Nearly vetoed \\
+		\bottomrule
+	\end{tabular}}
 
-  \vspace{0.5em}
-  \begin{columns}[T]
-    \begin{column}{0.48\textwidth}
-      \textbf{Threshold distribution:}\\[0.2em]
-      {\small Default: 0.30 $\to$ \alert{0.90} (3$\times$ stricter)\\
-      NNLS weight: \alert{2.93} (dominates fusion)\\
-      All other weights: $\leq$ 1.0}
-    \end{column}
-    \begin{column}{0.48\textwidth}
-      \textbf{Physical insight:}\\
-      {\small Optimizer independently discovers\\
-      the element difficulty hierarchy:\\
-      Fe/Si/Al (easy) $\to$ Na/Mn (intractable)}
-    \end{column}
-  \end{columns}
-\note{
-  This backup slide combines the per-element hybrid analysis with the
-  GPU-optimized thresholds. The optimized thresholds are physically
-  interpretable: Fe, Si, and Al have thresholds near zero because they
-  are reliably identified at any resolving power. Mn at 0.93 and Na
-  at 0.87 are nearly vetoed. The optimizer independently discovered
-  the element difficulty hierarchy that we identified in the manual
-  benchmark analysis. The default threshold tripled from 0.30 to 0.90,
-  confirming the baseline was far too permissive. NNLS dominates the
-  fusion weights at 2.93, meaning global spectral context is the
-  strongest signal for element identification.
-}
+	\vspace{0.5em}
+	\begin{columns}[T]
+		\begin{column}{0.48\textwidth}
+			\textbf{Threshold distribution:}\\[0.2em]
+			{\small Default: 0.30 $\to$ \alert{0.90} (3$\times$ stricter)\\
+			NNLS weight: \alert{2.93} (dominates fusion)\\
+			All other weights: $\leq$ 1.0}
+		\end{column}
+		\begin{column}{0.48\textwidth}
+			\textbf{Physical insight:}\\
+			{\small Optimizer independently discovers\\
+			the element difficulty hierarchy:\\
+			Fe/Si/Al (easy) $\to$ Na/Mn (intractable)}
+		\end{column}
+	\end{columns}
 \end{frame}
 
 \end{document}
