@@ -1,0 +1,335 @@
+\begin{thebibliography}{34}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\href}[2]{#2}
+\providecommand{\path}[1]{#1}
+\providecommand{\DOIprefix}{doi:}
+\providecommand{\ArXivprefix}{arXiv:}
+\providecommand{\URLprefix}{URL: }
+\providecommand{\Pubmedprefix}{pmid:}
+\providecommand{\doi}[1]{\href{http://dx.doi.org/#1}{\path{#1}}}
+\providecommand{\Pubmed}[1]{\href{pmid:#1}{\path{#1}}}
+\providecommand{\bibinfo}[2]{#2}
+\ifx\xfnm\relax \def\xfnm[#1]{\unskip,\space#1}\fi
+%Type = Article
+\bibitem[{Al-Jalali and Saily(2016)}]{AlJalali2016}
+\bibinfo{author}{Al-Jalali, M.A.}, \bibinfo{author}{Saily, G.},
+  \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Multi-peak voigt deconvolution of {LIBS} spectra for
+  element identification}.
+\newblock \bibinfo{journal}{Optics and Spectroscopy} \bibinfo{volume}{120},
+  \bibinfo{pages}{886--893}.
+\newblock \DOIprefix\doi{10.1134/S0030400X16060028}.
+%Type = Article
+\bibitem[{Barklem and Collet(2016)}]{Barklem2016}
+\bibinfo{author}{Barklem, P.S.}, \bibinfo{author}{Collet, R.},
+  \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Partition functions and equilibrium constants for
+  diatomic molecules and atoms of astrophysical interest}.
+\newblock \bibinfo{journal}{Astronomy \& Astrophysics} \bibinfo{volume}{588},
+  \bibinfo{pages}{A96}.
+\newblock \DOIprefix\doi{10.1051/0004-6361/201526961}.
+  \bibinfo{note}{arXiv:1602.03304}.
+%Type = Misc
+\bibitem[{Bradbury et~al.(2018)Bradbury, Frostig, Hawkins, Johnson, Leary,
+  Maclaurin, Necula, Paszke, VanderPlas, Wanderman-Milne and
+  Zhang}]{Bradbury2018}
+\bibinfo{author}{Bradbury, J.}, \bibinfo{author}{Frostig, R.},
+  \bibinfo{author}{Hawkins, P.}, \bibinfo{author}{Johnson, M.J.},
+  \bibinfo{author}{Leary, C.}, \bibinfo{author}{Maclaurin, D.},
+  \bibinfo{author}{Necula, G.}, \bibinfo{author}{Paszke, A.},
+  \bibinfo{author}{VanderPlas, J.}, \bibinfo{author}{Wanderman-Milne, S.},
+  \bibinfo{author}{Zhang, Q.}, \bibinfo{year}{2018}.
+\newblock \bibinfo{title}{{JAX}: Composable transformations of {Python}+{NumPy}
+  programs}.
+\newblock \URLprefix \url{http://github.com/jax-ml/jax}.
+%Type = Article
+\bibitem[{Ciucci et~al.(1999)Ciucci, Corsi, Palleschi, Rastelli, Salvetti and
+  Tognoni}]{Ciucci1999}
+\bibinfo{author}{Ciucci, A.}, \bibinfo{author}{Corsi, M.},
+  \bibinfo{author}{Palleschi, V.}, \bibinfo{author}{Rastelli, S.},
+  \bibinfo{author}{Salvetti, A.}, \bibinfo{author}{Tognoni, E.},
+  \bibinfo{year}{1999}.
+\newblock \bibinfo{title}{New procedure for quantitative elemental analysis by
+  {Laser-Induced Plasma Spectroscopy}}.
+\newblock \bibinfo{journal}{Applied Spectroscopy} \bibinfo{volume}{53},
+  \bibinfo{pages}{960--964}.
+\newblock \DOIprefix\doi{10.1366/0003702991947612}.
+%Type = Article
+\bibitem[{Clegg et~al.(2017)Clegg, Wiens, Anderson et~al.}]{Clegg2017}
+\bibinfo{author}{Clegg, S.M.}, \bibinfo{author}{Wiens, R.C.},
+  \bibinfo{author}{Anderson, R.}, et~al., \bibinfo{year}{2017}.
+\newblock \bibinfo{title}{Recalibration of the {Mars Science Laboratory
+  ChemCam} instrument with an expanded geochemical database}.
+\newblock \bibinfo{journal}{Spectrochimica Acta Part B: Atomic Spectroscopy}
+  \bibinfo{volume}{129}, \bibinfo{pages}{64--85}.
+\newblock \DOIprefix\doi{10.1016/j.sab.2016.12.003}.
+%Type = Article
+\bibitem[{Dai et~al.(2026)}]{Dai2026}
+\bibinfo{author}{Dai, Y.}, et~al., \bibinfo{year}{2026}.
+\newblock \bibinfo{title}{Improved spectral deconvolution for {LIBS} using
+  shoulder detection and residual completion}.
+\newblock \bibinfo{journal}{Spectrochimica Acta Part B: Atomic Spectroscopy}
+  \bibinfo{note}{In press}.
+%Type = Article
+\bibitem[{Drozdovskiy et~al.(2020)Drozdovskiy, Savijarvi, Juha
+  et~al.}]{Drozdovskiy2020}
+\bibinfo{author}{Drozdovskiy, I.}, \bibinfo{author}{Savijarvi, H.},
+  \bibinfo{author}{Juha, L.}, et~al., \bibinfo{year}{2020}.
+\newblock \bibinfo{title}{The {Aalto University} mineral spectral library: A
+  database for planetary science}.
+\newblock \bibinfo{journal}{Planetary and Space Science} \bibinfo{volume}{192},
+  \bibinfo{pages}{105063}.
+\newblock \DOIprefix\doi{10.1016/j.pss.2020.105063}.
+%Type = Article
+\bibitem[{Egozcue et~al.(2003)Egozcue, Pawlowsky-Glahn, Mateu-Figueras and
+  Barcel{\'o}-Vidal}]{Egozcue2003}
+\bibinfo{author}{Egozcue, J.J.}, \bibinfo{author}{Pawlowsky-Glahn, V.},
+  \bibinfo{author}{Mateu-Figueras, G.}, \bibinfo{author}{Barcel{\'o}-Vidal,
+  C.}, \bibinfo{year}{2003}.
+\newblock \bibinfo{title}{Isometric logratio transformations for compositional
+  data analysis}.
+\newblock \bibinfo{journal}{Mathematical Geology} \bibinfo{volume}{35},
+  \bibinfo{pages}{279--300}.
+\newblock \DOIprefix\doi{10.1023/A:1023818214614}.
+%Type = Article
+\bibitem[{Eum et~al.(2021)Eum, Lee and Kim}]{Eum2021}
+\bibinfo{author}{Eum, J.}, \bibinfo{author}{Lee, Y.}, \bibinfo{author}{Kim,
+  Y.S.}, \bibinfo{year}{2021}.
+\newblock \bibinfo{title}{Hierarchical spectral discrimination for mineral
+  identification using {LIBS}}.
+\newblock \bibinfo{journal}{Applied Spectroscopy} \bibinfo{volume}{75},
+  \bibinfo{pages}{1115--1126}.
+\newblock \DOIprefix\doi{10.1177/00037028211026856}.
+%Type = Article
+\bibitem[{Evans et~al.(2020)Evans, Pollock, Rebholz and Xiao}]{Evans2018}
+\bibinfo{author}{Evans, C.}, \bibinfo{author}{Pollock, S.},
+  \bibinfo{author}{Rebholz, L.G.}, \bibinfo{author}{Xiao, M.},
+  \bibinfo{year}{2020}.
+\newblock \bibinfo{title}{A proof that {Anderson} acceleration improves the
+  convergence rate in linearly converging fixed-point methods (but not in those
+  converging quadratically)}.
+\newblock \bibinfo{journal}{SIAM Journal on Numerical Analysis}
+  \bibinfo{volume}{58}, \bibinfo{pages}{788--810}.
+\newblock \DOIprefix\doi{10.1137/19M1245384}. \bibinfo{note}{arXiv:1810.08455}.
+%Type = Article
+\bibitem[{Fabre et~al.(2011)Fabre, Maurice, Cousin, Wiens, Forni, Sautter and
+  Guillaume}]{Fabre2011}
+\bibinfo{author}{Fabre, C.}, \bibinfo{author}{Maurice, S.},
+  \bibinfo{author}{Cousin, A.}, \bibinfo{author}{Wiens, R.C.},
+  \bibinfo{author}{Forni, O.}, \bibinfo{author}{Sautter, V.},
+  \bibinfo{author}{Guillaume, D.}, \bibinfo{year}{2011}.
+\newblock \bibinfo{title}{Onboard calibration igneous targets for the {Mars
+  Science Laboratory Curiosity} rover and the {Chemistry Camera} laser induced
+  breakdown spectroscopy instrument}.
+\newblock \bibinfo{journal}{Spectrochimica Acta Part B: Atomic Spectroscopy}
+  \bibinfo{volume}{66}, \bibinfo{pages}{280--289}.
+\newblock \DOIprefix\doi{10.1016/j.sab.2011.03.012}.
+%Type = Article
+\bibitem[{Grimm et~al.(2021)Grimm, Malik, Kitzmann, Guzm{\'a}n-Mesa, Stolker,
+  Bower, Lovis and Heng}]{Grimm2021}
+\bibinfo{author}{Grimm, S.L.}, \bibinfo{author}{Malik, M.},
+  \bibinfo{author}{Kitzmann, D.}, \bibinfo{author}{Guzm{\'a}n-Mesa, A.},
+  \bibinfo{author}{Stolker, T.}, \bibinfo{author}{Bower, D.J.},
+  \bibinfo{author}{Lovis, C.}, \bibinfo{author}{Heng, K.},
+  \bibinfo{year}{2021}.
+\newblock \bibinfo{title}{{HELIOS-K} 2.0 opacity calculator and open-source
+  opacity database for exoplanetary atmospheres}.
+\newblock \bibinfo{journal}{The Astrophysical Journal Supplement Series}
+  \bibinfo{volume}{253}, \bibinfo{pages}{30}.
+\newblock \DOIprefix\doi{10.3847/1538-4365/abd773}.
+  \bibinfo{note}{arXiv:2101.02005}.
+%Type = Article
+\bibitem[{Hansen and Ostermeier(2001)}]{Hansen2001}
+\bibinfo{author}{Hansen, N.}, \bibinfo{author}{Ostermeier, A.},
+  \bibinfo{year}{2001}.
+\newblock \bibinfo{title}{Completely derandomized self-adaptation in evolution
+  strategies}.
+\newblock \bibinfo{journal}{Evolutionary Computation} \bibinfo{volume}{9},
+  \bibinfo{pages}{159--195}.
+\newblock \DOIprefix\doi{10.1162/106365601750190398}.
+%Type = Article
+\bibitem[{Huml{\'i}{\v{c}}ek(1982)}]{Humlicek1982}
+\bibinfo{author}{Huml{\'i}{\v{c}}ek, J.}, \bibinfo{year}{1982}.
+\newblock \bibinfo{title}{Optimized computation of the {Voigt} and complex
+  probability functions}.
+\newblock \bibinfo{journal}{Journal of Quantitative Spectroscopy and Radiative
+  Transfer} \bibinfo{volume}{27}, \bibinfo{pages}{437--444}.
+\newblock \DOIprefix\doi{10.1016/0022-4073(82)90078-4}.
+%Type = Article
+\bibitem[{Johnson et~al.(2021)Johnson, Douze and J{\'e}gou}]{Johnson2019}
+\bibinfo{author}{Johnson, J.}, \bibinfo{author}{Douze, M.},
+  \bibinfo{author}{J{\'e}gou, H.}, \bibinfo{year}{2021}.
+\newblock \bibinfo{title}{Billion-scale similarity search with {GPUs}}.
+\newblock \bibinfo{journal}{IEEE Transactions on Big Data} \bibinfo{volume}{7},
+  \bibinfo{pages}{535--547}.
+\newblock \DOIprefix\doi{10.1109/TBDATA.2019.2921572}.
+%Type = Article
+\bibitem[{Kawahara et~al.(2022)Kawahara, Kawashima, Masuda, Crossfield, Pannier
+  and van~den Bekerom}]{Kawahara2022}
+\bibinfo{author}{Kawahara, H.}, \bibinfo{author}{Kawashima, Y.},
+  \bibinfo{author}{Masuda, K.}, \bibinfo{author}{Crossfield, I.J.M.},
+  \bibinfo{author}{Pannier, E.}, \bibinfo{author}{van~den Bekerom, D.},
+  \bibinfo{year}{2022}.
+\newblock \bibinfo{title}{{ExoJAX}: Automatic differentiable spectrum modeling
+  of exoplanets}.
+\newblock \bibinfo{journal}{The Astrophysical Journal Supplement Series}
+  \bibinfo{volume}{258}, \bibinfo{pages}{31}.
+\newblock \DOIprefix\doi{10.3847/1538-4365/ac3b4d}.
+  \bibinfo{note}{arXiv:2105.14782}.
+%Type = Misc
+\bibitem[{Kramida et~al.(2024)Kramida, Ralchenko, Reader and {NIST ASD
+  Team}}]{Kramida2024}
+\bibinfo{author}{Kramida, A.}, \bibinfo{author}{Ralchenko, Y.},
+  \bibinfo{author}{Reader, J.}, \bibinfo{author}{{NIST ASD Team}},
+  \bibinfo{year}{2024}.
+\newblock \bibinfo{title}{{NIST} atomic spectra database (version 5.12)}.
+\newblock \bibinfo{howpublished}{National Institute of Standards and
+  Technology, Gaithersburg, MD}.
+\newblock \URLprefix \url{https://physics.nist.gov/asd},
+  \DOIprefix\doi{10.18434/T4W30F}.
+%Type = Article
+\bibitem[{Labutin et~al.(2016)Labutin, Lednev, Ilyin and Popov}]{Labutin2013}
+\bibinfo{author}{Labutin, T.A.}, \bibinfo{author}{Lednev, V.N.},
+  \bibinfo{author}{Ilyin, A.A.}, \bibinfo{author}{Popov, A.M.},
+  \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Femtosecond laser-induced breakdown spectroscopy}.
+\newblock \bibinfo{journal}{Journal of Analytical Atomic Spectrometry}
+  \bibinfo{volume}{31}, \bibinfo{pages}{90--118}.
+\newblock \DOIprefix\doi{10.1039/C5JA00301F}. \bibinfo{note}{aLIAS algorithm
+  described herein}.
+%Type = Inproceedings
+\bibitem[{Lange(2023)}]{Lange2023}
+\bibinfo{author}{Lange, R.T.}, \bibinfo{year}{2023}.
+\newblock \bibinfo{title}{evosax: {JAX}-based evolution strategies}, in:
+  \bibinfo{booktitle}{Proceedings of the Companion Conference on Genetic and
+  Evolutionary Computation ({GECCO} '23 Companion)}, \bibinfo{publisher}{ACM}.
+  pp. \bibinfo{pages}{659--662}.
+\newblock \DOIprefix\doi{10.1145/3583133.3590733}.
+%Type = Book
+\bibitem[{Lawson and Hanson(1974)}]{Lawson1974}
+\bibinfo{author}{Lawson, C.L.}, \bibinfo{author}{Hanson, R.J.},
+  \bibinfo{year}{1974}.
+\newblock \bibinfo{title}{Solving Least Squares Problems}.
+\newblock Automatic Computation, \bibinfo{publisher}{Prentice-Hall}.
+%Type = Article
+\bibitem[{Maurice et~al.(2021)Maurice, Wiens, Bernardi et~al.}]{Maurice2021}
+\bibinfo{author}{Maurice, S.}, \bibinfo{author}{Wiens, R.C.},
+  \bibinfo{author}{Bernardi, P.}, et~al., \bibinfo{year}{2021}.
+\newblock \bibinfo{title}{The {SuperCam} instrument suite on the {Mars 2020
+  Perseverance} rover: Science objectives and mast-unit description}.
+\newblock \bibinfo{journal}{Space Science Reviews} \bibinfo{volume}{217},
+  \bibinfo{pages}{47}.
+\newblock \DOIprefix\doi{10.1007/s11214-021-00807-w}.
+%Type = Article
+\bibitem[{Olivero and Longbothum(1977)}]{Olivero1977}
+\bibinfo{author}{Olivero, J.J.}, \bibinfo{author}{Longbothum, R.L.},
+  \bibinfo{year}{1977}.
+\newblock \bibinfo{title}{Empirical fits to the {Voigt} line width: A brief
+  review}.
+\newblock \bibinfo{journal}{Journal of Quantitative Spectroscopy and Radiative
+  Transfer} \bibinfo{volume}{17}, \bibinfo{pages}{233--236}.
+\newblock \DOIprefix\doi{10.1016/0022-4073(77)90161-3}.
+%Type = Inproceedings
+\bibitem[{Ros and Hansen(2008)}]{Ros2008}
+\bibinfo{author}{Ros, R.}, \bibinfo{author}{Hansen, N.}, \bibinfo{year}{2008}.
+\newblock \bibinfo{title}{A simple modification in {CMA-ES} achieving linear
+  time and space complexity}, in: \bibinfo{booktitle}{Parallel Problem Solving
+  from Nature -- {PPSN X}}, \bibinfo{publisher}{Springer}. pp.
+  \bibinfo{pages}{296--305}.
+\newblock \DOIprefix\doi{10.1007/978-3-540-87700-4_30}.
+%Type = Article
+\bibitem[{Tan(2019)}]{Tan2019}
+\bibinfo{author}{Tan, X.}, \bibinfo{year}{2019}.
+\newblock \bibinfo{title}{A software package for rigorously calculating optical
+  plasma spectra and automatically retrieving plasma properties}.
+\newblock \bibinfo{journal}{Journal of Analytical Atomic Spectrometry}
+  \bibinfo{volume}{34}, \bibinfo{pages}{1469--1480}.
+\newblock \DOIprefix\doi{10.1039/C8JA00220G}. \bibinfo{note}{oPSIAL software;
+  arXiv:1802.01000}.
+%Type = Article
+\bibitem[{Tognoni et~al.(2010)Tognoni, Cristoforetti, Legnaioli and
+  Palleschi}]{Tognoni2010}
+\bibinfo{author}{Tognoni, E.}, \bibinfo{author}{Cristoforetti, G.},
+  \bibinfo{author}{Legnaioli, S.}, \bibinfo{author}{Palleschi, V.},
+  \bibinfo{year}{2010}.
+\newblock \bibinfo{title}{Calibration-free {Laser-Induced Breakdown
+  Spectroscopy}: State of the art}.
+\newblock \bibinfo{journal}{Spectrochimica Acta Part B: Atomic Spectroscopy}
+  \bibinfo{volume}{65}, \bibinfo{pages}{1--14}.
+\newblock \DOIprefix\doi{10.1016/j.sab.2009.11.006}.
+%Type = Article
+\bibitem[{Toth and Kelley(2015)}]{Toth2015}
+\bibinfo{author}{Toth, A.}, \bibinfo{author}{Kelley, C.T.},
+  \bibinfo{year}{2015}.
+\newblock \bibinfo{title}{Convergence analysis for {Anderson} acceleration}.
+\newblock \bibinfo{journal}{SIAM Journal on Numerical Analysis}
+  \bibinfo{volume}{53}, \bibinfo{pages}{805--819}.
+\newblock \DOIprefix\doi{10.1137/130919398}.
+%Type = Book
+\bibitem[{Van~Rijsbergen(1979)}]{VanRijsbergen1979}
+\bibinfo{author}{Van~Rijsbergen, C.J.}, \bibinfo{year}{1979}.
+\newblock \bibinfo{title}{Information Retrieval}.
+\newblock \bibinfo{edition}{2nd} ed., \bibinfo{publisher}{Butterworths},
+  \bibinfo{address}{London}.
+%Type = Article
+\bibitem[{Walker and Ni(2011)}]{Walker2011}
+\bibinfo{author}{Walker, H.F.}, \bibinfo{author}{Ni, P.}, \bibinfo{year}{2011}.
+\newblock \bibinfo{title}{{Anderson} acceleration for fixed-point iterations}.
+\newblock \bibinfo{journal}{SIAM Journal on Numerical Analysis}
+  \bibinfo{volume}{49}, \bibinfo{pages}{1715--1735}.
+\newblock \DOIprefix\doi{10.1137/10078356X}.
+%Type = Article
+\bibitem[{Wang et~al.(2014)Wang, Bao, He and Wang}]{Wang2014}
+\bibinfo{author}{Wang, Y.}, \bibinfo{author}{Bao, Y.}, \bibinfo{author}{He,
+  X.}, \bibinfo{author}{Wang, M.}, \bibinfo{year}{2014}.
+\newblock \bibinfo{title}{Non-negative least squares spectral unmixing for
+  remote sensing applications}.
+\newblock \bibinfo{journal}{Remote Sensing} \bibinfo{volume}{6},
+  \bibinfo{pages}{3287--3304}.
+\newblock \DOIprefix\doi{10.3390/rs6043287}.
+%Type = Article
+\bibitem[{Weideman(1994)}]{Weideman1994}
+\bibinfo{author}{Weideman, J.A.C.}, \bibinfo{year}{1994}.
+\newblock \bibinfo{title}{Computation of the complex error function}.
+\newblock \bibinfo{journal}{SIAM Journal on Numerical Analysis}
+  \bibinfo{volume}{31}, \bibinfo{pages}{1497--1518}.
+\newblock \DOIprefix\doi{10.1137/0731077}.
+%Type = Article
+\bibitem[{Wiens et~al.(2012)Wiens, Maurice, Barraclough et~al.}]{Wiens2013}
+\bibinfo{author}{Wiens, R.C.}, \bibinfo{author}{Maurice, S.},
+  \bibinfo{author}{Barraclough, B.}, et~al., \bibinfo{year}{2012}.
+\newblock \bibinfo{title}{The {ChemCam} instrument suite on the {Mars Science
+  Laboratory} ({MSL}) rover: Body unit and combined system tests}.
+\newblock \bibinfo{journal}{Space Science Reviews} \bibinfo{volume}{170},
+  \bibinfo{pages}{167--227}.
+\newblock \DOIprefix\doi{10.1007/s11214-012-9902-4}.
+%Type = Article
+\bibitem[{Wiens et~al.(2025)}]{Wiens2025}
+\bibinfo{author}{Wiens, R.C.}, et~al., \bibinfo{year}{2025}.
+\newblock \bibinfo{title}{Over 1.3 million laser shots on {Mars}: Updated
+  results from {ChemCam} and {SuperCam}}.
+\newblock \bibinfo{journal}{Space Science Reviews} \bibinfo{note}{Review, in
+  press}.
+%Type = Article
+\bibitem[{Zaghloul(2024)}]{Zaghloul2024}
+\bibinfo{author}{Zaghloul, M.R.}, \bibinfo{year}{2024}.
+\newblock \bibinfo{title}{Algorithm 1046: A revised implementation of the
+  {Faddeyeva} function}.
+\newblock \bibinfo{journal}{ACM Transactions on Mathematical Software}
+  \bibinfo{volume}{50}, \bibinfo{pages}{1--19}.
+\newblock \DOIprefix\doi{10.1145/3700779}. \bibinfo{note}{arXiv:2411.00917}.
+%Type = Article
+\bibitem[{Zeng et~al.(2020)Zeng, Chu, Tan, Hu and Yang}]{Zeng2020}
+\bibinfo{author}{Zeng, J.}, \bibinfo{author}{Chu, X.}, \bibinfo{author}{Tan,
+  W.}, \bibinfo{author}{Hu, Y.}, \bibinfo{author}{Yang, S.},
+  \bibinfo{year}{2020}.
+\newblock \bibinfo{title}{{Hackem-LIBS}: An heterogeneous stacking ensemble
+  model for {Laser-Induced Breakdown Spectroscopy} elemental quantitative
+  analysis}.
+\newblock \bibinfo{journal}{IEEE Access} \bibinfo{volume}{8},
+  \bibinfo{pages}{134614--134622}.
+\newblock \DOIprefix\doi{10.1109/ACCESS.2020.3010730}. \bibinfo{note}{ensemble
+  methods for LIBS quantification (regression), not identification}.
+
+\end{thebibliography}
