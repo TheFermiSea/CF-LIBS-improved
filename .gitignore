@@ -87,7 +87,3 @@ conductor/setup_state.json
 .dolt/
 .aw/
 
-# Manuscript and submission (private - not for public repo)
-paper/
-slides/
-arxiv/

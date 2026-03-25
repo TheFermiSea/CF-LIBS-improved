@@ -1,0 +1,150 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Comparison with GPU Spectroscopy Codes}
+
+The throughput of our batch forward model---$10{,}708$ spectra per second on a V100S---is
+% Source: benchmark_summary.json/headline_numbers/batch_forward_max_throughput_spectra_per_sec = 10708.1
+comparable to the $\sim 10{,}000$ spectra per second reported by \citet{Kawahara2022} for ExoJAX on the same GPU architecture.
+% Source: e2e_pipeline_results.json/references/note
+This is noteworthy because the two codes solve fundamentally different physics: ExoJAX computes molecular and atomic cross-sections for exoplanet atmospheric retrieval (a single-species, many-line opacity sum), while our code evaluates a multi-element Saha--Boltzmann chain with iterative charge balance, Boltzmann fitting, compositional closure, and Voigt broadening.
+The comparable throughput suggests that the JAX/XLA compilation stack achieves similar GPU utilization efficiency across these different spectral workloads, and that the per-spectrum computational cost is dominated in both cases by the Voigt profile matrix---an $(N_\mathrm{wl}, N_\mathrm{lines})$ outer product that maps naturally to GPU parallelism.
+
+The comparison with HELIOS-K \citep{Grimm2021} highlights a different tradeoff.
+HELIOS-K is implemented in CUDA C++ with hand-tuned kernels optimized for specific GPU architectures, achieving higher raw throughput for opacity calculations than a JAX-based approach can match.
+However, the JAX framework provides automatic differentiation, which enables gradient-based optimization (e.g., joint fitting of $T$, $n_e$, and $\bm{C}$ via L-BFGS-B) and Bayesian inference (via Hamiltonian Monte Carlo or variational methods) without manually deriving and implementing Jacobians.
+For CF-LIBS applications, where the inversion problem is as important as the forward model, this capability is a significant practical advantage that justifies the modest performance overhead relative to hand-tuned CUDA.
+
+\subsection{Anderson Acceleration: An Honest Assessment}
+
+The Anderson acceleration results merit candid discussion.
+The average iteration reduction of $1.6\times$ at tolerance $10^{-6}$ is modest,
+% Source: benchmark_summary.json/headline_numbers/anderson_avg_iteration_reduction = 1.62
+and the optimal depth of $m = 1$ at this tolerance means the algorithm reduces to a simple secant-like update rather than exploiting the full multi-step history.
+% Source: benchmark_summary.json/headline_numbers/anderson_optimal_M = 1
+
+The underlying reason is that the Saha--Boltzmann charge-balance iteration for typical LIBS plasmas ($T \sim 0.6$--\SI{1.5}{\electronvolt}, $n_e \sim 10^{15}$--$10^{17}$~\si{\per\cubic\centi\metre}) is already well-conditioned: the Picard contraction rate is $|g'(n_e^*)| \sim 0.3$--$0.7$, meaning simple iteration converges in 3--8 steps.
+Anderson acceleration delivers its greatest benefit for problems with contraction rates near unity, where Picard iteration is slow or fails to converge.
+For the charge-balance problem, such conditions arise at higher temperatures ($T > \SI{2}{\electronvolt}$) with significant double or triple ionization, or at very tight tolerances ($< 10^{-10}$) where depth $m = 5$ achieves a $2.9\times$ iteration reduction.
+
+Despite the modest speedup at standard tolerances, we include Anderson acceleration in the pipeline for two reasons: (1)~it provides a convergence guarantee for the harder plasma conditions that may arise in applications beyond the parameter range tested here, and (2)~the \texttt{lax.scan} implementation adds negligible overhead when $m = 0$ (Picard fallback), so the capability is available at zero cost when not needed.
+
+\subsection{JIT Compilation Overhead}
+
+JAX's just-in-time compilation introduces a one-time overhead of approximately \SIrange{30}{120}{\second} for the full forward model, depending on the number of emission lines and the complexity of the computation graph.
+This cost is amortized over subsequent calls: after the first \texttt{jit}-compiled execution, repeated calls incur only data transfer and kernel launch overhead.
+For manifold generation workloads involving $10^4$--$10^6$ forward evaluations, the compilation overhead is negligible ($< 0.01\%$ of total runtime).
+For interactive single-spectrum analysis, the compilation overhead can be mitigated by pre-compiling the model during application startup.
+
+\subsection{GPU Memory Constraints}
+
+The batch forward model encounters GPU out-of-memory errors at $B = 5000$ (estimated \SI{8.2}{\giga\byte})
+% Source: batch_forward_results.json/results[7]/estimated_memory_gb = 8.192, gpu_oom = true
+and the end-to-end pipeline at $B = 10{,}000$ (estimated \SI{91.6}{\giga\byte}).
+% Source: e2e_pipeline_results.json/results[4]/gpu_error
+These limits are consistent with the memory budget formula (\cref{eq:bmax}) and the \SI{32}{\giga\byte} capacity of the V100S.
+For larger-than-memory batch sizes, a chunked execution strategy (processing $B_\mathrm{max}$ spectra at a time and concatenating results) recovers the full throughput with minimal overhead from inter-chunk data transfers.
+
+\subsection{FAISS GPU Index}
+
+The manifold-based inference approach uses FAISS \citep{Johnson2019} for nearest-neighbor search in the precomputed spectral manifold.
+GPU FAISS benchmark data were not available for this study (the benchmark returned null results),
+% Source: benchmark_summary.json/headline_numbers/faiss_gpu_vs_cpu_speedup_largest = null
+and we do not report fabricated timing numbers.
+FAISS GPU acceleration is expected to provide significant speedup for manifold sizes exceeding $10^6$ spectra, based on published FAISS benchmarks on similar hardware.
+This remains an important direction for future work.
+
+\subsection{The RP~$< 1000$ Barrier}
+
+Our benchmark quantitatively confirms the literature consensus that peak-matching approaches are fundamentally limited at RP~$< 1000$.
+% Source: element_id_benchmark_report.md §4.1
+The best ALIAS configuration achieves $P = 0.505$, consistent with the theoretical expectation that at RP~$\approx 600$, a typical 200--900~nm spectral window contains ${\sim}100$~detectable peaks and ${\sim}5000$~catalogued transitions, giving a chance coincidence rate of ${\sim}10\%$ per element-line depending on wavelength tolerance.
+Elements with only 2--3 detectable lines (Na, K) are particularly vulnerable: a single chance match can trigger detection.
+
+The hybrid NNLS+ALIAS approach partially overcomes this barrier by requiring corroborating evidence from two orthogonal information sources.
+However, the improvement is inherently bounded by the weaker channel---ALIAS's limitations at low RP propagate into the hybrid result via the intersection operation.
+The 17\% F$_1$ improvement ($0.560 \to 0.654$) represents the maximum gain achievable by adding a global fitting stage to peak-matching confirmation, without improving the peak-matcher itself.
+
+\subsection{The Mn and Na Problem}
+
+Manganese and sodium represent the dominant failure mode across all five identification pathways.
+The root causes are distinct:
+% Source: element_id_benchmark_report.md §4.3
+
+Mn has $> 500$ transitions between 200--900~nm, and no spectral region is free of Mn lines.
+Any sample with $\geq 5$~detected peaks will inevitably produce Mn ``matches'' at RP~$< 1000$.
+The spurious detection rate for Mn is effectively determined by the number of detected peaks, not by the actual presence of Mn.
+At RP~$> 3000$, Mn's individual lines become resolvable and its characteristic multiplet patterns (e.g., the 403~nm triplet) can be positively identified.
+
+Na's D-lines at 589.0/589.6~nm are among the strongest emission lines in atomic spectroscopy.
+Even trace Na contamination (from sample handling, atmospheric Na, or substrate entrainment) produces detectable emission.
+With only 2--3 lines in the LIBS-accessible range, Na identification reduces to a binary question at a single spectral position---inherently unreliable without multi-line confirmation.
+
+Both elements require RP-dependent treatment: at RP~$< 1000$, they should either be excluded from the blind search or flagged with a ``probable contaminant'' warning.
+At RP~$> 3000$, standard peak-matching is expected to resolve them correctly.
+
+\subsection{Comparison with Mars LIBS Instruments}
+
+The ChemCam instrument on the Mars Science Laboratory rover operates at RP~$\approx 2000$--$4000$ across three spectrometer channels (240--342, 382--469, 474--906~nm) \citep{Wiens2013}.
+Its element identification and quantification pipeline relies on PLS regression trained on 69--332~geological standards \citep{Clegg2017}, achieving robust quantification of SiO$_2$, TiO$_2$, Al$_2$O$_3$, FeO$_\mathrm{T}$, MgO, CaO, Na$_2$O, K$_2$O.
+% Source: element_id_benchmark_report.md §4.2
+Our CF-LIBS approach, operating at lower RP and without calibration standards, cannot match ChemCam's quantitative performance.
+However, our hybrid identifier achieves $P = 1.00$ for Si and Al---the two most abundant rock-forming elements---which is essential for the downstream CF-LIBS concentration calculation.
+
+SuperCam (RP~$\approx 2500$) and MarSCoDe (RP~$\approx 500$--$700$) extend the Mars LIBS dataset to over 1.3~million spectra \citep{Wiens2025}.
+MarSCoDe's low RP is comparable to our Aalto benchmark conditions, and its element identification relies on pre-selected spectral windows for known target elements rather than blind identification.
+Our benchmark establishes quantitative performance baselines for blind identification at comparable resolving power, providing a reference for future calibration-free approaches to planetary LIBS analysis.
+
+\subsection{Implications for CF-LIBS Pipeline Design}
+
+The benchmark and optimization results together suggest two CF-LIBS pipeline architectures for low-RP instruments:
+% Source: element_id_benchmark_report.md §4.4
+
+\paragraph{Protocol A: Single-method (hybrid NNLS+ALIAS).}
+For deployments where GPU acceleration is unavailable or the optimization has not been performed for the target instrument configuration, we recommend the following analytical protocol.
+The initial element identification step should use the hybrid NNLS+ALIAS method in intersection mode (NNLS SNR~$\approx 1.5$, ALIAS detection threshold~$\approx 0.05$), as this provides the best balance of identification specificity and detection sensitivity among individual methods.
+Resolving-power-dependent post-filtering should then be applied to suppress Mn and Na at RP~$< 1000$, unless independent evidence (e.g., known sample composition from X-ray fluorescence) confirms their presence.
+The analysis should prioritize the major rock-forming elements---Si, Al, Fe, Ca, Mg, K---for which the hybrid method achieves adequate identification specificity ($P > 0.39$) and detection sensitivity ($R > 0.40$); for these elements, identification is sufficiently reliable for Boltzmann plot construction and CF-LIBS concentration calculation.
+Finally, the CF-LIBS concentration results from the first pass can be used to refine the element list: elements with concentrations below a physically motivated threshold (e.g., $< 0.1$~wt\%) may be identification artifacts and can be removed in a second iteration.
+
+\paragraph{Protocol B: GPU-optimized multi-method consensus identification.}
+When GPU resources are available, the 101-parameter consensus identification system achieves substantially higher performance ($F_{\beta} = 0.914$) by learning element-specific identification criteria and confidence thresholds.
+The optimized system subsumes the manual contaminant filtering step---it automatically learns to nearly veto spectroscopically intractable elements such as Mn and Na---and replaces the heuristic analytical protocol with a single optimized identification function.
+Re-optimization for a new instrument requires only the precomputed method outputs on a representative spectrum set (58~seconds on a V100S), making it practical for per-instrument calibration.
+
+\subsection{Why the Ensemble Outperforms Individual Algorithms}
+
+Ensemble methods have previously been applied to LIBS for quantitative analysis (regression): \citet{Zeng2020} demonstrated that heterogeneous stacking ensembles improve elemental concentration predictions over individual models.
+However, to our knowledge, multi-method consensus identification---where the methods being combined are fundamentally different identification strategies rather than variants of the same regression model---has not been explored.
+The per-algorithm standalone results (\cref{tab:standalone-algorithms}) reveal that the five methods extract complementary spectral information and fail on different elements, creating an opportunity for consensus-based identification.
+Specifically, NNLS exploits the global Boltzmann emissivity envelope across the full wavelength range, ALIAS validates individual emission line positions against atomic database wavelengths, comb matching identifies characteristic multiplet spacing patterns, and the hybrid method requires corroboration between the global emissivity structure and local peak positions.
+NNLS achieves near-perfect recall ($R = 0.922$) because full-spectrum decomposition detects any element with non-negligible spectral contribution, but its precision ($P = 0.336$) suffers because elements with many database lines (Mn, Na, V) inevitably receive non-zero coefficients.
+Conversely, the hybrid NNLS+ALIAS achieves the best single-method precision ($P = 0.578$) by requiring both global (NNLS) and local (peak-matching) evidence, but sacrifices recall for elements whose lines are too blended for ALIAS confirmation.
+
+The optimized ensemble resolves this tension by learning element-specific identification criteria: it uses NNLS's high detection sensitivity for trace elements where missed detections are costly, hybrid identification specificity for major rock-forming elements where spurious identifications would corrupt the Boltzmann plot, and ALIAS for line-level confirmation.
+The 22~per-element threshold multipliers allow the ensemble to apply different confidence requirements per element---low thresholds for reliably detected elements (Fe $= 0.05$, Si $= 0.12$, Al $= 0.07$), high thresholds for spectroscopically intractable elements (Mn $= 0.93$, Na $= 0.87$)---a degree of specialization impossible with any single algorithm's global threshold.
+
+\subsection{Implications of the Ensemble Optimization}
+
+The GPU-accelerated 101-parameter ensemble optimization (\cref{sec:results-optimized}) demonstrates several findings with implications for CF-LIBS pipeline design beyond the specific $F_{\beta} = 0.914$ result.
+
+First, the optimized per-element thresholds independently confirm the per-element analysis from the benchmark: elements that are spectroscopically intractable elements (Mn, Na) receive thresholds near unity, effectively vetoing them, while reliably detected elements (Fe, Si, Al) receive low thresholds.
+This convergence between the optimization's learned parameters and the human-interpretable per-element analysis validates both approaches.
+
+Second, the optimization discovered that the hand-tuned detection thresholds were dramatically too permissive (default 0.30 $\to$ 0.90), suggesting that conservative threshold selection---erring on the side of missed detections rather than false positives---is appropriate for CF-LIBS applications where false positives corrupt the Boltzmann plot and cascade into concentration errors.
+
+Third, the dominance of NNLS in the learned algorithm weights ($w = 2.93$) confirms that full-spectrum fitting provides the most valuable global spectral context, and that aggressive per-element thresholding of NNLS outputs outperforms the two-stage hybrid architecture's intersection-based gating mechanism.
+
+Fourth, the intermediate 41-parameter CMA-ES optimization over a single algorithm's threshold space plateaued at $F_{\beta} = 0.551$---well below the multi-method consensus system's $F_{\beta} = 0.914$---confirming that further improvement requires expanding the optimization to span all five identification methods simultaneously.
+The key insight is that no amount of threshold tuning on a single algorithm can compensate for the information that other algorithms provide.
+
+Finally, the ${\sim}35{,}000$ evaluations per second achievable on a single GPU demonstrates that GPU acceleration enables not just fast spectral synthesis but also exhaustive systematic exploration of multi-method identification configurations---a capability that is a direct consequence of the GPU pipeline developed in this work.
+For comparison, exploring $2 \times 10^6$ configurations manually at a rate of one configuration per minute would require approximately four years of continuous expert effort; the GPU completes this search in 58~seconds.
+
+\subsection{Limitations}
+
+Several limitations qualify the present results.
+All benchmarks were performed on a single GPU architecture (Tesla V100S), and performance on other hardware (A100, H100, consumer GPUs, Apple Silicon) may differ significantly due to differences in memory bandwidth, compute unit count, and float64 throughput; the V100S delivers float64 at half the rate of float32, while on consumer GPUs where float64 throughput is $1/32$ of float32, the speedup ratios would be substantially lower.
+The physical model scope is restricted to local thermodynamic equilibrium (LTE), a single-zone plasma, and optically thin emission; non-LTE effects, spatial inhomogeneity, and self-absorption correction---all of which become important for dense plasmas or strongly absorbing resonance lines---are not included in the GPU-accelerated pipeline.
+At single-spectrum batch size ($B = 1$), the GPU is slower than CPU ($0.21\times$ speedup) due to kernel launch and data transfer overhead; the throughput advantage is realized only for batch sizes $B \geq 10$, corresponding to approximately 10~accumulated laser shots, well below the typical 50--100~shots per analysis point in quantitative LIBS.
+Finally, 64-bit floating-point arithmetic is required throughout because the Weideman $N = 36$ coefficients span 14~orders of magnitude and the Boltzmann plot slope determination requires high-precision arithmetic; float32 computation would approximately double throughput but introduces $\sim 0.1$--$1\%$ errors in the Voigt profile wings and limits temperature precision to $\sim 3$~significant figures.

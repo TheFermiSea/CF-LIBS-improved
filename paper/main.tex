@@ -1,0 +1,56 @@
+\documentclass[preprint,12pt,authoryear]{elsarticle}
+
+% --- Packages ---
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{bm}
+\usepackage{xcolor}
+
+% --- SI units setup ---
+\sisetup{
+  separate-uncertainty = true,
+  multi-part-units = single,
+}
+
+% --- Journal metadata ---
+\journal{Journal of Quantitative Spectroscopy and Radiative Transfer}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{GPU-Accelerated Calibration-Free Laser-Induced Breakdown Spectroscopy via JAX}
+
+\author[inst1]{Brian Squires}
+\affiliation[inst1]{organization={[Affiliation]}}
+
+\begin{keyword}
+LIBS \sep calibration-free \sep GPU acceleration \sep JAX \sep Voigt profile \sep plasma diagnostics \sep real-time \sep element identification \sep spectral benchmark \sep multi-algorithm ensemble \sep CMA-ES optimization
+\end{keyword}
+
+\input{sections/abstract}
+
+\end{frontmatter}
+
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/results}
+\input{sections/discussion}
+\input{sections/conclusion}
+
+\section*{Data Availability}
+
+The source code, benchmark scripts, and validation data are available at \url{https://github.com/[repository]}.
+
+\section*{Acknowledgements}
+
+Computational resources were provided by [institution]. The Aalto University LIBS Spectral Library was used for real-data validation.
+
+\bibliography{refs}
+\bibliographystyle{elsarticle-harv}
+
+\end{document}

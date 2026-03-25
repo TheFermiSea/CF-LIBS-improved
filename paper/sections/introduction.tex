@@ -1,0 +1,66 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Laser-Induced Breakdown Spectroscopy (LIBS) is an atomic emission technique in which a focused laser pulse ablates a small volume of sample material, generating a transient plasma whose optical emission encodes the elemental composition of the target.
+Calibration-Free LIBS (CF-LIBS) eliminates the need for matrix-matched reference standards by deriving concentrations directly from plasma physics: the Boltzmann distribution governs excited-state populations, the Saha equation relates ionization-stage ratios to the electron temperature $T$ and electron density $n_e$, and a closure equation enforces the constraint that all elemental number fractions sum to unity \citep{Tognoni2010}.
+Since its introduction by \citet{Ciucci1999}, CF-LIBS has been applied to geological surveying, industrial process control, cultural heritage analysis, and planetary science---most notably aboard the ChemCam and SuperCam instruments on NASA's Mars rovers \citep{Wiens2013,Maurice2021}.
+
+Despite the elegance of the CF-LIBS approach, its computational demands are substantial.
+A single inversion requires identifying emission lines against a database of $10^4$--$10^5$ atomic transitions, evaluating Voigt profiles for each identified line, performing weighted least-squares Boltzmann fits for every element, iterating a coupled Saha--Boltzmann system to self-consistency, and enforcing compositional closure.
+When deployed in contexts that demand high throughput---online industrial monitoring, rapid survey campaigns, or manifold-based inference over grids of $10^6$--$10^8$ synthetic spectra---the CPU-bound nature of existing implementations becomes the primary bottleneck.
+Real-time operation at the laser repetition rate (typically \SIrange{1}{20}{\hertz}, with $10$--$100$ accumulated spectra per analysis) requires processing hundreds of spectra per second, a regime where serial CPU code is inadequate.
+
+The emergence of GPU computing in spectroscopy has demonstrated that massively parallel architectures can accelerate spectral calculations by orders of magnitude.
+\citet{Kawahara2022} developed ExoJAX, a JAX-based framework for computing molecular and atomic cross-sections for exoplanet atmospheric retrieval, reporting throughput of approximately $10{,}000$ spectra per second on an NVIDIA V100 GPU.
+\citet{Grimm2021} presented HELIOS-K, a CUDA~C++ opacity calculator for exoplanet atmospheres that achieves high throughput for Voigt profile evaluation across billions of spectral lines.
+Both works demonstrate that GPU parallelism is well-suited to spectral computation, but neither addresses the specific algorithmic pipeline of CF-LIBS: multi-element Saha--Boltzmann coupling, Boltzmann plot fitting with variable line counts per element, compositional closure, and the iterative self-consistency loop that ties these components together.
+
+A critical prerequisite for CF-LIBS analysis---and the second major challenge addressed in this work---is automated element identification: determining which elements are present in a measured spectrum before Boltzmann plots, temperature determination, and concentration calculation can proceed.
+An incorrectly identified element introduces spurious lines into the Boltzmann plot, biasing the temperature determination via the slope and cascading systematic errors into the concentrations of all elements through the closure constraint $\sum C_i = 1$; consequently, identification specificity is more consequential than detection sensitivity for the overall accuracy of the CF-LIBS analysis.
+At high resolving powers ($\mathrm{RP} > 5000$), this identification problem is comparatively tractable; algorithms such as ALIAS (Automatic Line Identification and Spectral Analysis) can achieve high accuracy by matching observed peak positions against theoretical wavelengths from atomic databases \citep{Labutin2013}.
+However, at the low resolving powers typical of compact and field-deployed spectrometers ($\mathrm{RP} = 300$--$1000$), severe spectral overlap, line blending, and the density of emission features render peak-matching unreliable.
+This is precisely the regime of interest for handheld LIBS instruments and planetary missions: the ChemCam instrument operates at $\mathrm{RP} \approx 2000$--$4000$ \citep{Wiens2013,Clegg2017}, while the MarSCoDe instrument on China's Zhurong rover operates at $\mathrm{RP} \approx 500$--$700$ \citep{Wiens2025}---comparable to the conditions in this study.
+Despite the importance of low-RP element identification, the literature lacks systematic quantitative benchmarks comparing identification algorithms in this regime.
+\citet{Tan2019} presented OPSIAL, a forward-model-based package for automatic element identification and plasma parameter retrieval that solves the radiative transfer equation line-by-line, but did not evaluate identification accuracy on a benchmark dataset with known ground-truth compositions.
+The Mars LIBS instruments employ multivariate regression (PLS, ICA) trained on libraries of hundreds of geological standards \citep{Clegg2017}, achieving robust quantification of 8 major elements but requiring large calibration databases and remaining limited to the compositional space covered by the training set.
+A calibration-free identifier that works reliably at low RP would enable analysis of truly unknown samples.
+
+To our knowledge, no GPU-accelerated implementation of the CF-LIBS pipeline has been reported.
+This paper fills that gap by presenting a complete GPU-accelerated CF-LIBS library implemented in JAX \citep{Bradbury2018}, a Python framework for composable function transformations including automatic differentiation (\texttt{grad}), vectorization (\texttt{vmap}), and just-in-time compilation (\texttt{jit}) to GPU via the XLA compiler.
+The choice of JAX over hand-tuned CUDA provides three advantages: (1)~automatic differentiation enables gradient-based joint optimization of temperature, electron density, and composition without manually deriving Jacobians; (2)~\texttt{vmap} provides batch parallelism with a single code path for both CPU and GPU; and (3)~Python-level development velocity is preserved while XLA delivers competitive GPU performance.
+
+We contribute GPU-optimized implementations of five core algorithms:
+\begin{enumerate}
+  \item \textbf{Voigt profile evaluation} via the \citet{Weideman1994} $N=36$ rational approximation to the Faddeeva function, achieving a branch-free formulation compatible with JAX automatic differentiation (\Cref{sec:voigt}).
+  \item \textbf{Vectorized Boltzmann fitting} using closed-form weighted least squares with a pad-and-mask strategy that batches variable-length line lists across elements without Python loops (\Cref{sec:boltzmann}).
+  \item \textbf{Anderson-accelerated Saha--Boltzmann iteration} that reduces the iteration count of the electron density self-consistency loop by storing a history of previous iterates and solving a least-squares mixing problem \citep{Walker2011,Evans2018} (\Cref{sec:anderson}).
+  \item \textbf{Exponential simplex parameterization of the compositional closure constraint} that reparameterizes the simplex constraint $\sum_i C_i = 1$, $C_i > 0$ as an unconstrained optimization in $\mathbb{R}^D$ with exact Jacobian, enabling gradient-based joint optimization (\Cref{sec:softmax}).
+  \item \textbf{Batch forward model} that composes all four kernels into a vectorized pipeline mapping plasma parameters $(T, n_e, \bm{C})$ to synthetic spectra via \texttt{vmap}, enabling manifold generation at throughput exceeding $10{,}000$ spectra per second (\Cref{sec:batch}).
+\end{enumerate}
+
+Beyond the GPU-accelerated forward model, we present two further contributions.
+The second contribution is a systematic benchmark of five element identification pathways evaluated on 74~real LIBS spectra from the Aalto University Spectral Library \citep{Drozdovskiy2020} at resolving powers $\mathrm{RP} = 300$--$1100$.
+The five pathways---ALIAS peak-matching, full-spectrum NNLS decomposition \citep{Lawson1974}, a novel two-stage hybrid NNLS+ALIAS identifier, Voigt deconvolution followed by ALIAS \citep{AlJalali2016,Dai2026}, and forward-model concentration thresholding---are evaluated across 93~configurations to establish quantitative performance baselines at low RP.
+Per-algorithm standalone evaluation reveals that no single algorithm dominates: NNLS achieves the highest recall ($R = 0.922$) but poor precision ($P = 0.336$), while the hybrid achieves the best precision among individual methods ($P = 0.578$).
+
+The third contribution is a GPU-accelerated multi-method consensus identification system that combines the complementary spectral information from all five identification methods via optimized weights and per-element identification confidence thresholds.
+Using Separable CMA-ES \citep{Hansen2001,Ros2008} to optimize a 101-parameter configuration spanning 8~parameter groups, the ensemble achieves $F_{\beta=0.5} = 0.914$ on the same 74~Aalto spectra---a 121\% improvement over the hand-tuned baseline---with $2{,}048{,}000$ evaluations completed in 58~seconds on a single V100S GPU.
+This result demonstrates that GPU acceleration enables not only fast forward-model computation but also exhaustive exploration of the multi-method identification configuration space.
+
+All implementations use 64-bit floating-point arithmetic throughout to maintain the numerical precision required for spectroscopic analysis.
+We benchmark each kernel individually and in an end-to-end pipeline on an NVIDIA Tesla V100S-PCIE-32GB GPU, demonstrating speedups ranging from $1.6\times$ (Anderson iteration reduction) to $76.4\times$ (Voigt profile throughput) with no loss of numerical accuracy relative to the CPU reference implementation.
+We validate GPU--CPU numerical parity on the 74~Aalto spectra and 6~synthetic ChemCam Calibration Target (CCCT) spectra.
+
+The remainder of this paper is organized as follows.
+\Cref{fig:pipeline} illustrates the overall pipeline architecture, highlighting the five GPU-accelerated components.
+\Cref{sec:methods} presents the mathematical formulation and GPU implementation strategy for each of the five kernels, the five element identification pathways and their scoring methodology, and the CMA-ES ensemble optimization framework.
+\Cref{sec:results} reports benchmark timings, accuracy validation, real-data verification, the systematic element identification comparison, and the ensemble optimization results.
+\Cref{sec:discussion} interprets the results in the context of prior GPU spectroscopy work, analyzes why the ensemble outperforms individual algorithms, and examines the implications for CF-LIBS pipeline design.
+\Cref{sec:conclusion} summarizes the contributions and outlines future directions.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig1_pipeline.pdf}
+  \caption{Architecture of the GPU-accelerated CF-LIBS pipeline. Five computational kernels (shaded) are implemented in JAX: Voigt profile evaluation, vectorized Boltzmann fitting, Anderson-accelerated Saha--Boltzmann iteration, softmax compositional closure, and the batch forward model. Arrows indicate data flow from measured spectrum to elemental composition.}
+  \label{fig:pipeline}
+\end{figure*}
