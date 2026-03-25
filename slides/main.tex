@@ -282,32 +282,171 @@
 \end{frame}
 
 % ----------------------------------------------------------
-% SLIDE 9: Kernel 2 — Boltzmann fitting
+% SLIDE 9: Kernel 2 — Boltzmann fitting: the problem
 % ----------------------------------------------------------
 \begin{frame}{Kernel 2: Vectorized Boltzmann Fitting}
-  \textbf{Boltzmann plot method:}
+  \textbf{Boltzmann plot} extracts temperature from line intensities:
   \begin{equation*}
-    \ln\!\left(\frac{I \lambda}{g_k A_{ki}}\right) = -\frac{E_k}{k_B T} + \text{const}
+    \underbrace{\ln\!\left(\frac{I_i \,\lambda_i}{g_{k,i}\, A_{ki,i}}\right)}_{y_i}
+    = \underbrace{-\frac{1}{k_B T}}_{b}\; E_{k,i} + \text{const}
+    \qquad\Longrightarrow\qquad
+    T = -\frac{1}{b\, k_B}
   \end{equation*}
 
   \vspace{0.3em}
-  \textbf{Challenge:} Different elements have different numbers of lines (ragged arrays)
+  \textbf{Fit $y = a + bx$ by weighted least squares} --- minimize
+  $\chi^2 = \sum_i w_i(y_i - a - bx_i)^2$
 
   \vspace{0.3em}
-  \textbf{Solution:} Closed-form WLS + pad-and-mask batching
-  \begin{itemize}
-    \item Five dot-product accumulators $\to$ slope and intercept
-    \item Pad all elements to $N_\text{max}$ lines, mask out padding
-    \item Element dimension = batch axis $\to$ parallel GPU execution
-    \item Only $10 N_\text{max} + 7$ FLOPs per element
-  \end{itemize}
+  Setting $\partial\chi^2\!/\partial a = 0$, $\partial\chi^2\!/\partial b = 0$ gives the
+  \alert{$2\times 2$ normal equations}:
+  \begin{equation*}
+    \underbrace{
+    \begin{pmatrix}
+      S_w    & S_{wx} \\
+      S_{wx} & S_{wxx}
+    \end{pmatrix}}_{\bm{X}^\top \bm{W} \bm{X}}
+    \begin{pmatrix} a \\ b \end{pmatrix}
+    =
+    \underbrace{
+    \begin{pmatrix} S_{wy} \\ S_{wxy} \end{pmatrix}}_{\bm{X}^\top \bm{W} \bm{y}}
+  \end{equation*}
+  with \alert{five scalar accumulators}:
+  $S_w\!=\!\sum w_i$,\;
+  $S_{wx}\!=\!\sum w_i x_i$,\;
+  $S_{wy}\!=\!\sum w_i y_i$,\;
+  $S_{wxx}\!=\!\sum w_i x_i^2$,\;
+  $S_{wxy}\!=\!\sum w_i x_i y_i$
 \note{
-  The Boltzmann plot extracts temperature from line intensities.
-  The challenge is that each element has a different number of
-  emission lines, creating ragged arrays.
-  We solved this with a pad-and-mask strategy: all elements padded
-  to a common length, with zero-weight masks on padding entries.
-  The closed-form weighted least squares needs only five dot products.
+  The Boltzmann plot is the workhorse of CF-LIBS temperature extraction.
+  For each element, you plot the log of the normalized intensity versus
+  the upper-level energy. The slope gives you the temperature.
+  The key insight: for a straight-line fit (two parameters), the normal
+  equations are a 2-by-2 system that can be solved analytically.
+  You never need to construct or invert a matrix --- just compute five
+  scalar sums (dot products) and apply Cramer's rule.
+  This is the standard result from Bevington and Robinson (2003) and
+  Numerical Recipes section 15.2, specialized to two parameters.
+}
+\end{frame}
+
+% ----------------------------------------------------------
+% SLIDE 9b: Boltzmann fitting: the solution
+% ----------------------------------------------------------
+\begin{frame}{Five Accumulators $\to$ Closed-Form Solution}
+  \textbf{Analytic inverse} via adjugate (Cramer's rule) --- \alert{no matrix factorization}:
+  \begin{equation*}
+    b = \frac{S_w\, S_{wxy} - S_{wx}\, S_{wy}}{\Delta}, \qquad
+    a = \frac{S_{wxx}\, S_{wy} - S_{wx}\, S_{wxy}}{\Delta}, \qquad
+    \Delta = S_w\, S_{wxx} - S_{wx}^2
+  \end{equation*}
+
+  \vspace{0.3em}
+  \textbf{Uncertainty} from the Gram covariance matrix $(\bm{X}^\top\bm{W}\bm{X})^{-1}$:
+  \begin{equation*}
+    \sigma_b = \sqrt{S_w / \Delta}, \qquad
+    \sigma_T = T^2\, k_B\, \sigma_b
+  \end{equation*}
+
+  \vspace{0.3em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Why not QR/SVD?}
+      \begin{itemize}
+        \item $2{\times}2$ system: $\kappa \sim 10^2$--$10^3$
+        \item Loses 2--3 digits $\to$ 12--13 correct in \texttt{float64}
+        \item Physical uncertainties $\sim 1$--$10\%$
+        \item QR adds $3\times$ cost, zero practical benefit
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Why this matters for GPU:}
+      \begin{itemize}
+        \item \alert{Branch-free}: same arithmetic path for every element
+        \item No warp divergence (no pivoting, no iteration)
+        \item Only $10 N_\text{max} + 11$ FLOPs per element
+        \item Degenerate fits ($|\Delta| < 10^{-30}$): branchless \texttt{where} $\to$ $T = 0$
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\note{
+  The closed-form solution reduces the entire Boltzmann fit to five
+  dot products, one determinant, and two numerator evaluations.
+  For a 2-by-2 system, the condition number is only 100 to 1000,
+  losing just 2 to 3 digits in float64. That leaves 12 to 13 correct
+  digits --- far more than the 1 to 10 percent physical uncertainties
+  in LIBS line intensities justify. QR or SVD would triple the compute
+  cost for zero practical accuracy benefit.
+  Critically for GPU: the entire computation is branch-free. Every
+  element follows the exact same instruction sequence, eliminating
+  warp divergence. The only conditional is a branchless where-guard
+  for degenerate fits when all upper-level energies are identical.
+}
+\end{frame}
+
+% ----------------------------------------------------------
+% SLIDE 9c: Pad-and-mask batching
+% ----------------------------------------------------------
+\begin{frame}{Pad-and-Mask: Ragged $\to$ Rectangular $\to$ GPU}
+  \textbf{Problem:} $D$ elements with \emph{different} line counts (Li: 3, Ca: 12, Fe: 47)
+
+  \vspace{0.3em}
+  \textbf{Solution:} Pad all to $N_\text{max}$, mask out padding via weight-zeroing
+  \begin{center}
+    \begin{tikzpicture}[
+      cell/.style={minimum width=0.55cm, minimum height=0.45cm, font=\scriptsize, anchor=center},
+      valid/.style={cell, fill=cbBlue!20},
+      padded/.style={cell, fill=gray!15, text=gray},
+      elabel/.style={font=\scriptsize\bfseries, anchor=east}
+    ]
+      % Labels
+      \node[elabel] at (-0.2, 0)    {Fe};
+      \node[elabel] at (-0.2, -0.6) {Ca};
+      \node[elabel] at (-0.2, -1.2) {Li};
+      % Fe: 5 valid
+      \foreach \i in {0,...,4} { \node[valid] at (0.55*\i+0.275, 0) {$w_{\pgfmathparse{int(\i+1)}\pgfmathresult}$}; }
+      % Ca: 3 valid + 2 padded
+      \foreach \i in {0,...,2} { \node[valid] at (0.55*\i+0.275, -0.6) {$w_{\pgfmathparse{int(\i+1)}\pgfmathresult}$}; }
+      \foreach \i in {3,4} { \node[padded] at (0.55*\i+0.275, -0.6) {$0$}; }
+      % Li: 2 valid + 3 padded
+      \foreach \i in {0,1} { \node[valid] at (0.55*\i+0.275, -1.2) {$w_{\pgfmathparse{int(\i+1)}\pgfmathresult}$}; }
+      \foreach \i in {2,3,4} { \node[padded] at (0.55*\i+0.275, -1.2) {$0$}; }
+      % Arrow and label
+      \draw[->, thick] (3.3, -0.6) -- (4.3, -0.6);
+      \node[font=\scriptsize, anchor=west] at (4.4, -0.35) {$\tilde{w} = w \cdot m$};
+      \node[font=\scriptsize, anchor=west] at (4.4, -0.85) {Padded $\to$ zero weight};
+    \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.2em}
+  \begin{itemize}
+    \item Weight-zeroing makes padding \alert{mathematically invisible}:
+          $\tilde{w}=0 \Rightarrow$ contributes $0$ to every accumulator
+    \item All arrays shape $(D, N_\text{max})$ $\to$ standard row-wise reductions
+    \item \texttt{jnp.sum(w\_masked * x, axis=1)} $\to$ vector of length $D$
+    \item Single \texttt{@jit} kernel: no Python loops, no branches, \texttt{float64}
+  \end{itemize}
+
+  \vspace{0.2em}
+  {\small\textbf{Cost:} $D \times (10\, N_\text{max} + 11)$ FLOPs total.
+  10 elements, $N_\text{max}\!=\!50$: \alert{5{,}110 FLOPs} --- one GPU warp.}
+\note{
+  The key challenge for GPU Boltzmann fitting is that each element has
+  a different number of emission lines --- Li might have 3 lines while
+  Fe has 47. GPUs need uniform array shapes.
+  We solve this by padding all elements to the maximum line count and
+  using a binary mask. The mask is applied by multiplying it into the
+  weights: padded entries get weight zero, so they contribute exactly
+  nothing to any of the five accumulator sums. The math is identical
+  to fitting only the valid lines.
+  The entire operation is a single JIT-compiled JAX function. No Python
+  loops, no conditional branches. The element dimension D is just a
+  batch axis --- all five dot products for all D elements execute in
+  parallel. For a typical 10-element LIBS analysis with 50 max lines,
+  the total cost is about 5000 floating-point operations --- trivial
+  for a GPU that can do trillions per second.
+  Float64 is essential: the Gram determinant involves a difference of
+  products that can suffer catastrophic cancellation in float32.
 }
 \end{frame}
 
@@ -331,15 +470,21 @@
 
       \vspace{0.5em}
       \textbf{Accuracy:}\\
-      Slope relative error: $5.65 \times 10^{-14}$
+      Slope relative error: $5.65 \times 10^{-14}$\\
+      {\small (12--13 correct digits, as predicted\\by condition number analysis)}
     \end{column}
   \end{columns}
 \note{
   At 20 elements, the GPU is 8.8 times faster.
   The important feature is that GPU time is essentially constant
-  regardless of how many elements you have --- it is all
-  executed in parallel. CPU time grows linearly.
-  The slope error is at machine precision.
+  regardless of how many elements you have --- the five accumulator
+  sums for all elements execute in parallel as row-wise reductions.
+  CPU time grows linearly because it loops over elements sequentially.
+  The slope error of 5.65 times 10 to the minus 14 confirms the
+  condition number analysis: we predicted 12 to 13 correct digits
+  from the kappa of 100 to 1000 for the 2-by-2 Gram matrix, and
+  that is exactly what we observe. This is at machine precision for
+  float64, and far exceeds the physical measurement uncertainties.
   Next: the iterative Saha-Boltzmann solver.
 }
 \end{frame}
