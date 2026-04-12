@@ -543,6 +543,13 @@ class PriorConfig:
         Log10(electron density) range (default: 15-19, i.e., 10^15-10^19 cm^-3)
     concentration_alpha : float
         Dirichlet prior concentration parameter (default: 1.0, uniform on simplex)
+    baseline_degree : int
+        Chebyshev polynomial baseline degree (0=no baseline, 3=cubic, 5=quintic).
+        The baseline models bremsstrahlung continuum as an additive term.
+    baseline_scale : Optional[float]
+        Prior scale for baseline coefficients. If None (default), automatically
+        set to 0.1 * max(observed) at sampling time. Larger values allow more
+        continuum variation.
     """
 
     T_eV_range: Tuple[float, float] = (0.5, 3.0)
@@ -550,6 +557,8 @@ class PriorConfig:
     # (branch-free implementation with stable gradients)
     log_ne_range: Tuple[float, float] = (15.0, 19.0)
     concentration_alpha: float = 1.0
+    baseline_degree: int = 0
+    baseline_scale: Optional[float] = None
 
     @classmethod
     def geological(cls, **kwargs) -> "PriorConfig":
@@ -1062,6 +1071,19 @@ class BayesianForwardModel:
         # Load atomic data (using shared utility)
         self.atomic_data = load_atomic_data(db_path, elements, wavelength_range)
 
+        # Pre-compute Chebyshev Vandermonde matrix for polynomial baseline.
+        # Chebyshev polynomials are orthogonal on [-1,1], which minimizes
+        # covariance between MCMC baseline coefficients and improves sampling.
+        wl_np = np.asarray(self.wavelength)
+        self._wl_norm = 2.0 * (wl_np - wl_np[0]) / max(wl_np[-1] - wl_np[0], 1e-6) - 1.0
+        # Max degree we might need (5 = quintic); slice at runtime.
+        max_baseline_degree = 5
+        self._baseline_basis = np.polynomial.chebyshev.chebvander(
+            self._wl_norm, max_baseline_degree
+        )  # shape: (n_pixels, max_degree+1)
+        if HAS_JAX:
+            self._baseline_basis_jax = jnp.array(self._baseline_basis, dtype=_JAX_REAL_DTYPE)
+
         logger.info(
             f"BayesianForwardModel: {len(elements)} elements, "
             f"{len(self.wavelength)} wavelengths, "
@@ -1343,6 +1365,22 @@ def bayesian_model(
     # --- Forward Model ---
     predicted = forward_model.forward(T_eV, log_ne, concentrations)
 
+    # --- Additive polynomial baseline (bremsstrahlung continuum) ---
+    if prior_config.baseline_degree > 0:
+        n_coeffs = prior_config.baseline_degree + 1
+        # Determine prior scale: data-driven default or user-specified
+        baseline_scale = prior_config.baseline_scale
+        if baseline_scale is None:
+            baseline_scale = 0.1 * jnp.max(observed)
+        baseline_coeffs = numpyro.sample(
+            "baseline_coeffs",
+            dist.Normal(jnp.zeros(n_coeffs), baseline_scale),
+        )
+        # Slice pre-computed Chebyshev Vandermonde basis to requested degree
+        basis = forward_model._baseline_basis_jax[:, :n_coeffs]
+        baseline = jnp.dot(basis, baseline_coeffs)
+        predicted = predicted + baseline
+
     # --- Likelihood ---
     # Variance model: Poisson + readout noise
     # Add safeguards for numerical stability
@@ -1420,11 +1458,18 @@ class MCMCSampler:
         # Uniform concentrations
         conc_init = jnp.ones(n_elements) / n_elements
 
-        return {
+        init_values = {
             "T_eV": T_init,
             "log_ne": log_ne_init,
             "concentrations": conc_init,
         }
+
+        # Initialize baseline coefficients at zero (no continuum adjustment)
+        if self.prior_config.baseline_degree > 0:
+            n_coeffs = self.prior_config.baseline_degree + 1
+            init_values["baseline_coeffs"] = jnp.zeros(n_coeffs)
+
+        return init_values
 
     def run(
         self,
