@@ -8,7 +8,7 @@ import math
 import numpy as np
 import pytest
 
-from cflibs.benchmarks.metrics import (
+from cflibs.benchmark.composition_metrics import (
     aitchison_distance,
     clr_transform,
     ilr_transform,
@@ -16,12 +16,11 @@ from cflibs.benchmarks.metrics import (
     rmse_composition,
     per_element_error,
 )
-from cflibs.benchmarks.corpus import BenchmarkCorpus, BenchmarkSpectrum
-from cflibs.benchmarks.harness import (
+from cflibs.benchmark.corpus import BenchmarkCorpus, BenchmarkSpectrum
+from cflibs.benchmark.harness import (
     AccuracyTier,
     BenchmarkHarness,
 )
-
 
 # ============================================================================
 # Aitchison distance

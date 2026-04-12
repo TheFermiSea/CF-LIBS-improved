@@ -32,8 +32,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from cflibs.benchmarks import BenchmarkCorpus, BenchmarkHarness  # noqa: E402
-from cflibs.benchmarks.corpus import _REFERENCE_LINES  # noqa: E402
+from cflibs.benchmark import BenchmarkCorpus, BenchmarkHarness  # noqa: E402
+from cflibs.benchmark.corpus import _REFERENCE_LINES  # noqa: E402
 from cflibs.inversion.boltzmann import (  # noqa: E402
     BoltzmannPlotFitter,
     FitMethod,

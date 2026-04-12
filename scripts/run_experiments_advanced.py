@@ -23,8 +23,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from cflibs.benchmarks.corpus import BenchmarkCorpus, BenchmarkSpectrum, _REFERENCE_LINES, _KB_EV
-from cflibs.benchmarks.harness import BenchmarkHarness, BenchmarkReport
+from cflibs.benchmark.corpus import BenchmarkCorpus, BenchmarkSpectrum, _REFERENCE_LINES, _KB_EV
+from cflibs.benchmark.harness import BenchmarkHarness, BenchmarkReport
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.boltzmann import BoltzmannPlotFitter, LineObservation
 from cflibs.inversion.closure import ClosureEquation
