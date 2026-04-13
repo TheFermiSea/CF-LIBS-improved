@@ -151,12 +151,21 @@ def build_bayesian_sparse_predictor(
             baseline_degree=int(config.get("baseline_degree", 0)),
         )
 
+        # Pass the spectrum's instrument broadening to match the prefilter basis
+        rp_estimate = getattr(spectrum, "rp_estimate", None)
+        fm_kwargs: dict = {}
+        if rp_estimate and rp_estimate > 0:
+            fm_kwargs["resolving_power"] = float(rp_estimate)
+        else:
+            fm_kwargs["instrument_fwhm_nm"] = basis_fwhm
+
         try:
             forward_model = BayesianForwardModel(
                 db_path=str(context.db_path),
                 elements=prefiltered,
                 wavelength_range=wl_range,
                 wavelength_grid=spectrum.wavelength_nm,
+                **fm_kwargs,
             )
         except Exception as exc:
             logger.error("BayesianForwardModel init failed: %s", exc)

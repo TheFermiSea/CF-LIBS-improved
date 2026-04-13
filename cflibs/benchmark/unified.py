@@ -1046,6 +1046,10 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
 def _bayesian_sparse_entry(quick: bool) -> Dict[str, "IDWorkflowSpec"]:
     """Lazy-load the bayesian_sparse workflow (requires JAX + NumPyro)."""
     try:
+        # Gate on actual heavy deps, not just the wrapper module
+        import jax  # noqa: F401
+        import numpyro  # noqa: F401
+
         from cflibs.benchmark.bayesian_sparse_id import (
             bayesian_sparse_config_name,
             bayesian_sparse_workflow_configs,
