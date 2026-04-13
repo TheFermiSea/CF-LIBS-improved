@@ -1039,7 +1039,29 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
             _build_nnls_concentration_predictor,
             _config_name,
         ),
+        **_bayesian_sparse_entry(quick),
     }
+
+
+def _bayesian_sparse_entry(quick: bool) -> Dict[str, "IDWorkflowSpec"]:
+    """Lazy-load the bayesian_sparse workflow (requires JAX + NumPyro)."""
+    try:
+        from cflibs.benchmark.bayesian_sparse_id import (
+            bayesian_sparse_config_name,
+            bayesian_sparse_workflow_configs,
+            build_bayesian_sparse_predictor,
+        )
+
+        return {
+            "bayesian_sparse": IDWorkflowSpec(
+                "bayesian_sparse",
+                bayesian_sparse_workflow_configs(quick),
+                build_bayesian_sparse_predictor,
+                bayesian_sparse_config_name,
+            )
+        }
+    except ImportError:
+        return {}
 
 
 def _fit_iterative_pipeline(
