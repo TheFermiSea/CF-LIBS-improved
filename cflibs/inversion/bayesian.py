@@ -281,6 +281,8 @@ def _compute_instrument_sigma(
         array of shape (n_lines,) for resolving-power mode.
     """
     if resolving_power is not None:
+        if resolving_power <= 0:
+            raise ValueError(f"resolving_power must be positive, got {resolving_power}")
         # Echelle: R = λ/FWHM → FWHM = λ/R → σ = FWHM / (2√(2ln2)) = λ/(R·2.355)
         return line_wavelengths_nm / (resolving_power * 2.355)
     else:
@@ -1128,7 +1130,9 @@ class BayesianForwardModel:
         wl_np = np.asarray(self.wavelength)
         self._wl_norm = 2.0 * (wl_np - wl_np[0]) / max(wl_np[-1] - wl_np[0], 1e-6) - 1.0
         # Max degree we might need (5 = quintic); slice at runtime.
+        # PriorConfig.baseline_degree must not exceed this.
         max_baseline_degree = 5
+        self._max_baseline_degree = max_baseline_degree
         self._baseline_basis = np.polynomial.chebyshev.chebvander(
             self._wl_norm, max_baseline_degree
         )  # shape: (n_pixels, max_degree+1)
@@ -1426,9 +1430,17 @@ def bayesian_model(
 
     # --- Additive polynomial baseline (bremsstrahlung continuum) ---
     if prior_config.baseline_degree > 0:
+        if prior_config.baseline_degree > forward_model._max_baseline_degree:
+            raise ValueError(
+                f"baseline_degree={prior_config.baseline_degree} exceeds max "
+                f"({forward_model._max_baseline_degree}). Pre-computed Chebyshev "
+                f"basis does not cover this degree."
+            )
         n_coeffs = prior_config.baseline_degree + 1
         # Determine prior scale: data-driven default or user-specified
         baseline_scale = prior_config.baseline_scale
+        if baseline_scale is not None and baseline_scale <= 0:
+            raise ValueError(f"baseline_scale must be positive, got {baseline_scale}")
         if baseline_scale is None:
             baseline_scale = 0.1 * jnp.max(observed)
         baseline_coeffs = numpyro.sample(
