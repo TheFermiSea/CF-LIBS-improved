@@ -130,6 +130,20 @@ class ElementIdentificationResult:
     parameters: Dict[str, float] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
 
+    @classmethod
+    def empty(cls, algorithm: str = "unknown", n_peaks: int = 0) -> "ElementIdentificationResult":
+        """Create an empty result with no detected or rejected elements."""
+        return cls(
+            detected_elements=[],
+            rejected_elements=[],
+            all_elements=[],
+            experimental_peaks=[],
+            n_peaks=n_peaks,
+            n_matched_peaks=0,
+            n_unmatched_peaks=0,
+            algorithm=algorithm,
+        )
+
 
 def to_line_observations(result: ElementIdentificationResult) -> List[LineObservation]:
     """

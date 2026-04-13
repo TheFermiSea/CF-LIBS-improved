@@ -146,17 +146,7 @@ class CombIdentifier:
         # Guard against empty arrays
         if len(wavelength) == 0 or len(intensity) == 0:
             logger.warning("Empty wavelength or intensity array")
-            return ElementIdentificationResult(
-                detected_elements=[],
-                rejected_elements=[],
-                all_elements=[],
-                experimental_peaks=[],
-                n_peaks=0,
-                n_matched_peaks=0,
-                n_unmatched_peaks=0,
-                algorithm="comb",
-                parameters={},
-            )
+            return ElementIdentificationResult.empty(algorithm="comb")
 
         # Validate input arrays
         if len(wavelength) != len(intensity):
