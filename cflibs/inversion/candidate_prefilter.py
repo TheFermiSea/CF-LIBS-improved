@@ -99,6 +99,10 @@ def select_candidate_elements(
         force_include = []
     if multi_t_offsets is None:
         multi_t_offsets = [-1500.0, 1500.0]
+    if k_min > k_max:
+        raise ValueError(f"k_min ({k_min}) must not exceed k_max ({k_max})")
+    if k_max < 1:
+        raise ValueError(f"k_max must be at least 1, got {k_max}")
 
     # Step 1: Run NNLS at base (T, ne)
     base_result = identifier.identify(wavelength, intensity)
