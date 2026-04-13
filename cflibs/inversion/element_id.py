@@ -113,8 +113,8 @@ class ElementIdentificationResult:
         Peaks with no element match
     algorithm : str
         Algorithm used: "alias", "comb", or "correlation"
-    parameters : Dict[str, float]
-        Algorithm parameters used (default {})
+    parameters : Dict[str, Any]
+        Algorithm parameters used; values may be float, str, bool, or list (default {})
     warnings : List[str]
         Any warnings generated (default [])
     """
@@ -127,7 +127,7 @@ class ElementIdentificationResult:
     n_matched_peaks: int
     n_unmatched_peaks: int
     algorithm: str
-    parameters: Dict[str, float] = field(default_factory=dict)
+    parameters: Dict[str, Any] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
 
 
