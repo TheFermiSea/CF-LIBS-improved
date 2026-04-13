@@ -77,7 +77,7 @@ class LineObservation:
         Here x = I * ...
         dx/x = dI/I (assuming errors in lambda, g, A are negligible)
         """
-        if self.intensity == 0:
+        if self.intensity <= 0:
             return 0.0
         return self.intensity_uncertainty / self.intensity
 
