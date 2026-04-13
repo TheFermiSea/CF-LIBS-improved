@@ -1003,6 +1003,17 @@ class CalibrationTransfer:
         if data.get("target_std") is not None:
             transfer._target_std = np.array(data["target_std"])
 
+        # Validate that method-critical state was loaded before marking fitted
+        method = transfer.method
+        if method == CalibrationMethod.PDS and not hasattr(transfer, "_pds_matrices"):
+            raise ValueError(f"Loaded model uses {method.value} but PDS matrices are missing")
+        if method == CalibrationMethod.STANDARDIZATION:
+            for attr in ("_source_mean", "_source_std", "_target_mean", "_target_std"):
+                if not hasattr(transfer, attr):
+                    raise ValueError(
+                        f"Loaded model uses {method.value} but {attr} is missing"
+                    )
+
         transfer._fitted = True
 
         logger.info(f"Loaded transfer model from {path}")
@@ -1363,12 +1374,13 @@ class TransferLearningPipeline:
         self.target_name = target_name
         self.use_finetuning = use_finetuning
 
-        # Initialize components with per-stage keyword arguments
-        self.domain_adapter = DomainAdapter(
-            method=adaptation_method, **(adapter_kwargs or {})
-        )
+        # Initialize components with per-stage keyword arguments.
+        # Filter out 'method' from kwargs to prevent collision with explicit args.
+        _adapter_kw = {k: v for k, v in (adapter_kwargs or {}).items() if k != "method"}
+        _calibration_kw = {k: v for k, v in (calibration_kwargs or {}).items() if k != "method"}
+        self.domain_adapter = DomainAdapter(method=adaptation_method, **_adapter_kw)
         self.calibration_transfer = CalibrationTransfer(
-            method=transfer_method, **(calibration_kwargs or {})
+            method=transfer_method, **_calibration_kw
         )
 
         if use_finetuning:
