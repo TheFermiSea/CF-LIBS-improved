@@ -254,6 +254,11 @@ try:
         create_temperature_prior,  # noqa: F401
         create_density_prior,  # noqa: F401
         create_concentration_prior,  # noqa: F401
+        TwoZoneBayesianForwardModel,  # noqa: F401
+        TwoZonePriorConfig,  # noqa: F401
+        TwoZoneMCMCSampler,  # noqa: F401
+        TwoZoneMCMCResult,  # noqa: F401
+        two_zone_bayesian_model,  # noqa: F401
     )
 
     HAS_BAYESIAN = True
@@ -515,6 +520,11 @@ if HAS_BAYESIAN:
             "create_temperature_prior",
             "create_density_prior",
             "create_concentration_prior",
+            "TwoZoneBayesianForwardModel",
+            "TwoZonePriorConfig",
+            "TwoZoneMCMCSampler",
+            "TwoZoneMCMCResult",
+            "two_zone_bayesian_model",
         ]
     )
 
