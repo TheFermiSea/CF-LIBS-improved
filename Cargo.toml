@@ -1,6 +1,6 @@
 [workspace]
-members = ["cflibs-core"]
-exclude = ["rust-plugin"]
+members = ["native/cflibs-core"]
+exclude = ["native/rust-plugin"]
 resolver = "2"
 
 [profile.release]

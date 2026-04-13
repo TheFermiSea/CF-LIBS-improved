@@ -90,3 +90,4 @@ conductor/setup_state.json
 
 # Beads / Dolt files (added by bd init)
 .beads-credential-key
+paper/submissions/arxiv/cf-libs-gpu.tar.gz
