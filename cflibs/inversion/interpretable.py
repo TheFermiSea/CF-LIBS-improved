@@ -62,7 +62,7 @@ References
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any, Callable
+from typing import Dict, List, Optional, Set, Tuple, Any, Callable
 from enum import Enum
 import numpy as np
 
@@ -586,9 +586,10 @@ class PhysicsGuidedFeatureExtractor:
 
                 if f2.value > 0:
                     ratio_value = f1.value / f2.value
-                    # Propagate uncertainty
+                    # Propagate uncertainty (guard against zero denominator)
                     ratio_unc = ratio_value * np.sqrt(
-                        (f1.uncertainty / f1.value) ** 2 + (f2.uncertainty / f2.value) ** 2
+                        (f1.uncertainty / max(abs(f1.value), 1e-20)) ** 2
+                        + (f2.uncertainty / max(abs(f2.value), 1e-20)) ** 2
                     )
 
                     ratio_features.append(
@@ -646,28 +647,42 @@ class PhysicsGuidedFeatureExtractor:
             Features with matrix of shape (n_samples, n_features)
         """
         n_samples = spectra.shape[0]
-        all_features: List[SpectralFeature] = []
-        feature_matrices = []
 
+        # First pass: extract features from every spectrum and collect the
+        # union of all feature names so every sample shares the same vocabulary.
+        results: List[FeatureExtractionResult] = []
+        all_feature_names_set: Dict[str, None] = {}  # ordered set via dict
         for i in range(n_samples):
             unc = uncertainties[i] if uncertainties is not None else None
             result = self.extract(wavelengths, spectra[i], unc)
+            results.append(result)
+            for name in result.feature_names:
+                all_feature_names_set.setdefault(name, None)
 
-            if i == 0:
-                all_features = result.features
-                feature_names = result.feature_names
+        feature_names = list(all_feature_names_set.keys())
 
-            feature_matrices.append(result.feature_matrix)
+        # Second pass: build a fixed-width matrix using the shared vocabulary.
+        # Missing features for a given sample are filled with 0.
+        feature_matrix = np.zeros((n_samples, len(feature_names)))
+        name_to_idx = {n: j for j, n in enumerate(feature_names)}
+        for i, result in enumerate(results):
+            for local_idx, name in enumerate(result.feature_names):
+                feature_matrix[i, name_to_idx[name]] = result.feature_matrix[0, local_idx]
 
-        # Stack into single matrix
-        feature_matrix = np.vstack(feature_matrices)
+        # Use features and metadata from the first sample for the summary
+        all_features = results[0].features
+        all_wavelengths_used: List[float] = []
+        all_elements: Set[str] = set()
+        for r in results:
+            all_wavelengths_used.extend(r.wavelengths_used)
+            all_elements.update(r.elements_detected)
 
         return FeatureExtractionResult(
             features=all_features,
             feature_matrix=feature_matrix,
             feature_names=feature_names,
-            wavelengths_used=result.wavelengths_used,
-            elements_detected=result.elements_detected,
+            wavelengths_used=sorted(set(all_wavelengths_used)),
+            elements_detected=list(all_elements),
         )
 
 
