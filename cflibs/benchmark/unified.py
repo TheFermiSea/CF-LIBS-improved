@@ -34,7 +34,11 @@ from cflibs.benchmark.dataset import (
     TruthType,
 )
 from cflibs.benchmark.loaders import load_benchmark
-from cflibs.benchmarks.metrics import aitchison_distance, per_element_error, rmse_composition
+from cflibs.benchmark.composition_metrics import (
+    aitchison_distance,
+    per_element_error,
+    rmse_composition,
+)
 from cflibs.core.logging_config import get_logger
 
 if TYPE_CHECKING:

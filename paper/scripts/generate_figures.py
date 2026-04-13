@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate all 7 publication-quality figures for the CF-LIBS JQSRT paper.
 
-Reads benchmark data from benchmarks/figures/*.csv (V100S GPU results).
+Reads benchmark data from docs/reports/benchmarks/figures/*.csv (V100S GPU results).
 Outputs PDF figures to paper/figures/.
 
 Usage:
@@ -29,7 +29,7 @@ import pandas as pd
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = ROOT / "benchmarks" / "figures"
+DATA_DIR = ROOT / "docs" / "reports" / "benchmarks" / "figures"
 OUT_DIR = ROOT / "paper" / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

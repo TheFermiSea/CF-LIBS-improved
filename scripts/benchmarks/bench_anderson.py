@@ -27,9 +27,11 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_SCRIPT_DIR, "../.."))
+sys.path.insert(0, _SCRIPT_DIR)
 
-from benchmarks.common import (
+from common import (  # noqa: E402
     benchmark_function,
     hardware_metadata,
     print_table,

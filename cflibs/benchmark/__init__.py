@@ -70,11 +70,26 @@ __all__ = [
     "SampleMetadata",
     "BenchmarkDataset",
     "DataSplit",
-    # Metrics
+    # Metrics (cflibs.benchmark.metrics — evaluation layer)
     "BenchmarkMetrics",
     "EvaluationResult",
     "ElementMetrics",
     "MetricType",
+    # Composition metrics (merged from cflibs.benchmarks.metrics)
+    "aitchison_distance",
+    "clr_transform",
+    "ilr_transform",
+    "ilr_inverse",
+    "rmse_composition",
+    "per_element_error",
+    # Corpus (merged from cflibs.benchmarks.corpus)
+    "BenchmarkCorpus",
+    # Harness (merged from cflibs.benchmarks.harness)
+    "AccuracyTier",
+    "BenchmarkHarness",
+    "BenchmarkReport",
+    "PipelineResult",
+    "SpectrumResult",
     # Synthetic generation
     "SyntheticBenchmarkGenerator",
     "CompositionRange",
@@ -125,6 +140,24 @@ _ATTRIBUTE_EXPORT_GROUPS = {
         "default_recipes",
     ],
     "cflibs.benchmark.loaders": ["load_benchmark", "save_benchmark", "BenchmarkFormat"],
+    "cflibs.benchmark.composition_metrics": [
+        "aitchison_distance",
+        "clr_transform",
+        "ilr_transform",
+        "ilr_inverse",
+        "rmse_composition",
+        "per_element_error",
+    ],
+    "cflibs.benchmark.corpus": [
+        "BenchmarkCorpus",
+    ],
+    "cflibs.benchmark.harness": [
+        "AccuracyTier",
+        "BenchmarkHarness",
+        "BenchmarkReport",
+        "PipelineResult",
+        "SpectrumResult",
+    ],
 }
 
 _MODULE_EXPORTS = {

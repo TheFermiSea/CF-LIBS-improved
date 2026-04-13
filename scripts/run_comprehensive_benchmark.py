@@ -33,7 +33,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
-from cflibs.benchmarks.metrics import aitchison_distance  # noqa: E402
+from cflibs.benchmark.composition_metrics import aitchison_distance  # noqa: E402
 from cflibs.core.constants import EV_TO_K  # noqa: E402
 from cflibs.core.logging_config import get_logger  # noqa: E402
 from cflibs.inversion.boltzmann import BoltzmannPlotFitter, FitMethod, LineObservation  # noqa: E402
