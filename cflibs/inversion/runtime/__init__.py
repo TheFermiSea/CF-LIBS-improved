@@ -1,1 +1,1 @@
-"""cflibs.inversion sub-package (created during Phase 1b restructure)."""
+"""cflibs.inversion.runtime sub-package."""
