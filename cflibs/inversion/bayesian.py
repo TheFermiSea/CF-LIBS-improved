@@ -253,6 +253,40 @@ STANDARD_MASSES = {
 # ============================================================================
 
 
+def _compute_instrument_sigma(
+    line_wavelengths_nm,
+    instrument_fwhm_nm: float,
+    resolving_power: Optional[float],
+):
+    """Compute per-line instrumental Gaussian sigma.
+
+    Two modes (mutually exclusive):
+    - Constant FWHM (Czerny-Turner): σ = FWHM / 2.355 (scalar)
+    - Constant resolving power (Echelle): σ(λ) = λ / (R · 2.355) (per-line array)
+
+    Parameters
+    ----------
+    line_wavelengths_nm : array
+        Line center wavelengths in nm. Must use line centers (not the pixel grid)
+        to preserve Voigt normalization.
+    instrument_fwhm_nm : float
+        Constant instrument FWHM in nm.
+    resolving_power : float or None
+        Resolving power R = λ/Δλ. When set, overrides instrument_fwhm_nm.
+
+    Returns
+    -------
+    sigma_inst : scalar or array
+        Instrumental Gaussian sigma in nm. Scalar for constant-FWHM mode,
+        array of shape (n_lines,) for resolving-power mode.
+    """
+    if resolving_power is not None:
+        # Echelle: R = λ/FWHM → FWHM = λ/R → σ = FWHM / (2√(2ln2)) = λ/(R·2.355)
+        return line_wavelengths_nm / (resolving_power * 2.355)
+    else:
+        return instrument_fwhm_nm / 2.355
+
+
 def load_atomic_data(
     db_path: str,
     elements: List[str],
@@ -1036,7 +1070,11 @@ class BayesianForwardModel:
     wavelength_grid : np.ndarray, optional
         Custom wavelength grid; if None, auto-generated
     instrument_fwhm_nm : float
-        Instrument FWHM in nm (default: 0.05)
+        Instrument FWHM in nm (default: 0.05). Mutually exclusive with resolving_power.
+    resolving_power : float, optional
+        Spectrometer resolving power R = λ/Δλ (e.g., 5000-20000 for Echelle).
+        When set, FWHM varies as λ/R across the spectrum. Mutually exclusive
+        with instrument_fwhm_nm.
     """
 
     def __init__(
@@ -1047,13 +1085,22 @@ class BayesianForwardModel:
         wavelength_grid: Optional[np.ndarray] = None,
         pixels: int = 2048,
         instrument_fwhm_nm: float = 0.05,
+        resolving_power: Optional[float] = None,
     ):
         if not HAS_JAX:
             raise ImportError("JAX required. Install with: pip install jax jaxlib")
 
+        # Validate mutually exclusive instrument modes
+        if resolving_power is not None and instrument_fwhm_nm != 0.05:
+            raise ValueError(
+                "resolving_power and instrument_fwhm_nm are mutually exclusive. "
+                "Set one or the other, not both."
+            )
+
         self.elements = elements
         self.wavelength_range = wavelength_range
         self.instrument_fwhm_nm = instrument_fwhm_nm
+        self.resolving_power = resolving_power
 
         # Create wavelength grid
         if wavelength_grid is not None:
@@ -1243,7 +1290,15 @@ class BayesianForwardModel:
         )
 
         # Instrument broadening
-        sigma_inst = self.instrument_fwhm_nm / 2.355
+        # Two modes: constant FWHM (Czerny-Turner) or constant resolving power (Echelle).
+        # For Echelle: R = λ/Δλ is constant → FWHM(λ) = λ/R → σ = λ/(R·2.355)
+        # σ_inst computed at line centers (data.wavelength_nm), NOT the pixel grid,
+        # to preserve Voigt normalization (Gemini physics review).
+        # Instrument broadening is purely Gaussian, so it adds in quadrature with
+        # Doppler (also Gaussian). Lorentzian Stark width is unaffected (Codex review).
+        sigma_inst = _compute_instrument_sigma(
+            data.wavelength_nm, self.instrument_fwhm_nm, self.resolving_power
+        )
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
         # Stark broadening (HWHM)
@@ -2343,7 +2398,10 @@ class TwoZoneBayesianForwardModel:
     pixels : int
         Number of pixels if auto-generating grid (default: 2048).
     instrument_fwhm_nm : float
-        Instrument FWHM in nm (default: 0.05).
+        Instrument FWHM in nm (default: 0.05). Mutually exclusive with resolving_power.
+    resolving_power : float, optional
+        Spectrometer resolving power R = λ/Δλ (e.g., 5000-20000 for Echelle).
+        When set, FWHM varies as λ/R across the spectrum.
     """
 
     def __init__(
@@ -2354,13 +2412,18 @@ class TwoZoneBayesianForwardModel:
         wavelength_grid: Optional[np.ndarray] = None,
         pixels: int = 2048,
         instrument_fwhm_nm: float = 0.05,
+        resolving_power: Optional[float] = None,
     ):
         if not HAS_JAX:
             raise ImportError("JAX required. Install with: pip install jax jaxlib")
 
+        if resolving_power is not None and instrument_fwhm_nm != 0.05:
+            raise ValueError("resolving_power and instrument_fwhm_nm are mutually exclusive.")
+
         self.elements = elements
         self.wavelength_range = wavelength_range
         self.instrument_fwhm_nm = instrument_fwhm_nm
+        self.resolving_power = resolving_power
 
         if wavelength_grid is not None:
             self.wavelength = _as_jax_real(wavelength_grid)
@@ -2438,7 +2501,9 @@ class TwoZoneBayesianForwardModel:
         sigma_doppler = data.wavelength_nm * jnp.sqrt(
             _as_jax_real(2.0) * T_eV * _JAX_EV_TO_J / (mass_kg * _JAX_C_LIGHT**2)
         )
-        sigma_inst = self.instrument_fwhm_nm / 2.355
+        sigma_inst = _compute_instrument_sigma(
+            data.wavelength_nm, self.instrument_fwhm_nm, self.resolving_power
+        )
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
         # Stark broadening
