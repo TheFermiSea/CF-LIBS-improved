@@ -197,12 +197,15 @@ def build_bayesian_sparse_predictor(
         all_element_ids: List[ElementIdentification] = []
 
         for i, element in enumerate(prefiltered):
-            mean_c = float(conc_mean[i]) if conc_mean is not None else 0.0
-            q025 = float(conc_q025[i]) if conc_q025 is not None else 0.0
-            q975 = float(conc_q975[i]) if conc_q975 is not None else 0.0
+            # concentrations_mean/q025/q975 are Dict[str, float] keyed by element name
+            mean_c = float(conc_mean.get(element, 0.0))
+            q025 = float(conc_q025.get(element, 0.0))
+            q975 = float(conc_q975.get(element, 0.0))
 
             # Compute detection probability: P(c_i > presence_floor)
-            if conc_samples is not None:
+            # samples["concentrations"] is a 2D array (n_samples, n_elements)
+            # indexed by position matching forward_model.elements order
+            if conc_samples is not None and i < conc_samples.shape[1]:
                 samples_i = conc_samples[:, i]
                 prob_present = float(np.mean(samples_i > presence_floor))
             else:
@@ -255,28 +258,19 @@ def build_bayesian_sparse_predictor(
         detected_elements = [e for e in all_element_ids if e.detected]
         rejected_elements = [e for e in all_element_ids if not e.detected]
 
-        # Convergence diagnostics
-        r_hat = mcmc_result.r_hat if hasattr(mcmc_result, "r_hat") else {}
-        ess = mcmc_result.ess if hasattr(mcmc_result, "ess") else {}
-        max_r_hat = max(r_hat.values()) if r_hat else float("nan")
-        min_ess = min(ess.values()) if ess else float("nan")
+        # Convergence diagnostics (r_hat, ess, convergence_status are
+        # guaranteed fields on MCMCResult — no hasattr needed)
+        max_r_hat = max(mcmc_result.r_hat.values()) if mcmc_result.r_hat else float("nan")
+        min_ess = min(mcmc_result.ess.values()) if mcmc_result.ess else float("nan")
+        convergence_status = mcmc_result.convergence_status.value
 
-        # Posterior predictive check
+        # Posterior predictive check (optional method on MCMCSampler)
         ppc_p_value = float("nan")
         try:
-            if hasattr(sampler, "posterior_predictive_check"):
-                ppc = sampler.posterior_predictive_check(
-                    mcmc_result, spectrum.intensity, n_samples=100
-                )
-                ppc_p_value = ppc.get("p_value", float("nan"))
-        except Exception:
+            ppc = sampler.posterior_predictive_check(mcmc_result, spectrum.intensity, n_samples=100)
+            ppc_p_value = ppc.get("p_value", float("nan"))
+        except (AttributeError, Exception):
             pass
-
-        convergence_status = str(
-            mcmc_result.convergence_status.value
-            if hasattr(mcmc_result, "convergence_status")
-            else "unknown"
-        )
 
         result = ElementIdentificationResult(
             detected_elements=detected_elements,
@@ -299,10 +293,8 @@ def build_bayesian_sparse_predictor(
                 "mcmc_wall_seconds": t_mcmc,
                 "prefilter_wall_seconds": t_prefilter,
                 "total_wall_seconds": t_total,
-                "T_eV_mean": float(mcmc_result.T_eV.mean) if hasattr(mcmc_result, "T_eV") else None,
-                "log_ne_mean": (
-                    float(mcmc_result.log_ne.mean) if hasattr(mcmc_result, "log_ne") else None
-                ),
+                "T_eV_mean": mcmc_result.T_eV_mean,
+                "log_ne_mean": mcmc_result.log_ne_mean,
                 "basis_fwhm_nm": basis_fwhm,
             },
         )
