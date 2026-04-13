@@ -112,14 +112,34 @@ python scripts/generate_model_library.py submit --n-chunks 32 --output-dir outpu
 | `cflibs/plasma/` | Plasma state (`SingleZoneLTEPlasma`), `SahaBoltzmannSolver`, partition functions (polynomial: log U = Σ aₙ(log T)ⁿ) |
 | `cflibs/radiation/` | `SpectrumModel` (forward model orchestrator), line emissivity, profile broadening (Gaussian, Doppler, resolving-power modes) |
 | `cflibs/atomic/` | `AtomicDatabase` (SQLite: lines, energy_levels, species_physics, partition_functions), connection pooling, query caching |
-| `cflibs/inversion/` | `IterativeCFLIBSSolver`, Boltzmann fitting (with SIGMA_CLIP/RANSAC/HUBER outlier rejection), line detection/selection, closure (standard/matrix/oxide modes), self-absorption correction, deconvolution, uncertainty |
+| `cflibs/inversion/` | Inversion pipeline — organized into 6 physics-aligned sub-packages (see below) |
 | `cflibs/manifold/` | `ManifoldGenerator` (JAX-accelerated), HDF5/Zarr storage backends, loader |
 | `cflibs/instrument/` | Instrument models (fixed FWHM or resolving-power mode), response curves |
 | `cflibs/core/` | Constants (SI + plasma units), config loading/validation (YAML), JAX runtime detection, logging |
 | `cflibs/io/` | Spectrum I/O, config loading, exporters (CSV, JSON, HDF5) |
 | `cflibs/cli/` | `main.py` — argparse CLI with subcommands: forward, invert, analyze, bayesian, batch, generate-db, generate-manifold |
+| `cflibs/benchmark/` | Unified benchmark harness, synthetic corpus, composition metrics (Aitchison/ILR), dataset adapters |
 | `cflibs/validation/` | Round-trip validation (`GoldenSpectrum` with known ground truth), NIST parity checks |
+| `cflibs/pds/` | ChemCam/SuperCam planetary data system interface |
 | `cflibs/hpc/` | Cluster utilities, SLURM integration |
+| `cflibs/experimental/ml/` | Quarantined ML modules: PINN, PLS, transfer learning, interpretable ML (deletion candidates) |
+| `native/cflibs-core/` | Rust computational core: comb matching, partition functions |
+| `native/rust-plugin/` | Rust plugin interface for DAQ |
+
+### Inversion Sub-Packages
+
+The `cflibs/inversion/` package is organized into sub-packages reflecting the CF-LIBS measurement→physics→inference pipeline:
+
+| Sub-package | Role |
+|-------------|------|
+| `common/` | Pure data structures (`LineObservation`, `BoltzmannFitResult`, `FitMethod`, `ElementIdentification`), PCA pipeline |
+| `preprocess/` | Signal processing: baseline removal, noise estimation, deconvolution, wavelength calibration, outlier detection (SAM/MAD) |
+| `physics/` | Saha-Boltzmann plasma physics: Boltzmann fitting, closure (standard/matrix/oxide/ILR), CDSB self-absorption, Stark broadening, line selection, quality metrics, uncertainty propagation |
+| `identify/` | Element identification: ALIAS, comb, correlation, spectral NNLS, hybrid (NNLS+ALIAS), BIC model selection, line detection (transition matching) |
+| `solve/` | Plasma parameter inference: iterative CF-LIBS loop, closed-form ILR solver, Bayesian (NumPyro NUTS + dynesty), joint L-BFGS-B optimizer, manifold coarse-to-fine |
+| `runtime/` | Real-time: DAQ streaming, temporal gate optimization, hardware interface |
+
+Backward-compatible shims exist at all old flat paths (`from cflibs.inversion.solver import X` still works).
 
 ### Key Abstractions
 
@@ -127,25 +147,8 @@ python scripts/generate_model_library.py submit --n-chunks 32 --output-dir outpu
 - **`SolverStrategy`** (ABC): pluggable plasma solvers (Saha-Boltzmann, multi-zone, non-LTE)
 - **`InstrumentModelProtocol`** (Protocol): structural typing for instrument models
 - **`SingleZoneLTEPlasma`** (`plasma/state.py`): core plasma state with composition conversion helpers (mass fractions ↔ number fractions ↔ number densities)
-
-### Advanced Inversion Modules
-
-The `cflibs/inversion/` package contains several advanced modules beyond the core solver. The table below highlights higher-level analysis and advanced features. For core utilities like line detection, preprocessing, and Boltzmann fitting, see the full module list in cflibs/inversion/.
-
-| Module | Role |
-|--------|------|
-| `closure.py` | `ClosureEquation` with three modes: **standard** (ΣC_s = 1 normalization), **matrix** (inter-element correction factors before normalization), **oxide** (converts metal concentrations to oxide wt% before closure, for geological samples) |
-| `joint_optimizer.py` | Replaces iterative closure with direct optimization: softmax parameterization ensures Σc_i = 1 by construction, jointly optimizes T, n_e, and concentrations via L-BFGS-B |
-| `bayesian.py` | NumPyro-based Bayesian inference: MCMC (NUTS) and nested sampling (via dynesty) for posterior distributions over T, n_e, and compositions with full uncertainty quantification |
-| `streaming.py` | Real-time spectral processing: ring-buffer accumulation, running-average Boltzmann fits, DAQ interface integration for live plasma monitoring |
-| `temporal.py` | Time-resolved LIBS analysis: gate-delay sweep processing, temporal evolution of T and n_e, optimal integration window selection |
-| `pinn.py` | Physics-Informed Neural Network: neural surrogate for the forward model trained with physics loss terms (Saha-Boltzmann consistency, closure constraint) |
-| `matrix_effects.py` | Inter-element matrix effect corrections: empirical correction factors and physics-based models for non-ideal plasma interactions |
-| `quality.py` | Quality metrics for inversion results: residual diagnostics, Boltzmann plot R², line-by-line fit quality |
-| `pca.py` | Principal Component Analysis for spectral dimensionality reduction |
-| `pls.py` | Partial Least Squares regression for rapid chemometric predictions |
-| `transfer.py` | Transfer learning / calibration transfer between instruments |
-| `hybrid.py` | Hybrid CF-LIBS + chemometric approaches |
+- **`BayesianForwardModel`** (`inversion/solve/bayesian.py`): JAX-compiled forward model for MCMC, supports resolving-power mode and Chebyshev baseline
+- **`select_candidate_elements`** (`inversion/candidate_prefilter.py`): NNLS-based top-K prefilter for Bayesian MCMC (mandatory — full-element MCMC is intractable)
 
 ### JAX Integration
 
