@@ -20,7 +20,7 @@ Design reviewed by Gemini 3.1 Pro (2026-04-13):
 
 from __future__ import annotations
 
-import copy
+import copy as _copy_module
 import re
 from collections import defaultdict
 from typing import Dict, List, Optional
@@ -111,8 +111,8 @@ def select_candidate_elements(
 
         for offset in multi_t_offsets:
             T_offset = max(base_T + offset, 3000.0)  # Floor at 3000 K (physical minimum)
-            # Create a shallow copy with modified fallback, bypassing basis_index
-            id_copy = copy.copy(identifier)
+            # Deep copy to avoid aliasing mutable state (_estimated_T, _estimated_ne)
+            id_copy = _copy_module.deepcopy(identifier)
             id_copy.basis_index = None  # Force fallback path
             id_copy.fallback_T_K = T_offset
             id_copy.fallback_ne_cm3 = base_ne
