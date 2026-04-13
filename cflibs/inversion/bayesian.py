@@ -1084,22 +1084,26 @@ class BayesianForwardModel:
         wavelength_range: Tuple[float, float],
         wavelength_grid: Optional[np.ndarray] = None,
         pixels: int = 2048,
-        instrument_fwhm_nm: float = 0.05,
+        instrument_fwhm_nm: Optional[float] = None,
         resolving_power: Optional[float] = None,
     ):
         if not HAS_JAX:
             raise ImportError("JAX required. Install with: pip install jax jaxlib")
 
         # Validate mutually exclusive instrument modes
-        if resolving_power is not None and instrument_fwhm_nm != 0.05:
+        has_fwhm = instrument_fwhm_nm is not None
+        has_rp = resolving_power is not None
+        if has_fwhm and has_rp:
             raise ValueError(
                 "resolving_power and instrument_fwhm_nm are mutually exclusive. "
                 "Set one or the other, not both."
             )
+        if not has_fwhm and not has_rp:
+            instrument_fwhm_nm = 0.05  # Default: constant 0.05 nm FWHM
 
         self.elements = elements
         self.wavelength_range = wavelength_range
-        self.instrument_fwhm_nm = instrument_fwhm_nm
+        self.instrument_fwhm_nm = instrument_fwhm_nm if instrument_fwhm_nm is not None else 0.05
         self.resolving_power = resolving_power
 
         # Create wavelength grid
@@ -2411,18 +2415,22 @@ class TwoZoneBayesianForwardModel:
         wavelength_range: Tuple[float, float],
         wavelength_grid: Optional[np.ndarray] = None,
         pixels: int = 2048,
-        instrument_fwhm_nm: float = 0.05,
+        instrument_fwhm_nm: Optional[float] = None,
         resolving_power: Optional[float] = None,
     ):
         if not HAS_JAX:
             raise ImportError("JAX required. Install with: pip install jax jaxlib")
 
-        if resolving_power is not None and instrument_fwhm_nm != 0.05:
+        has_fwhm = instrument_fwhm_nm is not None
+        has_rp = resolving_power is not None
+        if has_fwhm and has_rp:
             raise ValueError("resolving_power and instrument_fwhm_nm are mutually exclusive.")
+        if not has_fwhm and not has_rp:
+            instrument_fwhm_nm = 0.05
 
         self.elements = elements
         self.wavelength_range = wavelength_range
-        self.instrument_fwhm_nm = instrument_fwhm_nm
+        self.instrument_fwhm_nm = instrument_fwhm_nm if instrument_fwhm_nm is not None else 0.05
         self.resolving_power = resolving_power
 
         if wavelength_grid is not None:
