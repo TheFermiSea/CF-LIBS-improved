@@ -198,21 +198,19 @@ class CorrelationIdentifier:
         logger.info(f"Running correlation identifier in {mode} mode")
 
         # Detect experimental peaks using canonical baseline-subtracted pipeline
-        # Store peaks for reuse in _match_lines_to_peaks to avoid redundant calls
-        self._peaks, _, _ = detect_peaks_auto(
+        experimental_peaks, _, _ = detect_peaks_auto(
             wavelength,
             intensity,
             resolving_power=self.resolving_power,
         )
-        experimental_peaks = self._peaks
 
         logger.info(f"Detected {len(experimental_peaks)} experimental peaks")
 
         # Run identification
         if mode == "classic":
-            element_scores = self._identify_classic(wavelength, intensity)
+            element_scores = self._identify_classic(wavelength, intensity, experimental_peaks)
         elif mode == "vector":
-            element_scores = self._identify_vector(wavelength, intensity)
+            element_scores = self._identify_vector(wavelength, intensity, experimental_peaks)
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -278,6 +276,7 @@ class CorrelationIdentifier:
         self,
         wavelength: np.ndarray,
         intensity: np.ndarray,
+        peaks: List[Tuple],
     ) -> List[Tuple[str, float, float, List[IdentifiedLine], List[Transition]]]:
         """
         Classic mode: grid search over (T, n_e) with Pearson correlation.
@@ -351,7 +350,7 @@ class CorrelationIdentifier:
 
             # Match lines to experimental peaks
             matched_lines, unmatched_lines = self._match_lines_to_peaks(
-                element, transitions, wavelength, intensity
+                element, transitions, wavelength, intensity, peaks
             )
 
             element_scores.append((element, score, confidence, matched_lines, unmatched_lines))
@@ -362,6 +361,7 @@ class CorrelationIdentifier:
         self,
         wavelength: np.ndarray,
         intensity: np.ndarray,
+        peaks: List[Tuple],
     ) -> List[Tuple[str, float, float, List[IdentifiedLine], List[Transition]]]:
         """
         Vector mode: ANN search via FAISS with multi-model consensus.
@@ -433,7 +433,7 @@ class CorrelationIdentifier:
             confidence = np.clip(0.4 * score + 0.4 * count_weight + 0.2 * best_similarity, 0.0, 1.0)
             transitions = self._get_transitions_for_element(element, wl_min, wl_max)
             matched_lines, unmatched_lines = self._match_lines_to_peaks(
-                element, transitions, wavelength, intensity
+                element, transitions, wavelength, intensity, peaks
             )
 
             if score <= 0.0:
@@ -572,6 +572,7 @@ class CorrelationIdentifier:
         transitions: List[Transition],
         wavelength: np.ndarray,
         intensity: np.ndarray,
+        peaks: Optional[List[Tuple]] = None,
     ) -> Tuple[List[IdentifiedLine], List[Transition]]:
         """
         Match theoretical transitions to experimental peaks.
@@ -589,6 +590,8 @@ class CorrelationIdentifier:
             Experimental wavelength in nm
         intensity : np.ndarray
             Experimental intensity
+        peaks : List[Tuple], optional
+            Pre-detected peaks. If None, peaks are detected fresh.
 
         Returns
         -------
@@ -597,8 +600,6 @@ class CorrelationIdentifier:
         unmatched_lines : List[Transition]
             Transitions with no experimental match
         """
-        # Use cached peaks from identify() or detect fresh
-        peaks = getattr(self, "_peaks", None)
         if peaks is None:
             peaks, _, _ = detect_peaks_auto(
                 wavelength, intensity, resolving_power=self.resolving_power

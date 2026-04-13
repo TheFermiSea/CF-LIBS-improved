@@ -244,6 +244,11 @@ class PCAResult:
         if n_components is None:
             n_components = self.n_components
 
+        if n_components < 1:
+            raise ValueError(
+                f"n_components must be >= 1, got {n_components}"
+            )
+
         if n_components > self.n_components:
             raise ValueError(
                 f"Requested {n_components} components but only {self.n_components} fitted"
@@ -443,7 +448,12 @@ class PCAPipeline:
             X_centered = X
 
         # Total variance (before any dimensionality reduction)
-        total_variance = float(np.var(X_centered, axis=0, ddof=1).sum())
+        # When center=False, np.var() re-centers internally which gives wrong
+        # results since SVD ran on uncentered data. Use sum(X^2)/(n-1) instead.
+        if self.center:
+            total_variance = float(np.var(X_centered, axis=0, ddof=1).sum())
+        else:
+            total_variance = float(np.sum(X_centered**2) / (n_samples - 1))
 
         # Perform SVD
         if self.use_jax:
@@ -614,8 +624,12 @@ class PCAPipeline:
 
         n_samples = X_centered.shape[0]
 
-        # Convert to JAX array
-        X_jax = jnp.array(X_centered, dtype=jnp.float32)
+        # Convert to JAX array; use float64 when x64 mode is enabled
+        import jax
+
+        _use_f64 = getattr(jax.config, "jax_enable_x64", False)
+        _dtype = jnp.float64 if _use_f64 else jnp.float32
+        X_jax = jnp.array(X_centered, dtype=_dtype)
 
         # JAX SVD
         U, S, Vt = jnp.linalg.svd(X_jax, full_matrices=False)

@@ -100,7 +100,7 @@ class CalibrationMethod(Enum):
     SBC = auto()  # Slope/Bias Correction
     PDS = auto()  # Piecewise Direct Standardization
     DS = auto()  # Direct Standardization
-    OSC = auto()  # Orthogonal Signal Correction
+    # OSC (Orthogonal Signal Correction) could be added in a future release
     STANDARDIZATION = auto()  # Simple spectral standardization
 
 
@@ -248,10 +248,12 @@ def compute_mmd(
     n_X = X.shape[0]
     n_Y = Y.shape[0]
 
-    # Unbiased estimator
+    # Unbiased estimator: exclude diagonal self-kernel terms K(x_i, x_i).
+    # For RBF kernel K(x,x) = 1, so the diagonal sum equals n; for other
+    # kernels np.trace computes it exactly.
     mmd_squared = (
-        np.sum(K_XX) / (n_X * (n_X - 1) + 1e-10)
-        + np.sum(K_YY) / (n_Y * (n_Y - 1) + 1e-10)
+        (np.sum(K_XX) - np.trace(K_XX)) / (n_X * (n_X - 1) + 1e-10)
+        + (np.sum(K_YY) - np.trace(K_YY)) / (n_Y * (n_Y - 1) + 1e-10)
         - 2.0 * np.sum(K_XY) / (n_X * n_Y + 1e-10)
     )
 
@@ -926,6 +928,31 @@ class CalibrationTransfer:
             "transfer_matrix": (
                 self._transfer_matrix.tolist() if self._transfer_matrix is not None else None
             ),
+            "pds_matrices": (
+                [[int(s), int(e), c.tolist()] for s, e, c in self._pds_matrices]
+                if self._pds_matrices is not None
+                else None
+            ),
+            "source_mean": (
+                self._source_mean.tolist()
+                if hasattr(self, "_source_mean") and self._source_mean is not None
+                else None
+            ),
+            "source_std": (
+                self._source_std.tolist()
+                if hasattr(self, "_source_std") and self._source_std is not None
+                else None
+            ),
+            "target_mean": (
+                self._target_mean.tolist()
+                if hasattr(self, "_target_mean") and self._target_mean is not None
+                else None
+            ),
+            "target_std": (
+                self._target_std.tolist()
+                if hasattr(self, "_target_std") and self._target_std is not None
+                else None
+            ),
         }
 
         with open(path, "w") as f:
@@ -963,6 +990,18 @@ class CalibrationTransfer:
             transfer._bias = np.array(data["bias"])
         if data.get("transfer_matrix") is not None:
             transfer._transfer_matrix = np.array(data["transfer_matrix"])
+        if data.get("pds_matrices") is not None:
+            transfer._pds_matrices = [
+                (int(s), int(e), np.array(c)) for s, e, c in data["pds_matrices"]
+            ]
+        if data.get("source_mean") is not None:
+            transfer._source_mean = np.array(data["source_mean"])
+        if data.get("source_std") is not None:
+            transfer._source_std = np.array(data["source_std"])
+        if data.get("target_mean") is not None:
+            transfer._target_mean = np.array(data["target_mean"])
+        if data.get("target_std") is not None:
+            transfer._target_std = np.array(data["target_std"])
 
         transfer._fitted = True
 
@@ -1316,18 +1355,24 @@ class TransferLearningPipeline:
         adaptation_method: str = "coral",
         transfer_method: str = "sbc",
         use_finetuning: bool = False,
-        **kwargs,
+        adapter_kwargs: Optional[Dict[str, Any]] = None,
+        calibration_kwargs: Optional[Dict[str, Any]] = None,
+        finetuner_kwargs: Optional[Dict[str, Any]] = None,
     ):
         self.source_name = source_name
         self.target_name = target_name
         self.use_finetuning = use_finetuning
 
-        # Initialize components
-        self.domain_adapter = DomainAdapter(method=adaptation_method, **kwargs)
-        self.calibration_transfer = CalibrationTransfer(method=transfer_method, **kwargs)
+        # Initialize components with per-stage keyword arguments
+        self.domain_adapter = DomainAdapter(
+            method=adaptation_method, **(adapter_kwargs or {})
+        )
+        self.calibration_transfer = CalibrationTransfer(
+            method=transfer_method, **(calibration_kwargs or {})
+        )
 
         if use_finetuning:
-            self.finetuner = FineTuner(**kwargs)
+            self.finetuner = FineTuner(**(finetuner_kwargs or {}))
         else:
             self.finetuner = None
 

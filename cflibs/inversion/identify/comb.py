@@ -217,8 +217,14 @@ class CombIdentifier:
                             element=element,
                             ionization_stage=trans.ionization_stage,
                             intensity_exp=intensity[
-                                np.argmin(np.abs(wavelength - tooth_result["center_nm"]))
-                                + tooth_result["best_shift"]
+                                np.clip(
+                                    np.argmin(
+                                        np.abs(wavelength - tooth_result["center_nm"])
+                                    )
+                                    + tooth_result["best_shift"],
+                                    0,
+                                    len(intensity) - 1,
+                                )
                             ],
                             emissivity_th=0.0,
                             transition=trans,
