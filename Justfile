@@ -55,10 +55,10 @@ benchmark:
     .venv/bin/pytest tests/ -v --benchmark-only
 
 test-rust:
-    cargo test --manifest-path cflibs-core/Cargo.toml
+    cargo test --manifest-path native/cflibs-core/Cargo.toml
 
 test-rust-nextest:
-    cargo nextest run --manifest-path cflibs-core/Cargo.toml
+    cargo nextest run --manifest-path native/cflibs-core/Cargo.toml
 
 check:
     just lint
