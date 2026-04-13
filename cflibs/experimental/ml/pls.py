@@ -917,10 +917,12 @@ class PLSCrossValidator:
         # Storage for results
         cv_predictions = np.zeros((n_samples, n_targets, max_comp))
         fold_predictions = []
+        # Per-fold RMSE: (n_folds x max_comp) for proper SE estimation
+        fold_rmse = np.zeros((self.n_folds, max_comp))
 
         for fold_idx, (train_idx, test_idx) in enumerate(folds):
             X_train, X_test = X[train_idx], X[test_idx]
-            Y_train = Y[train_idx]
+            Y_train, Y_test = Y[train_idx], Y[test_idx]
 
             # Fit with max components
             pls = PLSRegression(
@@ -933,6 +935,9 @@ class PLSCrossValidator:
             for n_comp in range(1, max_comp + 1):
                 result = pls.predict(X_test, n_components=n_comp)
                 cv_predictions[test_idx, :, n_comp - 1] = result.predictions
+                # Track per-fold RMSE for SE estimation
+                fold_residuals = Y_test - result.predictions
+                fold_rmse[fold_idx, n_comp - 1] = np.sqrt(np.mean(fold_residuals**2))
 
             fold_predictions.append(cv_predictions[test_idx].copy())
 
@@ -958,11 +963,12 @@ class PLSCrossValidator:
             optimal_n = int(np.argmin(cv_rmse) + 1)
         elif self.selection_criterion == "one_sigma":
             # One standard error rule: simplest model within 1 SE of best
-            min_rmse = cv_rmse.min()
-            # Estimate SE from fold variability
-            se_estimate = cv_rmse.std() / np.sqrt(self.n_folds)
+            best_idx = int(np.argmin(cv_rmse))
+            min_rmse = cv_rmse[best_idx]
+            # SE from fold-to-fold variability at the best component count
+            se_estimate = fold_rmse[:, best_idx].std(ddof=1) / np.sqrt(self.n_folds)
             threshold = min_rmse + se_estimate
-            # Find first model below threshold
+            # Find simplest (first) model below threshold
             candidates = np.where(cv_rmse <= threshold)[0]
             optimal_n = (
                 int(candidates[0] + 1) if len(candidates) > 0 else int(np.argmin(cv_rmse) + 1)
@@ -1017,7 +1023,7 @@ class PLSCalibrationModel:
         self,
         spectrum: np.ndarray,
         return_scores: bool = False,
-    ) -> Dict[str, float]:
+    ) -> Union[Dict[str, float], Tuple[Dict[str, float], np.ndarray]]:
         """
         Predict elemental concentrations from a spectrum.
 
@@ -1030,8 +1036,10 @@ class PLSCalibrationModel:
 
         Returns
         -------
-        Dict[str, float]
-            Predicted concentrations by element
+        Dict[str, float] or Tuple[Dict[str, float], np.ndarray]
+            Predicted concentrations by element.
+            If return_scores=True, returns (concentrations, scores) where
+            scores is an (n_samples x n_components) array of latent scores.
         """
         spectrum = np.asarray(spectrum)
         if spectrum.ndim == 1:
@@ -1052,6 +1060,16 @@ class PLSCalibrationModel:
                         f"Predicted {el}={conc:.4f} outside calibration range "
                         f"[{cmin:.4f}, {cmax:.4f}]"
                     )
+
+        if return_scores:
+            # Compute latent scores: preprocess X, then project onto weight space
+            X_proc = self.pls_model._preprocess_x(spectrum, fit=False)
+            components = self.pls_model.components
+            W = components.x_weights
+            P = components.x_loadings
+            PW_inv = self.pls_model._safe_pw_inverse(P, W)
+            scores = X_proc @ W @ PW_inv
+            return concentrations, scores
 
         return concentrations
 

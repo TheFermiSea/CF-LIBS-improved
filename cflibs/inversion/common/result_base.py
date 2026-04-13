@@ -135,7 +135,9 @@ class ResultTableMixin:
         lines = []
         lines.append(TABLE_SEP)
 
-        if include_ci:
+        has_ci = include_ci and bool(conc_ci)
+
+        if has_ci:
             lines.append(f"{'Element':<20} {'Conc.':<12} {'Std':>12} {'95% CI':>20}")
         else:
             lines.append(f"{'Element':<20} {'Conc.':<12} {'Std':>12}")
@@ -146,7 +148,7 @@ class ResultTableMixin:
             mean = conc_mean[el]
             std = conc_std.get(el, 0.0)
 
-            if include_ci and conc_ci:
+            if has_ci:
                 ci = conc_ci.get(el, (mean - 2 * std, mean + 2 * std))
                 lines.append(f"{el:<20} {mean:>12.4f} {std:>12.4f} [{ci[0]:.4f}, {ci[1]:.4f}]")
             else:

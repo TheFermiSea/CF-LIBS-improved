@@ -438,7 +438,7 @@ def detect_line_observations(
                 deconv_results_by_wl = {}
                 for fr in deconv.fit_results:
                     best_peak_wl = float(peak_wl_arr[np.argmin(np.abs(peak_wl_arr - fr.center_nm))])
-                    deconv_results_by_wl[best_peak_wl] = fr
+                    deconv_results_by_wl[round(best_peak_wl, 4)] = fr
                 logger.debug(
                     "Deconvolution produced %d fit results for %d peaks",
                     len(deconv.fit_results),
@@ -478,10 +478,11 @@ def detect_line_observations(
                 matched_peak_indices.add(peak_idx)
 
                 # Use deconvolution result if available
-                if deconv_results_by_wl is not None and peak_wl in deconv_results_by_wl:
+                rounded_wl = round(peak_wl, 4)
+                if deconv_results_by_wl is not None and rounded_wl in deconv_results_by_wl:
                     result = _build_observation_from_fit(
                         transition,
-                        deconv_results_by_wl[peak_wl],
+                        deconv_results_by_wl[rounded_wl],
                         ground_state_threshold_ev,
                     )
                 else:
@@ -514,10 +515,11 @@ def detect_line_observations(
                 matched_peak_indices.add(peak_idx)
 
                 # Use deconvolution result if available
-                if deconv_results_by_wl is not None and peak_wl in deconv_results_by_wl:
+                rounded_wl = round(peak_wl, 4)
+                if deconv_results_by_wl is not None and rounded_wl in deconv_results_by_wl:
                     result = _build_observation_from_fit(
                         transition,
-                        deconv_results_by_wl[peak_wl],
+                        deconv_results_by_wl[rounded_wl],
                         ground_state_threshold_ev,
                     )
                 else:

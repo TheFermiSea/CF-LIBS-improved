@@ -844,6 +844,7 @@ class DifferentiableForwardModel:
     def _compute_spectrum(
         wavelength: jnp.ndarray,
         T_eV: float,
+        log_ne: float,
         concentrations: jnp.ndarray,
         line_positions: jnp.ndarray,
         line_gA: jnp.ndarray,
@@ -854,11 +855,45 @@ class DifferentiableForwardModel:
         """
         JIT-compiled spectrum computation.
 
-        Uses Boltzmann factors for line intensities and Gaussian profiles.
+        Uses Boltzmann factors for line intensities and Gaussian profiles
+        with Doppler, instrument, and Stark broadening contributions.
+
+        Parameters
+        ----------
+        wavelength : array
+            Wavelength grid [nm]
+        T_eV : float
+            Temperature in eV
+        log_ne : float
+            Log10 of electron density [cm^-3]
+        concentrations : array
+            Element concentrations
+        line_positions : array
+            Central wavelengths [nm]
+        line_gA : array
+            g*A values [s^-1]
+        line_Ek : array
+            Upper level energies [eV]
+        line_element_idx : array
+            Element index per line
+        sigma_inst : float
+            Instrument Gaussian sigma [nm]
         """
+        n_e = 10.0**log_ne
+
         # Temperature-dependent Gaussian width (simplified Doppler)
         sigma_doppler = 0.01 * jnp.sqrt(T_eV / 0.86)  # Approximate scaling
-        sigma_total = jnp.sqrt(sigma_inst**2 + sigma_doppler**2)
+
+        # Stark broadening: FWHM_stark ~ w * (n_e / 1e16) [nm]
+        # Typical Stark width parameter w ~ 0.01-0.1 nm at n_e=1e16 cm^-3
+        # for visible LIBS lines. We use a representative value.
+        # (CF-LIBS-improved-3sf fix): without this term the synthetic
+        # spectrum is invariant to n_e, breaking physics regularization.
+        stark_w_param = 0.02  # representative Stark width parameter [nm]
+        fwhm_stark = stark_w_param * (n_e / 1e16)
+        sigma_stark = fwhm_stark / 2.355  # convert FWHM to Gaussian sigma
+
+        sigma_total = jnp.sqrt(sigma_inst**2 + sigma_doppler**2 + sigma_stark**2)
 
         # Line intensities from Boltzmann
         boltzmann_factor = jnp.exp(-line_Ek / jnp.maximum(T_eV, 0.1))
@@ -889,7 +924,7 @@ class DifferentiableForwardModel:
         T_eV : float
             Temperature in eV
         log_ne : float
-            Log10 of electron density (affects line widths)
+            Log10 of electron density (affects Stark broadening widths)
         concentrations : array
             Element concentrations
 
@@ -902,6 +937,7 @@ class DifferentiableForwardModel:
         return self._compute_spectrum(
             self.wavelength,
             T_eV,
+            log_ne,
             concentrations,
             self.line_positions,
             self.line_gA,
@@ -967,6 +1003,8 @@ class PINNInverter:
         config: Optional[PINNConfig] = None,
         forward_model: Optional[DifferentiableForwardModel] = None,
         seed: int = 42,
+        partition_funcs_neutral: Optional[np.ndarray] = None,
+        partition_funcs_ion: Optional[np.ndarray] = None,
     ):
         if not HAS_JAX:
             raise ImportError("JAX required for PINNInverter")
@@ -984,6 +1022,17 @@ class PINNInverter:
         self.n_elements = len(elements)
         self.config = config
         self.forward_model = forward_model
+
+        # Store partition functions for Saha constraint in physics layer
+        # (CF-LIBS-improved-9o3): Without these, the Saha branch in
+        # PhysicsConstraintLayer.__call__ is never entered and the physics
+        # loss degenerates to pure data fitting.
+        self.partition_funcs_neutral = (
+            jnp.array(partition_funcs_neutral) if partition_funcs_neutral is not None else None
+        )
+        self.partition_funcs_ion = (
+            jnp.array(partition_funcs_ion) if partition_funcs_ion is not None else None
+        )
 
         # Initialize random key
         key = random.PRNGKey(seed)
@@ -1051,7 +1100,15 @@ class PINNInverter:
         data_loss = loss_T + loss_ne + 10.0 * loss_conc
 
         # Physics constraint losses
-        physics_losses = self.physics_layer(T_pred, log_ne_pred, conc_pred)
+        # Pass partition functions so the Saha constraint is evaluated
+        # (CF-LIBS-improved-9o3 fix)
+        physics_losses = self.physics_layer(
+            T_pred,
+            log_ne_pred,
+            conc_pred,
+            partition_funcs_neutral=self.partition_funcs_neutral,
+            partition_funcs_ion=self.partition_funcs_ion,
+        )
         physics_loss = sum(physics_losses.values())
 
         total_loss = data_loss + physics_loss
@@ -1274,8 +1331,14 @@ class PINNInverter:
         conc_mean = np.mean(conc_preds, axis=0)
         conc_std = np.std(conc_preds, axis=0) if len(conc_preds) > 1 else np.zeros(self.n_elements)
 
-        # Compute physics losses
-        physics_losses = self.physics_layer(T_mean, log_ne_mean, jnp.array(conc_mean))
+        # Compute physics losses (pass partition functions for Saha constraint)
+        physics_losses = self.physics_layer(
+            T_mean,
+            log_ne_mean,
+            jnp.array(conc_mean),
+            partition_funcs_neutral=self.partition_funcs_neutral,
+            partition_funcs_ion=self.partition_funcs_ion,
+        )
         total_loss = sum(physics_losses.values())
 
         concentrations = {el: float(conc_mean[i]) for i, el in enumerate(self.elements)}
