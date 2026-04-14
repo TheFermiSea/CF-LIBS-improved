@@ -67,7 +67,7 @@ logger = get_logger("inversion.transfer")
 try:
     import jax  # noqa: F401
     import jax.numpy as jnp
-    from jax import jit, grad  # noqa: F401
+    from jax import jit  # noqa: F401
 
     HAS_JAX = True
 except ImportError:
