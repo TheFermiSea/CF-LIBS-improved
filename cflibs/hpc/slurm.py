@@ -515,8 +515,7 @@ class SlurmJobManager:
             return SlurmJobState.UNKNOWN
 
 
-def create_distributed_mcmc_job(
-    script_path: str,
+def generate_distributed_mcmc_script(
     db_path: str,
     elements: List[str],
     wavelength_range: Tuple[float, float],
@@ -534,12 +533,10 @@ def create_distributed_mcmc_job(
     modules: Optional[List[str]] = None,
     conda_env: Optional[str] = None,
 ) -> str:
-    """Generate a SLURM SBATCH script for distributed MCMC.
+    """Generate a SLURM SBATCH script content for distributed MCMC.
 
     Parameters
     ----------
-    script_path : str
-        Path to write the generated SBATCH script.
     db_path : str
         Path to the atomic database.
     elements : list of str
@@ -576,7 +573,7 @@ def create_distributed_mcmc_job(
     Returns
     -------
     str
-        The SBATCH script content (also written to *script_path*).
+        The SBATCH script content.
     """
     wl_min, wl_max = wavelength_range
 
@@ -656,6 +653,90 @@ def create_distributed_mcmc_job(
     )
 
     script_content = "\n".join(lines) + "\n"
+    return script_content
+
+
+def create_distributed_mcmc_job(
+    script_path: str,
+    db_path: str,
+    elements: List[str],
+    wavelength_range: Tuple[float, float],
+    observed_path: str,
+    output_dir: str = ".",
+    ntasks: int = 4,
+    gpus_per_task: int = 0,
+    chains_per_rank: int = 1,
+    num_warmup: int = 500,
+    num_samples: int = 1000,
+    partition: str = "default",
+    time_limit: str = "04:00:00",
+    mem_gb: int = 16,
+    account: Optional[str] = None,
+    modules: Optional[List[str]] = None,
+    conda_env: Optional[str] = None,
+) -> str:
+    """Generate a SLURM SBATCH script for distributed MCMC.
+
+    Parameters
+    ----------
+    script_path : str
+        Path to write the generated SBATCH script.
+    db_path : str
+        Path to the atomic database.
+    elements : list of str
+        Elements to include in the analysis.
+    wavelength_range : tuple of float
+        ``(wl_min, wl_max)`` in nm.
+    observed_path : str
+        Path to the observed spectrum file (NumPy ``.npy``).
+    output_dir : str
+        Directory for results (default: ``"."``).
+    ntasks : int
+        Number of MPI tasks (ranks) (default: 4).
+    gpus_per_task : int
+        GPUs per task (0 = CPU only) (default: 0).
+    chains_per_rank : int
+        NUTS chains per MPI rank (default: 1).
+    num_warmup : int
+        Warmup samples per chain (default: 500).
+    num_samples : int
+        Posterior samples per chain (default: 1000).
+    partition : str
+        SLURM partition (default: ``"default"``).
+    time_limit : str
+        Time limit in ``HH:MM:SS`` (default: ``"04:00:00"``).
+    mem_gb : int
+        Memory per node in GB (default: 16).
+    account : str, optional
+        SLURM account.
+    modules : list of str, optional
+        Environment modules to load.
+    conda_env : str, optional
+        Conda environment to activate.
+
+    Returns
+    -------
+    str
+        The SBATCH script content (also written to *script_path*).
+    """
+    script_content = generate_distributed_mcmc_script(
+        db_path=db_path,
+        elements=elements,
+        wavelength_range=wavelength_range,
+        observed_path=observed_path,
+        output_dir=output_dir,
+        ntasks=ntasks,
+        gpus_per_task=gpus_per_task,
+        chains_per_rank=chains_per_rank,
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+        partition=partition,
+        time_limit=time_limit,
+        mem_gb=mem_gb,
+        account=account,
+        modules=modules,
+        conda_env=conda_env,
+    )
 
     with open(script_path, "w") as f:
         f.write(script_content)

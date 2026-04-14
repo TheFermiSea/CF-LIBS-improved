@@ -12,6 +12,7 @@ from cflibs.hpc.slurm import (
     SlurmJobState,
     SlurmJobStatus,
     create_distributed_mcmc_job,
+    generate_distributed_mcmc_script,
 )
 from cflibs.hpc.gpu_config import GPUInfo, configure_gpu, pin_to_device
 
@@ -22,6 +23,7 @@ __all__ = [
     "SlurmJobState",
     "SlurmJobManager",
     "create_distributed_mcmc_job",
+    "generate_distributed_mcmc_script",
     "GPUInfo",
     "configure_gpu",
     "pin_to_device",
