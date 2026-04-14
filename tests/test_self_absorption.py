@@ -991,11 +991,11 @@ class TestCOGFit:
             W = base_W * factor  # Linear scaling
 
             # Reverse engineer A_ki from desired gf
-            # gf = g_i * f = g_i * 1.4992e-16 * lambda^2 * A * (g_k/g_i)
+            # gf = g_i * f = g_i * 1.4992 * lambda_cm^2 * A * (g_k/g_i)
             # For g_i=5, g_k=7, lambda=500nm:
             g_i, g_k = 5, 7
             lambda_cm = 500e-7
-            A_ki = gf / (1.4992e-16 * lambda_cm**2 * g_k / g_i * g_i)
+            A_ki = gf / (1.4992 * lambda_cm**2 * g_k / g_i * g_i)
 
             lines.append(
                 MultipletLine(
@@ -1027,7 +1027,7 @@ class TestCOGFit:
 
             g_i, g_k = 5, 7
             lambda_cm = 500e-7
-            A_ki = gf / (1.4992e-16 * lambda_cm**2 * g_k / g_i * g_i)
+            A_ki = gf / (1.4992 * lambda_cm**2 * g_k / g_i * g_i)
 
             lines.append(
                 MultipletLine(

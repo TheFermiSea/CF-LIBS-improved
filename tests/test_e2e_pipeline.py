@@ -499,28 +499,18 @@ def test_solver_quality_metrics(tmp_path):
 # DB-dependent tests (skip if production DB not available)
 # ---------------------------------------------------------------------------
 
-DB_PATH = "ASD_da/libs_production.db"
-
-
-@pytest.fixture
-def prod_db():
-    if not Path(DB_PATH).exists():
-        pytest.skip(f"Database not found at {DB_PATH}")
-    return AtomicDatabase(DB_PATH)
-
-
 @pytest.mark.integration
 @pytest.mark.requires_db
 @pytest.mark.xfail(
     reason="RoundTripValidator concentration recovery bug: drops Fe, returns only Cu=1.0",
     strict=False,
 )
-def test_production_round_trip_noiseless(prod_db):
+def test_production_round_trip_noiseless(production_db):
     """Round-trip with full production database (noiseless)."""
     from cflibs.validation.round_trip import RoundTripValidator
 
     validator = RoundTripValidator(
-        prod_db,
+        production_db,
         temperature_tolerance=0.05,
         density_tolerance=0.20,
         concentration_tolerance=0.10,
@@ -543,12 +533,12 @@ def test_production_round_trip_noiseless(prod_db):
     reason="RoundTripValidator concentration recovery bug: drops Fe, returns only Cu=1.0",
     strict=False,
 )
-def test_production_round_trip_noisy(prod_db):
+def test_production_round_trip_noisy(production_db):
     """Round-trip with full production database (noisy)."""
     from cflibs.validation.round_trip import RoundTripValidator
 
     validator = RoundTripValidator(
-        prod_db,
+        production_db,
         temperature_tolerance=0.10,
         density_tolerance=0.30,
         concentration_tolerance=0.15,
