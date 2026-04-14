@@ -662,7 +662,7 @@ class RoundTripValidator:
 
     def _check_temperature(self, true_temp: float, recovered_temp: float) -> tuple[float, bool]:
         """Calculate temperature error and check if it passes tolerance."""
-        if true_temp == 0.0:
+        if abs(true_temp) < 1e-12:
             return float("inf"), False
         error = abs(recovered_temp - true_temp) / true_temp
         passed = error <= self.temperature_tolerance
@@ -670,7 +670,7 @@ class RoundTripValidator:
 
     def _check_density(self, true_density: float, recovered_density: float) -> tuple[float, bool]:
         """Calculate density error and check if it passes tolerance."""
-        if true_density == 0.0:
+        if abs(true_density) < 1e-12:
             return float("inf"), False
         error = abs(recovered_density - true_density) / true_density
         passed = error <= self.density_tolerance
