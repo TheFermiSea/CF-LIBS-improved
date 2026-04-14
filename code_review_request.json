@@ -1,0 +1,12 @@
+{
+  "pull_request": {
+    "title": "🧹 [Code Health] Refactor generate_manifold",
+    "description": "Refactored the `generate_manifold` function in `cflibs/manifold/generator.py` to extract complex inline logic into private helper methods (`_build_parameter_grid`, `_init_storage`, `_save_metadata`, `_compute_and_save_batches`).",
+    "changes": [
+      {
+        "file": "cflibs/manifold/generator.py",
+        "description": "Extracted generation, storage, metadata, and computation batching logic into separate private helper functions to improve readability and maintainability."
+      }
+    ]
+  }
+}

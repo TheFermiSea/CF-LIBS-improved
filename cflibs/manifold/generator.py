@@ -100,7 +100,7 @@ class ManifoldGenerator:
         """
         if not HAS_JAX:
             raise ImportError(
-                "JAX is required for manifold generation. " "Install with: pip install jax jaxlib"
+                "JAX is required for manifold generation. Install with: pip install jax jaxlib"
             )
 
         config.validate()
@@ -747,20 +747,15 @@ class ManifoldGenerator:
 
         return spectrum_accum
 
-    def generate_manifold(
-        self,
-        progress_callback: Optional[Callable[[int, int, float], None]] = None,
-    ) -> None:
+    def _build_parameter_grid(self) -> jnp.ndarray:
         """
-        Generate the complete spectral manifold.
+        Build the grid of parameters (T, ne, concentrations) to evaluate.
 
-        Parameters
-        ----------
-        progress_callback : callable, optional
-            Callback function(completed, total, percentage) for progress updates
+        Returns
+        -------
+        array
+            Array of parameters, shape (n_samples, n_params)
         """
-        logger.info("Starting manifold generation...")
-
         # Build parameter grid
         T_grid = np.linspace(
             self.config.temperature_range[0],
@@ -772,7 +767,6 @@ class ManifoldGenerator:
         )
 
         # Build concentration grid (simplex for multi-element)
-        # For now, simple grid for Ti-Al-V system
         params_list = []
 
         if len(self.config.elements) == 4:  # Ti-Al-V-Fe system
@@ -808,36 +802,21 @@ class ManifoldGenerator:
             f"  Concentrations: {len(params_list) // (len(T_grid) * len(ne_grid))} combinations"
         )
 
-        # Create wavelength grid
-        wl_grid = jnp.linspace(
-            self.config.wavelength_range[0], self.config.wavelength_range[1], self.config.pixels
-        )
+        return params_arr
 
-        # Move atomic data to device
-        atomic_data = tuple(jax.device_put(x) for x in self.atomic_data)
-
-        # Vectorized function
-        @jit
-        def batch_spectrum(batch_params):
-            return vmap(
-                lambda p: ManifoldGenerator._time_integrated_spectrum(
-                    wl_grid, p, atomic_data, self.config.gate_width_s, self.config.time_steps
-                ),
-                in_axes=0,
-            )(batch_params)
-
-        output_path = Path(self.config.output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        storage_format = _infer_storage_format(output_path)
-        chunk_rows = max(1, min(self.config.batch_size, n_samples))
-
-        start_time = time.time()
-
+    def _init_storage(
+        self,
+        output_path: Path,
+        storage_format: str,
+        n_samples: int,
+        wl_grid: np.ndarray,
+        chunk_rows: int,
+    ):
+        """Initialize the storage file/group and datasets."""
         if storage_format == "hdf5":
             if not HAS_H5PY:
                 raise ImportError(
-                    "h5py is required for HDF5 manifold generation. "
-                    "Install with: pip install h5py"
+                    "h5py is required for HDF5 manifold generation. Install with: pip install h5py"
                 )
             output_root = h5py.File(output_path, "w")
             dset_spec = output_root.create_dataset(
@@ -886,31 +865,96 @@ class ManifoldGenerator:
         else:
             raise ValueError(f"Unsupported manifold storage format: {storage_format}")
 
+        return output_root, dset_spec, dset_param, attrs
+
+    def _save_metadata(self, attrs):
+        """Save configuration metadata to storage attributes."""
+        attrs["elements"] = list(self.config.elements)
+        attrs["wavelength_range"] = list(self.config.wavelength_range)
+        attrs["temperature_range"] = list(self.config.temperature_range)
+        attrs["density_range"] = list(self.config.density_range)
+        attrs["physics_version"] = self.config.physics_version
+        attrs["use_voigt_profile"] = self.config.use_voigt_profile
+        attrs["use_stark_broadening"] = self.config.use_stark_broadening
+        attrs["instrument_fwhm_nm"] = self.config.instrument_fwhm_nm
+
+    def _compute_and_save_batches(
+        self,
+        params_arr: np.ndarray,
+        batch_spectrum,
+        dset_spec,
+        dset_param,
+        n_samples: int,
+        progress_callback: Optional[Callable[[int, int, float], None]],
+    ):
+        """Compute spectra in batches and save to storage."""
+        for i in range(0, n_samples, self.config.batch_size):
+            batch = params_arr[i : i + self.config.batch_size]
+            batch_jax = jnp.array(batch)
+
+            spectra = batch_spectrum(batch_jax)
+            spectra_np = np.array(spectra, dtype=np.float32)
+
+            end_idx = min(i + self.config.batch_size, n_samples)
+            dset_spec[i:end_idx] = spectra_np
+            dset_param[i:end_idx] = batch
+
+            if progress_callback:
+                progress_callback(i + len(batch), n_samples, (i + len(batch)) / n_samples)
+            elif i % (self.config.batch_size * 10) == 0:
+                logger.info(f"Generated {i}/{n_samples} ({i / n_samples:.1%})")
+
+    def generate_manifold(
+        self,
+        progress_callback: Optional[Callable[[int, int, float], None]] = None,
+    ) -> None:
+        """
+        Generate the complete spectral manifold.
+
+        Parameters
+        ----------
+        progress_callback : callable, optional
+            Callback function(completed, total, percentage) for progress updates
+        """
+        logger.info("Starting manifold generation...")
+
+        params_arr = self._build_parameter_grid()
+        n_samples = len(params_arr)
+
+        # Create wavelength grid
+        wl_grid = jnp.linspace(
+            self.config.wavelength_range[0], self.config.wavelength_range[1], self.config.pixels
+        )
+
+        # Move atomic data to device
+        atomic_data = tuple(jax.device_put(x) for x in self.atomic_data)
+
+        # Vectorized function
+        @jit
+        def batch_spectrum(batch_params):
+            return vmap(
+                lambda p: ManifoldGenerator._time_integrated_spectrum(
+                    wl_grid, p, atomic_data, self.config.gate_width_s, self.config.time_steps
+                ),
+                in_axes=0,
+            )(batch_params)
+
+        output_path = Path(self.config.output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        storage_format = _infer_storage_format(output_path)
+        chunk_rows = max(1, min(self.config.batch_size, n_samples))
+
+        start_time = time.time()
+
+        output_root, dset_spec, dset_param, attrs = self._init_storage(
+            output_path, storage_format, n_samples, wl_grid, chunk_rows
+        )
+
         try:
-            attrs["elements"] = list(self.config.elements)
-            attrs["wavelength_range"] = list(self.config.wavelength_range)
-            attrs["temperature_range"] = list(self.config.temperature_range)
-            attrs["density_range"] = list(self.config.density_range)
-            attrs["physics_version"] = self.config.physics_version
-            attrs["use_voigt_profile"] = self.config.use_voigt_profile
-            attrs["use_stark_broadening"] = self.config.use_stark_broadening
-            attrs["instrument_fwhm_nm"] = self.config.instrument_fwhm_nm
-
-            for i in range(0, n_samples, self.config.batch_size):
-                batch = params_arr[i : i + self.config.batch_size]
-                batch_jax = jnp.array(batch)
-
-                spectra = batch_spectrum(batch_jax)
-                spectra_np = np.array(spectra, dtype=np.float32)
-
-                end_idx = min(i + self.config.batch_size, n_samples)
-                dset_spec[i:end_idx] = spectra_np
-                dset_param[i:end_idx] = batch
-
-                if progress_callback:
-                    progress_callback(i + len(batch), n_samples, (i + len(batch)) / n_samples)
-                elif i % (self.config.batch_size * 10) == 0:
-                    logger.info(f"Generated {i}/{n_samples} ({i/n_samples:.1%})")
+            self._save_metadata(attrs)
+            self._compute_and_save_batches(
+                params_arr, batch_spectrum, dset_spec, dset_param, n_samples, progress_callback
+            )
         finally:
             if storage_format == "hdf5":
                 output_root.close()
@@ -918,6 +962,6 @@ class ManifoldGenerator:
         total_time = time.time() - start_time
         logger.info(
             f"Manifold generation complete: {n_samples} spectra in {total_time:.2f}s "
-            f"({n_samples/total_time:.0f} spectra/sec)"
+            f"({n_samples / total_time:.0f} spectra/sec)"
         )
         logger.info(f"Output saved to: {output_path} ({storage_format})")
