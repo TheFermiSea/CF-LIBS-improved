@@ -118,16 +118,16 @@ class RoundTripResult:
         lines = [
             f"Round-Trip Validation: {status}",
             f"  Temperature: {self.true_temperature_K:.0f} K -> {self.recovered_temperature_K:.0f} K "
-            f"(error: {self.temperature_error_frac*100:.1f}%)",
+            f"(error: {self.temperature_error_frac * 100:.1f}%)",
             f"  Electron density: {self.true_electron_density:.2e} -> {self.recovered_electron_density:.2e} "
-            f"(error: {self.electron_density_error_frac*100:.1f}%)",
+            f"(error: {self.electron_density_error_frac * 100:.1f}%)",
             "  Concentrations:",
         ]
         for el in self.true_concentrations:
             true_c = self.true_concentrations[el]
             rec_c = self.recovered_concentrations.get(el, 0.0)
             err = self.concentration_errors.get(el, float("inf"))
-            lines.append(f"    {el}: {true_c:.3f} -> {rec_c:.3f} (error: {err*100:.1f}%)")
+            lines.append(f"    {el}: {true_c:.3f} -> {rec_c:.3f} (error: {err * 100:.1f}%)")
         lines.append(f"  Converged: {self.converged} ({self.iterations} iterations)")
         return "\n".join(lines)
 
@@ -203,74 +203,24 @@ class GoldenSpectrumGenerator:
 
         T_eV = temperature_K / EV_TO_K
         for element, concentration in concentrations.items():
-            # Pre-compute Saha ratios and 3-stage coupled fractions
-            ip_I = self._get_ionization_potential(element, 1) or 7.0
-            U_I = self._get_partition_function(element, 1, temperature_K)
-            U_II = self._get_partition_function(element, 2, temperature_K)
-            S1 = (
-                (SAHA_CONST_CM3 / electron_density_cm3)
-                * (T_eV**1.5)
-                * (U_II / U_I)
-                * np.exp(-ip_I / T_eV)
+            f_I, f_II = self._calculate_stage_fractions(
+                element, temperature_K, T_eV, electron_density_cm3
             )
 
-            ip_II = self._get_ionization_potential(element, 2)
-            S2 = 0.0
-            if ip_II is not None:
-                U_III = self._get_partition_function(element, 3, temperature_K)
-                S2 = (
-                    (SAHA_CONST_CM3 / electron_density_cm3)
-                    * (T_eV**1.5)
-                    * (U_III / U_II)
-                    * np.exp(-ip_II / T_eV)
-                )
-            denom = 1.0 + S1 + S1 * S2
-            f_I = 1.0 / denom
-            f_II = S1 / denom
-
             for ion_stage in [1, 2] if include_ionic else [1]:
-                transitions = self._get_element_transitions(element, ion_stage, n_lines_per_element)
-
-                # Get partition function (approximate if not in database)
-                U = self._get_partition_function(element, ion_stage, temperature_K)
-
-                # Stage fraction: what fraction of this element is in this stage
                 stage_fraction = f_I if ion_stage == 1 else f_II
 
-                for trans in transitions:
-                    # Calculate intensity using Boltzmann distribution
-                    # I ∝ C × f_stage × (g_k × A_ki / U) × exp(-E_k / kT)
-                    E_k = trans["E_k_ev"]
-                    g_k = trans["g_k"]
-                    A_ki = trans["A_ki"]
-                    wavelength = trans["wavelength_nm"]
-
-                    boltzmann_factor = np.exp(-E_k / (KB_EV * temperature_K))
-                    base_intensity = (
-                        concentration * stage_fraction * g_k * A_ki * boltzmann_factor / U
-                    )
-
-                    # Scale to reasonable intensity values
-                    intensity = base_intensity * 1e-4  # Arbitrary scaling
-
-                    if intensity < min_intensity:
-                        continue
-
-                    # Estimate uncertainty (SNR ~ 20-100 for typical LIBS)
-                    snr = rng.uniform(20, 100)
-                    uncertainty = intensity / snr
-
-                    obs = LineObservation(
-                        wavelength_nm=wavelength,
-                        intensity=intensity,
-                        intensity_uncertainty=uncertainty,
-                        element=element,
-                        ionization_stage=ion_stage,
-                        E_k_ev=E_k,
-                        g_k=g_k,
-                        A_ki=A_ki,
-                    )
-                    all_observations.append(obs)
+                observations = self._generate_observations(
+                    element=element,
+                    ion_stage=ion_stage,
+                    concentration=concentration,
+                    stage_fraction=stage_fraction,
+                    temperature_K=temperature_K,
+                    n_lines_per_element=n_lines_per_element,
+                    min_intensity=min_intensity,
+                    rng=rng,
+                )
+                all_observations.extend(observations)
 
         logger.info(
             f"Generated golden spectrum: T={temperature_K:.0f} K, "
@@ -290,6 +240,85 @@ class GoldenSpectrumGenerator:
                 "min_intensity": min_intensity,
             },
         )
+
+    def _calculate_stage_fractions(
+        self, element: str, temperature_K: float, T_eV: float, electron_density_cm3: float
+    ) -> Tuple[float, float]:
+        """Calculate the fraction of the element in stages I and II using Saha equations."""
+        ip_I = self._get_ionization_potential(element, 1) or 7.0
+        U_I = self._get_partition_function(element, 1, temperature_K)
+        U_II = self._get_partition_function(element, 2, temperature_K)
+        S1 = (
+            (SAHA_CONST_CM3 / electron_density_cm3)
+            * (T_eV**1.5)
+            * (U_II / U_I)
+            * np.exp(-ip_I / T_eV)
+        )
+
+        ip_II = self._get_ionization_potential(element, 2)
+        S2 = 0.0
+        if ip_II is not None:
+            U_III = self._get_partition_function(element, 3, temperature_K)
+            S2 = (
+                (SAHA_CONST_CM3 / electron_density_cm3)
+                * (T_eV**1.5)
+                * (U_III / U_II)
+                * np.exp(-ip_II / T_eV)
+            )
+        denom = 1.0 + S1 + S1 * S2
+        f_I = 1.0 / denom
+        f_II = S1 / denom
+
+        return f_I, f_II
+
+    def _generate_observations(
+        self,
+        element: str,
+        ion_stage: int,
+        concentration: float,
+        stage_fraction: float,
+        temperature_K: float,
+        n_lines_per_element: int,
+        min_intensity: float,
+        rng: np.random.Generator,
+    ) -> List[LineObservation]:
+        """Generate line observations for a specific element and ionization stage."""
+        observations = []
+        transitions = self._get_element_transitions(element, ion_stage, n_lines_per_element)
+        U = self._get_partition_function(element, ion_stage, temperature_K)
+
+        for trans in transitions:
+            E_k = trans["E_k_ev"]
+            g_k = trans["g_k"]
+            A_ki = trans["A_ki"]
+            wavelength = trans["wavelength_nm"]
+
+            boltzmann_factor = np.exp(-E_k / (KB_EV * temperature_K))
+            base_intensity = concentration * stage_fraction * g_k * A_ki * boltzmann_factor / U
+
+            # Scale to reasonable intensity values
+            intensity = base_intensity * 1e-4
+
+            if intensity < min_intensity:
+                continue
+
+            # Estimate uncertainty (SNR ~ 20-100 for typical LIBS)
+            snr = rng.uniform(20, 100)
+            uncertainty = intensity / snr
+
+            obs = LineObservation(
+                wavelength_nm=wavelength,
+                intensity=intensity,
+                intensity_uncertainty=uncertainty,
+                element=element,
+                ionization_stage=ion_stage,
+                E_k_ev=E_k,
+                g_k=g_k,
+                A_ki=A_ki,
+            )
+            observations.append(obs)
+
+        return observations
 
     def _get_element_transitions(self, element: str, ion_stage: int, n_lines: int) -> List[Dict]:
         """Get transitions from database or generate synthetic ones."""
@@ -488,7 +517,7 @@ class GoldenSpectrumGenerator:
             n_e = 0.5 * n_e + 0.5 * n_e_new
 
         logger.warning(
-            "compute_equilibrium_ne did not converge after %d iterations " "(last n_e=%.3e cm^-3)",
+            "compute_equilibrium_ne did not converge after %d iterations (last n_e=%.3e cm^-3)",
             max_iter,
             n_e,
         )
@@ -832,7 +861,7 @@ class RoundTripValidator:
                 )
                 results.append(result)
                 logger.info(
-                    f"Sweep [{i*n_densities+j+1}/{n_temperatures*n_densities}]: "
+                    f"Sweep [{i * n_densities + j + 1}/{n_temperatures * n_densities}]: "
                     f"T={T:.0f}K, n_e={n_e:.1e} -> {'PASS' if result.passed else 'FAIL'}"
                 )
 
