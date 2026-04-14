@@ -355,12 +355,19 @@ class GoldenSpectrumGenerator:
         return transitions
 
     def _get_partition_function(self, element: str, ion_stage: int, temperature_K: float) -> float:
-        """Get partition function from database or estimate."""
+        """Get partition function via direct summation, with fallbacks."""
+        from cflibs.plasma.partition import PartitionFunctionEvaluator, get_levels_for_species
+
         try:
+            levels = get_levels_for_species(self.atomic_db, element, ion_stage)
+            if levels is not None:
+                g_arr, E_arr, ip_ev = levels
+                return PartitionFunctionEvaluator.evaluate_direct(
+                    temperature_K, g_arr, E_arr, ip_ev
+                )
+
             coeffs = self.atomic_db.get_partition_coefficients(element, ion_stage)
             if coeffs:
-                from cflibs.plasma.partition import PartitionFunctionEvaluator
-
                 return PartitionFunctionEvaluator.evaluate(temperature_K, coeffs.coefficients)
         except Exception:
             pass

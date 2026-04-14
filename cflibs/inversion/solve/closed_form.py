@@ -70,7 +70,14 @@ class ClosedFormILRSolver:
     def _evaluate_partition_function(
         self, element: str, ionization_stage: int, T_K: float
     ) -> float:
-        """Evaluate partition function with production fallbacks."""
+        """Evaluate partition function via direct summation, with fallbacks."""
+        from cflibs.plasma.partition import get_levels_for_species
+
+        levels = get_levels_for_species(self.atomic_db, element, ionization_stage)
+        if levels is not None:
+            g_arr, E_arr, ip_ev = levels
+            return PartitionFunctionEvaluator.evaluate_direct(T_K, g_arr, E_arr, ip_ev)
+
         pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
         if pf:
             return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)

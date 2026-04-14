@@ -90,3 +90,6 @@ conductor/setup_state.json
 
 # Beads / Dolt files (added by bd init)
 .beads-credential-key
+
+# Track the production atomic database (4MB, small enough for git)
+!ASD_da/libs_production.db
