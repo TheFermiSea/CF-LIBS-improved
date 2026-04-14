@@ -8,7 +8,6 @@ spectra for all parameter combinations of interest.
 """
 
 from __future__ import annotations
-from typing import Tuple
 
 from typing import Callable, Optional, Tuple
 import numpy as np
