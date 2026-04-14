@@ -302,13 +302,13 @@ def _query_atomic_data(
         placeholders = ",".join(["?"] * len(elements))
         query = f"""
             SELECT
-                l.element, l.sp_num, l.wavelength_nm, l.aki, l.ek_ev, l.gk,
-                sp.ip_ev, l.stark_w, l.stark_alpha
+                l.id, l.element, l.sp_num, l.wavelength_nm, l.aki, l.ek_ev, l.gk,
+                sp.ip_ev, l.stark_w, l.stark_alpha, l.ei_ev
             FROM lines l
             JOIN species_physics sp ON l.element = sp.element AND l.sp_num = sp.sp_num
             WHERE l.wavelength_nm BETWEEN ? AND ?
             AND l.element IN ({placeholders})
-            ORDER BY l.wavelength_nm
+            ORDER BY l.wavelength_nm, l.id
         """
         params = [wavelength_range[0], wavelength_range[1]] + list(elements)
         df = pd.read_sql_query(query, conn, params=params)
@@ -387,9 +387,12 @@ def _format_atomic_data_arrays(
     # E_i is approximated as E_k - hc/λ (in eV)
     wavelength_m = df["wavelength_nm"].values * 1e-9
     ek_ev_vals = df["ek_ev"].values
-    # ΔE = hc/λ in eV
-    delta_e_ev = (H_PLANCK * C_LIGHT / wavelength_m) / EV_TO_J
-    ei_ev_vals = np.maximum(ek_ev_vals - delta_e_ev, 0.0)
+    if "ei_ev" in df.columns and not df["ei_ev"].isnull().all():
+        ei_ev_vals = df["ei_ev"].values
+    else:
+        # ΔE = hc/λ in eV
+        delta_e_ev = (H_PLANCK * C_LIGHT / wavelength_m) / EV_TO_J
+        ei_ev_vals = np.maximum(ek_ev_vals - delta_e_ev, 0.0)
 
     # Oscillator strength from Einstein A: f = (m_e c λ² / 8π² e²) × (g_k/g_i) × A_ki
     # Simplified: f ≈ 1.499e-16 × λ_nm² × (g_k/g_i) × A_ki

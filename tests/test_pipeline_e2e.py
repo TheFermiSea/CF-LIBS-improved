@@ -173,7 +173,7 @@ def _simulate_fe_cu_spectrum(atomic_db: AtomicDatabase) -> tuple[np.ndarray, np.
     rng = np.random.default_rng(123)
     baseline = 0.001 * intensity.max()
     noisy = np.maximum(
-        intensity + baseline + rng.normal(0.0, 0.0005 * intensity.max(), size=intensity.shape),
+        intensity + baseline + rng.normal(0.0, 0.0001 * intensity.max(), size=intensity.shape),
         0.0,
     )
     return wavelength, noisy
