@@ -1,4 +1,3 @@
-
 """
 JAX-based manifold generator for high-throughput CF-LIBS.
 
@@ -388,16 +387,14 @@ class ManifoldGenerator:
 
         @staticmethod
         def _calculate_boltzmann_populations(
-            T_eV,
-            n_e,
-            concentration_map,
-            U0,
-            U1,
-            frac0,
-            frac1,
+            plasma_state,
+            saha_state,
             atomic_data,
         ):
             """Calculates upper level populations using the Boltzmann equation."""
+            T_eV, n_e, concentration_map = plasma_state
+            U0, U1, frac0, frac1 = saha_state
+
             lines_ek = atomic_data[2]
             lines_gk = atomic_data[3]
             lines_z = atomic_data[5]
@@ -449,13 +446,8 @@ class ManifoldGenerator:
             )
 
             n_upper = ManifoldGenerator._calculate_boltzmann_populations(
-                T_eV,
-                n_e,
-                concentration_map,
-                U0,
-                U1,
-                frac0,
-                frac1,
+                (T_eV, n_e, concentration_map),
+                (U0, U1, frac0, frac1),
                 atomic_data,
             )
 
