@@ -176,19 +176,25 @@ class SahaBoltzmannSolver(SolverStrategy):
         float
             Partition function
         """
-        # Try to get polynomial coefficients first (Phase 2a)
+        # Preferred: direct summation from cached energy-level arrays with IP cutoff
+        from cflibs.plasma.partition import get_levels_for_species
+
+        T_K = T_e_eV * EV_TO_K
+        level_data = get_levels_for_species(self.atomic_db, element, ionization_stage)
+        if level_data is not None:
+            g_arr, E_arr, ip_ev = level_data
+            return PartitionFunctionEvaluator.evaluate_direct(T_K, g_arr, E_arr, ip_ev)
+
+        # Fallback 1: polynomial coefficients
         if hasattr(self.atomic_db, "get_partition_coefficients"):
             pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
             if pf is not None:
-                T_K = T_e_eV * EV_TO_K
                 return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
 
-        # Fallback to summation over levels (Phase 1)
+        # Fallback 2: manual summation over EnergyLevel objects
         levels = self.atomic_db.get_energy_levels(element, ionization_stage)
 
         if not levels:
-            # Fallback: assume simple approximation
-            # For many elements, U ~ 2 * g_ground at low T
             key = (element, ionization_stage)
             with _MISSING_LEVEL_WARNED_LOCK:
                 should_warn = key not in _MISSING_LEVEL_WARNED
@@ -198,15 +204,12 @@ class SahaBoltzmannSolver(SolverStrategy):
                 logger.warning(
                     "No energy levels for %s %s, using approximation", element, ionization_stage
                 )
-            return 2.0  # Rough approximation
+            return 2.0
 
-        # Determine the energy cutoff: use ionization potential when available
-        # to exclude autoionizing states above the continuum.
         if max_energy_ev is None:
             ip = self.atomic_db.get_ionization_potential(element, ionization_stage)
             max_energy_ev = ip * 0.98 if ip else 50.0
 
-        # Partition function: U = sum(g_i * exp(-E_i / kT))
         U = 0.0
         for level in levels:
             if level.energy_ev <= max_energy_ev:
