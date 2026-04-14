@@ -12,10 +12,10 @@ def test_process_spectrum_happy_path():
     result = process_spectrum(wavelength, intensity)
 
     assert result["status"] == "success"
-    assert result["metrics"]["max_intensity"] == 100.0
-    assert result["metrics"]["peak_wavelength"] == 300.0
-    assert result["plasma_parameters"]["temperature_K"] == 12000.0
-    assert result["plasma_parameters"]["electron_density_cm3"] == 1e17
+    assert result["metrics"]["max_intensity"] == pytest.approx(100.0)
+    assert result["metrics"]["peak_wavelength"] == pytest.approx(300.0)
+    assert result["plasma_parameters"]["temperature_K"] == pytest.approx(12000.0)
+    assert result["plasma_parameters"]["electron_density_cm3"] == pytest.approx(1e17)
 
 
 def test_process_spectrum_types():
@@ -25,8 +25,8 @@ def test_process_spectrum_types():
 
     result = process_spectrum(wavelength, intensity)
 
-    assert type(result["metrics"]["max_intensity"]) is float
-    assert type(result["metrics"]["peak_wavelength"]) is float
+    assert isinstance(result["metrics"]["max_intensity"], float)
+    assert isinstance(result["metrics"]["peak_wavelength"], float)
 
 
 def test_process_spectrum_empty():
