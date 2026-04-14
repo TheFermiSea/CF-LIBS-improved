@@ -37,4 +37,4 @@ jobs:
 
     - name: Test with Pytest
       run: |
-        pytest tests/ -m "not nist_parity and not slow"
+        pytest tests/ -m "not requires_db and not slow"
