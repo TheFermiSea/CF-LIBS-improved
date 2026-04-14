@@ -228,13 +228,15 @@ def main():
     # Insert into database
     if not args.dry_run:
         cursor = conn.cursor()
-        for element, sp_num, coeffs, _ in all_coefficients:
-            cursor.execute(
-                """INSERT OR REPLACE INTO partition_functions
-                   (element, sp_num, a0, a1, a2, a3, a4, t_min, t_max, source)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 2000.0, 20000.0, 'NIST ASD energy level sum')""",
-                (element, sp_num, *coeffs),
-            )
+        data_to_insert = [
+            (element, sp_num, *coeffs) for element, sp_num, coeffs, _ in all_coefficients
+        ]
+        cursor.executemany(
+            """INSERT OR REPLACE INTO partition_functions
+               (element, sp_num, a0, a1, a2, a3, a4, t_min, t_max, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 2000.0, 20000.0, 'NIST ASD energy level sum')""",
+            data_to_insert,
+        )
         conn.commit()
         print(f"\nInserted {n_fitted} coefficient sets into database")
     else:
@@ -243,9 +245,9 @@ def main():
     conn.close()
 
     # Summary
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("SUMMARY")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"  Total element-stage combos found: {len(species)}")
     print(f"  Fitted: {n_fitted}")
     print(f"  Skipped: {n_skipped}")
