@@ -1409,16 +1409,21 @@ def create_pinn_from_database(
 
     # Get ionization potentials
     ips = []
-    for el in elements:
-        cursor = conn.execute(
-            "SELECT ip_ev FROM species_physics WHERE element=? AND sp_num=1", (el,)
-        )
-        row = cursor.fetchone()
-        if row:
-            ips.append(row[0])
-        else:
-            logger.warning(f"No IP for {el}, using default 7.0 eV")
-            ips.append(7.0)
+    if elements:
+        placeholders = ",".join(["?"] * len(elements))
+        query = f"SELECT element, ip_ev FROM species_physics WHERE sp_num=1 AND element IN ({placeholders})"
+        cursor = conn.execute(query, tuple(elements))
+
+        # Map results
+        results = dict(cursor.fetchall())
+
+        # Maintain order
+        for el in elements:
+            if el in results:
+                ips.append(results[el])
+            else:
+                logger.warning(f"No IP for {el}, using default 7.0 eV")
+                ips.append(7.0)
 
     conn.close()
 
