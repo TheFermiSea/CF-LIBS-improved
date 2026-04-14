@@ -67,7 +67,6 @@ logger = get_logger("inversion.transfer")
 try:
     import jax  # noqa: F401
     import jax.numpy as jnp
-    from jax import jit, grad  # noqa: F401
 
     HAS_JAX = True
 except ImportError:
@@ -1364,9 +1363,7 @@ class TransferLearningPipeline:
         self.use_finetuning = use_finetuning
 
         # Initialize components with per-stage keyword arguments
-        self.domain_adapter = DomainAdapter(
-            method=adaptation_method, **(adapter_kwargs or {})
-        )
+        self.domain_adapter = DomainAdapter(method=adaptation_method, **(adapter_kwargs or {}))
         self.calibration_transfer = CalibrationTransfer(
             method=transfer_method, **(calibration_kwargs or {})
         )
