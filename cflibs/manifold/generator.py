@@ -363,24 +363,24 @@ class ManifoldGenerator:
         )
 
         @staticmethod
-        def _calculate_partition_functions(T_K, atomic_data):
+        def _calculate_partition_functions(t_k, atomic_data):
             """Calculates neutral and ion partition functions for all lines' elements."""
             lines_el_idx = atomic_data[6]
             partition_coeffs = atomic_data[7]
             coeffs_0 = partition_coeffs[lines_el_idx, 0]
             coeffs_1 = partition_coeffs[lines_el_idx, 1]
-            U0 = polynomial_partition_function_jax(T_K, coeffs_0)
-            U1 = polynomial_partition_function_jax(T_K, coeffs_1)
-            return U0, U1
+            u0 = polynomial_partition_function_jax(t_k, coeffs_0)
+            u1 = polynomial_partition_function_jax(t_k, coeffs_1)
+            return u0, u1
 
         @staticmethod
-        def _calculate_saha_fractions(T_eV, n_e, U0, U1, atomic_data):
+        def _calculate_saha_fractions(t_ev, n_e, u0, u1, atomic_data):
             """Calculates the Saha ionization population fractions."""
             lines_el_idx = atomic_data[6]
             ionization_potentials = atomic_data[8]
-            IP_I = ionization_potentials[lines_el_idx, 0]
-            saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
-            ratio_n1_n0 = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
+            ip_i = ionization_potentials[lines_el_idx, 0]
+            saha_factor = (SAHA_CONST_CM3 / n_e) * (t_ev**1.5)
+            ratio_n1_n0 = saha_factor * (u1 / u0) * jnp.exp(-ip_i / t_ev)
             frac0 = 1.0 / (1.0 + ratio_n1_n0)
             frac1 = ratio_n1_n0 / (1.0 + ratio_n1_n0)
             return frac0, frac1
@@ -392,8 +392,8 @@ class ManifoldGenerator:
             atomic_data,
         ):
             """Calculates upper level populations using the Boltzmann equation."""
-            T_eV, n_e, concentration_map = plasma_state
-            U0, U1, frac0, frac1 = saha_state
+            t_ev, n_e, concentration_map = plasma_state
+            u0, u1, frac0, frac1 = saha_state
 
             lines_ek = atomic_data[2]
             lines_gk = atomic_data[3]
@@ -401,11 +401,11 @@ class ManifoldGenerator:
             lines_el_idx = atomic_data[6]
 
             pop_fraction = jnp.where(lines_z == 0, frac0, frac1)
-            U_val = jnp.where(lines_z == 0, U0, U1)
+            u_val = jnp.where(lines_z == 0, u0, u1)
             element_conc = concentration_map[lines_el_idx]
-            N_species_total = element_conc * n_e
-            N_species = N_species_total * pop_fraction
-            n_upper = N_species * (lines_gk / U_val) * jnp.exp(-lines_ek / T_eV)
+            n_species_total = element_conc * n_e
+            n_species = n_species_total * pop_fraction
+            n_upper = n_species * (lines_gk / u_val) * jnp.exp(-lines_ek / t_ev)
             return n_upper
 
         @staticmethod
@@ -437,17 +437,17 @@ class ManifoldGenerator:
             array
                 Upper level populations
             """
-            T_K = T_eV * EV_TO_K
+            t_k = T_eV * EV_TO_K
 
-            U0, U1 = ManifoldGenerator._calculate_partition_functions(T_K, atomic_data)
+            u0, u1 = ManifoldGenerator._calculate_partition_functions(t_k, atomic_data)
 
             frac0, frac1 = ManifoldGenerator._calculate_saha_fractions(
-                T_eV, n_e, U0, U1, atomic_data
+                T_eV, n_e, u0, u1, atomic_data
             )
 
             n_upper = ManifoldGenerator._calculate_boltzmann_populations(
                 (T_eV, n_e, concentration_map),
-                (U0, U1, frac0, frac1),
+                (u0, u1, frac0, frac1),
                 atomic_data,
             )
 
