@@ -1,3 +1,4 @@
+
 """
 JAX-based manifold generator for high-throughput CF-LIBS.
 
@@ -7,6 +8,7 @@ spectra for all parameter combinations of interest.
 """
 
 from __future__ import annotations
+from typing import Tuple
 
 from typing import Callable, Optional, Tuple
 import numpy as np
@@ -363,8 +365,10 @@ class ManifoldGenerator:
         )
 
         @staticmethod
-        def _calculate_partition_functions(T_K, lines_el_idx, partition_coeffs):
+        def _calculate_partition_functions(T_K, atomic_data):
             """Calculates neutral and ion partition functions for all lines' elements."""
+            lines_el_idx = atomic_data[6]
+            partition_coeffs = atomic_data[7]
             coeffs_0 = partition_coeffs[lines_el_idx, 0]
             coeffs_1 = partition_coeffs[lines_el_idx, 1]
             U0 = polynomial_partition_function_jax(T_K, coeffs_0)
@@ -372,8 +376,10 @@ class ManifoldGenerator:
             return U0, U1
 
         @staticmethod
-        def _calculate_saha_fractions(T_eV, n_e, U0, U1, lines_el_idx, ionization_potentials):
+        def _calculate_saha_fractions(T_eV, n_e, U0, U1, atomic_data):
             """Calculates the Saha ionization population fractions."""
+            lines_el_idx = atomic_data[6]
+            ionization_potentials = atomic_data[8]
             IP_I = ionization_potentials[lines_el_idx, 0]
             saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
             ratio_n1_n0 = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
@@ -386,16 +392,18 @@ class ManifoldGenerator:
             T_eV,
             n_e,
             concentration_map,
-            lines_z,
-            lines_el_idx,
-            lines_ek,
-            lines_gk,
             U0,
             U1,
             frac0,
             frac1,
+            atomic_data,
         ):
             """Calculates upper level populations using the Boltzmann equation."""
+            lines_ek = atomic_data[2]
+            lines_gk = atomic_data[3]
+            lines_z = atomic_data[5]
+            lines_el_idx = atomic_data[6]
+
             pop_fraction = jnp.where(lines_z == 0, frac0, frac1)
             U_val = jnp.where(lines_z == 0, U0, U1)
             element_conc = concentration_map[lines_el_idx]
@@ -410,85 +418,46 @@ class ManifoldGenerator:
             T_eV: float,
             n_e: float,
             concentration_map: jnp.ndarray,
-            lines_ip: jnp.ndarray,
-            lines_z: jnp.ndarray,
-            lines_el_idx: jnp.ndarray,
-            lines_ek: jnp.ndarray,
-            lines_gk: jnp.ndarray,
-            partition_coeffs: jnp.ndarray,
-            ionization_potentials: jnp.ndarray,
+            atomic_data: Tuple,
         ) -> jnp.ndarray:
             """
-
             Vectorized Saha-Eggert solver for JAX.
-
-
 
             Calculates upper level populations for all lines simultaneously.
 
-
-
             Parameters
-
             ----------
-
             T_eV : float
-
                 Electron temperature in eV
-
             n_e : float
-
                 Electron density in cm^-3
-
             concentration_map : array
-
                 Element concentrations
-
-            lines_* : arrays
-
-                Atomic data arrays
-
-            partition_coeffs : array
-
-                Partition function coefficients (num_elements, max_stages, 5)
-
-            ionization_potentials : array
-
-                Ionization potentials (num_elements, max_stages)
-
-
+            atomic_data : Tuple
+                Atomic data arrays from ManifoldGenerator._load_atomic_data
 
             Returns
-
             -------
-
             array
-
                 Upper level populations
-
             """
             T_K = T_eV * EV_TO_K
 
-            U0, U1 = ManifoldGenerator._calculate_partition_functions(
-                T_K, lines_el_idx, partition_coeffs
-            )
+            U0, U1 = ManifoldGenerator._calculate_partition_functions(T_K, atomic_data)
 
             frac0, frac1 = ManifoldGenerator._calculate_saha_fractions(
-                T_eV, n_e, U0, U1, lines_el_idx, ionization_potentials
+                T_eV, n_e, U0, U1, atomic_data
             )
 
             n_upper = ManifoldGenerator._calculate_boltzmann_populations(
                 T_eV,
                 n_e,
                 concentration_map,
-                lines_z,
-                lines_el_idx,
-                lines_ek,
-                lines_gk,
                 U0,
                 U1,
                 frac0,
                 frac1,
+                atomic_data,
             )
 
             return n_upper
@@ -565,13 +534,7 @@ class ManifoldGenerator:
                 T_eV,
                 n_e,
                 concentrations,
-                l_ip,
-                l_z,
-                l_el_idx,
-                l_ek,
-                l_gk,
-                partition_coeffs,
-                ionization_potentials,
+                atomic_data,
             )
 
             # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
