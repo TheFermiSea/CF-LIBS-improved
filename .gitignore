@@ -93,3 +93,6 @@ conductor/setup_state.json
 
 # Track the production atomic database (4MB, small enough for git)
 !ASD_da/libs_production.db
+# SQLite temporary files
+*.db-shm
+*.db-wal
