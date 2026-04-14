@@ -362,197 +362,277 @@ class ManifoldGenerator:
             lines_mass_amu,
         )
 
-        @staticmethod
-        def _calculate_partition_functions(t_k, atomic_data):
-            """Calculates neutral and ion partition functions for all lines' elements."""
-            lines_el_idx = atomic_data[6]
-            partition_coeffs = atomic_data[7]
-            coeffs_0 = partition_coeffs[lines_el_idx, 0]
-            coeffs_1 = partition_coeffs[lines_el_idx, 1]
-            u0 = polynomial_partition_function_jax(t_k, coeffs_0)
-            u1 = polynomial_partition_function_jax(t_k, coeffs_1)
-            return u0, u1
+    @staticmethod
+    def _calculate_partition_functions(t_k, atomic_data):
+        """Calculates neutral and ion partition functions for all lines' elements."""
+        lines_el_idx = atomic_data[6]
+        partition_coeffs = atomic_data[7]
+        coeffs_0 = partition_coeffs[lines_el_idx, 0]
+        coeffs_1 = partition_coeffs[lines_el_idx, 1]
+        u0 = polynomial_partition_function_jax(t_k, coeffs_0)
+        u1 = polynomial_partition_function_jax(t_k, coeffs_1)
+        return u0, u1
 
-        @staticmethod
-        def _calculate_saha_fractions(t_ev, n_e, u0, u1, atomic_data):
-            """Calculates the Saha ionization population fractions."""
-            lines_el_idx = atomic_data[6]
-            ionization_potentials = atomic_data[8]
-            ip_i = ionization_potentials[lines_el_idx, 0]
-            saha_factor = (SAHA_CONST_CM3 / n_e) * (t_ev**1.5)
-            ratio_n1_n0 = saha_factor * (u1 / u0) * jnp.exp(-ip_i / t_ev)
-            frac0 = 1.0 / (1.0 + ratio_n1_n0)
-            frac1 = ratio_n1_n0 / (1.0 + ratio_n1_n0)
-            return frac0, frac1
+    @staticmethod
+    def _calculate_saha_fractions(t_ev, n_e, u0, u1, atomic_data):
+        """Calculates the Saha ionization population fractions."""
+        lines_el_idx = atomic_data[6]
+        ionization_potentials = atomic_data[8]
+        ip_i = ionization_potentials[lines_el_idx, 0]
+        saha_factor = (SAHA_CONST_CM3 / n_e) * (t_ev**1.5)
+        ratio_n1_n0 = saha_factor * (u1 / u0) * jnp.exp(-ip_i / t_ev)
+        frac0 = 1.0 / (1.0 + ratio_n1_n0)
+        frac1 = ratio_n1_n0 / (1.0 + ratio_n1_n0)
+        return frac0, frac1
 
-        @staticmethod
-        def _calculate_boltzmann_populations(
-            plasma_state,
-            saha_state,
+    @staticmethod
+    def _calculate_boltzmann_populations(
+        plasma_state,
+        saha_state,
+        atomic_data,
+    ):
+        """Calculates upper level populations using the Boltzmann equation."""
+        t_ev, n_e, concentration_map = plasma_state
+        u0, u1, frac0, frac1 = saha_state
+
+        lines_ek = atomic_data[2]
+        lines_gk = atomic_data[3]
+        lines_z = atomic_data[5]
+        lines_el_idx = atomic_data[6]
+
+        pop_fraction = jnp.where(lines_z == 0, frac0, frac1)
+        u_val = jnp.where(lines_z == 0, u0, u1)
+        element_conc = concentration_map[lines_el_idx]
+        n_species_total = element_conc * n_e
+        n_species = n_species_total * pop_fraction
+        n_upper = n_species * (lines_gk / u_val) * jnp.exp(-lines_ek / t_ev)
+        return n_upper
+
+    @staticmethod
+    @jit
+    def _saha_eggert_solver(
+        T_eV: float,
+        n_e: float,
+        concentration_map: jnp.ndarray,
+        atomic_data: Tuple,
+    ) -> jnp.ndarray:
+        """
+        Vectorized Saha-Eggert solver for JAX.
+
+        Calculates upper level populations for all lines simultaneously.
+
+        Parameters
+        ----------
+        T_eV : float
+            Electron temperature in eV
+        n_e : float
+            Electron density in cm^-3
+        concentration_map : array
+            Element concentrations
+        atomic_data : Tuple
+            Atomic data arrays from ManifoldGenerator._load_atomic_data
+
+        Returns
+        -------
+        array
+            Upper level populations
+        """
+        t_k = T_eV * EV_TO_K
+
+        u0, u1 = ManifoldGenerator._calculate_partition_functions(t_k, atomic_data)
+
+        frac0, frac1 = ManifoldGenerator._calculate_saha_fractions(T_eV, n_e, u0, u1, atomic_data)
+
+        n_upper = ManifoldGenerator._calculate_boltzmann_populations(
+            (T_eV, n_e, concentration_map),
+            (u0, u1, frac0, frac1),
             atomic_data,
-        ):
-            """Calculates upper level populations using the Boltzmann equation."""
-            t_ev, n_e, concentration_map = plasma_state
-            u0, u1, frac0, frac1 = saha_state
+        )
 
-            lines_ek = atomic_data[2]
-            lines_gk = atomic_data[3]
-            lines_z = atomic_data[5]
-            lines_el_idx = atomic_data[6]
+        return n_upper
 
-            pop_fraction = jnp.where(lines_z == 0, frac0, frac1)
-            u_val = jnp.where(lines_z == 0, u0, u1)
-            element_conc = concentration_map[lines_el_idx]
-            n_species_total = element_conc * n_e
-            n_species = n_species_total * pop_fraction
-            n_upper = n_species * (lines_gk / u_val) * jnp.exp(-lines_ek / t_ev)
-            return n_upper
+    @staticmethod
+    @jit
+    def _compute_spectrum_snapshot(
+        wl_grid: jnp.ndarray,
+        T_eV: float,
+        n_e: float,
+        concentrations: jnp.ndarray,
+        atomic_data: Tuple,
+    ) -> jnp.ndarray:
+        """
 
-        @staticmethod
-        @jit
-        def _saha_eggert_solver(
-            T_eV: float,
-            n_e: float,
-            concentration_map: jnp.ndarray,
-            atomic_data: Tuple,
-        ) -> jnp.ndarray:
-            """
-            Vectorized Saha-Eggert solver for JAX.
+        Compute spectrum for a single time snapshot.
 
-            Calculates upper level populations for all lines simultaneously.
 
-            Parameters
-            ----------
-            T_eV : float
-                Electron temperature in eV
-            n_e : float
-                Electron density in cm^-3
-            concentration_map : array
-                Element concentrations
-            atomic_data : Tuple
-                Atomic data arrays from ManifoldGenerator._load_atomic_data
 
-            Returns
-            -------
-            array
-                Upper level populations
-            """
-            t_k = T_eV * EV_TO_K
+        Parameters
 
-            u0, u1 = ManifoldGenerator._calculate_partition_functions(t_k, atomic_data)
+        ----------
 
-            frac0, frac1 = ManifoldGenerator._calculate_saha_fractions(
-                T_eV, n_e, u0, u1, atomic_data
+        wl_grid : array
+
+            Wavelength grid
+
+        T_eV : float
+
+            Temperature in eV
+
+        n_e : float
+
+            Electron density
+
+        concentrations : array
+
+            Element concentrations
+
+        atomic_data : Tuple
+
+            Atomic data arrays
+
+
+
+        Returns
+
+        -------
+
+        array
+
+            Spectral intensity
+
+        """
+
+        (
+            l_wl,
+            l_aki,
+            l_ek,
+            l_gk,
+            l_ip,
+            l_z,
+            l_el_idx,
+            partition_coeffs,
+            ionization_potentials,
+            l_stark_w,
+            l_stark_alpha,
+            l_mass_amu,
+        ) = atomic_data
+
+        # Solve populations
+
+        n_upper = ManifoldGenerator._saha_eggert_solver(
+            T_eV,
+            n_e,
+            concentrations,
+            atomic_data,
+        )
+
+        # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
+
+        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
+
+        # --- Proper Voigt Broadening (Phase 2) ---
+
+        # Doppler width: sigma = lambda/c * sqrt(2kT/m)
+        # Using JAX-compatible doppler_sigma_jax
+        mass_kg = l_mass_amu * M_PROTON
+        sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
+
+        # Instrument broadening (Gaussian sigma)
+        # Uses default 0.05 nm FWHM; configurable via ManifoldConfig.instrument_fwhm_nm
+        sigma_inst = 0.05 / 2.355  # FWHM -> sigma
+
+        # Total Gaussian width
+        sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
+
+        # Stark broadening: HWHM (Lorentzian gamma)
+        # Use estimate_stark_parameter_jax for missing values (NaN)
+        # w_stark = w_ref * (n_e / 1e16) * (T / T_ref)^(-alpha)
+        REF_NE = 1.0e16
+        REF_T_EV = 0.86173  # 10000 K in eV
+
+        # Estimate Stark w_ref for lines without database values
+        # Use binding energy = IP - E_upper
+        binding_energy = jnp.maximum(l_ip - l_ek, 0.1)
+        n_eff = (l_z + 1) * jnp.sqrt(13.605 / binding_energy)
+        w_est = 2.0e-5 * (l_wl / 500.0) ** 2 * (n_eff**4)
+        w_est = jnp.clip(w_est, 0.0001, 0.5)
+
+        # Use database value if available, else estimate
+        w_ref = jnp.where(jnp.isnan(l_stark_w), w_est, l_stark_w)
+
+        # Stark HWHM calculation
+        factor_ne = n_e / REF_NE
+        factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -l_stark_alpha)
+        gamma_stark = w_ref * factor_ne * factor_T
+
+        # --- Voigt Profile Rendering (Humlicek W4 approximation) ---
+        # For each wavelength point, compute Voigt profile contribution from all lines
+        # z = (x + i*gamma) / (sigma * sqrt(2))
+        # V(x) = Re(w(z)) / (sigma * sqrt(2*pi))
+
+        diff = wl_grid[:, None] - l_wl[None, :]  # (n_wl, n_lines)
+
+        # Compute Voigt profile using Humlicek W4 approximation
+        z = (diff + 1j * gamma_stark) / (sigma_total * jnp.sqrt(2.0))
+
+        # Humlicek W4 Faddeeva approximation (no complex erfc needed)
+        x_h = jnp.real(z)
+        y_h = jnp.abs(jnp.imag(z))
+        s = jnp.abs(x_h) + y_h
+        t = y_h - 1j * x_h
+
+        # Region 1: s >= 15 (asymptotic)
+        w_r1 = t * 0.5641896 / (0.5 + t * t)
+
+        # Region 2: 5.5 <= s < 15
+        u = t * t
+        w_r2 = t * (1.410474 + u * 0.5641896) / (0.75 + u * (3.0 + u))
+
+        # Region 3: s < 5.5 and y >= 0.195 * |x| - 0.176
+        w_r3 = (16.4955 + t * (20.20933 + t * (11.96482 + t * (3.778987 + t * 0.5642236)))) / (
+            16.4955 + t * (38.82363 + t * (39.27121 + t * (21.69274 + t * (6.699398 + t))))
+        )
+
+        # Region 4: s < 5.5 and y < 0.195 * |x| - 0.176
+        w_r4 = jnp.exp(u) - t * (
+            36183.31
+            - u
+            * (
+                3321.9905
+                - u * (1540.787 - u * (219.0313 - u * (35.76683 - u * (1.320522 - u * 0.56419))))
             )
-
-            n_upper = ManifoldGenerator._calculate_boltzmann_populations(
-                (T_eV, n_e, concentration_map),
-                (u0, u1, frac0, frac1),
-                atomic_data,
+        ) / (
+            32066.6
+            - u
+            * (
+                24322.84
+                - u
+                * (9022.228 - u * (2186.181 - u * (364.2191 - u * (61.57037 - u * (1.841439 - u)))))
             )
+        )
 
-            return n_upper
+        # Select region based on conditions
+        w_z = jnp.where(
+            s >= 15.0,
+            w_r1,
+            jnp.where(
+                s >= 5.5,
+                w_r2,
+                jnp.where(
+                    y_h >= 0.195 * jnp.abs(x_h) - 0.176,
+                    w_r3,
+                    w_r4,
+                ),
+            ),
+        )
 
-        @staticmethod
-        @jit
-        def _compute_spectrum_snapshot(
-            wl_grid: jnp.ndarray,
-            T_eV: float,
-            n_e: float,
-            concentrations: jnp.ndarray,
-            atomic_data: Tuple,
-        ) -> jnp.ndarray:
-            """
+        profile = jnp.real(w_z) / (sigma_total * jnp.sqrt(2.0 * jnp.pi))
 
-            Compute spectrum for a single time snapshot.
+        # Sum contributions weighted by emissivity
 
+        intensity = jnp.sum(epsilon * profile, axis=1)
 
-
-            Parameters
-
-            ----------
-
-            wl_grid : array
-
-                Wavelength grid
-
-            T_eV : float
-
-                Temperature in eV
-
-            n_e : float
-
-                Electron density
-
-            concentrations : array
-
-                Element concentrations
-
-            atomic_data : Tuple
-
-                Atomic data arrays
-
-
-
-            Returns
-
-            -------
-
-            array
-
-                Spectral intensity
-
-            """
-
-            (
-                l_wl,
-                l_aki,
-                l_ek,
-                l_gk,
-                l_ip,
-                l_z,
-                l_el_idx,
-                partition_coeffs,
-                ionization_potentials,
-                l_stark_w,
-                l_stark_alpha,
-                l_mass_amu,
-            ) = atomic_data
-
-            # Solve populations
-
-            n_upper = ManifoldGenerator._saha_eggert_solver(
-                T_eV,
-                n_e,
-                concentrations,
-                atomic_data,
-            )
-
-            # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
-
-            epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
-
-            # --- Proper Voigt Broadening (Phase 2) ---
-
-            # Doppler width: sigma = lambda/c * sqrt(2kT/m)
-            sigma_doppler = doppler_sigma_jax(l_wl, T_eV, l_mass_amu)
-
-            # Instrument broadening (Gaussian sigma)
-            # Uses default 0.05 nm FWHM; configurable via ManifoldConfig.instrument_fwhm_nm
-            sigma_inst = 0.05 / 2.355  # FWHM -> sigma
-
-            # Total Gaussian width
-            sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
-
-            # Stark broadening: HWHM (Lorentzian gamma)
-            w_est = estimate_stark_parameter_jax(l_wl, l_ek, l_ip, l_z + 1)
-            w_ref = jnp.where(jnp.isnan(l_stark_w), w_est, l_stark_w)
-            gamma_stark = stark_hwhm_jax(n_e, T_eV, w_ref, l_stark_alpha)
-
-            # --- Voigt Profile Rendering (Weideman approximation) ---
-            intensity = voigt_spectrum_jax(wl_grid, l_wl, epsilon, sigma_total, gamma_stark)
-
-            return intensity
+        return intensity
 
     @staticmethod
     @jit
