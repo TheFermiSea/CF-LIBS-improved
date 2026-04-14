@@ -276,7 +276,7 @@ class JointOptimizer:
     ):
         if not HAS_JAX:
             raise ImportError(
-                "JAX is required for joint optimization. " "Install with: pip install jax jaxlib"
+                "JAX is required for joint optimization. Install with: pip install jax jaxlib"
             )
 
         self.forward_model = forward_model
@@ -680,23 +680,76 @@ class JointOptimizer:
         loss_fn = self._create_loss_function(measured, uncertainties)
         opt_loss = result.final_loss
 
+        # Get initial free parameters based on current optimum
+        x_opt = self._pack_params(
+            result.temperature_eV,
+            result.electron_density_cm3,
+            result.concentrations,
+        )
+        opt_log_T = x_opt[0]
+        opt_log_ne = x_opt[1]
+        opt_theta = x_opt[2:]
+
+        if parameter == "T_eV":
+            x_free_opt = jnp.concatenate([jnp.array([opt_log_ne]), opt_theta])
+        elif parameter == "log_ne":
+            x_free_opt = jnp.concatenate([jnp.array([opt_log_T]), opt_theta])
+        elif parameter.startswith("C_"):
+            el = parameter[2:]
+            if el not in self.elements:
+                raise ValueError(f"Unknown element: {el}")
+            el_idx = self.elements.index(el)
+            x_free_opt = jnp.concatenate(
+                [jnp.array([opt_log_T, opt_log_ne]), jnp.delete(opt_theta, el_idx)]
+            )
+
         profile_loss = []
         for pval in param_values:
-            # TODO: Re-optimize with fixed parameter
-            # For now, compute loss at fixed parameter with other params at optimum
             if parameter == "T_eV":
-                x = self._pack_params(pval, result.electron_density_cm3, result.concentrations)
-            elif parameter == "log_ne":
-                x = self._pack_params(result.temperature_eV, 10**pval, result.concentrations)
-            else:
-                # Fixed concentration (not yet implemented)
-                x = self._pack_params(
-                    result.temperature_eV,
-                    result.electron_density_cm3,
-                    result.concentrations,
-                )
 
-            loss = float(loss_fn(x))
+                def sub_loss(x_free):
+                    # x_free: [log_ne, theta...]
+                    # pval: T_eV
+                    safe_T = jnp.maximum(jnp.array(pval), 0.1)
+                    x_full = jnp.concatenate([jnp.array([jnp.log(safe_T)]), x_free])
+                    return loss_fn(x_full)
+            elif parameter == "log_ne":
+
+                def sub_loss(x_free):
+                    # x_free: [log_T, theta...]
+                    # pval: log_ne
+                    x_full = jnp.concatenate([jnp.array([x_free[0], pval]), x_free[1:]])
+                    return loss_fn(x_full)
+            elif parameter.startswith("C_"):
+                el = parameter[2:]
+                el_idx = self.elements.index(el)
+
+                def sub_loss(x_free):
+                    # x_free: [log_T, log_ne, theta_free...]
+                    # pval: C_el
+                    log_T, log_ne = x_free[0], x_free[1]
+                    theta_free = x_free[2:]
+
+                    # Compute theta_fixed such that softmax(theta)[el_idx] == pval
+                    safe_pval = jnp.clip(pval, 1e-10, 1.0 - 1e-10)
+                    sum_exp_free = jnp.sum(jnp.exp(theta_free))
+                    theta_fixed = (
+                        jnp.log(safe_pval) - jnp.log(1.0 - safe_pval) + jnp.log(sum_exp_free)
+                    )
+
+                    theta_full = jnp.insert(theta_free, el_idx, theta_fixed)
+                    x_full = jnp.concatenate([jnp.array([log_T, log_ne]), theta_full])
+                    return loss_fn(x_full)
+            else:
+                raise ValueError(f"Unknown parameter: {parameter}")
+
+            # Re-optimize other parameters starting from the overall optimum
+            res = jax_minimize(sub_loss, x_free_opt, method="bfgs", options={"maxiter": 50})
+
+            loss = float(res.fun)
+            # You could do x_free_opt = res.x here for warm start, but starting from the overall
+            # optimum is more robust against local minima for small deviations.
+
             profile_loss.append((loss - opt_loss) * self.n_wavelength)  # Delta chi^2
 
         return param_values, np.array(profile_loss)
@@ -781,7 +834,7 @@ class MultiStartJointOptimizer:
             conc_dict = {el: conc_init[j] for j, el in enumerate(self.optimizer.elements)}
 
             logger.debug(
-                f"Multi-start {i + 1}/{self.n_starts}: " f"T0={T_init:.3f} eV, n_e0={n_e_init:.2e}"
+                f"Multi-start {i + 1}/{self.n_starts}: T0={T_init:.3f} eV, n_e0={n_e_init:.2e}"
             )
 
             try:
