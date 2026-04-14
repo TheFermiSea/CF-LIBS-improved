@@ -292,28 +292,28 @@ def get_levels_for_species(
     if cache_key in _level_cache:
         return _level_cache[cache_key]
 
-    # Query energy levels
+    # Query energy levels via public API
     try:
-        conn = atomic_db._get_connection()
-        rows = conn.execute(
-            "SELECT g_level, energy_ev FROM energy_levels "
-            "WHERE element = ? AND sp_num = ? ORDER BY energy_ev",
-            (element, ionization_stage),
-        ).fetchall()
+        levels = atomic_db.get_energy_levels(element, ionization_stage)
     except Exception:
         return None
 
-    if not rows:
+    if not levels:
         return None
 
     # Get ionization potential
     ip = atomic_db.get_ionization_potential(element, ionization_stage)
     if ip is None:
         # Fallback: use max level energy + 1 eV as rough IP
-        ip = max(e for _, e in rows) + 1.0
+        ip = max(lev.energy_ev for lev in levels) + 1.0
 
-    g_arr = np.array([r[0] for r in rows], dtype=np.float64)
-    E_arr = np.array([r[1] for r in rows], dtype=np.float64)
+    g_arr = np.array([lev.g for lev in levels], dtype=np.float64)
+    E_arr = np.array([lev.energy_ev for lev in levels], dtype=np.float64)
+
+    # Sort by energy
+    sort_idx = np.argsort(E_arr)
+    g_arr = g_arr[sort_idx]
+    E_arr = E_arr[sort_idx]
 
     # Pre-filter autoionizing levels (belt-and-suspenders with DB cleanup)
     below_ip = E_arr < ip
