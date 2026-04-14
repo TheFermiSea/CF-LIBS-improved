@@ -1,5 +1,5 @@
 """
-Tests for I/O utilities.
+Tests for I/O spectrum utilities.
 """
 
 import os
@@ -62,6 +62,7 @@ def test_load_spectrum_csv():
     intensity = np.exp(-(((wavelength - 500) / 50) ** 2))
 
     fd, temp_path = tempfile.mkstemp(suffix=".csv")
+    os.close(fd)
 
     try:
         # Create CSV file
@@ -84,6 +85,7 @@ def test_load_spectrum_csv_alternative_names():
     intensity = np.ones_like(wavelength)
 
     fd, temp_path = tempfile.mkstemp(suffix=".csv")
+    os.close(fd)
 
     try:
         # Create CSV with alternative names
@@ -125,6 +127,56 @@ def test_load_spectrum_file_not_found():
     """Test loading non-existent file."""
     with pytest.raises(FileNotFoundError):
         load_spectrum("nonexistent_file.csv")
+
+
+def test_load_spectrum_csv_no_wavelength():
+    """Test loading CSV without wavelength column."""
+    wavelength = np.linspace(200, 800, 100)
+    intensity = np.ones_like(wavelength)
+
+    fd, temp_path = tempfile.mkstemp(suffix=".csv")
+    os.close(fd)
+    try:
+        df = pd.DataFrame({"random_col": wavelength, "intensity": intensity})
+        df.to_csv(temp_path, index=False)
+
+        with pytest.raises(ValueError, match="Could not find wavelength column in CSV"):
+            load_spectrum(temp_path)
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_load_spectrum_csv_no_intensity():
+    """Test loading CSV without intensity column."""
+    wavelength = np.linspace(200, 800, 100)
+    intensity = np.ones_like(wavelength)
+
+    fd, temp_path = tempfile.mkstemp(suffix=".csv")
+    os.close(fd)
+    try:
+        df = pd.DataFrame({"wavelength": wavelength, "random_col": intensity})
+        df.to_csv(temp_path, index=False)
+
+        with pytest.raises(ValueError, match="Could not find intensity column in CSV"):
+            load_spectrum(temp_path)
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_load_spectrum_numpy_1d_array():
+    """Test loading txt/numpy file with 1D array."""
+    wavelength = np.linspace(200, 800, 100)
+
+    fd, temp_path = tempfile.mkstemp(suffix=".txt")
+    os.close(fd)
+
+    try:
+        np.savetxt(temp_path, wavelength)
+
+        with pytest.raises(ValueError, match="Spectrum file must have at least 2 columns"):
+            load_spectrum(temp_path)
+    finally:
+        Path(temp_path).unlink()
 
 
 if __name__ == "__main__":
