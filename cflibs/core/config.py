@@ -65,6 +65,12 @@ def load_config(config_path: Union[str, Path]) -> Dict[str, Any]:
                     "PyYAML is required for YAML config files. " "Install with: pip install pyyaml"
                 )
             config = yaml.safe_load(f)  # type: ignore[attr-defined, union-attr]
+        elif suffix == ".json":
+            import json
+
+            config = json.load(f)
+        else:
+            raise ValueError(f"Unsupported config file format: {suffix} (use .yaml, .yml, or .json)")
 
     logger.info(f"Loaded configuration from {config_path}")
     return config

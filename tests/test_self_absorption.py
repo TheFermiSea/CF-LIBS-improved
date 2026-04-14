@@ -742,7 +742,9 @@ class TestMultipletLine:
     def test_oscillator_strength_calculation(self):
         """Verify oscillator strength is calculated from Einstein A."""
         # For a known A_ki, calculate expected f_ik
-        # f_ik = 1.4992e-16 * lambda[cm]^2 * A_ki * (g_k / g_i)
+        # f_ik = 1.4992 * lambda[cm]^2 * A_ki * (g_k / g_i)
+        # Prefactor 1.4992 is m_e*c/(8*pi^2*e^2) in CGS with lambda in cm.
+        # (1.4992e-16 is the same constant but for lambda in Angstroms.)
         line = MultipletLine(
             wavelength_nm=500.0,
             equivalent_width_nm=0.05,
@@ -756,7 +758,7 @@ class TestMultipletLine:
         )
 
         lambda_cm = 500.0 * 1e-7
-        expected_f = 1.4992e-16 * (lambda_cm**2) * 1e8 * (7 / 5)
+        expected_f = 1.4992 * (lambda_cm**2) * 1e8 * (7 / 5)
 
         assert line.oscillator_strength == pytest.approx(expected_f, rel=1e-6)
 

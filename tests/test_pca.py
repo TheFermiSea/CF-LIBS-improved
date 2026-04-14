@@ -519,8 +519,10 @@ class TestNoJAXBackend:
 
     def test_jax_requested_without_jax_raises(self, monkeypatch):
         """Should raise if JAX requested but not available."""
-        # Temporarily pretend JAX isn't available
-        import cflibs.inversion.pca as pca_module
+        # Temporarily pretend JAX isn't available.
+        # Must patch the canonical module where PCAPipeline reads HAS_JAX,
+        # not the backward-compat shim (cflibs.inversion.pca).
+        import cflibs.inversion.common.pca as pca_module
 
         monkeypatch.setattr(pca_module, "HAS_JAX", False)
 
