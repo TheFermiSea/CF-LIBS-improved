@@ -1065,6 +1065,7 @@ class PLSCalibrationModel:
             # Compute latent scores: preprocess X, then project onto weight space
             X_proc = self.pls_model._preprocess_x(spectrum, fit=False)
             components = self.pls_model.components
+            assert components is not None  # model is fitted
             W = components.x_weights
             P = components.x_loadings
             PW_inv = self.pls_model._safe_pw_inverse(P, W)

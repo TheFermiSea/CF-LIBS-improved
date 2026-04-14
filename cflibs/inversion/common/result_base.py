@@ -149,6 +149,7 @@ class ResultTableMixin:
             std = conc_std.get(el, 0.0)
 
             if has_ci:
+                assert conc_ci is not None  # narrowed by has_ci guard
                 ci = conc_ci.get(el, (mean - 2 * std, mean + 2 * std))
                 lines.append(f"{el:<20} {mean:>12.4f} {std:>12.4f} [{ci[0]:.4f}, {ci[1]:.4f}]")
             else:

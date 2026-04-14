@@ -46,6 +46,7 @@ htmlcov/
 
 # Data files
 *.db
+!ASD_da/libs_production.db
 *.sqlite
 *.h5
 *.hdf5
@@ -65,7 +66,6 @@ uv.lock
 Thumbs.db
 
 # Project specific
-libs_production.db
 spectral_manifold.h5
 *.log
 output/
