@@ -289,33 +289,12 @@ def _compute_instrument_sigma(
         return instrument_fwhm_nm / 2.355
 
 
-def load_atomic_data(
+def _query_atomic_data(
     db_path: str,
     elements: List[str],
     wavelength_range: Tuple[float, float],
-) -> "AtomicDataArrays":
-    """Load atomic data from database into JAX arrays.
-
-    This is a module-level utility shared by both ``BayesianForwardModel`` and
-    ``TwoZoneBayesianForwardModel``.
-
-    Parameters
-    ----------
-    db_path : str
-        Path to the SQLite atomic database.
-    elements : list of str
-        Elements to include (e.g. ``["Fe", "Cu"]``).
-    wavelength_range : tuple of float
-        ``(wl_min, wl_max)`` in nm.
-
-    Returns
-    -------
-    AtomicDataArrays
-        Arrays ready for JAX computation.
-    """
-    if not HAS_JAX:
-        raise ImportError("JAX required. Install with: pip install jax jaxlib")
-
+) -> Tuple[Any, np.ndarray, np.ndarray]:
+    """Query the database to retrieve atomic lines and species physics."""
     import pandas as pd
     import sqlite3
 
@@ -375,8 +354,7 @@ def load_atomic_data(
                         ips[el_idx, stage_idx] = ip_ev
 
             cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' "
-                "AND name='partition_functions'"
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='partition_functions'"
             )
             if cursor.fetchone():
                 cursor.execute(
@@ -394,6 +372,13 @@ def load_atomic_data(
         except Exception as e:
             logger.warning(f"Failed to load physics data: {e}")
 
+    return df, coeffs, ips
+
+
+def _format_atomic_data_arrays(
+    df: Any, coeffs: np.ndarray, ips: np.ndarray, elements: List[str]
+) -> "AtomicDataArrays":
+    """Format dataframe and physics arrays into JAX AtomicDataArrays."""
     stark_w_raw = df["stark_w"].fillna(float("nan")).values
     stark_alpha_raw = df["stark_alpha"].fillna(0.5).values
 
@@ -430,6 +415,37 @@ def load_atomic_data(
         ei_ev=jnp.array(ei_ev_vals, dtype=jnp.float32),
         f_osc=jnp.array(f_osc, dtype=jnp.float32),
     )
+
+
+def load_atomic_data(
+    db_path: str,
+    elements: List[str],
+    wavelength_range: Tuple[float, float],
+) -> "AtomicDataArrays":
+    """Load atomic data from database into JAX arrays.
+
+    This is a module-level utility shared by both ``BayesianForwardModel`` and
+    ``TwoZoneBayesianForwardModel``.
+
+    Parameters
+    ----------
+    db_path : str
+        Path to the SQLite atomic database.
+    elements : list of str
+        Elements to include (e.g. ``["Fe", "Cu"]``).
+    wavelength_range : tuple of float
+        ``(wl_min, wl_max)`` in nm.
+
+    Returns
+    -------
+    AtomicDataArrays
+        Arrays ready for JAX computation.
+    """
+    if not HAS_JAX:
+        raise ImportError("JAX required. Install with: pip install jax jaxlib")
+
+    df, coeffs, ips = _query_atomic_data(db_path, elements, wavelength_range)
+    return _format_atomic_data_arrays(df, coeffs, ips, elements)
 
 
 def partition_function(T_K: float, coeffs: Any) -> Any:
@@ -2252,7 +2268,7 @@ class NestedSampler:
         # Set random state
         rstate = np.random.default_rng(seed)
 
-        logger.info(f"Starting nested sampling: nlive={nlive}, dlogz={dlogz}, " f"ndim={self.ndim}")
+        logger.info(f"Starting nested sampling: nlive={nlive}, dlogz={dlogz}, ndim={self.ndim}")
 
         # Create and run sampler
         sampler = DynestyNestedSampler(
