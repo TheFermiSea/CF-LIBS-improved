@@ -101,7 +101,7 @@ class ManifoldGenerator:
         """
         if not HAS_JAX:
             raise ImportError(
-                "JAX is required for manifold generation. " "Install with: pip install jax jaxlib"
+                "JAX is required for manifold generation. Install with: pip install jax jaxlib"
             )
 
         config.validate()
@@ -363,6 +363,48 @@ class ManifoldGenerator:
         )
 
         @staticmethod
+        def _calculate_partition_functions(T_K, lines_el_idx, partition_coeffs):
+            """Calculates neutral and ion partition functions for all lines' elements."""
+            coeffs_0 = partition_coeffs[lines_el_idx, 0]
+            coeffs_1 = partition_coeffs[lines_el_idx, 1]
+            U0 = polynomial_partition_function_jax(T_K, coeffs_0)
+            U1 = polynomial_partition_function_jax(T_K, coeffs_1)
+            return U0, U1
+
+        @staticmethod
+        def _calculate_saha_fractions(T_eV, n_e, U0, U1, lines_el_idx, ionization_potentials):
+            """Calculates the Saha ionization population fractions."""
+            IP_I = ionization_potentials[lines_el_idx, 0]
+            saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
+            ratio_n1_n0 = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
+            frac0 = 1.0 / (1.0 + ratio_n1_n0)
+            frac1 = ratio_n1_n0 / (1.0 + ratio_n1_n0)
+            return frac0, frac1
+
+        @staticmethod
+        def _calculate_boltzmann_populations(
+            T_eV,
+            n_e,
+            concentration_map,
+            lines_z,
+            lines_el_idx,
+            lines_ek,
+            lines_gk,
+            U0,
+            U1,
+            frac0,
+            frac1,
+        ):
+            """Calculates upper level populations using the Boltzmann equation."""
+            pop_fraction = jnp.where(lines_z == 0, frac0, frac1)
+            U_val = jnp.where(lines_z == 0, U0, U1)
+            element_conc = concentration_map[lines_el_idx]
+            N_species_total = element_conc * n_e
+            N_species = N_species_total * pop_fraction
+            n_upper = N_species * (lines_gk / U_val) * jnp.exp(-lines_ek / T_eV)
+            return n_upper
+
+        @staticmethod
         @jit
         def _saha_eggert_solver(
             T_eV: float,
@@ -425,75 +467,29 @@ class ManifoldGenerator:
                 Upper level populations
 
             """
-
-            # Calculate T in Kelvin
-
             T_K = T_eV * EV_TO_K
 
-            # Retrieve Partition Functions for all lines' elements
+            U0, U1 = ManifoldGenerator._calculate_partition_functions(
+                T_K, lines_el_idx, partition_coeffs
+            )
 
-            # U0: Neutral (stage 0), U1: Ion (stage 1)
+            frac0, frac1 = ManifoldGenerator._calculate_saha_fractions(
+                T_eV, n_e, U0, U1, lines_el_idx, ionization_potentials
+            )
 
-            # We only support I/II balance for now in this fast solver
-
-            coeffs_0 = partition_coeffs[lines_el_idx, 0]
-
-            coeffs_1 = partition_coeffs[lines_el_idx, 1]
-
-            U0 = polynomial_partition_function_jax(T_K, coeffs_0)
-
-            U1 = polynomial_partition_function_jax(T_K, coeffs_1)
-
-            # Retrieve Ionization Potential (I -> II) for all lines' elements
-
-            # We need the IP of the neutral species (stage 0) to balance I <-> II
-
-            IP_I = ionization_potentials[lines_el_idx, 0]
-
-            # Saha equation: n1 / n0 = (SAHA_CONST/ne) * T^1.5 * (U1/U0) * exp(-IP/T)
-            # SAHA_CONST_CM3 already includes the free-electron degeneracy factor g_e = 2.
-
-            saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
-
-            ratio_n1_n0 = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
-
-            # Calculate population fractions
-
-            # frac0 = n0 / (n0 + n1)
-
-            # frac1 = n1 / (n0 + n1)
-
-            frac0 = 1.0 / (1.0 + ratio_n1_n0)
-
-            frac1 = ratio_n1_n0 / (1.0 + ratio_n1_n0)
-
-            # Select fraction based on line's ionization stage
-
-            # lines_z=0 -> use frac0, lines_z=1 -> use frac1
-
-            pop_fraction = jnp.where(lines_z == 0, frac0, frac1)
-
-            # Select appropriate partition function for Boltzmann
-
-            # n_upper = n_species * (g / U) * exp(-E / T)
-
-            U_val = jnp.where(lines_z == 0, U0, U1)
-
-            # Total element density
-
-            # N_total_element = element_conc * n_e
-
-            element_conc = concentration_map[lines_el_idx]
-
-            N_species_total = element_conc * n_e
-
-            # Species density (n0 or n1)
-
-            N_species = N_species_total * pop_fraction
-
-            # Boltzmann level population
-
-            n_upper = N_species * (lines_gk / U_val) * jnp.exp(-lines_ek / T_eV)
+            n_upper = ManifoldGenerator._calculate_boltzmann_populations(
+                T_eV,
+                n_e,
+                concentration_map,
+                lines_z,
+                lines_el_idx,
+                lines_ek,
+                lines_gk,
+                U0,
+                U1,
+                frac0,
+                frac1,
+            )
 
             return n_upper
 
@@ -751,8 +747,7 @@ class ManifoldGenerator:
         if storage_format == "hdf5":
             if not HAS_H5PY:
                 raise ImportError(
-                    "h5py is required for HDF5 manifold generation. "
-                    "Install with: pip install h5py"
+                    "h5py is required for HDF5 manifold generation. Install with: pip install h5py"
                 )
             output_root = h5py.File(output_path, "w")
             dset_spec = output_root.create_dataset(
@@ -825,7 +820,7 @@ class ManifoldGenerator:
                 if progress_callback:
                     progress_callback(i + len(batch), n_samples, (i + len(batch)) / n_samples)
                 elif i % (self.config.batch_size * 10) == 0:
-                    logger.info(f"Generated {i}/{n_samples} ({i/n_samples:.1%})")
+                    logger.info(f"Generated {i}/{n_samples} ({i / n_samples:.1%})")
         finally:
             if storage_format == "hdf5":
                 output_root.close()
@@ -833,6 +828,6 @@ class ManifoldGenerator:
         total_time = time.time() - start_time
         logger.info(
             f"Manifold generation complete: {n_samples} spectra in {total_time:.2f}s "
-            f"({n_samples/total_time:.0f} spectra/sec)"
+            f"({n_samples / total_time:.0f} spectra/sec)"
         )
         logger.info(f"Output saved to: {output_path} ({storage_format})")
