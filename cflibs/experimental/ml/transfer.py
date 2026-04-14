@@ -67,7 +67,7 @@ logger = get_logger("inversion.transfer")
 try:
     import jax  # noqa: F401
     import jax.numpy as jnp
-    from jax import jit, grad  # noqa: F401
+    from jax import jit  # noqa: F401
 
     HAS_JAX = True
 except ImportError:
@@ -600,7 +600,7 @@ class DomainAdapter:
         mmd_after = compute_mmd(source_aligned, target)
 
         logger.info(
-            f"Domain adaptation ({self.method.name}): " f"MMD {mmd_before:.6f} -> {mmd_after:.6f}"
+            f"Domain adaptation ({self.method.name}): MMD {mmd_before:.6f} -> {mmd_after:.6f}"
         )
 
         return DomainAdaptationResult(
@@ -1128,7 +1128,7 @@ class FineTuner:
         y_val = target_concentrations[val_idx]
 
         if verbose:
-            logger.info(f"Fine-tuning: {n_train} train, {n_val} val samples, " f"{epochs} epochs")
+            logger.info(f"Fine-tuning: {n_train} train, {n_val} val samples, {epochs} epochs")
 
         if HAS_JAX:
             return self._adapt_jax(
@@ -1218,9 +1218,7 @@ class FineTuner:
                 patience_counter += 1
 
             if verbose and epoch % 10 == 0:
-                logger.info(
-                    f"Epoch {epoch}: train_loss={loss_val:.6f}, " f"val_loss={val_loss:.6f}"
-                )
+                logger.info(f"Epoch {epoch}: train_loss={loss_val:.6f}, val_loss={val_loss:.6f}")
 
             # Early stopping
             if patience_counter >= self.early_stopping_patience:
@@ -1364,9 +1362,7 @@ class TransferLearningPipeline:
         self.use_finetuning = use_finetuning
 
         # Initialize components with per-stage keyword arguments
-        self.domain_adapter = DomainAdapter(
-            method=adaptation_method, **(adapter_kwargs or {})
-        )
+        self.domain_adapter = DomainAdapter(method=adaptation_method, **(adapter_kwargs or {}))
         self.calibration_transfer = CalibrationTransfer(
             method=transfer_method, **(calibration_kwargs or {})
         )
