@@ -704,33 +704,33 @@ class JointOptimizer:
             )
 
         profile_loss = []
-        for pval in param_values:
-            if parameter == "T_eV":
 
+        if parameter == "T_eV":
+
+            def sub_loss_factory(pval):
                 def sub_loss(x_free):
-                    # x_free: [log_ne, theta...]
-                    # pval: T_eV
                     safe_T = jnp.maximum(jnp.array(pval), 0.1)
                     x_full = jnp.concatenate([jnp.array([jnp.log(safe_T)]), x_free])
                     return loss_fn(x_full)
-            elif parameter == "log_ne":
 
+                return sub_loss
+        elif parameter == "log_ne":
+
+            def sub_loss_factory(pval):
                 def sub_loss(x_free):
-                    # x_free: [log_T, theta...]
-                    # pval: log_ne
                     x_full = jnp.concatenate([jnp.array([x_free[0], pval]), x_free[1:]])
                     return loss_fn(x_full)
-            elif parameter.startswith("C_"):
-                el = parameter[2:]
-                el_idx = self.elements.index(el)
 
+                return sub_loss
+        elif parameter.startswith("C_"):
+            el = parameter[2:]
+            el_idx = self.elements.index(el)
+
+            def sub_loss_factory(pval):
                 def sub_loss(x_free):
-                    # x_free: [log_T, log_ne, theta_free...]
-                    # pval: C_el
                     log_T, log_ne = x_free[0], x_free[1]
                     theta_free = x_free[2:]
 
-                    # Compute theta_fixed such that softmax(theta)[el_idx] == pval
                     safe_pval = jnp.clip(pval, 1e-10, 1.0 - 1e-10)
                     sum_exp_free = jnp.sum(jnp.exp(theta_free))
                     theta_fixed = (
@@ -740,8 +740,13 @@ class JointOptimizer:
                     theta_full = jnp.insert(theta_free, el_idx, theta_fixed)
                     x_full = jnp.concatenate([jnp.array([log_T, log_ne]), theta_full])
                     return loss_fn(x_full)
-            else:
-                raise ValueError(f"Unknown parameter: {parameter}")
+
+                return sub_loss
+        else:
+            raise ValueError(f"Unknown parameter: {parameter}")
+
+        for pval in param_values:
+            sub_loss = sub_loss_factory(pval)
 
             # Re-optimize other parameters starting from the overall optimum
             res = jax_minimize(sub_loss, x_free_opt, method="bfgs", options={"maxiter": 50})
