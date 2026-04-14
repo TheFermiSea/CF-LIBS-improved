@@ -11,7 +11,7 @@ import subprocess
 import time
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class SlurmJobState(Enum):
@@ -515,8 +515,7 @@ class SlurmJobManager:
             return SlurmJobState.UNKNOWN
 
 
-def create_distributed_mcmc_job(
-    script_path: str,
+def generate_distributed_mcmc_script(
     db_path: str,
     elements: List[str],
     wavelength_range: Tuple[float, float],
@@ -534,12 +533,10 @@ def create_distributed_mcmc_job(
     modules: Optional[List[str]] = None,
     conda_env: Optional[str] = None,
 ) -> str:
-    """Generate a SLURM SBATCH script for distributed MCMC.
+    """Generate a SLURM SBATCH script content for distributed MCMC.
 
     Parameters
     ----------
-    script_path : str
-        Path to write the generated SBATCH script.
     db_path : str
         Path to the atomic database.
     elements : list of str
@@ -576,7 +573,7 @@ def create_distributed_mcmc_job(
     Returns
     -------
     str
-        The SBATCH script content (also written to *script_path*).
+        The SBATCH script content.
     """
     wl_min, wl_max = wavelength_range
 
@@ -656,6 +653,28 @@ def create_distributed_mcmc_job(
     )
 
     script_content = "\n".join(lines) + "\n"
+    return script_content
+
+
+def create_distributed_mcmc_job(script_path: str, **kwargs: Any) -> str:
+    """Generate a SLURM SBATCH script for distributed MCMC.
+
+    This function wraps :func:`generate_distributed_mcmc_script` to also
+    write the generated script content to a file.
+
+    Parameters
+    ----------
+    script_path : str
+        Path to write the generated SBATCH script.
+    **kwargs : Any
+        Arguments passed to :func:`generate_distributed_mcmc_script`.
+
+    Returns
+    -------
+    str
+        The SBATCH script content (also written to *script_path*).
+    """
+    script_content = generate_distributed_mcmc_script(**kwargs)
 
     with open(script_path, "w") as f:
         f.write(script_content)
