@@ -19,7 +19,7 @@ from cflibs.core.constants import KB_EV
 
 try:
     import jax.numpy as jnp
-    from jax import jit
+    from jax import jit, vmap
 
     HAS_JAX = True
 except ImportError:
@@ -153,6 +153,121 @@ def direct_sum_partition_function_batch(
     boltzmann = np.exp(-E_masked[np.newaxis, :] / kT)  # (N_temps, N_levels)
     U = np.sum(g_masked[np.newaxis, :] * boltzmann, axis=1)  # (N_temps,)
     return np.maximum(U, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# JAX-compiled direct summation for manifold batch computation
+# ---------------------------------------------------------------------------
+
+if HAS_JAX:
+
+    @jit
+    def _direct_sum_single_temp(
+        T_K: jnp.ndarray,
+        g_levels: jnp.ndarray,
+        E_levels_ev: jnp.ndarray,
+        ip_ev: float,
+    ) -> jnp.ndarray:
+        """JIT-compiled direct summation for a single temperature.
+
+        Uses ``jnp.where`` for masking instead of boolean indexing so the
+        computation graph has a fixed shape and is fully traceable by JAX.
+
+        Parameters
+        ----------
+        T_K : scalar jnp.ndarray
+            Temperature in Kelvin.
+        g_levels : jnp.ndarray
+            Shape ``(N_levels,)`` statistical weights.
+        E_levels_ev : jnp.ndarray
+            Shape ``(N_levels,)`` level energies in eV.
+        ip_ev : float
+            Ionization potential in eV.
+
+        Returns
+        -------
+        jnp.ndarray
+            Scalar partition function value, floored at 1.0.
+        """
+        kT_ev = KB_EV * jnp.maximum(T_K, 1.0)
+        boltzmann = g_levels * jnp.exp(-E_levels_ev / kT_ev)
+        # Zero out levels above the ionization potential (JAX-friendly mask)
+        masked = jnp.where(E_levels_ev < ip_ev, boltzmann, 0.0)
+        return jnp.maximum(jnp.sum(masked), 1.0)
+
+    def direct_sum_partition_function_jax(
+        T_K,
+        g_levels: jnp.ndarray,
+        E_levels_ev: jnp.ndarray,
+        ip_ev: float,
+    ) -> jnp.ndarray:
+        """JAX-compiled direct summation partition function.
+
+        Works for scalar *or* array ``T_K``.  For array inputs the
+        computation is automatically vectorised with ``jax.vmap``.
+
+        Parameters
+        ----------
+        T_K : float or jnp.ndarray
+            Temperature(s) in Kelvin.  Scalar or 1-D array.
+        g_levels : jnp.ndarray
+            Shape ``(N_levels,)`` statistical weights.
+        E_levels_ev : jnp.ndarray
+            Shape ``(N_levels,)`` level energies in eV.
+        ip_ev : float
+            Ionization potential in eV.
+
+        Returns
+        -------
+        jnp.ndarray
+            Partition function value(s).  Same shape as *T_K*.
+        """
+        T_K = jnp.asarray(T_K)
+        if T_K.ndim == 0:
+            return _direct_sum_single_temp(T_K, g_levels, E_levels_ev, ip_ev)
+        # vmap over the temperature axis; g_levels, E_levels, ip_ev are shared
+        batched = vmap(lambda t: _direct_sum_single_temp(t, g_levels, E_levels_ev, ip_ev))
+        return batched(T_K)
+
+    def direct_sum_partition_function_batch_jax(
+        temperatures: jnp.ndarray,
+        g_levels: jnp.ndarray,
+        E_levels_ev: jnp.ndarray,
+        ip_ev: float,
+    ) -> jnp.ndarray:
+        """Batch direct summation over temperatures using ``jax.vmap``.
+
+        Convenience wrapper that always expects a 1-D temperature array
+        and returns a 1-D result array of the same length.
+
+        Parameters
+        ----------
+        temperatures : jnp.ndarray
+            Shape ``(N_temps,)`` temperatures in Kelvin.
+        g_levels : jnp.ndarray
+            Shape ``(N_levels,)`` statistical weights.
+        E_levels_ev : jnp.ndarray
+            Shape ``(N_levels,)`` level energies in eV.
+        ip_ev : float
+            Ionization potential in eV.
+
+        Returns
+        -------
+        jnp.ndarray
+            Shape ``(N_temps,)`` partition function values.
+        """
+        batched = vmap(lambda t: _direct_sum_single_temp(t, g_levels, E_levels_ev, ip_ev))
+        return batched(jnp.asarray(temperatures))
+
+else:
+
+    def direct_sum_partition_function_jax(*args, **kwargs):
+        """Stub — JAX not installed."""
+        raise ImportError("JAX is required for direct_sum_partition_function_jax")
+
+    def direct_sum_partition_function_batch_jax(*args, **kwargs):
+        """Stub — JAX not installed."""
+        raise ImportError("JAX is required for direct_sum_partition_function_batch_jax")
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +482,60 @@ class PartitionFunctionEvaluator:
         return direct_sum_partition_function_batch(
             temperatures_K, g_levels, E_levels_ev, ip_ev, n_e
         )
+
+    @staticmethod
+    def evaluate_direct_jax(
+        T_K,
+        g_levels,
+        E_levels_ev,
+        ip_ev: float,
+    ):
+        """JAX-compiled direct summation (scalar or array temperature).
+
+        Parameters
+        ----------
+        T_K : float or jnp.ndarray
+            Temperature(s) in Kelvin.
+        g_levels : jnp.ndarray
+            Shape ``(N_levels,)`` statistical weights.
+        E_levels_ev : jnp.ndarray
+            Shape ``(N_levels,)`` level energies in eV.
+        ip_ev : float
+            Ionization potential in eV.
+
+        Returns
+        -------
+        jnp.ndarray
+            Partition function value(s).
+        """
+        return direct_sum_partition_function_jax(T_K, g_levels, E_levels_ev, ip_ev)
+
+    @staticmethod
+    def evaluate_direct_batch_jax(
+        temperatures,
+        g_levels,
+        E_levels_ev,
+        ip_ev: float,
+    ):
+        """Batch JAX direct summation over a temperature array via ``vmap``.
+
+        Parameters
+        ----------
+        temperatures : jnp.ndarray
+            Shape ``(N_temps,)`` temperatures in Kelvin.
+        g_levels : jnp.ndarray
+            Shape ``(N_levels,)`` statistical weights.
+        E_levels_ev : jnp.ndarray
+            Shape ``(N_levels,)`` level energies in eV.
+        ip_ev : float
+            Ionization potential in eV.
+
+        Returns
+        -------
+        jnp.ndarray
+            Shape ``(N_temps,)`` partition function values.
+        """
+        return direct_sum_partition_function_batch_jax(temperatures, g_levels, E_levels_ev, ip_ev)
 
     @staticmethod
     def evaluate_batch(
