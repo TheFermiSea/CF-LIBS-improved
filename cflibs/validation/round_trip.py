@@ -118,16 +118,16 @@ class RoundTripResult:
         lines = [
             f"Round-Trip Validation: {status}",
             f"  Temperature: {self.true_temperature_K:.0f} K -> {self.recovered_temperature_K:.0f} K "
-            f"(error: {self.temperature_error_frac*100:.1f}%)",
+            f"(error: {self.temperature_error_frac * 100:.1f}%)",
             f"  Electron density: {self.true_electron_density:.2e} -> {self.recovered_electron_density:.2e} "
-            f"(error: {self.electron_density_error_frac*100:.1f}%)",
+            f"(error: {self.electron_density_error_frac * 100:.1f}%)",
             "  Concentrations:",
         ]
         for el in self.true_concentrations:
             true_c = self.true_concentrations[el]
             rec_c = self.recovered_concentrations.get(el, 0.0)
             err = self.concentration_errors.get(el, float("inf"))
-            lines.append(f"    {el}: {true_c:.3f} -> {rec_c:.3f} (error: {err*100:.1f}%)")
+            lines.append(f"    {el}: {true_c:.3f} -> {rec_c:.3f} (error: {err * 100:.1f}%)")
         lines.append(f"  Converged: {self.converged} ({self.iterations} iterations)")
         return "\n".join(lines)
 
@@ -488,7 +488,7 @@ class GoldenSpectrumGenerator:
             n_e = 0.5 * n_e + 0.5 * n_e_new
 
         logger.warning(
-            "compute_equilibrium_ne did not converge after %d iterations " "(last n_e=%.3e cm^-3)",
+            "compute_equilibrium_ne did not converge after %d iterations (last n_e=%.3e cm^-3)",
             max_iter,
             n_e,
         )
@@ -660,6 +660,41 @@ class RoundTripValidator:
         self.generator = GoldenSpectrumGenerator(atomic_db)
         self.noise_model = NoiseModel()
 
+    def _check_temperature(self, true_temp: float, recovered_temp: float) -> tuple[float, bool]:
+        """Calculate temperature error and check if it passes tolerance."""
+        if true_temp == 0.0:
+            return float("inf"), False
+        error = abs(recovered_temp - true_temp) / true_temp
+        passed = error <= self.temperature_tolerance
+        return error, passed
+
+    def _check_density(self, true_density: float, recovered_density: float) -> tuple[float, bool]:
+        """Calculate density error and check if it passes tolerance."""
+        if true_density == 0.0:
+            return float("inf"), False
+        error = abs(recovered_density - true_density) / true_density
+        passed = error <= self.density_tolerance
+        return error, passed
+
+    def _check_concentrations(
+        self, true_concentrations: dict[str, float], recovered_concentrations: dict[str, float]
+    ) -> tuple[dict[str, float], bool]:
+        """Calculate concentration errors and check if they pass tolerance."""
+        conc_errors = {}
+        all_passed = True
+
+        for el, true_c in true_concentrations.items():
+            rec_c = recovered_concentrations.get(el, 0.0)
+            if true_c > 0.01:  # Only check significant concentrations
+                error = abs(rec_c - true_c) / true_c
+                conc_errors[el] = error
+                if error > self.concentration_tolerance:
+                    all_passed = False
+            else:
+                conc_errors[el] = 0.0
+
+        return conc_errors, all_passed
+
     def validate(
         self,
         temperature_K: float,
@@ -741,25 +776,13 @@ class RoundTripValidator:
                 },
             )
 
-        # Calculate errors
-        temp_error = abs(result.temperature_K - temperature_K) / temperature_K
-        ne_error = abs(result.electron_density_cm3 - electron_density_cm3) / electron_density_cm3
-
-        conc_errors = {}
-        for el, true_c in concentrations.items():
-            rec_c = result.concentrations.get(el, 0.0)
-            if true_c > 0.01:  # Only check significant concentrations
-                conc_errors[el] = abs(rec_c - true_c) / true_c
-            else:
-                conc_errors[el] = 0.0
+        # Calculate errors and check tolerances using helper methods
+        temp_error, temp_passed = self._check_temperature(temperature_K, result.temperature_K)
+        ne_error, ne_passed = self._check_density(electron_density_cm3, result.electron_density_cm3)
+        conc_errors, conc_passed = self._check_concentrations(concentrations, result.concentrations)
 
         # Check if all tolerances are met
-        passed = (
-            temp_error <= self.temperature_tolerance
-            and ne_error <= self.density_tolerance
-            and all(e <= self.concentration_tolerance for e in conc_errors.values())
-            and result.converged
-        )
+        passed = temp_passed and ne_passed and conc_passed and result.converged
 
         tolerances = {
             "temperature": self.temperature_tolerance,
@@ -832,7 +855,7 @@ class RoundTripValidator:
                 )
                 results.append(result)
                 logger.info(
-                    f"Sweep [{i*n_densities+j+1}/{n_temperatures*n_densities}]: "
+                    f"Sweep [{i * n_densities + j + 1}/{n_temperatures * n_densities}]: "
                     f"T={T:.0f}K, n_e={n_e:.1e} -> {'PASS' if result.passed else 'FAIL'}"
                 )
 
