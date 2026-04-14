@@ -1244,16 +1244,14 @@ class QualityDashboard:
             ),
         )
 
-    def _build_widget(self) -> "widgets.VBox":
-        """Build the dashboard widget."""
-        if not self._metrics:
-            raise ValueError("No metrics loaded. Call from_*() first.")
-
-        cards = []
-
-        # Title
+    def _build_title_widget(self) -> "widgets.HTML":
+        """Build the title widget."""
         safe_title = _escape_html(self.title)
-        title_html = widgets.HTML(f"<h2 style='margin: 0 0 16px 0; color: #333;'>{safe_title}</h2>")
+        return widgets.HTML(f"<h2 style='margin: 0 0 16px 0; color: #333;'>{safe_title}</h2>")
+
+    def _build_cards_row(self) -> "widgets.HBox":
+        """Build the top row of metric cards."""
+        cards = []
 
         # Temperature card
         T_K = self._metrics.get("temperature_K", 0)
@@ -1317,81 +1315,85 @@ class QualityDashboard:
             )
             cards.append(samples_card)
 
-        # Top row of cards
-        top_row = widgets.HBox(
+        return widgets.HBox(
             cards,
             layout=widgets.Layout(flex_flow="row wrap"),
         )
 
-        # Composition breakdown
+    def _build_composition_widget(self) -> "widgets.HTML":
+        """Build the composition breakdown table widget."""
         concentrations = self._metrics.get("concentrations", {})
         conc_uncertainties = self._metrics.get("concentration_uncertainties", {})
 
-        if concentrations:
-            comp_html = "<h4 style='margin: 16px 0 8px 0; color: #666;'>Composition</h4>"
-            comp_html += "<table style='border-collapse: collapse; width: 100%;'>"
-            comp_html += "<tr style='background: #f5f5f5;'>"
-            comp_html += "<th style='padding: 8px; text-align: left;'>Element</th>"
-            comp_html += "<th style='padding: 8px; text-align: right;'>Concentration</th>"
-            comp_html += "<th style='padding: 8px; text-align: right;'>Uncertainty</th>"
+        if not concentrations:
+            return widgets.HTML("")
+
+        comp_html = "<h4 style='margin: 16px 0 8px 0; color: #666;'>Composition</h4>"
+        comp_html += "<table style='border-collapse: collapse; width: 100%;'>"
+        comp_html += "<tr style='background: #f5f5f5;'>"
+        comp_html += "<th style='padding: 8px; text-align: left;'>Element</th>"
+        comp_html += "<th style='padding: 8px; text-align: right;'>Concentration</th>"
+        comp_html += "<th style='padding: 8px; text-align: right;'>Uncertainty</th>"
+        comp_html += "</tr>"
+
+        for el, conc in concentrations.items():
+            unc = conc_uncertainties.get(el, 0)
+            safe_element = _escape_html(el)
+            comp_html += f"<tr><td style='padding: 8px;'><b>{safe_element}</b></td>"
+            comp_html += f"<td style='padding: 8px; text-align: right;'>{conc:.4f}</td>"
+            comp_html += f"<td style='padding: 8px; text-align: right;'>+/- {unc:.4f}</td>"
             comp_html += "</tr>"
 
-            for el, conc in concentrations.items():
-                unc = conc_uncertainties.get(el, 0)
-                safe_element = _escape_html(el)
-                comp_html += f"<tr><td style='padding: 8px;'><b>{safe_element}</b></td>"
-                comp_html += f"<td style='padding: 8px; text-align: right;'>{conc:.4f}</td>"
-                comp_html += f"<td style='padding: 8px; text-align: right;'>+/- {unc:.4f}</td>"
-                comp_html += "</tr>"
+        comp_html += "</table>"
+        return widgets.HTML(comp_html)
 
-            comp_html += "</table>"
-            comp_widget = widgets.HTML(comp_html)
-        else:
-            comp_widget = widgets.HTML("")
-
-        # R-hat diagnostics for MCMC
+    def _build_diagnostics_widget(self) -> "widgets.HTML":
+        """Build the MCMC convergence diagnostics table widget."""
         r_hat = self._metrics.get("r_hat", {})
         ess = self._metrics.get("ess", {})
 
-        if r_hat:
-            diag_html = (
-                "<h4 style='margin: 16px 0 8px 0; color: #666;'>Convergence Diagnostics</h4>"
+        if not r_hat:
+            return widgets.HTML("")
+
+        diag_html = "<h4 style='margin: 16px 0 8px 0; color: #666;'>Convergence Diagnostics</h4>"
+        diag_html += "<table style='border-collapse: collapse; width: 100%;'>"
+        diag_html += "<tr style='background: #f5f5f5;'>"
+        diag_html += "<th style='padding: 8px; text-align: left;'>Parameter</th>"
+        diag_html += "<th style='padding: 8px; text-align: right;'>R-hat</th>"
+        diag_html += "<th style='padding: 8px; text-align: right;'>ESS</th>"
+        diag_html += "<th style='padding: 8px; text-align: center;'>Status</th>"
+        diag_html += "</tr>"
+
+        for param, rhat in r_hat.items():
+            ess_val = ess.get(param, float("nan"))
+            status = "ok" if rhat < 1.01 else "warning"
+            status_icon = "+" if status == "ok" else "!"
+            status_color = "#2ca02c" if status == "ok" else "#d62728"
+            safe_param = _escape_html(param)
+
+            diag_html += f"<tr><td style='padding: 8px;'>{safe_param}</td>"
+            diag_html += f"<td style='padding: 8px; text-align: right;'>{rhat:.3f}</td>"
+            diag_html += f"<td style='padding: 8px; text-align: right;'>{ess_val:.0f}</td>"
+            diag_html += (
+                f"<td style='padding: 8px; text-align: center; color: {status_color};'>"
+                f"{status_icon}</td>"
             )
-            diag_html += "<table style='border-collapse: collapse; width: 100%;'>"
-            diag_html += "<tr style='background: #f5f5f5;'>"
-            diag_html += "<th style='padding: 8px; text-align: left;'>Parameter</th>"
-            diag_html += "<th style='padding: 8px; text-align: right;'>R-hat</th>"
-            diag_html += "<th style='padding: 8px; text-align: right;'>ESS</th>"
-            diag_html += "<th style='padding: 8px; text-align: center;'>Status</th>"
             diag_html += "</tr>"
 
-            for param, rhat in r_hat.items():
-                ess_val = ess.get(param, float("nan"))
-                status = "ok" if rhat < 1.01 else "warning"
-                status_icon = "+" if status == "ok" else "!"
-                status_color = "#2ca02c" if status == "ok" else "#d62728"
-                safe_param = _escape_html(param)
+        diag_html += "</table>"
+        return widgets.HTML(diag_html)
 
-                diag_html += f"<tr><td style='padding: 8px;'>{safe_param}</td>"
-                diag_html += f"<td style='padding: 8px; text-align: right;'>{rhat:.3f}</td>"
-                diag_html += f"<td style='padding: 8px; text-align: right;'>{ess_val:.0f}</td>"
-                diag_html += (
-                    f"<td style='padding: 8px; text-align: center; color: {status_color};'>"
-                    f"{status_icon}</td>"
-                )
-                diag_html += "</tr>"
-
-            diag_html += "</table>"
-            diag_widget = widgets.HTML(diag_html)
-        else:
-            diag_widget = widgets.HTML("")
+    def _build_widget(self) -> "widgets.VBox":
+        """Build the dashboard widget."""
+        if not self._metrics:
+            raise ValueError("No metrics loaded. Call from_*() first.")
 
         return widgets.VBox(
             [
-                title_html,
-                top_row,
-                comp_widget,
-                diag_widget,
+                self._build_title_widget(),
+                self._build_cards_row(),
+                self._build_composition_widget(),
+                self._build_diagnostics_widget(),
             ]
         )
 
