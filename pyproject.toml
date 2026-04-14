@@ -67,7 +67,8 @@ pinn = [
     "optax>=0.2.0",
 ]
 # Rust computational core (comb matching, partition functions)
-rust = ["native/cflibs-core"]
+# Built via maturin, not pip — see native/cflibs-core/README.md
+# rust = ["native/cflibs-core"]  # not a PEP 508 specifier
 # CI: everything needed to run the full test suite (no GPU, no MPI)
 ci = [
     "jax[cpu]>=0.4.26",
