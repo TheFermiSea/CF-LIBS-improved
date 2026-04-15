@@ -95,8 +95,14 @@ class AtomicDatabase(AtomicDataSource):
             "accuracy_grade": "TEXT",
         }
 
+        valid_dtypes = {"REAL", "INTEGER", "TEXT", "BLOB", "NUMERIC"}
         for col, dtype in required_line_cols.items():
             if col not in columns:
+                if not col.isidentifier():
+                    raise ValueError(f"Invalid column name for migration: {col}")
+                if dtype.upper() not in valid_dtypes:
+                    raise ValueError(f"Invalid data type for migration: {dtype}")
+
                 logger.info(f"Migrating schema: Adding {col} to lines table")
                 cursor.execute(f"ALTER TABLE lines ADD COLUMN {col} {dtype}")
 
