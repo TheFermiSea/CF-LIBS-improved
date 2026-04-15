@@ -159,14 +159,7 @@ class CombIdentifier:
             )
 
         # Validate input arrays
-        if len(wavelength) != len(intensity):
-            raise ValueError(
-                f"Wavelength and intensity arrays must have same length: "
-                f"{len(wavelength)} vs {len(intensity)}"
-            )
-
-        if not np.all(np.diff(wavelength) > 0):
-            raise ValueError("Wavelength array must be monotonically increasing")
+        self._validate_inputs(wavelength, intensity)
 
         logger.info(
             f"Starting comb identification on spectrum: "
@@ -183,7 +176,66 @@ class CombIdentifier:
         else:
             elements_to_search = self.elements
 
-        # Step 3: For each element, get lines and correlate teeth
+        # Step 3, 4, 5: Spectral matching and relative thresholding
+        element_identifications = self._match_spectra(
+            wavelength, intensity, baseline, threshold, elements_to_search
+        )
+
+        # Step 6: Split into detected and rejected
+        detected_elements = [e for e in element_identifications if e.detected]
+        rejected_elements = [e for e in element_identifications if not e.detected]
+
+        # Step 7: Identify experimental peaks and count matches
+        experimental_peaks, n_matched_peaks = self._detect_and_count_peaks(
+            wavelength, intensity, detected_elements
+        )
+
+        result = ElementIdentificationResult(
+            detected_elements=detected_elements,
+            rejected_elements=rejected_elements,
+            all_elements=element_identifications,
+            experimental_peaks=experimental_peaks,
+            n_peaks=len(experimental_peaks),
+            n_matched_peaks=n_matched_peaks,
+            n_unmatched_peaks=len(experimental_peaks) - n_matched_peaks,
+            algorithm="comb",
+            parameters={
+                "baseline_window_nm": self.baseline_window_nm,
+                "threshold_percentile": self.threshold_percentile,
+                "min_correlation": self.min_correlation,
+                "max_shift_pts": float(self.max_shift_pts),
+                "min_width_pts": float(self.min_width_pts),
+                "max_width_factor": self.max_width_factor,
+            },
+        )
+
+        logger.info(
+            f"Comb identification complete: {len(detected_elements)} detected, "
+            f"{len(rejected_elements)} rejected"
+        )
+
+        return result
+
+    def _validate_inputs(self, wavelength: np.ndarray, intensity: np.ndarray) -> None:
+        """Validate input arrays for identification."""
+        if len(wavelength) != len(intensity):
+            raise ValueError(
+                f"Wavelength and intensity arrays must have same length: "
+                f"{len(wavelength)} vs {len(intensity)}"
+            )
+
+        if not np.all(np.diff(wavelength) > 0):
+            raise ValueError("Wavelength array must be monotonically increasing")
+
+    def _match_spectra(
+        self,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        baseline: np.ndarray,
+        threshold: float,
+        elements_to_search: List[str],
+    ) -> List[ElementIdentification]:
+        """Match spectral lines for given elements."""
         element_teeth: Dict[str, List[dict]] = {}
         element_identifications = []
 
@@ -218,9 +270,7 @@ class CombIdentifier:
                             ionization_stage=trans.ionization_stage,
                             intensity_exp=intensity[
                                 np.clip(
-                                    np.argmin(
-                                        np.abs(wavelength - tooth_result["center_nm"])
-                                    )
+                                    np.argmin(np.abs(wavelength - tooth_result["center_nm"]))
                                     + tooth_result["best_shift"],
                                     0,
                                     len(intensity) - 1,
@@ -299,12 +349,15 @@ class CombIdentifier:
                     metadata=element_id.metadata,
                 )
 
-        # Step 6: Split into detected and rejected
-        detected_elements = [e for e in element_identifications if e.detected]
-        rejected_elements = [e for e in element_identifications if not e.detected]
+        return element_identifications
 
-        # Step 7: Identify experimental peaks using canonical peak detection
-        # (not pixel-level threshold which over-counts broad peaks)
+    def _detect_and_count_peaks(
+        self,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        detected_elements: List[ElementIdentification],
+    ) -> Tuple[List[Tuple[int, float]], int]:
+        """Detect experimental peaks and count matches."""
         experimental_peaks, _, _ = detect_peaks_auto(
             wavelength,
             intensity,
@@ -323,32 +376,7 @@ class CombIdentifier:
             for _, wl in experimental_peaks
             if any(abs(wl - mwl) < 0.1 for mwl in matched_peak_wavelengths)
         )
-
-        result = ElementIdentificationResult(
-            detected_elements=detected_elements,
-            rejected_elements=rejected_elements,
-            all_elements=element_identifications,
-            experimental_peaks=experimental_peaks,
-            n_peaks=len(experimental_peaks),
-            n_matched_peaks=n_matched_peaks,
-            n_unmatched_peaks=len(experimental_peaks) - n_matched_peaks,
-            algorithm="comb",
-            parameters={
-                "baseline_window_nm": self.baseline_window_nm,
-                "threshold_percentile": self.threshold_percentile,
-                "min_correlation": self.min_correlation,
-                "max_shift_pts": float(self.max_shift_pts),
-                "min_width_pts": float(self.min_width_pts),
-                "max_width_factor": self.max_width_factor,
-            },
-        )
-
-        logger.info(
-            f"Comb identification complete: {len(detected_elements)} detected, "
-            f"{len(rejected_elements)} rejected"
-        )
-
-        return result
+        return experimental_peaks, n_matched_peaks
 
     def _get_element_lines(self, element: str, wl_min: float, wl_max: float) -> List[Transition]:
         """
