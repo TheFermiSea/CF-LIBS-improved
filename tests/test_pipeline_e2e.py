@@ -192,7 +192,7 @@ def test_full_pipeline_recovers_multistage_sample(tmp_path: Path):
         wavelength_tolerance_nm=0.08,
         min_peak_height=0.003,
         peak_width_nm=0.10,
-        min_relative_intensity=50.0,
+        min_relative_intensity=None,
         kdet_enabled=False,
     )
 
