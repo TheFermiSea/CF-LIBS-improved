@@ -68,6 +68,51 @@ class TestEstimateNoise:
         sigma = estimate_noise(intensity, baseline)
         assert abs(sigma - true_noise) < 3.0
 
+    def test_zero_noise_floor(self):
+        # Case where intensity and baseline are identical
+        n = 1000
+        baseline = np.full(n, 100.0)
+        intensity = baseline.copy()
+        sigma = estimate_noise(intensity, baseline)
+        assert sigma >= 1e-10
+        # When noise is 0, it uses 95th percentile of abs(diff) * 1e-6, floored at 1e-10
+        # here diff is 0, so it should be exactly 1e-10
+        assert sigma == 1e-10
+
+    def test_small_array_break(self):
+        # Case where number of points is initially small (< 10)
+        # The loop should break immediately if mask count < 10
+        n = 8
+        baseline = np.zeros(n)
+        intensity = np.arange(n, dtype=float)
+        sigma = estimate_noise(intensity, baseline)
+        assert sigma > 0
+
+    def test_extreme_outlier(self):
+        # Case where one huge outlier exists
+        rng = np.random.default_rng(42)
+        n = 1000
+        true_noise = 10.0
+        baseline = np.zeros(n)
+        intensity = rng.normal(0, true_noise, n)
+        intensity[500] = 1e6  # Extreme outlier
+
+        sigma = estimate_noise(intensity, baseline)
+        # Should ignore the outlier and get close to true noise
+        assert abs(sigma - true_noise) < 3.0
+
+    def test_constant_offset(self):
+        # Case where there's a constant offset between intensity and baseline
+        rng = np.random.default_rng(42)
+        n = 1000
+        true_noise = 10.0
+        baseline = np.zeros(n)
+        intensity = rng.normal(100.0, true_noise, n)  # 100.0 offset
+
+        sigma = estimate_noise(intensity, baseline)
+        # MAD should be robust to the constant offset (it subtracts median)
+        assert abs(sigma - true_noise) < 3.0
+
 
 class TestDetectPeaks:
     def test_finds_known_peaks(self):

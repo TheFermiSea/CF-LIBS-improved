@@ -803,28 +803,27 @@ class PosteriorViewer:
         self._param_labels = labels or {k: k for k in samples}
         return self
 
-    def _build_figure(self, params: Optional[List[str]] = None) -> "go.FigureWidget":
-        """Build the corner plot figure."""
+    def _validate_plot_params(self, params: Optional[List[str]]) -> List[str]:
+        """Validate input parameters for building a posterior plot."""
         if not self._samples:
             raise ValueError("No samples loaded. Call from_*() first.")
 
-        params = params or list(self._samples.keys())
+        valid_params = params or list(self._samples.keys())
 
-        if not params:
+        if not valid_params:
             raise ValueError("At least one parameter required.")
-        n_params = len(params)
 
-        missing = [p for p in params if p not in self._samples]
+        missing = [p for p in valid_params if p not in self._samples]
         if missing:
             missing_str = ", ".join(sorted(missing))
             raise ValueError(f"Requested parameters not available in samples: {missing_str}")
 
-        empty = [p for p in params if np.asarray(self._samples[p]).size == 0]
+        empty = [p for p in valid_params if np.asarray(self._samples[p]).size == 0]
         if empty:
             empty_str = ", ".join(sorted(empty))
             raise ValueError(f"Cannot plot empty posterior samples for parameter(s): {empty_str}")
 
-        lengths = {p: np.asarray(self._samples[p]).size for p in params}
+        lengths = {p: np.asarray(self._samples[p]).size for p in valid_params}
         unique_lengths = set(lengths.values())
         if len(unique_lengths) != 1:
             lengths_str = ", ".join(f"{k}={v}" for k, v in lengths.items())
@@ -832,64 +831,182 @@ class PosteriorViewer:
                 "All selected posterior parameters must have equal sample length "
                 f"(got: {lengths_str})"
             )
+        return valid_params
 
-        base_n = lengths[params[0]]
-        weights: Optional[np.ndarray] = None
-        if self._weights is not None:
-            candidate = np.asarray(self._weights, dtype=float).reshape(-1)
-            if candidate.size != base_n:
-                raise ValueError(
-                    "weights length must match sample length when plotting posterior samples"
+    def _get_normalized_weights(self, base_n: int) -> Optional[np.ndarray]:
+        """Validate and normalize sample weights."""
+        if self._weights is None:
+            return None
+
+        candidate = np.asarray(self._weights, dtype=float).reshape(-1)
+        if candidate.size != base_n:
+            raise ValueError(
+                "weights length must match sample length when plotting posterior samples"
+            )
+        total_weight = float(np.sum(candidate))
+        if total_weight > 0:
+            return candidate / total_weight
+        return None
+
+    def _add_lower_triangle_plot(
+        self,
+        fig: "go.FigureWidget",
+        y_param: str,
+        x_param: str,
+        row: int,
+        col: int,
+        weights: Optional[np.ndarray],
+    ) -> None:
+        """Add a 2D scatter plot to the lower triangle of a corner plot."""
+        xi = self._samples[x_param]
+        yi = self._samples[y_param]
+
+        # Subsample for performance
+        n_samples = len(xi)
+        n_plot = min(2000, n_samples)
+        if n_samples == 0:
+            idx = np.array([], dtype=int)
+        elif n_plot == n_samples:
+            idx = np.arange(n_samples)
+        elif weights is None:
+            idx = np.random.choice(n_samples, n_plot, replace=False)
+        else:
+            positive = np.flatnonzero(weights > 0)
+            if positive.size == 0:
+                idx = np.random.choice(n_samples, n_plot, replace=False)
+            elif n_plot >= positive.size:
+                idx = positive
+            else:
+                sample_weights = weights[positive]
+                sample_weights = sample_weights / np.sum(sample_weights)
+                idx = np.random.choice(
+                    positive,
+                    n_plot,
+                    replace=False,
+                    p=sample_weights,
                 )
-            total_weight = float(np.sum(candidate))
-            if total_weight > 0:
-                weights = candidate / total_weight
+
+        fig.add_trace(
+            go.Scatter(
+                x=xi[idx],
+                y=yi[idx],
+                mode="markers",
+                marker=dict(
+                    size=2,
+                    color="#1f77b4",
+                    opacity=0.3,
+                ),
+                showlegend=False,
+            ),
+            row=row,
+            col=col,
+        )
+
+    def _add_diagonal_plot(
+        self,
+        fig: "go.FigureWidget",
+        param: str,
+        row: int,
+        col: int,
+        weights: Optional[np.ndarray],
+    ) -> None:
+        """Add a 1D marginal histogram to the diagonal of a corner plot."""
+        samples = self._samples[param]
+        if weights is None:
+            fig.add_trace(
+                go.Histogram(
+                    x=samples,
+                    nbinsx=30,
+                    showlegend=False,
+                    marker_color="#1f77b4",
+                    opacity=0.7,
+                ),
+                row=row,
+                col=col,
+            )
+        else:
+            counts, edges = np.histogram(samples, bins=30, weights=weights)
+            centers = 0.5 * (edges[:-1] + edges[1:])
+            fig.add_trace(
+                go.Bar(
+                    x=centers,
+                    y=counts,
+                    showlegend=False,
+                    marker_color="#1f77b4",
+                    opacity=0.7,
+                ),
+                row=row,
+                col=col,
+            )
+
+        # Add credible interval lines
+        q025, q50, q975 = _weighted_percentiles(
+            np.asarray(samples, dtype=float), weights, np.array([2.5, 50.0, 97.5])
+        )
+        for q, dash in [(q025, "dot"), (q50, "solid"), (q975, "dot")]:
+            fig.add_vline(
+                x=q,
+                line_dash=dash,
+                line_color="red",
+                line_width=1,
+                row=row,
+                col=col,
+            )
+
+    def _build_single_marginal(self, param: str, weights: Optional[np.ndarray]) -> "go.FigureWidget":
+        """Build a single marginal distribution plot."""
+        fig = go.FigureWidget()
+        samples = self._samples[param]
+        label = self._param_labels.get(param, param)
+
+        if weights is None:
+            fig.add_trace(
+                go.Histogram(
+                    x=samples,
+                    name=label,
+                    opacity=0.7,
+                    nbinsx=50,
+                )
+            )
+        else:
+            counts, edges = np.histogram(samples, bins=50, weights=weights)
+            centers = 0.5 * (edges[:-1] + edges[1:])
+            fig.add_trace(
+                go.Bar(
+                    x=centers,
+                    y=counts,
+                    name=label,
+                    opacity=0.7,
+                )
+            )
+
+        # Add credible interval lines
+        q025, q50, q975 = _weighted_percentiles(
+            np.asarray(samples, dtype=float), weights, np.array([2.5, 50.0, 97.5])
+        )
+        for q, style in [(q025, "dot"), (q50, "solid"), (q975, "dot")]:
+            fig.add_vline(x=q, line_dash=style, line_color="red")
+
+        fig.update_layout(
+            title=f"{self.title}: {label}",
+            xaxis_title=label,
+            yaxis_title="Count",
+            height=400,
+            width=500,
+        )
+
+        return fig
+
+    def _build_figure(self, params: Optional[List[str]] = None) -> "go.FigureWidget":
+        """Build the corner plot figure."""
+        params = self._validate_plot_params(params)
+        n_params = len(params)
+        base_n = np.asarray(self._samples[params[0]]).size
+        weights = self._get_normalized_weights(base_n)
 
         if n_params == 1:
-            # Single histogram
-            fig = go.FigureWidget()
-            p = params[0]
-            samples = self._samples[p]
+            return self._build_single_marginal(params[0], weights)
 
-            if weights is None:
-                fig.add_trace(
-                    go.Histogram(
-                        x=samples,
-                        name=self._param_labels.get(p, p),
-                        opacity=0.7,
-                        nbinsx=50,
-                    )
-                )
-            else:
-                counts, edges = np.histogram(samples, bins=50, weights=weights)
-                centers = 0.5 * (edges[:-1] + edges[1:])
-                fig.add_trace(
-                    go.Bar(
-                        x=centers,
-                        y=counts,
-                        name=self._param_labels.get(p, p),
-                        opacity=0.7,
-                    )
-                )
-
-            # Add credible interval lines
-            q025, q50, q975 = _weighted_percentiles(
-                np.asarray(samples, dtype=float), weights, np.array([2.5, 50.0, 97.5])
-            )
-            for q, style in [(q025, "dot"), (q50, "solid"), (q975, "dot")]:
-                fig.add_vline(x=q, line_dash=style, line_color="red")
-
-            fig.update_layout(
-                title=f"{self.title}: {self._param_labels.get(p, p)}",
-                xaxis_title=self._param_labels.get(p, p),
-                yaxis_title="Count",
-                height=400,
-                width=500,
-            )
-
-            return fig
-
-        # Corner plot for multiple parameters
         fig = make_subplots(
             rows=n_params,
             cols=n_params,
@@ -901,121 +1018,21 @@ class PosteriorViewer:
 
         for i, pi in enumerate(params):
             for j, pj in enumerate(params):
-                row = i + 1
-                col = j + 1
-
+                row, col = i + 1, j + 1
                 if i == j:
-                    # Diagonal: 1D histogram
-                    samples = self._samples[pi]
-                    if weights is None:
-                        fig.add_trace(
-                            go.Histogram(
-                                x=samples,
-                                nbinsx=30,
-                                showlegend=False,
-                                marker_color="#1f77b4",
-                                opacity=0.7,
-                            ),
-                            row=row,
-                            col=col,
-                        )
-                    else:
-                        counts, edges = np.histogram(samples, bins=30, weights=weights)
-                        centers = 0.5 * (edges[:-1] + edges[1:])
-                        fig.add_trace(
-                            go.Bar(
-                                x=centers,
-                                y=counts,
-                                showlegend=False,
-                                marker_color="#1f77b4",
-                                opacity=0.7,
-                            ),
-                            row=row,
-                            col=col,
-                        )
-
-                    # Add credible interval lines
-                    q025, q50, q975 = _weighted_percentiles(
-                        np.asarray(samples, dtype=float), weights, np.array([2.5, 50.0, 97.5])
-                    )
-                    for q, dash in [(q025, "dot"), (q50, "solid"), (q975, "dot")]:
-                        fig.add_vline(
-                            x=q,
-                            line_dash=dash,
-                            line_color="red",
-                            line_width=1,
-                            row=row,
-                            col=col,
-                        )
-
+                    self._add_diagonal_plot(fig, pi, row, col, weights)
                 elif i > j:
-                    # Lower triangle: 2D scatter/contour
-                    xi = self._samples[pj]
-                    yi = self._samples[pi]
-
-                    # Subsample for performance
-                    n_samples = len(xi)
-                    n_plot = min(2000, n_samples)
-                    if n_samples == 0:
-                        idx = np.array([], dtype=int)
-                    elif n_plot == n_samples:
-                        idx = np.arange(n_samples)
-                    elif weights is None:
-                        idx = np.random.choice(n_samples, n_plot, replace=False)
-                    else:
-                        positive = np.flatnonzero(weights > 0)
-                        if positive.size == 0:
-                            idx = np.random.choice(n_samples, n_plot, replace=False)
-                        elif n_plot >= positive.size:
-                            idx = positive
-                        else:
-                            sample_weights = weights[positive]
-                            sample_weights = sample_weights / np.sum(sample_weights)
-                            idx = np.random.choice(
-                                positive,
-                                n_plot,
-                                replace=False,
-                                p=sample_weights,
-                            )
-
-                    fig.add_trace(
-                        go.Scatter(
-                            x=xi[idx],
-                            y=yi[idx],
-                            mode="markers",
-                            marker=dict(
-                                size=2,
-                                color="#1f77b4",
-                                opacity=0.3,
-                            ),
-                            showlegend=False,
-                        ),
-                        row=row,
-                        col=col,
-                    )
-                # Upper triangle: empty
+                    self._add_lower_triangle_plot(fig, pi, pj, row, col, weights)
 
                 # Axis labels
                 if i == n_params - 1:
-                    fig.update_xaxes(
-                        title_text=self._param_labels.get(pj, pj),
-                        row=row,
-                        col=col,
-                    )
+                    fig.update_xaxes(title_text=self._param_labels.get(pj, pj), row=row, col=col)
                 if j == 0 and i > 0:
-                    fig.update_yaxes(
-                        title_text=self._param_labels.get(pi, pi),
-                        row=row,
-                        col=col,
-                    )
+                    fig.update_yaxes(title_text=self._param_labels.get(pi, pi), row=row, col=col)
 
         fig.update_layout(
-            title=self.title,
-            height=self.height,
-            width=self.width,
-            showlegend=False,
+            title=self.title, height=self.height, width=self.width, showlegend=False
         )
-
         return go.FigureWidget(fig)
 
     def show(self, params: Optional[List[str]] = None) -> "go.FigureWidget":
