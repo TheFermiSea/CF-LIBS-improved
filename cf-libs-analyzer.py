@@ -2,9 +2,16 @@
 import sqlite3
 import numpy as np
 import pandas as pd
-from scipy.sparse import csc_matrix, eye, diags
+from scipy.sparse import csc_matrix, diags
 from scipy.sparse.linalg import spsolve
 from scipy.signal import find_peaks
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+try:
+    from line_identifier import LineIdentifier
+except ImportError:
+    pass
 
 # --- PHYSICS CONSTANTS ---
 KB = 8.617e-5 
@@ -71,29 +78,44 @@ class CFLIBS_Analyzer:
         self.identified_lines = []
 
         print("Identifying Elements...")
-        for el in search_list:
-            # Only look for Neutral (I) and Ion (II) lines (Ultrafast logic)
-            query = """
-                SELECT * FROM lines 
-                WHERE element = ? AND sp_num <= 2 
-                AND rel_int > 50 
-                ORDER BY rel_int DESC LIMIT 50
-            """
-            db_lines = pd.read_sql_query(query, self.conn, params=(el,))
-            
-            hits = 0
-            for _, db_line in db_lines.iterrows():
-                match = self.peaks[
-                    (self.peaks['wavelength'] > db_line['wavelength_nm'] - tolerance_nm) & 
-                    (self.peaks['wavelength'] < db_line['wavelength_nm'] + tolerance_nm)
-                ]
-                if not match.empty:
-                    hits += 1
-                    row = db_line.to_dict()
-                    row['experimental_intensity'] = match.iloc[0]['intensity']
-                    self.identified_lines.append(row)
+        if not search_list:
+            self.elements = []
+            self.line_data = pd.DataFrame()
+            print(f"Detected: {self.elements}")
+            return
 
-            if hits > 3: 
+        # N+1 Optimization: Fetch all elements in one query with window function
+        placeholders = ','.join(['?'] * len(search_list))
+        query = f"""
+            SELECT *
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY element ORDER BY rel_int DESC) as rn
+                FROM lines
+                WHERE element IN ({placeholders}) AND sp_num <= 2 AND rel_int > 50
+            ) WHERE rn <= 50
+        """
+        db_lines = pd.read_sql_query(query, self.conn, params=tuple(search_list))
+
+        # Pandas Optimization: Extract numpy arrays for fast matching
+        peaks_wl = self.peaks['wavelength'].to_numpy()
+        peaks_int = self.peaks['intensity'].to_numpy()
+
+        # Track hits per element
+        hits_per_el = {el: 0 for el in search_list}
+
+        for row in db_lines.itertuples(index=False):
+            # Boolean mask on numpy arrays is much faster than pandas dataframe
+            mask = (peaks_wl > row.wavelength_nm - tolerance_nm) & (peaks_wl < row.wavelength_nm + tolerance_nm)
+            if mask.any():
+                hits_per_el[row.element] += 1
+                row_dict = row._asdict()
+                row_dict.pop('rn', None) # Remove row number added by window function
+                # Get the first match intensity
+                row_dict['experimental_intensity'] = peaks_int[mask][0]
+                self.identified_lines.append(row_dict)
+
+        for el, hits in hits_per_el.items():
+            if hits > 3:
                 found_elements.add(el)
         
         self.elements = list(found_elements)
@@ -104,7 +126,8 @@ class CFLIBS_Analyzer:
         # Optimized for speed: In production, replace with interpolation table
         query = "SELECT g_level, energy_ev FROM energy_levels WHERE element=? AND sp_num=?"
         levels = pd.read_sql_query(query, self.conn, params=(element, sp_num))
-        if levels.empty: return 1.0 
+        if levels.empty:
+            return 1.0
         Z = np.sum(levels['g_level'] * np.exp(-levels['energy_ev'] / T_eV))
         return Z
 
@@ -113,7 +136,8 @@ class CFLIBS_Analyzer:
         INDUSTRIAL HYBRID: Uses a known element (e.g. Ar or Ti matrix) to lock scale.
         This is more robust than pure CF-LIBS for ultrafast.
         """
-        if self.line_data.empty: return
+        if self.line_data.empty:
+            return
 
         print(f"--- Solving with Internal Standard: {known_ref_element} = {known_ref_conc:.1%} ---")
         
@@ -148,7 +172,8 @@ class CFLIBS_Analyzer:
         # 3. Solve others
         for el in self.elements:
             el_lines = self.line_data[self.line_data['element'] == el]
-            if el_lines.empty: continue
+            if el_lines.empty:
+                continue
             
             line = el_lines.iloc[0]
             Z_el = self.calculate_partition_function(el, line['sp_num'], T_eV)
