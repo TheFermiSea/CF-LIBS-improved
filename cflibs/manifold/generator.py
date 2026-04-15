@@ -48,7 +48,7 @@ except ImportError:
         return func
 
 
-from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_K, EV_TO_J, H_PLANCK, M_PROTON
+from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_K, H_PLANCK
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
@@ -56,7 +56,8 @@ from cflibs.plasma.partition import polynomial_partition_function_jax
 
 # Conditional imports for JAX physics functions
 if HAS_JAX:
-    pass
+    from cflibs.radiation.profiles import doppler_sigma_jax, voigt_spectrum_jax
+    from cflibs.radiation.stark import estimate_stark_parameter_jax, stark_hwhm_jax
 
 logger = get_logger("manifold.generator")
 
@@ -584,9 +585,7 @@ class ManifoldGenerator:
             # --- Proper Voigt Broadening (Phase 2) ---
 
             # Doppler width: sigma = lambda/c * sqrt(2kT/m)
-            # Using JAX-compatible doppler_sigma_jax
-            mass_kg = l_mass_amu * M_PROTON
-            sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
+            sigma_doppler = doppler_sigma_jax(l_wl, T_eV, l_mass_amu)
 
             # Instrument broadening (Gaussian sigma)
             # Uses default 0.05 nm FWHM; configurable via ManifoldConfig.instrument_fwhm_nm
@@ -596,96 +595,12 @@ class ManifoldGenerator:
             sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
             # Stark broadening: HWHM (Lorentzian gamma)
-            # Use estimate_stark_parameter_jax for missing values (NaN)
-            # w_stark = w_ref * (n_e / 1e16) * (T / T_ref)^(-alpha)
-            REF_NE = 1.0e16
-            REF_T_EV = 0.86173  # 10000 K in eV
-
-            # Estimate Stark w_ref for lines without database values
-            # Use binding energy = IP - E_upper
-            binding_energy = jnp.maximum(l_ip - l_ek, 0.1)
-            n_eff = (l_z + 1) * jnp.sqrt(13.605 / binding_energy)
-            w_est = 2.0e-5 * (l_wl / 500.0) ** 2 * (n_eff**4)
-            w_est = jnp.clip(w_est, 0.0001, 0.5)
-
-            # Use database value if available, else estimate
+            w_est = estimate_stark_parameter_jax(l_wl, l_ek, l_ip, l_z + 1)
             w_ref = jnp.where(jnp.isnan(l_stark_w), w_est, l_stark_w)
+            gamma_stark = stark_hwhm_jax(n_e, T_eV, w_ref, l_stark_alpha)
 
-            # Stark HWHM calculation
-            factor_ne = n_e / REF_NE
-            factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -l_stark_alpha)
-            gamma_stark = w_ref * factor_ne * factor_T
-
-            # --- Voigt Profile Rendering (Humlicek W4 approximation) ---
-            # For each wavelength point, compute Voigt profile contribution from all lines
-            # z = (x + i*gamma) / (sigma * sqrt(2))
-            # V(x) = Re(w(z)) / (sigma * sqrt(2*pi))
-
-            diff = wl_grid[:, None] - l_wl[None, :]  # (n_wl, n_lines)
-
-            # Compute Voigt profile using Humlicek W4 approximation
-            z = (diff + 1j * gamma_stark) / (sigma_total * jnp.sqrt(2.0))
-
-            # Humlicek W4 Faddeeva approximation (no complex erfc needed)
-            x_h = jnp.real(z)
-            y_h = jnp.abs(jnp.imag(z))
-            s = jnp.abs(x_h) + y_h
-            t = y_h - 1j * x_h
-
-            # Region 1: s >= 15 (asymptotic)
-            w_r1 = t * 0.5641896 / (0.5 + t * t)
-
-            # Region 2: 5.5 <= s < 15
-            u = t * t
-            w_r2 = t * (1.410474 + u * 0.5641896) / (0.75 + u * (3.0 + u))
-
-            # Region 3: s < 5.5 and y >= 0.195 * |x| - 0.176
-            w_r3 = (16.4955 + t * (20.20933 + t * (11.96482 + t * (3.778987 + t * 0.5642236)))) / (
-                16.4955 + t * (38.82363 + t * (39.27121 + t * (21.69274 + t * (6.699398 + t))))
-            )
-
-            # Region 4: s < 5.5 and y < 0.195 * |x| - 0.176
-            w_r4 = jnp.exp(u) - t * (
-                36183.31
-                - u
-                * (
-                    3321.9905
-                    - u
-                    * (1540.787 - u * (219.0313 - u * (35.76683 - u * (1.320522 - u * 0.56419))))
-                )
-            ) / (
-                32066.6
-                - u
-                * (
-                    24322.84
-                    - u
-                    * (
-                        9022.228
-                        - u * (2186.181 - u * (364.2191 - u * (61.57037 - u * (1.841439 - u))))
-                    )
-                )
-            )
-
-            # Select region based on conditions
-            w_z = jnp.where(
-                s >= 15.0,
-                w_r1,
-                jnp.where(
-                    s >= 5.5,
-                    w_r2,
-                    jnp.where(
-                        y_h >= 0.195 * jnp.abs(x_h) - 0.176,
-                        w_r3,
-                        w_r4,
-                    ),
-                ),
-            )
-
-            profile = jnp.real(w_z) / (sigma_total * jnp.sqrt(2.0 * jnp.pi))
-
-            # Sum contributions weighted by emissivity
-
-            intensity = jnp.sum(epsilon * profile, axis=1)
+            # --- Voigt Profile Rendering (Weideman approximation) ---
+            intensity = voigt_spectrum_jax(wl_grid, l_wl, epsilon, sigma_total, gamma_stark)
 
             return intensity
 
