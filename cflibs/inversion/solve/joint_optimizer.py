@@ -276,7 +276,7 @@ class JointOptimizer:
     ):
         if not HAS_JAX:
             raise ImportError(
-                "JAX is required for joint optimization. " "Install with: pip install jax jaxlib"
+                "JAX is required for joint optimization. Install with: pip install jax jaxlib"
             )
 
         self.forward_model = forward_model
@@ -681,22 +681,69 @@ class JointOptimizer:
         opt_loss = result.final_loss
 
         profile_loss = []
-        for pval in param_values:
-            # TODO: Re-optimize with fixed parameter
-            # For now, compute loss at fixed parameter with other params at optimum
-            if parameter == "T_eV":
-                x = self._pack_params(pval, result.electron_density_cm3, result.concentrations)
-            elif parameter == "log_ne":
-                x = self._pack_params(result.temperature_eV, 10**pval, result.concentrations)
-            else:
-                # Fixed concentration (not yet implemented)
-                x = self._pack_params(
-                    result.temperature_eV,
-                    result.electron_density_cm3,
-                    result.concentrations,
-                )
+        opt_x = self._pack_params(
+            result.temperature_eV, result.electron_density_cm3, result.concentrations
+        )
 
-            loss = float(loss_fn(x))
+        if parameter == "T_eV":
+            x_free_0 = opt_x[1:]
+
+            @jit
+            def _opt_profile(fixed_val: float) -> float:
+                fixed_log_T = jnp.log(jnp.maximum(fixed_val, 0.1))
+
+                def obj(x_free: jnp.ndarray) -> float:
+                    x_full = jnp.concatenate([jnp.array([fixed_log_T]), x_free])
+                    return loss_fn(x_full)
+
+                res = jax_minimize(
+                    obj, x_free_0, method="bfgs", options={"maxiter": self.max_iterations}
+                )
+                return res.fun
+
+        elif parameter == "log_ne":
+            x_free_0 = jnp.concatenate([jnp.array([opt_x[0]]), opt_x[2:]])
+
+            @jit
+            def _opt_profile(fixed_val: float) -> float:
+                fixed_log_ne = fixed_val
+
+                def obj(x_free: jnp.ndarray) -> float:
+                    x_full = jnp.concatenate([jnp.array([x_free[0], fixed_log_ne]), x_free[1:]])
+                    return loss_fn(x_full)
+
+                res = jax_minimize(
+                    obj, x_free_0, method="bfgs", options={"maxiter": self.max_iterations}
+                )
+                return res.fun
+
+        elif parameter.startswith("C_"):
+            el = parameter[2:]
+            k = self.elements.index(el)
+            x_free_0 = jnp.concatenate([opt_x[:2], jnp.delete(opt_x[2:], k)])
+
+            @jit
+            def _opt_profile(fixed_val: float) -> float:
+                p = jnp.clip(fixed_val, 1e-7, 1.0 - 1e-7)
+
+                def obj(x_free: jnp.ndarray) -> float:
+                    log_T_ne = x_free[:2]
+                    theta_free = x_free[2:]
+                    log_Z_free = jax.scipy.special.logsumexp(theta_free)
+                    theta_k = jnp.log(p / (1.0 - p)) + log_Z_free
+                    theta_full = jnp.insert(theta_free, k, theta_k)
+                    x_full = jnp.concatenate([log_T_ne, theta_full])
+                    return loss_fn(x_full)
+
+                res = jax_minimize(
+                    obj, x_free_0, method="bfgs", options={"maxiter": self.max_iterations}
+                )
+                return res.fun
+        else:
+            raise ValueError(f"Unknown parameter: {parameter}")
+
+        for pval in param_values:
+            loss = float(_opt_profile(pval))
             profile_loss.append((loss - opt_loss) * self.n_wavelength)  # Delta chi^2
 
         return param_values, np.array(profile_loss)
@@ -781,7 +828,7 @@ class MultiStartJointOptimizer:
             conc_dict = {el: conc_init[j] for j, el in enumerate(self.optimizer.elements)}
 
             logger.debug(
-                f"Multi-start {i + 1}/{self.n_starts}: " f"T0={T_init:.3f} eV, n_e0={n_e_init:.2e}"
+                f"Multi-start {i + 1}/{self.n_starts}: T0={T_init:.3f} eV, n_e0={n_e_init:.2e}"
             )
 
             try:

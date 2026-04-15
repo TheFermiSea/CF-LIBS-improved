@@ -619,3 +619,56 @@ class TestEdgeCases:
         # Concentrations should always sum to 1 regardless of starting point
         np.testing.assert_allclose(sum(result_low.concentrations.values()), 1.0, rtol=1e-6)
         np.testing.assert_allclose(sum(result_high.concentrations.values()), 1.0, rtol=1e-6)
+
+    def test_profile_likelihood_concentration(self):
+        """Test profile likelihood computation for concentration parameter."""
+        elements = ["Fe", "Mg"]
+        line_centers = {"Fe": [500.0], "Mg": [510.0]}
+        line_strengths = {"Fe": [1.0], "Mg": [1.0]}
+        wavelength = np.linspace(490, 520, 100)
+
+        forward_model = create_simple_forward_model(elements, line_centers, line_strengths)
+        optimizer = JointOptimizer(forward_model, elements, wavelength)
+
+        # Perfect synthetic spectrum
+        measured = forward_model(1.0, 1e17, jnp.array([0.7, 0.3]), wavelength)
+
+        result = optimizer.optimize(
+            measured,
+            initial_T_eV=1.0,
+            initial_n_e=1e17,
+            initial_concentrations={"Fe": 0.5, "Mg": 0.5},
+            method="BFGS",
+        )
+
+        param_values, profile_loss = optimizer.profile_likelihood(
+            result, "C_Fe", measured, n_points=5, sigma_range=2.0
+        )
+
+        assert len(param_values) == 5
+        assert len(profile_loss) == 5
+        # The minimum profile loss should be very close to zero at the optimum
+        assert np.min(profile_loss) < 1e-3
+
+    def test_profile_likelihood_log_ne(self):
+        """Test profile likelihood computation for log_ne parameter."""
+        elements = ["Fe"]
+        line_centers = {"Fe": [500.0]}
+        line_strengths = {"Fe": [1.0]}
+        wavelength = np.linspace(490, 510, 100)
+
+        forward_model = create_simple_forward_model(elements, line_centers, line_strengths)
+        optimizer = JointOptimizer(forward_model, elements, wavelength)
+
+        measured = forward_model(1.0, 1e17, jnp.array([1.0]), wavelength)
+
+        result = optimizer.optimize(measured, initial_T_eV=1.0, initial_n_e=1e17, method="BFGS")
+
+        param_values, profile_loss = optimizer.profile_likelihood(
+            result, "log_ne", measured, n_points=5, sigma_range=2.0
+        )
+
+        assert len(param_values) == 5
+        assert len(profile_loss) == 5
+        # The minimum profile loss should be very close to zero at the optimum
+        assert np.min(profile_loss) < 1e-3
