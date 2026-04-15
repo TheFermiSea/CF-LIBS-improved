@@ -76,7 +76,7 @@ except ImportError:
 try:
     from scipy import linalg  # noqa: F401
     from scipy.optimize import minimize
-    from scipy.interpolate import interp1d  # noqa: F401
+
 
     HAS_SCIPY = True
 except ImportError:
