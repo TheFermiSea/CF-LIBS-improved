@@ -101,7 +101,7 @@ class ManifoldGenerator:
         """
         if not HAS_JAX:
             raise ImportError(
-                "JAX is required for manifold generation. " "Install with: pip install jax jaxlib"
+                "JAX is required for manifold generation. Install with: pip install jax jaxlib"
             )
 
         config.validate()
@@ -362,247 +362,277 @@ class ManifoldGenerator:
             lines_mass_amu,
         )
 
-        @staticmethod
-        @jit
-        def _saha_eggert_solver(
-            T_eV: float,
-            n_e: float,
-            concentration_map: jnp.ndarray,
-            lines_ip: jnp.ndarray,
-            lines_z: jnp.ndarray,
-            lines_el_idx: jnp.ndarray,
-            lines_ek: jnp.ndarray,
-            lines_gk: jnp.ndarray,
-            partition_coeffs: jnp.ndarray,
-            ionization_potentials: jnp.ndarray,
-        ) -> jnp.ndarray:
-            """
+    @staticmethod
+    def _calculate_partition_functions(t_k, atomic_data):
+        """Calculates neutral and ion partition functions for all lines' elements."""
+        lines_el_idx = atomic_data[6]
+        partition_coeffs = atomic_data[7]
+        coeffs_0 = partition_coeffs[lines_el_idx, 0]
+        coeffs_1 = partition_coeffs[lines_el_idx, 1]
+        u0 = polynomial_partition_function_jax(t_k, coeffs_0)
+        u1 = polynomial_partition_function_jax(t_k, coeffs_1)
+        return u0, u1
+
+    @staticmethod
+    def _calculate_saha_fractions(t_ev, n_e, u0, u1, atomic_data):
+        """Calculates the Saha ionization population fractions."""
+        lines_el_idx = atomic_data[6]
+        ionization_potentials = atomic_data[8]
+        ip_i = ionization_potentials[lines_el_idx, 0]
+        saha_factor = (SAHA_CONST_CM3 / n_e) * (t_ev**1.5)
+        ratio_n1_n0 = saha_factor * (u1 / u0) * jnp.exp(-ip_i / t_ev)
+        frac0 = 1.0 / (1.0 + ratio_n1_n0)
+        frac1 = ratio_n1_n0 / (1.0 + ratio_n1_n0)
+        return frac0, frac1
+
+    @staticmethod
+    def _calculate_boltzmann_populations(
+        plasma_state,
+        saha_state,
+        atomic_data,
+    ):
+        """Calculates upper level populations using the Boltzmann equation."""
+        t_ev, n_e, concentration_map = plasma_state
+        u0, u1, frac0, frac1 = saha_state
+
+        lines_ek = atomic_data[2]
+        lines_gk = atomic_data[3]
+        lines_z = atomic_data[5]
+        lines_el_idx = atomic_data[6]
+
+        pop_fraction = jnp.where(lines_z == 0, frac0, frac1)
+        u_val = jnp.where(lines_z == 0, u0, u1)
+        element_conc = concentration_map[lines_el_idx]
+        n_species_total = element_conc * n_e
+        n_species = n_species_total * pop_fraction
+        n_upper = n_species * (lines_gk / u_val) * jnp.exp(-lines_ek / t_ev)
+        return n_upper
+
+    @staticmethod
+    @jit
+    def _saha_eggert_solver(
+        T_eV: float,
+        n_e: float,
+        concentration_map: jnp.ndarray,
+        atomic_data: Tuple,
+    ) -> jnp.ndarray:
+        """
+        Vectorized Saha-Eggert solver for JAX.
+
+        Calculates upper level populations for all lines simultaneously.
+
+        Parameters
+        ----------
+        T_eV : float
+            Electron temperature in eV
+        n_e : float
+            Electron density in cm^-3
+        concentration_map : array
+            Element concentrations
+        atomic_data : Tuple
+            Atomic data arrays from ManifoldGenerator._load_atomic_data
+
+        Returns
+        -------
+        array
+            Upper level populations
+        """
+        t_k = T_eV * EV_TO_K
+
+        u0, u1 = ManifoldGenerator._calculate_partition_functions(t_k, atomic_data)
+
+        frac0, frac1 = ManifoldGenerator._calculate_saha_fractions(T_eV, n_e, u0, u1, atomic_data)
+
+        n_upper = ManifoldGenerator._calculate_boltzmann_populations(
+            (T_eV, n_e, concentration_map),
+            (u0, u1, frac0, frac1),
+            atomic_data,
+        )
+
+        return n_upper
+
+    @staticmethod
+    @jit
+    def _compute_spectrum_snapshot(
+        wl_grid: jnp.ndarray,
+        T_eV: float,
+        n_e: float,
+        concentrations: jnp.ndarray,
+        atomic_data: Tuple,
+    ) -> jnp.ndarray:
+        """
+
+        Compute spectrum for a single time snapshot.
 
-            Vectorized Saha-Eggert solver for JAX.
 
 
+        Parameters
 
-            Calculates upper level populations for all lines simultaneously.
+        ----------
 
+        wl_grid : array
 
+            Wavelength grid
 
-            Parameters
+        T_eV : float
 
-            ----------
+            Temperature in eV
 
-            T_eV : float
+        n_e : float
 
-                Electron temperature in eV
+            Electron density
 
-            n_e : float
+        concentrations : array
 
-                Electron density in cm^-3
+            Element concentrations
 
-            concentration_map : array
+        atomic_data : Tuple
 
-                Element concentrations
+            Atomic data arrays
 
-            lines_* : arrays
 
-                Atomic data arrays
 
-            partition_coeffs : array
+        Returns
 
-                Partition function coefficients (num_elements, max_stages, 5)
+        -------
 
-            ionization_potentials : array
+        array
 
-                Ionization potentials (num_elements, max_stages)
+            Spectral intensity
 
+        """
 
+        (
+            l_wl,
+            l_aki,
+            l_ek,
+            l_gk,
+            l_ip,
+            l_z,
+            l_el_idx,
+            partition_coeffs,
+            ionization_potentials,
+            l_stark_w,
+            l_stark_alpha,
+            l_mass_amu,
+        ) = atomic_data
 
-            Returns
+        # Solve populations
 
-            -------
+        n_upper = ManifoldGenerator._saha_eggert_solver(
+            T_eV,
+            n_e,
+            concentrations,
+            atomic_data,
+        )
 
-            array
+        # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
 
-                Upper level populations
+        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
 
-            """
+        # --- Proper Voigt Broadening (Phase 2) ---
 
-            # Calculate T in Kelvin
+        # Doppler width: sigma = lambda/c * sqrt(2kT/m)
+        # Using JAX-compatible doppler_sigma_jax
+        mass_kg = l_mass_amu * M_PROTON
+        sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
 
-            T_K = T_eV * EV_TO_K
+        # Instrument broadening (Gaussian sigma)
+        # Uses default 0.05 nm FWHM; configurable via ManifoldConfig.instrument_fwhm_nm
+        sigma_inst = 0.05 / 2.355  # FWHM -> sigma
 
-            # Retrieve Partition Functions for all lines' elements
+        # Total Gaussian width
+        sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
-            # U0: Neutral (stage 0), U1: Ion (stage 1)
+        # Stark broadening: HWHM (Lorentzian gamma)
+        # Use estimate_stark_parameter_jax for missing values (NaN)
+        # w_stark = w_ref * (n_e / 1e16) * (T / T_ref)^(-alpha)
+        REF_NE = 1.0e16
+        REF_T_EV = 0.86173  # 10000 K in eV
 
-            # We only support I/II balance for now in this fast solver
+        # Estimate Stark w_ref for lines without database values
+        # Use binding energy = IP - E_upper
+        binding_energy = jnp.maximum(l_ip - l_ek, 0.1)
+        n_eff = (l_z + 1) * jnp.sqrt(13.605 / binding_energy)
+        w_est = 2.0e-5 * (l_wl / 500.0) ** 2 * (n_eff**4)
+        w_est = jnp.clip(w_est, 0.0001, 0.5)
 
-            coeffs_0 = partition_coeffs[lines_el_idx, 0]
+        # Use database value if available, else estimate
+        w_ref = jnp.where(jnp.isnan(l_stark_w), w_est, l_stark_w)
 
-            coeffs_1 = partition_coeffs[lines_el_idx, 1]
+        # Stark HWHM calculation
+        factor_ne = n_e / REF_NE
+        factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -l_stark_alpha)
+        gamma_stark = w_ref * factor_ne * factor_T
 
-            U0 = polynomial_partition_function_jax(T_K, coeffs_0)
+        # --- Voigt Profile Rendering (Humlicek W4 approximation) ---
+        # For each wavelength point, compute Voigt profile contribution from all lines
+        # z = (x + i*gamma) / (sigma * sqrt(2))
+        # V(x) = Re(w(z)) / (sigma * sqrt(2*pi))
 
-            U1 = polynomial_partition_function_jax(T_K, coeffs_1)
+        diff = wl_grid[:, None] - l_wl[None, :]  # (n_wl, n_lines)
 
-            # Retrieve Ionization Potential (I -> II) for all lines' elements
+        # Compute Voigt profile using Humlicek W4 approximation
+        z = (diff + 1j * gamma_stark) / (sigma_total * jnp.sqrt(2.0))
 
-            # We need the IP of the neutral species (stage 0) to balance I <-> II
+        # Humlicek W4 Faddeeva approximation (no complex erfc needed)
+        x_h = jnp.real(z)
+        y_h = jnp.abs(jnp.imag(z))
+        s = jnp.abs(x_h) + y_h
+        t = y_h - 1j * x_h
 
-            IP_I = ionization_potentials[lines_el_idx, 0]
+        # Region 1: s >= 15 (asymptotic)
+        w_r1 = t * 0.5641896 / (0.5 + t * t)
 
-            # Saha equation: n1 / n0 = (SAHA_CONST/ne) * T^1.5 * (U1/U0) * exp(-IP/T)
-            # SAHA_CONST_CM3 already includes the free-electron degeneracy factor g_e = 2.
+        # Region 2: 5.5 <= s < 15
+        u = t * t
+        w_r2 = t * (1.410474 + u * 0.5641896) / (0.75 + u * (3.0 + u))
 
-            saha_factor = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
+        # Region 3: s < 5.5 and y >= 0.195 * |x| - 0.176
+        w_r3 = (16.4955 + t * (20.20933 + t * (11.96482 + t * (3.778987 + t * 0.5642236)))) / (
+            16.4955 + t * (38.82363 + t * (39.27121 + t * (21.69274 + t * (6.699398 + t))))
+        )
 
-            ratio_n1_n0 = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
-
-            # Calculate population fractions
-
-            # frac0 = n0 / (n0 + n1)
-
-            # frac1 = n1 / (n0 + n1)
-
-            frac0 = 1.0 / (1.0 + ratio_n1_n0)
-
-            frac1 = ratio_n1_n0 / (1.0 + ratio_n1_n0)
-
-            # Select fraction based on line's ionization stage
-
-            # lines_z=0 -> use frac0, lines_z=1 -> use frac1
-
-            pop_fraction = jnp.where(lines_z == 0, frac0, frac1)
-
-            # Select appropriate partition function for Boltzmann
-
-            # n_upper = n_species * (g / U) * exp(-E / T)
-
-            U_val = jnp.where(lines_z == 0, U0, U1)
-
-            # Total element density
-
-            # N_total_element = element_conc * n_e
-
-            element_conc = concentration_map[lines_el_idx]
-
-            N_species_total = element_conc * n_e
-
-            # Species density (n0 or n1)
-
-            N_species = N_species_total * pop_fraction
-
-            # Boltzmann level population
-
-            n_upper = N_species * (lines_gk / U_val) * jnp.exp(-lines_ek / T_eV)
-
-            return n_upper
-
-        @staticmethod
-        @jit
-        def _compute_spectrum_snapshot(
-            wl_grid: jnp.ndarray,
-            T_eV: float,
-            n_e: float,
-            concentrations: jnp.ndarray,
-            atomic_data: Tuple,
-        ) -> jnp.ndarray:
-            """
-
-            Compute spectrum for a single time snapshot.
-
-
-
-            Parameters
-
-            ----------
-
-            wl_grid : array
-
-                Wavelength grid
-
-            T_eV : float
-
-                Temperature in eV
-
-            n_e : float
-
-                Electron density
-
-            concentrations : array
-
-                Element concentrations
-
-            atomic_data : Tuple
-
-                Atomic data arrays
-
-
-
-            Returns
-
-            -------
-
-            array
-
-                Spectral intensity
-
-            """
-
-            (
-                l_wl,
-                l_aki,
-                l_ek,
-                l_gk,
-                l_ip,
-                l_z,
-                l_el_idx,
-                partition_coeffs,
-                ionization_potentials,
-                l_stark_w,
-                l_stark_alpha,
-                l_mass_amu,
-            ) = atomic_data
-
-            # Solve populations
-
-            n_upper = ManifoldGenerator._saha_eggert_solver(
-                T_eV,
-                n_e,
-                concentrations,
-                l_ip,
-                l_z,
-                l_el_idx,
-                l_ek,
-                l_gk,
-                partition_coeffs,
-                ionization_potentials,
+        # Region 4: s < 5.5 and y < 0.195 * |x| - 0.176
+        w_r4 = jnp.exp(u) - t * (
+            36183.31
+            - u
+            * (
+                3321.9905
+                - u * (1540.787 - u * (219.0313 - u * (35.76683 - u * (1.320522 - u * 0.56419))))
             )
+        ) / (
+            32066.6
+            - u
+            * (
+                24322.84
+                - u
+                * (9022.228 - u * (2186.181 - u * (364.2191 - u * (61.57037 - u * (1.841439 - u)))))
+            )
+        )
 
-            # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
+        # Select region based on conditions
+        w_z = jnp.where(
+            s >= 15.0,
+            w_r1,
+            jnp.where(
+                s >= 5.5,
+                w_r2,
+                jnp.where(
+                    y_h >= 0.195 * jnp.abs(x_h) - 0.176,
+                    w_r3,
+                    w_r4,
+                ),
+            ),
+        )
 
-            epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
+        profile = jnp.real(w_z) / (sigma_total * jnp.sqrt(2.0 * jnp.pi))
 
-            # --- Proper Voigt Broadening (Phase 2) ---
+        # Sum contributions weighted by emissivity
 
-            # Doppler width: sigma = lambda/c * sqrt(2kT/m)
-            sigma_doppler = doppler_sigma_jax(l_wl, T_eV, l_mass_amu)
+        intensity = jnp.sum(epsilon * profile, axis=1)
 
-            # Instrument broadening (Gaussian sigma)
-            # Uses default 0.05 nm FWHM; configurable via ManifoldConfig.instrument_fwhm_nm
-            sigma_inst = 0.05 / 2.355  # FWHM -> sigma
-
-            # Total Gaussian width
-            sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
-
-            # Stark broadening: HWHM (Lorentzian gamma)
-            w_est = estimate_stark_parameter_jax(l_wl, l_ek, l_ip, l_z + 1)
-            w_ref = jnp.where(jnp.isnan(l_stark_w), w_est, l_stark_w)
-            gamma_stark = stark_hwhm_jax(n_e, T_eV, w_ref, l_stark_alpha)
-
-            # --- Voigt Profile Rendering (Weideman approximation) ---
-            intensity = voigt_spectrum_jax(wl_grid, l_wl, epsilon, sigma_total, gamma_stark)
-
-            return intensity
+        return intensity
 
     @staticmethod
     @jit
@@ -751,8 +781,7 @@ class ManifoldGenerator:
         if storage_format == "hdf5":
             if not HAS_H5PY:
                 raise ImportError(
-                    "h5py is required for HDF5 manifold generation. "
-                    "Install with: pip install h5py"
+                    "h5py is required for HDF5 manifold generation. Install with: pip install h5py"
                 )
             output_root = h5py.File(output_path, "w")
             dset_spec = output_root.create_dataset(
@@ -825,7 +854,7 @@ class ManifoldGenerator:
                 if progress_callback:
                     progress_callback(i + len(batch), n_samples, (i + len(batch)) / n_samples)
                 elif i % (self.config.batch_size * 10) == 0:
-                    logger.info(f"Generated {i}/{n_samples} ({i/n_samples:.1%})")
+                    logger.info(f"Generated {i}/{n_samples} ({i / n_samples:.1%})")
         finally:
             if storage_format == "hdf5":
                 output_root.close()
@@ -833,6 +862,6 @@ class ManifoldGenerator:
         total_time = time.time() - start_time
         logger.info(
             f"Manifold generation complete: {n_samples} spectra in {total_time:.2f}s "
-            f"({n_samples/total_time:.0f} spectra/sec)"
+            f"({n_samples / total_time:.0f} spectra/sec)"
         )
         logger.info(f"Output saved to: {output_path} ({storage_format})")
