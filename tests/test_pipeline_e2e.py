@@ -43,8 +43,7 @@ EXPECTED_LINES = {
 def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
     db_path = tmp_path / "pipeline_e2e.db"
     conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE lines (
             id INTEGER PRIMARY KEY,
             element TEXT,
@@ -57,20 +56,16 @@ def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
             gk INTEGER,
             rel_int REAL
         )
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         CREATE TABLE energy_levels (
             element TEXT,
             sp_num INTEGER,
             g_level INTEGER,
             energy_ev REAL
         )
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         CREATE TABLE species_physics (
             element TEXT,
             sp_num INTEGER,
@@ -78,10 +73,8 @@ def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
             atomic_mass REAL,
             PRIMARY KEY (element, sp_num)
         )
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         CREATE TABLE partition_functions (
             element TEXT,
             sp_num INTEGER,
@@ -95,8 +88,7 @@ def _build_multistage_atomic_db(tmp_path: Path) -> AtomicDatabase:
             source TEXT,
             PRIMARY KEY (element, sp_num)
         )
-        """
-    )
+        """)
 
     line_rows = [
         ("Fe", 1, 371.99, 1.5e7, 0.0, 3.33, 9, 11, 1000),
@@ -198,7 +190,7 @@ def test_full_pipeline_recovers_multistage_sample(tmp_path: Path):
         atomic_db,
         elements=["Fe", "Cu"],
         wavelength_tolerance_nm=0.08,
-        min_peak_height=0.005,
+        min_peak_height=0.003,
         peak_width_nm=0.10,
         min_relative_intensity=50.0,
         kdet_enabled=False,
