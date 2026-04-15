@@ -48,7 +48,7 @@ except ImportError:
         return func
 
 
-from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_K, H_PLANCK
+from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_J, EV_TO_K, H_PLANCK, M_PROTON
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
@@ -56,8 +56,7 @@ from cflibs.plasma.partition import polynomial_partition_function_jax
 
 # Conditional imports for JAX physics functions
 if HAS_JAX:
-    from cflibs.radiation.profiles import doppler_sigma_jax, voigt_spectrum_jax
-    from cflibs.radiation.stark import estimate_stark_parameter_jax, stark_hwhm_jax
+    pass  # JAX physics helpers available in cflibs.radiation if needed
 
 logger = get_logger("manifold.generator")
 
