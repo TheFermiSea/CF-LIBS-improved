@@ -188,7 +188,7 @@ def test_full_pipeline_recovers_multistage_sample(tmp_path: Path):
         atomic_db,
         elements=["Fe", "Cu"],
         wavelength_tolerance_nm=0.08,
-        min_peak_height=0.003,
+        min_peak_height=0.003,  # below weakest expected line (Cu 515.32 nm) but above noise floor
         peak_width_nm=0.10,
         min_relative_intensity=50.0,
         kdet_enabled=False,
