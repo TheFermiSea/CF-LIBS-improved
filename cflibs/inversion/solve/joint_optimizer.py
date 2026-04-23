@@ -544,8 +544,11 @@ class JointOptimizer:
         T_eV = jnp.exp(log_T)
         n_e = jnp.power(10.0, log_ne)
 
-        # Softmax ensures concentrations sum to 1
-        concentrations = jax.nn.softmax(theta)
+        # Softmax-style simplex projection using jnp primitives only — no jax.nn.
+        # The max subtraction keeps exp() from overflowing for large logits.
+        shifted = theta - jnp.max(theta)
+        exp_shifted = jnp.exp(shifted)
+        concentrations = exp_shifted / jnp.sum(exp_shifted)
 
         return T_eV, n_e, concentrations
 
@@ -739,6 +742,7 @@ class JointOptimizer:
                     obj, x_free_0, method="bfgs", options={"maxiter": self.max_iterations}
                 )
                 return res.fun
+
         else:
             raise ValueError(f"Unknown parameter: {parameter}")
 

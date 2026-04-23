@@ -202,10 +202,8 @@ extend-select = ["TID"]
 "tests/**/*.py" = ["TID251"]
 # Quarantined ML research code (CLAUDE.md flags as deletion candidates).
 "cflibs/experimental/ml/**/*.py" = ["TID251"]
-# Legacy production offenders — each tracked for de-ML (remove the ignore once the issue closes).
+# Legacy production offender — tracked for de-ML (remove the ignore once the issue closes).
 "cflibs/inversion/identify/alias.py" = ["TID251"]           # CF-LIBS-improved-0ff5
-"cflibs/inversion/solve/coarse_to_fine.py" = ["TID251"]     # CF-LIBS-improved-b3mz
-"cflibs/inversion/solve/joint_optimizer.py" = ["TID251"]    # CF-LIBS-improved-3pau
 
 [tool.ty.src]
 include = ["cflibs"]

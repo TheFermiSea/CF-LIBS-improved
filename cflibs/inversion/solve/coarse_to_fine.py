@@ -209,7 +209,11 @@ def _unpack_params(x):
     """Unpack optimization vector to (T_eV, n_e, concentrations)."""
     T_eV = jnp.exp(x[0])
     n_e = jnp.exp(x[1])
-    conc = jax.nn.softmax(x[2:])
+    # Softmax-style simplex projection using jnp primitives only — no jax.nn.
+    # The max subtraction keeps exp() from overflowing for large logits.
+    shifted = x[2:] - jnp.max(x[2:])
+    exp_shifted = jnp.exp(shifted)
+    conc = exp_shifted / jnp.sum(exp_shifted)
     return T_eV, n_e, conc
 
 
