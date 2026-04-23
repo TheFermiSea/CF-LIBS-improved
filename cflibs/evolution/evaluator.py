@@ -37,6 +37,15 @@ FORBIDDEN_PREFIXES: tuple[str, ...] = (
     "jax.experimental.stax",
 )
 
+# Callables that smuggle imports past static analysis. Evolved candidates
+# have no legitimate reason to use them; any occurrence is flagged as a
+# ``dynamic_import`` violation regardless of the argument.
+DYNAMIC_IMPORT_CALLS: tuple[str, ...] = (
+    "__import__",
+    "importlib.import_module",
+    "importlib.__import__",
+)
+
 
 @dataclass(frozen=True)
 class BlocklistViolation:
@@ -45,7 +54,7 @@ class BlocklistViolation:
     module: str
     lineno: int
     col_offset: int
-    kind: str  # "import" | "import_from" | "attribute"
+    kind: str  # "import" | "import_from" | "attribute" | "dynamic_import"
 
     def format(self) -> str:
         return f"line {self.lineno}: forbidden {self.kind} of {self.module!r}"
@@ -95,6 +104,8 @@ def scan_source(source: str) -> list[BlocklistViolation]:
     * :class:`ast.ImportFrom` statements — ``from sklearn.linear_model import
       Ridge``, ``from jax import nn``.
     * :class:`ast.Attribute` access chains — ``jax.nn.relu(x)``.
+    * :class:`ast.Call` nodes that invoke :data:`DYNAMIC_IMPORT_CALLS`
+      (e.g. ``__import__("sklearn")``, ``importlib.import_module("torch")``).
 
     Duplicate hits arising from walking nested attribute chains are
     de-duplicated by source location.
@@ -141,6 +152,26 @@ def scan_source(source: str) -> list[BlocklistViolation]:
                         lineno=node.lineno,
                         col_offset=node.col_offset,
                         kind="attribute",
+                    )
+                )
+        elif isinstance(node, ast.Call):
+            # Detect dynamic-import smuggling: __import__("sklearn"),
+            # importlib.import_module("torch"), etc. Evolved candidates never
+            # need runtime-resolved imports, so any occurrence is rejected
+            # regardless of the string argument.
+            func = node.func
+            called: str | None = None
+            if isinstance(func, ast.Name):
+                called = func.id
+            elif isinstance(func, ast.Attribute):
+                called = _flatten_attribute(func)
+            if called is not None and called in DYNAMIC_IMPORT_CALLS:
+                raw.append(
+                    BlocklistViolation(
+                        module=called,
+                        lineno=node.lineno,
+                        col_offset=node.col_offset,
+                        kind="dynamic_import",
                     )
                 )
 

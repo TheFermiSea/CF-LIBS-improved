@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from cflibs.evolution.evaluator import (
+    DYNAMIC_IMPORT_CALLS,
     BlocklistViolationError,
     FORBIDDEN_PREFIXES,
     assert_physics_only,
@@ -194,3 +195,42 @@ def test_forbidden_prefixes_complete() -> None:
         "jax.experimental.stax",
     }
     assert required.issubset(set(FORBIDDEN_PREFIXES))
+
+
+# ---------------------------------------------------------------------------
+# Dynamic-import smuggling.
+# ---------------------------------------------------------------------------
+
+
+def test_dunder_import_rejected_for_forbidden_module() -> None:
+    source = '__import__("sklearn")'
+    violations = scan_source(source)
+    dyn = [v for v in violations if v.kind == "dynamic_import"]
+    assert len(dyn) == 1
+    assert dyn[0].module == "__import__"
+
+
+def test_dunder_import_rejected_for_innocent_module_too() -> None:
+    """Dynamic imports are banned regardless of target — evolved code has no need."""
+    source = '__import__("numpy")'
+    violations = scan_source(source)
+    dyn = [v for v in violations if v.kind == "dynamic_import"]
+    assert len(dyn) == 1
+
+
+def test_importlib_import_module_rejected() -> None:
+    source = 'import importlib\nimportlib.import_module("torch")'
+    violations = scan_source(source)
+    dyn = [v for v in violations if v.kind == "dynamic_import"]
+    assert len(dyn) == 1
+    assert dyn[0].module == "importlib.import_module"
+
+
+def test_dynamic_import_calls_registry_covers_common_forms() -> None:
+    assert "__import__" in DYNAMIC_IMPORT_CALLS
+    assert "importlib.import_module" in DYNAMIC_IMPORT_CALLS
+
+
+def test_assert_physics_only_raises_on_dynamic_import() -> None:
+    with pytest.raises(BlocklistViolationError):
+        assert_physics_only('__import__("sklearn")')
