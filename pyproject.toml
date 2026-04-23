@@ -202,8 +202,9 @@ extend-select = ["TID"]
 "tests/**/*.py" = ["TID251"]
 # Quarantined ML research code (CLAUDE.md flags as deletion candidates).
 "cflibs/experimental/ml/**/*.py" = ["TID251"]
-# Legacy production offender — tracked for de-ML (remove the ignore once the issue closes).
-"cflibs/inversion/identify/alias.py" = ["TID251"]           # CF-LIBS-improved-0ff5
+# (All legacy production ML offenders have been de-ML'd — no per-file-ignores
+# are currently needed. Re-add here with the bead-ID trail if new exceptions
+# are warranted.)
 
 [tool.ty.src]
 include = ["cflibs"]
