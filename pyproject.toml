@@ -176,6 +176,37 @@ line-length = 100
 target-version = "py38"
 extend-exclude = ["tests/validation/validation"]
 
+[tool.ruff.lint]
+# Enable flake8-tidy-imports (TID) so we can ban ML libraries in the shipped
+# CF-LIBS algorithm. Defaults (E, F) remain active.
+extend-select = ["TID"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Hard project constraint: the shipped CF-LIBS algorithm must be physics-only.
+# Neural networks, trained models, and PLS/PCR are forbidden in production code.
+# ML is allowed ONLY in the optimization/search process (cflibs/evolution/)
+# and the experimental quarantine (cflibs/experimental/ml/). See the hierarchical
+# ES epic CF-LIBS-improved-3fy3 for the full constraint specification.
+"sklearn".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
+"torch".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
+"tensorflow".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
+"keras".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
+"flax".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
+"equinox".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
+"transformers".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
+"jax.nn".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
+"jax.experimental.stax".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may import ML libs to verify blocklist behavior / mocks.
+"tests/**/*.py" = ["TID251"]
+# Quarantined ML research code (CLAUDE.md flags as deletion candidates).
+"cflibs/experimental/ml/**/*.py" = ["TID251"]
+# Legacy production offenders — each tracked for de-ML (remove the ignore once the issue closes).
+"cflibs/inversion/identify/alias.py" = ["TID251"]           # CF-LIBS-improved-0ff5
+"cflibs/inversion/solve/coarse_to_fine.py" = ["TID251"]     # CF-LIBS-improved-b3mz
+"cflibs/inversion/solve/joint_optimizer.py" = ["TID251"]    # CF-LIBS-improved-3pau
+
 [tool.ty.src]
 include = ["cflibs"]
 
