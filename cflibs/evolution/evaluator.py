@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Literal
+
+ViolationKind = Literal["import", "import_from", "attribute", "dynamic_import"]
 
 # Prefixes that must never appear in evolved candidate code.
 #
@@ -54,7 +56,7 @@ class BlocklistViolation:
     module: str
     lineno: int
     col_offset: int
-    kind: str  # "import" | "import_from" | "attribute" | "dynamic_import"
+    kind: ViolationKind
 
     def format(self) -> str:
         return f"line {self.lineno}: forbidden {self.kind} of {self.module!r}"

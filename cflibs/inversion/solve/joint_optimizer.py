@@ -541,14 +541,11 @@ class JointOptimizer:
         log_ne = x[1]
         theta = x[2:]
 
+        from cflibs.inversion.physics.softmax_closure import softmax_closure
+
         T_eV = jnp.exp(log_T)
         n_e = jnp.power(10.0, log_ne)
-
-        # Softmax-style simplex projection using jnp primitives only — no jax.nn.
-        # The max subtraction keeps exp() from overflowing for large logits.
-        shifted = theta - jnp.max(theta)
-        exp_shifted = jnp.exp(shifted)
-        concentrations = exp_shifted / jnp.sum(exp_shifted)
+        concentrations = softmax_closure(theta)
 
         return T_eV, n_e, concentrations
 

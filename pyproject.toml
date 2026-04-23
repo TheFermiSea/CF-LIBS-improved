@@ -182,11 +182,9 @@ extend-exclude = ["tests/validation/validation"]
 extend-select = ["TID"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-# Hard project constraint: the shipped CF-LIBS algorithm must be physics-only.
-# Neural networks, trained models, and PLS/PCR are forbidden in production code.
-# ML is allowed ONLY in the optimization/search process (cflibs/evolution/)
-# and the experimental quarantine (cflibs/experimental/ml/). See the hierarchical
-# ES epic CF-LIBS-improved-3fy3 for the full constraint specification.
+# The shipped CF-LIBS algorithm must be physics-only. ML is allowed only in the
+# optimization-process tooling (cflibs/evolution/) and the deletion-candidate
+# quarantine (cflibs/experimental/ml/). Full spec: CF-LIBS-improved-3fy3.
 "sklearn".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
 "torch".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
 "tensorflow".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
@@ -198,13 +196,12 @@ extend-select = ["TID"]
 "jax.experimental.stax".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
 
 [tool.ruff.lint.per-file-ignores]
-# Tests may import ML libs to verify blocklist behavior / mocks.
-"tests/**/*.py" = ["TID251"]
-# Quarantined ML research code (CLAUDE.md flags as deletion candidates).
+# Only the evolution blocklist tests and the legacy interpretable-ML test need
+# to import forbidden libs directly; the rest of the test suite should obey
+# the same constraint as production code.
+"tests/evolution/**/*.py" = ["TID251"]
+"tests/test_interpretable.py" = ["TID251"]
 "cflibs/experimental/ml/**/*.py" = ["TID251"]
-# (All legacy production ML offenders have been de-ML'd — no per-file-ignores
-# are currently needed. Re-add here with the bead-ID trail if new exceptions
-# are warranted.)
 
 [tool.ty.src]
 include = ["cflibs"]

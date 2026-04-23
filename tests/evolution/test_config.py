@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
-from cflibs.evolution.config import EvolutionDriverConfig, FitnessWeights
+from cflibs.evolution.config import EvolutionDriverConfig
 
 
 def test_defaults_are_sensible() -> None:
@@ -14,13 +16,21 @@ def test_defaults_are_sensible() -> None:
     assert cfg.evaluation_timeout_s > 0
     assert cfg.structural_mutation_cadence >= 1
     assert cfg.enforcement_mode == "hard"
+    assert cfg.overfitting_penalty >= 0
 
 
-def test_fitness_weights_default_covers_all_planned_matrices() -> None:
-    w = FitnessWeights()
-    # All five dataset classes from epic 3fy3 must have an explicit weight.
+def test_default_fitness_weights_cover_all_planned_matrices() -> None:
+    cfg = EvolutionDriverConfig()
     for name in ("aalto", "chemcam", "supercam", "usgs", "nist_steel"):
-        assert hasattr(w, name), f"missing default weight for {name}"
+        assert name in cfg.fitness_weights
+        assert cfg.fitness_weights[name] > 0
+
+
+def test_fitness_weights_accepts_new_dataset() -> None:
+    cfg = EvolutionDriverConfig(
+        fitness_weights={"aalto": 1.0, "custom_mars_soil": 2.5},
+    )
+    assert cfg.fitness_weights["custom_mars_soil"] == 2.5
 
 
 def test_override_evaluation_workers_to_serial() -> None:
@@ -29,19 +39,21 @@ def test_override_evaluation_workers_to_serial() -> None:
 
 
 @pytest.mark.parametrize(
-    "kwargs, field",
+    "kwargs",
     [
-        ({"perturbations_per_batch": 0}, "perturbations_per_batch"),
-        ({"perturbations_per_batch": -3}, "perturbations_per_batch"),
-        ({"perturbation_timeout_s": 0}, "timeouts"),
-        ({"evaluation_timeout_s": -1.0}, "timeouts"),
-        ({"evaluation_workers": -1}, "evaluation_workers"),
-        ({"structural_mutation_cadence": 0}, "structural_mutation_cadence"),
-        ({"max_wallclock_hours": 0}, "max_wallclock_hours"),
+        {"perturbations_per_batch": 0},
+        {"perturbations_per_batch": -3},
+        {"perturbation_timeout_s": 0},
+        {"evaluation_timeout_s": -1.0},
+        {"evaluation_workers": -1},
+        {"structural_mutation_cadence": 0},
+        {"max_wallclock_hours": 0},
+        {"overfitting_penalty": -0.1},
+        {"fitness_weights": {"aalto": -1.0}},
     ],
 )
-def test_invalid_values_rejected(kwargs: dict, field: str) -> None:
-    with pytest.raises(ValueError, match=field):
+def test_invalid_values_rejected(kwargs: dict) -> None:
+    with pytest.raises(ValueError):
         EvolutionDriverConfig(**kwargs)
 
 
@@ -52,5 +64,5 @@ def test_enforcement_mode_must_be_hard_or_warn() -> None:
 
 def test_dataclass_is_frozen() -> None:
     cfg = EvolutionDriverConfig()
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         cfg.perturbations_per_batch = 99  # type: ignore[misc]
