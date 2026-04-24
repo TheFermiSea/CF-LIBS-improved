@@ -245,9 +245,7 @@ class PCAResult:
             n_components = self.n_components
 
         if n_components < 1:
-            raise ValueError(
-                f"n_components must be >= 1, got {n_components}"
-            )
+            raise ValueError(f"n_components must be >= 1, got {n_components}")
 
         if n_components > self.n_components:
             raise ValueError(

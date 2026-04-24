@@ -55,17 +55,6 @@ widgets = [
     "ipywidgets>=8.0.0",
     "plotly>=5.0.0",
 ]
-# Machine learning (interpretable models, PLS, hybrid)
-ml = [
-    "scikit-learn>=1.3.0",
-    "joblib>=1.3.0",
-]
-# Physics-Informed Neural Networks (requires JAX + Equinox + Optax)
-pinn = [
-    "jax>=0.4.26",
-    "equinox>=0.11.0",
-    "optax>=0.2.0",
-]
 # Rust computational core (comb matching, partition functions)
 # Built via maturin, not pip — see native/cflibs-core/README.md
 # rust = ["native/cflibs-core"]  # not a PEP 508 specifier
@@ -78,8 +67,6 @@ ci = [
     "numpyro>=0.14.0",
     "arviz>=0.17.0",
     "uncertainties>=3.2.0",
-    "scikit-learn>=1.3.0",
-    "joblib>=1.3.0",
     "dynesty>=2.1.0",
 ]
 # Development dependencies
@@ -110,13 +97,9 @@ local = [
     "numpyro>=0.14.0",
     "arviz>=0.17.0",
     "uncertainties>=3.2.0",
-    "scikit-learn>=1.3.0",
-    "joblib>=1.3.0",
     "dynesty>=2.1.0",
     "ipywidgets>=8.0.0",
     "plotly>=5.0.0",
-    "equinox>=0.11.0",
-    "optax>=0.2.4,<0.3.0",
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "pytest-benchmark>=4.0.0",
@@ -133,8 +116,6 @@ cluster = [
     "numpyro>=0.14.0",
     "arviz>=0.17.0",
     "uncertainties>=3.2.0",
-    "equinox>=0.11.0",
-    "optax>=0.2.0",
     "mpi4py>=3.1.0",
 ]
 
@@ -182,9 +163,9 @@ extend-exclude = ["tests/validation/validation"]
 extend-select = ["TID"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-# The shipped CF-LIBS algorithm must be physics-only. ML is allowed only in the
-# optimization-process tooling (cflibs/evolution/) and the deletion-candidate
-# quarantine (cflibs/experimental/ml/). Full spec: CF-LIBS-improved-3fy3.
+# The shipped CF-LIBS algorithm is physics-only — no ML anywhere. Full spec:
+# CF-LIBS-improved-3fy3. The cflibs/experimental/ml/ quarantine was deleted
+# outright, so no per-file exemptions are needed.
 "sklearn".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
 "torch".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
 "tensorflow".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
@@ -194,10 +175,6 @@ extend-select = ["TID"]
 "transformers".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
 "jax.nn".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
 "jax.experimental.stax".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
-
-[tool.ruff.lint.per-file-ignores]
-# Quarantined ML research code (CLAUDE.md flags as deletion candidates).
-"cflibs/experimental/ml/**/*.py" = ["TID251"]
 
 [tool.ty.src]
 include = ["cflibs"]

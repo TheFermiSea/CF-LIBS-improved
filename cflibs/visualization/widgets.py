@@ -953,7 +953,9 @@ class PosteriorViewer:
                 col=col,
             )
 
-    def _build_single_marginal(self, param: str, weights: Optional[np.ndarray]) -> "go.FigureWidget":
+    def _build_single_marginal(
+        self, param: str, weights: Optional[np.ndarray]
+    ) -> "go.FigureWidget":
         """Build a single marginal distribution plot."""
         fig = go.FigureWidget()
         samples = self._samples[param]
@@ -1030,9 +1032,7 @@ class PosteriorViewer:
                 if j == 0 and i > 0:
                     fig.update_yaxes(title_text=self._param_labels.get(pi, pi), row=row, col=col)
 
-        fig.update_layout(
-            title=self.title, height=self.height, width=self.width, showlegend=False
-        )
+        fig.update_layout(title=self.title, height=self.height, width=self.width, showlegend=False)
         return go.FigureWidget(fig)
 
     def show(self, params: Optional[List[str]] = None) -> "go.FigureWidget":

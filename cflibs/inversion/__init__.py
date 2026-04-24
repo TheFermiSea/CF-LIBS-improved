@@ -115,17 +115,6 @@ from cflibs.inversion.pca import (
     denoise_spectra,
     explained_variance_curve,
 )
-from cflibs.inversion.pls import (
-    PLSAlgorithm,
-    PreprocessingMethod,
-    PLSComponents,
-    PLSResult,
-    CrossValidationResult,
-    PLSRegression,
-    PLSCrossValidator,
-    PLSCalibrationModel,
-    build_pls_calibration,
-)
 from cflibs.inversion.temporal import (
     PlasmaPhase,
     TemporalGateConfig,
@@ -141,30 +130,6 @@ from cflibs.inversion.temporal import (
     TimeResolvedCFLIBSSolver,
     create_default_evolution_model,
     recommend_gate_timing,
-)
-from cflibs.inversion.interpretable import (
-    FeatureType,
-    SpectralFeature,
-    FeatureExtractionResult,
-    SpectralExplanation,
-    ValidationResult,
-    PhysicsGuidedFeatureExtractor,
-    SpectralExplainer,
-    ExplanationValidator,
-)
-from cflibs.inversion.transfer import (
-    DomainAdapter,
-    DomainAdaptationMethod,
-    DomainAdaptationResult,
-    compute_mmd,
-    adapt_domains,
-    CalibrationTransfer,
-    CalibrationMethod,
-    TransferResult,
-    transfer_calibration,
-    FineTuner,
-    FineTuneResult,
-    TransferLearningPipeline,
 )
 from cflibs.inversion.streaming import (
     AnalysisMode,
@@ -285,12 +250,6 @@ try:
 except ImportError:
     pass
 
-# Note: Interpretable-ML and PINN re-exports were removed from the public
-# cflibs.inversion surface (CF-LIBS-improved-0ljo) because the shipped
-# CF-LIBS algorithm must be physics-only. The underlying modules remain
-# available under cflibs/experimental/ml/ for research use; import them
-# from that path directly if still needed.
-
 # --- Public API ---
 __all__ = [
     # Boltzmann plotting
@@ -390,16 +349,6 @@ __all__ = [
     "fit_pca",
     "denoise_spectra",
     "explained_variance_curve",
-    # PLS
-    "PLSAlgorithm",
-    "PreprocessingMethod",
-    "PLSComponents",
-    "PLSResult",
-    "CrossValidationResult",
-    "PLSRegression",
-    "PLSCrossValidator",
-    "PLSCalibrationModel",
-    "build_pls_calibration",
     # Temporal dynamics
     "PlasmaPhase",
     "TemporalGateConfig",
@@ -415,28 +364,6 @@ __all__ = [
     "TimeResolvedCFLIBSSolver",
     "create_default_evolution_model",
     "recommend_gate_timing",
-    # Transfer learning
-    "DomainAdapter",
-    "DomainAdaptationMethod",
-    "DomainAdaptationResult",
-    "compute_mmd",
-    "adapt_domains",
-    "CalibrationTransfer",
-    "CalibrationMethod",
-    "TransferResult",
-    "transfer_calibration",
-    "FineTuner",
-    "FineTuneResult",
-    "TransferLearningPipeline",
-    # Interpretable ML
-    "FeatureType",
-    "SpectralFeature",
-    "FeatureExtractionResult",
-    "SpectralExplanation",
-    "ValidationResult",
-    "PhysicsGuidedFeatureExtractor",
-    "SpectralExplainer",
-    "ExplanationValidator",
     # Real-time streaming
     "AnalysisMode",
     "StreamingConfig",
@@ -523,6 +450,3 @@ if HAS_PCA_JAX:
             "pca_reconstruction_error_jax",
         ]
     )
-
-# ML-dependent exports (InterpretableModel, PINN) removed from the public
-# cflibs.inversion surface — see note above (CF-LIBS-improved-0ljo).
