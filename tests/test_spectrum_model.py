@@ -186,24 +186,21 @@ def test_spectrum_model_legacy_mode_unchanged(atomic_db, sample_plasma):
 
     instrument = InstrumentModel(resolution_fwhm_nm=0.05)
 
-    model_default = SpectrumModel(
-        plasma=sample_plasma,
-        atomic_db=atomic_db,
-        instrument=instrument,
-        lambda_min=370.0,
-        lambda_max=375.0,
-        delta_lambda=0.1,
-    )
+    def get_model(mode=None):
+        kwargs = dict(
+            plasma=sample_plasma,
+            atomic_db=atomic_db,
+            instrument=instrument,
+            lambda_min=370.0,
+            lambda_max=375.0,
+            delta_lambda=0.1,
+        )
+        if mode is not None:
+            kwargs["broadening_mode"] = mode
+        return SpectrumModel(**kwargs)
 
-    model_legacy = SpectrumModel(
-        plasma=sample_plasma,
-        atomic_db=atomic_db,
-        instrument=instrument,
-        lambda_min=370.0,
-        lambda_max=375.0,
-        delta_lambda=0.1,
-        broadening_mode=BroadeningMode.LEGACY,
-    )
+    model_default = get_model()
+    model_legacy = get_model(BroadeningMode.LEGACY)
 
     wl1, I1 = model_default.compute_spectrum()
     wl2, I2 = model_legacy.compute_spectrum()
@@ -222,25 +219,19 @@ def test_spectrum_model_nist_parity_vs_legacy_differ(atomic_db, sample_plasma):
 
     instrument = InstrumentModel.from_resolving_power(1000)
 
-    model_legacy = SpectrumModel(
-        plasma=sample_plasma,
-        atomic_db=atomic_db,
-        instrument=instrument,
-        lambda_min=370.0,
-        lambda_max=375.0,
-        delta_lambda=0.01,
-        broadening_mode=BroadeningMode.LEGACY,
-    )
+    def get_model(mode):
+        return SpectrumModel(
+            plasma=sample_plasma,
+            atomic_db=atomic_db,
+            instrument=instrument,
+            lambda_min=370.0,
+            lambda_max=375.0,
+            delta_lambda=0.01,
+            broadening_mode=mode,
+        )
 
-    model_nist = SpectrumModel(
-        plasma=sample_plasma,
-        atomic_db=atomic_db,
-        instrument=instrument,
-        lambda_min=370.0,
-        lambda_max=375.0,
-        delta_lambda=0.01,
-        broadening_mode=BroadeningMode.NIST_PARITY,
-    )
+    model_legacy = get_model(BroadeningMode.LEGACY)
+    model_nist = get_model(BroadeningMode.NIST_PARITY)
 
     _, I_legacy = model_legacy.compute_spectrum()
     _, I_nist = model_nist.compute_spectrum()
