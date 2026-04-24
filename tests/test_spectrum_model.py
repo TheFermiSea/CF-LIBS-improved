@@ -75,28 +75,20 @@ def test_spectrum_model_path_length_scaling(atomic_db, sample_plasma):
     """Test that intensity scales with path length."""
     instrument = InstrumentModel(resolution_fwhm_nm=0.05)
 
-    model1 = SpectrumModel(
-        plasma=sample_plasma,
-        atomic_db=atomic_db,
-        instrument=instrument,
-        lambda_min=370.0,
-        lambda_max=375.0,
-        delta_lambda=0.1,
-        path_length_m=1e-5,
-    )
+    def get_spectrum(path_length):
+        model = SpectrumModel(
+            plasma=sample_plasma,
+            atomic_db=atomic_db,
+            instrument=instrument,
+            lambda_min=370.0,
+            lambda_max=375.0,
+            delta_lambda=0.1,
+            path_length_m=path_length,
+        )
+        return model.compute_spectrum()
 
-    model2 = SpectrumModel(
-        plasma=sample_plasma,
-        atomic_db=atomic_db,
-        instrument=instrument,
-        lambda_min=370.0,
-        lambda_max=375.0,
-        delta_lambda=0.1,
-        path_length_m=2e-5,
-    )
-
-    wl1, I1 = model1.compute_spectrum()
-    wl2, I2 = model2.compute_spectrum()
+    wl1, I1 = get_spectrum(1e-5)
+    wl2, I2 = get_spectrum(2e-5)
 
     # Intensities should scale with path length
     # (allowing for numerical differences)
