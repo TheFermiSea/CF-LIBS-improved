@@ -82,7 +82,7 @@ def test_spectrum_model_path_length_scaling(atomic_db, sample_plasma):
         lambda_min=370.0,
         lambda_max=375.0,
         delta_lambda=0.1,
-        path_length_m=0.01,
+        path_length_m=1e-5,
     )
 
     model2 = SpectrumModel(
@@ -92,7 +92,7 @@ def test_spectrum_model_path_length_scaling(atomic_db, sample_plasma):
         lambda_min=370.0,
         lambda_max=375.0,
         delta_lambda=0.1,
-        path_length_m=0.02,
+        path_length_m=2e-5,
     )
 
     wl1, I1 = model1.compute_spectrum()
