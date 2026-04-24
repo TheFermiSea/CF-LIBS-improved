@@ -14,20 +14,9 @@ PARAMETERS dict are what the 27B Scout mutates per batch.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from types import MappingProxyType
 from typing import Literal, Mapping
 
 EnforcementMode = Literal["hard", "warn"]
-
-_DEFAULT_FITNESS_WEIGHTS: Mapping[str, float] = MappingProxyType(
-    {
-        "aalto": 1.0,
-        "chemcam": 1.0,
-        "supercam": 1.0,
-        "usgs": 1.0,
-        "nist_steel": 1.0,
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -60,7 +49,13 @@ class EvolutionDriverConfig:
     # five matrix classes currently planned for the multi-dataset
     # benchmark suite.
     fitness_weights: Mapping[str, float] = field(
-        default_factory=lambda: dict(_DEFAULT_FITNESS_WEIGHTS)
+        default_factory=lambda: {
+            "aalto": 1.0,
+            "chemcam": 1.0,
+            "supercam": 1.0,
+            "usgs": 1.0,
+            "nist_steel": 1.0,
+        }
     )
 
     # Multiplier on per-dataset fitness variance — higher values more
@@ -89,5 +84,7 @@ class EvolutionDriverConfig:
             raise ValueError(
                 f"enforcement_mode must be 'hard' or 'warn', got {self.enforcement_mode!r}"
             )
+        if not self.fitness_weights:
+            raise ValueError("fitness_weights must be non-empty")
         if any(w < 0 for w in self.fitness_weights.values()):
             raise ValueError("fitness_weights must all be >= 0")

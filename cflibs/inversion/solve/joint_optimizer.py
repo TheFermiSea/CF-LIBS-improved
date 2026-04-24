@@ -42,10 +42,13 @@ try:
     from jax import jit
     from jax.scipy.optimize import minimize as jax_minimize
 
+    from cflibs.inversion.physics.softmax_closure import softmax_closure
+
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
     jnp = None
+    softmax_closure = None  # type: ignore[assignment]
 
     def jit(f):
         return f
@@ -540,8 +543,6 @@ class JointOptimizer:
         log_T = x[0]
         log_ne = x[1]
         theta = x[2:]
-
-        from cflibs.inversion.physics.softmax_closure import softmax_closure
 
         T_eV = jnp.exp(log_T)
         n_e = jnp.power(10.0, log_ne)

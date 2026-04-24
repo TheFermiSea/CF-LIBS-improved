@@ -196,11 +196,7 @@ extend-select = ["TID"]
 "jax.experimental.stax".msg = "NO ML in shipped CF-LIBS algorithm. See CF-LIBS-improved-3fy3."
 
 [tool.ruff.lint.per-file-ignores]
-# Only the evolution blocklist tests and the legacy interpretable-ML test need
-# to import forbidden libs directly; the rest of the test suite should obey
-# the same constraint as production code.
-"tests/evolution/**/*.py" = ["TID251"]
-"tests/test_interpretable.py" = ["TID251"]
+# Quarantined ML research code (CLAUDE.md flags as deletion candidates).
 "cflibs/experimental/ml/**/*.py" = ["TID251"]
 
 [tool.ty.src]

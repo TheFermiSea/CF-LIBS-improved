@@ -49,8 +49,10 @@ def test_override_evaluation_workers_to_serial() -> None:
         {"structural_mutation_cadence": 0},
         {"max_wallclock_hours": 0},
         {"overfitting_penalty": -0.1},
+        {"fitness_weights": {}},
         {"fitness_weights": {"aalto": -1.0}},
     ],
+    ids=lambda kw: next(iter(kw)),
 )
 def test_invalid_values_rejected(kwargs: dict) -> None:
     with pytest.raises(ValueError):
