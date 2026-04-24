@@ -67,6 +67,7 @@ class TestPriorConfig:
             assert isinstance(config, PriorConfig)
 
 
+@pytest.mark.requires_bayesian
 class TestCreateConcentrationPrior:
     """Tests for the create_concentration_prior() helper (requires NumPyro)."""
 

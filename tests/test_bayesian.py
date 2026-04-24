@@ -1069,6 +1069,7 @@ class TestNestedSampling:
         assert result.n_calls > 0
 
 
+@pytest.mark.requires_bayesian
 class TestPosteriorPredictiveCheck:
     """Tests for posterior predictive check functionality."""
 
