@@ -1207,6 +1207,7 @@ class TestPosteriorPredictiveCheck:
         assert ppc["chi_squared_obs"] > 0
         assert all(np.isfinite(cs) for cs in ppc["chi_squared_sim"])
 
+    @pytest.mark.requires_bayesian
     def test_posterior_predictive_check_n_samples_limiting(self, bayesian_db):
         """Test that n_samples is limited to available samples."""
         pytest.importorskip("jax")
