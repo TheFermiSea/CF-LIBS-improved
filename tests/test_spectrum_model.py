@@ -34,12 +34,10 @@ def test_spectrum_model_compute_spectrum(atomic_db, sample_plasma):
     """Test computing a complete spectrum."""
     instrument = InstrumentModel(resolution_fwhm_nm=0.05)
 
-    model = SpectrumModel(
+    model = _create_test_model(
         plasma=sample_plasma,
         atomic_db=atomic_db,
         instrument=instrument,
-        lambda_min=370.0,  # Narrow range for faster test
-        lambda_max=375.0,
         delta_lambda=0.01,
     )
 
@@ -76,13 +74,10 @@ def test_spectrum_model_path_length_scaling(atomic_db, sample_plasma):
     instrument = InstrumentModel(resolution_fwhm_nm=0.05)
 
     def get_spectrum(path_length):
-        model = SpectrumModel(
+        model = _create_test_model(
             plasma=sample_plasma,
             atomic_db=atomic_db,
             instrument=instrument,
-            lambda_min=370.0,
-            lambda_max=375.0,
-            delta_lambda=0.1,
             path_length_m=path_length,
         )
         return model.compute_spectrum()
@@ -104,9 +99,8 @@ def test_spectrum_model_temperature_dependence(atomic_db):
 
     plasma2 = SingleZoneLTEPlasma(T_e=12000.0, n_e=1e17, species={"Fe": 1e15})
 
-    model1 = SpectrumModel(plasma1, atomic_db, instrument, 370.0, 375.0, 0.1)
-
-    model2 = SpectrumModel(plasma2, atomic_db, instrument, 370.0, 375.0, 0.1)
+    model1 = _create_test_model(plasma1, atomic_db, instrument)
+    model2 = _create_test_model(plasma2, atomic_db, instrument)
 
     wl1, I1 = model1.compute_spectrum()
     wl2, I2 = model2.compute_spectrum()
@@ -124,12 +118,10 @@ def test_spectrum_model_nist_parity_mode(atomic_db, sample_plasma):
 
     instrument = InstrumentModel.from_resolving_power(1000)
 
-    model = SpectrumModel(
+    model = _create_test_model(
         plasma=sample_plasma,
         atomic_db=atomic_db,
         instrument=instrument,
-        lambda_min=370.0,
-        lambda_max=375.0,
         delta_lambda=0.01,
         broadening_mode=BroadeningMode.NIST_PARITY,
     )
@@ -147,12 +139,10 @@ def test_spectrum_model_nist_parity_requires_resolving_power(atomic_db, sample_p
     instrument = InstrumentModel(resolution_fwhm_nm=0.05)
 
     with pytest.raises(ValueError, match="resolving_power"):
-        SpectrumModel(
+        _create_test_model(
             plasma=sample_plasma,
             atomic_db=atomic_db,
             instrument=instrument,
-            lambda_min=370.0,
-            lambda_max=375.0,
             delta_lambda=0.01,
             broadening_mode=BroadeningMode.NIST_PARITY,
         )
@@ -164,12 +154,10 @@ def test_spectrum_model_physical_doppler_mode(atomic_db, sample_plasma):
 
     instrument = InstrumentModel(resolution_fwhm_nm=0.05)
 
-    model = SpectrumModel(
+    model = _create_test_model(
         plasma=sample_plasma,
         atomic_db=atomic_db,
         instrument=instrument,
-        lambda_min=370.0,
-        lambda_max=375.0,
         delta_lambda=0.01,
         broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
     )
@@ -180,27 +168,37 @@ def test_spectrum_model_physical_doppler_mode(atomic_db, sample_plasma):
     assert np.all(intensity >= 0)
 
 
+def _create_test_model(
+    plasma,
+    atomic_db,
+    instrument,
+    lambda_min=370.0,
+    lambda_max=375.0,
+    delta_lambda=0.1,
+    **kwargs
+):
+    """Helper to create SpectrumModel with common test defaults."""
+    return SpectrumModel(
+        plasma=plasma,
+        atomic_db=atomic_db,
+        instrument=instrument,
+        lambda_min=lambda_min,
+        lambda_max=lambda_max,
+        delta_lambda=delta_lambda,
+        **kwargs
+    )
+
+
 def test_spectrum_model_legacy_mode_unchanged(atomic_db, sample_plasma):
     """Test LEGACY mode produces identical results to old behavior."""
     from cflibs.radiation.profiles import BroadeningMode
 
     instrument = InstrumentModel(resolution_fwhm_nm=0.05)
 
-    def get_model(mode=None):
-        kwargs = dict(
-            plasma=sample_plasma,
-            atomic_db=atomic_db,
-            instrument=instrument,
-            lambda_min=370.0,
-            lambda_max=375.0,
-            delta_lambda=0.1,
-        )
-        if mode is not None:
-            kwargs["broadening_mode"] = mode
-        return SpectrumModel(**kwargs)
-
-    model_default = get_model()
-    model_legacy = get_model(BroadeningMode.LEGACY)
+    model_default = _create_test_model(sample_plasma, atomic_db, instrument)
+    model_legacy = _create_test_model(
+        sample_plasma, atomic_db, instrument, broadening_mode=BroadeningMode.LEGACY
+    )
 
     wl1, I1 = model_default.compute_spectrum()
     wl2, I2 = model_legacy.compute_spectrum()
@@ -219,19 +217,12 @@ def test_spectrum_model_nist_parity_vs_legacy_differ(atomic_db, sample_plasma):
 
     instrument = InstrumentModel.from_resolving_power(1000)
 
-    def get_model(mode):
-        return SpectrumModel(
-            plasma=sample_plasma,
-            atomic_db=atomic_db,
-            instrument=instrument,
-            lambda_min=370.0,
-            lambda_max=375.0,
-            delta_lambda=0.01,
-            broadening_mode=mode,
-        )
-
-    model_legacy = get_model(BroadeningMode.LEGACY)
-    model_nist = get_model(BroadeningMode.NIST_PARITY)
+    model_legacy = _create_test_model(
+        sample_plasma, atomic_db, instrument, delta_lambda=0.01, broadening_mode=BroadeningMode.LEGACY
+    )
+    model_nist = _create_test_model(
+        sample_plasma, atomic_db, instrument, delta_lambda=0.01, broadening_mode=BroadeningMode.NIST_PARITY
+    )
 
     _, I_legacy = model_legacy.compute_spectrum()
     _, I_nist = model_nist.compute_spectrum()
