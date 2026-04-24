@@ -2,19 +2,6 @@
 
 Thank you for your interest in contributing to CF-LIBS! This guide will help you get started.
 
-## Table of Contents
-
-1. [Code of Conduct](#code-of-conduct)
-2. [Getting Started](#getting-started)
-3. [Development Setup](#development-setup)
-4. [Coding Standards](#coding-standards)
-5. [Testing](#testing)
-6. [Documentation](#documentation)
-7. [Submitting Changes](#submitting-changes)
-8. [Areas for Contribution](#areas-for-contribution)
-
----
-
 ## Code of Conduct
 
 CF-LIBS is committed to providing a welcoming and inclusive environment. Please be respectful and constructive in all interactions.
@@ -84,17 +71,7 @@ JAX_PLATFORMS=cpu pytest tests/ -v
 
 ### Physics-Only Constraint
 
-The shipped CF-LIBS algorithm must remain **physics-only**: never introduce `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, `jax.nn`, or `jax.experimental.stax` into `cflibs/` production code. These are allowed only in:
-- `cflibs/evolution/` — LLM-driven algorithm optimization tooling
-- `cflibs/experimental/ml/` — Deletion-candidate quarantine
-
-Enforcement happens at two levels:
-1. **Ruff TID251 check** — `ruff check cflibs/` will fail if banned APIs appear
-2. **AST blocklist scanner** — Evolution framework validates evolved code before fitness evaluation
-
-Before submitting PRs: run `ruff check cflibs/` to verify no banned imports.
-
-See bead CF-LIBS-improved-3fy3 for full specification.
+The shipped CF-LIBS algorithm is physics-only. See [`docs/Evolution_Framework.md`](docs/Evolution_Framework.md) for the forbidden-library list, allowed primitives, and enforcement (Ruff TID251 + AST scanner). Before submitting a PR touching `cflibs/` production code, run `ruff check cflibs/` or `python -m cflibs.evolution <your_file.py>` to verify no banned imports slipped in.
 
 ### Code Formatting
 
@@ -254,20 +231,7 @@ def function_name(param1: Type, param2: Type) -> ReturnType:
     """
 ```
 
-### Documentation Files
-
-- **API Reference**: `docs/API_Reference.md` - Auto-generated or manually maintained
-- **User Guide**: `docs/User_Guide.md` - User-facing documentation
-- **Contributing**: `CONTRIBUTING.md` - This file
-- **README**: `README.md` - Project overview
-
-### Updating Documentation
-
-When adding new features:
-1. Update relevant docstrings
-2. Add examples to User Guide if user-facing
-3. Update API Reference
-4. Add/update README if major feature
+When adding a user-facing feature: update docstrings, extend `docs/User_Guide.md` with an example, and link it from `docs/API_Reference.md`. For internal changes, NumPy-style docstrings are sufficient.
 
 ---
 

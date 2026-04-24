@@ -62,13 +62,7 @@
 
 ### Physics-Only Constraint
 
-**The shipped CF-LIBS algorithm must not use:** `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, `jax.nn`, or `jax.experimental.stax`. Machine learning is strictly forbidden in the core library — it is allowed **only** in `cflibs/evolution/` (LLM-driven optimization tooling) and `cflibs/experimental/ml/` (quarantined deletion candidates).
-
-Enforcement via two mechanisms:
-- **Ruff TID251 banned-api rule** — Configured in `pyproject.toml` under `[tool.ruff.lint.flake8-tidy-imports.banned-api]`. Blocks these imports in all shipped code.
-- **AST blocklist scanner** — `cflibs/evolution/evaluator.py` parses evolved candidate code and rejects any that import forbidden libraries. Callable via `python -m cflibs.evolution <file>` or invoked automatically during the LLM-driven evolution loop.
-
-See bead CF-LIBS-improved-3fy3 and `docs/Evolution_Framework.md` for full details.
+The shipped CF-LIBS algorithm is physics-only — no neural networks, no trained models. Full forbidden-library spec, enforcement mechanism (Ruff TID251 + AST scanner), and rationale live in [`docs/Evolution_Framework.md`](docs/Evolution_Framework.md). ML is allowed only in `cflibs/evolution/` and `cflibs/experimental/ml/`.
 
 ## Testing Guidelines
 - Framework: pytest with optional `pytest-cov` and `pytest-benchmark`.

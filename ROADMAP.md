@@ -6,13 +6,13 @@ This document outlines the current status and future direction of CF-LIBS (Calib
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| **Phase 1-3** | ✅ Complete | Minimal physics engine, classic CF-LIBS, Bayesian methods |
-| **Phase 4** | 🟨 In Progress | Production pipeline accuracy, benchmark integration |
-| **Phase 5** | 📋 Planned | Hierarchical evolution, production optimization |
+| Phase 1-3 | Complete | Minimal physics engine, classic CF-LIBS, Bayesian methods |
+| Phase 4 | In progress | Production pipeline accuracy, benchmark integration |
+| Phase 5 | Planned | Hierarchical evolution, production optimization |
 
 ---
 
-## Completed Work ✅
+## Completed Work
 
 ### Inversion Package Reorganization
 - Refactored `cflibs/inversion/` into physics-aligned sub-packages:
@@ -32,7 +32,7 @@ This document outlines the current status and future direction of CF-LIBS (Calib
 - See bead CF-LIBS-improved-3fy3 for full specification
 
 ### Evolution Framework Scaffolding (Phase 1)
-- **Blocklist scanner** — `cflibs/evolution/blocklist.py` validates evolved code for physics-only compliance
+- **Blocklist scanner** — `cflibs/evolution/evaluator.py` validates evolved code for physics-only compliance
 - **Ruff TID251 rule** — `pyproject.toml` bans ML imports from shipped code
 - **CLI placeholder** — `cflibs/evolution/__init__.py` with driver interface
 - **Prompt primitives** — Foundation for LLM-driven optimization (incomplete)
@@ -48,7 +48,7 @@ This document outlines the current status and future direction of CF-LIBS (Calib
 
 ---
 
-## In Progress 🟨
+## In Progress
 
 ### Multi-Dataset Benchmark Integration
 **Tracking**: CF-LIBS-improved-shv (Pipeline Accuracy epic)
@@ -74,22 +74,21 @@ Proof-of-concept LLM-driven algorithm optimization:
 
 ---
 
-## Planned Work 📋
+## Planned Work
+
+These phases depend on completion of the scaffolding in "In Progress". Target dates are omitted until the prerequisites are in place.
 
 ### Phase 5a: Full Hierarchical Evolution Run
-**Target**: Q3 2026
 
-Complete end-to-end evolution search:
+Complete end-to-end evolution search once the orchestration loop lands:
 1. Generate 100+ inversion algorithm variants via LLM prompting
 2. Validate each variant against physics-only blocklist
 3. Benchmark each on USGS + NIST + synthetic corpus
 4. Identify pareto-optimal algorithm configurations
-5. Document findings and submit results
 
-**Deliverable**: Published results on algorithmic landscape and best practices.
+**Deliverable**: results on algorithmic landscape and best practices.
 
 ### Phase 5b: Multi-Matrix Overfitting Analysis
-**Target**: Q4 2026
 
 Systematic study of closure equation and matrix effect corrections:
 - Test closure models (standard, matrix, oxide, ILR) across alloy classes
@@ -97,7 +96,6 @@ Systematic study of closure equation and matrix effect corrections:
 - Recommend safe operating envelopes for each matrix
 
 ### Phase 5c: Paper Submission
-**Target**: Q4 2026
 
 Publication of CF-LIBS algorithmic results:
 - Algorithm design rationale and physics validation

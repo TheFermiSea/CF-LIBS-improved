@@ -93,7 +93,7 @@ The `cflibs/inversion/` package is organized into 6 sub-packages reflecting the 
 | `solve/` | Plasma parameter inference: iterative CF-LIBS loop, closed-form ILR solver, Bayesian (NumPyro NUTS + dynesty), manifold coarse-to-fine |
 | `runtime/` | Real-time DAQ streaming, temporal gate optimization, hardware interface |
 
-Backward-compatible shims at old flat paths (`from cflibs.inversion.solver import X`) still work.
+Backward-compatible shims at old flat paths (`from cflibs.inversion.solver import X`) still work. Full API: [docs/API_Reference.md](docs/API_Reference.md).
 
 ### Validation & Analysis
 
@@ -220,7 +220,7 @@ Measured spectrum → plasma parameters (T_e, n_e, composition) via iterative CF
 
 **Bayesian option**: NumPyro NUTS sampler + dynesty nested sampling for full posterior.
 
-For detailed equations and physics assumptions, see [CLAUDE.md](/CLAUDE.md#physics-model) and physics module docstrings.
+For detailed equations and physics assumptions, see [CLAUDE.md](CLAUDE.md#architecture) and module docstrings under `cflibs/plasma/`, `cflibs/radiation/`, and `cflibs/inversion/physics/`.
 
 ---
 

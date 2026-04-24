@@ -3,7 +3,7 @@
 CF-LIBS Documentation
 =====================
 
-**CF-LIBS** is a production-grade Python library for physics-based forward modeling and analysis of LIBS plasmas.
+**CF-LIBS** is a physics-based Python library for forward modeling and analysis of LIBS plasmas. The shipped algorithm is physics-only — see :doc:`Evolution_Framework` for the constraint spec.
 
 Inversion Config
 ----------------

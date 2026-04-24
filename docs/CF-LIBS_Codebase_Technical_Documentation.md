@@ -2,7 +2,7 @@
 
 **Calibration-Free Laser-Induced Breakdown Spectroscopy**
 
-A comprehensive Python library for quantitative elemental analysis without calibration standards, using plasma physics to calculate elemental compositions directly from spectral line intensities.
+A Python library for quantitative elemental analysis without calibration standards, using plasma physics to calculate elemental compositions directly from spectral line intensities. The shipped algorithm is physics-only (no neural networks or trained models) — see [Evolution_Framework.md](Evolution_Framework.md) for the constraint spec.
 
 ---
 
@@ -35,24 +35,9 @@ CF-LIBS (Calibration-Free LIBS) enables quantitative elemental analysis from las
 1. **Forward Modeling**: Computing synthetic spectra from known plasma parameters using fundamental atomic physics
 2. **Inverse Problem**: Extracting plasma temperature, electron density, and elemental concentrations from measured spectra
 
-### Development Status
+### Status
 
-| Phase | Status | Description |
-|-------|--------|-------------|
-| Phase 1 | Complete | Minimal viable physics engine |
-| Phase 2a | Complete | Physics foundation (partition functions, Voigt, Stark) |
-| Phase 2b | Complete | Classic CF-LIBS implementation (Boltzmann plots, solver, closure) |
-| Phase 2c | Complete | Quality metrics and diagnostics |
-| Phase 2d | Complete | Advanced forward fitting (manifold + hybrid inversion) |
-| Phase 3 | Complete | Bayesian methods and uncertainty quantification |
-| Phase 4 | Future | Ecosystem and integrations |
-
-### Codebase Statistics
-
-- **57 Python source files**
-- **15,593 lines of code**
-- **300+ unit and integration tests**
-- **JAX-compatible** for GPU acceleration
+See [ROADMAP.md](../ROADMAP.md) for current work streams and the epic tracking in beads.
 
 ---
 
