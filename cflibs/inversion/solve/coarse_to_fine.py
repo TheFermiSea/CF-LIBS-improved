@@ -209,7 +209,20 @@ def _pack_params(T_eV, n_e, concentrations, elements):
 
 
 def _unpack_params(x):
-    """Unpack optimization vector to (T_eV, n_e, concentrations)."""
+    """Unpack optimization vector to (T_eV, n_e, concentrations).
+
+    Parameters
+    ----------
+    x : array-like
+        Packed parameter vector: [log(T_eV), log(n_e), softmax_logits].
+        Concentrations are enforced on the simplex via softmax_closure
+        from cflibs.inversion.physics.softmax_closure.
+
+    Returns
+    -------
+    Tuple[float, float, array-like]
+        (T_eV, n_e, concentrations) where concentrations sum to 1.
+    """
     T_eV = jnp.exp(x[0])
     n_e = jnp.exp(x[1])
     conc = softmax_closure(x[2:])

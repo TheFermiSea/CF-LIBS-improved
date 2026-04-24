@@ -1882,12 +1882,15 @@ class ALIASIdentifier:
         l1_ratio: float = 0.9,
     ) -> Tuple[np.ndarray, float]:
         """
-        Sparse NNLS via ElasticNet with non-negativity constraint.
+        Sparse NNLS via L-BFGS-B constrained optimization.
 
         Standard NNLS distributes signal across correlated endmembers,
         producing many small non-zero coefficients for absent elements
-        (Black et al. 2024). The L1 penalty enforces sparsity, driving
+        (Black & Burnside 2024). The L1 penalty enforces sparsity, driving
         truly absent elements to zero.
+
+        Physics-only implementation: minimizes the elastic-net objective
+        with non-negativity via L-BFGS-B bounds rather than sklearn.
 
         Parameters
         ----------

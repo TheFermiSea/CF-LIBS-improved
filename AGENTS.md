@@ -2,6 +2,8 @@
 
 ## Project Structure & Module Organization
 - `cflibs/` contains the library source (core physics, atomic data, plasma state, radiation, instrument models, CLI).
+  - `cflibs/evolution/` — LLM-driven algorithm optimization tooling (hierarchical-ES, blocklist scanner); ML allowed here only.
+  - `cflibs/experimental/ml/` — Quarantined ML research code (deletion candidates); ML allowed here only.
 - `tests/` holds pytest suites and fixtures.
 - `docs/` contains user-facing documentation and API references.
 - `examples/` has runnable configs and sample workflows.
@@ -10,7 +12,7 @@
 ## Build, Test, and Development Commands
 - `just setup` creates a Python 3.12 `uv` environment with the baseline dev toolchain.
 - `just setup-codex` creates a Python 3.12 `uv` environment with Codex-friendly local extras (`dev`, `jax-cpu`, `hdf5`).
-- `just check` runs the stable local quality gate (`ruff check`, `mypy`, fast pytest).
+- `just check` runs the stable local quality gate (`ruff check` including TID251 physics-only enforcement, `mypy`, fast pytest).
 - `just test-fast` runs a CPU-only fast pytest slice that skips DB, Bayesian, Rust, JAX, and slow tests.
 - `just typecheck-ty` runs `ty` in exploratory mode; it is not yet a required gate.
 - `uv venv --python 3.12` creates a virtual environment with `uv`.
@@ -57,6 +59,16 @@
 - Use type hints for public functions and NumPy-style docstrings for public APIs.
 - Test files: `test_*.py`; test functions: `test_*`.
 - Prefer descriptive, physics-aligned naming (e.g., `saha_equation_ratio`, `compute_spectrum`).
+
+### Physics-Only Constraint
+
+**The shipped CF-LIBS algorithm must not use:** `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, `jax.nn`, or `jax.experimental.stax`. Machine learning is strictly forbidden in the core library — it is allowed **only** in `cflibs/evolution/` (LLM-driven optimization tooling) and `cflibs/experimental/ml/` (quarantined deletion candidates).
+
+Enforcement via two mechanisms:
+- **Ruff TID251 banned-api rule** — Configured in `pyproject.toml` under `[tool.ruff.lint.flake8-tidy-imports.banned-api]`. Blocks these imports in all shipped code.
+- **AST blocklist scanner** — `cflibs/evolution/evaluator.py` parses evolved candidate code and rejects any that import forbidden libraries. Callable via `python -m cflibs.evolution <file>` or invoked automatically during the LLM-driven evolution loop.
+
+See bead CF-LIBS-improved-3fy3 and `docs/Evolution_Framework.md` for full details.
 
 ## Testing Guidelines
 - Framework: pytest with optional `pytest-cov` and `pytest-benchmark`.

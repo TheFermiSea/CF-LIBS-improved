@@ -591,6 +591,16 @@ def calculate_spectrum_emissivity(
 
 **Location**: `cflibs/inversion/`
 
+**Organization:** The inversion package is organized into 6 physics-aligned sub-packages:
+- `cflibs.inversion.common/` — Data structures (LineObservation, BoltzmannFitResult), PCA pipeline
+- `cflibs.inversion.preprocess/` — Signal processing (baseline removal, noise estimation, deconvolution)
+- `cflibs.inversion.physics/` — Saha-Boltzmann solver, closure equations, CDSB, line selection, uncertainty propagation
+- `cflibs.inversion.identify/` — Element identification (ALIAS, comb, correlation, spectral NNLS, BIC)
+- `cflibs.inversion.solve/` — Plasma parameter inference (iterative CF-LIBS, ILR solver, Bayesian MCMC, manifold)
+- `cflibs.inversion.runtime/` — Real-time systems (DAQ streaming, temporal gate optimization, hardware interface)
+
+**Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work.
+
 For the CLI and configuration schema used by classic CF-LIBS inversion, see
 `docs/User_Guide.md` (Inversion section) and `docs/API_Reference.md` (CLI options).
 
@@ -1655,6 +1665,46 @@ class RoundTripValidator:
         - Coverage (credible interval calibration)
         """
 ```
+
+---
+
+## Algorithm Evolution Framework
+
+**Location**: `cflibs/evolution/`
+
+**Purpose**: LLM-driven algorithm optimization tooling for physics-only CF-LIBS. This is **tooling only** — not part of shipped CF-LIBS algorithm.
+
+### Overview
+
+The evolution framework enables automated discovery of new inversion algorithms using large language models within a strict physics-only constraint:
+
+```python
+class PhysicsOnlyBlocklist:
+    """
+    Enforces hard constraint: evolved candidates cannot import or use
+    sklearn, torch, tensorflow, keras, flax, equinox, transformers,
+    jax.nn, or jax.experimental.stax.
+    
+    Dual enforcement:
+    1. Ruff TID251 static rule in pyproject.toml
+    2. AST blocklist scanner in evaluator.py rejects violating code
+    """
+    
+    BANNED_MODULES = {
+        'sklearn', 'torch', 'tensorflow', 'keras', 
+        'flax', 'equinox', 'transformers', 'jax.nn'
+    }
+    BANNED_ATTRIBUTES = {'jax.experimental.stax'}
+```
+
+### Key Components
+
+- **Hierarchical ES driver**: Evolutionary strategy for parameter optimization
+- **Physics fitness evaluator**: Validates evolved algorithms against NIST data
+- **Blocklist scanner**: Rejects any evolved code that violates physics-only constraint
+- **Persistence layer**: Saves successful algorithm variants for review and integration
+
+See `docs/Evolution_Framework.md` for full specifications.
 
 ---
 

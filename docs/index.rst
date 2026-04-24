@@ -34,6 +34,7 @@ and :doc:`API_Reference` for CLI flags.
    :caption: Developer Notes
 
    CF-LIBS_Codebase_Technical_Documentation
+   Evolution_Framework
 
 .. toctree::
    :maxdepth: 1

@@ -1,15 +1,15 @@
 # CF-LIBS: Phase 0 & Phase 1 Implementation + Echellogram Processing
 
-## 🎯 Overview
+## Overview
 
 This PR implements the foundational infrastructure for **CF-LIBS** (Computational Framework for Laser-Induced Breakdown Spectroscopy), establishing a production-grade Python library for forward modeling, inversion, and analysis of LIBS plasmas.
 
 **Deliverables:**
-- ✅ Phase 0: Complete package scaffold with core utilities
-- ✅ Phase 1: Minimal Viable Physics Engine for forward modeling  
-- ✅ Echellogram Processing: Upgraded 2D spectral image extraction
+- Phase 0: Complete package scaffold with core utilities
+- Phase 1: Minimal Viable Physics Engine for forward modeling  
+- Echellogram Processing: Upgraded 2D spectral image extraction
 
-## 📦 What's New
+## What's New
 
 ### Phase 0: Scaffold & Core Utilities
 
@@ -34,7 +34,7 @@ This PR implements the foundational infrastructure for **CF-LIBS** (Computationa
 - **Error Handling**: Proper exceptions and validation
 - **Documentation**: Comprehensive guide with examples
 
-## 🔬 Key Features
+## Key Features
 
 ### Forward Modeling
 ```python
@@ -60,7 +60,7 @@ extractor = EchelleExtractor('calibration.json')
 wavelength, intensity = extractor.extract_spectrum(image_2d)
 ```
 
-## 📊 Statistics
+## Statistics
 
 - **~3000 lines** of Python code
 - **25 Python modules** across 8 packages
@@ -68,22 +68,22 @@ wavelength, intensity = extractor.extract_spectrum(image_2d)
 - **4 example files** (configs + scripts)
 - **7 documentation files**
 
-## 🧪 Testing
+## Testing
 
-- ✅ Test infrastructure with pytest
-- ✅ Unit tests for core modules
-- ✅ Echellogram extraction tests
-- ✅ All tests passing
-- ✅ No linter errors
+- Test infrastructure with pytest
+- Unit tests for core modules
+- Echellogram extraction tests
+- All tests passing
+- No linter errors
 
-## 📚 Documentation
+## Documentation
 
 - Comprehensive README files for each phase
 - API documentation in docstrings
 - Usage examples and guides
 - Configuration file examples
 
-## 🔧 Configuration
+## Configuration
 
 Example YAML config:
 ```yaml
@@ -104,7 +104,7 @@ spectrum:
   delta_lambda_nm: 0.01
 ```
 
-## ✅ Checklist
+## Checklist
 
 - [x] Phase 0: Package structure and core utilities
 - [x] Phase 0: Constants and units module
@@ -119,9 +119,8 @@ spectrum:
 - [x] Examples and test cases
 - [x] Code linting passes
 
-## 🚀 Ready for Review
+## Ready for Review
 
 This PR establishes the foundation for CF-LIBS as specified in the README. The code is production-ready, well-documented, and follows best practices.
 
-**See `PR_DESCRIPTION.md` for full details.**
-
+See `PR_DESCRIPTION.md` for full details.

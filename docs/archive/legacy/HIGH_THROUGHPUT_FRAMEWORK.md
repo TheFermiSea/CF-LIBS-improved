@@ -127,4 +127,9 @@ $$
 4.  **Week 4:** Integration testing with the ICCD. Calibrate the "Design Matrix" ($\mathbf{A}$) using a standard lamp to fix the exact pixel-to-wavelength mapping.
 
 ---
+
+## Archival Note
+
+This document was archived 2026-04-23. It represents an early architectural vision from project development. The current implementation has evolved from this design, with the manifold generation fully functional in `cflibs/manifold/` and using different deployment models. For current architecture details, see CLAUDE.md and Manifold_Generation_Guide.md.
+
 *© 2025 TheFermiSea. All Rights Reserved.*

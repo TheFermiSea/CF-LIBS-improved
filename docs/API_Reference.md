@@ -620,6 +620,23 @@ Save spectrum to file.
 
 ---
 
+## Inversion Module
+
+The inversion module is organized into 6 physics-aligned sub-packages that reflect the CF-LIBS measurement→physics→inference pipeline:
+
+| Sub-package | Role |
+|-------------|------|
+| `cflibs.inversion.common` | Data structures (LineObservation, BoltzmannFitResult), PCA pipeline |
+| `cflibs.inversion.preprocess` | Signal processing (baseline, noise, deconvolution, wavelength calibration) |
+| `cflibs.inversion.physics` | Saha-Boltzmann solver, closure equations, CDSB, Stark broadening, line selection, uncertainties |
+| `cflibs.inversion.identify` | Element identification (ALIAS, comb, correlation, spectral NNLS, BIC selection) |
+| `cflibs.inversion.solve` | Plasma inference (iterative CF-LIBS, ILR solver, Bayesian MCMC, manifold coarse-to-fine) |
+| `cflibs.inversion.runtime` | Real-time: DAQ streaming, temporal gate optimization, hardware interface |
+
+**Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work via compatibility shims.
+
+**Physics-only constraint:** The shipped CF-LIBS algorithm must not import or use `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, or `jax.nn`. Machine learning is allowed only in `cflibs/evolution/` (LLM-driven algorithm optimization) and `cflibs/experimental/ml/` (quarantined, deletion candidates). Enforcement via Ruff TID251 static rule.
+
 ## CLI Module
 
 ### Main (`cflibs.cli.main`)

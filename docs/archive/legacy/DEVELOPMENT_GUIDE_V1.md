@@ -230,3 +230,9 @@ Wrap it in a compiled endpoint (e.g., ONNX Runtime).
 Test latency (Goal: <5 ms).
 
 This approach moves you from "Scientific Code" (accurate but slow) to "Industrial Firmware" (approximate, robust, and instant).
+
+---
+
+## Archival Note
+
+This document was archived 2026-04-23. It represents an early architectural proposal from project development. For current architecture and physics implementation, see CLAUDE.md and ROADMAP.md.

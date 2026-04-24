@@ -1,5 +1,17 @@
 # CF-LIBS Deployment Guide
 
+## Physics-Only Constraint
+
+**HARD CONSTRAINT:** The shipped CF-LIBS algorithm must not import or use `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, `jax.nn`, or `jax.experimental.stax`. Machine learning is allowed only in:
+- `cflibs/evolution/` — LLM-driven algorithm optimization (tooling only)
+- `cflibs/experimental/ml/` — Quarantined ML modules (deletion candidates)
+
+**Enforcement:**
+1. **Ruff TID251 static rule** — `pyproject.toml` bans these APIs from the shipped codebase
+2. **AST blocklist scanner** — `cflibs/evolution/evaluator.py` rejects evolved code that violates the ban
+
+See CLAUDE.md for full specifications.
+
 ## Environment Setup
 
 CF-LIBS uses `uv` for fast, reliable Python environment management.

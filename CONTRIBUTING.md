@@ -40,26 +40,35 @@ CF-LIBS is committed to providing a welcoming and inclusive environment. Please 
 
 ### Install in Development Mode
 
+CF-LIBS uses `uv` for environment management and `setuptools` for packaging.
+
+**Base installation (all platforms):**
 ```bash
-just setup
+uv venv --python 3.12
+pip install -e ".[dev]"
 ```
 
-This installs:
-- The package in editable mode
-- Development dependencies (pytest, black, mypy, ruff, ty)
-- A consistent command surface through `just`
+**Apple Silicon (Metal backend):**
+```bash
+uv pip install -e ".[local]"
+```
+
+**NVIDIA GPU cluster deployment:**
+```bash
+uv pip install -e ".[cluster]"
+```
 
 ### Verify Setup
 
 ```bash
-# Stable local quality gate
-just check
+# Run quality gates (ruff, black, mypy, pytest)
+ruff check cflibs/ tests/
+black --check cflibs/
+mypy cflibs/
+pytest tests/ -v
 
-# Full pytest suite
-just test
-
-# Experimental next-generation type check
-just typecheck-ty
+# Force CPU backend (useful for CI/testing)
+JAX_PLATFORMS=cpu pytest tests/ -v
 ```
 
 ---
@@ -73,41 +82,34 @@ just typecheck-ty
 - **Type hints**: Use type hints for all public functions
 - **Docstrings**: Use NumPy-style docstrings for all public functions/classes
 
+### Physics-Only Constraint
+
+The shipped CF-LIBS algorithm must remain **physics-only**: never introduce `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, `jax.nn`, or `jax.experimental.stax` into `cflibs/` production code. These are allowed only in:
+- `cflibs/evolution/` — LLM-driven algorithm optimization tooling
+- `cflibs/experimental/ml/` — Deletion-candidate quarantine
+
+Enforcement happens at two levels:
+1. **Ruff TID251 check** — `ruff check cflibs/` will fail if banned APIs appear
+2. **AST blocklist scanner** — Evolution framework validates evolved code before fitness evaluation
+
+Before submitting PRs: run `ruff check cflibs/` to verify no banned imports.
+
+See bead CF-LIBS-improved-3fy3 for full specification.
+
 ### Code Formatting
 
-We currently use `black` for repo formatting commands:
+Use Black for formatting:
 
 ```bash
-just fmt
+black cflibs/
 ```
 
-We are evaluating Ruff's formatter for a future repo-wide migration:
+### Linting and Type Checking
 
 ```bash
-just fmt-ruff-check
-```
-
-### Linting
-
-We use `ruff` for the stable lint gate:
-
-```bash
-just lint
-just lint-fix  # Auto-fix issues
-```
-
-### Type Checking
-
-We use `mypy` for the stable type-check gate:
-
-```bash
-just typecheck
-```
-
-We are also evaluating `ty` in advisory mode:
-
-```bash
-just typecheck-ty
+ruff check cflibs/ tests/       # Linting (includes TID251 physics-only check)
+ruff check --fix cflibs/        # Auto-fix issues
+mypy cflibs/                    # Type checking
 ```
 
 ### Example Code Style
@@ -185,7 +187,7 @@ def test_temperature_conversion():
 
 ```bash
 # Run all tests
-just test
+pytest tests/ -v
 
 # Run specific test file
 pytest tests/test_constants.py -v
@@ -193,8 +195,11 @@ pytest tests/test_constants.py -v
 # Run with coverage
 pytest tests/ --cov=cflibs --cov-report=html
 
-# Run the fast local slice used by `just check`
-just test-fast
+# Skip slow and database-dependent tests
+pytest tests/ -m "not slow and not requires_db"
+
+# Force CPU backend (for reproducibility)
+JAX_PLATFORMS=cpu pytest tests/ -v
 ```
 
 ### Test Coverage
@@ -270,15 +275,22 @@ When adding new features:
 
 ### Commit Messages
 
-Use clear, descriptive commit messages:
+Use short imperative summaries (50 chars or less):
 
 ```
-Short summary (50 chars or less)
+feat: Add hierarchical element selection
+fix: Correct Voigt profile gradient calculation
+docs: Update Bayesian inference user guide
+perf: Optimize element identification with caching
+refactor: Reorganize inversion subpackages
+```
 
-Longer explanation if needed. Explain what and why, not how.
+Optional body for context:
+```
+Brief explanation if the change needs justification.
 - What changed
 - Why it changed
-- Any breaking changes
+- Any breaking changes or important notes
 ```
 
 ### Pull Request Process
@@ -298,8 +310,8 @@ Longer explanation if needed. Explain what and why, not how.
 
 3. **Ensure code quality**:
    ```bash
-   black cflibs/
-   ruff check cflibs/
+   ruff check cflibs/ tests/
+   black --check cflibs/
    mypy cflibs/
    ```
 
@@ -427,7 +439,3 @@ def saha_equation_ratio(
 ## License
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
-
----
-
-Thank you for contributing to CF-LIBS! 🎉

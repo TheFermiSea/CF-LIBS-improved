@@ -3,12 +3,12 @@
 This dataclass captures the settings that govern the evolution *driver*
 itself — batch sizes, timeouts, aggregation weights, enforcement mode —
 not the PARAMETERS dict inside the evolved code target (that belongs to
-``cflibs.evolution`` downstream, tracked under CF-LIBS-improved-jrw).
+``cflibs.evolution`` downstream).
 
-Keeping these two concerns in separate modules makes the scope
-explicit: values here are what the orchestration loop (bd ``4e0j``)
-reads to control its own behaviour; values in the evolved-code
-PARAMETERS dict are what the 27B Scout mutates per batch.
+Keeping these two concerns in separate modules makes the scope explicit:
+values here are what the orchestration loop reads to control its own
+behaviour; values in the evolved-code PARAMETERS dict are what the
+evolution search mutates per batch.
 """
 
 from __future__ import annotations

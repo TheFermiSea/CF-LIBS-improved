@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CF-LIBS is a physics-based Calibration-Free Laser-Induced Breakdown Spectroscopy library. It implements the full CF-LIBS pipeline: forward modeling (plasma parameters → synthetic spectrum), inversion (measured spectrum → plasma composition), and GPU-accelerated manifold pre-computation for fast inference.
 
+## Physics-Only Constraint
+
+**HARD CONSTRAINT:** The shipped CF-LIBS algorithm must not import or use: `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, `jax.nn`, or `jax.experimental.stax`. Machine learning is allowed **only** in `cflibs/evolution/` (LLM-driven algorithm optimization tooling) and `cflibs/experimental/ml/` (deletion-candidate quarantine). Enforcement happens at two levels:
+
+1. **Ruff TID251 static rule** — `pyproject.toml` bans these APIs from the shipped codebase via `[tool.ruff.lint.flake8-tidy-imports.banned-api]`.
+2. **AST blocklist scanner** — `cflibs/evolution/evaluator.py` parses evolved candidate code and rejects any that violates the ban before physics evaluation (fitness = -inf).
+
+See bead CF-LIBS-improved-3fy3 for the full specification.
+
 ## Setup
 
 ```bash
@@ -72,6 +81,16 @@ cflibs batch ./spectra --elements Fe,Cu --output-dir output/batch_results
 cflibs generate-manifold examples/manifold_config_example.yaml --progress
 ```
 
+## Evolution Tooling
+
+```bash
+python -m cflibs.evolution candidate.py                # Scan candidate for forbidden imports
+python -m cflibs.evolution file_a.py file_b.py        # Scan multiple files
+cat candidate.py | python -m cflibs.evolution -        # Scan from stdin
+```
+
+The AST blocklist scanner enforces the physics-only constraint (see above) on any evolved candidate code produced by the LLM-driven optimization loop. Candidates with violations are rejected before physics evaluation.
+
 ## Data And Validation Workflows
 
 ```bash
@@ -122,6 +141,7 @@ python scripts/generate_model_library.py submit --n-chunks 32 --output-dir outpu
 | `cflibs/validation/` | Round-trip validation (`GoldenSpectrum` with known ground truth), NIST parity checks |
 | `cflibs/pds/` | ChemCam/SuperCam planetary data system interface |
 | `cflibs/hpc/` | Cluster utilities, SLURM integration |
+| `cflibs/evolution/` | Hierarchical-ES driver + physics-only blocklist scanner for LLM-driven algorithm evolution. Optimization-process tooling only (see docs/Evolution_Framework.md). |
 | `cflibs/experimental/ml/` | Quarantined ML modules: PINN, PLS, transfer learning, interpretable ML (deletion candidates) |
 | `native/cflibs-core/` | Rust computational core: comb matching, partition functions |
 | `native/rust-plugin/` | Rust plugin interface for DAQ |

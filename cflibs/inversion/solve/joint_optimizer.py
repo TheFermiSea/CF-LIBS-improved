@@ -16,7 +16,8 @@ Key features:
 The optimization parameterization:
 - Temperature: log(T_eV) for positivity and scale invariance
 - Electron density: log10(n_e) for wide dynamic range
-- Concentrations: softmax(theta) to enforce sum-to-one simplex constraint
+- Concentrations: softmax(theta) via cflibs.inversion.physics.softmax_closure
+  to enforce sum-to-one simplex constraint
 
 References:
 - Tognoni et al., "CF-LIBS: State of the art" (2010) - limitations of sequential analysis
