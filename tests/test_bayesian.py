@@ -24,7 +24,7 @@ pytestmark = [
 ]
 
 # Skip all tests if JAX is not available
-jax = pytest.importorskip("jax")
+jax = pytest.importorskip("jax", exc_type=ImportError)
 import jax.numpy as jnp  # noqa: E402
 
 from cflibs.inversion.bayesian import (  # noqa: E402
@@ -647,7 +647,7 @@ class TestMCMCSampling:
 
     def test_run_mcmc_smoke(self, bayesian_db):
         """Smoke test for MCMC sampling."""
-        pytest.importorskip("numpyro")
+        pytest.importorskip("numpyro", exc_type=ImportError)
         from cflibs.inversion.bayesian import run_mcmc
 
         model = BayesianForwardModel(
@@ -688,7 +688,7 @@ class TestMCMCSampling:
 
     def test_mcmc_result_correlation_matrix(self, bayesian_db):
         """Test correlation matrix computation from MCMCResult."""
-        pytest.importorskip("numpyro")
+        pytest.importorskip("numpyro", exc_type=ImportError)
         from cflibs.inversion.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
@@ -730,7 +730,7 @@ class TestMCMCSampling:
 
     def test_mcmc_result_correlation_table(self, bayesian_db):
         """Test correlation table string formatting."""
-        pytest.importorskip("numpyro")
+        pytest.importorskip("numpyro", exc_type=ImportError)
         from cflibs.inversion.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
@@ -758,7 +758,7 @@ class TestMCMCSampling:
 
     def test_mcmc_sampler_plot_corner(self, bayesian_db):
         """Test corner plot method (returns None if matplotlib unavailable)."""
-        pytest.importorskip("numpyro")
+        pytest.importorskip("numpyro", exc_type=ImportError)
         from cflibs.inversion.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
@@ -788,7 +788,7 @@ class TestMCMCSampling:
 
     def test_mcmc_sampler_plot_forest(self, bayesian_db):
         """Test forest plot method."""
-        pytest.importorskip("numpyro")
+        pytest.importorskip("numpyro", exc_type=ImportError)
         from cflibs.inversion.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
@@ -1075,8 +1075,8 @@ class TestPosteriorPredictiveCheck:
     @pytest.mark.slow
     def test_posterior_predictive_check_returns_expected_keys(self, bayesian_db):
         """Test that posterior predictive check returns all expected keys."""
-        pytest.importorskip("jax")
-        pytest.importorskip("numpyro")
+        pytest.importorskip("jax", exc_type=ImportError)
+        pytest.importorskip("numpyro", exc_type=ImportError)
         import jax.numpy as jnp
         from cflibs.inversion.bayesian import MCMCSampler
 
@@ -1132,8 +1132,8 @@ class TestPosteriorPredictiveCheck:
     @pytest.mark.slow
     def test_posterior_predictive_check_p_value_range(self, bayesian_db):
         """Test that p-value is in valid range [0, 1]."""
-        pytest.importorskip("jax")
-        pytest.importorskip("numpyro")
+        pytest.importorskip("jax", exc_type=ImportError)
+        pytest.importorskip("numpyro", exc_type=ImportError)
         import jax.numpy as jnp
         from cflibs.inversion.bayesian import MCMCSampler
 
@@ -1170,8 +1170,8 @@ class TestPosteriorPredictiveCheck:
     @pytest.mark.slow
     def test_posterior_predictive_check_model_adequate_for_good_fit(self, bayesian_db):
         """Test that model_adequate is True when model fits well."""
-        pytest.importorskip("jax")
-        pytest.importorskip("numpyro")
+        pytest.importorskip("jax", exc_type=ImportError)
+        pytest.importorskip("numpyro", exc_type=ImportError)
         import jax.numpy as jnp
         from cflibs.inversion.bayesian import MCMCSampler
 
@@ -1210,8 +1210,8 @@ class TestPosteriorPredictiveCheck:
     @pytest.mark.requires_bayesian
     def test_posterior_predictive_check_n_samples_limiting(self, bayesian_db):
         """Test that n_samples is limited to available samples."""
-        pytest.importorskip("jax")
-        pytest.importorskip("numpyro")
+        pytest.importorskip("jax", exc_type=ImportError)
+        pytest.importorskip("numpyro", exc_type=ImportError)
         import jax.numpy as jnp
         from cflibs.inversion.bayesian import MCMCSampler
 
@@ -1580,8 +1580,11 @@ class TestTwoZoneMCMCSampler:
     """Smoke test for two-zone MCMC sampling."""
 
     @pytest.mark.slow
+    @pytest.mark.requires_bayesian
     def test_smoke_run(self, bayesian_db):
         """Two-zone MCMC runs without error on synthetic data."""
+        pytest.importorskip("jax", exc_type=ImportError)
+        pytest.importorskip("numpyro", exc_type=ImportError)
         from cflibs.inversion.bayesian import (
             TwoZoneBayesianForwardModel,
             TwoZoneMCMCSampler,

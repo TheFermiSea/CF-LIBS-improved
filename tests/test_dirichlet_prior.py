@@ -72,7 +72,7 @@ class TestCreateConcentrationPrior:
 
     @pytest.mark.requires_bayesian
     def test_basic_dirichlet_creation(self):
-        pytest.importorskip("numpyro")
+        pytest.importorskip("numpyro", exc_type=ImportError)
         from cflibs.inversion.bayesian import create_concentration_prior
 
         prior = create_concentration_prior(n_elements=3, alpha=1.0)
@@ -80,7 +80,7 @@ class TestCreateConcentrationPrior:
 
     @pytest.mark.requires_bayesian
     def test_informative_prior_with_known_concentrations(self):
-        pytest.importorskip("numpyro")
+        pytest.importorskip("numpyro", exc_type=ImportError)
         from cflibs.inversion.bayesian import create_concentration_prior
 
         prior = create_concentration_prior(
@@ -90,7 +90,7 @@ class TestCreateConcentrationPrior:
 
     @pytest.mark.requires_bayesian
     def test_sparse_alpha_produces_valid_prior(self):
-        pytest.importorskip("numpyro")
+        pytest.importorskip("numpyro", exc_type=ImportError)
         from cflibs.inversion.bayesian import create_concentration_prior
 
         prior = create_concentration_prior(n_elements=5, alpha=0.5)
