@@ -1575,6 +1575,7 @@ class TestTwoZoneMCMCResult:
         assert "Fe" in table
 
 
+@pytest.mark.requires_bayesian
 class TestTwoZoneMCMCSampler:
     """Smoke test for two-zone MCMC sampling."""
 
