@@ -526,6 +526,7 @@ class TestLogLikelihood:
 
 
 @pytest.mark.requires_jax
+@pytest.mark.requires_bayesian
 class TestPriorCreation:
     """Tests for prior creation functions."""
 
@@ -642,6 +643,7 @@ class TestBayesianForwardModelEdgeCases:
 
 @pytest.mark.requires_jax
 @pytest.mark.slow
+@pytest.mark.requires_bayesian
 class TestMCMCSampling:
     """Integration tests for MCMC sampling (require NumPyro)."""
 
@@ -818,6 +820,7 @@ class TestMCMCSampling:
 
 
 @pytest.mark.requires_jax
+@pytest.mark.requires_bayesian
 class TestNestedSampling:
     """Tests for nested sampling functionality."""
 
