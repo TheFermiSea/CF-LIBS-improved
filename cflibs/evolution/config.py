@@ -14,6 +14,7 @@ evolution search mutates per batch.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Literal, Mapping
 
 EnforcementMode = Literal["hard", "warn"]
@@ -88,3 +89,6 @@ class EvolutionDriverConfig:
             raise ValueError("fitness_weights must be non-empty")
         if any(w < 0 for w in self.fitness_weights.values()):
             raise ValueError("fitness_weights must all be >= 0")
+        # Honour frozen=True for the mapping contents too: dict.__setitem__
+        # would otherwise slip past the dataclass-level immutability.
+        object.__setattr__(self, "fitness_weights", MappingProxyType(dict(self.fitness_weights)))

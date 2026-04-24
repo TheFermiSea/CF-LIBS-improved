@@ -68,3 +68,22 @@ def test_dataclass_is_frozen() -> None:
     cfg = EvolutionDriverConfig()
     with pytest.raises(dataclasses.FrozenInstanceError):
         cfg.perturbations_per_batch = 99  # type: ignore[misc]
+
+
+def test_fitness_weights_is_immutable() -> None:
+    """frozen=True must extend to the mapping contents, not just the reference."""
+    cfg = EvolutionDriverConfig()
+    with pytest.raises(TypeError):
+        cfg.fitness_weights["aalto"] = 42.0  # type: ignore[index]
+    with pytest.raises(TypeError):
+        del cfg.fitness_weights["aalto"]  # type: ignore[attr-defined]
+
+
+def test_caller_mutations_do_not_leak_into_config() -> None:
+    """A user-supplied dict must be copied — later mutations must not affect the config."""
+    user_weights = {"aalto": 1.0, "custom": 2.0}
+    cfg = EvolutionDriverConfig(fitness_weights=user_weights)
+    user_weights["custom"] = 99.0
+    user_weights["new_key"] = 5.0
+    assert cfg.fitness_weights["custom"] == 2.0
+    assert "new_key" not in cfg.fitness_weights
