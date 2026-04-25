@@ -108,11 +108,33 @@ python scripts/generate_model_library.py build-index --output-dir output/model_l
 python scripts/generate_model_library.py submit --n-chunks 32 --output-dir output/model_library
 ```
 
-## Code Search Workflow
+## Code Intelligence (use Serena first)
 
-- Prefer semantic search with `colgrep` before regex-only search.
-- `colgrep "where inversion line selection happens" -k 20` for intent-level discovery.
-- `colgrep -e "add_parser(" -F "cli subcommands" cflibs/cli/main.py` to map CLI command registration quickly.
+The Serena MCP server is the **default code-intelligence tool** for this project. It exposes Pyright-grade symbol resolution, blast-radius analysis, and symbolic editing — all of which beat grep/Read/Edit on a Python codebase with heavy ABCs, decorators, and shim re-exports like CF-LIBS.
+
+**Search ladder — try in order, only fall back when the previous tier returns nothing useful:**
+
+1. **Symbol lookup (Serena).** Default `relative_path="cflibs/"` to suppress noise from `tests/`, `scripts/`, `docs/`.
+   - "find a class/method by name": `find_symbol(name_path_pattern="IterativeCFLIBSSolver", depth=1, include_body=False)`
+   - "find every caller / who uses X": `find_referencing_symbols(name_path="softmax_closure", relative_path="cflibs/")` (LSP-accurate; distinguishes call sites from comments/strings)
+   - "what's in this directory at a glance": `get_symbols_overview(relative_path="cflibs/inversion/physics/")`
+2. **Intent search.** `colgrep "where inversion line selection happens" -k 20` when you need semantic discovery (no symbol name yet).
+3. **Pattern search.** `search_for_pattern` (Serena) for regex with `relative_path` scoping — quieter than raw grep, skips `.git`/`ASD_da/` automatically.
+4. **Bash grep / find.** Only for non-Python files (YAML, TOML, Markdown, Rust).
+
+**Editing (use Serena when changing whole symbols):**
+
+- "rewrite this method's body": `find_symbol(name_path="ClassName/method", include_body=True)` then `replace_symbol_body(name_path="ClassName/method", body="...")`. Do NOT Read+Edit a 1000-line file when only one method is changing.
+- "delete this function and check nothing breaks": `safe_delete_symbol(name_path="...")` — refuses if references exist.
+- "rename across all files": `rename_symbol(name_path="OldName", new_name="NewName")` — LSP-coordinated, follows shim re-exports correctly.
+- For sub-symbol edits (a few lines inside a method): `replace_content` with regex; cheaper than rewriting the whole body.
+
+**Project memory.** Persistent context lives in `.serena/memories/` and survives sessions. `list_memories` to enumerate, `read_memory(name)` to load, `write_memory(name, content)` for new facts, `edit_memory(name, …)` for incremental updates. The seeded set covers physics-only constraint, inversion sub-package map, JAX backend matrix, evolution blocklist, suggested commands, code style. New non-obvious facts learned mid-session should be persisted there.
+
+**When to NOT reach for Serena:**
+- Reading a tiny config file (just use Read).
+- Running tests, formatters, git commands (Bash).
+- Operations on the Rust crates in `native/` (Serena's pyright doesn't cover Rust).
 
 ## Architecture
 

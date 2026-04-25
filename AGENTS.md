@@ -64,6 +64,19 @@
 
 The shipped CF-LIBS algorithm is physics-only — no neural networks, no trained models. Full forbidden-library spec, enforcement mechanism (Ruff TID251 + AST scanner), and rationale live in [`docs/Evolution_Framework.md`](docs/Evolution_Framework.md). ML is allowed only in `cflibs/evolution/` and `cflibs/experimental/ml/`.
 
+### Code Intelligence (Serena MCP)
+
+Serena MCP is the default for symbol-aware navigation and editing on this Python codebase. Search ladder:
+
+1. Symbol lookup → `find_symbol`, `find_referencing_symbols`, `get_symbols_overview`. Default `relative_path="cflibs/"`.
+2. Intent search → `colgrep` for semantic discovery without a known symbol name.
+3. Pattern search → `search_for_pattern` (regex with relative-path scoping).
+4. Bash grep → only for non-Python files (YAML, TOML, Rust, Markdown).
+
+For edits to a whole function/method/class body, prefer `replace_symbol_body` over Read+Edit. For renames, use `rename_symbol` (LSP-coordinated; follows the inversion shim re-exports correctly). For caller analysis before refactor, run `find_referencing_symbols` first. Persist non-obvious project facts via `write_memory`/`edit_memory` (see `.serena/memories/` for the seeded set).
+
+Full guidance: see [`CLAUDE.md` § Code Intelligence](CLAUDE.md#code-intelligence-use-serena-first).
+
 ## Testing Guidelines
 - Framework: pytest with optional `pytest-cov` and `pytest-benchmark`.
 - Coverage target for new code: >80% (see `CONTRIBUTING.md`).
