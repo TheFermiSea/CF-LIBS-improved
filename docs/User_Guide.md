@@ -2,6 +2,10 @@
 
 Complete guide for using the CF-LIBS library for forward modeling and analysis of LIBS spectra.
 
+If you are new to the repository, start with
+[Quick Start for Scientists](Quick_Start_For_Scientists.md). This guide is more detailed and
+assumes you are ready to edit configuration files or use the Python API.
+
 ## Table of Contents
 
 1. [Installation](#installation)
@@ -437,9 +441,10 @@ for config_file in configs:
 
 **Problem**: The database file doesn't exist.
 
-**Solution**: Generate the database using `legacy/datagen_v2.py`:
+**Solution**: Use the bundled example database or generate a new one:
 ```bash
-python legacy/datagen_v2.py
+cflibs forward examples/config_example.yaml --output spectrum.csv
+cflibs generate-db --db-path libs_production.db
 ```
 
 #### "No orders calibrated"

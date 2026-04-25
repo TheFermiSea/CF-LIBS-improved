@@ -172,7 +172,7 @@ class SpectrumModel:
         # Collect sigmas only for transitions that have populations
         sigmas = []
         for trans in transitions:
-            key = (trans.element, trans.ionization_stage, trans.E_k_ev)
+            key = (trans.element, trans.ionization_stage, round(trans.E_k_ev, 8))
             if key not in populations:
                 continue
 

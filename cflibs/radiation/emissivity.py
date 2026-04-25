@@ -95,7 +95,7 @@ def calculate_spectrum_emissivity(
 
     for trans in transitions:
         # Find population for upper level
-        key = (trans.element, trans.ionization_stage, trans.E_k_ev)
+        key = (trans.element, trans.ionization_stage, round(trans.E_k_ev, 8))
         if key in populations:
             n_k = populations[key]
             epsilon = calculate_line_emissivity(trans, n_k)

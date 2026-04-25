@@ -2,7 +2,7 @@
 # This configuration generates a synthetic spectrum for a simple Fe-H plasma
 
 # Atomic database path (relative to config file or absolute)
-atomic_database: libs_production.db
+atomic_database: ../ASD_da/libs_production.db
 
 # Plasma configuration
 plasma:
@@ -30,4 +30,3 @@ spectrum:
   lambda_max_nm: 800.0       # Maximum wavelength in nm
   delta_lambda_nm: 0.01      # Wavelength step in nm
   path_length_m: 0.01        # Plasma path length in meters (for optically thin)
-

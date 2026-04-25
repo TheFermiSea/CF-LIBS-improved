@@ -15,6 +15,19 @@ CF-LIBS implements the full measurement-to-inference pipeline: synthetic spectru
 
 **Status:** Active development. Core forward model, iterative CF-LIBS inversion pipeline, Bayesian inference, and manifold pre-computation are mature. Recent work: inversion package reorganized into 6 physics-aligned sub-packages; ruff TID251 rule enforces physics-only constraint in shipped code.
 
+## New User Path
+
+If you are scientifically comfortable with LIBS but new to this codebase, start with
+[Quick Start for Scientists](docs/Quick_Start_For_Scientists.md). It covers setup checks,
+the bundled example database, first spectrum generation, first analysis, and common
+CSV/input problems without requiring a codebase tour.
+
+```bash
+cflibs doctor
+cflibs forward examples/config_example.yaml --output spectrum.csv
+cflibs analyze data/aalto_libs/elements/Fe_spectrum.csv --elements Fe --db-path ASD_da/libs_production.db
+```
+
 ---
 
 ## Quick Start

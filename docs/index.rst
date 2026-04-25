@@ -16,6 +16,7 @@ and :doc:`API_Reference` for CLI flags.
    :maxdepth: 2
    :caption: User Guide
 
+   Quick_Start_For_Scientists
    User_Guide
    Database_Generation
    Manifold_Generation_Guide
