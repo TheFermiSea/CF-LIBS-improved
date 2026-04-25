@@ -8,7 +8,15 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from cflibs.cli.main import forward_model_cmd, invert_cmd, dbgen_cmd, main
+from cflibs.cli.main import (
+    _float_config_value,
+    _resolve_db_path,
+    doctor_cmd,
+    forward_model_cmd,
+    invert_cmd,
+    dbgen_cmd,
+    main,
+)
 
 
 def test_forward_model_cmd_missing_config():
@@ -90,6 +98,34 @@ def test_dbgen_cmd_forwards_args():
         dbgen_cmd(args)
 
     mock_generate.assert_called_once_with(db_path="custom.db", elements=["Fe", "Cu"])
+
+
+def test_resolve_db_path_finds_bundled_sample_database():
+    """Default database resolution should find the checked-in sample database."""
+    db_path = _resolve_db_path()
+
+    assert db_path.name == "libs_production.db"
+    assert db_path.exists()
+    assert db_path.parent.name == "ASD_da"
+
+
+def test_float_config_value_accepts_scientific_notation_string():
+    """YAML may parse values like 1.0e17 as strings; CLI configs should still work."""
+    assert _float_config_value({"ne": "1.0e17"}, "ne", "plasma") == 1.0e17
+
+
+def test_doctor_cmd_reports_next_steps(capsys):
+    """Doctor command should provide a setup summary and first commands."""
+
+    class Args:
+        db_path = None
+
+    doctor_cmd(Args())
+
+    captured = capsys.readouterr()
+    assert "CF-LIBS setup doctor" in captured.out
+    assert "atomic database" in captured.out
+    assert "cflibs forward examples/config_example.yaml" in captured.out
 
 
 def test_main_no_command(capsys):

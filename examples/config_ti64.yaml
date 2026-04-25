@@ -1,7 +1,7 @@
 # CF-LIBS Configuration for Ti-6Al-4V Alloy
 # Simulates a typical ultrafast LIBS plasma
 
-atomic_database: libs_production.db
+atomic_database: ../ASD_da/libs_production.db
 
 plasma:
   model: single_zone_lte
@@ -27,4 +27,3 @@ spectrum:
   lambda_max_nm: 500.0
   delta_lambda_nm: 0.005     # High resolution
   path_length_m: 0.01
-

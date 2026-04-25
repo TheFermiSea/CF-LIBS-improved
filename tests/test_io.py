@@ -102,6 +102,25 @@ def test_load_spectrum_csv_alternative_names():
         Path(temp_path).unlink()
 
 
+def test_load_spectrum_csv_accepts_aalto_spectrum_column():
+    """Aalto example spectra use wavelength,spectrum columns."""
+    wavelength = np.linspace(200, 800, 100)
+    intensity = np.ones_like(wavelength)
+
+    fd, temp_path = tempfile.mkstemp(suffix=".csv")
+
+    try:
+        df = pd.DataFrame({"wavelength": wavelength, "spectrum": intensity})
+        df.to_csv(temp_path, index=False)
+
+        wl_loaded, int_loaded = load_spectrum(temp_path)
+
+        assert np.allclose(wl_loaded, wavelength)
+        assert np.allclose(int_loaded, intensity)
+    finally:
+        Path(temp_path).unlink()
+
+
 def test_load_spectrum_numpy_format():
     """Test loading spectrum from NumPy format."""
     wavelength = np.linspace(200, 800, 100)

@@ -12,6 +12,19 @@ CF‑LIBS is intended as a *foundation* for serious research and engineering wor
 
 > **Status**: Active development — Phase 3 (Advanced Inversion & Uncertainty). Phases 0-2 are complete. Core Phase 3 components (forward model, inversion pipeline, Bayesian inference, manifold generation) are implemented; multi-zone models and sensitivity analysis are still in progress. Current work focuses on Compositional Data Analysis (CoDa) for closure modernization, atomic database augmentation (STARK-B, VALD), and Mars PDS real-data validation.
 
+## New User Path
+
+If you are scientifically comfortable with LIBS but new to this codebase, start with
+[Quick Start for Scientists](docs/Quick_Start_For_Scientists.md). It covers setup checks,
+the bundled example database, first spectrum generation, first analysis, and common
+CSV/input problems without requiring a codebase tour.
+
+```bash
+cflibs doctor
+cflibs forward examples/config_example.yaml --output spectrum.csv
+cflibs analyze data/aalto_libs/elements/Fe_spectrum.csv --elements Fe --db-path ASD_da/libs_production.db
+```
+
 ## Current Features
 
 - **Forward model**: Single-zone LTE plasma → Saha-Boltzmann equilibrium → line emissivity → Gaussian/Doppler/resolving-power broadening → instrument convolution
