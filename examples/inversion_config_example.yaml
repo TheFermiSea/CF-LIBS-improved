@@ -1,4 +1,4 @@
-atomic_database: libs_production.db
+atomic_database: ../ASD_da/libs_production.db
 
 analysis:
   elements: ["Fe", "Cu"]
