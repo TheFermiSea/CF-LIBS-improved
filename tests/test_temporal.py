@@ -852,3 +852,311 @@ class TestEdgeCases:
 
         # Should handle gracefully
         assert tau == 0.0
+
+
+# =============================================================================
+# Joint multi-gate Saha-Boltzmann fit
+# =============================================================================
+
+
+class TestJointMultiGateFit:
+    """Tests for ``joint_multi_gate_fit``: shared composition across gates."""
+
+    # -- Shared synthetic-spectrum helpers -------------------------------------
+
+    _IPS = {"Fe": 7.87, "Cu": 7.73}
+    _U_I = {"Fe": 25.0, "Cu": 2.0}
+    _U_II = {"Fe": 30.0, "Cu": 4.0}
+
+    # (wavelength_nm, E_k_eV, g_k, A_ki) per (element, ion stage)
+    _LINES = {
+        "Fe": {
+            1: [
+                (371.99, 3.33, 11, 1.0e7),
+                (404.58, 3.93, 9, 8.6e6),
+                (438.35, 4.44, 9, 5.0e6),
+                (495.76, 4.68, 7, 4.2e6),
+                (516.75, 2.45, 9, 5.7e6),
+            ],
+            2: [
+                (238.20, 5.20, 10, 3.0e8),
+                (259.94, 4.82, 8, 2.2e8),
+            ],
+        },
+        "Cu": {
+            1: [
+                (324.75, 3.82, 4, 1.4e8),
+                (327.40, 3.79, 2, 1.4e8),
+                (510.55, 3.82, 4, 2.0e6),
+            ],
+        },
+    }
+
+    def _synth_observations(
+        self,
+        T_K: float,
+        ne: float,
+        composition: dict,
+        alpha_offset: float = 0.0,
+        seed: int = 0,
+        snr: float = 200.0,
+    ):
+        """Build a list of LineObservation matching the joint-fit forward model."""
+        from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3
+        from cflibs.inversion.boltzmann import LineObservation
+
+        rng = np.random.default_rng(seed)
+        T_eV = T_K / EV_TO_K
+        log_S = {
+            el: (
+                np.log(SAHA_CONST_CM3)
+                - np.log(ne)
+                + 1.5 * np.log(T_eV)
+                + np.log(self._U_II[el] / self._U_I[el])
+                - self._IPS[el] / T_eV
+            )
+            for el in composition
+        }
+        observations = []
+        for element, by_stage in self._LINES.items():
+            if element not in composition:
+                continue
+            for stage, lines in by_stage.items():
+                for wl, E_k, g_k, A_ki in lines:
+                    y = (
+                        alpha_offset
+                        + np.log(composition[element])
+                        - np.log(self._U_I[element])
+                        - E_k / T_eV
+                    )
+                    if stage == 2:
+                        y = y + log_S[element]
+                    intensity = float(np.exp(y) * g_k * A_ki / wl)
+                    intensity *= float(rng.normal(1.0, 1.0 / snr))
+                    intensity = max(intensity, 1e-12)
+                    sigma = max(intensity / snr, 1e-12)
+                    observations.append(
+                        LineObservation(
+                            wavelength_nm=wl,
+                            intensity=intensity,
+                            intensity_uncertainty=sigma,
+                            element=element,
+                            ionization_stage=stage,
+                            E_k_ev=E_k,
+                            g_k=g_k,
+                            A_ki=A_ki,
+                        )
+                    )
+        return observations
+
+    def _build_spectra(
+        self,
+        gates_config,
+        composition,
+        snr: float = 200.0,
+    ):
+        """Construct a list of TimeResolvedSpectrum from per-gate parameters."""
+        spectra = []
+        for i, gc in enumerate(gates_config):
+            obs = self._synth_observations(
+                T_K=gc["T_K"],
+                ne=gc["ne"],
+                composition=composition,
+                alpha_offset=gc["alpha"],
+                seed=42 + i,
+                snr=snr,
+            )
+            spectra.append(
+                TimeResolvedSpectrum(
+                    gate=TemporalGateConfig(delay_ns=gc["delay"], width_ns=200.0),
+                    observations=obs,
+                )
+            )
+        return spectra
+
+    # -- Acceptance tests ------------------------------------------------------
+
+    def test_joint_multi_gate_recovers_constant_composition(self):
+        """3 gates, same composition, different (T, ne): joint fit recovers C within 2%."""
+        from cflibs.inversion.runtime.multi_gate import joint_multi_gate_fit
+
+        true_comp = {"Fe": 0.7, "Cu": 0.3}
+        gates_config = [
+            {"delay": 200.0, "T_K": 14000.0, "ne": 5.0e17, "alpha": 30.0},
+            {"delay": 700.0, "T_K": 11000.0, "ne": 2.0e17, "alpha": 28.5},
+            {"delay": 1500.0, "T_K": 8000.0, "ne": 8.0e16, "alpha": 27.0},
+        ]
+        spectra = self._build_spectra(gates_config, true_comp, snr=200.0)
+
+        result = joint_multi_gate_fit(
+            spectra,
+            ionization_potentials_eV=self._IPS,
+            partition_func_I=self._U_I,
+            partition_func_II=self._U_II,
+            initial_temperatures_K=[10000.0] * 3,
+            initial_electron_densities_cm3=[1.0e17] * 3,
+            initial_composition={"Fe": 0.5, "Cu": 0.5},
+        )
+
+        assert result.converged
+        assert result.n_gates == 3
+        for el, true_value in true_comp.items():
+            assert abs(result.composition_shared[el] - true_value) < 0.02
+        # Per-gate temperatures should also recover within ~20%
+        for fitted_T, gc in zip(result.temperatures_K_per_gate, gates_config):
+            assert abs(fitted_T - gc["T_K"]) / gc["T_K"] < 0.25
+
+    def test_joint_multi_gate_lower_uncertainty_than_per_gate(self):
+        """Joint fit composition uncertainty must be < average per-gate uncertainty."""
+        from cflibs.inversion.runtime.multi_gate import joint_multi_gate_fit
+
+        true_comp = {"Fe": 0.7, "Cu": 0.3}
+        gates_config = [
+            {"delay": 200.0, "T_K": 14000.0, "ne": 5.0e17, "alpha": 30.0},
+            {"delay": 700.0, "T_K": 11000.0, "ne": 2.0e17, "alpha": 28.5},
+            {"delay": 1500.0, "T_K": 8000.0, "ne": 8.0e16, "alpha": 27.0},
+        ]
+        spectra = self._build_spectra(gates_config, true_comp, snr=50.0)
+
+        # Per-gate uncertainties (run the joint-fit machinery on each gate alone)
+        per_gate_sigmas = []
+        for sp in spectra:
+            res_pg = joint_multi_gate_fit(
+                [sp],
+                ionization_potentials_eV=self._IPS,
+                partition_func_I=self._U_I,
+                partition_func_II=self._U_II,
+                initial_temperatures_K=[10000.0],
+                initial_electron_densities_cm3=[1.0e17],
+                initial_composition={"Fe": 0.5, "Cu": 0.5},
+            )
+            per_gate_sigmas.append(
+                np.array([res_pg.composition_uncertainty[el] for el in ["Fe", "Cu"]])
+            )
+        mean_per_gate_sigma = np.mean(per_gate_sigmas, axis=0)
+
+        res_joint = joint_multi_gate_fit(
+            spectra,
+            ionization_potentials_eV=self._IPS,
+            partition_func_I=self._U_I,
+            partition_func_II=self._U_II,
+            initial_temperatures_K=[10000.0] * 3,
+            initial_electron_densities_cm3=[1.0e17] * 3,
+            initial_composition={"Fe": 0.5, "Cu": 0.5},
+        )
+        joint_sigma = np.array([res_joint.composition_uncertainty[el] for el in ["Fe", "Cu"]])
+
+        # Headline benefit: joint fit must be strictly tighter than the
+        # average per-gate fit for every element.
+        assert np.all(joint_sigma < mean_per_gate_sigma), (
+            f"Joint sigma {joint_sigma.tolist()} not strictly less than "
+            f"per-gate mean {mean_per_gate_sigma.tolist()}"
+        )
+
+    def test_joint_multi_gate_handles_missing_lines(self):
+        """Drop half the lines from one gate; fit must still recover composition."""
+        from cflibs.inversion.runtime.multi_gate import joint_multi_gate_fit
+
+        true_comp = {"Fe": 0.7, "Cu": 0.3}
+        gates_config = [
+            {"delay": 200.0, "T_K": 14000.0, "ne": 5.0e17, "alpha": 30.0},
+            {"delay": 700.0, "T_K": 11000.0, "ne": 2.0e17, "alpha": 28.5},
+            {"delay": 1500.0, "T_K": 8000.0, "ne": 8.0e16, "alpha": 27.0},
+        ]
+        spectra = self._build_spectra(gates_config, true_comp, snr=200.0)
+        # Drop every other observation from the middle gate
+        spectra[1] = TimeResolvedSpectrum(
+            gate=spectra[1].gate,
+            observations=list(spectra[1].observations[::2]),
+        )
+
+        result = joint_multi_gate_fit(
+            spectra,
+            ionization_potentials_eV=self._IPS,
+            partition_func_I=self._U_I,
+            partition_func_II=self._U_II,
+            initial_temperatures_K=[10000.0] * 3,
+            initial_electron_densities_cm3=[1.0e17] * 3,
+            initial_composition={"Fe": 0.5, "Cu": 0.5},
+        )
+
+        assert result.converged
+        for el, true_value in true_comp.items():
+            assert abs(result.composition_shared[el] - true_value) < 0.03
+
+    def test_joint_multi_gate_accepts_tuple_payload(self):
+        """The function should accept ``(gate, observations)`` tuples directly."""
+        from cflibs.inversion.runtime.multi_gate import joint_multi_gate_fit
+
+        true_comp = {"Fe": 0.7, "Cu": 0.3}
+        gates_config = [
+            {"delay": 200.0, "T_K": 14000.0, "ne": 5.0e17, "alpha": 30.0},
+            {"delay": 1500.0, "T_K": 8000.0, "ne": 8.0e16, "alpha": 27.0},
+        ]
+        spectra = self._build_spectra(gates_config, true_comp, snr=200.0)
+        payload = [(s.gate, s.observations) for s in spectra]
+
+        result = joint_multi_gate_fit(
+            payload,
+            ionization_potentials_eV=self._IPS,
+            partition_func_I=self._U_I,
+            partition_func_II=self._U_II,
+            initial_temperatures_K=[10000.0] * 2,
+            initial_electron_densities_cm3=[1.0e17] * 2,
+            initial_composition={"Fe": 0.5, "Cu": 0.5},
+        )
+
+        assert result.converged
+        assert result.n_gates == 2
+        for el, true_value in true_comp.items():
+            assert abs(result.composition_shared[el] - true_value) < 0.03
+
+    def test_joint_multi_gate_5_gate_acceptance(self):
+        """5-gate acceptance: joint composition RMSEP < half the per-gate RMSEP."""
+        from cflibs.inversion.runtime.multi_gate import joint_multi_gate_fit
+
+        true_comp = {"Fe": 0.7, "Cu": 0.3}
+        gates_config = [
+            {"delay": 100.0, "T_K": 16000.0, "ne": 8.0e17, "alpha": 31.0},
+            {"delay": 400.0, "T_K": 13000.0, "ne": 4.0e17, "alpha": 29.5},
+            {"delay": 800.0, "T_K": 10500.0, "ne": 2.0e17, "alpha": 28.5},
+            {"delay": 1500.0, "T_K": 8500.0, "ne": 1.0e17, "alpha": 27.5},
+            {"delay": 2500.0, "T_K": 7000.0, "ne": 5.0e16, "alpha": 26.5},
+        ]
+        spectra = self._build_spectra(gates_config, true_comp, snr=50.0)
+
+        # Per-gate fits
+        per_gate_results = []
+        for sp in spectra:
+            res = joint_multi_gate_fit(
+                [sp],
+                ionization_potentials_eV=self._IPS,
+                partition_func_I=self._U_I,
+                partition_func_II=self._U_II,
+                initial_temperatures_K=[10000.0],
+                initial_electron_densities_cm3=[1.0e17],
+                initial_composition={"Fe": 0.5, "Cu": 0.5},
+            )
+            per_gate_results.append(np.array([res.composition_shared[el] for el in ["Fe", "Cu"]]))
+        truth_vec = np.array([true_comp[el] for el in ["Fe", "Cu"]])
+        per_gate_errs = np.array([(r - truth_vec) ** 2 for r in per_gate_results])
+        per_gate_rmsep = float(np.sqrt(per_gate_errs.mean()))
+
+        # Joint fit
+        res_joint = joint_multi_gate_fit(
+            spectra,
+            ionization_potentials_eV=self._IPS,
+            partition_func_I=self._U_I,
+            partition_func_II=self._U_II,
+            initial_temperatures_K=[10000.0] * 5,
+            initial_electron_densities_cm3=[1.0e17] * 5,
+            initial_composition={"Fe": 0.5, "Cu": 0.5},
+        )
+        joint_vec = np.array([res_joint.composition_shared[el] for el in ["Fe", "Cu"]])
+        joint_rmsep = float(np.sqrt(((joint_vec - truth_vec) ** 2).mean()))
+
+        # Acceptance criterion from the bead spec.
+        assert joint_rmsep < 0.5 * per_gate_rmsep, (
+            f"Joint RMSEP {joint_rmsep:.4f} should be < half per-gate RMSEP "
+            f"{per_gate_rmsep:.4f}"
+        )

@@ -26,6 +26,19 @@ class FitMethod(Enum):
 class LineObservation:
     """
     Represents a single spectral line observation.
+
+    Attributes
+    ----------
+    wavelength_nm, intensity, intensity_uncertainty, element,
+    ionization_stage, E_k_ev, g_k, A_ki
+        See class signature.
+    aki_uncertainty : float or None, optional
+        Fractional uncertainty on the Einstein coefficient (sigma(A_ki) / A_ki),
+        as supplied by the atomic database (NIST grades B/C/D/E map to
+        ~0.10/0.25/0.50/1.00). Used for inverse-variance weighting of the
+        Boltzmann plot so that poorly characterized lines do not dominate
+        the slope. ``None`` means atomic-data uncertainty is unknown — the
+        fitter falls back to a uniform A_ki contribution for that line.
     """
 
     wavelength_nm: float
@@ -36,6 +49,7 @@ class LineObservation:
     E_k_ev: float  # upper level energy in eV
     g_k: int  # statistical weight of upper level
     A_ki: float  # Einstein coefficient in s^-1
+    aki_uncertainty: float | None = None  # fractional sigma(A_ki) / A_ki, optional
 
     @property
     def y_value(self) -> float:
