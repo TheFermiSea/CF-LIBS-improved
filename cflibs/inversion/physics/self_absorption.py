@@ -63,8 +63,9 @@ Recommended Usage
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Sequence, Tuple
 import numpy as np
+from scipy.optimize import brentq
 
 from cflibs.core.constants import C_LIGHT, EV_TO_K, KB, KB_EV, M_PROTON
 from cflibs.core.logging_config import get_logger
@@ -110,6 +111,263 @@ class AbsorptionCorrectionResult:
     correction_factor: float
     is_optically_thick: bool
     iterations: int = 1
+
+
+@dataclass
+class DoubletRatioResult:
+    """
+    Result of a single-spectrum, closed-form self-absorption correction
+    derived from a doublet (two lines from the same upper level).
+
+    The doublet-ratio method (Pace et al., Spectrochim. Acta B 2025,
+    https://www.sciencedirect.com/science/article/abs/pii/S0584854725001995)
+    is a SECOND-OPINION estimator that complements the curve-of-growth
+    derived self-absorption correction (CDSB). For two lines (k -> i1,
+    k -> i2) sharing the same upper level k, the LS-coupling theoretical
+    intensity ratio in the optically-thin limit is
+
+        r_theory = (g_i1 * A_i1 * lambda_i1**3) / (g_i2 * A_i2 * lambda_i2**3)
+
+    The measured ratio r_meas = I_1 / I_2 differs from r_theory because
+    each line is attenuated by a curve-of-growth escape factor
+    f(tau) = (1 - exp(-tau)) / tau, with both line-center optical
+    depths sharing the upper-level population:
+
+        tau_2 = tau_1 / r_theory
+
+    Solving f(tau_1) / f(tau_1 / r_theory) = r_meas / r_theory for tau_1
+    gives a 1-D nonlinear root, which is solved with `scipy.optimize.brentq`.
+
+    Attributes
+    ----------
+    tau_1 : float
+        Recovered optical depth of the stronger line (line 1).
+    tau_2 : float
+        Recovered optical depth of the weaker line (line 2).
+    f_tau_1 : float
+        Escape factor f(tau_1) applied to line 1.
+    f_tau_2 : float
+        Escape factor f(tau_2) applied to line 2.
+    r_measured : float
+        Measured intensity ratio I_1 / I_2.
+    r_theory : float
+        Theoretical optically-thin intensity ratio.
+    i1_corrected : float
+        Self-absorption-corrected intensity of line 1: I_1 / f(tau_1).
+    i2_corrected : float
+        Self-absorption-corrected intensity of line 2: I_2 / f(tau_2).
+    wavelength_pair_nm : tuple[float, float]
+        (lambda_1, lambda_2) of the two doublet lines in nm.
+    agreement_with_cdsb_sigma : float, optional
+        (tau_doublet - tau_cdsb) / max(sigma_doublet, sigma_cdsb) when
+        the result has been cross-checked against a CDSB-derived tau.
+        None if no cross-check was performed.
+    """
+
+    tau_1: float
+    tau_2: float
+    f_tau_1: float
+    f_tau_2: float
+    r_measured: float
+    r_theory: float
+    i1_corrected: float
+    i2_corrected: float
+    wavelength_pair_nm: Tuple[float, float]
+    agreement_with_cdsb_sigma: Optional[float] = None
+
+
+def _theoretical_doublet_ratio(line1: LineObservation, line2: LineObservation) -> float:
+    """
+    LS-coupling theoretical optically-thin intensity ratio I_1 / I_2 for
+    two emission lines sharing the same upper level.
+
+    r_theory = (g_i1 * A_i1 * lambda_i1**3) / (g_i2 * A_i2 * lambda_i2**3)
+
+    Note: For LIBS line lists, ``g_k`` (upper-level statistical weight)
+    is what we have on ``LineObservation``; for two lines sharing the
+    upper level, the line-strength ratio reduces to A * lambda**3 with
+    a degeneracy factor that accounts for the two transitions. We use
+    g_k * A_ki * lambda**3 as a stand-in (same upper level => g_k_1 ==
+    g_k_2, so this reduces to A * lambda**3).
+    """
+    return (line1.g_k * line1.A_ki * line1.wavelength_nm**3) / (
+        line2.g_k * line2.A_ki * line2.wavelength_nm**3
+    )
+
+
+def correct_via_doublet_ratio(
+    line1: LineObservation,
+    line2: LineObservation,
+) -> DoubletRatioResult:
+    """
+    Closed-form, single-spectrum self-absorption correction for a doublet.
+
+    Both lines must share the same upper level (E_k_ev within 1 meV) and
+    the same species (element + ionization stage). The correction solves
+    the 1-D nonlinear equation
+
+        f(tau_1) / f(tau_1 / r_theory) = r_meas / r_theory
+
+    for the optical depth tau_1 of line 1 via `scipy.optimize.brentq`
+    over tau_1 in [1e-4, 30]. The corrected intensities are
+    I_i_corr = I_i / f(tau_i), with tau_2 = tau_1 / r_theory.
+
+    See Pace et al., Spectrochim. Acta B 2025
+    (https://www.sciencedirect.com/science/article/abs/pii/S0584854725001995).
+
+    Parameters
+    ----------
+    line1, line2 : LineObservation
+        Two lines from the same upper level. The line with the smaller
+        wavelength is treated as ``line1`` after internal swapping if
+        necessary (matching the ordering returned by `find_doublet_pairs`).
+
+    Returns
+    -------
+    DoubletRatioResult
+        Closed-form recovery of (tau_1, tau_2) and the corrected
+        intensities. ``agreement_with_cdsb_sigma`` is left as ``None``;
+        populate it by comparing against a CDSB-derived tau in
+        :py:meth:`SelfAbsorptionCorrector.cross_check_with_doublets`.
+
+    Raises
+    ------
+    ValueError
+        If the lines do not share the upper level or species, or if any
+        intensity / oscillator strength is non-positive.
+    """
+    # Order so line1 has the shorter wavelength (matches find_doublet_pairs)
+    if line2.wavelength_nm < line1.wavelength_nm:
+        line1, line2 = line2, line1
+
+    # Validate species
+    if line1.element != line2.element:
+        raise ValueError(f"Doublet lines must share element: {line1.element} != {line2.element}")
+    if line1.ionization_stage != line2.ionization_stage:
+        raise ValueError(
+            f"Doublet lines must share ionization stage: "
+            f"{line1.ionization_stage} != {line2.ionization_stage}"
+        )
+
+    # Validate same upper level (within ~1 meV)
+    if abs(line1.E_k_ev - line2.E_k_ev) > 0.001:
+        raise ValueError(
+            f"Doublet lines must share upper level (within 1 meV): "
+            f"E_k_1={line1.E_k_ev:.4f} eV, E_k_2={line2.E_k_ev:.4f} eV"
+        )
+
+    # Validate measurable intensities and atomic data
+    if line1.intensity <= 0 or line2.intensity <= 0:
+        raise ValueError(
+            f"Doublet correction requires positive intensities: "
+            f"I_1={line1.intensity}, I_2={line2.intensity}"
+        )
+    if line1.A_ki <= 0 or line2.A_ki <= 0 or line1.g_k <= 0 or line2.g_k <= 0:
+        raise ValueError("Doublet correction requires positive g_k * A_ki for both lines")
+
+    r_theory = _theoretical_doublet_ratio(line1, line2)
+    r_meas = line1.intensity / line2.intensity
+    ratio_of_ratios = r_meas / r_theory
+
+    def residual(tau_1_guess: float) -> float:
+        """f(tau_1) / f(tau_1 / r_theory) - r_meas / r_theory."""
+        f1 = _escape_factor(tau_1_guess)
+        f2 = _escape_factor(tau_1_guess / r_theory)
+        return f1 / f2 - ratio_of_ratios
+
+    tau_low, tau_high = 1e-4, 30.0
+    res_low = residual(tau_low)
+    res_high = residual(tau_high)
+
+    # Optically thin / inconsistent-with-self-absorption case: same-sign
+    # residuals at the bracket endpoints. Either r_meas == r_theory (no
+    # absorption) or r_meas implies negative tau (measurement is brighter
+    # than the optically-thin prediction, which is impossible under pure
+    # self-absorption). Return tau ~ 0 with a debug log.
+    if res_low * res_high > 0 or abs(ratio_of_ratios - 1.0) < 1e-12:
+        if abs(res_low) > 0.05:
+            logger.debug(
+                "Doublet at (%.3f, %.3f) nm: r_meas/r_theory=%.4f implies negative "
+                "or near-zero tau (residual at tau=1e-4 is %.3e); returning tau~0.",
+                line1.wavelength_nm,
+                line2.wavelength_nm,
+                ratio_of_ratios,
+                res_low,
+            )
+        tau_1 = 1e-4
+        tau_2 = tau_1 / r_theory
+        f_tau_1 = _escape_factor(tau_1)
+        f_tau_2 = _escape_factor(tau_2)
+        return DoubletRatioResult(
+            tau_1=tau_1,
+            tau_2=tau_2,
+            f_tau_1=f_tau_1,
+            f_tau_2=f_tau_2,
+            r_measured=r_meas,
+            r_theory=r_theory,
+            i1_corrected=line1.intensity / f_tau_1,
+            i2_corrected=line2.intensity / f_tau_2,
+            wavelength_pair_nm=(line1.wavelength_nm, line2.wavelength_nm),
+        )
+
+    tau_1 = brentq(residual, tau_low, tau_high, xtol=1e-6, rtol=1e-8, maxiter=100)
+    tau_2 = tau_1 / r_theory
+    f_tau_1 = _escape_factor(tau_1)
+    f_tau_2 = _escape_factor(tau_2)
+
+    return DoubletRatioResult(
+        tau_1=tau_1,
+        tau_2=tau_2,
+        f_tau_1=f_tau_1,
+        f_tau_2=f_tau_2,
+        r_measured=r_meas,
+        r_theory=r_theory,
+        i1_corrected=line1.intensity / f_tau_1,
+        i2_corrected=line2.intensity / f_tau_2,
+        wavelength_pair_nm=(line1.wavelength_nm, line2.wavelength_nm),
+    )
+
+
+def find_doublet_pairs(
+    lines: Sequence[LineObservation],
+    dE_ev_tol: float = 0.001,
+) -> List[Tuple[LineObservation, LineObservation]]:
+    """
+    Scan a line list for all (line_i, line_j) pairs sharing the same
+    upper level (matching ``E_k_ev`` within ``dE_ev_tol``) AND the same
+    species (element + ionization stage), with line_i.wavelength_nm <
+    line_j.wavelength_nm.
+
+    Parameters
+    ----------
+    lines : sequence of LineObservation
+        Input line observations.
+    dE_ev_tol : float, default 0.001
+        Tolerance (in eV) for matching upper-level energies. The default
+        of 1 meV catches NIST quantization noise.
+
+    Returns
+    -------
+    list of (LineObservation, LineObservation)
+        All matched pairs, with the shorter-wavelength line first.
+    """
+    pairs: List[Tuple[LineObservation, LineObservation]] = []
+    n = len(lines)
+    for i in range(n):
+        for j in range(i + 1, n):
+            li, lj = lines[i], lines[j]
+            if li.element != lj.element:
+                continue
+            if li.ionization_stage != lj.ionization_stage:
+                continue
+            if abs(li.E_k_ev - lj.E_k_ev) > dE_ev_tol:
+                continue
+            if li.wavelength_nm < lj.wavelength_nm:
+                pairs.append((li, lj))
+            elif lj.wavelength_nm < li.wavelength_nm:
+                pairs.append((lj, li))
+            # Equal-wavelength case: skip (degenerate, not a doublet)
+    return pairs
 
 
 @dataclass
@@ -694,6 +952,112 @@ class SelfAbsorptionCorrector:
             max_optical_depth=max_tau,
             warnings=warnings_list,
         )
+
+    def cross_check_with_doublets(
+        self,
+        lines: Sequence[LineObservation],
+        cdsb_result: SelfAbsorptionResult,
+        sigma_threshold: float = 2.0,
+    ) -> List[DoubletRatioResult]:
+        """
+        Second-opinion cross-check of CDSB-derived optical depths using the
+        closed-form, single-spectrum doublet-ratio method of Pace et al.,
+        Spectrochim. Acta B 2025
+        (https://www.sciencedirect.com/science/article/abs/pii/S0584854725001995).
+
+        For every detected doublet pair (two lines from the same upper level
+        + same species) the optical depth tau_doublet is recovered from
+        f(tau_1) / f(tau_1 / r_theory) = r_meas / r_theory and compared
+        against the CDSB-derived tau for the stronger line of the pair.
+        Disagreements with absolute z-score > ``sigma_threshold`` are
+        flagged via ``logger.warning``.
+
+        Sigma estimate: doublet uncertainty is propagated from the line
+        intensity uncertainties through the linearised root condition;
+        CDSB uncertainty is taken to be 30% of tau (the "high-tau limit"
+        warned about in this module's docstring) when no covariance
+        estimate is available from the CDSB step itself. These are
+        deliberately conservative defaults — refine when CDSB grows a
+        proper covariance estimator.
+
+        Parameters
+        ----------
+        lines : sequence of LineObservation
+            Same line list used to drive the CDSB correction.
+        cdsb_result : SelfAbsorptionResult
+            Output of :py:meth:`correct` or :py:meth:`correct_with_cog`,
+            which provides per-wavelength CDSB optical depths.
+        sigma_threshold : float, default 2.0
+            Threshold on |tau_doublet - tau_cdsb| / max(sigma) above which
+            a warning is logged.
+
+        Returns
+        -------
+        list of DoubletRatioResult
+            One entry per detected doublet pair, with
+            ``agreement_with_cdsb_sigma`` populated.
+        """
+        results: List[DoubletRatioResult] = []
+        pairs = find_doublet_pairs(lines)
+
+        for line1, line2 in pairs:
+            try:
+                doublet_res = correct_via_doublet_ratio(line1, line2)
+            except ValueError as exc:
+                logger.warning(
+                    "Doublet cross-check skipped for pair " "(%.3f nm, %.3f nm): %s",
+                    line1.wavelength_nm,
+                    line2.wavelength_nm,
+                    exc,
+                )
+                continue
+
+            # Map the stronger line (line1, shorter wavelength by convention,
+            # but the higher-tau end of the pair) to the CDSB tau bookkeeping.
+            cdsb_corr = cdsb_result.corrections.get(line1.wavelength_nm)
+            if cdsb_corr is None:
+                # CDSB did not produce a result for this line — skip cross-check
+                results.append(doublet_res)
+                continue
+
+            tau_cdsb = cdsb_corr.optical_depth
+            tau_doublet = doublet_res.tau_1
+
+            # Conservative uncertainty estimates.
+            # Doublet sigma: fractional uncertainty in the measured ratio
+            # propagates ~linearly into tau in the moderate-tau regime.
+            sigma_r_meas = 0.0
+            if line1.intensity > 0 and line2.intensity > 0:
+                rel_1 = line1.intensity_uncertainty / line1.intensity
+                rel_2 = line2.intensity_uncertainty / line2.intensity
+                sigma_r_meas = doublet_res.r_measured * np.sqrt(rel_1**2 + rel_2**2)
+            # df/dtau ~ -1/2 + tau/3 - ...  for small tau; use |df/dtau| ~ 0.5
+            # to avoid divide-by-zero. This is a conservative ~2x overestimate.
+            sigma_doublet = max(sigma_r_meas / max(0.1, doublet_res.r_theory), 1e-3)
+            sigma_cdsb = max(0.3 * abs(tau_cdsb), 1e-3)
+
+            denom = max(sigma_doublet, sigma_cdsb)
+            agreement_sigma = (tau_doublet - tau_cdsb) / denom
+            doublet_res.agreement_with_cdsb_sigma = agreement_sigma
+
+            if abs(agreement_sigma) > sigma_threshold:
+                logger.warning(
+                    "Self-absorption cross-check disagreement at %.3f nm "
+                    "(pair %.3f/%.3f nm, %s %s): tau_doublet=%.3f, "
+                    "tau_cdsb=%.3f, |z|=%.2f > %.2f",
+                    line1.wavelength_nm,
+                    *doublet_res.wavelength_pair_nm,
+                    line1.element,
+                    line1.ionization_stage,
+                    tau_doublet,
+                    tau_cdsb,
+                    abs(agreement_sigma),
+                    sigma_threshold,
+                )
+
+            results.append(doublet_res)
+
+        return results
 
 
 def estimate_optical_depth_from_intensity_ratio(

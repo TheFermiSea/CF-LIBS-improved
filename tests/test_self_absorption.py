@@ -23,6 +23,9 @@ from cflibs.inversion.self_absorption import (
     COGLineData,
     COGRegime,
     MultipletLine,
+    DoubletRatioResult,
+    correct_via_doublet_ratio,
+    find_doublet_pairs,
 )
 from cflibs.inversion.boltzmann import LineObservation
 
@@ -1601,3 +1604,241 @@ class TestCOGTheoreticalCurve:
         # Should return valid results
         assert len(log_W) == len(log_tau)
         assert np.all(np.isfinite(log_W))
+
+
+# ==============================================================================
+# Doublet-Ratio Self-Absorption Correction (Pace et al. 2025)
+# ==============================================================================
+
+
+def _f_tau(tau: float) -> float:
+    """Reference escape factor for synthetic injection."""
+    if tau < 1e-10:
+        return 1.0
+    return (1.0 - np.exp(-tau)) / tau
+
+
+def _make_doublet(
+    lam1: float,
+    lam2: float,
+    A_ki: float,
+    g_k: int,
+    tau1_inj: float,
+    *,
+    element: str = "Fe",
+    stage: int = 1,
+    E_k_ev: float = 5.0,
+) -> tuple[LineObservation, LineObservation, float, float]:
+    """
+    Build a synthetic doublet pair from the same upper level with optical
+    depth tau1_inj injected into line 1 (and tau2_inj = tau1_inj / r_theory
+    into line 2). Returns (line1, line2, tau1_inj, tau2_inj).
+    """
+    r_theory = (lam1**3) / (lam2**3)  # g_k and A_ki cancel since they match
+    tau2_inj = tau1_inj / r_theory
+    # True intensities consistent with r_theory: I_true_1 / I_true_2 = r_theory
+    I_true_1, I_true_2 = r_theory, 1.0
+    I_meas_1 = I_true_1 * _f_tau(tau1_inj)
+    I_meas_2 = I_true_2 * _f_tau(tau2_inj)
+    line1 = LineObservation(
+        wavelength_nm=lam1,
+        intensity=I_meas_1,
+        intensity_uncertainty=0.01 * I_meas_1,
+        element=element,
+        ionization_stage=stage,
+        E_k_ev=E_k_ev,
+        g_k=g_k,
+        A_ki=A_ki,
+    )
+    line2 = LineObservation(
+        wavelength_nm=lam2,
+        intensity=I_meas_2,
+        intensity_uncertainty=0.01 * I_meas_2,
+        element=element,
+        ionization_stage=stage,
+        E_k_ev=E_k_ev,
+        g_k=g_k,
+        A_ki=A_ki,
+    )
+    return line1, line2, tau1_inj, tau2_inj
+
+
+class TestDoubletRatioCorrection:
+    """Tests for closed-form doublet-ratio self-absorption correction."""
+
+    @pytest.mark.parametrize("tau_inj", [0.1, 1.0, 3.0])
+    def test_doublet_correction_recovers_known_tau(self, tau_inj):
+        """Recover injected tau in [0.1, 5] within 15% from a noiseless doublet."""
+        line1, line2, tau1_truth, tau2_truth = _make_doublet(
+            lam1=400.0, lam2=500.0, A_ki=1e8, g_k=4, tau1_inj=tau_inj
+        )
+        result = correct_via_doublet_ratio(line1, line2)
+
+        assert isinstance(result, DoubletRatioResult)
+        # 15% recovery per the issue acceptance criterion
+        assert (
+            abs(result.tau_1 - tau1_truth) / tau1_truth < 0.15
+        ), f"tau_1 recovery failed: {result.tau_1} vs truth {tau1_truth}"
+        assert (
+            abs(result.tau_2 - tau2_truth) / tau2_truth < 0.15
+        ), f"tau_2 recovery failed: {result.tau_2} vs truth {tau2_truth}"
+        # Corrected intensities should approximate the true (optically thin)
+        # intensities used for injection
+        r_theory = (400.0**3) / (500.0**3)
+        assert result.i1_corrected == pytest.approx(r_theory, rel=0.15)
+        assert result.i2_corrected == pytest.approx(1.0, rel=0.15)
+        # Wavelength pair ordered by ascending wavelength
+        assert result.wavelength_pair_nm == (400.0, 500.0)
+        # No cross-check yet
+        assert result.agreement_with_cdsb_sigma is None
+
+    def test_doublet_correction_optically_thin_limit(self):
+        """If r_meas == r_theory, recovered tau collapses to brentq lower bound."""
+        line1, line2, _, _ = _make_doublet(lam1=400.0, lam2=500.0, A_ki=1e8, g_k=4, tau1_inj=1e-6)
+        # Force exactly thin: set r_meas = r_theory by reconstructing intensities
+        r_theory = (400.0**3) / (500.0**3)
+        line1 = LineObservation(
+            wavelength_nm=400.0,
+            intensity=r_theory,
+            intensity_uncertainty=0.01,
+            element="Fe",
+            ionization_stage=1,
+            E_k_ev=5.0,
+            g_k=4,
+            A_ki=1e8,
+        )
+        line2 = LineObservation(
+            wavelength_nm=500.0,
+            intensity=1.0,
+            intensity_uncertainty=0.01,
+            element="Fe",
+            ionization_stage=1,
+            E_k_ev=5.0,
+            g_k=4,
+            A_ki=1e8,
+        )
+        result = correct_via_doublet_ratio(line1, line2)
+
+        # tau_1 should sit at the brentq lower-bound (1e-4) within tolerance
+        assert result.tau_1 < 1e-3, f"Expected tau_1 ~ 1e-4, got {result.tau_1}"
+        # Corrections should be ~unity
+        assert result.f_tau_1 == pytest.approx(1.0, abs=1e-3)
+        assert result.i1_corrected == pytest.approx(line1.intensity, rel=1e-3)
+
+    def test_find_doublet_pairs_matches_upper_level(self):
+        """Mixed list with one matched pair + one mismatched returns only the match."""
+        # Pair A: same upper level (5.000 eV), same species
+        line_a1 = LineObservation(400.0, 1.0, 0.01, "Fe", 1, 5.0000, 4, 1e8)
+        line_a2 = LineObservation(500.0, 1.0, 0.01, "Fe", 1, 5.0005, 4, 1e8)
+        # Pair B: clearly different upper levels (5.0 vs 6.0 eV)
+        line_b = LineObservation(600.0, 1.0, 0.01, "Fe", 1, 6.0, 4, 1e8)
+
+        pairs = find_doublet_pairs([line_a1, line_a2, line_b])
+
+        assert len(pairs) == 1
+        wl_set = {pairs[0][0].wavelength_nm, pairs[0][1].wavelength_nm}
+        assert wl_set == {400.0, 500.0}
+        # Wavelength ordering: shorter first
+        assert pairs[0][0].wavelength_nm < pairs[0][1].wavelength_nm
+
+    def test_find_doublet_pairs_rejects_different_species(self):
+        """Same upper-level energy but different element returns no pairs."""
+        line_fe = LineObservation(400.0, 1.0, 0.01, "Fe", 1, 5.0, 4, 1e8)
+        line_cu = LineObservation(500.0, 1.0, 0.01, "Cu", 1, 5.0, 4, 1e8)
+
+        pairs = find_doublet_pairs([line_fe, line_cu])
+        assert pairs == []
+
+        # Also: same element, different ionization stage
+        line_fe2 = LineObservation(500.0, 1.0, 0.01, "Fe", 2, 5.0, 4, 1e8)
+        pairs2 = find_doublet_pairs([line_fe, line_fe2])
+        assert pairs2 == []
+
+    def test_doublet_correction_handles_zero_intensity(self):
+        """Zero intensity must raise ValueError (not silently NaN)."""
+        line_zero = LineObservation(400.0, 0.0, 0.0, "Fe", 1, 5.0, 4, 1e8)
+        line_ok = LineObservation(500.0, 1.0, 0.01, "Fe", 1, 5.0, 4, 1e8)
+
+        with pytest.raises(ValueError, match="positive intensities"):
+            correct_via_doublet_ratio(line_zero, line_ok)
+
+    def test_doublet_correction_rejects_different_upper_level(self):
+        """Lines from different upper levels must raise ValueError."""
+        l1 = LineObservation(400.0, 1.0, 0.01, "Fe", 1, 5.0, 4, 1e8)
+        l2 = LineObservation(500.0, 1.0, 0.01, "Fe", 1, 6.0, 4, 1e8)
+        with pytest.raises(ValueError, match="upper level"):
+            correct_via_doublet_ratio(l1, l2)
+
+    def test_cross_check_with_doublets_flags_disagreement(self, caplog):
+        """SelfAbsorptionCorrector.cross_check_with_doublets logs warning on disagreement."""
+        import logging
+
+        line1, line2, tau1_truth, _ = _make_doublet(
+            lam1=400.0, lam2=500.0, A_ki=1e8, g_k=4, tau1_inj=1.5
+        )
+        # Build a fake CDSB result that disagrees strongly (tau_cdsb = 0.1, truth = 1.5)
+        cdsb_corr = AbsorptionCorrectionResult(
+            original_intensity=line1.intensity,
+            corrected_intensity=line1.intensity / _f_tau(0.1),
+            optical_depth=0.1,
+            correction_factor=1.0 / _f_tau(0.1),
+            is_optically_thick=False,
+        )
+        cdsb_result = SelfAbsorptionResult(
+            corrected_observations=[line1, line2],
+            masked_observations=[],
+            corrections={400.0: cdsb_corr},
+            n_corrected=1,
+            n_masked=0,
+            max_optical_depth=0.1,
+        )
+
+        corrector = SelfAbsorptionCorrector()
+        with caplog.at_level(logging.WARNING, logger="inversion.self_absorption"):
+            results = corrector.cross_check_with_doublets(
+                [line1, line2], cdsb_result, sigma_threshold=2.0
+            )
+
+        assert len(results) == 1
+        assert results[0].agreement_with_cdsb_sigma is not None
+        # tau_doublet ~ 1.5, tau_cdsb = 0.1 => big positive z-score
+        assert results[0].agreement_with_cdsb_sigma > 2.0
+        # Warning emitted
+        assert any(
+            "disagreement" in rec.message.lower() for rec in caplog.records
+        ), f"Expected disagreement warning, got: {[r.message for r in caplog.records]}"
+
+    def test_cross_check_with_doublets_no_disagreement(self, caplog):
+        """When CDSB and doublet agree, no warning is logged."""
+        import logging
+
+        line1, line2, tau1_truth, _ = _make_doublet(
+            lam1=400.0, lam2=500.0, A_ki=1e8, g_k=4, tau1_inj=1.0
+        )
+        # CDSB tau very close to truth
+        cdsb_corr = AbsorptionCorrectionResult(
+            original_intensity=line1.intensity,
+            corrected_intensity=line1.intensity / _f_tau(1.0),
+            optical_depth=1.0,
+            correction_factor=1.0 / _f_tau(1.0),
+            is_optically_thick=False,
+        )
+        cdsb_result = SelfAbsorptionResult(
+            corrected_observations=[line1, line2],
+            masked_observations=[],
+            corrections={400.0: cdsb_corr},
+            n_corrected=1,
+            n_masked=0,
+            max_optical_depth=1.0,
+        )
+
+        corrector = SelfAbsorptionCorrector()
+        with caplog.at_level(logging.WARNING, logger="inversion.self_absorption"):
+            results = corrector.cross_check_with_doublets(
+                [line1, line2], cdsb_result, sigma_threshold=2.0
+            )
+
+        assert len(results) == 1
+        assert abs(results[0].agreement_with_cdsb_sigma) < 2.0
+        # No disagreement warning
+        assert not any("disagreement" in rec.message.lower() for rec in caplog.records)
