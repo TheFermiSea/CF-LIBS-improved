@@ -31,6 +31,40 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.state import SingleZoneLTEPlasma
 
 
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip tests marked `requires_*` when their optional dependency is missing.
+
+    The `requires_*` markers declared in pytest.ini are descriptive labels; they
+    do not skip on their own. This hook makes them functional: for each marker
+    listed below, attempt the import once during collection and attach a
+    `pytest.mark.skip` to every item carrying that marker when the import fails.
+
+    Closes CF-LIBS-improved-48c2 (bayesian tests crashed with ImportError instead
+    of skipping cleanly when NumPyro was not installed). Same pattern extends to
+    the other optional-dep markers in pytest.ini.
+    """
+    optional_deps = {
+        "requires_jax": ("jax", 'pip install ".[jax-cpu]"'),
+        "requires_bayesian": ("numpyro", 'pip install ".[bayesian]"'),
+        "requires_uncertainty": ("uncertainties", 'pip install ".[uncertainty]"'),
+    }
+    missing = {}
+    for marker_name, (module_name, hint) in optional_deps.items():
+        try:
+            __import__(module_name)
+        except ImportError:
+            missing[marker_name] = (module_name, hint)
+    if not missing:
+        return
+    for item in items:
+        for marker_name, (module_name, hint) in missing.items():
+            if item.get_closest_marker(marker_name) is not None:
+                item.add_marker(
+                    pytest.mark.skip(reason=f"{marker_name}: {module_name} not installed ({hint})")
+                )
+                break
+
+
 @pytest.fixture(scope="session")
 def production_db():
     """Session-scoped production database fixture.
