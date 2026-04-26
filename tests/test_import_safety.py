@@ -37,3 +37,22 @@ def test_hybrid_import_is_safe_when_optional_stack_fails():
     """Optional Bayesian/JAX failures must not prevent hybrid imports."""
     result = _run_import_snippet("from cflibs.inversion.hybrid import HybridInverter; print('ok')")
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_inversion_package_import_is_quiet_and_lazy():
+    """Top-level inversion import should not pull optional plotting/Bayesian stacks."""
+    result = _run_import_snippet("import cflibs.inversion; print('ok')")
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert result.stdout.strip() == "ok"
+    assert result.stderr == ""
+
+
+def test_inversion_lazy_export_still_resolves_core_symbol():
+    """Lazy package exports should preserve the public inversion API."""
+    result = _run_import_snippet(
+        "from cflibs.inversion import ClosureEquation; " "print(ClosureEquation.__name__)"
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert result.stdout.strip() == "ClosureEquation"
