@@ -338,12 +338,13 @@ Solves Saha-Boltzmann equations for LTE plasma.
 
 **Methods:**
 
-##### `__init__(atomic_db)`
+##### `__init__(atomic_db, ipd_model=None)`
 
 Initialize solver.
 
 **Parameters:**
-- `atomic_db` (AtomicDatabase): Atomic database
+- `atomic_db` (AtomicDataSource): Atomic database
+- `ipd_model` (Optional[IPDModel]): Ionization-potential depression model; `None` disables IPD corrections.
 
 ##### `solve_ionization_balance(element, T_e_eV, n_e_cm3, total_density_cm3)`
 
@@ -404,7 +405,7 @@ Calculate Gaussian line profile.
 - `wavelength` (float or array): Wavelength(s) in nm
 - `center` (float): Line center wavelength in nm
 - `sigma` (float): Standard deviation in nm
-- `amplitude` (float): Peak amplitude
+- `amplitude` (float): Integrated area (not peak height). Peak height equals `amplitude / (sigma * sqrt(2*pi))`.
 
 **Returns:** float or array - Profile value(s)
 
@@ -464,7 +465,7 @@ Forward model for computing synthetic LIBS spectra.
 
 **Methods:**
 
-##### `__init__(plasma, atomic_db, instrument, lambda_min, lambda_max, delta_lambda, path_length_m=0.01)`
+##### `__init__(plasma, atomic_db, instrument, lambda_min, lambda_max, delta_lambda, path_length_m=0.01, use_jax=False, broadening_mode=BroadeningMode.LEGACY)`
 
 Initialize spectrum model.
 
@@ -475,7 +476,9 @@ Initialize spectrum model.
 - `lambda_min` (float): Minimum wavelength in nm
 - `lambda_max` (float): Maximum wavelength in nm
 - `delta_lambda` (float): Wavelength step in nm
-- `path_length_m` (float): Plasma path length in meters
+- `path_length_m` (float): Plasma path length in meters (default 0.01 = 1 cm)
+- `use_jax` (bool): Enable JAX-accelerated evaluation path
+- `broadening_mode` (BroadeningMode): Line-broadening variant (LEGACY / RESOLVING_POWER). See `cflibs.radiation.BroadeningMode`.
 
 ##### `compute_spectrum()`
 
@@ -493,17 +496,36 @@ Compute synthetic spectrum.
 
 #### `InstrumentModel`
 
-Model for spectrometer instrument response.
+Model for spectrometer instrument response. Supports two resolution modes:
+
+- **Fixed-FWHM mode** (default): constant `resolution_fwhm_nm` across the spectrum.
+- **Resolving-power mode**: `resolution_fwhm_nm` scales with wavelength as `λ / R`. Enabled when `resolving_power` is set and positive.
 
 **Attributes:**
-- `resolution_fwhm_nm` (float): Instrument resolution (FWHM) in nm
-- `response_curve` (array, optional): Spectral response curve
-- `wavelength_calibration` (callable, optional): Pixel to wavelength function
+- `resolution_fwhm_nm` (float): Instrument FWHM in nm (fixed-FWHM mode).
+- `resolving_power` (Optional[float]): Dimensionless resolving power R = λ/Δλ. When set (> 0), resolution scales with wavelength and this overrides `resolution_fwhm_nm` at query time.
+- `response_curve` (array, optional): Spectral response curve.
+- `wavelength_calibration` (callable, optional): Pixel-to-wavelength function.
 
 **Properties:**
-- `resolution_sigma_nm` (float): Gaussian standard deviation
+- `resolution_sigma_nm` (float): Gaussian standard deviation derived from `resolution_fwhm_nm`.
+- `is_resolving_power_mode` (bool): True iff `resolving_power` is set and positive.
 
 **Methods:**
+
+##### `sigma_at_wavelength(wavelength_nm)`
+
+Return Gaussian σ (nm) at the given wavelength. In resolving-power mode, FWHM = `wavelength_nm / resolving_power`; otherwise returns the fixed-FWHM σ.
+
+##### `from_resolving_power(resolving_power, response_curve=None)` (classmethod)
+
+Construct an `InstrumentModel` in resolving-power mode.
+
+**Parameters:**
+- `resolving_power` (float): Dimensionless R, must be positive.
+- `response_curve` (Optional[array]): Optional spectral response curve.
+
+**Raises:** `ValueError` if `resolving_power <= 0`.
 
 ##### `from_file(config_path)`
 
@@ -620,6 +642,23 @@ Save spectrum to file.
 
 ---
 
+## Inversion Module
+
+The inversion module is organized into 6 physics-aligned sub-packages that reflect the CF-LIBS measurement→physics→inference pipeline:
+
+| Sub-package | Role |
+|-------------|------|
+| `cflibs.inversion.common` | Data structures (LineObservation, BoltzmannFitResult), PCA pipeline |
+| `cflibs.inversion.preprocess` | Signal processing (baseline, noise, deconvolution, wavelength calibration) |
+| `cflibs.inversion.physics` | Saha-Boltzmann solver, closure equations, CDSB, Stark broadening, line selection, uncertainties |
+| `cflibs.inversion.identify` | Element identification (ALIAS, comb, correlation, spectral NNLS, BIC selection) |
+| `cflibs.inversion.solve` | Plasma inference (iterative CF-LIBS, ILR solver, Bayesian MCMC, manifold coarse-to-fine) |
+| `cflibs.inversion.runtime` | Real-time: DAQ streaming, temporal gate optimization, hardware interface |
+
+**Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work via compatibility shims.
+
+**Physics-only constraint:** The shipped CF-LIBS algorithm is physics-only (no neural networks or trained models). See [Evolution_Framework.md](Evolution_Framework.md) for the full forbidden/allowed specification and enforcement.
+
 ## CLI Module
 
 ### Main (`cflibs.cli.main`)
@@ -677,8 +716,6 @@ All modules use descriptive error messages and proper exception types:
 
 ---
 
-## Version Information
+## Further Reading
 
-Current version: **0.1.0** (Phase 0 & Phase 1 Complete)
-
-For more information, see the [User Guide](User_Guide.md) and [Contributing Guide](../CONTRIBUTING.md).
+See the [User Guide](User_Guide.md), [Contributing Guide](../CONTRIBUTING.md), and [ROADMAP.md](../ROADMAP.md).

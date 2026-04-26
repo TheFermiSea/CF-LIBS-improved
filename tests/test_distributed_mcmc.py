@@ -120,10 +120,11 @@ class TestDistributedMCMCSamplerMocked:
         mock_fm = MagicMock()
         mock_model_fn = MagicMock()
 
-        with patch("cflibs.hpc.distributed_mcmc.HAS_MPI", True), patch(
-            "cflibs.hpc.distributed_mcmc.HAS_NUMPYRO", True
-        ), patch("cflibs.hpc.distributed_mcmc.HAS_JAX", True), patch(
-            "cflibs.hpc.distributed_mcmc.MPI", MagicMock()
+        with (
+            patch("cflibs.hpc.distributed_mcmc.HAS_MPI", True),
+            patch("cflibs.hpc.distributed_mcmc.HAS_NUMPYRO", True),
+            patch("cflibs.hpc.distributed_mcmc.HAS_JAX", True),
+            patch("cflibs.hpc.distributed_mcmc.MPI", MagicMock()),
         ):
 
             cfg = DistributedMCMCConfig(chains_per_rank=1, num_samples=100)

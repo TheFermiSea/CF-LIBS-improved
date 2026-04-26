@@ -267,3 +267,7 @@ python scripts/calibrate_alias.py --help
 7. ⏭️ **NEXT**: Close individual PRs after consolidation is merged
 
 ---
+
+## Archival Note
+
+This document was archived 2026-04-23. It documents the peak detection improvement consolidation process from February 2026. Refer to this for historical context on branch comparison methodology and consolidation rationale.

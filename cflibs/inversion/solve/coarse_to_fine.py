@@ -38,10 +38,13 @@ try:
     # jit, grad, value_and_grad available via jax module
     from jax.scipy.optimize import minimize as jax_minimize
 
+    from cflibs.inversion.physics.softmax_closure import softmax_closure
+
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
     jnp = None
+    softmax_closure = None  # type: ignore[assignment]
 
 
 def _normalize_optimizer_method(method: str) -> str:
@@ -206,10 +209,23 @@ def _pack_params(T_eV, n_e, concentrations, elements):
 
 
 def _unpack_params(x):
-    """Unpack optimization vector to (T_eV, n_e, concentrations)."""
+    """Unpack optimization vector to (T_eV, n_e, concentrations).
+
+    Parameters
+    ----------
+    x : array-like
+        Packed parameter vector: [log(T_eV), log(n_e), softmax_logits].
+        Concentrations are enforced on the simplex via softmax_closure
+        from cflibs.inversion.physics.softmax_closure.
+
+    Returns
+    -------
+    Tuple[float, float, array-like]
+        (T_eV, n_e, concentrations) where concentrations sum to 1.
+    """
     T_eV = jnp.exp(x[0])
     n_e = jnp.exp(x[1])
-    conc = jax.nn.softmax(x[2:])
+    conc = softmax_closure(x[2:])
     return T_eV, n_e, conc
 
 

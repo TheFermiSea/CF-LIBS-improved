@@ -17,7 +17,6 @@ from cflibs.inversion.closure import (
     ilr_inverse,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helmert basis tests
 # ---------------------------------------------------------------------------
@@ -265,9 +264,7 @@ class TestApplyILR:
 
         assert "Zn" not in result.concentrations
         assert len(result.concentrations) == 2
-        np.testing.assert_allclose(
-            sum(result.concentrations.values()), 1.0, atol=1e-14
-        )
+        np.testing.assert_allclose(sum(result.concentrations.values()), 1.0, atol=1e-14)
 
     def test_single_element_returns_empty(self):
         """ILR needs at least 2 elements."""

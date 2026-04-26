@@ -277,66 +277,6 @@ def _pipeline_hybrid_manifold(
 # E4: Speed-accuracy Pareto frontier pipelines
 # ---------------------------------------------------------------------------
 
-def _make_pls_pipeline(
-    n_components: int,
-    corpus: List[BenchmarkSpectrum],
-    train_fraction: float = 0.7,
-):
-    """Build a PLS pipeline trained on a subset of the corpus.
-
-    Returns a callable ``(wavelength, intensity, elements) -> dict``.
-    """
-    from cflibs.inversion.pls import PLSRegression
-
-    # Split corpus into train/test by index
-    rng = np.random.default_rng(123)
-    n = len(corpus)
-    n_train = max(2, int(n * train_fraction))
-    indices = rng.permutation(n)
-    train_idx = indices[:n_train]
-
-    # Collect all elements across the corpus
-    all_elements = sorted(
-        {el for spec in corpus for el in spec.ground_truth.get("concentrations", {})}
-    )
-
-    # Build training matrices
-    X_train = np.array([corpus[i].intensity for i in train_idx])
-    Y_train = np.array([
-        [corpus[i].ground_truth.get("concentrations", {}).get(el, 0.0) for el in all_elements]
-        for i in train_idx
-    ])
-
-    # Adjust n_components to be feasible
-    max_comp = min(n_components, n_train - 1, X_train.shape[1])
-    if max_comp < 1:
-        max_comp = 1
-
-    pls = PLSRegression(n_components=max_comp)
-    pls.fit(X_train, Y_train)
-
-    def pipeline(
-        wavelength: np.ndarray,
-        intensity: np.ndarray,
-        elements: List[str],
-    ) -> Dict[str, Any]:
-        X = intensity.reshape(1, -1)
-        result = pls.predict(X)
-        predictions = result.predictions[0]
-        # Clip negatives, re-normalize
-        predictions = np.clip(predictions, 0.0, None)
-        total = predictions.sum()
-        if total > 0:
-            predictions = predictions / total
-        else:
-            predictions = np.ones(len(all_elements)) / len(all_elements)
-        return {
-            "concentrations": {el: float(predictions[i]) for i, el in enumerate(all_elements)},
-        }
-
-    return pipeline
-
-
 def _pipeline_manifold_coarse(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -517,15 +457,8 @@ def run_e3(corpus: List[BenchmarkSpectrum]) -> BenchmarkReport:
 
 
 def run_e4(corpus: List[BenchmarkSpectrum]) -> BenchmarkReport:
-    """E4: Speed-accuracy Pareto frontier."""
+    """E4: Speed-accuracy Pareto frontier — physics-only variants."""
     harness = BenchmarkHarness()
-
-    # PLS pipelines (trained on corpus)
-    pls_fast = _make_pls_pipeline(n_components=3, corpus=corpus)
-    pls_accurate = _make_pls_pipeline(n_components=10, corpus=corpus)
-
-    harness.register_pipeline("PLS-fast", pls_fast)
-    harness.register_pipeline("PLS-accurate", pls_accurate)
     harness.register_pipeline("Manifold-coarse", _pipeline_manifold_coarse)
     harness.register_pipeline("Manifold-fine", _pipeline_manifold_fine)
     harness.register_pipeline("Full-physics", _pipeline_full_physics)

@@ -60,6 +60,7 @@ htmlcov/
 nist_*_cache/
 .uv-cache/
 uv.lock
+.claude/cache/
 
 # OS
 .DS_Store

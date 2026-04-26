@@ -357,6 +357,7 @@ def test_three_stage_ionization_coupling(atomic_db):
 
     from cflibs.plasma.saha_boltzmann import ionization_potential_lowering
     from cflibs.core.constants import EV_TO_K
+
     T_K = T_eV * EV_TO_K
     delta_chi = ionization_potential_lowering(n_e, T_K)
     eff_ip_I = max(ip_I - delta_chi, 0.0)

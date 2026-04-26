@@ -105,11 +105,11 @@ def _make_synthetic_atomic_data(
             ip_arr[i, j] = val
         # Simple partition functions: U ~ g0 * (1 + small T-dependent correction)
         # Using log(U) = a0 + a1*log(T) form
-        pf_arr[i, 0, 0] = np.log(9.0)   # Fe I g0 ~ 9, Cu I g0 ~ 2, etc.
-        pf_arr[i, 0, 1] = 0.05           # small T dependence
-        pf_arr[i, 1, 0] = np.log(10.0)   # ionized ground state
+        pf_arr[i, 0, 0] = np.log(9.0)  # Fe I g0 ~ 9, Cu I g0 ~ 2, etc.
+        pf_arr[i, 0, 1] = 0.05  # small T dependence
+        pf_arr[i, 1, 0] = np.log(10.0)  # ionized ground state
         pf_arr[i, 1, 1] = 0.03
-        pf_arr[i, 2, 0] = np.log(1.0)    # doubly ionized (placeholder)
+        pf_arr[i, 2, 0] = np.log(1.0)  # doubly ionized (placeholder)
 
     ad = BatchAtomicData(
         line_wavelengths=ad.line_wavelengths,
@@ -187,9 +187,7 @@ def test_batch_spectrum_shape(jax_synthetic_data):
     B = 8
     T_eV = jnp.ones(B, dtype=jnp.float64) * 1.0
     n_e = jnp.ones(B, dtype=jnp.float64) * 1e17
-    C = jnp.broadcast_to(
-        jnp.array([0.7, 0.2, 0.1], dtype=jnp.float64), (B, 3)
-    )
+    C = jnp.broadcast_to(jnp.array([0.7, 0.2, 0.1], dtype=jnp.float64), (B, 3))
 
     spectra = batch_forward_model(T_eV, n_e, C, wl_grid, ad)
     assert spectra.shape == (B, wl_grid.shape[0])
@@ -234,14 +232,12 @@ def test_batch_vs_sequential(jax_synthetic_data):
     mask = spectra_seq > jnp.max(spectra_seq) * 1e-10
     if jnp.any(mask):
         rel_err = jnp.max(
-            jnp.abs(spectra_batch - spectra_seq)
-            / jnp.maximum(jnp.abs(spectra_seq), 1e-300)
-            * mask
+            jnp.abs(spectra_batch - spectra_seq) / jnp.maximum(jnp.abs(spectra_seq), 1e-300) * mask
         )
         assert float(rel_err) < 1e-12, f"Max relative error: {float(rel_err)}"
-    assert float(max_abs_diff) < 1e-20 or float(
-        max_abs_diff / jnp.max(jnp.abs(spectra_seq))
-    ) < 1e-12
+    assert (
+        float(max_abs_diff) < 1e-20 or float(max_abs_diff / jnp.max(jnp.abs(spectra_seq))) < 1e-12
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -349,9 +345,7 @@ def test_multi_element(jax_synthetic_data):
     """3 elements produce peaks in distinct wavelength regions."""
     ad, _, wl_grid = jax_synthetic_data
     C = jnp.array([0.5, 0.3, 0.2], dtype=jnp.float64)
-    spectrum = single_spectrum_forward(
-        jnp.float64(1.0), jnp.float64(1e17), C, wl_grid, ad
-    )
+    spectrum = single_spectrum_forward(jnp.float64(1.0), jnp.float64(1e17), C, wl_grid, ad)
 
     # Fe lines near 260 nm, Cu near 325 nm, Si near 250 nm
     # Check that there is signal in multiple distinct regions
@@ -376,15 +370,11 @@ def test_zero_concentration(jax_synthetic_data):
 
     # Full spectrum with Cu
     C_full = jnp.array([0.5, 0.3, 0.2], dtype=jnp.float64)
-    spec_full = single_spectrum_forward(
-        jnp.float64(1.0), jnp.float64(1e17), C_full, wl_grid, ad
-    )
+    spec_full = single_spectrum_forward(jnp.float64(1.0), jnp.float64(1e17), C_full, wl_grid, ad)
 
     # Zero Cu
     C_nocu = jnp.array([0.6, 0.0, 0.4], dtype=jnp.float64)
-    spec_nocu = single_spectrum_forward(
-        jnp.float64(1.0), jnp.float64(1e17), C_nocu, wl_grid, ad
-    )
+    spec_nocu = single_spectrum_forward(jnp.float64(1.0), jnp.float64(1e17), C_nocu, wl_grid, ad)
 
     # Cu region should have signal in full but not in nocu
     cu_mask = (wl_grid >= 320) & (wl_grid <= 345)
@@ -392,9 +382,9 @@ def test_zero_concentration(jax_synthetic_data):
     cu_nocu = float(jnp.max(spec_nocu[cu_mask]))
     assert cu_full > 0, "Cu signal missing from full spectrum"
     # Cu contribution should be essentially zero (only Fe/Si wing leakage)
-    assert cu_nocu < cu_full * 0.01, (
-        f"Cu signal not removed: full={cu_full:.2e}, nocu={cu_nocu:.2e}"
-    )
+    assert (
+        cu_nocu < cu_full * 0.01
+    ), f"Cu signal not removed: full={cu_full:.2e}, nocu={cu_nocu:.2e}"
 
 
 # ---------------------------------------------------------------------------
@@ -408,20 +398,16 @@ def test_temperature_dependence(jax_synthetic_data):
     ad, _, wl_grid = jax_synthetic_data
     C = jnp.array([0.7, 0.2, 0.1], dtype=jnp.float64)
 
-    spec_low = single_spectrum_forward(
-        jnp.float64(0.7), jnp.float64(1e17), C, wl_grid, ad
-    )
-    spec_high = single_spectrum_forward(
-        jnp.float64(1.3), jnp.float64(1e17), C, wl_grid, ad
-    )
+    spec_low = single_spectrum_forward(jnp.float64(0.7), jnp.float64(1e17), C, wl_grid, ad)
+    spec_high = single_spectrum_forward(jnp.float64(1.3), jnp.float64(1e17), C, wl_grid, ad)
 
     # Higher temperature should produce stronger total emission
     # (more upper-level population for same density)
     total_low = float(jnp.sum(spec_low))
     total_high = float(jnp.sum(spec_high))
-    assert total_high > total_low, (
-        f"Higher T should give more emission: low={total_low:.2e}, high={total_high:.2e}"
-    )
+    assert (
+        total_high > total_low
+    ), f"Higher T should give more emission: low={total_low:.2e}, high={total_high:.2e}"
 
 
 # ---------------------------------------------------------------------------
@@ -435,12 +421,8 @@ def test_density_dependence(jax_synthetic_data):
     ad, _, wl_grid = jax_synthetic_data
     C = jnp.array([0.7, 0.2, 0.1], dtype=jnp.float64)
 
-    spec_low_ne = single_spectrum_forward(
-        jnp.float64(1.0), jnp.float64(1e15), C, wl_grid, ad
-    )
-    spec_high_ne = single_spectrum_forward(
-        jnp.float64(1.0), jnp.float64(1e18), C, wl_grid, ad
-    )
+    spec_low_ne = single_spectrum_forward(jnp.float64(1.0), jnp.float64(1e15), C, wl_grid, ad)
+    spec_high_ne = single_spectrum_forward(jnp.float64(1.0), jnp.float64(1e18), C, wl_grid, ad)
 
     # Higher n_e means broader lines, so peak should be lower relative to
     # total (more spread out)
@@ -454,9 +436,9 @@ def test_density_dependence(jax_synthetic_data):
     ratio_high = peak_high / max(total_high, 1e-300)
 
     # Broader lines -> lower peak-to-total ratio
-    assert ratio_high < ratio_low, (
-        f"Higher n_e should broaden lines: ratio_low={ratio_low:.4e}, ratio_high={ratio_high:.4e}"
-    )
+    assert (
+        ratio_high < ratio_low
+    ), f"Higher n_e should broaden lines: ratio_low={ratio_low:.4e}, ratio_high={ratio_high:.4e}"
 
 
 # ---------------------------------------------------------------------------
@@ -474,9 +456,7 @@ def test_batch_size_invariance(jax_synthetic_data):
     C = jnp.array([0.7, 0.2, 0.1], dtype=jnp.float64)
 
     # B=1
-    spec_1 = batch_forward_model(
-        T[None], ne[None], C[None], wl_grid, ad
-    )
+    spec_1 = batch_forward_model(T[None], ne[None], C[None], wl_grid, ad)
 
     # B=64 (all same parameters)
     spec_64 = batch_forward_model(

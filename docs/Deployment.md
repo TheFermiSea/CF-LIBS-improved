@@ -1,5 +1,7 @@
 # CF-LIBS Deployment Guide
 
+The shipped CF-LIBS algorithm is physics-only; see [Evolution_Framework.md](Evolution_Framework.md) for the full constraint and enforcement spec (Ruff TID251 + AST scanner).
+
 ## Environment Setup
 
 CF-LIBS uses `uv` for fast, reliable Python environment management.

@@ -13,7 +13,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 DB_PATH = Path(__file__).parent.parent / "libs_production.db"
 
 

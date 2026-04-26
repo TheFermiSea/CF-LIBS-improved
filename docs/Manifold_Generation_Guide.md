@@ -274,7 +274,6 @@ pip install jax[cuda] -f https://storage.googleapis.com/jax-releases/jax_cuda_re
 
 ## See Also
 
-- [High-Throughput Framework](../HIGH_THROUGHPUT_FRAMEWORK.md) - Architecture overview
-- [Development Guide](../DEVELOPMENT_GUIDE_V1.md) - Industrial requirements
-- [API Reference](API_Reference.md) - ManifoldGenerator API
+- [API Reference](API_Reference.md) — `ManifoldGenerator` API
+- [archive/legacy/HIGH_THROUGHPUT_FRAMEWORK.md](archive/legacy/HIGH_THROUGHPUT_FRAMEWORK.md) — historical architecture notes (superseded)
 

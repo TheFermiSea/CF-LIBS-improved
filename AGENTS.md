@@ -2,6 +2,7 @@
 
 ## Project Structure & Module Organization
 - `cflibs/` contains the library source (core physics, atomic data, plasma state, radiation, instrument models, CLI).
+  - `cflibs/evolution/` — LLM-driven algorithm optimization tooling (hierarchical-ES, blocklist scanner). The only place under `cflibs/` where ML libraries are permitted.
 - `tests/` holds pytest suites and fixtures.
 - `docs/` contains user-facing documentation and API references.
 - `examples/` has runnable configs and sample workflows.
@@ -10,7 +11,7 @@
 ## Build, Test, and Development Commands
 - `just setup` creates a Python 3.12 `uv` environment with the baseline dev toolchain.
 - `just setup-codex` creates a Python 3.12 `uv` environment with Codex-friendly local extras (`dev`, `jax-cpu`, `hdf5`).
-- `just check` runs the stable local quality gate (`ruff check`, `mypy`, fast pytest).
+- `just check` runs the stable local quality gate (`ruff check` including TID251 physics-only enforcement, `mypy`, fast pytest).
 - `just test-fast` runs a CPU-only fast pytest slice that skips DB, Bayesian, Rust, JAX, and slow tests.
 - `just typecheck-ty` runs `ty` in exploratory mode; it is not yet a required gate.
 - `uv venv --python 3.12` creates a virtual environment with `uv`.
@@ -57,6 +58,23 @@
 - Use type hints for public functions and NumPy-style docstrings for public APIs.
 - Test files: `test_*.py`; test functions: `test_*`.
 - Prefer descriptive, physics-aligned naming (e.g., `saha_equation_ratio`, `compute_spectrum`).
+
+### Physics-Only Constraint
+
+The shipped CF-LIBS algorithm is physics-only — no neural networks, no trained models. Full forbidden-library spec, enforcement mechanism (Ruff TID251 + AST scanner), and rationale live in [`docs/Evolution_Framework.md`](docs/Evolution_Framework.md). ML is allowed only in `cflibs/evolution/` (optimization-process tooling).
+
+### Code Intelligence (Serena MCP)
+
+Serena MCP is the default for symbol-aware navigation and editing on this Python codebase. Search ladder:
+
+1. Symbol lookup → `find_symbol`, `find_referencing_symbols`, `get_symbols_overview`. Default `relative_path="cflibs/"`.
+2. Intent search → `colgrep` for semantic discovery without a known symbol name.
+3. Pattern search → `search_for_pattern` (regex with relative-path scoping).
+4. Bash grep → only for non-Python files (YAML, TOML, Rust, Markdown).
+
+For edits to a whole function/method/class body, prefer `replace_symbol_body` over Read+Edit. For renames, use `rename_symbol` (LSP-coordinated; follows the inversion shim re-exports correctly). For caller analysis before refactor, run `find_referencing_symbols` first. Persist non-obvious project facts via `write_memory`/`edit_memory` (see `.serena/memories/` for the seeded set).
+
+Full guidance: see [`CLAUDE.md` § Code Intelligence](CLAUDE.md#code-intelligence-use-serena-first).
 
 ## Testing Guidelines
 - Framework: pytest with optional `pytest-cov` and `pytest-benchmark`.

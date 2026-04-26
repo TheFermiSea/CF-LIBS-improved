@@ -115,17 +115,6 @@ from cflibs.inversion.pca import (
     denoise_spectra,
     explained_variance_curve,
 )
-from cflibs.inversion.pls import (
-    PLSAlgorithm,
-    PreprocessingMethod,
-    PLSComponents,
-    PLSResult,
-    CrossValidationResult,
-    PLSRegression,
-    PLSCrossValidator,
-    PLSCalibrationModel,
-    build_pls_calibration,
-)
 from cflibs.inversion.temporal import (
     PlasmaPhase,
     TemporalGateConfig,
@@ -141,30 +130,6 @@ from cflibs.inversion.temporal import (
     TimeResolvedCFLIBSSolver,
     create_default_evolution_model,
     recommend_gate_timing,
-)
-from cflibs.inversion.interpretable import (
-    FeatureType,
-    SpectralFeature,
-    FeatureExtractionResult,
-    SpectralExplanation,
-    ValidationResult,
-    PhysicsGuidedFeatureExtractor,
-    SpectralExplainer,
-    ExplanationValidator,
-)
-from cflibs.inversion.transfer import (
-    DomainAdapter,
-    DomainAdaptationMethod,
-    DomainAdaptationResult,
-    compute_mmd,
-    adapt_domains,
-    CalibrationTransfer,
-    CalibrationMethod,
-    TransferResult,
-    transfer_calibration,
-    FineTuner,
-    FineTuneResult,
-    TransferLearningPipeline,
 )
 from cflibs.inversion.streaming import (
     AnalysisMode,
@@ -196,8 +161,6 @@ HAS_PCA_JAX = False
 HAS_BAYESIAN = False
 HAS_NESTED = False
 HAS_UNCERTAINTIES = False
-HAS_INTERPRETABLE_ML = False
-HAS_PINN = False
 
 # --- Optional: Hybrid inversion (requires JAX) ---
 try:
@@ -287,37 +250,6 @@ try:
 except ImportError:
     pass
 
-# --- Optional: Interpretable ML (requires sklearn) ---
-try:
-    from cflibs.inversion.interpretable import InterpretableModel  # noqa: F401
-
-    HAS_INTERPRETABLE_ML = True
-except Exception as exc:
-    # Interpretable ML components are optional
-    _log_optional_import_failure("interpretable_ml", exc)
-
-# --- Optional: Physics-Informed Neural Networks (requires JAX + Equinox + Optax) ---
-try:
-    from cflibs.inversion.pinn import (
-        ConstraintType,  # noqa: F401
-        PhysicsConstraintConfig,  # noqa: F401
-        PINNConfig,  # noqa: F401
-        PINNResult,  # noqa: F401
-        DifferentiableForwardModel,  # noqa: F401
-        PINNInverter,  # noqa: F401
-        boltzmann_residual,  # noqa: F401
-        saha_residual,  # noqa: F401
-        closure_residual,  # noqa: F401
-        positivity_penalty,  # noqa: F401
-        range_penalty,  # noqa: F401
-        create_pinn_from_database,  # noqa: F401
-        generate_synthetic_training_data,  # noqa: F401
-    )
-
-    HAS_PINN = True
-except Exception as exc:
-    # PINN components are optional
-    _log_optional_import_failure("pinn", exc)
 # --- Public API ---
 __all__ = [
     # Boltzmann plotting
@@ -417,16 +349,6 @@ __all__ = [
     "fit_pca",
     "denoise_spectra",
     "explained_variance_curve",
-    # PLS
-    "PLSAlgorithm",
-    "PreprocessingMethod",
-    "PLSComponents",
-    "PLSResult",
-    "CrossValidationResult",
-    "PLSRegression",
-    "PLSCrossValidator",
-    "PLSCalibrationModel",
-    "build_pls_calibration",
     # Temporal dynamics
     "PlasmaPhase",
     "TemporalGateConfig",
@@ -442,28 +364,6 @@ __all__ = [
     "TimeResolvedCFLIBSSolver",
     "create_default_evolution_model",
     "recommend_gate_timing",
-    # Transfer learning
-    "DomainAdapter",
-    "DomainAdaptationMethod",
-    "DomainAdaptationResult",
-    "compute_mmd",
-    "adapt_domains",
-    "CalibrationTransfer",
-    "CalibrationMethod",
-    "TransferResult",
-    "transfer_calibration",
-    "FineTuner",
-    "FineTuneResult",
-    "TransferLearningPipeline",
-    # Interpretable ML
-    "FeatureType",
-    "SpectralFeature",
-    "FeatureExtractionResult",
-    "SpectralExplanation",
-    "ValidationResult",
-    "PhysicsGuidedFeatureExtractor",
-    "SpectralExplainer",
-    "ExplanationValidator",
     # Real-time streaming
     "AnalysisMode",
     "StreamingConfig",
@@ -485,7 +385,6 @@ __all__ = [
     "HAS_NESTED",
     "HAS_UNCERTAINTIES",
     "HAS_PCA_JAX",
-    "HAS_PINN",
 ]
 
 # Extend __all__ with optional exports
@@ -549,28 +448,5 @@ if HAS_PCA_JAX:
             "pca_transform_jax",
             "pca_inverse_transform_jax",
             "pca_reconstruction_error_jax",
-        ]
-    )
-
-if HAS_INTERPRETABLE_ML:
-    __all__.extend(["InterpretableModel", "HAS_INTERPRETABLE_ML"])
-
-if HAS_PINN:
-    __all__.extend(
-        [
-            "ConstraintType",
-            "PhysicsConstraintConfig",
-            "PINNConfig",
-            "PINNResult",
-            "DifferentiableForwardModel",
-            "PINNInverter",
-            "boltzmann_residual",
-            "saha_residual",
-            "closure_residual",
-            "positivity_penalty",
-            "range_penalty",
-            "create_pinn_from_database",
-            "generate_synthetic_training_data",
-            "HAS_PINN",
         ]
     )

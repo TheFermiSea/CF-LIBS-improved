@@ -16,7 +16,8 @@ Key features:
 The optimization parameterization:
 - Temperature: log(T_eV) for positivity and scale invariance
 - Electron density: log10(n_e) for wide dynamic range
-- Concentrations: softmax(theta) to enforce sum-to-one simplex constraint
+- Concentrations: softmax(theta) via cflibs.inversion.physics.softmax_closure
+  to enforce sum-to-one simplex constraint
 
 References:
 - Tognoni et al., "CF-LIBS: State of the art" (2010) - limitations of sequential analysis
@@ -42,10 +43,13 @@ try:
     from jax import jit
     from jax.scipy.optimize import minimize as jax_minimize
 
+    from cflibs.inversion.physics.softmax_closure import softmax_closure
+
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
     jnp = None
+    softmax_closure = None  # type: ignore[assignment]
 
     def jit(f):
         return f
@@ -543,9 +547,7 @@ class JointOptimizer:
 
         T_eV = jnp.exp(log_T)
         n_e = jnp.power(10.0, log_ne)
-
-        # Softmax ensures concentrations sum to 1
-        concentrations = jax.nn.softmax(theta)
+        concentrations = softmax_closure(theta)
 
         return T_eV, n_e, concentrations
 
@@ -739,6 +741,7 @@ class JointOptimizer:
                     obj, x_free_0, method="bfgs", options={"maxiter": self.max_iterations}
                 )
                 return res.fun
+
         else:
             raise ValueError(f"Unknown parameter: {parameter}")
 

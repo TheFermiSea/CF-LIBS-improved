@@ -1882,12 +1882,15 @@ class ALIASIdentifier:
         l1_ratio: float = 0.9,
     ) -> Tuple[np.ndarray, float]:
         """
-        Sparse NNLS via ElasticNet with non-negativity constraint.
+        Sparse NNLS via L-BFGS-B constrained optimization.
 
         Standard NNLS distributes signal across correlated endmembers,
         producing many small non-zero coefficients for absent elements
-        (Black et al. 2024). The L1 penalty enforces sparsity, driving
+        (Black & Burnside 2024). The L1 penalty enforces sparsity, driving
         truly absent elements to zero.
+
+        Physics-only implementation: minimizes the elastic-net objective
+        with non-negativity via L-BFGS-B bounds rather than sklearn.
 
         Parameters
         ----------
@@ -1911,26 +1914,45 @@ class ALIASIdentifier:
             return np.zeros(n_cands), 0.0
 
         try:
-            from sklearn.linear_model import ElasticNet
+            # Physics-only non-negative elastic-net via L-BFGS-B. Mirrors
+            # sklearn.linear_model.ElasticNet(positive=True, ...) but without
+            # importing an ML library (see CF-LIBS-improved-3fy3): minimize
+            #   0.5 * ||A_norm x - y||^2
+            #   + alpha * ( l1_ratio * sum(x) + 0.5 * (1-l1_ratio) * x^T x )
+            # subject to x >= 0. Under x >= 0 the L1 term reduces to a smooth
+            # linear sum(x), so the full objective is differentiable and
+            # L-BFGS-B handles the non-negativity via bounds.
+            from scipy.optimize import minimize
 
-            # Normalize columns for stable regularization
             col_norms = np.linalg.norm(A, axis=0)
             col_norms[col_norms == 0] = 1.0
             A_norm = A / col_norms
 
-            model = ElasticNet(
-                alpha=alpha,
-                l1_ratio=l1_ratio,
-                positive=True,
-                fit_intercept=False,
-                max_iter=2000,
+            l1_weight = float(alpha * l1_ratio)
+            l2_weight = float(alpha * (1.0 - l1_ratio))
+
+            def _loss_grad(x: np.ndarray) -> Tuple[float, np.ndarray]:
+                r = A_norm @ x - peak_intensities
+                loss = (
+                    0.5 * float(r @ r)
+                    + l1_weight * float(np.sum(x))
+                    + 0.5 * l2_weight * float(x @ x)
+                )
+                grad = A_norm.T @ r + l1_weight + l2_weight * x
+                return loss, grad
+
+            result = minimize(
+                _loss_grad,
+                x0=np.zeros(n_cands),
+                jac=True,
+                bounds=[(0.0, None)] * n_cands,
+                method="L-BFGS-B",
+                options={"maxiter": 2000},
             )
-            model.fit(A_norm, peak_intensities)
-            # Rescale coefficients back
-            sparse_c = model.coef_ / col_norms
+            sparse_c = np.asarray(result.x) / col_norms
             residual = float(np.linalg.norm(peak_intensities - A @ sparse_c))
         except Exception:
-            # Fallback to standard NNLS
+            # Fallback to standard NNLS (no sparsity regularization).
             from scipy.optimize import nnls as _nnls
 
             sparse_c, residual = _nnls(A, peak_intensities)

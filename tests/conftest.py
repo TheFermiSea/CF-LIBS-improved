@@ -31,6 +31,74 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.state import SingleZoneLTEPlasma
 
 
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip tests marked ``requires_*`` when their optional dependency is missing
+    or broken.
+
+    The ``requires_*`` markers declared in pytest.ini are descriptive labels; they
+    do not skip on their own. This hook makes them functional: for each marker
+    listed below, probe the dependency once during collection and attach a
+    ``pytest.mark.skip`` to every item carrying that marker when the probe fails.
+
+    The probe has two parts: (1) the bare module imports, and (2) any cflibs
+    flag the production code uses to decide whether the dependency is usable.
+    Both must succeed — on Python 3.12 we have seen environments where the
+    top-level ``import numpyro`` succeeds but cflibs's deeper
+    ``from numpyro.infer import MCMC, NUTS, init_to_uniform`` block raises
+    ``ImportError`` (so ``cflibs.inversion.solve.bayesian.HAS_NUMPYRO`` is
+    ``False``). A bare-module-only probe would pass and the test would then
+    crash with cflibs's own ``ImportError("NumPyro required")`` instead of
+    being skipped.
+
+    Catches any ``Exception`` (not just ``ImportError``) because real-world
+    failure modes for optional native deps include broken-wheel
+    ``RuntimeError``s, partial installs that surface as ``AttributeError``,
+    and ``OSError`` from missing shared libraries. A failed probe must never
+    abort collection.
+
+    Closes CF-LIBS-improved-48c2.
+    """
+    # marker_name -> (probes, hint)
+    # probes is a list of (module_name, attr) pairs:
+    #   - if attr is None, just import the module
+    #   - if attr is a string, also assert getattr(module, attr) is truthy
+    optional_deps: dict[str, tuple[list[tuple[str, str | None]], str]] = {
+        "requires_jax": ([("jax", None)], 'pip install ".[jax-cpu]"'),
+        "requires_bayesian": (
+            [
+                ("numpyro", None),
+                ("cflibs.inversion.solve.bayesian", "HAS_NUMPYRO"),
+            ],
+            'pip install ".[bayesian]"',
+        ),
+        "requires_uncertainty": ([("uncertainties", None)], 'pip install ".[uncertainty]"'),
+    }
+    missing: dict[str, tuple[str, str, str]] = {}
+    for marker_name, (probes, hint) in optional_deps.items():
+        for module_name, attr in probes:
+            try:
+                module = __import__(module_name, fromlist=["__all__"])
+                if attr is not None and not getattr(module, attr, False):
+                    missing[marker_name] = (module_name, hint, f"{attr}=False")
+                    break
+            except Exception as exc:  # noqa: BLE001 — see docstring rationale
+                missing[marker_name] = (module_name, hint, type(exc).__name__)
+                break
+    if not missing:
+        return
+    for item in items:
+        for marker_name, (module_name, hint, exc_name) in missing.items():
+            if item.get_closest_marker(marker_name) is not None:
+                item.add_marker(
+                    pytest.mark.skip(
+                        reason=(
+                            f"{marker_name}: {module_name} unavailable " f"({exc_name}); {hint}"
+                        )
+                    )
+                )
+                break
+
+
 @pytest.fixture(scope="session")
 def production_db():
     """Session-scoped production database fixture.

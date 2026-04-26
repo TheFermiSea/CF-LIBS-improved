@@ -1144,53 +1144,6 @@ def _fit_hybrid_manifold_pipeline(
     return predictor
 
 
-def _fit_pls_pipeline(
-    _context: UnifiedBenchmarkContext,
-    train_spectra: Sequence[BenchmarkSpectrum],
-    config: Dict[str, Any],
-) -> Callable[
-    [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
-]:
-    from cflibs.inversion.pls import PLSRegression
-
-    train_spectra = [spec for spec in train_spectra if spec.truth_type != TruthType.BLIND]
-    if len(train_spectra) < 2:
-        raise ValueError("Need at least two supervised spectra to train PLS")
-
-    elements = sorted({el for spec in train_spectra for el in spec.true_composition.keys()})
-    X_train = np.array([spec.intensity for spec in train_spectra], dtype=float)
-    Y_train = np.array(
-        [[spec.true_composition.get(el, 0.0) for el in elements] for spec in train_spectra],
-        dtype=float,
-    )
-    max_components = min(
-        int(config["n_components"]), X_train.shape[0] - 1, X_train.shape[1], len(elements)
-    )
-    max_components = max(max_components, 1)
-    pls = PLSRegression(n_components=max_components)
-    pls.fit(X_train, Y_train)
-
-    def predictor(
-        spectrum: BenchmarkSpectrum,
-        candidate_elements: Sequence[str],
-        _id_result: Optional[ElementIdentificationResult],
-    ) -> Dict[str, Any]:
-        result = pls.predict(np.asarray(spectrum.intensity, dtype=float).reshape(1, -1))
-        prediction = np.clip(result.predictions[0], 0.0, None)
-        concentrations = {el: float(prediction[idx]) for idx, el in enumerate(elements)}
-        if candidate_elements:
-            candidate_set = set(candidate_elements)
-            concentrations = {
-                el: value if el in candidate_set else 0.0 for el, value in concentrations.items()
-            }
-        total = sum(concentrations.values())
-        if total > 0:
-            concentrations = {el: value / total for el, value in concentrations.items()}
-        return {"concentrations": concentrations}
-
-    return predictor
-
-
 def build_composition_workflow_registry(quick: bool = False) -> Dict[str, CompositionWorkflowSpec]:
     from cflibs.inversion.boltzmann import FitMethod
 
@@ -1217,13 +1170,6 @@ def build_composition_workflow_registry(quick: bool = False) -> Dict[str, Compos
         ),
         "hybrid_manifold": CompositionWorkflowSpec(
             "hybrid_manifold", [{}], _fit_hybrid_manifold_pipeline, _config_name
-        ),
-        "pls": CompositionWorkflowSpec(
-            "pls",
-            [{"n_components": 3}, {"n_components": 10}] if not quick else [{"n_components": 3}],
-            _fit_pls_pipeline,
-            _config_name,
-            requires_training=True,
         ),
     }
 

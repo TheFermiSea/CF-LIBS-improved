@@ -70,7 +70,9 @@ def load_config(config_path: Union[str, Path]) -> Dict[str, Any]:
 
             config = json.load(f)
         else:
-            raise ValueError(f"Unsupported config file format: {suffix} (use .yaml, .yml, or .json)")
+            raise ValueError(
+                f"Unsupported config file format: {suffix} (use .yaml, .yml, or .json)"
+            )
 
     logger.info(f"Loaded configuration from {config_path}")
     return config

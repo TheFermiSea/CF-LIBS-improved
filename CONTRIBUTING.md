@@ -2,19 +2,6 @@
 
 Thank you for your interest in contributing to CF-LIBS! This guide will help you get started.
 
-## Table of Contents
-
-1. [Code of Conduct](#code-of-conduct)
-2. [Getting Started](#getting-started)
-3. [Development Setup](#development-setup)
-4. [Coding Standards](#coding-standards)
-5. [Testing](#testing)
-6. [Documentation](#documentation)
-7. [Submitting Changes](#submitting-changes)
-8. [Areas for Contribution](#areas-for-contribution)
-
----
-
 ## Code of Conduct
 
 CF-LIBS is committed to providing a welcoming and inclusive environment. Please be respectful and constructive in all interactions.
@@ -40,26 +27,35 @@ CF-LIBS is committed to providing a welcoming and inclusive environment. Please 
 
 ### Install in Development Mode
 
+CF-LIBS uses `uv` for environment management and `setuptools` for packaging.
+
+**Base installation (all platforms):**
 ```bash
-just setup
+uv venv --python 3.12
+pip install -e ".[dev]"
 ```
 
-This installs:
-- The package in editable mode
-- Development dependencies (pytest, black, mypy, ruff, ty)
-- A consistent command surface through `just`
+**Apple Silicon (Metal backend):**
+```bash
+uv pip install -e ".[local]"
+```
+
+**NVIDIA GPU cluster deployment:**
+```bash
+uv pip install -e ".[cluster]"
+```
 
 ### Verify Setup
 
 ```bash
-# Stable local quality gate
-just check
+# Run quality gates (ruff, black, mypy, pytest)
+ruff check cflibs/ tests/
+black --check cflibs/
+mypy cflibs/
+pytest tests/ -v
 
-# Full pytest suite
-just test
-
-# Experimental next-generation type check
-just typecheck-ty
+# Force CPU backend (useful for CI/testing)
+JAX_PLATFORMS=cpu pytest tests/ -v
 ```
 
 ---
@@ -73,41 +69,24 @@ just typecheck-ty
 - **Type hints**: Use type hints for all public functions
 - **Docstrings**: Use NumPy-style docstrings for all public functions/classes
 
+### Physics-Only Constraint
+
+The shipped CF-LIBS algorithm is physics-only. See [`docs/Evolution_Framework.md`](docs/Evolution_Framework.md) for the forbidden-library list, allowed primitives, and enforcement (Ruff TID251 + AST scanner). Before submitting a PR touching `cflibs/` production code, run `ruff check cflibs/` or `python -m cflibs.evolution <your_file.py>` to verify no banned imports slipped in.
+
 ### Code Formatting
 
-We currently use `black` for repo formatting commands:
+Use Black for formatting:
 
 ```bash
-just fmt
+black cflibs/
 ```
 
-We are evaluating Ruff's formatter for a future repo-wide migration:
+### Linting and Type Checking
 
 ```bash
-just fmt-ruff-check
-```
-
-### Linting
-
-We use `ruff` for the stable lint gate:
-
-```bash
-just lint
-just lint-fix  # Auto-fix issues
-```
-
-### Type Checking
-
-We use `mypy` for the stable type-check gate:
-
-```bash
-just typecheck
-```
-
-We are also evaluating `ty` in advisory mode:
-
-```bash
-just typecheck-ty
+ruff check cflibs/ tests/       # Linting (includes TID251 physics-only check)
+ruff check --fix cflibs/        # Auto-fix issues
+mypy cflibs/                    # Type checking
 ```
 
 ### Example Code Style
@@ -185,7 +164,7 @@ def test_temperature_conversion():
 
 ```bash
 # Run all tests
-just test
+pytest tests/ -v
 
 # Run specific test file
 pytest tests/test_constants.py -v
@@ -193,8 +172,11 @@ pytest tests/test_constants.py -v
 # Run with coverage
 pytest tests/ --cov=cflibs --cov-report=html
 
-# Run the fast local slice used by `just check`
-just test-fast
+# Skip slow and database-dependent tests
+pytest tests/ -m "not slow and not requires_db"
+
+# Force CPU backend (for reproducibility)
+JAX_PLATFORMS=cpu pytest tests/ -v
 ```
 
 ### Test Coverage
@@ -249,20 +231,7 @@ def function_name(param1: Type, param2: Type) -> ReturnType:
     """
 ```
 
-### Documentation Files
-
-- **API Reference**: `docs/API_Reference.md` - Auto-generated or manually maintained
-- **User Guide**: `docs/User_Guide.md` - User-facing documentation
-- **Contributing**: `CONTRIBUTING.md` - This file
-- **README**: `README.md` - Project overview
-
-### Updating Documentation
-
-When adding new features:
-1. Update relevant docstrings
-2. Add examples to User Guide if user-facing
-3. Update API Reference
-4. Add/update README if major feature
+When adding a user-facing feature: update docstrings, extend `docs/User_Guide.md` with an example, and link it from `docs/API_Reference.md`. For internal changes, NumPy-style docstrings are sufficient.
 
 ---
 
@@ -270,15 +239,22 @@ When adding new features:
 
 ### Commit Messages
 
-Use clear, descriptive commit messages:
+Use short imperative summaries (50 chars or less):
 
 ```
-Short summary (50 chars or less)
+feat: Add hierarchical element selection
+fix: Correct Voigt profile gradient calculation
+docs: Update Bayesian inference user guide
+perf: Optimize element identification with caching
+refactor: Reorganize inversion subpackages
+```
 
-Longer explanation if needed. Explain what and why, not how.
+Optional body for context:
+```
+Brief explanation if the change needs justification.
 - What changed
 - Why it changed
-- Any breaking changes
+- Any breaking changes or important notes
 ```
 
 ### Pull Request Process
@@ -298,8 +274,8 @@ Longer explanation if needed. Explain what and why, not how.
 
 3. **Ensure code quality**:
    ```bash
-   black cflibs/
-   ruff check cflibs/
+   ruff check cflibs/ tests/
+   black --check cflibs/
    mypy cflibs/
    ```
 
@@ -427,7 +403,3 @@ def saha_equation_ratio(
 ## License
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
-
----
-
-Thank you for contributing to CF-LIBS! 🎉
