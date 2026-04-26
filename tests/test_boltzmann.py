@@ -464,3 +464,116 @@ class TestEdgeCases:
             result = fitter.fit(obs)
             assert np.isfinite(result.temperature_K)
             assert result.temperature_K > 0
+
+
+# ============================================================================
+# Tests for inverse-variance weighting by NIST A_ki uncertainty
+# ============================================================================
+
+
+def _build_ladder(
+    T_K: float,
+    aki_uncertainties: list[float | None],
+    intensity_noise: float = 0.005,
+    intensity_rel_err: float = 0.01,
+    bias_indices: tuple[int, ...] = (),
+    bias_offset: float = 0.0,
+    seed: int = 7,
+) -> list[LineObservation]:
+    """Generate a clean Boltzmann ladder with per-line aki_uncertainty.
+
+    Selected indices in ``bias_indices`` get ``bias_offset`` added to y to mimic
+    a noisy/bad atomic-data line (e.g. a NIST grade-D transition with the wrong
+    Aki). Sigma-clipping is intentionally toggled off in callers (large outlier
+    sigma) so we isolate the weighting behaviour.
+    """
+    rng = np.random.default_rng(seed)
+    T_eV = T_K * KB_EV
+    energies = np.linspace(2.0, 6.0, len(aki_uncertainties))
+    intercept_const = 10.0
+    obs = []
+    for i, (Ek, unc) in enumerate(zip(energies, aki_uncertainties)):
+        expected_y = np.log(intercept_const) - Ek / T_eV
+        y = expected_y + rng.normal(0, intensity_noise)
+        if i in bias_indices:
+            y += bias_offset
+        intensity = float(np.exp(y))
+        obs.append(
+            LineObservation(
+                wavelength_nm=1.0,
+                intensity=intensity,
+                intensity_uncertainty=intensity * intensity_rel_err,
+                element="Fe",
+                ionization_stage=1,
+                E_k_ev=float(Ek),
+                g_k=1,
+                A_ki=1.0,
+                aki_uncertainty=unc,
+            )
+        )
+    return obs
+
+
+def test_aki_weighting_downweights_noisy_grade_lines():
+    """Lines tagged with large sigma(A_ki) and a y-bias must lose influence.
+
+    Without weighting the bias drags the slope; with weighting the high-sigma
+    points contribute negligibly so T stays close to the truth.
+    """
+    T_target = 9000.0
+    n_good = 12
+    aki_uncs = [0.05] * n_good + [0.80, 0.80, 0.80]  # 3 grade-D lines
+    bias_indices = (n_good, n_good + 1, n_good + 2)
+    obs = _build_ladder(
+        T_target,
+        aki_uncs,
+        intensity_noise=0.005,
+        bias_indices=bias_indices,
+        bias_offset=1.5,  # big bias on the grade-D lines
+        seed=11,
+    )
+
+    # Disable sigma-clipping so the test isolates the weighting effect.
+    fitter = BoltzmannPlotFitter(outlier_sigma=1e6, max_iterations=1)
+
+    weighted = fitter.fit(obs, aki_uncertainty_weighting=True)
+    unweighted = fitter.fit(obs, aki_uncertainty_weighting=False)
+
+    rel_err_weighted = abs(weighted.temperature_K - T_target) / T_target
+    rel_err_unweighted = abs(unweighted.temperature_K - T_target) / T_target
+
+    assert rel_err_weighted < 0.05, (
+        f"Weighted fit drifted: T={weighted.temperature_K:.0f} K "
+        f"(rel err {rel_err_weighted:.3f})"
+    )
+    # And weighting must do strictly better than no weighting on this dataset.
+    assert rel_err_weighted < rel_err_unweighted
+
+
+def test_aki_weighting_no_change_with_uniform_sigma():
+    """Uniform sigma(A_ki) must yield the same T as the unweighted fit."""
+    T_target = 8500.0
+    aki_uncs = [0.10] * 15  # all the same
+    obs = _build_ladder(T_target, aki_uncs, intensity_noise=0.01, seed=23)
+    fitter = BoltzmannPlotFitter(outlier_sigma=1e6, max_iterations=1)
+
+    weighted = fitter.fit(obs, aki_uncertainty_weighting=True)
+    unweighted = fitter.fit(obs, aki_uncertainty_weighting=False)
+
+    # Inverse-variance LSQ with the same sigma added in quadrature scales every
+    # weight by the same factor, leaving slope/intercept identical.
+    assert weighted.temperature_K == pytest.approx(unweighted.temperature_K, rel=1e-10)
+    assert weighted.slope == pytest.approx(unweighted.slope, rel=1e-10)
+
+
+def test_aki_weighting_handles_missing_uncertainty():
+    """Half the lines have aki_uncertainty=None — fit must still produce sensible T."""
+    T_target = 7500.0
+    aki_uncs: list[float | None] = [0.05, None, 0.10, None, 0.05, None, 0.10, None, 0.05, None]
+    obs = _build_ladder(T_target, aki_uncs, intensity_noise=0.005, seed=37)
+
+    fitter = BoltzmannPlotFitter(outlier_sigma=1e6, max_iterations=1)
+    result = fitter.fit(obs, aki_uncertainty_weighting=True)
+
+    assert np.isfinite(result.temperature_K)
+    assert abs(result.temperature_K - T_target) / T_target < 0.05

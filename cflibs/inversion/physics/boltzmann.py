@@ -98,7 +98,11 @@ class BoltzmannPlotFitter:
         self.ransac_max_trials = ransac_max_trials
         self.huber_epsilon = huber_epsilon
 
-    def fit(self, observations: list[LineObservation]) -> BoltzmannFitResult:
+    def fit(
+        self,
+        observations: list[LineObservation],
+        aki_uncertainty_weighting: bool = True,
+    ) -> BoltzmannFitResult:
         """
         Perform robust linear regression on Boltzmann plot data.
 
@@ -110,6 +114,15 @@ class BoltzmannPlotFitter:
         ----------
         observations : list[LineObservation]
             List of line observations
+        aki_uncertainty_weighting : bool, optional
+            When True (default), inflate each per-line y-uncertainty by the
+            atomic-data contribution sigma_y(A_ki) = sigma(A_ki)/A_ki, combined
+            in quadrature with the intensity term. This down-weights NIST C/D
+            graded transitions in the inverse-variance LSQ so that poorly
+            characterized lines do not dominate the fitted slope. Lines whose
+            ``aki_uncertainty`` is ``None`` keep their original intensity-only
+            sigma_y. Set to False to reproduce the legacy intensity-only fit
+            exactly.
 
         Returns
         -------
@@ -127,7 +140,7 @@ class BoltzmannPlotFitter:
         # Prepare arrays
         x_all = np.array([obs.E_k_ev for obs in observations])
         y_all = np.array([obs.y_value for obs in observations])
-        y_err_all = np.array([obs.y_uncertainty for obs in observations])
+        y_err_all = self._build_sigma_y(observations, aki_uncertainty_weighting)
 
         # Handle cases where y calculation failed (e.g. negative intensity)
         valid_mask = np.isfinite(y_all)
@@ -436,6 +449,43 @@ class BoltzmannPlotFitter:
             n_iterations,
             covariance_matrix,
         )
+
+    def _build_sigma_y(
+        self,
+        observations: list[LineObservation],
+        aki_uncertainty_weighting: bool,
+    ) -> np.ndarray:
+        """Compute per-line sigma_y, optionally folding in NIST A_ki uncertainty.
+
+        For y = ln(I * lambda / (g * A_ki)) the linearized error propagation gives
+        sigma_y^2 = (sigma_I / I)^2 + (sigma(A_ki) / A_ki)^2 (errors in lambda and
+        g_k are negligible). When ``aki_uncertainty_weighting`` is False, only the
+        intensity term is retained so the fitter reproduces the legacy result.
+
+        Lines with ``aki_uncertainty is None`` contribute zero atomic-data variance
+        (i.e. fall back to the intensity-only sigma); the count of such lines is
+        logged at debug level so users can see how much of the fit is unweighted
+        by atomic-data quality.
+        """
+        sigma_intensity = np.array([obs.y_uncertainty for obs in observations])
+        if not aki_uncertainty_weighting:
+            return sigma_intensity
+
+        sigma_aki = np.zeros(len(observations))
+        n_missing = 0
+        for i, obs in enumerate(observations):
+            unc = obs.aki_uncertainty
+            if unc is None or not np.isfinite(unc) or unc <= 0:
+                n_missing += 1
+                continue
+            sigma_aki[i] = unc
+        if n_missing:
+            logger.debug(
+                "%d/%d lines lack aki_uncertainty; using intensity-only sigma_y for those.",
+                n_missing,
+                len(observations),
+            )
+        return np.sqrt(sigma_intensity**2 + sigma_aki**2)
 
     def _compute_weights(self, y_err: np.ndarray) -> np.ndarray:
         """Compute regression weights from measurement uncertainties."""
