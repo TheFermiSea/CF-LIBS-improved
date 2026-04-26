@@ -37,30 +37,53 @@ def pytest_collection_modifyitems(config, items):
 
     The ``requires_*`` markers declared in pytest.ini are descriptive labels; they
     do not skip on their own. This hook makes them functional: for each marker
-    listed below, attempt the import once during collection and attach a
-    ``pytest.mark.skip`` to every item carrying that marker when the import
-    fails or is otherwise unusable.
+    listed below, probe the dependency once during collection and attach a
+    ``pytest.mark.skip`` to every item carrying that marker when the probe fails.
 
-    Catches any ``Exception`` (not just ``ImportError``) because real-world failure
-    modes for optional native deps include broken-wheel ``RuntimeError``s, partial
-    installs that surface as ``AttributeError``, and ``OSError`` from missing
-    shared libraries. A failed probe must never abort collection.
+    The probe has two parts: (1) the bare module imports, and (2) any cflibs
+    flag the production code uses to decide whether the dependency is usable.
+    Both must succeed — on Python 3.12 we have seen environments where the
+    top-level ``import numpyro`` succeeds but cflibs's deeper
+    ``from numpyro.infer import MCMC, NUTS, init_to_uniform`` block raises
+    ``ImportError`` (so ``cflibs.inversion.solve.bayesian.HAS_NUMPYRO`` is
+    ``False``). A bare-module-only probe would pass and the test would then
+    crash with cflibs's own ``ImportError("NumPyro required")`` instead of
+    being skipped.
 
-    Closes CF-LIBS-improved-48c2 (Bayesian tests crashed with ImportError instead
-    of skipping cleanly when NumPyro was not installed). Same pattern extends to
-    the other optional-dep markers in pytest.ini.
+    Catches any ``Exception`` (not just ``ImportError``) because real-world
+    failure modes for optional native deps include broken-wheel
+    ``RuntimeError``s, partial installs that surface as ``AttributeError``,
+    and ``OSError`` from missing shared libraries. A failed probe must never
+    abort collection.
+
+    Closes CF-LIBS-improved-48c2.
     """
-    optional_deps = {
-        "requires_jax": ("jax", 'pip install ".[jax-cpu]"'),
-        "requires_bayesian": ("numpyro", 'pip install ".[bayesian]"'),
-        "requires_uncertainty": ("uncertainties", 'pip install ".[uncertainty]"'),
+    # marker_name -> (probes, hint)
+    # probes is a list of (module_name, attr) pairs:
+    #   - if attr is None, just import the module
+    #   - if attr is a string, also assert getattr(module, attr) is truthy
+    optional_deps: dict[str, tuple[list[tuple[str, str | None]], str]] = {
+        "requires_jax": ([("jax", None)], 'pip install ".[jax-cpu]"'),
+        "requires_bayesian": (
+            [
+                ("numpyro", None),
+                ("cflibs.inversion.solve.bayesian", "HAS_NUMPYRO"),
+            ],
+            'pip install ".[bayesian]"',
+        ),
+        "requires_uncertainty": ([("uncertainties", None)], 'pip install ".[uncertainty]"'),
     }
-    missing = {}
-    for marker_name, (module_name, hint) in optional_deps.items():
-        try:
-            __import__(module_name)
-        except Exception as exc:  # noqa: BLE001 — see docstring rationale
-            missing[marker_name] = (module_name, hint, type(exc).__name__)
+    missing: dict[str, tuple[str, str, str]] = {}
+    for marker_name, (probes, hint) in optional_deps.items():
+        for module_name, attr in probes:
+            try:
+                module = __import__(module_name, fromlist=["__all__"])
+                if attr is not None and not getattr(module, attr, False):
+                    missing[marker_name] = (module_name, hint, f"{attr}=False")
+                    break
+            except Exception as exc:  # noqa: BLE001 — see docstring rationale
+                missing[marker_name] = (module_name, hint, type(exc).__name__)
+                break
     if not missing:
         return
     for item in items:
