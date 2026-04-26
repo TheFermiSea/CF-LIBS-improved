@@ -499,6 +499,7 @@ def test_solver_quality_metrics(tmp_path):
 # DB-dependent tests (skip if production DB not available)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.requires_db
 @pytest.mark.xfail(

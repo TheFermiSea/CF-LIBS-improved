@@ -95,7 +95,7 @@ class TestPathLengthScaling:
         )
         _, I1 = SpectrumModel(**common, path_length_m=0.01).compute_spectrum()
         _, I2 = SpectrumModel(**common, path_length_m=0.02).compute_spectrum()
-        
+
         # Intensity must be monotonically increasing with length
         assert np.all(I2 >= I1)
         # Intensity must be bounded by optically thin limit (2 * I1)

@@ -117,9 +117,7 @@ def _assert_group_integrity(dataset: BenchmarkDataset, splits) -> None:
         train_groups = {
             dataset.get_spectrum(spectrum_id).group_id for spectrum_id in split.train_ids
         }
-        test_groups = {
-            dataset.get_spectrum(spectrum_id).group_id for spectrum_id in split.test_ids
-        }
+        test_groups = {dataset.get_spectrum(spectrum_id).group_id for spectrum_id in split.test_ids}
         assert train_groups.isdisjoint(test_groups)
         covered_test_ids.update(split.test_ids)
 

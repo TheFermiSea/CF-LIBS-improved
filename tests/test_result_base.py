@@ -74,18 +74,24 @@ def test_result_table_mixin_concentration_table():
     # We pass it explicitly since `_format_concentration_table` expects conc_mean and conc_std as parameters.
     # Note: the mixin docs say "Classes using this mixin should have attributes: concentrations_mean, concentrations_std"
     # Although `_format_concentration_table` itself currently takes them as arguments, we fulfill the contract.
-    lines = dummy._format_concentration_table(dummy.concentrations_mean, dummy.concentrations_std, conc_ci)
+    lines = dummy._format_concentration_table(
+        dummy.concentrations_mean, dummy.concentrations_std, conc_ci
+    )
 
     assert len(lines) > 0
     assert any("Fe" in line and "0.5000" in line for line in lines)
     assert any("Ni" in line and "0.5000" in line for line in lines)
 
     # Test without CI
-    lines_no_ci = dummy._format_concentration_table(dummy.concentrations_mean, dummy.concentrations_std, include_ci=False)
+    lines_no_ci = dummy._format_concentration_table(
+        dummy.concentrations_mean, dummy.concentrations_std, include_ci=False
+    )
     assert not any("[0.4" in line for line in lines_no_ci)
 
     # Test without passing conc_ci but with include_ci=True
-    lines_auto_ci = dummy._format_concentration_table(dummy.concentrations_mean, dummy.concentrations_std, include_ci=True)
+    lines_auto_ci = dummy._format_concentration_table(
+        dummy.concentrations_mean, dummy.concentrations_std, include_ci=True
+    )
     assert not any("[0.4" in line for line in lines_auto_ci)
 
 

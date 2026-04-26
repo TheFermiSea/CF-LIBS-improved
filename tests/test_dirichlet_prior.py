@@ -13,7 +13,6 @@ import numpy as np
 import pytest
 from scipy import stats
 
-
 pytestmark = pytest.mark.unit
 
 

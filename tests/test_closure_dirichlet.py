@@ -14,10 +14,10 @@ from cflibs.inversion.closure import (
     DirichletResidualResult,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_intercepts_and_pfs(element_fractions, F=100.0):
     """
@@ -40,6 +40,7 @@ def _make_intercepts_and_pfs(element_fractions, F=100.0):
 # Tests: no missing elements  (residual should be ~0)
 # ---------------------------------------------------------------------------
 
+
 class TestNoMissingElements:
     """When all mass is accounted for, residual should be zero or negligible."""
 
@@ -48,9 +49,7 @@ class TestNoMissingElements:
         fracs = {"Fe": 0.7, "Cu": 0.2, "Al": 0.1}
         intercepts, pfs = _make_intercepts_and_pfs(fracs)
 
-        res = ClosureEquation.apply_dirichlet_residual(
-            intercepts, pfs, mode="simple"
-        )
+        res = ClosureEquation.apply_dirichlet_residual(intercepts, pfs, mode="simple")
 
         assert isinstance(res, DirichletResidualResult)
         assert res.mode == "simple"
@@ -64,9 +63,7 @@ class TestNoMissingElements:
         fracs = {"Fe": 0.7, "Cu": 0.2, "Al": 0.1}
         intercepts, pfs = _make_intercepts_and_pfs(fracs, F=100.0)
 
-        res = ClosureEquation.apply_dirichlet_residual(
-            intercepts, pfs, mode="dirichlet"
-        )
+        res = ClosureEquation.apply_dirichlet_residual(intercepts, pfs, mode="dirichlet")
 
         assert res.mode == "dirichlet"
         # With raw_sum = 100, residual should be small
@@ -79,6 +76,7 @@ class TestNoMissingElements:
 # ---------------------------------------------------------------------------
 # Tests: missing elements  (the core use case)
 # ---------------------------------------------------------------------------
+
 
 class TestMissingElements:
     """When elements are missing, residual should capture the deficit."""
@@ -156,6 +154,7 @@ class TestMissingElements:
 # Tests: simple vs dirichlet mode comparison
 # ---------------------------------------------------------------------------
 
+
 class TestModeComparison:
     """Compare simple and dirichlet modes produce reasonable results."""
 
@@ -164,9 +163,7 @@ class TestModeComparison:
         intercepts, pfs = _make_intercepts_and_pfs(detected, F=1.0)
 
         for m in ("simple", "dirichlet"):
-            res = ClosureEquation.apply_dirichlet_residual(
-                intercepts, pfs, mode=m
-            )
+            res = ClosureEquation.apply_dirichlet_residual(intercepts, pfs, mode=m)
             assert res.residual_fraction >= 0.0
             for c in res.concentrations.values():
                 assert c >= 0.0
@@ -194,9 +191,7 @@ class TestModeComparison:
         intercepts, pfs = _make_intercepts_and_pfs(detected, F=1.0)
 
         for m in ("simple", "dirichlet"):
-            res = ClosureEquation.apply_dirichlet_residual(
-                intercepts, pfs, mode=m
-            )
+            res = ClosureEquation.apply_dirichlet_residual(intercepts, pfs, mode=m)
             # Fe/Cu ratio should be 2.0 regardless of mode
             ratio = res.concentrations["Fe"] / res.concentrations["Cu"]
             assert ratio == pytest.approx(2.0, rel=1e-6)
@@ -205,6 +200,7 @@ class TestModeComparison:
 # ---------------------------------------------------------------------------
 # Tests: edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     """Edge case handling."""
@@ -225,9 +221,7 @@ class TestEdgeCases:
         fracs = {"Fe": 0.5, "Cu": 0.3, "Al": 0.2}
         intercepts, pfs = _make_intercepts_and_pfs(fracs, F=1.0)
 
-        res_simple = ClosureEquation.apply_dirichlet_residual(
-            intercepts, pfs, mode="simple"
-        )
+        res_simple = ClosureEquation.apply_dirichlet_residual(intercepts, pfs, mode="simple")
         assert res_simple.residual_fraction == pytest.approx(0.0, abs=1e-10)
 
     def test_very_large_residual(self):
@@ -257,9 +251,7 @@ class TestEdgeCases:
         intercepts = {"Fe": 1.0, "Unknown": 2.0}
         partition_funcs = {"Fe": 10.0}  # No entry for Unknown
 
-        res = ClosureEquation.apply_dirichlet_residual(
-            intercepts, partition_funcs, mode="simple"
-        )
+        res = ClosureEquation.apply_dirichlet_residual(intercepts, partition_funcs, mode="simple")
 
         assert "Unknown" not in res.concentrations
         assert "Fe" in res.concentrations
@@ -289,6 +281,7 @@ class TestEdgeCases:
 # Tests: diagnostic output
 # ---------------------------------------------------------------------------
 
+
 class TestDiagnostics:
     """Verify diagnostic fields are populated correctly."""
 
@@ -296,9 +289,7 @@ class TestDiagnostics:
         detected = {"Fe": 0.6, "Cu": 0.2}
         intercepts, pfs = _make_intercepts_and_pfs(detected, F=1.0)
 
-        res = ClosureEquation.apply_dirichlet_residual(
-            intercepts, pfs, mode="simple"
-        )
+        res = ClosureEquation.apply_dirichlet_residual(intercepts, pfs, mode="simple")
 
         # raw_sum = 0.8, so diagnostic = |0.8 - 1| = 0.2
         assert res.closure_diagnostic == pytest.approx(0.2, rel=1e-6)
@@ -307,9 +298,7 @@ class TestDiagnostics:
         detected = {"Fe": 0.7, "Cu": 0.3}
         intercepts, pfs = _make_intercepts_and_pfs(detected, F=1.0)
 
-        res = ClosureEquation.apply_dirichlet_residual(
-            intercepts, pfs, mode="simple"
-        )
+        res = ClosureEquation.apply_dirichlet_residual(intercepts, pfs, mode="simple")
 
         assert res.raw_closure_sum == pytest.approx(1.0, rel=1e-6)
 
@@ -318,9 +307,7 @@ class TestDiagnostics:
         detected = {"Fe": 0.6, "Cu": 0.2}
         intercepts, pfs = _make_intercepts_and_pfs(detected, F=1.0)
 
-        res = ClosureEquation.apply_dirichlet_residual(
-            intercepts, pfs, mode="simple"
-        )
+        res = ClosureEquation.apply_dirichlet_residual(intercepts, pfs, mode="simple")
 
         assert res.experimental_factor == pytest.approx(res.raw_closure_sum, rel=1e-10)
 
@@ -328,6 +315,7 @@ class TestDiagnostics:
 # ---------------------------------------------------------------------------
 # Tests: threshold behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestThreshold:
     """Verify residual_threshold gating in simple mode."""
