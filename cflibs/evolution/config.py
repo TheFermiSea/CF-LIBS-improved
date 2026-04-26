@@ -13,6 +13,7 @@ evolution search mutates per batch.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal, Mapping
@@ -42,7 +43,9 @@ class EvolutionDriverConfig:
 
     # Blocklist enforcement mode. "hard" sets fitness = -inf on any
     # violation; "warn" logs but allows evaluation (useful during
-    # scanner development — never in production runs).
+    # scanner development — never in production runs). Consumed by the
+    # evolution driver, not by `evaluator.scan_source` /
+    # `evaluator.assert_physics_only` (those always raise on violations).
     enforcement_mode: EnforcementMode = "hard"
 
     # Per-dataset fitness weights. Keyed by dataset name so new matrices
@@ -87,8 +90,8 @@ class EvolutionDriverConfig:
             )
         if not self.fitness_weights:
             raise ValueError("fitness_weights must be non-empty")
-        if any(w < 0 for w in self.fitness_weights.values()):
-            raise ValueError("fitness_weights must all be >= 0")
+        if any(not math.isfinite(w) or w < 0 for w in self.fitness_weights.values()):
+            raise ValueError("fitness_weights must all be finite and >= 0 (no NaN/inf)")
         # Honour frozen=True for the mapping contents too: dict.__setitem__
         # would otherwise slip past the dataclass-level immutability.
         object.__setattr__(self, "fitness_weights", MappingProxyType(dict(self.fitness_weights)))

@@ -8,7 +8,7 @@ CF-LIBS is a physics-based Calibration-Free Laser-Induced Breakdown Spectroscopy
 
 ## Physics-Only Constraint
 
-**HARD CONSTRAINT:** The shipped CF-LIBS algorithm must not import or use: `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, `jax.nn`, or `jax.experimental.stax`. Machine learning is allowed **only** in `cflibs/evolution/` (LLM-driven algorithm optimization tooling) and `cflibs/experimental/ml/` (deletion-candidate quarantine). Enforcement happens at two levels:
+**HARD CONSTRAINT:** The shipped CF-LIBS algorithm must not import or use: `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, `jax.nn`, or `jax.experimental.stax`. Machine learning is allowed **only** in `cflibs/evolution/` (LLM-driven algorithm optimization tooling). Enforcement happens at two levels:
 
 1. **Ruff TID251 static rule** — `pyproject.toml` bans these APIs from the shipped codebase via `[tool.ruff.lint.flake8-tidy-imports.banned-api]`.
 2. **AST blocklist scanner** — `cflibs/evolution/evaluator.py` parses evolved candidate code and rejects any that violates the ban before physics evaluation (fitness = -inf).
@@ -164,7 +164,6 @@ The Serena MCP server is the **default code-intelligence tool** for this project
 | `cflibs/pds/` | ChemCam/SuperCam planetary data system interface |
 | `cflibs/hpc/` | Cluster utilities, SLURM integration |
 | `cflibs/evolution/` | Hierarchical-ES driver + physics-only blocklist scanner for LLM-driven algorithm evolution. Optimization-process tooling only (see docs/Evolution_Framework.md). |
-| `cflibs/experimental/ml/` | Quarantined ML modules: PINN, PLS, transfer learning, interpretable ML (deletion candidates) |
 | `native/cflibs-core/` | Rust computational core: comb matching, partition functions |
 | `native/rust-plugin/` | Rust plugin interface for DAQ |
 

@@ -2,8 +2,7 @@
 
 ## Project Structure & Module Organization
 - `cflibs/` contains the library source (core physics, atomic data, plasma state, radiation, instrument models, CLI).
-  - `cflibs/evolution/` — LLM-driven algorithm optimization tooling (hierarchical-ES, blocklist scanner); ML allowed here only.
-  - `cflibs/experimental/ml/` — Quarantined ML research code (deletion candidates); ML allowed here only.
+  - `cflibs/evolution/` — LLM-driven algorithm optimization tooling (hierarchical-ES, blocklist scanner). The only place under `cflibs/` where ML libraries are permitted.
 - `tests/` holds pytest suites and fixtures.
 - `docs/` contains user-facing documentation and API references.
 - `examples/` has runnable configs and sample workflows.
@@ -62,7 +61,7 @@
 
 ### Physics-Only Constraint
 
-The shipped CF-LIBS algorithm is physics-only — no neural networks, no trained models. Full forbidden-library spec, enforcement mechanism (Ruff TID251 + AST scanner), and rationale live in [`docs/Evolution_Framework.md`](docs/Evolution_Framework.md). ML is allowed only in `cflibs/evolution/` and `cflibs/experimental/ml/`.
+The shipped CF-LIBS algorithm is physics-only — no neural networks, no trained models. Full forbidden-library spec, enforcement mechanism (Ruff TID251 + AST scanner), and rationale live in [`docs/Evolution_Framework.md`](docs/Evolution_Framework.md). ML is allowed only in `cflibs/evolution/` (optimization-process tooling).
 
 ### Code Intelligence (Serena MCP)
 

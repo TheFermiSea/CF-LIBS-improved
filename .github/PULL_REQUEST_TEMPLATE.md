@@ -1,126 +1,45 @@
-# CF-LIBS: Phase 0 & Phase 1 Implementation + Echellogram Processing
+## Summary
 
-## Overview
+<!-- 1-3 bullets on what changed and why. -->
 
-This PR implements the foundational infrastructure for **CF-LIBS** (Computational Framework for Laser-Induced Breakdown Spectroscopy), establishing a production-grade Python library for forward modeling, inversion, and analysis of LIBS plasmas.
+## Linked issues
 
-**Deliverables:**
-- Phase 0: Complete package scaffold with core utilities
-- Phase 1: Minimal Viable Physics Engine for forward modeling  
-- Echellogram Processing: Upgraded 2D spectral image extraction
+<!-- Beads IDs (e.g. CF-LIBS-improved-3fy3) and/or GitHub issues. -->
 
-## What's New
+## Type of change
 
-### Phase 0: Scaffold & Core Utilities
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to change)
+- [ ] Refactor (no functional change)
+- [ ] Documentation update
+- [ ] Test or CI infrastructure
 
-- **Package Structure**: Complete `cflibs` namespace with 8 submodules
-- **Core Modules**: Constants, units, config, logging systems
-- **CLI**: Command-line interface for forward modeling and inversion
-- **Packaging**: `setup.py`, `pyproject.toml` with proper dependencies
-- **Testing**: Pytest infrastructure with initial test suite
+## Physics-only constraint
 
-### Phase 1: Minimal Viable Physics Engine
+<!-- Required for any change to cflibs/ outside cflibs/evolution/. -->
 
-- **Atomic Data**: Structures and SQLite database interface
-- **Plasma Physics**: `SingleZoneLTEPlasma` and `SahaBoltzmannSolver`
-- **Radiation**: Line emissivity calculations with Gaussian broadening
-- **Forward Model**: `SpectrumModel` API integrating all components
-- **CLI Integration**: Fully functional `cflibs forward` command
+- [ ] No new imports of `sklearn`, `torch`, `tensorflow`, `keras`, `flax`, `equinox`, `transformers`, `jax.nn`, or `jax.experimental.stax` in shipped code.
+- [ ] If `cflibs/evolution/` is touched, candidates produced by it still pass `cflibs.evolution.evaluator.assert_physics_only`.
+- [ ] If new ML imports were unavoidable, this PR also adds the corresponding `[tool.ruff.lint.per-file-ignores]` entry with a tracking bead-ID comment.
 
-### Echellogram Processing Upgrade
+## Test plan
 
-- **Enhanced Extractor**: Upgraded from standalone script to integrated module
-- **Type Hints**: Full type annotation throughout
-- **Error Handling**: Proper exceptions and validation
-- **Documentation**: Comprehensive guide with examples
+<!-- Concrete commands run, results observed. Be specific about what was tested AND what was not. -->
 
-## Key Features
-
-### Forward Modeling
-```python
-from cflibs.plasma import SingleZoneLTEPlasma
-from cflibs.atomic import AtomicDatabase
-from cflibs.radiation import SpectrumModel
-
-# Generate synthetic LIBS spectrum
-plasma = SingleZoneLTEPlasma(T_e=10000, n_e=1e17, species={"Fe": 1e15})
-model = SpectrumModel(plasma, atomic_db, instrument, 200, 800, 0.01)
-wavelength, intensity = model.compute_spectrum()
-```
-
-### CLI Usage
-```bash
-cflibs forward examples/config_example.yaml --output spectrum.csv
-```
-
-### Echellogram Extraction
-```python
-from cflibs.instrument import EchelleExtractor
-extractor = EchelleExtractor('calibration.json')
-wavelength, intensity = extractor.extract_spectrum(image_2d)
-```
-
-## Statistics
-
-- **~3000 lines** of Python code
-- **25 Python modules** across 8 packages
-- **4 test files** with comprehensive coverage
-- **4 example files** (configs + scripts)
-- **7 documentation files**
-
-## Testing
-
-- Test infrastructure with pytest
-- Unit tests for core modules
-- Echellogram extraction tests
-- All tests passing
-- No linter errors
+- [ ] `ruff check cflibs/ tests/`
+- [ ] `black --check cflibs/`
+- [ ] Touched-area pytest slice
+- [ ] Full pytest suite (note pre-existing failures separately if any)
 
 ## Documentation
 
-- Comprehensive README files for each phase
-- API documentation in docstrings
-- Usage examples and guides
-- Configuration file examples
+<!-- Did this change require updates to CLAUDE.md / AGENTS.md / docs/? -->
 
-## Configuration
+- [ ] CLAUDE.md / AGENTS.md updated if architecture or conventions changed
+- [ ] `docs/` updated if user-facing APIs or workflows changed
+- [ ] Inline docstrings updated where signatures changed
 
-Example YAML config:
-```yaml
-plasma:
-  model: single_zone_lte
-  Te: 10000.0
-  ne: 1.0e17
-  species:
-    - element: Fe
-      number_density: 1.0e15
+## Notes for reviewer
 
-instrument:
-  resolution_fwhm_nm: 0.05
-
-spectrum:
-  lambda_min_nm: 200.0
-  lambda_max_nm: 800.0
-  delta_lambda_nm: 0.01
-```
-
-## Checklist
-
-- [x] Phase 0: Package structure and core utilities
-- [x] Phase 0: Constants and units module
-- [x] Phase 0: Logging and configuration system
-- [x] Phase 0: CLI entry point
-- [x] Phase 1: Atomic data structures
-- [x] Phase 1: Saha-Boltzmann solver
-- [x] Phase 1: Line emissivity calculations
-- [x] Phase 1: Forward model API
-- [x] Echellogram processing upgrade
-- [x] Documentation
-- [x] Examples and test cases
-- [x] Code linting passes
-
-## Ready for Review
-
-This PR establishes the foundation for CF-LIBS as specified in the README. The code is production-ready, well-documented, and follows best practices.
-
-See `PR_DESCRIPTION.md` for full details.
+<!-- Anything else: design tradeoffs, open questions, parts intentionally left out. -->

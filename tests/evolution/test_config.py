@@ -8,6 +8,8 @@ import pytest
 
 from cflibs.evolution.config import EvolutionDriverConfig
 
+pytestmark = pytest.mark.unit
+
 
 def test_defaults_are_sensible() -> None:
     cfg = EvolutionDriverConfig()

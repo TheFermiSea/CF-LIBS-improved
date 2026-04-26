@@ -32,14 +32,21 @@ from cflibs.plasma.state import SingleZoneLTEPlasma
 
 
 def pytest_collection_modifyitems(config, items):
-    """Auto-skip tests marked `requires_*` when their optional dependency is missing.
+    """Auto-skip tests marked ``requires_*`` when their optional dependency is missing
+    or broken.
 
-    The `requires_*` markers declared in pytest.ini are descriptive labels; they
+    The ``requires_*`` markers declared in pytest.ini are descriptive labels; they
     do not skip on their own. This hook makes them functional: for each marker
     listed below, attempt the import once during collection and attach a
-    `pytest.mark.skip` to every item carrying that marker when the import fails.
+    ``pytest.mark.skip`` to every item carrying that marker when the import
+    fails or is otherwise unusable.
 
-    Closes CF-LIBS-improved-48c2 (bayesian tests crashed with ImportError instead
+    Catches any ``Exception`` (not just ``ImportError``) because real-world failure
+    modes for optional native deps include broken-wheel ``RuntimeError``s, partial
+    installs that surface as ``AttributeError``, and ``OSError`` from missing
+    shared libraries. A failed probe must never abort collection.
+
+    Closes CF-LIBS-improved-48c2 (Bayesian tests crashed with ImportError instead
     of skipping cleanly when NumPyro was not installed). Same pattern extends to
     the other optional-dep markers in pytest.ini.
     """
@@ -52,15 +59,19 @@ def pytest_collection_modifyitems(config, items):
     for marker_name, (module_name, hint) in optional_deps.items():
         try:
             __import__(module_name)
-        except ImportError:
-            missing[marker_name] = (module_name, hint)
+        except Exception as exc:  # noqa: BLE001 — see docstring rationale
+            missing[marker_name] = (module_name, hint, type(exc).__name__)
     if not missing:
         return
     for item in items:
-        for marker_name, (module_name, hint) in missing.items():
+        for marker_name, (module_name, hint, exc_name) in missing.items():
             if item.get_closest_marker(marker_name) is not None:
                 item.add_marker(
-                    pytest.mark.skip(reason=f"{marker_name}: {module_name} not installed ({hint})")
+                    pytest.mark.skip(
+                        reason=(
+                            f"{marker_name}: {module_name} unavailable " f"({exc_name}); {hint}"
+                        )
+                    )
                 )
                 break
 

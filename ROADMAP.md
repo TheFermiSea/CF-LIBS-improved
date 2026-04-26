@@ -28,7 +28,7 @@ This document outlines the current status and future direction of CF-LIBS (Calib
 - Removed JAX neural networks from shipped CF-LIBS algorithm
 - Enforced physics-only constraint via Ruff TID251 static checks
 - Introduced AST blocklist scanner in `cflibs/evolution/evaluator.py`
-- Quarantined ML code in `cflibs/experimental/ml/` (deletion candidates)
+- Deleted the `cflibs/experimental/ml/` quarantine and its 4 backward-compat shims (~8,750 LOC removed); the physics-only claim is now structurally true
 - See bead CF-LIBS-improved-3fy3 for full specification
 
 ### Evolution Framework Scaffolding (Phase 1)
@@ -127,8 +127,8 @@ Publication of CF-LIBS algorithmic results:
 - `cflibs/validation/` — Round-trip testing, NIST parity checks
 - `cflibs/benchmark/` — Standardized metrics across datasets
 
-### Experimental (Deletion Candidates)
-- `cflibs/experimental/ml/` — Quarantined ML research code (interpretable ML, PINN, PLS)
+### Optimization-Process Tooling
+- `cflibs/evolution/` — LLM-driven hierarchical-ES driver, prompt primitives, AST blocklist scanner, runtime config. The only place under `cflibs/` where ML libraries are permitted. Tooling proposes candidate physics code; it never ships with it.
 
 ---
 

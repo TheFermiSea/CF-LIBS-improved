@@ -18,6 +18,8 @@ from cflibs.evolution.evaluator import (
     scan_source,
 )
 
+pytestmark = pytest.mark.unit
+
 # ---------------------------------------------------------------------------
 # Allowed-source fixtures — must produce zero violations.
 # ---------------------------------------------------------------------------

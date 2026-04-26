@@ -113,15 +113,13 @@ Backward-compatible shims at old flat paths (`from cflibs.inversion.solver impor
 | `cflibs/cli/` | CLI subcommands: forward, invert, analyze, bayesian, batch, generate-db, generate-manifold |
 | `cflibs/pds/` | ChemCam/SuperCam planetary data system interface |
 | `cflibs/hpc/` | Cluster utilities, SLURM integration |
-| `cflibs/experimental/ml/` | Quarantined ML modules (PINN, PLS, transfer learning); deletion candidates per CF-LIBS-improved-3fy3 |
+| `cflibs/evolution/` | LLM-driven algorithm optimization tooling (hierarchical-ES, blocklist scanner). The only place under `cflibs/` where ML libraries are permitted. |
 
 Rust components in `native/cflibs-core/` (comb matching, partition functions) and `native/rust-plugin/` (DAQ interface).
 
 ### Physics Constraint
 
-**Shipped CF-LIBS code is physics-only.** Machine learning is forbidden in `cflibs/` production code (ruff TID251 rule in `pyproject.toml`). ML is allowed only in:
-- `cflibs/evolution/` — algorithm optimization tooling
-- `cflibs/experimental/ml/` — deletion-candidate research code
+**Shipped CF-LIBS code is physics-only.** Machine learning is forbidden in `cflibs/` production code (ruff TID251 rule in `pyproject.toml`); the only exception is `cflibs/evolution/`, which holds optimization-process tooling (LLM perturbation generation, council synthesis) that proposes candidate code but never ships in the final algorithm.
 
 This constraint ensures reproducibility and interpretability of inferred plasma parameters. See epic CF-LIBS-improved-3fy3.
 

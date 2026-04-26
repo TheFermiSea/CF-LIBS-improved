@@ -62,7 +62,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             sys.stderr.write(f"{spec}: not found\n")
             total_violations += 1
             continue
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             sys.stderr.write(f"{spec}: {exc}\n")
             total_violations += 1
             continue

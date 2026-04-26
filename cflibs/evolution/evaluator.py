@@ -191,7 +191,12 @@ def scan_source(source: str) -> list[BlocklistViolation]:
 
 
 def assert_physics_only(source: str) -> None:
-    """Raise :class:`BlocklistViolationError` if ``source`` violates the blocklist."""
+    """Raise :class:`BlocklistViolationError` if ``source`` violates the blocklist.
+
+    Note: ``ast.parse(source)`` is called internally; malformed candidate code
+    surfaces as :class:`SyntaxError`, not :class:`BlocklistViolationError`.
+    Callers that need a single exception type should catch both.
+    """
     violations = scan_source(source)
     if violations:
         raise BlocklistViolationError(violations)

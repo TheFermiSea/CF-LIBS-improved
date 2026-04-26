@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cflibs.evolution.evaluator import FORBIDDEN_PREFIXES
 from cflibs.evolution.prompts import ALLOWED_PRIMITIVES, render_preamble
+
+pytestmark = pytest.mark.unit
 
 
 def test_render_preamble_mentions_every_forbidden_library() -> None:

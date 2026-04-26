@@ -9,6 +9,8 @@ import pytest
 
 from cflibs.evolution.__main__ import main
 
+pytestmark = pytest.mark.unit
+
 
 def test_clean_file_exits_zero(tmp_path: Path) -> None:
     clean = tmp_path / "clean.py"
