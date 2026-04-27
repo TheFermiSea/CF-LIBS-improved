@@ -31,10 +31,10 @@ jobs:
     
     - name: Run benchmarks
       run: |
-        pytest tests/ -v --benchmark-only || echo "No benchmarks found"
+        pytest tests/ -v --benchmark-only --benchmark-json=benchmark-results.json || echo "No benchmarks found"
     
     - name: Upload benchmark results
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' && hashFiles('benchmark-results.json') != ''
       uses: benchmark-action/github-action-benchmark@v1
       with:
         tool: 'pytest'
