@@ -72,6 +72,7 @@ def pytest_collection_modifyitems(config, items):
             'pip install ".[bayesian]"',
         ),
         "requires_uncertainty": ([("uncertainties", None)], 'pip install ".[uncertainty]"'),
+        "requires_rust": ([("cflibs._core", None)], 'compile cflibs-core rust extension'),
     }
     missing: dict[str, tuple[str, str, str]] = {}
     for marker_name, (probes, hint) in optional_deps.items():
@@ -84,6 +85,16 @@ def pytest_collection_modifyitems(config, items):
             except Exception as exc:  # noqa: BLE001 — see docstring rationale
                 missing[marker_name] = (module_name, hint, type(exc).__name__)
                 break
+    # Probe database files
+    candidates = [
+        Path("libs_production.db"),
+        Path("ASD_da/libs_production.db"),
+        Path(__file__).parent.parent / "libs_production.db",
+        Path(__file__).parent.parent / "ASD_da" / "libs_production.db",
+    ]
+    if not any(p.exists() for p in candidates):
+        missing["requires_db"] = ("ASD_da/libs_production.db", "download atomic database", "missing_file")
+
     if not missing:
         return
     for item in items:
