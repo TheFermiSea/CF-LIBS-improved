@@ -3,12 +3,75 @@ Main CLI entry point for CF-LIBS.
 """
 
 import argparse
+import importlib.util
 import sys
 from pathlib import Path
 
 from cflibs.core.logging_config import setup_logging, get_logger
 
 logger = get_logger("cli.main")
+
+
+def _repo_root() -> Path:
+    """Return the repository root when running from a source checkout."""
+    return Path(__file__).resolve().parents[2]
+
+
+def _resolve_existing_path(
+    path_value: str | Path, *, relative_to: str | Path | None = None
+) -> Path:
+    """
+    Resolve a user-provided path using beginner-friendly fallbacks.
+
+    Config examples often use short relative paths. Check the current working
+    directory first, then the config file directory, then the source checkout.
+    """
+    path = Path(path_value).expanduser()
+    if path.is_absolute():
+        return path
+
+    candidates = [Path.cwd() / path]
+    if relative_to is not None:
+        candidates.append(Path(relative_to).resolve().parent / path)
+
+    root = _repo_root()
+    candidates.extend(
+        [
+            root / path,
+            root / "ASD_da" / path.name,
+        ]
+    )
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return candidates[0]
+
+
+def _resolve_db_path(
+    path_value: str | Path | None = None, *, relative_to: str | Path | None = None
+) -> Path:
+    """Resolve the atomic database path, preferring the bundled sample database if present."""
+    return _resolve_existing_path(path_value or "libs_production.db", relative_to=relative_to)
+
+
+def _missing_db_message(db_path: Path) -> str:
+    return (
+        f"Atomic database not found: {db_path}. "
+        "If you are using the source checkout, try ASD_da/libs_production.db. "
+        "To build a new database, run: cflibs generate-db --db-path libs_production.db"
+    )
+
+
+def _float_config_value(config: dict, key: str, section: str) -> float:
+    """Read numeric YAML values, including scientific notation parsed as strings."""
+    try:
+        return float(config[key])
+    except KeyError as exc:
+        raise ValueError(f"{section} config missing required field: {key}") from exc
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{section}.{key} must be numeric; got {config.get(key)!r}") from exc
 
 
 def forward_model_cmd(args):
@@ -28,22 +91,24 @@ def forward_model_cmd(args):
     validate_instrument_config(config)
 
     # Load atomic database
-    db_path = config.get("atomic_database", "libs_production.db")
-    if not Path(db_path).exists():
-        raise FileNotFoundError(
-            f"Atomic database not found: {db_path}. "
-            "Please run datagen_v2.py to generate the database."
-        )
+    db_path = _resolve_db_path(config.get("atomic_database"), relative_to=args.config)
+    if not db_path.exists():
+        raise FileNotFoundError(_missing_db_message(db_path))
     atomic_db = AtomicDatabase(db_path)
 
     # Create plasma state
     plasma_config = config["plasma"]
     plasma = SingleZoneLTEPlasma(
-        T_e=plasma_config["Te"],
-        n_e=plasma_config["ne"],
-        species={s["element"]: s["number_density"] for s in plasma_config["species"]},
-        T_g=plasma_config.get("Tg"),
-        pressure=plasma_config.get("pressure"),
+        T_e=_float_config_value(plasma_config, "Te", "plasma"),
+        n_e=_float_config_value(plasma_config, "ne", "plasma"),
+        species={
+            s["element"]: _float_config_value(s, "number_density", f"species {s['element']}")
+            for s in plasma_config["species"]
+        },
+        T_g=float(plasma_config["Tg"]) if plasma_config.get("Tg") is not None else None,
+        pressure=(
+            float(plasma_config["pressure"]) if plasma_config.get("pressure") is not None else None
+        ),
     )
 
     # Create instrument model
@@ -51,10 +116,10 @@ def forward_model_cmd(args):
 
     # Get spectrum parameters
     spectrum_config = config.get("spectrum", {})
-    lambda_min = spectrum_config.get("lambda_min_nm", 200.0)
-    lambda_max = spectrum_config.get("lambda_max_nm", 800.0)
-    delta_lambda = spectrum_config.get("delta_lambda_nm", 0.01)
-    path_length = spectrum_config.get("path_length_m", 0.01)
+    lambda_min = float(spectrum_config.get("lambda_min_nm", 200.0))
+    lambda_max = float(spectrum_config.get("lambda_max_nm", 800.0))
+    delta_lambda = float(spectrum_config.get("delta_lambda_nm", 0.01))
+    path_length = float(spectrum_config.get("path_length_m", 0.01))
 
     # Create spectrum model
     model = SpectrumModel(
@@ -81,7 +146,7 @@ def forward_model_cmd(args):
             np.column_stack([wavelength, intensity]),
             delimiter=",",
             header="wavelength_nm,intensity_W_m2_nm_sr",
-            comments="#",
+            comments="",
         )
         print(f"Spectrum saved to {output_path}")
     else:
@@ -128,12 +193,9 @@ def invert_cmd(args):
     if isinstance(elements, str):
         elements = [elements]
 
-    db_path = config.get("atomic_database", "libs_production.db")
-    if not Path(db_path).exists():
-        raise FileNotFoundError(
-            f"Atomic database not found: {db_path}. "
-            "Please run datagen_v2.py to generate the database."
-        )
+    db_path = _resolve_db_path(config.get("atomic_database"), relative_to=args.config)
+    if not db_path.exists():
+        raise FileNotFoundError(_missing_db_message(db_path))
 
     wavelength, intensity = load_spectrum(args.spectrum)
     atomic_db = AtomicDatabase(db_path)
@@ -247,11 +309,9 @@ def analyze_cmd(args):
     from cflibs.inversion.solver import IterativeCFLIBSSolver
     from cflibs.io.spectrum import load_spectrum
 
-    db_path = args.db_path or "libs_production.db"
-    if not Path(db_path).exists():
-        raise FileNotFoundError(
-            f"Atomic database not found: {db_path}. " "Please run cflibs generate-db to create it."
-        )
+    db_path = _resolve_db_path(args.db_path)
+    if not db_path.exists():
+        raise FileNotFoundError(_missing_db_message(db_path))
 
     elements = [e.strip() for e in args.elements.split(",")]
     wavelength, intensity = load_spectrum(args.spectrum)
@@ -365,8 +425,8 @@ def bayesian_cmd(args):
     from cflibs.inversion.bayesian import BayesianForwardModel, MCMCSampler
     from cflibs.io.spectrum import load_spectrum
 
-    db_path = args.db_path or "libs_production.db"
-    if not Path(db_path).exists():
+    db_path = _resolve_db_path(args.db_path)
+    if not db_path.exists():
         raise FileNotFoundError(f"Atomic database not found: {db_path}.")
 
     elements = [e.strip() for e in args.elements.split(",")]
@@ -421,8 +481,8 @@ def batch_cmd(args):
     if not directory.is_dir():
         raise ValueError(f"Not a directory: {directory}")
 
-    db_path = args.db_path or "libs_production.db"
-    if not Path(db_path).exists():
+    db_path = _resolve_db_path(args.db_path)
+    if not db_path.exists():
         raise FileNotFoundError(f"Atomic database not found: {db_path}.")
 
     elements = [e.strip() for e in args.elements.split(",")]
@@ -513,6 +573,45 @@ def dbgen_cmd(args):
         logger.error(f"Error during database generation: {e}")
         print(f"ERROR: {e}")
         sys.exit(1)
+
+
+def doctor_cmd(args):
+    """Check whether the local environment is ready for common beginner workflows."""
+    import cflibs
+
+    root = _repo_root()
+    db_path = _resolve_db_path(args.db_path)
+    example_config = root / "examples" / "config_example.yaml"
+
+    required_packages = ["numpy", "scipy", "pandas", "yaml", "matplotlib"]
+    optional_packages = ["jax", "h5py", "faiss", "numpyro", "arviz"]
+
+    print("CF-LIBS setup doctor")
+    print(f"  Python: {sys.version.split()[0]}")
+    print(f"  cflibs: {cflibs.__version__}")
+    print(f"  Working directory: {Path.cwd()}")
+    print()
+
+    print("Core checks:")
+    print(f"  {'OK' if db_path.exists() else 'MISSING'} atomic database: {db_path}")
+    print(f"  {'OK' if example_config.exists() else 'MISSING'} example config: {example_config}")
+    for package in required_packages:
+        status = "OK" if importlib.util.find_spec(package) is not None else "MISSING"
+        print(f"  {status} Python package: {package}")
+
+    print()
+    print("Optional capabilities:")
+    for package in optional_packages:
+        status = "OK" if importlib.util.find_spec(package) is not None else "not installed"
+        print(f"  {status}: {package}")
+
+    print()
+    print("Try this first:")
+    print("  cflibs forward examples/config_example.yaml --output spectrum.csv")
+    print(
+        "  cflibs analyze data/aalto_libs/elements/Fe_spectrum.csv "
+        "--elements Fe --db-path ASD_da/libs_production.db"
+    )
 
 
 def manifold_cmd(args):
@@ -710,6 +809,18 @@ def main():
     )
     batch_parser.set_defaults(func=batch_cmd)
 
+    # Setup diagnostics command
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Check setup and print beginner-friendly next commands"
+    )
+    doctor_parser.add_argument(
+        "--db-path",
+        type=str,
+        default=None,
+        help="Path to atomic database to check (default: bundled sample or libs_production.db)",
+    )
+    doctor_parser.set_defaults(func=doctor_cmd)
+
     # Database generation command
     dbgen_parser = subparsers.add_parser(
         "generate-db", help="Generate atomic database from NIST data"
@@ -752,7 +863,11 @@ def main():
     try:
         args.func(args)
     except Exception as e:
-        logger.error(f"Error executing command: {e}", exc_info=True)
+        if args.log_level == "DEBUG":
+            logger.error(f"Error executing command: {e}", exc_info=True)
+        else:
+            print(f"ERROR: {e}", file=sys.stderr)
+            print("Run again with --log-level DEBUG to show the traceback.", file=sys.stderr)
         sys.exit(1)
 
 

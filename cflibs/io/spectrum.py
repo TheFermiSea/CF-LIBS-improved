@@ -45,7 +45,15 @@ def load_spectrum(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
             raise ValueError("Could not find wavelength column in CSV")
 
         int_col = None
-        for col in ["intensity", "intensity_W_m2_nm_sr", "I", "counts", "signal"]:
+        for col in [
+            "intensity",
+            "intensity_W_m2_nm_sr",
+            "I",
+            "counts",
+            "signal",
+            "spectrum",
+            "flux",
+        ]:
             if col in df.columns:
                 int_col = col
                 break
