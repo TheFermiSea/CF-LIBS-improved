@@ -109,3 +109,7 @@ data/csa_planetary_libs/
 data/gibbons2024_nitrogen_libs/
 data/silva2022_tropical_soils/
 data/vrabel2020_soil_benchmark/
+
+# Cargo build artifacts (the swarm orchestrator was committing target-swarm/.fingerprint/* into main).
+target/
+target-swarm/
