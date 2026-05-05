@@ -97,3 +97,19 @@ conductor/setup_state.json
 # SQLite temporary files
 *.db-shm
 *.db-wal
+
+# Tool artifacts (claude/asta/gitnexus skill caches)
+.asta/
+.gitnexus/
+.claude/skills/gitnexus/
+
+# Local benchmark/calibration datasets (not source-controlled)
+data/chemcam_calib/
+data/csa_planetary_libs/
+data/gibbons2024_nitrogen_libs/
+data/silva2022_tropical_soils/
+data/vrabel2020_soil_benchmark/
+
+# Cargo build artifacts (the swarm orchestrator was committing target-swarm/.fingerprint/* into main).
+target/
+target-swarm/
