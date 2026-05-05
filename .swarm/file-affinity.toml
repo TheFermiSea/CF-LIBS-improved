@@ -1,0 +1,74 @@
+# Swarm file-affinity policy for CF-LIBS-improved.
+#
+# Read by the beefcake-swarm orchestrator (python/file_affinity.py).
+# Architect-emitted file writes matching `blocked_globs` are rejected
+# pre-apply with an APPLY-category SEPL error so the architect retries
+# against an allowed target. `language_hint` is injected into the
+# architect's user message just before the "Produce the diff now"
+# instruction so recency-weighted attention catches it.
+#
+# Background (beefcake-xfyfg, 2026-05-05):
+# claude-opus-4-7 architect was systematically picking the wrong target
+# files on this repo — modifying Cargo.toml + target-swarm/.fingerprint/*
+# for issue 4w8x (Hierarchical NumPyro priors → cflibs/inversion/solve/
+# bayesian.py), and rewriting 271 lines of native/cflibs-core/src/
+# comb_matching.rs for issue r45l (Student-t Bayesian likelihood, also
+# a Python NumPyro task). Two batches of polluted swarm/* branches were
+# rolled back. This policy guards against that bias.
+
+blocked_globs = [
+    # Rust crate is for hot-path partition functions only. Issues that
+    # genuinely need Rust changes should override this by explicitly
+    # requesting them in the issue title/description, but the default is
+    # block so the architect can't drift into Rust on Python tasks.
+    "native/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    # Build artifacts — the swarm orchestrator was merge-committing
+    # these into main. Never source-control these.
+    "target/**",
+    "target-swarm/**",
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "**/*.pyo",
+    # Local datasets (gitignored, but defensive — see PR #53).
+    "data/**",
+    ".asta/**",
+    ".gitnexus/**",
+    # Operational state (the swarm shouldn't rewrite its own bookkeeping).
+    ".beads/backup/**",
+    ".swarm/lineage/**",
+    ".swarm/feedback/**",
+    ".swarm/mutation-archive.jsonl",
+]
+
+language_hint = """\
+This repo is **Python-primary** — calibration-free LIBS plasma analysis
+built on NumPyro, JAX, scipy, FAISS, and a SQLite atomic database.
+Default to editing `.py` files under `cflibs/`. The Rust crate at
+`native/cflibs-core/` is reserved for hot-path partition-function
+polynomials and comb-line matching FFI; only modify Rust when the
+issue title or description explicitly names a Rust target.
+
+Strict physics-only AST blocklist (enforced by Ruff TID251 + the scanner
+in `cflibs/evolution/evaluator.py`): **no `sklearn`, `torch`, `tensorflow`,
+`keras`, `flax`, `equinox`, or `transformers` imports** in code under
+`cflibs/` except `cflibs/evolution/`. The identification + inversion
+pipelines must remain pure physics (Saha–Boltzmann ionization equilibrium,
+NumPyro NUTS for Bayesian inversion, multiplet-aware Boltzmann fits,
+Stark broadening, scipy.optimize). Proposing an ML-based replacement
+will fail the scanner — formulate fixes as physics + Bayesian-statistics
+choices, not as model substitutions.
+
+Common file targets, by issue archetype:
+- Bayesian model formulation / NumPyro priors / robust likelihoods →
+  `cflibs/inversion/solve/bayesian.py`, `cflibs/inversion/priors.py`.
+- Peak / line identification gating → `cflibs/identification/`.
+- Atomic-data adapters & reference standards →
+  `cflibs/atomic/<adapter>.py` (and read raw files from
+  `/cluster/shared/cf-libs-data/<dataset>/raw/` per repo notes).
+- Benchmark-protocol reproduction → `cflibs/benchmark/` and
+  `scripts/validate_*.py`.
+- Stark widths / multiplet-aware fits / Saha-Boltzmann anchor →
+  `cflibs/plasma/`, `cflibs/identification/multiplet.py`.
+"""
