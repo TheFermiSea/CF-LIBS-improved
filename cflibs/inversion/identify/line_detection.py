@@ -502,13 +502,13 @@ def detect_line_observations(
                 if is_resonance:
                     resonance_lines.add(key)
             for peak_idx, peak_wl in peaks:
-                transition = _match_transition(
+                matched = _match_transition(
                     peak_wl + applied_shift_nm, transitions, wavelength_tolerance_nm
                 )
-                if transition is None:
+                if matched is None:
                     continue
 
-                key = (transition.element, transition.ionization_stage, transition.wavelength_nm)
+                key = (matched.element, matched.ionization_stage, matched.wavelength_nm)
                 if key in seen_keys:
                     continue
                 seen_keys.add(key)
@@ -518,13 +518,13 @@ def detect_line_observations(
                 rounded_wl = round(peak_wl, 4)
                 if deconv_results_by_wl is not None and rounded_wl in deconv_results_by_wl:
                     result = _build_observation_from_fit(
-                        transition,
+                        matched,
                         deconv_results_by_wl[rounded_wl],
                         ground_state_threshold_ev,
                     )
                 else:
                     result = _build_observation(
-                        transition,
+                        matched,
                         peak_idx,
                         wavelength,
                         intensity,

@@ -176,16 +176,18 @@ class Exporter(ABC):
         else:
             raise ValueError(f"Unsupported data type: {type(data).__name__}")
 
-    def _dataclass_to_dict(self, obj: Any, max_depth: int = 10) -> Dict[str, Any]:
+    def _dataclass_to_dict(self, obj: Any, max_depth: int = 10) -> Any:
         """
         Convert dataclass to dictionary recursively.
 
-        Handles nested dataclasses and numpy arrays.
+        Handles nested dataclasses and numpy arrays. Returns ``str(obj)``
+        when ``max_depth`` is exhausted, so the recursion terminates safely
+        on cyclic references.
         """
         if max_depth <= 0:
             return str(obj)
 
-        result = {}
+        result: Dict[str, Any] = {}
         for f in fields(obj):
             value = getattr(obj, f.name)
             result[f.name] = self._convert_value(value, max_depth - 1)

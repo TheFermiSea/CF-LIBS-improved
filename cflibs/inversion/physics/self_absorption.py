@@ -1493,8 +1493,8 @@ class CurveOfGrowthAnalyzer:
         # Determine regime from slope
         regime = self._classify_regime(slope, r_squared)
 
-        # Estimate mean Doppler width
-        mean_wavelength = np.mean([ld.wavelength_nm for ld in lines_data])
+        # Estimate mean Doppler width. np.mean returns floating[Any]; coerce.
+        mean_wavelength = float(np.mean([ld.wavelength_nm for ld in lines_data]))
         doppler_width = self._compute_doppler_width(mean_wavelength)
 
         # Estimate damping parameter if not provided

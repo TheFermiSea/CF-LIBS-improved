@@ -1173,8 +1173,8 @@ class EdgeOptimizedModel:
             import jax.numpy as jnp
 
             @jax.jit
-            def _boltzmann_slope(energies: jnp.ndarray, y_values: jnp.ndarray) -> float:
-                """Fast Boltzmann slope calculation."""
+            def _boltzmann_slope(energies: jnp.ndarray, y_values: jnp.ndarray) -> jnp.ndarray:
+                """Fast Boltzmann slope calculation. Returns a 0-d JAX scalar."""
                 n = len(energies)
                 sum_x = jnp.sum(energies)
                 sum_y = jnp.sum(y_values)

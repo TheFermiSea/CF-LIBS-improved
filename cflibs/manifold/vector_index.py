@@ -6,7 +6,7 @@ for efficient approximate nearest neighbor search on pre-computed model spectra.
 """
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Any, Tuple
 import numpy as np
 from pathlib import Path
 
@@ -253,7 +253,10 @@ class VectorIndex:
 
         self.dimension = dimension
         self.config = config or VectorIndexConfig()
-        self.index = None
+        # Underlying FAISS index, created in build(). Typed `Any` because the
+        # FAISS Python bindings expose IndexFlatL2 / IndexIVFFlat / IndexIVFPQ
+        # without a common base class, and `faiss` itself has no stubs.
+        self.index: Any = None
 
     @property
     def is_built(self) -> bool:
@@ -363,7 +366,7 @@ class VectorIndex:
 
         return distances, indices
 
-    def save(self, path: str):
+    def save(self, path: str | Path):
         """
         Save index to HDF5 file.
 
@@ -385,14 +388,14 @@ class VectorIndex:
         if not HAS_H5PY:
             raise ImportError("h5py is required for saving. Install with: pip install h5py")
 
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        out_path = Path(path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Serialize FAISS index to bytes
         faiss_bytes = faiss.serialize_index(self.index)
 
         # Save to HDF5
-        with h5py.File(path, "w") as f:
+        with h5py.File(out_path, "w") as f:
             f.attrs["dimension"] = self.dimension
             f.attrs["index_type"] = self.config.index_type
             f.attrs["n_lists"] = self.config.n_lists
@@ -406,7 +409,7 @@ class VectorIndex:
         logger.info(f"Index saved to {path}")
 
     @classmethod
-    def load(cls, path: str) -> "VectorIndex":
+    def load(cls, path: str | Path) -> "VectorIndex":
         """
         Load index from HDF5 file.
 
@@ -430,11 +433,11 @@ class VectorIndex:
         if not HAS_H5PY:
             raise ImportError("h5py is required for loading. Install with: pip install h5py")
 
-        path = Path(path)
-        if not path.exists():
-            raise FileNotFoundError(f"Index file not found: {path}")
+        in_path = Path(path)
+        if not in_path.exists():
+            raise FileNotFoundError(f"Index file not found: {in_path}")
 
-        with h5py.File(path, "r") as f:
+        with h5py.File(in_path, "r") as f:
             dimension = int(f.attrs["dimension"])
             config = VectorIndexConfig(
                 index_type=str(f.attrs["index_type"]),

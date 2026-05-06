@@ -311,7 +311,7 @@ class CDSBPlotter:
         )
 
         # Track convergence history
-        tau_history = [np.mean(list(tau_values.values()))]
+        tau_history: list[float] = [float(np.mean(list(tau_values.values())))]
         temp_history = [current_T_K]
 
         # Iterative CD-SB correction
@@ -348,7 +348,7 @@ class CDSBPlotter:
             )
 
             # Check for divergence
-            mean_new_tau = np.mean(list(new_tau_values.values()))
+            mean_new_tau = float(np.mean(list(new_tau_values.values())))
             if mean_new_tau > 100 * tau_history[0]:
                 warnings.append(f"Iteration {iteration}: tau diverging")
                 convergence_status = CDSBConvergenceStatus.UNSTABLE

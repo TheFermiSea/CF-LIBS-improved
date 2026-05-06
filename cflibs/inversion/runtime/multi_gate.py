@@ -44,7 +44,7 @@ Applied Physics B / Spectrochimica Acta B work; see e.g. Appl. Phys. B
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -459,8 +459,12 @@ def _warm_start(
 def _pack_observations(
     gate_observations: Sequence[Sequence[LineObservation]],
     el_index: Dict[str, int],
-) -> Dict[str, np.ndarray]:
-    """Flatten all (gate, line) observations into NumPy arrays for vectorisation."""
+) -> Dict[str, Any]:
+    """Flatten all (gate, line) observations into NumPy arrays for vectorisation.
+
+    Returns a dict whose values are mostly ``np.ndarray`` but include the integer
+    count ``n_obs``; typed ``Any`` to cover the heterogeneous payload.
+    """
     gate_idx: List[int] = []
     el_idx: List[int] = []
     ion_stage: List[int] = []

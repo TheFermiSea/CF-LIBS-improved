@@ -43,7 +43,7 @@ class SpectrographHardware(SpectrographInterface):
         self.pixels = config.get("pixels", 2048) if config else 2048
         self._exposure_time_ms = 100.0
         self._gain = 1.0
-        self._wavelength_calibration = None
+        self._wavelength_calibration: Optional[Dict[float, float]] = None
 
     def connect(self) -> bool:
         """Connect to spectrograph hardware."""
