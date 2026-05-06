@@ -102,6 +102,7 @@ class BoltzmannPlotFitter:
         self,
         observations: list[LineObservation],
         aki_uncertainty_weighting: bool = True,
+        multiplet_groups: list[str | int] | None = None,
     ) -> BoltzmannFitResult:
         """
         Perform robust linear regression on Boltzmann plot data.
@@ -123,6 +124,10 @@ class BoltzmannPlotFitter:
             ``aki_uncertainty`` is ``None`` keep their original intensity-only
             sigma_y. Set to False to reproduce the legacy intensity-only fit
             exactly.
+        multiplet_groups : list[str | int], optional
+            If provided, must be same length as observations. Observations with the
+            same group ID are aggregated (summing gA and intensity) into a single
+            multiplet point before fitting, following Wakil et al. (2023).
 
         Returns
         -------
@@ -137,10 +142,77 @@ class BoltzmannPlotFitter:
         if len(observations) < 2:
             raise ValueError("Need at least 2 points for a fit")
 
-        # Prepare arrays
-        x_all = np.array([obs.E_k_ev for obs in observations])
-        y_all = np.array([obs.y_value for obs in observations])
-        y_err_all = self._build_sigma_y(observations, aki_uncertainty_weighting)
+        if multiplet_groups is not None:
+            if len(multiplet_groups) != len(observations):
+                raise ValueError("multiplet_groups must have same length as observations")
+
+            # Group indices by group_id
+            groups: dict[str | int | None, list[int]] = {}
+            group_order = []
+            for i, gid in enumerate(multiplet_groups):
+                if gid not in groups:
+                    groups[gid] = []
+                    group_order.append(gid)
+                groups[gid].append(i)
+
+            x_agg, y_agg, y_err_agg = [], [], []
+            for gid in group_order:
+                idxs = groups[gid]
+                if gid is None:
+                    # Treat None as independent lines
+                    for idx in idxs:
+                        obs = observations[idx]
+                        x_agg.append(obs.E_k_ev)
+                        y_agg.append(obs.y_value)
+                        sigma = obs.y_uncertainty
+                        unc = obs.aki_uncertainty
+                        if aki_uncertainty_weighting and unc is not None and np.isfinite(unc) and unc > 0:
+                            sigma = np.sqrt(sigma**2 + unc**2)
+                        y_err_agg.append(sigma)
+                elif len(idxs) == 1:
+                    idx = idxs[0]
+                    obs = observations[idx]
+                    x_agg.append(obs.E_k_ev)
+                    y_agg.append(obs.y_value)
+                    sigma = obs.y_uncertainty
+                    unc = obs.aki_uncertainty
+                    if aki_uncertainty_weighting and unc is not None and np.isfinite(unc) and unc > 0:
+                        sigma = np.sqrt(sigma**2 + unc**2)
+                    y_err_agg.append(sigma)
+                else:
+                    # Aggregate multiplet: ln(sum(I*lambda) / sum(gA))
+                    sum_gA = 0.0
+                    sum_I_lam = 0.0
+                    sum_E_gA = 0.0
+                    var_I_lam = 0.0
+                    var_gA = 0.0
+                    for idx in idxs:
+                        obs = observations[idx]
+                        gA = obs.g_k * obs.A_ki
+                        I_lam = gA * np.exp(obs.y_value)
+                        sum_gA += gA
+                        sum_I_lam += I_lam
+                        sum_E_gA += obs.E_k_ev * gA
+                        var_I_lam += (I_lam * obs.y_uncertainty)**2
+                        unc = obs.aki_uncertainty
+                        if aki_uncertainty_weighting and unc is not None and np.isfinite(unc) and unc > 0:
+                            var_gA += (gA * unc)**2
+
+                    x_agg.append(sum_E_gA / sum_gA)
+                    y_agg.append(np.log(sum_I_lam / sum_gA))
+                    # Propagation: Var(ln(Sum I / Sum gA)) = Var(Sum I)/(Sum I)**2 + Var(Sum gA)/(Sum gA)**2
+                    rel_var_I = var_I_lam / (sum_I_lam**2) if sum_I_lam > 0 else 0.0
+                    rel_var_gA = var_gA / (sum_gA**2) if sum_gA > 0 else 0.0
+                    y_err_agg.append(np.sqrt(rel_var_I + rel_var_gA))
+
+            x_all = np.array(x_agg)
+            y_all = np.array(y_agg)
+            y_err_all = np.array(y_err_agg)
+        else:
+            # Prepare arrays normally
+            x_all = np.array([obs.E_k_ev for obs in observations])
+            y_all = np.array([obs.y_value for obs in observations])
+            y_err_all = self._build_sigma_y(observations, aki_uncertainty_weighting)
 
         # Handle cases where y calculation failed (e.g. negative intensity)
         valid_mask = np.isfinite(y_all)
