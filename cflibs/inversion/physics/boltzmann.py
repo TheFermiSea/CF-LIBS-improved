@@ -102,6 +102,7 @@ class BoltzmannPlotFitter:
         self,
         observations: list[LineObservation],
         aki_uncertainty_weighting: bool = True,
+        multiplet_groups: list[str | int | None] | None = None,
     ) -> BoltzmannFitResult:
         """
         Perform robust linear regression on Boltzmann plot data.
@@ -123,37 +124,187 @@ class BoltzmannPlotFitter:
             ``aki_uncertainty`` is ``None`` keep their original intensity-only
             sigma_y. Set to False to reproduce the legacy intensity-only fit
             exactly.
+        multiplet_groups : list[str | int | None], optional
+            If provided, must be same length as observations. Observations with the
+            same non-None group ID are aggregated (summing gA and intensity) into a
+            single multiplet point before fitting, following Wakil et al. (2023).
+            Observations assigned ``None`` as their group ID are treated as
+            independent lines and are never aggregated.
 
         Returns
         -------
         BoltzmannFitResult
-            Fit results including temperature, uncertainties, and outlier info
+            Fit results including temperature, uncertainties, and outlier info.
+            When *multiplet_groups* is provided, ``rejected_points`` and
+            ``inlier_mask`` are expressed in terms of original observation indices
+            (not aggregated-point indices) so that downstream consumers such as
+            ``plot()`` can be used without special-casing.
 
         Raises
         ------
         ValueError
-            If fewer than 2 valid observations provided
+            If fewer than 2 valid observations (or aggregated points) are available
         """
         if len(observations) < 2:
             raise ValueError("Need at least 2 points for a fit")
 
-        # Prepare arrays
-        x_all = np.array([obs.E_k_ev for obs in observations])
-        y_all = np.array([obs.y_value for obs in observations])
-        y_err_all = self._build_sigma_y(observations, aki_uncertainty_weighting)
+        x_all, y_all, y_err_all, agg_to_obs_indices = self._prepare_fit_arrays(
+            observations, aki_uncertainty_weighting, multiplet_groups
+        )
 
         # Handle cases where y calculation failed (e.g. negative intensity)
         valid_mask = np.isfinite(y_all)
         if not np.all(valid_mask):
             logger.warning(f"Excluding {np.sum(~valid_mask)} points with invalid Y values")
 
+        # Ensure at least 2 valid (aggregated) points remain before fitting.
+        # Multiplet aggregation can reduce the effective point count below 2 even
+        # when len(observations) >= 2.
+        if int(np.sum(valid_mask)) < 2:
+            raise ValueError(
+                f"Need at least 2 valid points for a fit; only {int(np.sum(valid_mask))} "
+                "remain after multiplet aggregation and invalid-y filtering."
+            )
+
         # Route to appropriate fitting method
         if self.method == FitMethod.RANSAC:
-            return self._fit_ransac(x_all, y_all, y_err_all, valid_mask)
+            result = self._fit_ransac(x_all, y_all, y_err_all, valid_mask)
         elif self.method == FitMethod.HUBER:
-            return self._fit_huber(x_all, y_all, y_err_all, valid_mask)
+            result = self._fit_huber(x_all, y_all, y_err_all, valid_mask)
         else:  # SIGMA_CLIP (default)
-            return self._fit_sigma_clip(x_all, y_all, y_err_all, valid_mask)
+            result = self._fit_sigma_clip(x_all, y_all, y_err_all, valid_mask)
+
+        # When multiplet_groups was provided, the fit operated on the aggregated
+        # array.  Translate rejected_points and inlier_mask back to original
+        # observation indices so downstream consumers (plot(), widgets) can use
+        # them against the observations list without special-casing.
+        if agg_to_obs_indices is not None:
+            result = self._translate_multiplet_indices(
+                result, agg_to_obs_indices, len(observations)
+            )
+
+        return result
+
+    def _prepare_fit_arrays(
+        self,
+        observations: list[LineObservation],
+        aki_uncertainty_weighting: bool,
+        multiplet_groups: list[str | int | None] | None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[list[int]] | None]:
+        """Build fit arrays, optionally aggregating unresolved multiplet groups."""
+        if multiplet_groups is None:
+            return (
+                np.array([obs.E_k_ev for obs in observations]),
+                np.array([obs.y_value for obs in observations]),
+                self._build_sigma_y(observations, aki_uncertainty_weighting),
+                None,
+            )
+
+        if len(multiplet_groups) != len(observations):
+            raise ValueError("multiplet_groups must have same length as observations")
+
+        groups = self._group_multiplet_indices(multiplet_groups)
+        x_agg: list[float] = []
+        y_agg: list[float] = []
+        y_err_agg: list[float] = []
+        agg_to_obs_indices: list[list[int]] = []
+
+        for gid, idxs in groups:
+            if gid is None or len(idxs) == 1:
+                self._append_independent_observations(
+                    observations,
+                    idxs,
+                    aki_uncertainty_weighting,
+                    x_agg,
+                    y_agg,
+                    y_err_agg,
+                    agg_to_obs_indices,
+                )
+                continue
+
+            x_val, y_val, y_err = self._aggregate_multiplet_observations(
+                observations, idxs, aki_uncertainty_weighting
+            )
+            x_agg.append(x_val)
+            y_agg.append(y_val)
+            y_err_agg.append(y_err)
+            agg_to_obs_indices.append(list(idxs))
+
+        return (
+            np.array(x_agg),
+            np.array(y_agg),
+            np.array(y_err_agg),
+            agg_to_obs_indices,
+        )
+
+    @staticmethod
+    def _group_multiplet_indices(
+        multiplet_groups: list[str | int | None],
+    ) -> list[tuple[str | int | None, list[int]]]:
+        """Group observation indices in first-seen order."""
+        groups: dict[str | int | None, list[int]] = {}
+        group_order: list[str | int | None] = []
+        for idx, gid in enumerate(multiplet_groups):
+            if gid not in groups:
+                groups[gid] = []
+                group_order.append(gid)
+            groups[gid].append(idx)
+        return [(gid, groups[gid]) for gid in group_order]
+
+    def _append_independent_observations(
+        self,
+        observations: list[LineObservation],
+        indices: list[int],
+        aki_uncertainty_weighting: bool,
+        x_agg: list[float],
+        y_agg: list[float],
+        y_err_agg: list[float],
+        agg_to_obs_indices: list[list[int]],
+    ) -> None:
+        """Append non-aggregated observations to the fit arrays."""
+        single_obs = [observations[idx] for idx in indices]
+        single_sigma = self._build_sigma_y(single_obs, aki_uncertainty_weighting)
+        for sigma_idx, obs_idx in enumerate(indices):
+            obs = observations[obs_idx]
+            x_agg.append(obs.E_k_ev)
+            y_agg.append(obs.y_value)
+            y_err_agg.append(float(single_sigma[sigma_idx]))
+            agg_to_obs_indices.append([obs_idx])
+
+    @staticmethod
+    def _aggregate_multiplet_observations(
+        observations: list[LineObservation],
+        indices: list[int],
+        aki_uncertainty_weighting: bool,
+    ) -> tuple[float, float, float]:
+        """Return one Wakil-style aggregate point for a multiplet group."""
+        sum_ga = 0.0
+        sum_i_lam = 0.0
+        sum_e_ga = 0.0
+        var_i_lam = 0.0
+        var_ga = 0.0
+
+        for idx in indices:
+            obs = observations[idx]
+            ga = obs.g_k * obs.A_ki
+            if ga <= 0.0:
+                continue
+            i_lam = ga * np.exp(obs.y_value)
+            sum_ga += ga
+            sum_i_lam += i_lam
+            sum_e_ga += obs.E_k_ev * ga
+            var_i_lam += (i_lam * obs.y_uncertainty) ** 2
+
+            unc = obs.aki_uncertainty
+            if aki_uncertainty_weighting and unc is not None and np.isfinite(unc) and unc > 0:
+                var_ga += (ga * unc) ** 2
+
+        if sum_ga <= 0.0 or sum_i_lam <= 0.0:
+            return np.nan, np.nan, np.nan
+
+        rel_var_i = var_i_lam / (sum_i_lam**2)
+        rel_var_ga = var_ga / (sum_ga**2)
+        return sum_e_ga / sum_ga, np.log(sum_i_lam / sum_ga), np.sqrt(rel_var_i + rel_var_ga)
 
     def _fit_sigma_clip(
         self,
@@ -448,6 +599,58 @@ class BoltzmannPlotFitter:
             "huber",
             n_iterations,
             covariance_matrix,
+        )
+
+    def _translate_multiplet_indices(
+        self,
+        result: BoltzmannFitResult,
+        agg_to_obs_indices: list[list[int]],
+        n_observations: int,
+    ) -> BoltzmannFitResult:
+        """Translate aggregated-point indices back to original observation indices.
+
+        When *multiplet_groups* is used the fit operates on a (possibly smaller)
+        aggregated array.  This helper maps ``rejected_points`` and ``inlier_mask``
+        from aggregated-point space back to original-observation space so that
+        downstream consumers such as ``plot()`` and visualization widgets can use
+        the result against the original *observations* list without special-casing
+        the multiplet path.
+
+        For a rejected aggregated point every constituent original observation is
+        also marked as rejected (and vice-versa for inlier points).
+        """
+        obs_rejected: list[int] = []
+        for agg_i in result.rejected_points:
+            obs_rejected.extend(agg_to_obs_indices[agg_i])
+
+        if result.inlier_mask is not None:
+            obs_inlier_mask = np.zeros(n_observations, dtype=bool)
+            for agg_i, is_inlier in enumerate(result.inlier_mask):
+                for obs_i in agg_to_obs_indices[agg_i]:
+                    obs_inlier_mask[obs_i] = is_inlier
+        else:
+            obs_inlier_mask = None
+
+        n_points = (
+            int(np.sum(obs_inlier_mask))
+            if obs_inlier_mask is not None
+            else n_observations - len(obs_rejected)
+        )
+
+        return BoltzmannFitResult(
+            temperature_K=result.temperature_K,
+            temperature_uncertainty_K=result.temperature_uncertainty_K,
+            intercept=result.intercept,
+            intercept_uncertainty=result.intercept_uncertainty,
+            r_squared=result.r_squared,
+            n_points=n_points,
+            rejected_points=sorted(obs_rejected),
+            slope=result.slope,
+            slope_uncertainty=result.slope_uncertainty,
+            fit_method=result.fit_method,
+            n_iterations=result.n_iterations,
+            inlier_mask=obs_inlier_mask,
+            covariance_matrix=result.covariance_matrix,
         )
 
     def _build_sigma_y(
