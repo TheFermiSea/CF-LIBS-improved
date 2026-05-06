@@ -3,7 +3,7 @@ Iterative solver for Classic CF-LIBS.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import Any, Dict, List, Optional
 import numpy as np
 from collections import defaultdict
 
@@ -59,7 +59,10 @@ class CFLIBSResult:
     concentration_uncertainties: Dict[str, float]
     iterations: int
     converged: bool
-    quality_metrics: Dict[str, float] = field(default_factory=dict)
+    # Heterogeneous: floats for numeric scores (e.g. r_squared, lte_n_e_ratio,
+    # n_lines), bools for flags (lte_mcwhirter_satisfied), and strings for
+    # human-readable mode/warning/error annotations from the streaming pipeline.
+    quality_metrics: Dict[str, Any] = field(default_factory=dict)
     electron_density_uncertainty_cm3: float = 0.0
     boltzmann_covariance: Optional[np.ndarray] = field(default=None, repr=False)
 

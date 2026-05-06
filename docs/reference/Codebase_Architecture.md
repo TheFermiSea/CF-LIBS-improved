@@ -1,8 +1,17 @@
-# CF-LIBS Codebase Technical Documentation
+# CF-LIBS Codebase Architecture
 
 **Calibration-Free Laser-Induced Breakdown Spectroscopy**
 
-A Python library for quantitative elemental analysis without calibration standards, using plasma physics to calculate elemental compositions directly from spectral line intensities. The shipped algorithm is physics-only (no neural networks or trained models) — see [Evolution_Framework.md](Evolution_Framework.md) for the constraint spec.
+Python library for quantitative elemental analysis without calibration
+standards. This document is the **module-by-module architecture
+reference** for developers and contributors. Users looking for usage
+documentation should start at the [user guide](../user/User_Guide.md);
+users looking for the equations the code evaluates should start at the
+[physics reference](../physics/README.md).
+
+The shipped algorithm is physics-only (no neural networks or trained
+models) — see [Evolution_Framework.md](../development/Evolution_Framework.md)
+for the constraint spec.
 
 ---
 
@@ -10,11 +19,11 @@ A Python library for quantitative elemental analysis without calibration standar
 
 1. [Project Overview](#project-overview)
 2. [Architecture and Design Patterns](#architecture-and-design-patterns)
-3. [Core Module (`cflibs.core`)](#core-module)
+3. [Core Module (`cflibs.core`)](#architecture-core-module)
 4. [Atomic Data Module (`cflibs.atomic`)](#atomic-data-module)
 5. [Plasma Physics Module (`cflibs.plasma`)](#plasma-physics-module)
-6. [Radiation Module (`cflibs.radiation`)](#radiation-module)
-7. [Inversion Module (`cflibs.inversion`)](#inversion-module)
+6. [Radiation Module (`cflibs.radiation`)](#architecture-radiation-module)
+7. [Inversion Module (`cflibs.inversion`)](#architecture-inversion-module)
 8. [Bayesian Methods](#bayesian-methods)
 9. [Manifold Generation (`cflibs.manifold`)](#manifold-generation)
 10. [Validation Framework (`cflibs.validation`)](#validation-framework)
@@ -26,6 +35,7 @@ A Python library for quantitative elemental analysis without calibration standar
 
 ---
 
+(project-overview)=
 ## Project Overview
 
 ### Purpose
@@ -37,10 +47,11 @@ CF-LIBS (Calibration-Free LIBS) enables quantitative elemental analysis from las
 
 ### Status
 
-See [ROADMAP.md](../ROADMAP.md) for current work streams and the epic tracking in beads.
+See `ROADMAP.md` for current work streams and the epic tracking in beads.
 
 ---
 
+(architecture-and-design-patterns)=
 ## Architecture and Design Patterns
 
 ### Design Philosophy
@@ -112,6 +123,7 @@ Thread-safe database access for concurrent operations.
 
 ---
 
+(architecture-core-module)=
 ## Core Module
 
 **Location**: `cflibs/core/`
@@ -141,6 +153,7 @@ YAML/JSON configuration file parsing with validation.
 
 ---
 
+(atomic-data-module)=
 ## Atomic Data Module
 
 **Location**: `cflibs/atomic/`
@@ -248,6 +261,7 @@ class AtomicDatabase(AtomicDataSource):
 
 ---
 
+(plasma-physics-module)=
 ## Plasma Physics Module
 
 **Location**: `cflibs/plasma/`
@@ -358,6 +372,7 @@ Where:
 
 ---
 
+(architecture-radiation-module)=
 ## Radiation Module
 
 **Location**: `cflibs/radiation/`
@@ -572,6 +587,7 @@ def calculate_spectrum_emissivity(
 
 ---
 
+(architecture-inversion-module)=
 ## Inversion Module
 
 **Location**: `cflibs/inversion/`
@@ -587,7 +603,8 @@ def calculate_spectrum_emissivity(
 **Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work.
 
 For the CLI and configuration schema used by classic CF-LIBS inversion, see
-`docs/User_Guide.md` (Inversion section) and `docs/API_Reference.md` (CLI options).
+`docs/user/User_Guide.md` (Inversion section) and
+`docs/reference/API_Reference.md` (CLI options).
 
 ### Optional Dependency Flags
 
@@ -610,6 +627,67 @@ if HAS_UNCERTAINTIES:
 | `HAS_BAYESIAN` | JAX + NumPyro | `MCMCSampler`, MCMC inference |
 | `HAS_NESTED` | dynesty | `NestedSampler`, evidence calculation |
 | `HAS_UNCERTAINTIES` | uncertainties | Correlation-aware error propagation |
+
+
+(element-identification-architecture)=
+### Element Identification Architecture
+
+Scientific background and user-level tuning guidance live in
+[Peak Identification and Line Matching](../user/Peak_Identification_Guide.md).
+For developers, the important boundary is that element identification creates
+candidate elements and `LineObservation` objects; the iterative CF-LIBS solver
+only consumes vetted line observations.
+
+**Preprocessing (`cflibs.inversion.preprocess`)**
+
+- `preprocessing.py` is the canonical peak-detection implementation.
+- Baseline options are median, SNIP, and ALS.
+- Noise is estimated from sigma-clipped MAD residuals.
+- Peak detection uses baseline-subtracted height/prominence thresholds,
+  resolving-power-aware spacing, minimum-FWHM cosmic-ray filtering, and optional
+  second-derivative confirmation.
+- Deconvolution utilities in `deconvolution.py` can resolve overlapping peaks
+  before line observations are built.
+
+**Classic line observation path (`cflibs.inversion.identify.line_detection`)**
+
+This is the path used by `cflibs analyze`, `cflibs invert`, and `cflibs batch`:
+
+```
+raw spectrum -> detect peaks -> load candidate transitions
+             -> kdet prefilter -> comb shift scan
+             -> transition/peak matching -> LineObservation list
+             -> resonance-line set -> LineSelector -> solver
+```
+
+The function `detect_line_observations` deliberately requires a candidate
+element list. That keeps the quantitative inversion tied to prior knowledge or
+to an explicitly reviewed element-identification result instead of a blind
+periodic-table sweep.
+
+**Element-level identifiers (`cflibs.inversion.identify`)**
+
+- `alias.py`: ALIAS-style scoring after simplified LTE emissivity simulation.
+  It exposes similarity, detection-rate, wavelength-shift, and confidence
+  terms suitable for explaining candidate decisions.
+- `comb.py`: element fingerprints represented as comb teeth. It is useful for
+  coherent wavelength shifts and broadening but does not fully model line-specific
+  Stark shifts.
+- `correlation.py`: Labutin-style model-spectrum correlation, with optional
+  vector-index acceleration when a validated spectral library exists.
+- `spectral_nnls.py`: full-spectrum NNLS decomposition against single-element
+  basis spectra; best used as a candidate prefilter for large search spaces.
+- `hybrid.py` and `candidate_prefilter.py`: orchestration helpers that combine
+  full-spectrum and line-level evidence.
+
+**Data contracts**
+
+- `ElementIdentificationResult` records detected/rejected elements, matched and
+  unmatched lines, peak counts, algorithm name, and score metadata.
+- `LineDetectionResult` records solver-ready `LineObservation` objects plus
+  resonance-line keys, applied wavelength shift, peak counts, and warnings.
+- `LineSelector` is the last quality gate before inversion. It filters by SNR,
+  line count, energy spread, isolation, and resonance-line policy.
 
 ### Result Formatting Utilities (`result_base.py`)
 
@@ -708,8 +786,8 @@ class BoltzmannPlotFitter:
 Convert a measured spectrum into CF-LIBS line observations by detecting peaks
 and matching them to database transitions:
 
-See `docs/User_Guide.md` for the `analysis` configuration fields that control
-line detection and selection.
+See `docs/user/User_Guide.md` for the `analysis` configuration fields that
+control line detection and selection.
 
 ```python
 from cflibs.inversion.line_detection import detect_line_observations
@@ -1149,6 +1227,7 @@ class MADOutlierDetector:
 
 ---
 
+(bayesian-methods)=
 ## Bayesian Methods
 
 **Location**: `cflibs/inversion/bayesian.py`
@@ -1398,6 +1477,7 @@ class NestedSampler:
 
 ---
 
+(manifold-generation)=
 ## Manifold Generation
 
 **Location**: `cflibs/manifold/`
@@ -1533,6 +1613,7 @@ class SpectralFitter:
 
 ---
 
+(validation-framework)=
 ## Validation Framework
 
 **Location**: `cflibs/validation/`
@@ -1689,10 +1770,11 @@ class PhysicsOnlyBlocklist:
 - **Blocklist scanner**: Rejects any evolved code that violates physics-only constraint
 - **Persistence layer**: Saves successful algorithm variants for review and integration
 
-See `docs/Evolution_Framework.md` for full specifications.
+See `docs/development/Evolution_Framework.md` for full specifications.
 
 ---
 
+(key-physics-and-equations)=
 ## Key Physics and Equations
 
 ### Line Intensity (LTE)
@@ -1791,6 +1873,7 @@ C_s = U_s(T) × exp(q_s) / F
 
 ---
 
+(data-flow-and-pipelines)=
 ## Data Flow and Pipelines
 
 ### Forward Model Pipeline
@@ -1942,6 +2025,7 @@ C_s = U_s(T) × exp(q_s) / F
 
 ---
 
+(jax-acceleration)=
 ## JAX Acceleration
 
 ### Overview
@@ -1990,6 +2074,7 @@ pip install -e ".[cluster]"  # NVIDIA CUDA
 
 ---
 
+(database-schema)=
 ## Database Schema
 
 ### Tables
@@ -2052,6 +2137,7 @@ pip install -e ".[cluster]"  # NVIDIA CUDA
 
 ---
 
+(api-quick-reference)=
 ## API Quick Reference
 
 ### Creating a Forward Model

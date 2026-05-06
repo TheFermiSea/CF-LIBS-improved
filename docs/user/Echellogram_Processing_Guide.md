@@ -81,7 +81,7 @@ save_spectrum('extracted_spectrum.csv', wavelength, intensity)
 
 The calibration file is a JSON file with the following structure:
 
-```json
+```text
 {
     "order_50": {
         "y_coeffs": [0.0001, 0.1, 500],
@@ -210,4 +210,3 @@ Planned improvements for Phase 2+:
 ---
 
 For more information, see the `EchelleExtractor` class documentation in `cflibs.instrument.echelle`.
-

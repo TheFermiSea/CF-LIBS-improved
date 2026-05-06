@@ -31,7 +31,7 @@ try:
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
-    jnp = None
+    jnp = None  # type: ignore[assignment]
 
 from cflibs.core.logging_config import get_logger
 

@@ -1196,11 +1196,11 @@ class ALIASIdentifier:
                     T_eV = T_K * KB_EV
 
                     # Get precomputed ionization balance
-                    stage_densities = grid_stage_densities.get((T_K, n_e))
-                    if stage_densities is None:
+                    cached_densities = grid_stage_densities.get((T_K, n_e))
+                    if cached_densities is None:
                         continue
 
-                    stage_density = stage_densities.get(transition.ionization_stage, 0.0)
+                    stage_density = cached_densities.get(transition.ionization_stage, 0.0)
                     if stage_density == 0.0:
                         continue
 
@@ -1361,7 +1361,7 @@ class ALIASIdentifier:
             if len(distances) > 0:
                 min_dist = np.min(distances)
                 if min_dist <= 1.5 * delta_lambda:
-                    closest_idx = np.argmin(distances)
+                    closest_idx = int(np.argmin(distances))
                     per_element_shifts.append(peak_wavelengths[closest_idx] - line["wavelength_nm"])
 
         # Use per-element shift if enough matches, else fall back to global
@@ -1485,13 +1485,13 @@ class ALIASIdentifier:
                 thresholds.append(bins[bin_idx])
 
         # Find threshold where detection_rate > 0.5
-        detection_rates = np.array(detection_rates)
-        thresholds = np.array(thresholds)
+        detection_rates_arr = np.asarray(detection_rates)
+        thresholds_arr = np.asarray(thresholds)
 
-        above_50 = detection_rates > 0.5
+        above_50 = detection_rates_arr > 0.5
         if np.any(above_50):
             # Return lowest threshold with >50% detection
-            candidate = thresholds[np.where(above_50)[0][0]]
+            candidate = thresholds_arr[np.where(above_50)[0][0]]
         else:
             candidate = min_log
 

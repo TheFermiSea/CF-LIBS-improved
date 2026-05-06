@@ -121,12 +121,12 @@ try:
     from cflibs.radiation.profiles import _voigt_profile_kernel_jax
 except ImportError:
     HAS_JAX = False
-    jnp = None
+    jnp = None  # type: ignore[assignment]
 
     def jit(f):
         return f
 
-    _voigt_profile_kernel_jax = None
+    _voigt_profile_kernel_jax = None  # type: ignore[assignment]
 
 try:
     import numpyro
@@ -174,7 +174,7 @@ if HAS_JAX:
     _JAX_M_PROTON = _as_jax_real(M_PROTON)
 
 else:
-    _JAX_REAL_DTYPE = None
+    _JAX_REAL_DTYPE = None  # type: ignore[assignment]
 
     def _as_jax_real(value: Any) -> Any:
         return value

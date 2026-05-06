@@ -1858,7 +1858,7 @@ def summarize_id_records(records: Sequence[IDEvaluationRecord]) -> Dict[str, Any
     for workflow_name, workflow_records in by_workflow.items():
         overall[workflow_name] = _compute_workflow_aggregates(workflow_records)
         per_element[workflow_name] = _compute_per_element_stats(workflow_records)
-        workflow_buckets = _compute_id_stratified_buckets(workflow_records, stratified.keys())
+        workflow_buckets = _compute_id_stratified_buckets(workflow_records, list(stratified.keys()))
         for field_name, bucket_data in workflow_buckets.items():
             stratified[field_name][workflow_name] = bucket_data
 
@@ -1999,7 +1999,9 @@ def summarize_composition_records(records: Sequence[CompositionEvaluationRecord]
     for key, pair_records in by_pair.items():
         summary[key] = _compute_composition_overall(pair_records)
         per_element[key] = _compute_composition_per_element(pair_records)
-        pair_buckets = _compute_composition_stratified_buckets(pair_records, stratified.keys())
+        pair_buckets = _compute_composition_stratified_buckets(
+            pair_records, list(stratified.keys())
+        )
         for field_name, bucket_data in pair_buckets.items():
             stratified[field_name][key] = bucket_data
     return {"overall": summary, "per_element": per_element, "stratified": stratified}
@@ -2510,12 +2512,14 @@ class UnifiedBenchmarkRunner:
             id_blocks, higher_is_better=True
         )
         comp_blocks: Dict[str, Dict[str, float]] = {}
-        for record in composition_records:
-            if record.scored and record.aitchison is not None:
-                pair_name = f"{record.id_workflow_name}__{record.composition_workflow_name}"
-                comp_blocks.setdefault(f"{record.outer_split_id}:{record.spectrum_id}", {})[
-                    pair_name
-                ] = record.aitchison
+        for comp_record in composition_records:
+            if comp_record.scored and comp_record.aitchison is not None:
+                pair_name = (
+                    f"{comp_record.id_workflow_name}__{comp_record.composition_workflow_name}"
+                )
+                comp_blocks.setdefault(
+                    f"{comp_record.outer_split_id}:{comp_record.spectrum_id}", {}
+                )[pair_name] = comp_record.aitchison
         statistics["friedman_nemenyi"]["composition"] = friedman_nemenyi(
             comp_blocks, higher_is_better=False
         )

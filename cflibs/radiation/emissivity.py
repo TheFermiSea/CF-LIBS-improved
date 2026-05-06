@@ -3,7 +3,7 @@ Line emissivity calculations.
 """
 
 import numpy as np
-from typing import Dict, Tuple, List, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from cflibs.core.constants import H_PLANCK, C_LIGHT
 from cflibs.atomic.structures import Transition
@@ -13,7 +13,9 @@ logger = get_logger("radiation.emissivity")
 
 
 def calculate_line_emissivity(
-    transition: Transition, upper_level_population_cm3: float, wavelength_nm: float = None
+    transition: Transition,
+    upper_level_population_cm3: float,
+    wavelength_nm: Optional[float] = None,
 ) -> float:
     """
     Calculate spectral emissivity for a transition.
@@ -146,6 +148,8 @@ def calculate_spectrum_emissivity(
             return np.array(spectrum)
 
     if is_per_line:
+        # is_per_line ⇒ sigma_nm is np.ndarray (the isinstance check above).
+        assert isinstance(sigma_nm, np.ndarray)
         spectrum = apply_gaussian_broadening_per_line(
             wavelength_grid, line_wavelengths_arr, line_emissivities_arr, sigma_nm
         )

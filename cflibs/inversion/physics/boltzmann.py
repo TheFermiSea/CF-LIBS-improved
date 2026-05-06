@@ -37,7 +37,7 @@ try:
     HAS_MATPLOTLIB = True
 except ImportError:
     HAS_MATPLOTLIB = False
-    Figure = object  # Dummy for type hinting if missing
+    Figure = object  # type: ignore[misc,assignment]  # dummy for type hinting if missing
 
 
 class BoltzmannPlotFitter:

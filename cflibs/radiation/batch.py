@@ -14,7 +14,7 @@ logger = get_logger("radiation.batch")
 
 def compute_spectrum_batch(
     models: List[SpectrumModel], n_workers: Optional[int] = None, use_processes: bool = False
-) -> List[Tuple[np.ndarray, np.ndarray]]:
+) -> List[Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """
     Compute multiple spectra in parallel.
 
@@ -29,8 +29,9 @@ def compute_spectrum_batch(
 
     Returns
     -------
-    List[Tuple[np.ndarray, np.ndarray]]
-        List of (wavelength, intensity) tuples
+    List[Tuple[Optional[np.ndarray], Optional[np.ndarray]]]
+        List of (wavelength, intensity) tuples. Failed spectra produce
+        ``(None, None)`` so callers can filter without losing index alignment.
     """
     if not models:
         return []
@@ -49,8 +50,10 @@ def compute_spectrum_batch(
         # Submit all tasks
         futures = {executor.submit(model.compute_spectrum): i for i, model in enumerate(models)}
 
-        # Collect results in order
-        completed = {}
+        # Collect results in order. Successful entries hold (wavelength,
+        # intensity) ndarrays; failed entries hold (None, None) and are
+        # filtered/handled by callers.
+        completed: Dict[int, Tuple[Optional[np.ndarray], Optional[np.ndarray]]] = {}
         for future in as_completed(futures):
             idx = futures[future]
             try:
@@ -91,7 +94,10 @@ def compute_spectrum_grid(
     base_model: SpectrumModel,
     parameter_grid: Dict[str, List[float]],
     n_workers: Optional[int] = None,
-) -> Tuple[List[Dict[str, float]], List[Tuple[np.ndarray, np.ndarray]]]:
+) -> Tuple[
+    List[Dict[str, float]],
+    List[Tuple[Optional[np.ndarray], Optional[np.ndarray]]],
+]:
     """
     Compute spectra for a grid of parameter values.
 
@@ -160,7 +166,10 @@ def compute_spectrum_ensemble(
     n_samples: int,
     parameter_distributions: Dict[str, Callable[..., float]],
     n_workers: Optional[int] = None,
-) -> Tuple[List[Dict[str, float]], List[Tuple[np.ndarray, np.ndarray]]]:
+) -> Tuple[
+    List[Dict[str, float]],
+    List[Tuple[Optional[np.ndarray], Optional[np.ndarray]]],
+]:
     """
     Compute spectra for an ensemble of random parameter samples.
 

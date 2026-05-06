@@ -131,7 +131,7 @@ include = ["cflibs*"]
 exclude = ["tests*", "docs*", "examples*"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -139,17 +139,36 @@ ignore_missing_imports = true
 # JAX/optional-import redefinitions and no-any-return from numpy/pandas; fix incrementally
 disable_error_code = ["no-redef", "misc", "no-any-return"]
 
-# Incremental typing: disable noisy codes in cflibs until fixed (optional imports, Array/ndarray, etc.)
+# Some optional dependencies (zarr ≥3.2 with PEP 695 generics, numpyro/arviz/dynesty
+# stubs) use syntax or patterns mypy chokes on under our pinned `python_version`.
+# Skip following their imports — cflibs uses them through `Any`-typed shims.
 [[tool.mypy.overrides]]
-module = "cflibs.*"
+module = [
+    "zarr.*",
+    "numpyro.*",
+    "arviz.*",
+    "dynesty.*",
+]
+follow_imports = "skip"
+
+# JAX-heavy modules expose `jax.Array` (0-d) values where Python `float` is
+# annotated. Properly typing the JAX↔NumPy↔float boundary requires widening many
+# function signatures to `float | jax.Array` and is a cross-cutting cleanup task
+# tracked separately. Until then, suppress the noisy categories on these specific
+# modules only — the rest of cflibs gets full type checking.
+[[tool.mypy.overrides]]
+module = [
+    "cflibs.inversion.solve.bayesian",
+    "cflibs.inversion.solve.joint_optimizer",
+    "cflibs.inversion.solve.coarse_to_fine",
+    "cflibs.inversion.preprocess.deconvolution",
+    "cflibs.radiation.profiles",
+    "cflibs.radiation.stark",
+]
 disable_error_code = [
     "assignment",
     "arg-type",
-    "attr-defined",
     "return-value",
-    "dict-item",
-    "operator",
-    "call-arg",
 ]
 
 [tool.ruff]

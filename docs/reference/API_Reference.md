@@ -14,6 +14,7 @@ Complete API documentation for the CF-LIBS library.
 
 ---
 
+(core-module)=
 ## Core Module
 
 ### Constants (`cflibs.core.constants`)
@@ -168,6 +169,7 @@ Get a logger instance for a module.
 
 ---
 
+(atomic-module)=
 ## Atomic Module
 
 ### Structures (`cflibs.atomic.structures`)
@@ -283,6 +285,7 @@ Close database connection.
 
 ---
 
+(plasma-module)=
 ## Plasma Module
 
 ### State (`cflibs.plasma.state`)
@@ -393,6 +396,7 @@ Solve complete Saha-Boltzmann system for a plasma.
 
 ---
 
+(radiation-module)=
 ## Radiation Module
 
 ### Profiles (`cflibs.radiation.profiles`)
@@ -490,6 +494,7 @@ Compute synthetic spectrum.
 
 ---
 
+(instrument-module)=
 ## Instrument Module
 
 ### Model (`cflibs.instrument.model`)
@@ -614,6 +619,7 @@ Extract complete 1D spectrum from 2D echellogram.
 
 ---
 
+(io-module)=
 ## I/O Module
 
 ### Spectrum (`cflibs.io.spectrum`)
@@ -642,6 +648,7 @@ Save spectrum to file.
 
 ---
 
+(inversion-module)=
 ## Inversion Module
 
 The inversion module is organized into 6 physics-aligned sub-packages that reflect the CF-LIBS measurement→physics→inference pipeline:
@@ -657,8 +664,59 @@ The inversion module is organized into 6 physics-aligned sub-packages that refle
 
 **Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work via compatibility shims.
 
-**Physics-only constraint:** The shipped CF-LIBS algorithm is physics-only (no neural networks or trained models). See [Evolution_Framework.md](Evolution_Framework.md) for the full forbidden/allowed specification and enforcement.
+**Physics-only constraint:** The shipped CF-LIBS algorithm is physics-only (no neural networks or trained models). See [Evolution_Framework.md](../development/Evolution_Framework.md) for the full forbidden/allowed specification and enforcement.
 
+
+### Peak Identification and Line Matching
+
+The user-facing workflow is described in
+[Peak Identification and Line Matching](../user/Peak_Identification_Guide.md).
+This section maps that workflow to the public APIs.
+
+#### Preprocessing (`cflibs.inversion.preprocessing`)
+
+- `BaselineMethod`: `MEDIAN`, `SNIP`, or `ALS` baseline strategy.
+- `estimate_baseline(wavelength, intensity, window_nm=10.0)`: moving-median
+  baseline estimate.
+- `estimate_baseline_snip(...)`: SNIP baseline estimate for sharp peaks on a
+  slowly varying continuum.
+- `estimate_baseline_als(...)`: asymmetric least-squares baseline estimate.
+- `estimate_noise(intensity, baseline)`: iterative sigma-clipped MAD noise
+  estimate.
+- `detect_peaks(...)`: baseline-subtracted, noise-thresholded peak detection.
+- `detect_peaks_auto(...)`: convenience wrapper that estimates baseline/noise
+  before calling `detect_peaks`.
+
+#### Classic Line Observation Builder (`cflibs.inversion.line_detection`)
+
+`detect_line_observations(...)` is the bridge from raw spectra to the classic
+CF-LIBS solver. It loads candidate transitions, detects peaks, applies optional
+`kdet` prefiltering, scans global wavelength shifts, scores comb matches, and
+returns a `LineDetectionResult` with:
+
+- `observations`: `LineObservation` inputs for the iterative solver.
+- `resonance_lines`: transition keys marked as self-absorption risk.
+- `total_peaks`, `matched_peaks`, `unmatched_peaks`.
+- `applied_shift_nm`: selected global wavelength shift.
+- `warnings`: machine-readable diagnostics such as `no_peaks_detected`,
+  `comb_no_elements_passed`, or `no_peaks_matched`.
+
+#### Element Identifiers (`cflibs.inversion.identify`)
+
+| Class | Use case |
+|-------|----------|
+| `ALIASIdentifier` | Interpretable ALIAS scoring with theoretical emissivities, detection-rate, wavelength-shift, and confidence terms. |
+| `CombIdentifier` | Element fingerprint matching with triangular comb teeth and local template correlation. |
+| `CorrelationIdentifier` | Model-spectrum correlation over `(T, n_e)` grids or vector-indexed libraries. |
+| `SpectralNNLSIdentifier` | Full-spectrum non-negative decomposition into single-element basis spectra. |
+
+All identifiers return `ElementIdentificationResult`, which separates detected
+and rejected elements and carries per-element score/confidence metadata. For
+quantitative CF-LIBS, use these identifiers to produce a defensible candidate
+list, then pass selected elements through `detect_line_observations` and
+`LineSelector` before solving.
+
+(cli-module)=
 ## CLI Module
 
 ### Main (`cflibs.cli.main`)
@@ -718,4 +776,4 @@ All modules use descriptive error messages and proper exception types:
 
 ## Further Reading
 
-See the [User Guide](User_Guide.md), [Contributing Guide](../CONTRIBUTING.md), and [ROADMAP.md](../ROADMAP.md).
+See the [User Guide](../user/User_Guide.md), `CONTRIBUTING.md`, and `ROADMAP.md`.

@@ -7,12 +7,14 @@ This module provides:
 - Factory fixtures for generating synthetic test data
 """
 
+import ast
 import os
-import pytest
-import numpy as np
 import sqlite3
 import tempfile
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 # Force JAX to use CPU backend before any JAX imports.
 # Metal backend is abandoned (jax-metal incompatible with JAX >= 0.6)
@@ -26,9 +28,112 @@ try:
 except ImportError:
     pass
 
-from cflibs.atomic.structures import Transition, EnergyLevel
+from cflibs.atomic.structures import EnergyLevel, Transition
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.state import SingleZoneLTEPlasma
+
+
+def _get_missing_optional_dependencies() -> dict[str, tuple[str, str, str]]:
+    """Probe optional dependencies once and return missing markers."""
+    optional_deps: dict[str, tuple[list[tuple[str, str | None]], str]] = {
+        "requires_jax": ([("jax", None)], 'pip install ".[jax-cpu]"'),
+        "requires_bayesian": (
+            [
+                ("numpyro", None),
+                ("cflibs.inversion.solve.bayesian", "HAS_NUMPYRO"),
+            ],
+            'pip install ".[bayesian]"',
+        ),
+        "requires_uncertainty": ([("uncertainties", None)], 'pip install ".[uncertainty]"'),
+        "requires_rust": ([("cflibs._core", None)], "compile cflibs-core rust extension"),
+    }
+    missing: dict[str, tuple[str, str, str]] = {}
+    for marker_name, (probes, hint) in optional_deps.items():
+        for module_name, attr in probes:
+            try:
+                module = __import__(module_name, fromlist=["__all__"])
+                if attr is not None and not getattr(module, attr, False):
+                    missing[marker_name] = (module_name, hint, f"{attr}=False")
+                    break
+            except Exception as exc:  # noqa: BLE001 — see docstring rationale
+                missing[marker_name] = (module_name, hint, type(exc).__name__)
+                break
+
+    # Rust extension has two acceptable installed locations: maturin's
+    # `cflibs._core` (when cflibs is installed non-editable so maturin can
+    # nest the .so under it) and a top-level `_core` module (the editable-
+    # install fallback that production code in cflibs/plasma/partition.py
+    # accepts). The probe above only checks `cflibs._core`; if that failed
+    # but `_core` resolves, retract the missing marker.
+    if "requires_rust" in missing:
+        try:
+            __import__("_core")
+            del missing["requires_rust"]
+        except Exception:  # noqa: BLE001
+            pass
+    # Probe database files
+    candidates = [
+        Path("libs_production.db"),
+        Path("ASD_da/libs_production.db"),
+        Path(__file__).parent.parent / "libs_production.db",
+        Path(__file__).parent.parent / "ASD_da" / "libs_production.db",
+    ]
+    if not any(p.exists() for p in candidates):
+        missing["requires_db"] = ("ASD_da/libs_production.db", "download atomic database", "missing_file")
+    return missing
+
+
+def _infer_optional_dependency_markers(path: Path) -> set[str]:
+    """Infer optional dependency markers from module contents before import."""
+    markers: set[str] = set()
+    try:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return markers
+
+    marker_names = (
+        "requires_jax",
+        "requires_bayesian",
+        "requires_uncertainty",
+        "requires_rust",
+        "requires_db",
+    )
+    for marker_name in marker_names:
+        if marker_name in source:
+            markers.add(marker_name)
+
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            imported_names = {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported_names = {node.module.split(".")[0]}
+        else:
+            continue
+
+        if "jax" in imported_names:
+            markers.add("requires_jax")
+        if "numpyro" in imported_names or "dynesty" in imported_names or "arviz" in imported_names:
+            markers.add("requires_bayesian")
+        if "uncertainties" in imported_names:
+            markers.add("requires_uncertainty")
+        if "_core" in imported_names:
+            markers.add("requires_rust")
+
+    return markers
+
+
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool:
+    """Skip optional-dependency test modules before import-time failures occur."""
+    if collection_path.suffix != ".py" or "tests" not in collection_path.parts:
+        return False
+
+    missing = _get_missing_optional_dependencies()
+    if not missing:
+        return False
+
+    required_markers = _infer_optional_dependency_markers(collection_path)
+    return any(marker in missing for marker in required_markers)
 
 
 def pytest_collection_modifyitems(config, items):
@@ -58,42 +163,7 @@ def pytest_collection_modifyitems(config, items):
 
     Closes CF-LIBS-improved-48c2.
     """
-    # marker_name -> (probes, hint)
-    # probes is a list of (module_name, attr) pairs:
-    #   - if attr is None, just import the module
-    #   - if attr is a string, also assert getattr(module, attr) is truthy
-    optional_deps: dict[str, tuple[list[tuple[str, str | None]], str]] = {
-        "requires_jax": ([("jax", None)], 'pip install ".[jax-cpu]"'),
-        "requires_bayesian": (
-            [
-                ("numpyro", None),
-                ("cflibs.inversion.solve.bayesian", "HAS_NUMPYRO"),
-            ],
-            'pip install ".[bayesian]"',
-        ),
-        "requires_uncertainty": ([("uncertainties", None)], 'pip install ".[uncertainty]"'),
-        "requires_rust": ([("cflibs._core", None)], 'compile cflibs-core rust extension'),
-    }
-    missing: dict[str, tuple[str, str, str]] = {}
-    for marker_name, (probes, hint) in optional_deps.items():
-        for module_name, attr in probes:
-            try:
-                module = __import__(module_name, fromlist=["__all__"])
-                if attr is not None and not getattr(module, attr, False):
-                    missing[marker_name] = (module_name, hint, f"{attr}=False")
-                    break
-            except Exception as exc:  # noqa: BLE001 — see docstring rationale
-                missing[marker_name] = (module_name, hint, type(exc).__name__)
-                break
-    # Probe database files
-    candidates = [
-        Path("libs_production.db"),
-        Path("ASD_da/libs_production.db"),
-        Path(__file__).parent.parent / "libs_production.db",
-        Path(__file__).parent.parent / "ASD_da" / "libs_production.db",
-    ]
-    if not any(p.exists() for p in candidates):
-        missing["requires_db"] = ("ASD_da/libs_production.db", "download atomic database", "missing_file")
+    missing = _get_missing_optional_dependencies()
 
     if not missing:
         return

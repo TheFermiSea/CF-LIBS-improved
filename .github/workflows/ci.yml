@@ -22,10 +22,32 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
 
-    - name: Install dependencies
+    - name: Set up Rust toolchain (stable)
+      # Pinned to a specific commit per supply-chain best practice (CWE-829).
+      uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable @ 2026-03-27
+
+    - name: Cache cargo build (cflibs-core)
+      uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.9.1
+      with:
+        workspaces: native/cflibs-core
+
+    - name: Install Python dependencies
+      # `[ci]` provides JAX (CPU), NumPyro, ArviZ, dynesty, h5py, zarr, faiss-cpu,
+      # uncertainties — the full computational stack the shipped algorithm
+      # exercises. `[dev]` adds linters, mypy, pytest, etc.
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[dev,ci]"
+
+    - name: Build cflibs-core Rust extension
+      # Match production: comb-matching and partition-function tests need the
+      # native extension. `pip install ./native/cflibs-core` builds a wheel via
+      # the maturin PEP 517 backend (declared in that crate's pyproject.toml)
+      # and installs it without needing an explicit virtualenv. The module
+      # lands as top-level `_core`, which `cflibs/plasma/partition.py` accepts
+      # via its `from cflibs._core / from _core` fallback chain.
+      run: |
+        pip install ./native/cflibs-core
 
     - name: Lint with Ruff
       run: |
@@ -36,5 +58,11 @@ jobs:
         mypy cflibs/
 
     - name: Test with Pytest
+      # Run the full suite. `slow` markers are kept off the blocking job
+      # because end-to-end MCMC and full NIST-parity sweeps are minutes-long
+      # and run separately in the Performance Benchmarks workflow. All other
+      # markers (`requires_jax`, `requires_bayesian`, `requires_db`,
+      # `requires_rust`, `requires_uncertainty`) now resolve because their
+      # dependencies are installed above.
       run: |
-        pytest tests/ -m "not requires_db and not requires_bayesian and not requires_rust and not requires_jax and not slow"
+        pytest tests/ -m "not slow"

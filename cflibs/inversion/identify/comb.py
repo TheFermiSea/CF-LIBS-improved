@@ -518,7 +518,7 @@ class CombIdentifier:
             best_width, active (bool)
         """
         # Find nearest index to center_nm
-        center_idx = np.argmin(np.abs(wavelength - center_nm))
+        center_idx = int(np.argmin(np.abs(wavelength - center_nm)))
 
         # Estimate resolution element from wavelength spacing
         dwl = np.median(np.diff(wavelength))

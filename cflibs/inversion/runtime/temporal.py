@@ -1076,14 +1076,14 @@ class TemporalSelfAbsorptionCorrector:
             emission_weight = n_e * np.exp(-E_lower_eV / T_eV) if T_eV > 0 else 0
             weights.append(emission_weight)
 
-        tau_values = np.array(tau_values)
-        weights = np.array(weights)
+        tau_arr = np.asarray(tau_values, dtype=float)
+        weight_arr = np.asarray(weights, dtype=float)
 
         # Weighted average
-        if np.sum(weights) > 0:
-            return float(np.average(tau_values, weights=weights))
+        if np.sum(weight_arr) > 0:
+            return float(np.average(tau_arr, weights=weight_arr))
         else:
-            return float(np.mean(tau_values))
+            return float(np.mean(tau_arr))
 
     def correct_observations(
         self,
@@ -1476,7 +1476,7 @@ class TimeResolvedCFLIBSSolver:
         best_spec = next(s for s in spectra if s.gate.delay_ns == best_delay)
 
         # Quality metric: average weight
-        combined_quality = np.mean(list(gate_weights.values()))
+        combined_quality = float(np.mean(list(gate_weights.values())))
 
         logger.info(
             f"Multi-gate CF-LIBS: {len(spectra)} gates, "

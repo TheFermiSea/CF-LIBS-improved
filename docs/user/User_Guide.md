@@ -3,8 +3,13 @@
 Complete guide for using the CF-LIBS library for forward modeling and analysis of LIBS spectra.
 
 If you are new to the repository, start with
-[Quick Start for Scientists](Quick_Start_For_Scientists.md). This guide is more detailed and
-assumes you are ready to edit configuration files or use the Python API.
+[Quick Start: Real Data](Quick_Start_Real_Data.md) (for analyzing measured spectra) or
+[Quick Start: Synthetic Spectra](Quick_Start_Synthetic.md) (for forward modeling).
+This guide is more detailed and assumes you are ready to edit configuration files
+or use the Python API.
+
+For the underlying equations and the physical assumptions of the inversion, see the
+[physics reference](../physics/README.md).
 
 ## Table of Contents
 
@@ -19,6 +24,7 @@ assumes you are ready to edit configuration files or use the Python API.
 
 ---
 
+(installation)=
 ## Installation
 
 ### Requirements
@@ -61,6 +67,7 @@ print(cflibs.__version__)  # Should print 0.1.0
 
 ---
 
+(quick-start)=
 ## Quick Start
 
 ### Generate Your First Spectrum
@@ -115,6 +122,7 @@ plt.show()
 
 ---
 
+(forward-modeling)=
 ## Forward Modeling
 
 ### Using the Python API
@@ -212,6 +220,7 @@ instrument = InstrumentModel(
 
 ---
 
+(echellogram-extraction)=
 ## Echellogram Extraction
 
 ### Basic Usage
@@ -279,6 +288,7 @@ wavelength, intensity = extractor.extract_spectrum(
 
 ---
 
+(configuration-files)=
 ## Configuration Files
 
 ### Structure
@@ -340,9 +350,10 @@ See `examples/config_example.yaml` and `examples/config_ti64.yaml` for complete 
 
 ---
 
+(advanced-usage)=
 ## Advanced Usage
 
-## Inversion (Classic CF-LIBS)
+### Inversion (Classic CF-LIBS)
 
 The CLI supports classic CF-LIBS inversion using detected spectral lines.
 Provide a spectrum file plus an inversion config.
@@ -431,8 +442,33 @@ for config_file in configs:
     # ... (process each config)
 ```
 
+(bayesian-inference)=
+### Bayesian Inference
+
+Bayesian inversion is available through the dedicated `cflibs bayesian`
+command when the optional NumPyro stack is installed:
+
+```bash
+pip install -e ".[bayesian]"
+cflibs bayesian spectrum.csv --elements Fe,Cr,Ni --output posterior.nc
+```
+
+Use this path when you need posterior intervals, chain diagnostics, and
+posterior-predictive checks rather than a single point estimate.
+
+(inversion-diagnostics)=
+### Inversion Diagnostics
+
+For difficult spectra, inspect more than the final concentrations:
+
+- `result.boltzmann_fits` for per-element slopes, intercepts, and `R²`.
+- `result.convergence_history` to see whether `T` and `n_e` stabilized.
+- `result.quality_metrics` for McWhirter, consistency, and self-absorption flags.
+- DEBUG logging from `cflibs analyze` / `cflibs invert` to see why lines were rejected.
+
 ---
 
+(troubleshooting)=
 ## Troubleshooting
 
 ### Common Issues
@@ -480,12 +516,13 @@ extractor = EchelleExtractor('calibration.json')
 
 ### Getting Help
 
-- Check the [API Reference](API_Reference.md)
-- Review [examples](../examples/)
-- See [Contributing Guide](../CONTRIBUTING.md) for development questions
+- Check the [API Reference](../reference/API_Reference.md)
+- Review the `examples/` directory in the repository root
+- See `CONTRIBUTING.md` for development questions
 
 ---
 
+(examples)=
 ## Examples
 
 ### Example 1: Ti-6Al-4V Alloy
@@ -572,8 +609,8 @@ for al_conc in al_concentrations:
 
 ## Next Steps
 
-- Explore the [API Reference](API_Reference.md) for detailed function documentation
-- Check out [examples](../examples/) for more use cases
-- Read about [contributing](../CONTRIBUTING.md) if you want to help develop CF-LIBS
+- Explore the [API Reference](../reference/API_Reference.md) for detailed function documentation
+- Check out the `examples/` directory for more use cases
+- Read `CONTRIBUTING.md` if you want to help develop CF-LIBS
 
 For questions or issues, please open an issue on GitHub.
