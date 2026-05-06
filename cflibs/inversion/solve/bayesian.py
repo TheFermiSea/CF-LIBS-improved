@@ -611,6 +611,9 @@ class PriorConfig:
     # Full LIBS density range now supported thanks to Weideman Faddeeva approximation
     # (branch-free implementation with stable gradients)
     log_ne_range: Tuple[float, float] = (15.0, 19.0)
+    # Wavelength shift prior [nm]. If None, shift is assumed to be 0.
+    # Typical range for stable spectrometers is (-0.05, 0.05) nm.
+    shift_nm_range: Optional[Tuple[float, float]] = None
     concentration_alpha: float = 1.0
     baseline_degree: int = 0
     baseline_scale: Optional[float] = None
@@ -623,7 +626,11 @@ class PriorConfig:
         with several minor components. Dirichlet alpha < 1 favors sparse
         compositions.
         """
-        defaults = {"concentration_alpha": 0.5, "T_eV_range": (0.5, 2.0)}
+        defaults = {
+            "concentration_alpha": 0.5,
+            "T_eV_range": (0.5, 2.0),
+            "shift_nm_range": (-0.02, 0.02),
+        }
         defaults.update(kwargs)
         return cls(**defaults)
 
@@ -634,7 +641,11 @@ class PriorConfig:
         Alloys have well-characterized compositions with known major
         elements. Dirichlet alpha > 1 favors more equal distributions.
         """
-        defaults = {"concentration_alpha": 2.0, "T_eV_range": (0.6, 1.5)}
+        defaults = {
+            "concentration_alpha": 2.0,
+            "T_eV_range": (0.6, 1.5),
+            "shift_nm_range": (-0.01, 0.01),
+        }
         defaults.update(kwargs)
         return cls(**defaults)
 
@@ -708,6 +719,9 @@ class MCMCResult:
     log_ne_q025: float
     log_ne_q975: float
 
+    shift_nm_mean: Optional[float] = None
+    shift_nm_std: Optional[float] = None
+
     concentrations_mean: Dict[str, float]
     concentrations_std: Dict[str, float]
     concentrations_q025: Dict[str, float]
@@ -768,6 +782,11 @@ class MCMCResult:
             f"[{self.log_ne_q025:.4f}, {self.log_ne_q975:.4f}]",
             f"{'n_e [cm^-3]':<20} {self.n_e_mean:>12.2e}",
         ]
+
+        if self.shift_nm_mean is not None:
+            lines.append(
+                f"{'Shift [nm]':<20} {self.shift_nm_mean:>12.4f} {self.shift_nm_std:>12.4f}"
+            )
 
         lines.append("-" * 70)
         lines.append(f"{'Element':<20} {'Conc.':<12} {'Std':>12} {'95% CI':>20}")
@@ -1174,6 +1193,7 @@ class BayesianForwardModel:
         log_ne: float,
         concentrations: jnp.ndarray,
         total_species_density_cm3: Optional[float] = None,
+        shift_nm: float = 0.0,
     ) -> jnp.ndarray:
         """
         Compute synthetic spectrum for given plasma parameters.
@@ -1189,6 +1209,8 @@ class BayesianForwardModel:
         total_species_density_cm3 : float, optional
             Total heavy-particle number density in cm^-3. If omitted, the
             legacy approximation ``total_species_density_cm3 = n_e`` is used.
+        shift_nm : float, optional
+            Global wavelength shift in nm (default: 0.0)
 
         Returns
         -------
@@ -1204,6 +1226,7 @@ class BayesianForwardModel:
             n_e,
             concentrations,
             total_species_density_cm3=total_species_density_cm3,
+            shift_nm=shift_nm,
         )
 
     def forward_numpy(
@@ -1212,6 +1235,7 @@ class BayesianForwardModel:
         log_ne: float,
         concentrations: np.ndarray,
         total_species_density_cm3: Optional[float] = None,
+        shift_nm: float = 0.0,
     ) -> np.ndarray:
         """
         Compute synthetic spectrum using NumPy arrays (for dynesty compatibility).
@@ -1229,6 +1253,8 @@ class BayesianForwardModel:
         total_species_density_cm3 : float, optional
             Total heavy-particle number density in cm^-3. If omitted, the
             legacy approximation ``total_species_density_cm3 = n_e`` is used.
+        shift_nm : float, optional
+            Global wavelength shift in nm (default: 0.0)
 
         Returns
         -------
@@ -1241,6 +1267,7 @@ class BayesianForwardModel:
             log_ne,
             conc_jax,
             total_species_density_cm3=total_species_density_cm3,
+            shift_nm=shift_nm,
         )
         return np.array(result)
 
@@ -1258,6 +1285,7 @@ class BayesianForwardModel:
         n_e: float,
         concentrations: jnp.ndarray,
         total_species_density_cm3: Optional[float] = None,
+        shift_nm: float = 0.0,
     ) -> jnp.ndarray:
         """
         Compute spectrum with full physics.
@@ -1268,6 +1296,7 @@ class BayesianForwardModel:
         T_eV = _as_jax_real(T_eV)
         n_e = _as_jax_real(n_e)
         concentrations = _as_jax_real(concentrations)
+        shift_nm = _as_jax_real(shift_nm)
         T_K = T_eV * _JAX_EV_TO_K
         total_species_density = _resolve_total_species_density_cm3(n_e, total_species_density_cm3)
 
@@ -1345,7 +1374,8 @@ class BayesianForwardModel:
 
         # --- Voigt Profile (Weideman rational approximation) ---
         # Uses branch-free implementation for gradient stability during MCMC
-        diff = self.wavelength[:, None] - data.wavelength_nm[None, :]
+        # Incorporate wavelength shift if provided (Gemini alignment fix)
+        diff = self.wavelength[:, None] - (data.wavelength_nm[None, :] + shift_nm)
         profile = _voigt_profile_kernel_jax(diff, sigma_total[None, :], gamma_stark[None, :])
 
         # Sum line contributions
@@ -1444,8 +1474,21 @@ def bayesian_model(
     alpha = jnp.ones(n_elements) * prior_config.concentration_alpha
     concentrations = numpyro.sample("concentrations", dist.Dirichlet(alpha))
 
+    # Wavelength shift: optional uniform prior
+    shift_nm = 0.0
+    if prior_config.shift_nm_range is not None:
+        shift_nm = numpyro.sample(
+            "shift_nm",
+            dist.Uniform(prior_config.shift_nm_range[0], prior_config.shift_nm_range[1]),
+        )
+
     # --- Forward Model ---
-    predicted = forward_model.forward(T_eV, log_ne, concentrations)
+    predicted = forward_model.forward(T_eV, log_ne, concentrations, shift_nm=shift_nm)
+
+    # --- LTE Validity Penalty ---
+    # Enforce McWhirter criterion as a soft constraint in the posterior
+    penalty = mcwhirter_log_penalty(T_eV, log_ne)
+    numpyro.factor("lte_penalty", penalty)
 
     # --- Additive polynomial baseline (bremsstrahlung continuum) ---
     if prior_config.baseline_degree > 0:
@@ -1554,6 +1597,10 @@ class MCMCSampler:
             "concentrations": conc_init,
         }
 
+        # Initialize wavelength shift at zero
+        if self.prior_config.shift_nm_range is not None:
+            init_values["shift_nm"] = 0.0
+
         # Initialize baseline coefficients at zero (no continuum adjustment)
         if self.prior_config.baseline_degree > 0:
             n_coeffs = self.prior_config.baseline_degree + 1
@@ -1645,6 +1692,13 @@ class MCMCSampler:
         log_ne_flat = np.array(log_ne_samples).flatten()
         conc_flat = np.array(conc_samples).reshape(-1, n_elements)
 
+        shift_nm_mean = None
+        shift_nm_std = None
+        if "shift_nm" in samples:
+            shift_flat = np.array(samples["shift_nm"]).flatten()
+            shift_nm_mean = float(np.mean(shift_flat))
+            shift_nm_std = float(np.std(shift_flat))
+
         # Compute convergence diagnostics
         r_hat, ess = self._compute_convergence_diagnostics(mcmc, num_chains)
 
@@ -1662,6 +1716,8 @@ class MCMCSampler:
             log_ne_std=float(np.std(log_ne_flat)),
             log_ne_q025=float(np.percentile(log_ne_flat, 2.5)),
             log_ne_q975=float(np.percentile(log_ne_flat, 97.5)),
+            shift_nm_mean=shift_nm_mean,
+            shift_nm_std=shift_nm_std,
             concentrations_mean={
                 el: float(np.mean(conc_flat[:, i])) for i, el in enumerate(self.elements)
             },
