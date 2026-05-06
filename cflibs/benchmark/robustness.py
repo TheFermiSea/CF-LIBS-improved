@@ -368,16 +368,16 @@ def outlier_injection_perturbation(
     out = _copy_spectrum(spectrum)
     n = out.intensity.size
 
-    if n == 0 or fraction == 0.0 or sigma_multiplier == 0.0:
+    if n == 0 or fraction <= 0.0 or sigma_multiplier <= 0.0:
         return out
 
     if rng is None:
         rng = np.random.default_rng()
 
     sigma = float(np.std(out.intensity))
-    if sigma == 0.0:
-        # Fall back to a fraction of the mean if std is zero (constant
-        # spectrum).  This still injects detectable outliers.
+    if sigma < 1e-12:
+        # Fall back to a fraction of the mean if std is effectively zero
+        # (constant spectrum). This still injects detectable outliers.
         sigma = float(np.mean(np.abs(out.intensity))) or 1.0
 
     n_corrupt = int(round(fraction * n))
