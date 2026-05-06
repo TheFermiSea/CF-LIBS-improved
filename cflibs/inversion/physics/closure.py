@@ -1,9 +1,10 @@
 """
 Closure equation implementation for CF-LIBS.
 
-Includes standard, matrix, oxide, and ILR (Isometric Log-Ratio) closure modes.
-The ILR transform maps compositions from the D-simplex to R^(D-1), enabling
-unconstrained optimization in a proper metric space.
+Includes standard, matrix, oxide, ILR (Isometric Log-Ratio), and PWLR
+(pairwise/pivot log-ratio) closure modes. The ILR/PWLR modes map
+compositions from the D-simplex to R^(D-1), enabling unconstrained
+optimization in coordinate space.
 
 References
 ----------
@@ -20,6 +21,10 @@ from cflibs.core.logging_config import get_logger
 
 logger = get_logger("inversion.closure")
 
+LOGRATIO_CLIP_FLOOR = 1e-10
+PWLR_WEIGHT_FLOOR = 1e-12
+PWLR_ADAPTIVE_SCALE_MAX = 50.0
+
 
 class ClosureMode(Enum):
     """Closure equation modes for CF-LIBS normalization."""
@@ -28,6 +33,7 @@ class ClosureMode(Enum):
     MATRIX = "matrix"
     OXIDE = "oxide"
     ILR = "ilr"
+    PWLR = "pwlr"
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +82,7 @@ def clr_transform(composition: np.ndarray) -> np.ndarray:
     np.ndarray
         CLR coordinates, same shape as input.
     """
-    log_comp = np.log(np.clip(composition, 1e-10, None))
+    log_comp = np.log(np.clip(composition, LOGRATIO_CLIP_FLOOR, None))
     return log_comp - np.mean(log_comp, axis=-1, keepdims=True)
 
 
@@ -122,6 +128,111 @@ def ilr_inverse(coords: np.ndarray, D: int) -> np.ndarray:
     clr = coords @ V.T  # (D-1,) @ (D-1, D) -> (D,)
     comp = np.exp(clr)
     return comp / np.sum(comp, axis=-1, keepdims=True)
+
+
+def _pivot_permutation(D: int, pivot_index: int) -> np.ndarray:
+    """Return index permutation with the selected pivot moved to position 0."""
+    if pivot_index < 0 or pivot_index >= D:
+        raise ValueError(f"pivot_index={pivot_index} out of bounds for D={D}")
+    if pivot_index == 0:
+        return np.arange(D)
+    keep = [i for i in range(D) if i != pivot_index]
+    return np.array([pivot_index, *keep], dtype=int)
+
+
+def plr_transform(composition: np.ndarray, pivot_index: int = 0) -> np.ndarray:
+    """
+    Pivot log-ratio (PLR) transform (a form of ALR).
+
+    Uses a pivot element (default first element). Maps a D-part composition
+    to (D-1) log-ratio coordinates.
+
+    Parameters
+    ----------
+    composition : np.ndarray
+        Composition vector(s) on the simplex, shape (D,) or (N, D).
+
+    pivot_index : int, optional
+        Index of the pivot component.
+
+    Returns
+    -------
+    np.ndarray
+        PLR coordinates, shape (D-1,) or (N, D-1).
+    """
+    D = composition.shape[-1]
+    perm = _pivot_permutation(D, pivot_index)
+    log_comp = np.log(np.clip(composition[..., perm], LOGRATIO_CLIP_FLOOR, None))
+    return log_comp[..., 1:] - log_comp[..., :1]
+
+
+def plr_inverse(coords: np.ndarray, D: Optional[int] = None, pivot_index: int = 0) -> np.ndarray:
+    """
+    Inverse PLR transform: map from R^(D-1) back to the D-simplex.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        PLR coordinates, shape (D-1,) or (N, D-1).
+
+    D : int, optional
+        Number of compositional parts. If omitted, inferred as ``coords.shape[-1] + 1``.
+    pivot_index : int, optional
+        Index of the pivot component in output composition.
+
+    Returns
+    -------
+    np.ndarray
+        Composition on the simplex (sums to 1), shape (D,) or (N, D).
+    """
+    if D is None:
+        D = coords.shape[-1] + 1
+    ratios = np.exp(coords)
+    ones_shape = list(ratios.shape)
+    ones_shape[-1] = 1
+    simplex_perm = np.concatenate([np.ones(ones_shape), ratios], axis=-1)
+    simplex_perm = simplex_perm / np.sum(simplex_perm, axis=-1, keepdims=True)
+
+    perm = _pivot_permutation(D, pivot_index)
+    inv_perm = np.argsort(perm)
+    return simplex_perm[..., inv_perm]
+
+
+def optimize_pwlr_coordinates(
+    simplex: np.ndarray,
+    pivot_index: int,
+    regularization_strength: float = 1e-4,
+) -> np.ndarray:
+    """
+    Optimize concentrations in PWLR coordinates with adaptive ridge regularization.
+
+    The optimization is performed directly in PWLR space:
+
+        argmin_z  0.5 * sum_i w_i (z_i - z_target_i)^2 + 0.5 * λ ||z||_2^2
+
+    where ``z_target`` is the PWLR transform of the normalized raw concentrations.
+    The closed-form minimizer is solved as a small linear system. For near-zero
+    components, an adaptive λ dampens extreme coordinates and improves numerical
+    stability without adding concentration offsets in simplex space.
+    """
+    if regularization_strength < 0.0 or not np.isfinite(regularization_strength):
+        raise ValueError("regularization_strength must be finite and >= 0")
+
+    D = simplex.shape[-1]
+    target = plr_transform(simplex, pivot_index=pivot_index)
+    if D <= 2:
+        return target
+
+    perm = _pivot_permutation(D, pivot_index)
+    simplex_perm = np.clip(simplex[perm], PWLR_WEIGHT_FLOOR, None)
+    weights = np.ones(D - 1)
+    min_component = float(np.clip(simplex_perm.min(), PWLR_WEIGHT_FLOOR, None))
+    adaptive_scale = 1.0 - np.log(min_component)
+    adaptive_lambda = regularization_strength * min(adaptive_scale, PWLR_ADAPTIVE_SCALE_MAX)
+
+    A = np.diag(weights + adaptive_lambda)
+    b = weights * target
+    return np.linalg.solve(A, b)
 
 
 def _validated_abundance_multiplier(
@@ -425,12 +536,13 @@ class ClosureEquation:
         ClosureResult
             Concentrations on the simplex (sum=1, all positive).
         """
-        # Build ordered element list and raw relative concentrations
+        # Build deterministic ordered element list and raw relative concentrations
         elements = []
         rel_values = []
         total_measured = 0.0
 
-        for element, q_s in intercepts.items():
+        for element in sorted(intercepts):
+            q_s = intercepts[element]
             if element not in partition_funcs:
                 logger.warning(f"Missing partition function for {element} in ILR closure")
                 continue
@@ -461,6 +573,95 @@ class ClosureEquation:
             experimental_factor=F,
             total_measured=total_measured,
             mode="ilr",
+        )
+
+    @staticmethod
+    def apply_pwlr(
+        intercepts: Dict[str, float],
+        partition_funcs: Dict[str, float],
+        abundance_multipliers: Optional[Dict[str, float]] = None,
+        pivot_element: Optional[str] = None,
+        regularization_strength: float = 1e-4,
+    ) -> ClosureResult:
+        """
+        Apply PWLR (Pivot Log-Ratio) based closure.
+
+        Uses the pairwise/pivot log-ratio transform as an alternative to ILR. PLR
+        provides a quasi-isometric coordinate system that is easier to
+        interpret than ILR and handles compositional zeros more gracefully in
+        optimization.
+
+        Parameters
+        ----------
+        intercepts : Dict[str, float]
+            Boltzmann plot intercepts q_s for each element.
+        partition_funcs : Dict[str, float]
+            Partition function values U_s(T) for each element.
+        abundance_multipliers : Dict[str, float], optional
+            Optional per-element scaling factors. Defaults to unity.
+        pivot_element : str, optional
+            Optional pivot element. If omitted, the dominant raw component is
+            used as pivot.
+        regularization_strength : float, optional
+            Base ridge strength for PWLR-space optimization.
+
+        Returns
+        -------
+        ClosureResult
+            Concentrations on the simplex (sum=1, all positive).
+        """
+        if regularization_strength < 0.0 or not np.isfinite(regularization_strength):
+            raise ValueError("regularization_strength must be finite and >= 0")
+
+        # Build deterministic ordered element list and raw relative concentrations
+        elements = []
+        rel_values = []
+        total_measured = 0.0
+
+        for element in sorted(intercepts):
+            q_s = intercepts[element]
+            if element not in partition_funcs:
+                logger.warning(f"Missing partition function for {element} in PWLR closure")
+                continue
+
+            U_s = partition_funcs[element]
+            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
+            rel_C = multiplier * U_s * np.exp(q_s)
+            elements.append(element)
+            rel_values.append(rel_C)
+            total_measured += rel_C
+
+        if total_measured == 0 or len(elements) < 2:
+            logger.error("PWLR closure requires at least 2 elements with non-zero concentration")
+            return ClosureResult({}, 0.0, 0.0, "pwlr")
+
+        # Normalize to simplex, optimize in PWLR space, then map back.
+        raw = np.array(rel_values)
+        simplex = raw / np.sum(raw)
+
+        if pivot_element is not None:
+            if pivot_element not in elements:
+                raise ValueError(f"pivot_element {pivot_element!r} not found in closure elements")
+            pivot_index = elements.index(pivot_element)
+        else:
+            pivot_index = int(np.argmax(simplex))
+
+        coords = optimize_pwlr_coordinates(
+            simplex=simplex,
+            pivot_index=pivot_index,
+            regularization_strength=regularization_strength,
+        )
+        final_simplex = plr_inverse(coords, D=len(elements), pivot_index=pivot_index)
+
+        F = total_measured  # experimental factor matches standard definition
+
+        concentrations = {el: float(final_simplex[i]) for i, el in enumerate(elements)}
+
+        return ClosureResult(
+            concentrations=concentrations,
+            experimental_factor=F,
+            total_measured=total_measured,
+            mode="pwlr",
         )
 
     @staticmethod

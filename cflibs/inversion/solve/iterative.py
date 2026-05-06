@@ -365,7 +365,7 @@ class IterativeCFLIBSSolver:
 
         Parameters:
             observations (List[LineObservation]): Spectral line observations to invert; lines are grouped by element.
-            closure_mode (str): Closure method for converting Boltzmann intercepts to concentrations. One of "standard", "matrix", or "oxide".
+            closure_mode (str): Closure method for converting Boltzmann intercepts to concentrations. One of "standard", "matrix", "oxide", "ilr", or "pwlr".
             **closure_kwargs: Additional keyword arguments forwarded to the chosen closure method (for example, a matrix_element for "matrix" mode).
 
         Returns:
@@ -475,6 +475,19 @@ class IterativeCFLIBSSolver:
                     abundance_multipliers=abundance_multipliers,
                     **closure_kwargs,
                 )
+            elif closure_mode == "ilr":
+                closure_res = ClosureEquation.apply_ilr(
+                    intercepts,
+                    partition_funcs,
+                    abundance_multipliers=abundance_multipliers,
+                )
+            elif closure_mode == "pwlr":
+                closure_res = ClosureEquation.apply_pwlr(
+                    intercepts,
+                    partition_funcs,
+                    abundance_multipliers=abundance_multipliers,
+                    **closure_kwargs,
+                )
             else:
                 closure_res = ClosureEquation.apply_standard(
                     intercepts,
@@ -569,7 +582,7 @@ class IterativeCFLIBSSolver:
 
         Parameters:
             observations (List[LineObservation]): Spectral lines with intensity uncertainties.
-            closure_mode (str): Closure algorithm to use ('standard', 'matrix', or 'oxide').
+            closure_mode (str): Closure algorithm to use ('standard', 'matrix', 'oxide', 'ilr', or 'pwlr').
             **closure_kwargs: Arguments passed to the chosen closure routine (e.g. 'matrix_element',
                 'matrix_fraction', or 'oxide_stoichiometry').
 
@@ -676,6 +689,12 @@ class IterativeCFLIBSSolver:
                 intercepts_u,
                 partition_funcs,
                 closure_kwargs.get("oxide_stoichiometry", {}),
+                abundance_multipliers=abundance_multipliers,
+            )
+        elif closure_mode in {"ilr", "pwlr"}:
+            concentrations_u = propagate_through_closure_standard(
+                intercepts_u,
+                partition_funcs,
                 abundance_multipliers=abundance_multipliers,
             )
         else:
