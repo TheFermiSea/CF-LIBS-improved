@@ -72,7 +72,7 @@ def pytest_collection_modifyitems(config, items):
             'pip install ".[bayesian]"',
         ),
         "requires_uncertainty": ([("uncertainties", None)], 'pip install ".[uncertainty]"'),
-        "requires_rust": ([("cflibs._core", None)], 'compile cflibs-core rust extension'),
+        "requires_rust": ([("cflibs._core", None)], "compile cflibs-core rust extension"),
     }
     missing: dict[str, tuple[str, str, str]] = {}
     for marker_name, (probes, hint) in optional_deps.items():
@@ -85,6 +85,19 @@ def pytest_collection_modifyitems(config, items):
             except Exception as exc:  # noqa: BLE001 — see docstring rationale
                 missing[marker_name] = (module_name, hint, type(exc).__name__)
                 break
+
+    # Rust extension has two acceptable installed locations: maturin's
+    # `cflibs._core` (when cflibs is installed non-editable so maturin can
+    # nest the .so under it) and a top-level `_core` module (the editable-
+    # install fallback that production code in cflibs/plasma/partition.py
+    # accepts). The probe above only checks `cflibs._core`; if that failed
+    # but `_core` resolves, retract the missing marker.
+    if "requires_rust" in missing:
+        try:
+            __import__("_core")
+            del missing["requires_rust"]
+        except Exception:  # noqa: BLE001
+            pass
     # Probe database files
     candidates = [
         Path("libs_production.db"),
