@@ -256,6 +256,59 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Unified benchmark completed. Outputs written to {args.output_dir.resolve()}")
     for key in sorted(outputs):
         print(f"{key}: {outputs[key].resolve()}")
+
+    # ---------------------------------------------------------------
+    # Tier-1 physical-consistency gate (CF-LIBS-improved-wa4).
+    #
+    # The unified benchmark already tracks per-spectrum T and n_e via
+    # ``CompositionEvaluationRecord``; aggregate the four physical-
+    # consistency checks and (a) write them to
+    # ``physical_consistency.json`` next to the existing summaries,
+    # (b) merge a compact section into ``composition_summary.json``
+    # so downstream parsers (python/benchmark_gate.py) only need to
+    # read one file, and (c) reflect the gate decision in the exit
+    # code so a benchmark that improves point estimates while
+    # silently violating LTE blocks the PR.
+    # ---------------------------------------------------------------
+    from cflibs.benchmark.physical_consistency import (
+        aggregate_physical_consistency,
+        report_to_summary_lines,
+    )
+    import json as _json
+
+    pc_report = aggregate_physical_consistency(composition_records)
+    pc_dict = pc_report.to_dict()
+
+    pc_path = args.output_dir / "physical_consistency.json"
+    with pc_path.open("w") as f:
+        _json.dump(pc_dict, f, indent=2)
+    print(f"physical_consistency_json: {pc_path.resolve()}")
+
+    # Merge into composition_summary.json so the beefcake-swarm gate
+    # parser can find both pieces in one read.
+    summary_path = outputs.get(
+        "composition_summary_json", args.output_dir / "composition_summary.json"
+    )
+    if summary_path.exists():
+        try:
+            with summary_path.open("r") as f:
+                summary_doc = _json.load(f)
+        except (OSError, _json.JSONDecodeError):
+            summary_doc = {}
+        if isinstance(summary_doc, dict):
+            summary_doc["physical_consistency"] = pc_dict
+            with summary_path.open("w") as f:
+                _json.dump(summary_doc, f, indent=2)
+
+    for line in report_to_summary_lines(pc_report):
+        print(line)
+
+    if pc_report.blocked:
+        print(
+            "Physical-consistency gate BLOCKED — see "
+            f"{pc_path.resolve()} for details."
+        )
+        return 2
     return 0
 
 
