@@ -121,7 +121,7 @@ Full guidance: see [`CLAUDE.md` § Code Intelligence](CLAUDE.md#code-intelligenc
 
    ```bash
    git pull --rebase
-   bash ./scripts/bdh :force-sync  # only needed after bead-state changes such as claim/complete/update actions or index/schema migrations; bdh mutations otherwise auto-sync
+   bd dolt push
    git push
    git status  # MUST show "up to date with origin"
    ```
@@ -136,90 +136,54 @@ Full guidance: see [`CLAUDE.md` § Code Intelligence](CLAUDE.md#code-intelligenc
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 
-<!-- BEADHUB:START -->
-## BeadHub Coordination Rules
+## Native Beads Workflow
 
-This project uses `bash ./scripts/bdh` for multi-agent coordination and issue tracking. It is a thin repo-local wrapper around `bdh`, and `bdh` is a wrapper on top of `bd` (beads). Commands starting with `:` like `bash ./scripts/bdh :status` are managed by BeadHub. Other commands are sent to `bd`.
+This repo uses native `bd` (beads) for issue tracking. BeadHub/`bdh` is retired
+for this project; do not use `.beadhub`, `.aw/`, `localhost:8000`, or
+`bash ./scripts/bdh :...` commands for current workflow.
 
-`.beadhub`, `.aw/`, and `.beadhub-cache/` are per-worktree and intentionally gitignored. New worktrees do not inherit the root checkout's BeadHub identity, so each worktree must have its own local bootstrap:
+### Start Here (Every Session)
 
-```bash
-bash ./scripts/beadhub-bootstrap.sh
-```
-
-In this repo's local OSS setup, the BeadHub server uses `http://localhost:8000` as the API base (with endpoints under `/v1`). The local bootstrap avoids writes to `~/.config/aw`, writes repo-local AW files under `.aw/`, and `bash ./scripts/bdh` exports the workspace API key from that local config so `bdh` can authenticate consistently in sandboxed Codex worktrees. Do not append `/api` unless you are intentionally switching this workspace to BeadHub Cloud or another server that expects that base path.
-
-You are expected to work and coordinate with a team of agents. ALWAYS prioritize the team vs your particular task.
-
-You will see notifications telling you that other agents have written mails or chat messages, or are waiting for you. NEVER ignore notifications. It is rude towards your fellow agents. Do not be rude.
-
-Your goal is for the team to succeed in the shared project.
-
-The active project policy as well as the expected behaviour associated to your role is shown via `bash ./scripts/bdh :policy`.
-
-## Start Here (Every Session)
+Run native `bd` commands serially; Dolt-backed beads uses a local SQL server and
+parallel diagnostic commands can race the auto-start/port file.
 
 ```bash
-bash ./scripts/bdh :policy    # READ CAREFULLY and follow diligently
-bash ./scripts/bdh :status    # who am I? (alias/workspace/role) + team status
-bash ./scripts/bdh ready      # find unblocked work
+bd prime
+bd memories
+bd ready
+bd status
 ```
 
-Use `bash ./scripts/bdh :help` for BeadHub-specific help in this repo.
+### Native Beads Repair
 
-## Rules
-
-- Always use `bash ./scripts/bdh` (not raw `bd` or raw `bdh`) so work is coordinated and uses the workspace-local BeadHub config.
-- Default to mail (`bash ./scripts/bdh :aweb mail list|open|send`) for coordination; use chat (`bash ./scripts/bdh :aweb chat pending|open|send-and-wait|send-and-leave|history|extend-wait`) when you need a conversation with another agent.
-- Respond immediately to WAITING notifications — someone is blocked.
-- Notifications are for YOU, the agent, not for the human.
-- Don't overwrite the work of other agents without coordinating first.
-- ALWAYS check what other agents are working on with `bash ./scripts/bdh :status`, which will tell you which beads they have claimed and what files they are working on (reservations).
-- `bash ./scripts/bdh` derives your identity from the `.beadhub` file in the current worktree. If you run it from another directory you will be impersonating another agent, do not do that.
-- Prioritize good communication — your goal is for the team to succeed
-
-## Using mail
-
-Mail is fire-and-forget — use it for status updates, handoffs, and non-blocking questions.
+If `bd` reports `Dolt server unreachable at 127.0.0.1:0`, a stale or missing
+port file is usually the problem. Diagnose without starting BeadHub:
 
 ```bash
-bash ./scripts/bdh :aweb mail send <alias> "message"                         # Send a message
-bash ./scripts/bdh :aweb mail send <alias> "message" --subject "API design"  # With subject
-bash ./scripts/bdh :aweb mail list                                           # Check your inbox
-bash ./scripts/bdh :aweb mail open <alias>                                   # Read & acknowledge
+bd dolt show
+lsof -nP -iTCP -sTCP:LISTEN | rg 'dolt|<port>'
+BEADS_DOLT_PORT=<actual_port> bd ping
 ```
 
-## Using chat
-
-Chat sessions are persistent per participant pair. Use `--start-conversation` when initiating a new exchange (longer wait timeout).
-
-**Starting a conversation:**
+If the forced-port ping works, persist the active port for this checkout:
 
 ```bash
-bash ./scripts/bdh :aweb chat send-and-wait <alias> "question" --start-conversation
+bd dolt set port <actual_port>
+bd ping
 ```
 
-**Replying (when someone is waiting for you):**
+If another Dolt process is holding this repo's `.beads/dolt` locks and the port
+cannot be recovered, clean up native Dolt processes for this project only:
 
 ```bash
-bash ./scripts/bdh :aweb chat send-and-wait <alias> "response"
+bd dolt killall
+bd bootstrap --dry-run
+bd bootstrap --yes
+bd ping
 ```
 
-**Final reply (you don't need their answer):**
-
-```bash
-bash ./scripts/bdh :aweb chat send-and-leave <alias> "thanks, got it"
-```
-
-**Other commands:**
-
-```bash
-bash ./scripts/bdh :aweb chat pending          # List conversations with unread messages
-bash ./scripts/bdh :aweb chat open <alias>     # Read unread messages
-bash ./scripts/bdh :aweb chat history <alias>  # Full conversation history
-bash ./scripts/bdh :aweb chat extend-wait <alias> "need more time"  # Ask for patience
-```
-<!-- BEADHUB:END -->
+Use `bd upgrade status` after connectivity is restored. Do not run `bd doctor`
+in parallel with other `bd` commands.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker

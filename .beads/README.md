@@ -30,6 +30,31 @@ bd update <issue-id> --status done
 bd dolt push
 ```
 
+### Native Dolt Troubleshooting
+
+This repository uses native `bd` with a per-project Dolt SQL server. Do not use
+BeadHub/`bdh`, `.beadhub`, `.aw/`, or `localhost:8000` for this repo.
+
+Run `bd` diagnostics serially. If commands fail with
+`Dolt server unreachable at 127.0.0.1:0`, recover the native Dolt port:
+
+```bash
+bd dolt show
+lsof -nP -iTCP -sTCP:LISTEN | rg 'dolt|<port>'
+BEADS_DOLT_PORT=<actual_port> bd ping
+bd dolt set port <actual_port>
+bd ping
+```
+
+If the server is stale and still holding `.beads/dolt` locks:
+
+```bash
+bd dolt killall
+bd bootstrap --dry-run
+bd bootstrap --yes
+bd ping
+```
+
 ### Working with Issues
 
 Issues in Beads are:

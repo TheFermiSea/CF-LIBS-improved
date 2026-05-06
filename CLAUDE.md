@@ -248,6 +248,10 @@ Short imperative summary (<=50 chars), optional body explaining what/why. Recent
 ## Beads Workflow (Native `bd`)
 
 - Use native `bd` commands for issue tracking and session context.
+- Do not use BeadHub/`bdh`, `.beadhub`, `.aw/`, or `localhost:8000`; that
+  workflow is retired for this repo.
+- Run `bd` diagnostics serially. Dolt-backed beads uses a local SQL server, and
+  parallel `bd` commands can race the auto-start/port file.
 - Session start:
   - `bd prime`
   - `bd memories`
@@ -258,3 +262,29 @@ Short imperative summary (<=50 chars), optional body explaining what/why. Recent
   - `bd update <BEAD_ID> --status in_progress`
   - `bd comment <BEAD_ID> "Completed X, working on Y"`
   - `bd update <BEAD_ID> --status inreview`
+
+### Native Beads Repair
+
+If `bd` reports `Dolt server unreachable at 127.0.0.1:0`, diagnose the native
+Dolt server, not BeadHub:
+
+```bash
+bd dolt show
+lsof -nP -iTCP -sTCP:LISTEN | rg 'dolt|<port>'
+BEADS_DOLT_PORT=<actual_port> bd ping
+bd dolt set port <actual_port>
+bd ping
+```
+
+If a stale Dolt process is holding this repo's `.beads/dolt` locks and the port
+cannot be recovered:
+
+```bash
+bd dolt killall
+bd bootstrap --dry-run
+bd bootstrap --yes
+bd ping
+```
+
+After connectivity is restored, run `bd upgrade status`. Do not run `bd doctor`
+in parallel with other `bd` commands.
