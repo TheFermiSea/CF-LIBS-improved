@@ -717,3 +717,37 @@ class TestMultipletGroupsFit:
         fitter = BoltzmannPlotFitter()
         with pytest.raises(ValueError, match="2 valid"):
             fitter.fit(lines, multiplet_groups=groups)
+
+    def test_zero_strength_multiplet_group_is_filtered(self):
+        """Invalid aggregate groups should be filtered before fitting, not crash."""
+        lines = create_synthetic_lines(9000.0, n_points=4, noise_level=0.0, seed=0)
+        invalid_a = LineObservation(
+            wavelength_nm=500.0,
+            intensity=1.0,
+            intensity_uncertainty=0.05,
+            element="Fe",
+            ionization_stage=1,
+            E_k_ev=2.0,
+            g_k=0,
+            A_ki=1.0,
+        )
+        invalid_b = LineObservation(
+            wavelength_nm=501.0,
+            intensity=1.0,
+            intensity_uncertainty=0.05,
+            element="Fe",
+            ionization_stage=1,
+            E_k_ev=2.1,
+            g_k=0,
+            A_ki=1.0,
+        )
+        observations = [invalid_a, invalid_b, *lines]
+        groups = ["invalid", "invalid", *[f"line_{idx}" for idx in range(len(lines))]]
+
+        fitter = BoltzmannPlotFitter(outlier_sigma=1e6, max_iterations=1)
+        result = fitter.fit(observations, multiplet_groups=groups)
+
+        assert np.isfinite(result.temperature_K)
+        assert result.inlier_mask is not None
+        assert not result.inlier_mask[0]
+        assert not result.inlier_mask[1]

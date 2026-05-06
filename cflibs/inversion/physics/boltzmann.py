@@ -187,19 +187,21 @@ class BoltzmannPlotFitter:
                         agg_to_obs_indices.append([idx])
                 else:
                     # Aggregate multiplet: ln(sum(I*lambda) / sum(gA))
-                    sum_gA = 0.0
-                    sum_I_lam = 0.0
-                    sum_E_gA = 0.0
-                    var_I_lam = 0.0
-                    var_gA = 0.0
+                    sum_ga = 0.0
+                    sum_i_lam = 0.0
+                    sum_e_ga = 0.0
+                    var_i_lam = 0.0
+                    var_ga = 0.0
                     for idx in idxs:
                         obs = observations[idx]
-                        gA = obs.g_k * obs.A_ki
-                        I_lam = gA * np.exp(obs.y_value)
-                        sum_gA += gA
-                        sum_I_lam += I_lam
-                        sum_E_gA += obs.E_k_ev * gA
-                        var_I_lam += (I_lam * obs.y_uncertainty) ** 2
+                        ga = obs.g_k * obs.A_ki
+                        if ga <= 0.0:
+                            continue
+                        i_lam = ga * np.exp(obs.y_value)
+                        sum_ga += ga
+                        sum_i_lam += i_lam
+                        sum_e_ga += obs.E_k_ev * ga
+                        var_i_lam += (i_lam * obs.y_uncertainty) ** 2
                         unc = obs.aki_uncertainty
                         if (
                             aki_uncertainty_weighting
@@ -207,14 +209,20 @@ class BoltzmannPlotFitter:
                             and np.isfinite(unc)
                             and unc > 0
                         ):
-                            var_gA += (gA * unc) ** 2
+                            var_ga += (ga * unc) ** 2
 
-                    x_agg.append(sum_E_gA / sum_gA)
-                    y_agg.append(np.log(sum_I_lam / sum_gA))
-                    # Propagation: Var(ln(ΣI / ΣgA)) ≈ Var(ΣI)/(ΣI)² + Var(ΣgA)/(ΣgA)²
-                    rel_var_I = var_I_lam / (sum_I_lam**2) if sum_I_lam > 0 else 0.0
-                    rel_var_gA = var_gA / (sum_gA**2) if sum_gA > 0 else 0.0
-                    y_err_agg.append(np.sqrt(rel_var_I + rel_var_gA))
+                    if sum_ga == 0.0 or sum_i_lam <= 0.0:
+                        x_agg.append(np.nan)
+                        y_agg.append(np.nan)
+                        y_err_agg.append(np.nan)
+                    else:
+                        x_agg.append(sum_e_ga / sum_ga)
+                        y_agg.append(np.log(sum_i_lam / sum_ga))
+                        # Propagation: Var(ln(sum I / sum gA)) ~= Var(sum I)/(sum I)^2
+                        # + Var(sum gA)/(sum gA)^2.
+                        rel_var_i = var_i_lam / (sum_i_lam**2)
+                        rel_var_ga = var_ga / (sum_ga**2)
+                        y_err_agg.append(np.sqrt(rel_var_i + rel_var_ga))
                     agg_to_obs_indices.append(list(idxs))
 
             x_all = np.array(x_agg)
