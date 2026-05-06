@@ -760,14 +760,28 @@ class MCMCResult:
             "-" * 70,
             f"{'Parameter':<20} {'Mean':>12} {'Std':>12} {'95% CI':>20}",
             "-" * 70,
-            f"{'T [eV]':<20} {self.T_eV_mean:>12.4f} {self.T_eV_std:>12.4f} "
-            f"[{self.T_eV_q025:.4f}, {self.T_eV_q975:.4f}]",
-            f"{'T [K]':<20} {self.T_K_mean:>12.0f} {self.T_eV_std * EV_TO_K:>12.0f} "
-            f"[{self.T_eV_q025 * EV_TO_K:.0f}, {self.T_eV_q975 * EV_TO_K:.0f}]",
-            f"{'log10(n_e)':<20} {self.log_ne_mean:>12.4f} {self.log_ne_std:>12.4f} "
-            f"[{self.log_ne_q025:.4f}, {self.log_ne_q975:.4f}]",
-            f"{'n_e [cm^-3]':<20} {self.n_e_mean:>12.2e}",
         ]
+
+        if not np.isnan(self.T_eV_mean):
+            lines.append(
+                f"{'T [eV]':<20} {self.T_eV_mean:>12.4f} {self.T_eV_std:>12.4f} "
+                f"[{self.T_eV_q025:.4f}, {self.T_eV_q975:.4f}]"
+            )
+            lines.append(
+                f"{'T [K]':<20} {self.T_K_mean:>12.0f} {self.T_eV_std * EV_TO_K:>12.0f} "
+                f"[{self.T_eV_q025 * EV_TO_K:.0f}, {self.T_eV_q975 * EV_TO_K:.0f}]"
+            )
+        else:
+            lines.append(f"{'T [eV]':<20} {'[Marginalized]':>12}")
+
+        if not np.isnan(self.log_ne_mean):
+            lines.append(
+                f"{'log10(n_e)':<20} {self.log_ne_mean:>12.4f} {self.log_ne_std:>12.4f} "
+                f"[{self.log_ne_q025:.4f}, {self.log_ne_q975:.4f}]"
+            )
+            lines.append(f"{'n_e [cm^-3]':<20} {self.n_e_mean:>12.2e}")
+        else:
+            lines.append(f"{'log10(n_e)':<20} {'[Marginalized]':>12}")
 
         lines.append("-" * 70)
         lines.append(f"{'Element':<20} {'Conc.':<12} {'Std':>12} {'95% CI':>20}")
@@ -811,13 +825,18 @@ class MCMCResult:
             - 'labels': list of parameter names
             - 'T_log_ne_corr': float, specific T vs log_ne correlation
         """
-        # Extract flattened samples
-        T_samples = np.array(self.samples["T_eV"]).flatten()
-        log_ne_samples = np.array(self.samples["log_ne"]).flatten()
-
         # Build parameter matrix
-        param_names = ["T_eV", "log_ne"]
-        param_data = [T_samples, log_ne_samples]
+        param_names = []
+        param_data = []
+
+        # Extract flattened samples if available
+        if "T_eV" in self.samples:
+            param_names.append("T_eV")
+            param_data.append(np.array(self.samples["T_eV"]).flatten())
+
+        if "log_ne" in self.samples:
+            param_names.append("log_ne")
+            param_data.append(np.array(self.samples["log_ne"]).flatten())
 
         if include_concentrations and "concentrations" in self.samples:
             conc_samples = np.array(self.samples["concentrations"])
@@ -835,11 +854,18 @@ class MCMCResult:
                 param_data.append(conc_samples[:, i])
 
         # Stack and compute correlation
+        if not param_data:
+            return {"matrix": np.array([[]]), "labels": [], "T_log_ne_corr": float("nan")}
+
         data_matrix = np.vstack(param_data).T  # (n_samples, n_params)
         corr_matrix = np.corrcoef(data_matrix.T)
 
         # Key correlation: T vs log_ne
-        T_log_ne_corr = corr_matrix[0, 1]
+        T_log_ne_corr = float("nan")
+        if "T_eV" in param_names and "log_ne" in param_names:
+            idx_t = param_names.index("T_eV")
+            idx_ne = param_names.index("log_ne")
+            T_log_ne_corr = corr_matrix[idx_t, idx_ne]
 
         return {
             "matrix": corr_matrix,
@@ -883,7 +909,10 @@ class MCMCResult:
             lines.append(row)
 
         lines.append("-" * 70)
-        lines.append(f"T - log_ne correlation: {corr_data['T_log_ne_corr']:.3f}")
+        if not np.isnan(corr_data["T_log_ne_corr"]):
+            lines.append(f"T - log_ne correlation: {corr_data['T_log_ne_corr']:.3f}")
+        else:
+            lines.append("T - log_ne correlation: [N/A - Marginalized]")
         lines.append("=" * 70)
 
         return "\n".join(lines)
@@ -1107,6 +1136,7 @@ class BayesianForwardModel:
         pixels: int = 2048,
         instrument_fwhm_nm: Optional[float] = None,
         resolving_power: Optional[float] = None,
+        marginalize_plasma_params: bool = False,
     ):
         if not HAS_JAX:
             raise ImportError("JAX required. Install with: pip install jax jaxlib")
@@ -1126,6 +1156,7 @@ class BayesianForwardModel:
         self.wavelength_range = wavelength_range
         self.instrument_fwhm_nm = instrument_fwhm_nm if instrument_fwhm_nm is not None else 0.05
         self.resolving_power = resolving_power
+        self.marginalize_plasma_params = marginalize_plasma_params
 
         # Create wavelength grid
         if wavelength_grid is not None:
@@ -1404,6 +1435,7 @@ def bayesian_model(
     observed: jnp.ndarray,
     prior_config: PriorConfig = PriorConfig(),
     noise_params: NoiseParameters = NoiseParameters(),
+    marginalize_plasma_params: Optional[bool] = None,
 ):
     """
     NumPyro probabilistic model for CF-LIBS Bayesian inference.
@@ -1425,20 +1457,34 @@ def bayesian_model(
     if not HAS_NUMPYRO:
         raise ImportError("NumPyro required. Install with: pip install numpyro")
 
+    if marginalize_plasma_params is None:
+        marginalize_plasma_params = forward_model.marginalize_plasma_params
+
     n_elements = len(forward_model.elements)
 
     # --- Priors ---
-    # Temperature: uniform on physically realistic range
-    T_eV = numpyro.sample(
-        "T_eV",
-        dist.Uniform(prior_config.T_eV_range[0], prior_config.T_eV_range[1]),
-    )
+    if marginalize_plasma_params:
+        # Hierarchical priors with non-centered reparameterization for nuisance parameters.
+        # This improves NUTS efficiency when integrating out T and ne.
+        mu_T = (prior_config.T_eV_range[0] + prior_config.T_eV_range[1]) / 2
+        sigma_T = (prior_config.T_eV_range[1] - prior_config.T_eV_range[0]) / 4
+        T_eV_raw = numpyro.sample("T_eV_raw", dist.Normal(0, 1))
+        T_eV = numpyro.deterministic("T_eV", mu_T + sigma_T * T_eV_raw)
 
-    # Electron density: log-uniform (Jeffreys prior for scale parameter)
-    log_ne = numpyro.sample(
-        "log_ne",
-        dist.Uniform(prior_config.log_ne_range[0], prior_config.log_ne_range[1]),
-    )
+        mu_ne = (prior_config.log_ne_range[0] + prior_config.log_ne_range[1]) / 2
+        sigma_ne = (prior_config.log_ne_range[1] - prior_config.log_ne_range[0]) / 4
+        log_ne_raw = numpyro.sample("log_ne_raw", dist.Normal(0, 1))
+        log_ne = numpyro.deterministic("log_ne", mu_ne + sigma_ne * log_ne_raw)
+    else:
+        # Standard uniform priors
+        T_eV = numpyro.sample(
+            "T_eV",
+            dist.Uniform(prior_config.T_eV_range[0], prior_config.T_eV_range[1]),
+        )
+        log_ne = numpyro.sample(
+            "log_ne",
+            dist.Uniform(prior_config.log_ne_range[0], prior_config.log_ne_range[1]),
+        )
 
     # Concentrations: Dirichlet prior (ensures sum to 1)
     alpha = jnp.ones(n_elements) * prior_config.concentration_alpha
@@ -1571,6 +1617,7 @@ class MCMCSampler:
         target_accept_prob: float = 0.8,
         max_tree_depth: int = 10,
         progress_bar: bool = True,
+        marginalize_plasma_params: Optional[bool] = None,
     ) -> MCMCResult:
         """
         Run MCMC sampling.
@@ -1604,9 +1651,18 @@ class MCMCSampler:
         observed_jax = _as_jax_real(observed)
         n_elements = len(self.elements)
 
+        if marginalize_plasma_params is None:
+            marginalize_plasma_params = self.forward_model.marginalize_plasma_params
+
         # Create model function
         def model(obs):
-            bayesian_model(self.forward_model, obs, self.prior_config, self.noise_params)
+            bayesian_model(
+                self.forward_model,
+                obs,
+                self.prior_config,
+                self.noise_params,
+                marginalize_plasma_params=marginalize_plasma_params,
+            )
 
         # Create NUTS sampler with initialization
         # Use init_to_uniform for robustness - samples from prior to find valid start
@@ -1651,17 +1707,40 @@ class MCMCSampler:
         # Determine convergence status
         convergence_status = self._assess_convergence(r_hat, ess, num_samples)
 
+        # Handle marginalization of plasma parameters in summary
+        if marginalize_plasma_params:
+            T_mean, T_std, T_q025, T_q975 = (float("nan"),) * 4
+            ne_mean, ne_std, ne_q025, ne_q975 = (float("nan"),) * 4
+            # Remove from samples dict to "drop from summary" and "integrate out"
+            # (they are still in the trace for NUTS, but not in the result)
+            exclude = ["T_eV", "log_ne", "T_eV_raw", "log_ne_raw"]
+            samples_filtered = {k: np.array(v) for k, v in samples.items() if k not in exclude}
+        else:
+            T_mean, T_std, T_q025, T_q975 = (
+                float(np.mean(T_flat)),
+                float(np.std(T_flat)),
+                float(np.percentile(T_flat, 2.5)),
+                float(np.percentile(T_flat, 97.5)),
+            )
+            ne_mean, ne_std, ne_q025, ne_q975 = (
+                float(np.mean(log_ne_flat)),
+                float(np.std(log_ne_flat)),
+                float(np.percentile(log_ne_flat, 2.5)),
+                float(np.percentile(log_ne_flat, 97.5)),
+            )
+            samples_filtered = {k: np.array(v) for k, v in samples.items()}
+
         # Build MCMCResult
         result = MCMCResult(
-            samples={k: np.array(v) for k, v in samples.items()},
-            T_eV_mean=float(np.mean(T_flat)),
-            T_eV_std=float(np.std(T_flat)),
-            T_eV_q025=float(np.percentile(T_flat, 2.5)),
-            T_eV_q975=float(np.percentile(T_flat, 97.5)),
-            log_ne_mean=float(np.mean(log_ne_flat)),
-            log_ne_std=float(np.std(log_ne_flat)),
-            log_ne_q025=float(np.percentile(log_ne_flat, 2.5)),
-            log_ne_q975=float(np.percentile(log_ne_flat, 97.5)),
+            samples=samples_filtered,
+            T_eV_mean=T_mean,
+            T_eV_std=T_std,
+            T_eV_q025=T_q025,
+            T_eV_q975=T_q975,
+            log_ne_mean=ne_mean,
+            log_ne_std=ne_std,
+            log_ne_q025=ne_q025,
+            log_ne_q975=ne_q975,
             concentrations_mean={
                 el: float(np.mean(conc_flat[:, i])) for i, el in enumerate(self.elements)
             },
