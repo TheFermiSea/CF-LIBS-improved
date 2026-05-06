@@ -1,0 +1,55 @@
+# Pre-PR benchmark gate for CF-LIBS-improved.
+#
+# Read by python/benchmark_gate.py in the orchestrator. When this file
+# is present in the target repo's .swarm/ dir, run.py::process_issue
+# invokes the gate after the verifier passes but BEFORE opening the PR.
+# Failures with required=true block PR creation; the architect's
+# branch is preserved on disk so a human can inspect.
+#
+# The classify command outputs one of {"skip","light","heavy"} on stdout.
+# "skip" → no benchmark dispatched. "light" / "heavy" → the run command
+# is invoked with {tier} substituted, and dispatches to vasp-03 GPU via
+# scripts/post-merge-benchmark.sh (drains llama.cpp inference, rsyncs
+# the worktree to NFS, runs the corresponding tier of cflibs/benchmark/
+# against Aalto / ChemCam / SuperCam reference data, returns non-zero
+# on regression).
+#
+# Recommended dogfood-loop parallelism with this gate: --parallel 1.
+# vasp-03 is single-V100 and benchmark dispatches serialize there; back-
+# pressure shows up cleanly with parallel=1. (post-merge-benchmark.sh
+# does have rsync/NFS-level coordination but inline architect work
+# wasted on a queued benchmark slot is more visible at parallel=1.)
+
+# Diff base: classify the architect's swarm/<id> branch against `dev`.
+# `git diff --name-only dev..HEAD` is what the classifier uses.
+classify_command = [
+    "/home/brian/code/beefcake-swarm/scripts/post-merge-benchmark.sh",
+    "classify",
+    "{worktree}",
+    "{base_branch}",
+]
+
+# Tier substituted from classify output. {issue_id} threads through to
+# the post-merge-benchmark.sh `run` subcommand for traceability in the
+# benchmark output dir on NFS (output/benchmark_gate/<sha>/).
+run_command_template = [
+    "/home/brian/code/beefcake-swarm/scripts/post-merge-benchmark.sh",
+    "run",
+    "{worktree}",
+    "{tier}",
+    "{issue_id}",
+]
+
+# 30 min: light tier is ~1-2 min, heavy is 10-30 min. Plus rsync +
+# inference-drain + cuda-cache warm overhead.
+timeout_secs = 1800
+
+# Block PR creation on benchmark failure. The architect's swarm/<id>
+# branch is preserved (run.py keep_on_fail=True for benchmark gate
+# failures) so a human can inspect the regression without re-running
+# the architect.
+required = true
+
+# Tiers that mean "no benchmark needed" (e.g. test-only, docs-only
+# changes that the do_classify subcommand returns "skip" for).
+skip_tiers = ["skip"]
