@@ -4,6 +4,21 @@
 This CLI is a thin front-end over :class:`cflibs.benchmark.unified.UnifiedBenchmarkRunner`.
 It loads the configured datasets, runs the selected identification and/or
 composition workflows, and writes the benchmark artifacts to an output directory.
+
+Posterior calibration metrics
+-----------------------------
+When a composition workflow returns posterior samples (key
+``posterior_samples`` in its prediction dict, or an ``mcmc_result``
+object whose ``samples`` attribute matches the ``MCMCResult.samples``
+shape), the unified runner automatically calls
+:func:`cflibs.benchmark.posterior_metrics.compute_posterior_diagnostics`
+and stashes the resulting fields under
+``record.annotations["posterior_diagnostics"]`` of every emitted
+``CompositionEvaluationRecord``. The diagnostics flow through
+``composition_records.json`` unchanged. See ``docs/VALIDATION_METRICS.md``
+§2.3 for the binding thresholds (R-hat < 1.01, ESS_bulk ≥ 400, divergent
+transitions = 0, PSIS k-hat < 0.7, 95% coverage in the bidirectional
+band [0.93, 0.97]).
 """
 
 from __future__ import annotations

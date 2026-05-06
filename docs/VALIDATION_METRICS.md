@@ -99,6 +99,14 @@ Coverage outside the band fires a Tier-2 alarm if not in the hard-fail
 range. PIT-histogram $\chi^2$ uniformity test is reported as Tier-3
 diagnostic.
 
+**Implementation:** `cflibs.benchmark.posterior_metrics.compute_posterior_diagnostics`
+returns a `PosteriorDiagnostics` dataclass covering R-hat / ESS-bulk /
+ESS-tail per parameter, divergent-transition count, PSIS-LOO ELPD with
+per-fold $\hat k$, 95%-CI empirical coverage with a bidirectional gate
+verdict, PIT $\chi^2$ p-value, and CLR-space sharpness. The unified
+runner threads this through to `composition_records.json` whenever a
+composition workflow emits a `posterior_samples` payload.
+
 ### 2.4 Cross-dataset generalization (anti-overfit)
 
 | Requirement | Spec |

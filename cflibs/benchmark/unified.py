@@ -1447,6 +1447,84 @@ def _compute_fractional_error(
     return abs(float(predicted_value) - float(observed_value)) / max(float(observed_value), 1e-12)
 
 
+_POSTERIOR_EXCLUDE_KEYS = frozenset(
+    {
+        "concentrations",
+        "posterior_samples",
+        "mcmc_result",
+        "log_likelihood",
+        "divergent_count",
+    }
+)
+
+
+def _maybe_compute_posterior_diagnostics(
+    prediction: Dict[str, Any],
+    candidate_elements: Sequence[str],
+    true_composition: Dict[str, float],
+) -> Optional[Dict[str, Any]]:
+    """Compute posterior calibration diagnostics for a Bayesian
+    composition workflow, or return ``None`` if no MCMC samples were
+    emitted by the workflow.
+
+    The function looks for a ``posterior_samples`` mapping in
+    ``prediction`` (or unpacks it from a ``mcmc_result`` object whose
+    ``samples`` attribute mimics ``MCMCResult.samples``). The certified
+    composition vector is supplied as the ``concentrations[i]`` entries
+    in the certified-values mapping passed to the diagnostic.
+
+    Returns the diagnostic dataclass as a JSON-serialisable dict so it
+    can be stashed in ``CompositionEvaluationRecord.annotations`` and
+    survive the ``json.dumps`` round-trip in
+    ``write_outputs/composition_records.json``.
+    """
+    samples = prediction.get("posterior_samples")
+    if samples is None:
+        mcmc_result = prediction.get("mcmc_result")
+        if mcmc_result is not None and hasattr(mcmc_result, "samples"):
+            samples = mcmc_result.samples
+    if not samples:
+        return None
+
+    log_likelihood = prediction.get("log_likelihood")
+    divergent_count = int(prediction.get("divergent_count", 0))
+
+    # Build certified_values for the parameters we have ground-truth on:
+    # the concentration vector indexed by candidate-element order.
+    certified: Dict[str, float] = {}
+    for i, element in enumerate(candidate_elements):
+        if element in true_composition:
+            certified[f"concentrations[{i}]"] = float(true_composition[element])
+
+    try:
+        from cflibs.benchmark.posterior_metrics import compute_posterior_diagnostics
+
+        diag = compute_posterior_diagnostics(
+            samples,
+            certified_values=certified or None,
+            log_likelihood=log_likelihood,
+            divergent_count=divergent_count,
+        )
+        return diag.as_dict()
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"posterior_metrics_failed: {exc}"}
+
+
+def _compose_annotations(
+    prediction: Dict[str, Any], posterior_diag: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Drop bulky posterior-sample arrays out of the annotations dict and
+    tack the computed posterior diagnostics on instead."""
+    annotations: Dict[str, Any] = {
+        key: value
+        for key, value in prediction.items()
+        if key not in _POSTERIOR_EXCLUDE_KEYS
+    }
+    if posterior_diag is not None:
+        annotations["posterior_diagnostics"] = posterior_diag
+    return annotations
+
+
 def _build_composition_success_record(
     spectrum: BenchmarkSpectrum,
     id_workflow_name: str,
@@ -1465,6 +1543,9 @@ def _build_composition_success_record(
     rmse = float(rmse_composition(true_comp, concentrations))
     per_element = per_element_error(true_comp, concentrations)
     ratio_errors = subcompositional_ratio_errors(concentrations, true_comp)
+    posterior_diag = _maybe_compute_posterior_diagnostics(
+        prediction, candidate_elements, true_comp
+    )
     return CompositionEvaluationRecord(
         dataset_id=spectrum.dataset_id or "unknown",
         spectrum_id=spectrum.spectrum_id,
@@ -1502,9 +1583,7 @@ def _build_composition_success_record(
             element: float(errors[1]) for element, errors in per_element.items()
         },
         subcompositional_ratio_errors=ratio_errors,
-        annotations={
-            key: value for key, value in prediction.items() if key not in {"concentrations"}
-        },
+        annotations=_compose_annotations(prediction, posterior_diag),
     )
 
 
