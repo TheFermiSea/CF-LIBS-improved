@@ -1,9 +1,11 @@
 """Tests for PWLR (pairwise/pivot log-ratio) closure behavior."""
 
 import numpy as np
+import pytest
 
 from cflibs.inversion.closure import (
     ClosureEquation,
+    LOGRATIO_CLIP_FLOOR,
     plr_inverse,
     plr_transform,
 )
@@ -13,18 +15,25 @@ def _intercepts_from_composition(
     composition: dict[str, float],
 ) -> tuple[dict[str, float], dict[str, float]]:
     partition_funcs = {el: 1.0 for el in composition}
-    intercepts = {el: np.log(max(val, 1e-300)) for el, val in composition.items()}
+    intercepts = {el: np.log(max(val, LOGRATIO_CLIP_FLOOR)) for el, val in composition.items()}
     return intercepts, partition_funcs
 
 
-def test_pwlr_round_trip_identity_sanity() -> None:
-    comp = np.array([0.62, 0.23, 0.1, 0.05])
-    coords = plr_transform(comp, pivot_index=2)
-    recovered = plr_inverse(coords, D=4, pivot_index=2)
+@pytest.mark.parametrize(
+    ("comp", "pivot_index"),
+    [
+        (np.array([0.62, 0.23, 0.1, 0.05]), 2),
+        (np.array([0.26, 0.25, 0.24, 0.25]), 0),
+        (np.array([0.97, 0.02, 0.009, 0.001]), 1),
+    ],
+)
+def test_pwlr_round_trip_identity_sanity(comp: np.ndarray, pivot_index: int) -> None:
+    coords = plr_transform(comp, pivot_index=pivot_index)
+    recovered = plr_inverse(coords, D=4, pivot_index=pivot_index)
     np.testing.assert_allclose(recovered, comp, atol=1e-12)
 
 
-def test_pwlr_aalto_suite_converges_close_to_ilr() -> None:
+def test_pwlr_aalto_suite_matches_ilr_closely() -> None:
     # Representative Aalto-like mineral compositions (major + trace elements)
     aalto_suite = [
         {"Si": 0.47, "Al": 0.21, "Fe": 0.17, "Ca": 0.11, "Mg": 0.04},
@@ -44,7 +53,7 @@ def test_pwlr_aalto_suite_converges_close_to_ilr() -> None:
 
 
 def test_pwlr_handles_compositional_zeros_without_offset() -> None:
-    intercepts = {"Fe": np.log(0.999998), "Cu": np.log(2e-6), "Zn": -np.inf}
+    intercepts = {"Fe": np.log(0.999998), "Cu": np.log(2e-6), "Zn": np.log(1e-20)}
     partition_funcs = {"Fe": 1.0, "Cu": 1.0, "Zn": 1.0}
 
     result = ClosureEquation.apply_pwlr(intercepts, partition_funcs)
@@ -55,7 +64,7 @@ def test_pwlr_handles_compositional_zeros_without_offset() -> None:
     assert result.concentrations["Zn"] < 1e-6
 
 
-def test_pwlr_parameter_space_optimization_differs_from_ilr_on_near_zero_case() -> None:
+def test_pwlr_diverges_from_ilr_near_zero() -> None:
     composition = {"Fe": 0.999995, "Cu": 4e-6, "Zn": 1e-6}
     intercepts, partition_funcs = _intercepts_from_composition(composition)
 

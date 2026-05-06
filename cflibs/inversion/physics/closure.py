@@ -2,7 +2,7 @@
 Closure equation implementation for CF-LIBS.
 
 Includes standard, matrix, oxide, ILR (Isometric Log-Ratio), and PWLR
-(pairwise/pivot log-ratio) closure modes. Log-ratio transforms map
+(pairwise/pivot log-ratio) closure modes. The ILR/PWLR modes map
 compositions from the D-simplex to R^(D-1), enabling unconstrained
 optimization in coordinate space.
 
@@ -20,6 +20,10 @@ import numpy as np
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("inversion.closure")
+
+LOGRATIO_CLIP_FLOOR = 1e-10
+PWLR_WEIGHT_FLOOR = 1e-12
+PWLR_ADAPTIVE_SCALE_MAX = 50.0
 
 
 class ClosureMode(Enum):
@@ -78,7 +82,7 @@ def clr_transform(composition: np.ndarray) -> np.ndarray:
     np.ndarray
         CLR coordinates, same shape as input.
     """
-    log_comp = np.log(np.clip(composition, 1e-10, None))
+    log_comp = np.log(np.clip(composition, LOGRATIO_CLIP_FLOOR, None))
     return log_comp - np.mean(log_comp, axis=-1, keepdims=True)
 
 
@@ -158,7 +162,7 @@ def plr_transform(composition: np.ndarray, pivot_index: int = 0) -> np.ndarray:
     """
     D = composition.shape[-1]
     perm = _pivot_permutation(D, pivot_index)
-    log_comp = np.log(np.clip(composition[..., perm], 1e-10, None))
+    log_comp = np.log(np.clip(composition[..., perm], LOGRATIO_CLIP_FLOOR, None))
     return log_comp[..., 1:] - log_comp[..., :1]
 
 
@@ -220,9 +224,11 @@ def optimize_pwlr_coordinates(
         return target
 
     perm = _pivot_permutation(D, pivot_index)
-    simplex_perm = np.clip(simplex[perm], 1e-12, None)
+    simplex_perm = np.clip(simplex[perm], PWLR_WEIGHT_FLOOR, None)
     weights = np.ones(D - 1)
-    adaptive_lambda = regularization_strength * (1.0 + max(0.0, -np.log(simplex_perm.min())))
+    min_component = float(np.clip(simplex_perm.min(), PWLR_WEIGHT_FLOOR, None))
+    adaptive_scale = 1.0 - np.log(min_component)
+    adaptive_lambda = regularization_strength * min(adaptive_scale, PWLR_ADAPTIVE_SCALE_MAX)
 
     A = np.diag(weights + adaptive_lambda)
     b = weights * target
@@ -604,6 +610,9 @@ class ClosureEquation:
         ClosureResult
             Concentrations on the simplex (sum=1, all positive).
         """
+        if regularization_strength < 0.0 or not np.isfinite(regularization_strength):
+            raise ValueError("regularization_strength must be finite and >= 0")
+
         # Build deterministic ordered element list and raw relative concentrations
         elements = []
         rel_values = []
