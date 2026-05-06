@@ -112,6 +112,16 @@ __all__ = [
     "CalibrationOptions",
     "compute_binary_metrics",
     "run_synthetic_benchmark",
+    # Robustness perturbation battery
+    "LINE_DROPOUT_DELTA_DA_MAX",
+    "OUTLIER_INJECTION_DELTA_DA_MAX",
+    "PerturbationReport",
+    "PerturbationResult",
+    "PerturbationSummary",
+    "default_perturbations",
+    "line_dropout_perturbation",
+    "outlier_injection_perturbation",
+    "run_perturbation_battery",
     # I/O
     "load_benchmark",
     "save_benchmark",
@@ -167,6 +177,17 @@ _ATTRIBUTE_EXPORT_GROUPS = {
         "BenchmarkReport",
         "PipelineResult",
         "SpectrumResult",
+    ],
+    "cflibs.benchmark.robustness": [
+        "LINE_DROPOUT_DELTA_DA_MAX",
+        "OUTLIER_INJECTION_DELTA_DA_MAX",
+        "PerturbationReport",
+        "PerturbationResult",
+        "PerturbationSummary",
+        "default_perturbations",
+        "line_dropout_perturbation",
+        "outlier_injection_perturbation",
+        "run_perturbation_battery",
     ],
 }
 
