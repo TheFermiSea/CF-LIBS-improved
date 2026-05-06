@@ -150,6 +150,48 @@ class ALIASIdentifier:
         relative_cl_threshold: float = 0.1,
         boltzmann_r2_min: float = 0.85,
     ):
+        """
+        Initialize the ALIAS element identifier.
+
+        Parameters
+        ----------
+        atomic_db : AtomicDatabase
+            Atomic database used to retrieve transition and level data.
+        resolving_power : float, optional
+            Instrument resolving power used when modeling line widths and matching
+            observed to theoretical lines.
+        T_range_K : Tuple[float, float], optional
+            Temperature search range in kelvin for the Saha-Boltzmann grid.
+        n_e_range_cm3 : Tuple[float, float], optional
+            Electron density search range in cm^-3 for the Saha-Boltzmann grid.
+        T_steps : int, optional
+            Number of temperature grid points to evaluate.
+        n_e_steps : int, optional
+            Number of electron density grid points to evaluate.
+        intensity_threshold_factor : float, optional
+            Multiplier applied to the estimated noise level when detecting peaks.
+        detection_threshold : float, optional
+            Minimum normalized line strength considered during identification.
+        chance_window_scale : float, optional
+            Scale factor controlling the wavelength window used in chance-match
+            calculations.
+        elements : Optional[List[str]], optional
+            Restrict identification to this subset of element symbols. If ``None``,
+            all supported elements may be considered.
+        max_lines_per_element : int, optional
+            Maximum number of theoretical lines retained per element.
+        reference_temperature : float, optional
+            Reference temperature used when ranking or screening candidate lines.
+        max_screening_candidates : int, optional
+            Maximum number of candidate elements retained after screening.
+        relative_cl_threshold : float, optional
+            Minimum relative confidence level required for an element to be kept.
+        boltzmann_r2_min : float, optional
+            Minimum acceptable coefficient of determination (R^2) for Boltzmann-plot
+            consistency checks used during identification. Higher values make
+            identification stricter by requiring better linear agreement, while
+            lower values allow more permissive acceptance of candidate elements.
+        """
         self.atomic_db = atomic_db
         if not (np.isfinite(resolving_power) and resolving_power > 0):
             raise ValueError(f"resolving_power must be finite and > 0, got {resolving_power!r}")
