@@ -331,6 +331,16 @@ def build_production_db(
                     continue
 
                 # Conversion & Formatting
+                aki_uncertainty = (
+                    pd.to_numeric(clean["unc_Aki"], errors="coerce") / 100.0
+                    if "unc_Aki" in clean
+                    else pd.Series(pd.NA, index=clean.index, dtype="float64")
+                )
+                accuracy_grade = (
+                    clean["acc"]
+                    if "acc" in clean
+                    else pd.Series(pd.NA, index=clean.index, dtype="object")
+                )
                 sql_df = pd.DataFrame(
                     {
                         "element": el,
@@ -342,9 +352,8 @@ def build_production_db(
                         "gi": clean["g_i"],
                         "gk": clean["g_k"],
                         "rel_int": pd.to_numeric(clean["intens"], errors="coerce").fillna(0),
-                        "aki_uncertainty": pd.to_numeric(clean.get("unc_Aki"), errors="coerce")
-                        / 100.0,
-                        "accuracy_grade": clean.get("acc"),
+                        "aki_uncertainty": aki_uncertainty,
+                        "accuracy_grade": accuracy_grade,
                     }
                 )
 

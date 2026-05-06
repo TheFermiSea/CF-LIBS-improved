@@ -167,4 +167,4 @@ def test_nist_grade_uncertainty_mapping():
     assert mapping["B"] == 0.10
     assert mapping["C"] == 0.25
     assert mapping["D"] == 0.50
-    assert mapping["E"] == 0.50
+    assert mapping["E"] == 1.00
