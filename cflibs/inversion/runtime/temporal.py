@@ -1076,14 +1076,14 @@ class TemporalSelfAbsorptionCorrector:
             emission_weight = n_e * np.exp(-E_lower_eV / T_eV) if T_eV > 0 else 0
             weights.append(emission_weight)
 
-        tau_values = np.array(tau_values)
-        weights = np.array(weights)
+        tau_arr = np.asarray(tau_values, dtype=float)
+        weight_arr = np.asarray(weights, dtype=float)
 
         # Weighted average
-        if np.sum(weights) > 0:
-            return float(np.average(tau_values, weights=weights))
+        if np.sum(weight_arr) > 0:
+            return float(np.average(tau_arr, weights=weight_arr))
         else:
-            return float(np.mean(tau_values))
+            return float(np.mean(tau_arr))
 
     def correct_observations(
         self,
@@ -1420,6 +1420,11 @@ class TimeResolvedCFLIBSSolver:
                     expected_ne = result["electron_density_cm3"]
                 gate_weights[delay] = self._compute_gate_weight(result, expected_T, expected_ne)
 
+        # Capture the pre-normalized weights so combined_quality below
+        # reflects raw scoring signal rather than collapsing to 1/n_gates
+        # after normalization.
+        raw_gate_weights = dict(gate_weights)
+
         # Normalize weights
         total_weight = sum(gate_weights.values())
         if total_weight > 0:
@@ -1475,8 +1480,13 @@ class TimeResolvedCFLIBSSolver:
         best_delay = max(gate_weights.keys(), key=lambda k: gate_weights[k])
         best_spec = next(s for s in spectra if s.gate.delay_ns == best_delay)
 
-        # Quality metric: average weight
-        combined_quality = np.mean(list(gate_weights.values()))
+        # Quality metric: average raw (pre-normalization) weight, so the
+        # value reflects how strong the per-gate signals were rather than the
+        # post-normalization artefact of mean(weights) == 1/n_gates.
+        if raw_gate_weights:
+            combined_quality = float(np.mean(list(raw_gate_weights.values())))
+        else:
+            combined_quality = 0.0
 
         logger.info(
             f"Multi-gate CF-LIBS: {len(spectra)} gates, "

@@ -61,7 +61,7 @@
 
 ### Physics-Only Constraint
 
-The shipped CF-LIBS algorithm is physics-only — no neural networks, no trained models. Full forbidden-library spec, enforcement mechanism (Ruff TID251 + AST scanner), and rationale live in [`docs/Evolution_Framework.md`](docs/Evolution_Framework.md). ML is allowed only in `cflibs/evolution/` (optimization-process tooling).
+The shipped CF-LIBS algorithm is physics-only — no neural networks, no trained models. Full forbidden-library spec, enforcement mechanism (Ruff TID251 + AST scanner), and rationale live in [`docs/development/Evolution_Framework.md`](docs/development/Evolution_Framework.md). ML is allowed only in `cflibs/evolution/` (optimization-process tooling).
 
 ### Code Intelligence (Serena MCP)
 

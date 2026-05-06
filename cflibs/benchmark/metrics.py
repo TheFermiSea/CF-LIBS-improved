@@ -355,6 +355,9 @@ class BenchmarkMetrics:
             elif pred_len != n_spectra:
                 raise ValueError("Inconsistent array lengths across elements")
 
+        # n_spectra is set by the loop above; the elements list is non-empty.
+        assert n_spectra is not None
+
         # Calculate per-element metrics
         element_metrics = {}
         for elem in elements:
@@ -362,10 +365,11 @@ class BenchmarkMetrics:
             true = np.array(true_values[elem])
             element_metrics[elem] = self._calculate_element_metrics(elem, pred, true)
 
-        # Calculate overall metrics (weighted by element presence)
-        overall_rmsep = np.mean([m.rmsep for m in element_metrics.values()])
-        overall_mae = np.mean([m.mae for m in element_metrics.values()])
-        overall_r2 = np.mean([m.r_squared for m in element_metrics.values()])
+        # Calculate overall metrics (weighted by element presence). np.mean
+        # returns np.floating[Any]; coerce to plain float for the dataclass.
+        overall_rmsep = float(np.mean([m.rmsep for m in element_metrics.values()]))
+        overall_mae = float(np.mean([m.mae for m in element_metrics.values()]))
+        overall_r2 = float(np.mean([m.r_squared for m in element_metrics.values()]))
 
         return EvaluationResult(
             dataset_name=dataset_name,
@@ -492,7 +496,7 @@ class BenchmarkMetrics:
                 else:
                     # Average across elements
                     values = [result.get_metric(el, metric) for el in result.elements]
-                    value = np.mean(values)
+                    value = float(np.mean(values))
 
             comparison[key] = value
 

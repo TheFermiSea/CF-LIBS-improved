@@ -115,6 +115,7 @@ class CompositionRange:
     def sample(self, rng: np.random.Generator) -> float:
         """Sample a composition value."""
         if self.distribution == "fixed":
+            assert self.fixed_value is not None  # guaranteed by __post_init__
             return self.fixed_value
         elif self.distribution == "uniform":
             return rng.uniform(self.min_fraction, self.max_fraction)

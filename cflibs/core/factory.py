@@ -2,7 +2,7 @@
 Factory patterns for creating plasma models, solvers, and instruments.
 """
 
-from typing import Dict, Type, Optional
+from typing import Any, Dict, Type, Optional, cast
 from pathlib import Path
 
 from cflibs.core.abc import SolverStrategy, PlasmaModel, InstrumentModelInterface, AtomicDataSource
@@ -62,7 +62,9 @@ class SolverFactory:
             available = ", ".join(cls._solvers.keys())
             raise ValueError(f"Unknown solver: {name}. Available: {available}")
 
-        solver_class = cls._solvers[name]
+        # Concrete solvers accept (atomic_db, **kwargs); SolverStrategy ABC
+        # itself defines no __init__, so cast through Any to satisfy mypy.
+        solver_class = cast(Any, cls._solvers[name])
         return solver_class(atomic_db, **kwargs)
 
     @classmethod
@@ -176,7 +178,10 @@ class InstrumentFactory:
             available = ", ".join(cls._instruments.keys())
             raise ValueError(f"Unknown instrument: {name}. Available: {available}")
 
-        instrument_class = cls._instruments[name]
+        # InstrumentModelInterface is a structural Protocol; the concrete
+        # InstrumentModel exposes a `from_file` classmethod that the Protocol
+        # cannot declare. Cast through Any for the dynamic dispatch.
+        instrument_class = cast(Any, cls._instruments[name])
 
         if config_path:
             return instrument_class.from_file(config_path)
@@ -189,7 +194,9 @@ class InstrumentFactory:
         return list(cls._instruments.keys())
 
 
-# Register default implementations
+# Register default implementations. Mypy does not always recognise that
+# concrete classes structurally satisfy the Protocol; the runtime behaviour
+# matches the @runtime_checkable contract on PlasmaModel / InstrumentModelProtocol.
 SolverFactory.register("saha_boltzmann", SahaBoltzmannSolver)
-PlasmaModelFactory.register("single_zone_lte", SingleZoneLTEPlasma)
-InstrumentFactory.register("standard", InstrumentModel)
+PlasmaModelFactory.register("single_zone_lte", cast(Type[PlasmaModel], SingleZoneLTEPlasma))
+InstrumentFactory.register("standard", cast(Type[InstrumentModelInterface], InstrumentModel))

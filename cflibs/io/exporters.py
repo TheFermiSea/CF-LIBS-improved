@@ -176,16 +176,18 @@ class Exporter(ABC):
         else:
             raise ValueError(f"Unsupported data type: {type(data).__name__}")
 
-    def _dataclass_to_dict(self, obj: Any, max_depth: int = 10) -> Dict[str, Any]:
+    def _dataclass_to_dict(self, obj: Any, max_depth: int = 10) -> Any:
         """
         Convert dataclass to dictionary recursively.
 
-        Handles nested dataclasses and numpy arrays.
+        Handles nested dataclasses and numpy arrays. Returns ``str(obj)``
+        when ``max_depth`` is exhausted, so the recursion terminates safely
+        on cyclic references.
         """
         if max_depth <= 0:
             return str(obj)
 
-        result = {}
+        result: Dict[str, Any] = {}
         for f in fields(obj):
             value = getattr(obj, f.name)
             result[f.name] = self._convert_value(value, max_depth - 1)
@@ -790,12 +792,22 @@ class HDF5Exporter(Exporter):
                 data=np.array([uncertainties.get(el, 0) for el in elements]),
             )
 
-        # Quality metrics
+        # Quality metrics: numeric scalars become HDF5 attributes, string
+        # annotations (e.g. solver mode, warning, anchoring element name)
+        # are preserved as string attributes so HDF5 round-trips match CSV
+        # and JSON exports.  Non-scalar values (lists, dicts) are skipped
+        # with a debug log so callers can audit if needed.
         if "quality_metrics" in data and data["quality_metrics"]:
             metrics = f.create_group("quality_metrics")
             for key, value in data["quality_metrics"].items():
-                if isinstance(value, (int, float, bool)):
+                if isinstance(value, (int, float, bool, str)):
                     metrics.attrs[key] = value
+                else:
+                    logger.debug(
+                        "Skipping non-scalar quality_metrics[%r] of type %s in HDF5 export",
+                        key,
+                        type(value).__name__,
+                    )
 
         # Boltzmann covariance
         if "boltzmann_covariance" in data and data["boltzmann_covariance"] is not None:

@@ -463,68 +463,33 @@ def detect_line_observations(
             transitions = comb_transitions_by_element.get(element, [])
             if not transitions:
                 continue
-            matches = _match_transitions_to_peaks(
-                peaks=peaks,
-                transitions=transitions,
-                tolerance_nm=wavelength_tolerance_nm,
-                shift_nm=applied_shift_nm,
-                used_peaks=used_peaks,
-            )
-            for transition, peak_idx, peak_wl, _delta in matches:
-                key = (transition.element, transition.ionization_stage, transition.wavelength_nm)
-                if key in seen_keys:
-                    continue
-                seen_keys.add(key)
-                matched_peak_indices.add(peak_idx)
-
-                # Use deconvolution result if available
-                rounded_wl = round(peak_wl, 4)
-                if deconv_results_by_wl is not None and rounded_wl in deconv_results_by_wl:
-                    result = _build_observation_from_fit(
-                        transition,
-                        deconv_results_by_wl[rounded_wl],
-                        ground_state_threshold_ev,
-                    )
-                else:
-                    result = _build_observation(
-                        transition,
-                        peak_idx,
-                        wavelength,
-                        intensity,
-                        half_width_px,
-                        wl_step,
-                        ground_state_threshold_ev,
-                    )
-                if result is None:
-                    continue
-                obs, is_resonance = result
-                observations.append(obs)
-                if is_resonance:
-                    resonance_lines.add(key)
             for peak_idx, peak_wl in peaks:
-                transition = _match_transition(
+                if peak_idx in used_peaks:
+                    continue
+                matched = _match_transition(
                     peak_wl + applied_shift_nm, transitions, wavelength_tolerance_nm
                 )
-                if transition is None:
+                if matched is None:
                     continue
 
-                key = (transition.element, transition.ionization_stage, transition.wavelength_nm)
+                key = (matched.element, matched.ionization_stage, matched.wavelength_nm)
                 if key in seen_keys:
                     continue
                 seen_keys.add(key)
+                used_peaks.add(peak_idx)
                 matched_peak_indices.add(peak_idx)
 
                 # Use deconvolution result if available
                 rounded_wl = round(peak_wl, 4)
                 if deconv_results_by_wl is not None and rounded_wl in deconv_results_by_wl:
                     result = _build_observation_from_fit(
-                        transition,
+                        matched,
                         deconv_results_by_wl[rounded_wl],
                         ground_state_threshold_ev,
                     )
                 else:
                     result = _build_observation(
-                        transition,
+                        matched,
                         peak_idx,
                         wavelength,
                         intensity,

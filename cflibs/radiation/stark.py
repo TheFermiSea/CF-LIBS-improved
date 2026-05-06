@@ -14,7 +14,7 @@ try:
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
-    jnp = None
+    jnp = None  # type: ignore[assignment]
 
     def jit(f):
         return f

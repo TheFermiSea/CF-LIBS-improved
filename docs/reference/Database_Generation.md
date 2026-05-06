@@ -238,7 +238,7 @@ Planned enhancements:
 
 ## See Also
 
-- [User Guide](User_Guide.md) - How to use the database
+- [User Guide](../user/User_Guide.md) - How to use the database
 - [API Reference](API_Reference.md) - Database API documentation
 - `datagen_v2.py` - Source code for database generation
 

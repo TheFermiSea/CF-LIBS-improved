@@ -3,45 +3,69 @@
 CF-LIBS Documentation
 =====================
 
-**CF-LIBS** is a physics-based Python library for forward modeling and analysis of LIBS plasmas. The shipped algorithm is physics-only — see :doc:`Evolution_Framework` for the constraint spec.
+**CF-LIBS** is a physics-based Python library for forward modeling and
+inversion of laser-induced breakdown spectroscopy plasmas. The shipped
+algorithm is physics-only — see :doc:`development/Evolution_Framework`
+for the constraint specification.
 
-Inversion Config
-----------------
+Documentation is organized into four areas:
 
-The classic CF-LIBS inversion uses an `analysis` section in your config file to control
-line detection, selection, and solver settings. See :doc:`User_Guide` for the full schema
-and :doc:`API_Reference` for CLI flags.
+* **User guides** — how to analyze real spectra and generate synthetic
+  ones.
+* **Physics reference** — equations, assumptions, and the inversion
+  algorithm in detail.
+* **Reference** — API and codebase architecture.
+* **Development** — deployment, evolution framework, and other internal
+  notes.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: User Guide
-
-   Quick_Start_For_Scientists
-   User_Guide
-   Database_Generation
-   Manifold_Generation_Guide
-   Hardware_Interfaces
-   Echellogram_Processing_Guide
-   Deployment
+For new users analyzing measured LIBS spectra, start with
+:doc:`user/Quick_Start_Real_Data`.
 
 .. toctree::
    :maxdepth: 2
-   :caption: API Reference
+   :caption: User Guides
 
-   API_Reference
+   user/README
+   user/Quick_Start_Real_Data
+   user/Peak_Identification_Guide
+   user/Quick_Start_Synthetic
+   user/User_Guide
+   user/Manifold_Generation_Guide
+   user/Hardware_Interfaces
+   user/Echellogram_Processing_Guide
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Physics
+
+   physics/README
+   physics/Equations
+   physics/Assumptions_And_Validity
+   physics/Inversion_Algorithm
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference
+
+   reference/README
+   reference/API_Reference
+   reference/Codebase_Architecture
+   reference/Database_Generation
 
 .. toctree::
    :maxdepth: 1
-   :caption: Developer Notes
+   :caption: Development
 
-   CF-LIBS_Codebase_Technical_Documentation
-   Evolution_Framework
+   development/README
+   development/Evolution_Framework
+   development/Deployment
+   development/CODEEVOLVE_WAVE2_PLAN
+   development/REFERENCE_ANALYSIS_LIBSSA
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Analysis
+   :hidden:
 
-   REFERENCE_ANALYSIS_LIBSSA
+   README
 
 Indices and tables
 ==================

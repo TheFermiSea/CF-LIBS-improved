@@ -126,6 +126,7 @@ class SahaBoltzmannSolver(SolverStrategy):
 
         S2 = 0.0
         if ip_II is not None:
+            assert eff_ip_II is not None  # implied by `ip_II is not None` above
             ip_III = self.atomic_db.get_ionization_potential(element, 3)
             eff_ip_III = max(ip_III - delta_chi, 0.0) if ip_III is not None else None
             U_III = self.calculate_partition_function(element, 3, T_e_eV, max_energy_ev=eff_ip_III)

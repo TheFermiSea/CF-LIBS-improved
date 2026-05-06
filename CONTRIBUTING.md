@@ -71,7 +71,7 @@ JAX_PLATFORMS=cpu pytest tests/ -v
 
 ### Physics-Only Constraint
 
-The shipped CF-LIBS algorithm is physics-only. See [`docs/Evolution_Framework.md`](docs/Evolution_Framework.md) for the forbidden-library list, allowed primitives, and enforcement (Ruff TID251 + AST scanner). Before submitting a PR touching `cflibs/` production code, run `ruff check cflibs/` or `python -m cflibs.evolution <your_file.py>` to verify no banned imports slipped in.
+The shipped CF-LIBS algorithm is physics-only. See [`docs/development/Evolution_Framework.md`](docs/development/Evolution_Framework.md) for the forbidden-library list, allowed primitives, and enforcement (Ruff TID251 + AST scanner). Before submitting a PR touching `cflibs/` production code, run `ruff check cflibs/` or `python -m cflibs.evolution <your_file.py>` to verify no banned imports slipped in.
 
 ### Code Formatting
 
@@ -231,7 +231,7 @@ def function_name(param1: Type, param2: Type) -> ReturnType:
     """
 ```
 
-When adding a user-facing feature: update docstrings, extend `docs/User_Guide.md` with an example, and link it from `docs/API_Reference.md`. For internal changes, NumPy-style docstrings are sufficient.
+When adding a user-facing feature: update docstrings, extend `docs/user/User_Guide.md` with an example, and link it from `docs/reference/API_Reference.md`. If the change affects the underlying physics or invalidates an existing assumption, update the relevant document under `docs/physics/`. For internal changes, NumPy-style docstrings are sufficient.
 
 ---
 

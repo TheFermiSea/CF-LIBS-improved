@@ -2,7 +2,7 @@
 Factory for creating hardware components.
 """
 
-from typing import Dict, Type, Optional, Any
+from typing import Any, Dict, Optional, Type, cast
 from pathlib import Path
 
 from cflibs.hardware.abc import HardwareComponent
@@ -95,9 +95,13 @@ class HardwareFactory:
                 "motion_stage": MotionStageHardware,
                 "flow_regulator": FlowRegulatorHardware,
             }
-            component_class = defaults.get(component_type)
-            if component_class is None:
+            default_class = defaults.get(component_type)
+            if default_class is None:
                 raise ValueError(f"No default implementation for {component_type}")
+            # The fallback classes are concrete subclasses of HardwareComponent;
+            # the dict's annotation flattens them to type[HardwareComponent], which
+            # mypy then rejects as abstract. Cast through Any for the assignment.
+            component_class = cast(Any, default_class)
             logger.warning(
                 f"Component '{name}' not registered for type '{component_type}', "
                 f"using default placeholder"

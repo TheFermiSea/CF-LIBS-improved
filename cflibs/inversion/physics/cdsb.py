@@ -311,7 +311,7 @@ class CDSBPlotter:
         )
 
         # Track convergence history
-        tau_history = [np.mean(list(tau_values.values()))]
+        tau_history: list[float] = [float(np.mean(list(tau_values.values())))]
         temp_history = [current_T_K]
 
         # Iterative CD-SB correction
@@ -348,7 +348,7 @@ class CDSBPlotter:
             )
 
             # Check for divergence
-            mean_new_tau = np.mean(list(new_tau_values.values()))
+            mean_new_tau = float(np.mean(list(new_tau_values.values())))
             if mean_new_tau > 100 * tau_history[0]:
                 warnings.append(f"Iteration {iteration}: tau diverging")
                 convergence_status = CDSBConvergenceStatus.UNSTABLE
@@ -563,13 +563,17 @@ class CDSBPlotter:
                 )
                 continue
 
-            # Calculate correction factor
-            if tau < self.tau_min_correction:
-                # Optically thin - no correction needed
-                correction_factor = 1.0
-            elif tau < 1e-6:
+            # Calculate correction factor.  Branch order matters: the
+            # numerically-stable Taylor approximation must be checked BEFORE
+            # the `tau < tau_min_correction` short-circuit, otherwise (since
+            # `tau_min_correction` defaults to 0.05 ≫ 1e-6) the Taylor branch
+            # is dead code and any tau in (0, 1e-6) returns the wrong factor.
+            if tau < 1e-6:
                 # Very small tau: (1 - exp(-tau))/tau -> 1 - tau/2
                 correction_factor = 1.0 / (1.0 - tau / 2.0)
+            elif tau < self.tau_min_correction:
+                # Optically thin - no correction needed
+                correction_factor = 1.0
             elif tau > 50:
                 # Large tau: (1 - exp(-tau))/tau -> 1/tau
                 correction_factor = tau

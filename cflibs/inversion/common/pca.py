@@ -59,7 +59,7 @@ try:
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
-    jnp = None
+    jnp = None  # type: ignore[assignment]
 
     def jit(f):
         return f
@@ -524,7 +524,8 @@ class PCAPipeline:
         """Apply variance selection if n_components is a float."""
         if isinstance(self.n_components, float):
             cumvar = np.cumsum(explained_variance_ratio)
-            n_keep = np.searchsorted(cumvar, self.n_components) + 1
+            # np.searchsorted returns np.intp; coerce so int operations work.
+            n_keep = int(np.searchsorted(cumvar, self.n_components)) + 1
             n_keep = min(n_keep, len(components))
 
             components = components[:n_keep]

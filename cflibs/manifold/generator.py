@@ -37,8 +37,8 @@ try:
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
-    jax = None
-    jnp = None
+    jax = None  # type: ignore[assignment]
+    jnp = None  # type: ignore[assignment]
 
     # Define dummy decorators to allow class definition
     def jit(func):

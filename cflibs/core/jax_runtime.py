@@ -21,8 +21,8 @@ try:
     HAS_JAX = True
 except ImportError:  # pragma: no cover - exercised only when JAX is absent
     HAS_JAX = False
-    jax = None
-    jnp = None
+    jax = None  # type: ignore[assignment]
+    jnp = None  # type: ignore[assignment]
 
 
 def jax_active_backend() -> str | None:

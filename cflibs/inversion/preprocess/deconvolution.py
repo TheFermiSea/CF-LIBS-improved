@@ -25,11 +25,12 @@ logger = get_logger("inversion.deconvolution")
 try:
     import jax  # noqa: F401
     import jax.numpy as jnp
+    import jax.scipy.optimize  # noqa: F401  needed at runtime by `jax.scipy.optimize.minimize` below
 
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
-    jnp = None
+    jnp = None  # type: ignore[assignment]
 
 # Lazy-cached import: profiles.py creates Weideman coefficients at import
 # time, so we defer until first use to ensure jax_enable_x64 is already set.

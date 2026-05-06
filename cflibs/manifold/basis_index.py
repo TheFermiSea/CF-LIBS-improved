@@ -224,7 +224,7 @@ class BasisIndex:
 
         return T_est, ne_est, details
 
-    def save(self, path: str) -> None:
+    def save(self, path: str | Path) -> None:
         """
         Save the index, embedder, and metadata to HDF5.
 
@@ -245,10 +245,10 @@ class BasisIndex:
         assert self._params is not None
         assert self._elements is not None
 
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        out_path = Path(path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with h5py.File(path, "w") as f:
+        with h5py.File(out_path, "w") as f:
             # Metadata arrays
             f.create_dataset("element_indices", data=self._element_indices)
             f.create_dataset("grid_indices", data=self._grid_indices)
@@ -275,7 +275,7 @@ class BasisIndex:
         logger.info(f"Basis index saved to {path}")
 
     @classmethod
-    def load(cls, path: str) -> "BasisIndex":
+    def load(cls, path: str | Path) -> "BasisIndex":
         """
         Load a saved BasisIndex from HDF5.
 
@@ -292,11 +292,11 @@ class BasisIndex:
         if not HAS_H5PY:
             raise ImportError("h5py is required for loading")
 
-        path = Path(path)
-        if not path.exists():
-            raise FileNotFoundError(f"Index file not found: {path}")
+        in_path = Path(path)
+        if not in_path.exists():
+            raise FileNotFoundError(f"Index file not found: {in_path}")
 
-        with h5py.File(path, "r") as f:
+        with h5py.File(in_path, "r") as f:
             n_components = int(f.attrs["n_components"])
             index_type = str(f.attrs["index_type"])
 
@@ -346,6 +346,7 @@ def _weighted_median(values: np.ndarray, weights: np.ndarray) -> float:
     sorted_vals = values[sorted_idx]
     sorted_weights = weights[sorted_idx]
     cum_weight = np.cumsum(sorted_weights)
-    median_idx = np.searchsorted(cum_weight, 0.5)
+    # np.searchsorted returns np.intp; coerce to int so min() returns int.
+    median_idx = int(np.searchsorted(cum_weight, 0.5))
     median_idx = min(median_idx, len(sorted_vals) - 1)
     return float(sorted_vals[median_idx])
