@@ -82,6 +82,11 @@ __all__ = [
     "ilr_inverse",
     "rmse_composition",
     "per_element_error",
+    "subcompositional_ratio_errors",
+    "load_subcompositional_pairs",
+    "classify_stratum",
+    "stratify_per_element_errors",
+    "DEFAULT_STRATA_THRESHOLDS",
     # Corpus (merged from cflibs.benchmarks.corpus)
     "BenchmarkCorpus",
     # Harness (merged from cflibs.benchmarks.harness)
@@ -147,6 +152,11 @@ _ATTRIBUTE_EXPORT_GROUPS = {
         "ilr_inverse",
         "rmse_composition",
         "per_element_error",
+        "subcompositional_ratio_errors",
+        "load_subcompositional_pairs",
+        "classify_stratum",
+        "stratify_per_element_errors",
+        "DEFAULT_STRATA_THRESHOLDS",
     ],
     "cflibs.benchmark.corpus": [
         "BenchmarkCorpus",

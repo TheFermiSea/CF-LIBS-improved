@@ -11,14 +11,26 @@ References
 - Aitchison, J. (1986) "The Statistical Analysis of Compositional Data"
 - Egozcue et al. (2003) "Isometric Logratio Transformations for
   Compositional Data Analysis"
+- Greenacre (2018) "Compositional Data Analysis in Practice" — pairwise
+  log-ratios as subcompositional invariants.
 """
 
-from typing import Dict, Tuple
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
 # Minimum value used to replace zeros/negatives before log transforms.
 _EPSILON = 1e-12
+
+# Default canonical pair list (used as fallback when protocol.yaml cannot be
+# located).  The authoritative source is validation/protocol.yaml.
+_DEFAULT_SUBCOMPOSITIONAL_PAIRS: Tuple[Tuple[str, str], ...] = (
+    ("Fe", "Si"),
+    ("Mg", "Si"),
+    ("Ca", "Si"),
+    ("Al", "Si"),
+)
 
 
 def _to_positive_array(
@@ -273,3 +285,305 @@ def per_element_error(
         result[el] = (abs_err, rel_err)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Subcompositional ratio errors (Tier-1 gate companion)
+# ---------------------------------------------------------------------------
+
+
+def load_subcompositional_pairs(
+    protocol_path: Optional[Path] = None,
+) -> List[Tuple[str, str]]:
+    """Load the canonical subcompositional pair list from the validation protocol.
+
+    The pair list is read from ``validation/protocol.yaml`` under the
+    ``subcompositional_pairs`` key.  When ``protocol_path`` is ``None`` the
+    function searches upwards from this module for the first ``validation``
+    directory containing ``protocol.yaml``.
+
+    Falls back to the canonical ``[(Fe, Si), (Mg, Si), (Ca, Si), (Al, Si)]``
+    list when the file cannot be located or parsed (e.g. in installed-package
+    contexts where the protocol file is not co-located).
+
+    Parameters
+    ----------
+    protocol_path : Path, optional
+        Explicit path to ``protocol.yaml``.  When ``None`` the file is
+        located by walking upward from this module.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Ordered ``(numerator, denominator)`` pairs.
+    """
+    candidate: Optional[Path] = None
+    if protocol_path is not None:
+        candidate = Path(protocol_path)
+    else:
+        here = Path(__file__).resolve()
+        for parent in here.parents:
+            guess = parent / "validation" / "protocol.yaml"
+            if guess.is_file():
+                candidate = guess
+                break
+
+    if candidate is None or not candidate.is_file():
+        return list(_DEFAULT_SUBCOMPOSITIONAL_PAIRS)
+
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        data = yaml.safe_load(candidate.read_text())
+    except Exception:
+        return list(_DEFAULT_SUBCOMPOSITIONAL_PAIRS)
+
+    raw_pairs = data.get("subcompositional_pairs") if isinstance(data, dict) else None
+    if not raw_pairs:
+        return list(_DEFAULT_SUBCOMPOSITIONAL_PAIRS)
+
+    pairs: List[Tuple[str, str]] = []
+    for entry in raw_pairs:
+        if isinstance(entry, (list, tuple)) and len(entry) == 2:
+            pairs.append((str(entry[0]), str(entry[1])))
+    return pairs or list(_DEFAULT_SUBCOMPOSITIONAL_PAIRS)
+
+
+def subcompositional_ratio_errors(
+    predicted_composition: Mapping[str, float],
+    true_composition: Mapping[str, float],
+    pairs: Optional[Sequence[Tuple[str, str]]] = None,
+) -> Dict[str, float]:
+    """Per-pair |log(r̂/r*)| subcompositional ratio errors.
+
+    For each ``(numerator, denominator)`` pair, computes
+    ``abs(log(predicted_ratio) - log(true_ratio))`` where each ratio is
+    ``composition[numerator] / composition[denominator]``.  Zero / negative
+    components are clipped to ``_EPSILON`` before taking the logarithm so a
+    completely missing element produces a large (but finite) error rather
+    than NaN.
+
+    A pair is only scored when **both** elements appear in ``true_composition``
+    with strictly positive values; otherwise the pair is reported as ``NaN``
+    and downstream aggregators must filter accordingly.
+
+    Subcompositional ratios are scale-invariant under closure: missing
+    detection of a VUV-only element inflates all detected concentrations
+    proportionally, but the ratios between detected elements remain
+    physically correct.  This is the Aitchison subcompositional-coherence
+    property — the metric that surfaces ratio-only violations cleanly when
+    the global Aitchison distance is dominated by closure noise.
+
+    Parameters
+    ----------
+    predicted_composition : Mapping[str, float]
+        Predicted composition (element symbol -> fraction).
+    true_composition : Mapping[str, float]
+        Ground-truth composition.
+    pairs : Sequence[Tuple[str, str]], optional
+        Pair list as ``(numerator, denominator)`` tuples.  When ``None``,
+        loads from ``validation/protocol.yaml`` via
+        :func:`load_subcompositional_pairs`.
+
+    Returns
+    -------
+    Dict[str, float]
+        Mapping of ``"<num>/<den>"`` to ``|log(r̂/r*)|``.  Pairs with
+        ill-defined truth ratios map to ``float('nan')``.
+    """
+    if pairs is None:
+        pairs = load_subcompositional_pairs()
+
+    errors: Dict[str, float] = {}
+    for numerator, denominator in pairs:
+        key = f"{numerator}/{denominator}"
+
+        true_num = float(true_composition.get(numerator, 0.0))
+        true_den = float(true_composition.get(denominator, 0.0))
+
+        if true_num <= 0.0 or true_den <= 0.0:
+            errors[key] = float("nan")
+            continue
+
+        pred_num = max(float(predicted_composition.get(numerator, 0.0)), _EPSILON)
+        pred_den = max(float(predicted_composition.get(denominator, 0.0)), _EPSILON)
+
+        true_ratio = true_num / true_den
+        pred_ratio = pred_num / pred_den
+        errors[key] = float(abs(np.log(pred_ratio) - np.log(true_ratio)))
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Concentration stratification (majors / minors / traces)
+# ---------------------------------------------------------------------------
+
+
+# Default thresholds matching validation/protocol.yaml composition_strata.
+# Concentrations are mass fractions (i.e. 0.05 == 5 wt%).
+DEFAULT_STRATA_THRESHOLDS: Dict[str, Dict[str, float]] = {
+    "majors": {
+        "concentration_floor": 0.05,
+        "rd_max": 0.05,
+    },
+    "minors": {
+        "concentration_floor": 0.001,
+        "concentration_ceiling": 0.05,
+        "rd_max": 0.20,
+    },
+    "traces": {
+        "concentration_ceiling": 0.001,
+        # No rd_max — traces are MDL-bounded, not RD-bounded.  The pass
+        # criterion uses an ``mdl_factor`` multiple of the LOQ when supplied.
+        "mdl_factor": 3.0,
+    },
+}
+
+
+def classify_stratum(
+    certified_concentration: float,
+    thresholds: Optional[Mapping[str, Mapping[str, float]]] = None,
+) -> str:
+    """Classify a concentration into ``majors`` / ``minors`` / ``traces``.
+
+    Boundary convention (matches docs/VALIDATION_METRICS.md §2.1):
+    - ``majors``: ``c > majors.concentration_floor`` (strictly greater)
+    - ``minors``: ``minors.concentration_floor <= c <= minors.concentration_ceiling``
+    - ``traces``: ``c < traces.concentration_ceiling``
+
+    Note that the boundary at exactly the floor (5 wt%) falls into ``minors``
+    and the boundary at exactly the ceiling (0.1 wt%) also falls into
+    ``minors``.  This is the inclusive-minors convention used by Tier-1 gate
+    review, where a borderline value's stricter (5%) and looser (20%) RD
+    requirements both apply, and we elect to enforce the looser one.
+
+    Parameters
+    ----------
+    certified_concentration : float
+        Mass fraction of the certified value (NOT predicted).
+    thresholds : Mapping, optional
+        Stratum thresholds; falls back to :data:`DEFAULT_STRATA_THRESHOLDS`.
+
+    Returns
+    -------
+    str
+        ``"majors"``, ``"minors"``, or ``"traces"``.
+    """
+    cfg = thresholds or DEFAULT_STRATA_THRESHOLDS
+    majors_floor = float(cfg.get("majors", {}).get("concentration_floor", 0.05))
+    traces_ceiling = float(cfg.get("traces", {}).get("concentration_ceiling", 0.001))
+
+    if certified_concentration > majors_floor:
+        return "majors"
+    if certified_concentration < traces_ceiling:
+        return "traces"
+    return "minors"
+
+
+def stratify_per_element_errors(
+    per_element_records: Iterable[Mapping[str, Any]],
+    thresholds: Optional[Mapping[str, Mapping[str, float]]] = None,
+    loq_lookup: Optional[Mapping[str, float]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Aggregate per-element / per-spectrum records into stratum summaries.
+
+    Each input record is a mapping with at least the keys:
+
+    - ``element``: element symbol (str)
+    - ``true``: certified concentration (mass fraction)
+    - ``predicted``: predicted concentration (mass fraction)
+
+    The relative deviation (RD) is ``|predicted - true| / true``.  Records
+    with ``true <= 0`` are dropped (cannot be stratified by certified
+    concentration).
+
+    Stratification is by **certified** concentration, not predicted, so a
+    PR cannot move an element between strata by inflating its prediction.
+
+    Pass / fail per stratum:
+    - ``majors``: ``mean_rd <= majors.rd_max`` (default 5%)
+    - ``minors``: ``mean_rd <= minors.rd_max`` (default 20%)
+    - ``traces``: ``mean_rd <= mdl_factor * (LOQ_for_element / true)`` when
+      ``loq_lookup`` is supplied; otherwise ``True`` (informational only).
+
+    Parameters
+    ----------
+    per_element_records : Iterable[Mapping]
+        Per-spectrum records with ``element``, ``true``, ``predicted`` keys.
+    thresholds : Mapping, optional
+        Override default stratum thresholds.
+    loq_lookup : Mapping[str, float], optional
+        Element symbol -> LOQ (mass fraction) for trace MDL gating.
+
+    Returns
+    -------
+    Dict[str, Dict[str, Any]]
+        ``{stratum: {n_elements, n_spectra, mean_rd, median_rd, p95_rd, pass}}``.
+    """
+    cfg = thresholds or DEFAULT_STRATA_THRESHOLDS
+    buckets: Dict[str, List[Tuple[str, float, float]]] = {
+        "majors": [],
+        "minors": [],
+        "traces": [],
+    }
+
+    for record in per_element_records:
+        true = float(record.get("true", 0.0))
+        if true <= 0.0:
+            continue
+        pred = float(record.get("predicted", 0.0))
+        element = str(record.get("element", "?"))
+        rd = abs(pred - true) / true
+        stratum = classify_stratum(true, cfg)
+        buckets[stratum].append((element, true, rd))
+
+    summary: Dict[str, Dict[str, Any]] = {}
+    for stratum, entries in buckets.items():
+        if not entries:
+            summary[stratum] = {
+                "n_elements": 0,
+                "n_spectra": 0,
+                "mean_rd": float("nan"),
+                "median_rd": float("nan"),
+                "p95_rd": float("nan"),
+                "pass": True,  # vacuously passes when no observations
+            }
+            continue
+
+        rds = np.array([rd for _, _, rd in entries], dtype=np.float64)
+        elements = sorted({el for el, _, _ in entries})
+
+        mean_rd = float(np.mean(rds))
+        median_rd = float(np.median(rds))
+        p95_rd = float(np.percentile(rds, 95))
+
+        if stratum in ("majors", "minors"):
+            rd_max = float(cfg.get(stratum, {}).get("rd_max", 0.20))
+            passed = mean_rd <= rd_max
+        else:
+            # traces: MDL-bounded.  When a per-element LOQ table is provided,
+            # require mean_rd to stay within (mdl_factor * LOQ / mean(true)).
+            mdl_factor = float(cfg.get("traces", {}).get("mdl_factor", 3.0))
+            if loq_lookup:
+                bounded = []
+                for element, true, rd in entries:
+                    loq = float(loq_lookup.get(element, float("inf")))
+                    if true > 0:
+                        bounded.append(rd <= mdl_factor * (loq / true))
+                passed = bool(bounded) and all(bounded)
+            else:
+                # No LOQ table available: do not gate (return informational
+                # pass=True so the absence of LOQ data does not silently fail).
+                passed = True
+
+        summary[stratum] = {
+            "n_elements": len(elements),
+            "n_spectra": len(entries),
+            "mean_rd": mean_rd,
+            "median_rd": median_rd,
+            "p95_rd": p95_rd,
+            "pass": passed,
+        }
+
+    return summary
