@@ -18,6 +18,7 @@ from scipy.stats import binom, linregress
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 from cflibs.core.constants import KB_EV
+from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, LineObservation
 from cflibs.inversion.element_id import (
     IdentifiedLine,
     ElementIdentification,
@@ -75,6 +76,11 @@ class ALIASIdentifier:
     relative_cl_threshold : float, optional
         CL must be >= max_CL * relative_cl_threshold to count as detected.
         Set to 0 to disable the relative threshold (default: 0.1)
+    boltzmann_r2_min : float, optional
+        Minimum Boltzmann-plot R^2 required for candidates with at least three
+        matched lines. Must be finite and in [0, 1]. Candidates with fewer
+        than three expected lines are exempt because no meaningful Boltzmann
+        regression can be performed (default: 0.85).
     """
 
     # Temperature bounds for physics validation
@@ -142,6 +148,7 @@ class ALIASIdentifier:
         reference_temperature: float = 10000.0,
         max_screening_candidates: int = 12,
         relative_cl_threshold: float = 0.1,
+        boltzmann_r2_min: float = 0.85,
     ):
         self.atomic_db = atomic_db
         if not (np.isfinite(resolving_power) and resolving_power > 0):
@@ -159,6 +166,11 @@ class ALIASIdentifier:
         self.reference_temperature = reference_temperature
         self.max_screening_candidates = max_screening_candidates
         self.relative_cl_threshold = relative_cl_threshold
+        if not (np.isfinite(boltzmann_r2_min) and 0.0 <= boltzmann_r2_min <= 1.0):
+            raise ValueError(
+                f"boltzmann_r2_min must be finite and in [0, 1], got {boltzmann_r2_min!r}"
+            )
+        self.boltzmann_r2_min = float(boltzmann_r2_min)
 
         # Create Saha-Boltzmann solver
         self.solver = SahaBoltzmannSolver(atomic_db)
@@ -540,7 +552,8 @@ class ALIASIdentifier:
 
             # Gate 4: Boltzmann consistency — verify matched lines follow
             # ln(I·λ/gA) vs E_k with physically reasonable temperature
-            boltz_factor = self._boltzmann_consistency_check(
+            boltz_factor, boltz_r2 = self._boltzmann_consistency_check(
+                element,
                 fused_lines,
                 matched_mask,
                 matched_peak_idx,
@@ -564,6 +577,17 @@ class ALIASIdentifier:
             if N_expected > 0 and N_expected < 10:
                 adaptive_dt *= min(3.0, math.sqrt(10.0 / N_expected))
             detected = CL >= adaptive_dt
+
+            # Physics-grounded hard gates (Task wzus):
+            # (a) Require up to three matched lines, but do not reject species
+            #     that only have one or two expected observable lines.
+            # (b) Require Boltzmann R^2 >= boltzmann_r2_min only when at least
+            #     three matched lines make a regression meaningful.
+            min_required_matches = max(1, min(3, int(N_expected)))
+            if N_matched < min_required_matches:
+                detected = False
+            if N_matched >= 3 and boltz_r2 < self.boltzmann_r2_min:
+                detected = False
 
             # Create IdentifiedLine objects for matched lines
             # Reuse peak indices from matching to avoid re-selection outside window
@@ -618,6 +642,8 @@ class ALIASIdentifier:
                     "fill_factor": fill_factor,
                     "N_penalty": min(1.0, math.sqrt(N_expected / 5.0)) if N_expected > 0 else 0.0,
                     "boltzmann_factor": boltz_factor,
+                    "boltzmann_r2": boltz_r2,
+                    "min_required_matches": min_required_matches,
                     "sparse_nnls_coeff": cand.get("sparse_nnls_coeff", 0.0),
                     "nnls_significant": cand.get("nnls_significant", True),
                     "effective_R": self._effective_R,
@@ -1042,26 +1068,30 @@ class ALIASIdentifier:
 
     def _boltzmann_consistency_check(
         self,
+        element: str,
         fused_lines: List[dict],
         matched_mask: np.ndarray,
         matched_peak_idx: np.ndarray,
         intensity: np.ndarray,
         peaks: List[Tuple[int, float]],
-    ) -> float:
+    ) -> Tuple[float, float]:
         """
         Boltzmann consistency check for matched lines.
 
         For elements with >=3 matched lines, fit ln(I*lambda/(g*A)) vs E_k.
         Slope should give physical temperature (3000-50000K) with reasonable R^2.
 
-        Returns a factor in [0.5, 1.0] to multiply into CL.
+        Returns
+        -------
+        Tuple[float, float]
+            (boltzmann_factor, r_squared)
+            boltzmann_factor is in [0.5, 1.0] to multiply into CL.
         """
         matched_indices = np.nonzero(matched_mask)[0]
         if len(matched_indices) < 3:
-            return 0.5  # Penalize — not enough lines for Boltzmann check
+            return 0.5, 0.0  # Penalize — not enough lines for Boltzmann check
 
-        E_k_vals = []
-        y_vals = []
+        observations = []
 
         for i in matched_indices:
             trans = fused_lines[i]["transition"]
@@ -1072,39 +1102,49 @@ class ALIASIdentifier:
             if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
                 continue
 
-            y = math.log(I_obs * trans.wavelength_nm / (trans.g_k * trans.A_ki))
-            E_k_vals.append(trans.E_k_ev)
-            y_vals.append(y)
+            observations.append(
+                LineObservation(
+                    element=element,
+                    ionization_stage=trans.ionization_stage,
+                    wavelength_nm=trans.wavelength_nm,
+                    E_k_ev=trans.E_k_ev,
+                    g_k=trans.g_k,
+                    A_ki=trans.A_ki,
+                    intensity=I_obs,
+                    intensity_uncertainty=max(abs(I_obs) * 0.1, 1e-12),
+                )
+            )
 
-        if len(E_k_vals) < 3:
-            return 0.5
-
-        E_k_arr = np.array(E_k_vals)
-        y_arr = np.array(y_vals)
+        if len(observations) < 3:
+            return 0.5, 0.0
 
         # Need some spread in E_k for meaningful fit
+        E_k_arr = np.array([obs.E_k_ev for obs in observations])
         if np.ptp(E_k_arr) < 0.5:
-            return 1.0  # All same energy level, can't fit
+            # No meaningful Boltzmann regression is possible.
+            return 0.5, 0.0
 
         try:
-            result = linregress(E_k_arr, y_arr)
+            fitter = BoltzmannPlotFitter()
+            result = fitter.fit(observations)
             slope = result.slope
-            r_sq = result.rvalue**2
+            r_sq = result.r_squared
         except (ValueError, ZeroDivisionError):
-            return 1.0
+            return 1.0, 0.0
 
         # Check physical validity
         if slope >= 0:
             # Positive slope = anti-Boltzmann → likely false positive
-            return 0.5
+            return 0.5, r_sq
 
-        T_K = -1.0 / (slope * KB_EV)
+        T_K = result.temperature_K
         if T_K < self._T_CONSISTENCY_MIN_K or T_K > self._T_CONSISTENCY_MAX_K:
             # Unphysical temperature
-            return 0.5
+            return 0.5, r_sq
 
         # Scale by R^2: good fit → 1.0, poor fit → 0.7
-        return float(0.7 + 0.3 * min(r_sq, 1.0))
+        factor = float(0.7 + 0.3 * min(r_sq, 1.0))
+        return factor, r_sq
 
     def _compute_element_emissivities(
         self,
