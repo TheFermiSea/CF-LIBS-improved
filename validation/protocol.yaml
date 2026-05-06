@@ -1,0 +1,179 @@
+# Pre-registered validation protocol for CF-LIBS PR gate.
+#
+# Authoritative reference: docs/VALIDATION_METRICS.md
+#
+# IMPORTANT: This file is pre-registered. Changes must:
+#   1. bump `version` (semver)
+#   2. document the change in docs/VALIDATION_METRICS.md changelog
+#   3. re-run every prior PR against the new spec before applying
+#
+# Read by python/benchmark_gate.py (beefcake-swarm) at gate time.
+
+version: "0.1.0"
+status: "draft"          # tracked → enforced when the gate code lands
+locked_by: "manual"      # later: protocol.yaml.sig with maintainer signature
+
+# --- Primary endpoint (the ONE number the gate decides on) ---
+primary_endpoint:
+  metric: "aitchison_distance"
+  space: "clr"
+  aggregation:
+    per_dataset: "median"
+    cross_dataset: "friedman_mean_rank"
+  thresholds:
+    excellent: 0.05
+    good: 0.10
+    acceptable: 0.20
+    fail: 0.20            # ≥ 0.20 fails
+  improvement_required:
+    relative: 0.05        # ≥ 5%
+    absolute: 0.005       # AND ≥ 0.005
+    bootstrap_ci_excludes_zero: true
+  no_regression_cap:
+    per_dataset_relative: 0.10   # no dataset > +10% on d_A
+
+# --- Composition stratification (mandatory; majors/minors/traces all
+# must independently pass) ---
+composition_strata:
+  majors:
+    concentration_floor: 0.05    # > 5 wt%
+    rd_max: 0.05
+  minors:
+    concentration_floor: 0.001   # 0.1–5 wt%
+    concentration_ceiling: 0.05
+    rd_max: 0.20
+  traces:
+    concentration_ceiling: 0.001  # < 0.1 wt%
+    bound: "mdl"                  # report as ≤ LOQ if below LOQ
+
+# --- Subcompositional ratios (also reported, also gated) ---
+subcompositional_pairs:
+  - [Fe, Si]
+  - [Mg, Si]
+  - [Ca, Si]
+  - [Al, Si]
+ratio_log_error_max: 0.20
+
+# --- Identification (Tier 1) ---
+identification:
+  macro_f1_regression_max_abs: 0.02
+  recall_floor_per_element:
+    elements: [Si, Fe, Mg, Ca, Al, Ti, Mn, K, Na]
+    threshold: 0.6
+    datasets: [aalto, usgs, nist_srm]
+  wavelength_tolerance:
+    formula: "sqrt(fwhm_inst**2 + omega_stark**2)"
+    fallback_fixed: 0.05  # nm — used only when stark width unavailable
+
+# --- Posterior calibration (Tier 1 when MCMC active; Tier 3 otherwise) ---
+posterior_calibration:
+  applies_when: "mcmc_or_nested_sampling_active"
+  hard_gates:
+    rhat_max: 1.01
+    ess_bulk_min: 400         # below this → INVALID, not FAIL (re-run)
+    ess_tail_min: 400
+    divergent_transitions_max: 0
+    psis_k_hat_max: 0.7
+    coverage_band: [0.93, 0.97]   # bidirectional
+  soft_alarms:
+    elpd_regression_max_se_multiple: 4
+
+# --- Cross-dataset generalization (Tier 1) ---
+generalization:
+  required_crm_panel:
+    - id: "steel"
+      candidates: ["nist_srm_1764", "jk_steel"]
+    - id: "basalt"
+      candidates: ["bhvo-2"]
+    - id: "mars_analog"
+      candidates: ["norite", "shergottite"]
+    - id: "plant_soil"
+      candidates: ["nist_1573a"]
+  sequestered_fraction: 0.30
+  sequestered_rotation_period: "quarterly"
+  negative_transfer_guard:
+    rule: "block_if_any_dataset_regresses_while_others_improve"
+    threshold_relative: 0.05
+
+# --- Physical consistency (Tier 1; any 2 trip = block) ---
+physical_consistency:
+  any_n_trip_to_block: 2
+  any_one_trip_alarm: true
+  checks:
+    - id: "multi_t_lte"
+      formula: "abs(t_neutral - t_ion) / t_avg"
+      max: 0.15
+      reference: "Cristoforetti 2010"
+    - id: "mcwhirter_floor"
+      formula: "n_e >= 1.6e12 * sqrt(t_avg) * (delta_e_ev)**3"
+      reference: "textbook LTE"
+    - id: "plasma_t_physicality"
+      t_e_min_kelvin: 3000
+      t_e_max_kelvin: 20000
+      catastrophic_below_kelvin: 1000
+    - id: "closure_residual_unnormalized"
+      formula: "abs(sum(C_s) - 1)"
+      max: 0.10
+
+# --- Statistical decision protocol ---
+statistics:
+  per_pr_test: "wilcoxon_signed_rank_paired_per_dataset"
+  baselines:
+    - id: "last_green_main"
+      type: "rolling"
+    - id: "frozen_v0"
+      type: "fixed"
+      ref: "tognoni_2010_reproduction"
+      fallback: "first_commit_on_main"
+  tier1_multiplicity: "holm_bonferroni"
+  tier1_alpha: 0.05
+  tier2_multiplicity: "bh_fdr"
+  tier2_q: 0.10
+  reproducibility:
+    seeds: 5
+    independent_runs: 2
+    max_disagreement_relative: 0.01
+  environment:
+    docker_image_pinned: true       # populated when image is built
+    cuda_deterministic: true
+    single_gpu_per_run: true
+    agent_seed_choice_allowed: false
+
+# --- Robustness perturbations (Tier 2) ---
+robustness:
+  line_dropout:
+    n_lines_removed: 3
+    delta_d_a_max: 0.02
+  outlier_injection:
+    fraction_channels: 0.05
+    sigma_multiplier: 5
+    delta_d_a_max: 0.05
+  self_absorption_t_rsd_limit: 0.01    # Völker & Gornushkin 2023
+
+# --- Tier 2 alarms (BH-FDR q=0.10) ---
+tier2_alarms:
+  wall_clock_per_spectrum_max_regression: 0.20
+  peak_rss_max_regression: 0.30
+  mcmc_tokens_max_regression: 0.50
+  fp_rate_track_elements: [Mn, Na, K]
+  internal_external_precision_ratio_min: 0.30   # Holtzman 2015 stellar guardrail
+
+# --- Tier 3 forensics (log only) ---
+tier3_forensics:
+  per_spectrum_top_n_worst: 10
+  emit:
+    - pit_histogram_chi2
+    - log_evidence_nested_sampling
+    - per_element_mdl_loq
+    - subcompositional_aitchison_detected_only
+    - rp_stratified_scoring
+    - plasma_param_composition_correlation
+
+# --- Goodhart hedges ---
+goodhart_hedges:
+  sequestered_held_out: true
+  physical_constraint_gates: true
+  adversarial_twin_run: false        # not yet implemented
+  internal_external_precision_ratio: true
+  multi_matrix_crm_mandate: true
+  metric_leakage_to_workers: false   # architect sees pass/fail; workers don't

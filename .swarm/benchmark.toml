@@ -40,9 +40,12 @@ run_command_template = [
     "{issue_id}",
 ]
 
-# 30 min: light tier is ~1-2 min, heavy is 10-30 min. Plus rsync +
-# inference-drain + cuda-cache warm overhead.
-timeout_secs = 1800
+# Orchestrator-side wall-clock cap. The bench script picks a per-tier
+# inner timeout (BENCH_TIMEOUT_LIGHT=600, BENCH_TIMEOUT_HEAVY=2400,
+# BENCH_TIMEOUT_NIGHTLY=5400 by default) so this outer cap must exceed
+# the largest of those plus rsync + drain + cuda-cache + restore overhead.
+# Sized for the nightly tier (~50-60 min wall-clock end-to-end).
+timeout_secs = 6000
 
 # Block PR creation on benchmark failure. The architect's swarm/<id>
 # branch is preserved (run.py keep_on_fail=True for benchmark gate
