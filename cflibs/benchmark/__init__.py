@@ -87,6 +87,9 @@ __all__ = [
     "classify_stratum",
     "stratify_per_element_errors",
     "DEFAULT_STRATA_THRESHOLDS",
+    # Posterior calibration metrics (Tier-1 hard gate when MCMC active)
+    "PosteriorDiagnostics",
+    "compute_posterior_diagnostics",
     # Corpus (merged from cflibs.benchmarks.corpus)
     "BenchmarkCorpus",
     # Harness (merged from cflibs.benchmarks.harness)
@@ -167,6 +170,10 @@ _ATTRIBUTE_EXPORT_GROUPS = {
         "classify_stratum",
         "stratify_per_element_errors",
         "DEFAULT_STRATA_THRESHOLDS",
+    ],
+    "cflibs.benchmark.posterior_metrics": [
+        "PosteriorDiagnostics",
+        "compute_posterior_diagnostics",
     ],
     "cflibs.benchmark.corpus": [
         "BenchmarkCorpus",
