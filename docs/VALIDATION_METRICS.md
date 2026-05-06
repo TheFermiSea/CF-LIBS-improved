@@ -243,7 +243,11 @@ The current benchmark **does not** emit:
 - Stratified-by-magnitude composition reporting
 - Subcompositional ratio errors (Fe/Si, Mg/Si, Ca/Si, Al/Si)
 - Adaptive wavelength tolerance $\epsilon(\lambda)$
-- Multi-T LTE consistency check (some checks log but don't gate)
+- Multi-T LTE consistency check (single-T currently — McWhirter floor,
+  T physicality and closure residual are now Tier-1-gated via
+  `cflibs/benchmark/physical_consistency.py`; the multi-T LTE check
+  itself only fires when an inversion populates per-spectrum
+  `t_neutral_k` and `t_ion_k`, which is still TODO)
 - Robustness perturbation tests (line-dropout, outlier injection)
 - Adversarial-twin run
 - Sequestered held-out separation
