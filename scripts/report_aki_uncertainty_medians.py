@@ -55,9 +55,12 @@ def compute_medians(db_path: str) -> dict:
             grades = [r[1] for r in rows if r[1] is not None]
 
             # Distinguish numerically ingested uncertainties from grade-backfilled ones.
-            # Rows where accuracy_grade is NULL had uncertainty assigned numerically
-            # (Kramida 2024 data) since the grade was not stored; rows with a grade
-            # were assigned via the grade→sigma heuristic or ingested alongside a grade.
+            # "Numerical" here means accuracy_grade IS NULL: these rows received their
+            # aki_uncertainty directly from the NIST/Kramida unc_Aki field in datagen_v2.py
+            # (no categorical grade was stored alongside the numerical value).
+            # "Grade-backfilled" means accuracy_grade IS NOT NULL: these rows had their
+            # aki_uncertainty set from the grade→sigma mapping (or were ingested with both
+            # a numerical value and an accuracy grade from ASD cache output).
             numerical_rows = conn.execute(
                 "SELECT aki_uncertainty "
                 "FROM lines "
@@ -110,13 +113,16 @@ def print_report(medians: dict) -> None:
         med_all = stats["median_aki_uncertainty"]
         med_num = stats["median_numerical_uncertainty"]
         med_grd = stats["median_grade_backfilled_uncertainty"]
+        med_all_str = f"{med_all:.4f}" if med_all is not None else "N/A"
+        med_num_str = f"{med_num:.4f}" if med_num is not None else "N/A"
+        med_grd_str = f"{med_grd:.4f}" if med_grd is not None else "N/A"
         print(
             f"{label:<8} "
             f"{stats['n_lines_with_uncertainty']:>8} "
             f"{stats['n_numerical_uncertainty']:>12} "
-            f"{med_all if med_all is not None else 'N/A':>14.4f} "
-            f"{med_num if med_num is not None else 'N/A':>20} "
-            f"{med_grd if med_grd is not None else 'N/A':>22}"
+            f"{med_all_str:>14} "
+            f"{med_num_str:>20} "
+            f"{med_grd_str:>22}"
         )
     print()
     print("Grade distributions:")
