@@ -7,14 +7,17 @@
 #   1. Creates an unprivileged 'dolt' system user.
 #   2. Installs a pinned Dolt binary at /usr/local/bin/dolt.
 #   3. Generates a strong password and writes /etc/default/beads-dolt.
-#   4. Installs and enables the beads-dolt.service systemd unit.
-#   5. Starts the server listening on 0.0.0.0:3306 (SQL) and 0.0.0.0:50051
+#   4. Writes a Dolt YAML server config to /etc/beads-dolt/config.yaml.
+#   5. Bootstraps a 'beads' SQL user (one-time, on a localhost-only sql-server)
+#      against the privileges database. Persists in /var/lib/dolt/.doltcfg/.
+#   6. Installs and enables the beads-dolt.service systemd unit.
+#   7. Starts the server listening on 0.0.0.0:3306 (SQL) and 0.0.0.0:50051
 #      (remotesapi gRPC). Restrict access at the network layer (Tailscale
 #      ACLs / firewall) — these ports are NOT auth-hardened against the
 #      open internet.
 #
 # Idempotent: re-running upgrades the binary if DOLT_VERSION changed and
-# leaves credentials untouched.
+# leaves credentials untouched (existing /etc/default/beads-dolt wins).
 #
 # Environment overrides:
 #   DOLT_VERSION  Dolt release to install (default below; bump as needed)
@@ -26,8 +29,10 @@ set -euo pipefail
 DOLT_VERSION="${DOLT_VERSION:-1.87.0}"
 DOLT_USER="${DOLT_USER:-beads}"
 DATA_DIR="${DATA_DIR:-/var/lib/dolt}"
+CFG_DIR="/etc/beads-dolt"
 SERVICE_FILE="/etc/systemd/system/beads-dolt.service"
 ENV_FILE="/etc/default/beads-dolt"
+SERVER_CONFIG="$CFG_DIR/config.yaml"
 BIN_PATH="/usr/local/bin/dolt"
 
 if [[ "$EUID" -ne 0 ]]; then
@@ -69,8 +74,9 @@ fi
 
 echo "Dolt: $("$BIN_PATH" version | head -1)"
 
-# 3. Data dir ----------------------------------------------------------------
+# 3. Data dir + config dir ---------------------------------------------------
 install -d -o dolt -g dolt -m 0750 "$DATA_DIR"
+install -d -o root -g dolt -m 0750 "$CFG_DIR"
 
 # 4. Credentials -------------------------------------------------------------
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -81,24 +87,102 @@ if [[ ! -f "$ENV_FILE" ]]; then
 BEADS_DOLT_USER=$DOLT_USER
 BEADS_DOLT_PASSWORD=$password
 EOF
-    cat <<BANNER
-
-============================================================
-Generated credentials for the beads federation hub.
-Saved to $ENV_FILE (root:dolt 0640).
-
-  user:     $DOLT_USER
-  password: $password
-
-Save this password in your password manager — every client
-needs it to push/pull/federate. View later with:
-  sudo cat $ENV_FILE
-============================================================
-BANNER
+    creds_banner=1
+else
+    creds_banner=0
 fi
 
-# 5. systemd unit ------------------------------------------------------------
-cat >"$SERVICE_FILE" <<'UNIT'
+# Load credentials we just wrote (or already had).
+# shellcheck source=/dev/null
+source "$ENV_FILE"
+
+# 5. Server config -----------------------------------------------------------
+cat >"$SERVER_CONFIG" <<EOF
+# Managed by setup-beads-lxc.sh — overwritten on every run.
+log_level: info
+listener:
+  host: 0.0.0.0
+  port: 3306
+  max_connections: 100
+remotesapi:
+  port: 50051
+data_dir: $DATA_DIR
+cfg_dir: $DATA_DIR/.doltcfg
+behavior:
+  auto_gc_behavior:
+    enable: true
+EOF
+chown root:dolt "$SERVER_CONFIG"
+chmod 0640 "$SERVER_CONFIG"
+
+# 6. Bootstrap the SQL user --------------------------------------------------
+# Dolt 1.50+ removed --user/--password flags. Users live in
+# $cfg_dir/privileges.db. Start a bootstrap sql-server on localhost,
+# create the user as the auto-provisioned root@localhost (no password),
+# then stop the bootstrap server. Idempotent via "CREATE USER IF NOT EXISTS".
+PRIV_DB="$DATA_DIR/.doltcfg/privileges.db"
+if [[ ! -f "$PRIV_DB" ]] || ! grep -aq "$BEADS_DOLT_USER" "$PRIV_DB" 2>/dev/null; then
+    echo "Bootstrapping SQL user '$BEADS_DOLT_USER'..."
+
+    # mariadb-client speaks Dolt's MySQL dialect (mysql_native_password
+    # compatible). The 'mysql' Debian package would also work.
+    if ! command -v mariadb &>/dev/null; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mariadb-client
+    fi
+
+    bootstrap_log="$(mktemp)"
+    # runuser (util-linux, in Debian minimal) avoids needing sudo installed.
+    # cd to DATA_DIR first so the dolt user has read access to cwd.
+    (
+        cd "$DATA_DIR"
+        runuser -u dolt -- env HOME="$DATA_DIR" "$BIN_PATH" sql-server \
+            --host 127.0.0.1 --port 3399 \
+            --data-dir "$DATA_DIR" \
+            >"$bootstrap_log" 2>&1
+    ) &
+    bootstrap_pid=$!
+
+    # Wait for it to come up
+    for _ in $(seq 1 20); do
+        if mariadb -h 127.0.0.1 -P 3399 -u root -e "SELECT 1" &>/dev/null; then
+            break
+        fi
+        sleep 0.5
+    done
+
+    if ! mariadb -h 127.0.0.1 -P 3399 -u root -e "SELECT 1" &>/dev/null; then
+        echo "Bootstrap server failed to start. Last log:" >&2
+        tail -20 "$bootstrap_log" >&2
+        kill "$bootstrap_pid" 2>/dev/null || true
+        exit 1
+    fi
+
+    # Grants we need:
+    #   beads@%        — full DBA on every database for the federation user.
+    #   root@%         — CLONE_ADMIN + ALL for the Dolt remotesapi gRPC service.
+    #                    The gRPC server identifies pushers as 'root' regardless
+    #                    of URL-embedded creds, so the privilege check fails
+    #                    unless 'root'@'%' has CLONE_ADMIN. Network access is
+    #                    gated by Tailscale ACLs / firewall — treat password
+    #                    auth as defence-in-depth, not the primary boundary.
+    mariadb -h 127.0.0.1 -P 3399 -u root <<SQL
+CREATE USER IF NOT EXISTS '$BEADS_DOLT_USER'@'%' IDENTIFIED BY '$BEADS_DOLT_PASSWORD';
+GRANT ALL PRIVILEGES ON *.* TO '$BEADS_DOLT_USER'@'%' WITH GRANT OPTION;
+GRANT CLONE_ADMIN ON *.* TO '$BEADS_DOLT_USER'@'%';
+CREATE USER IF NOT EXISTS 'root'@'%';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+GRANT CLONE_ADMIN ON *.* TO 'root'@'%';
+FLUSH PRIVILEGES;
+SQL
+
+    kill "$bootstrap_pid" 2>/dev/null || true
+    wait "$bootstrap_pid" 2>/dev/null || true
+    rm -f "$bootstrap_log"
+    echo "  user '$BEADS_DOLT_USER' bootstrapped."
+fi
+
+# 7. systemd unit ------------------------------------------------------------
+cat >"$SERVICE_FILE" <<UNIT
 [Unit]
 Description=Dolt SQL Server (beads federation hub)
 Documentation=https://docs.dolthub.com/sql-reference/server/server-configuration
@@ -109,15 +193,8 @@ Wants=network-online.target
 Type=simple
 User=dolt
 Group=dolt
-WorkingDirectory=/var/lib/dolt
-EnvironmentFile=/etc/default/beads-dolt
-ExecStart=/usr/local/bin/dolt sql-server \
-    --host 0.0.0.0 \
-    --port 3306 \
-    --remotesapi-port 50051 \
-    --user ${BEADS_DOLT_USER} \
-    --password ${BEADS_DOLT_PASSWORD} \
-    --data-dir /var/lib/dolt
+WorkingDirectory=$DATA_DIR
+ExecStart=$BIN_PATH sql-server --config $SERVER_CONFIG
 Restart=on-failure
 RestartSec=5s
 LimitNOFILE=65536
@@ -126,7 +203,7 @@ TimeoutStopSec=30s
 # Hardening
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/dolt
+ReadWritePaths=$DATA_DIR
 PrivateTmp=true
 NoNewPrivileges=true
 ProtectKernelTunables=true
@@ -139,11 +216,29 @@ LockPersonality=true
 WantedBy=multi-user.target
 UNIT
 
-# 6. Enable + start ----------------------------------------------------------
+# 8. Print banner if we just generated creds ---------------------------------
+if [[ "$creds_banner" -eq 1 ]]; then
+    cat <<BANNER
+
+============================================================
+Generated credentials for the beads federation server.
+Saved to $ENV_FILE (root:dolt 0640).
+
+  user:     $BEADS_DOLT_USER
+  password: $BEADS_DOLT_PASSWORD
+
+Save this password in your password manager — every client
+needs it to push/pull/federate. View later with:
+  sudo cat $ENV_FILE
+============================================================
+BANNER
+fi
+
+# 9. Enable + start ----------------------------------------------------------
 systemctl daemon-reload
 systemctl enable --now beads-dolt.service
 
-# 7. Status ------------------------------------------------------------------
+# 10. Status -----------------------------------------------------------------
 sleep 2
 systemctl --no-pager --lines=0 status beads-dolt.service || true
 echo
