@@ -1,0 +1,37 @@
+# NotebookLM notebook registry for CF-LIBS-improved.
+#
+# The orchestrator (python/run.py::process_issue + load_notebook_registry)
+# reads this file, queries each `auto_query=true` notebook with the issue
+# title + description as context, and threads the results into the
+# architect's prompt under a "## Knowledge base context" section.
+#
+# Notebook IDs are from `nlm notebook list` on ai-proxy:
+#   nlm notebook list | jq '.[] | {id, title, source_count}'
+#
+# To refresh / add sources to a notebook:
+#   nlm source add <notebook-id> --url <paper-url>
+#   nlm source add <notebook-id> --file <local-path>
+#
+# Auth: `nlm login --check` should report "Authentication valid".
+
+[notebooks.project_brain]
+# General CF-LIBS literature & physics — Saha-Boltzmann, Voigt, Stark
+# broadening, NumPyro inversion patterns, calibration-free LIBS theory.
+# Used pre-task to ground the architect in physics + prior decisions
+# before it produces any SEARCH/REPLACE blocks.
+id = "e1dd4578-7a6f-4c0c-8506-39570aeab5c1"
+title = "CF-LIBS: Calibration-Free Laser-Induced Breakdown Spectroscopy"
+role = "project_brain"
+auto_query = true
+auto_update = false   # don't auto-write resolution summaries here; keep curated
+
+[notebooks.debugging_kb]
+# CF-LIBS algorithmic optimization research — failure modes, ablations,
+# benchmark protocols (Pedarnig 2023, Wang 2018, etc.). Queried for
+# "known fixes / error patterns for <issue>" so the architect doesn't
+# re-discover failure modes the swarm has already documented.
+id = "9170d55e-d489-4132-9184-29786ef870cc"
+title = "CF-LIBS Algorithmic Optimization Research"
+role = "debugging_kb"
+auto_query = true
+auto_update = true    # post-success summaries route here for cross-issue learning
