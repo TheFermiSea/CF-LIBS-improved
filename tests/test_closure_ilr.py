@@ -298,6 +298,7 @@ class TestClosureMode:
         assert ClosureMode.MATRIX.value == "matrix"
         assert ClosureMode.OXIDE.value == "oxide"
         assert ClosureMode.ILR.value == "ilr"
+        assert ClosureMode.PWLR.value == "pwlr"
 
     def test_enum_from_string(self):
         assert ClosureMode("ilr") is ClosureMode.ILR
