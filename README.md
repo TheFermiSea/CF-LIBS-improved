@@ -17,16 +17,28 @@ CF-LIBS implements the full measurement-to-inference pipeline: synthetic spectru
 
 ## New User Path
 
-If you are scientifically comfortable with LIBS but new to this codebase, start with
-[Quick Start for Scientists](docs/Quick_Start_For_Scientists.md). It covers setup checks,
-the bundled example database, first spectrum generation, first analysis, and common
-CSV/input problems without requiring a codebase tour.
+CF-LIBS' primary use case is **extracting plasma temperature, electron density, and
+elemental composition from a measured LIBS spectrum without calibration standards.**
+If that is what you want, start here:
+
+→ **[Quick Start: Real Data](docs/user/Quick_Start_Real_Data.md)** — analyze a measured spectrum.
+
+If instead you want to generate a synthetic spectrum from known plasma parameters
+(experimental design, sanity checks, benchmarking), start here:
+
+→ **[Quick Start: Synthetic Spectra](docs/user/Quick_Start_Synthetic.md)** — forward modeling.
+
+Sanity check your install and run the bundled real-data example:
 
 ```bash
 cflibs doctor
-cflibs forward examples/config_example.yaml --output spectrum.csv
-cflibs analyze data/aalto_libs/elements/Fe_spectrum.csv --elements Fe --db-path ASD_da/libs_production.db
+cflibs analyze data/aalto_libs/elements/Fe_spectrum.csv \
+    --elements Fe --db-path ASD_da/libs_production.db --uncertainty analytical
 ```
+
+For the equations CF-LIBS evaluates and the physical assumptions of the inversion,
+see the [physics reference](docs/physics/README.md). For a one-page map of all
+documentation, see [docs/README.md](docs/README.md).
 
 ---
 
@@ -106,7 +118,7 @@ The `cflibs/inversion/` package is organized into 6 sub-packages reflecting the 
 | `solve/` | Plasma parameter inference: iterative CF-LIBS loop, closed-form ILR solver, Bayesian (NumPyro NUTS + dynesty), manifold coarse-to-fine |
 | `runtime/` | Real-time DAQ streaming, temporal gate optimization, hardware interface |
 
-Backward-compatible shims at old flat paths (`from cflibs.inversion.solver import X`) still work. Full API: [docs/API_Reference.md](docs/API_Reference.md).
+Backward-compatible shims at old flat paths (`from cflibs.inversion.solver import X`) still work. Full API: [docs/reference/API_Reference.md](docs/reference/API_Reference.md).
 
 ### Validation & Analysis
 
@@ -134,7 +146,7 @@ Rust components in `native/cflibs-core/` (comb matching, partition functions) an
 
 **Shipped CF-LIBS code is physics-only.** Machine learning is forbidden in `cflibs/` production code (ruff TID251 rule in `pyproject.toml`); the only exception is `cflibs/evolution/`, which holds optimization-process tooling (LLM perturbation generation, council synthesis) that proposes candidate code but never ships in the final algorithm.
 
-This constraint ensures reproducibility and interpretability of inferred plasma parameters. See epic CF-LIBS-improved-3fy3.
+This constraint ensures reproducibility and interpretability of inferred plasma parameters. See [docs/development/Evolution_Framework.md](docs/development/Evolution_Framework.md) for the full constraint specification and enforcement.
 
 ---
 
@@ -163,7 +175,7 @@ cflibs generate-manifold examples/manifold_config_example.yaml --progress
 cflibs generate-db  # Rebuild atomic database from NIST ASD
 ```
 
-For full details on CLI options, run `cflibs --help` or see [CLI documentation](/docs/API_Reference.md).
+For full details on CLI options, run `cflibs --help` or see [CLI documentation](docs/reference/API_Reference.md).
 
 ---
 
@@ -200,38 +212,27 @@ python scripts/validate_real_data.py \
 
 ## Physics Model
 
-### Forward Model
+CF-LIBS implements:
 
-Given plasma state (T_e, n_e, composition), CF-LIBS computes synthetic spectrum via:
+- **Forward model:** Saha–Boltzmann equilibrium → level populations →
+  line emissivity → Voigt line profiles (Doppler + Stark) → optically
+  thin transport → instrument convolution → synthetic spectrum.
+- **Iterative inversion:** Boltzmann plot (common-slope, multi-element)
+  → Saha correction (ionic lines → neutral plane) → closure equation
+  (`standard` / `matrix` / `oxide`) → self-consistent `n_e` update,
+  iterated to convergence.
+- **Uncertainties:** analytical propagation through the Boltzmann
+  covariance, Monte Carlo over the full pipeline, or full Bayesian
+  inference (NumPyro NUTS + dynesty nested sampling).
 
-1. **Saha-Boltzmann equilibrium** → level populations
-   - Boltzmann distribution for excitation (within ionization stage)
-   - Saha equation for ionization balance
-2. **Line emissivity**: ε_λ = (hc/4πλ) A_ul n_u φ_ul(λ)
-   - A_ul: Einstein A coefficient
-   - n_u: upper-level population
-   - φ_ul(λ): normalized line profile
-3. **Line broadening**: Gaussian (thermal) + Lorentzian (collisions, Stark) → Voigt
-4. **Instrument convolution**: detector response + spectral resolution
-5. **Optical depth**: optional self-absorption via curve-of-growth
-
-### Inversion Model
-
-Measured spectrum → plasma parameters (T_e, n_e, composition) via iterative CF-LIBS solver:
-
-1. **Preprocessing**: baseline removal, noise estimation, peak detection
-2. **Line identification**: ALIAS/comb/correlation matching against atomic database
-3. **Boltzmann plot**: extract T_e from ln(I_λ/gA) vs. E_k
-4. **Saha correction**: map ionic lines to neutral plane
-5. **Multi-element fit**: common-slope constraint across elements
-6. **Closure equation**: charge/pressure balance + Σ C_s = 1
-7. **Iterate**: refine n_e until convergence
-
-**Uncertainties**: analytical propagation via Boltzmann covariance matrix, or Monte Carlo re-sampling.
-
-**Bayesian option**: NumPyro NUTS sampler + dynesty nested sampling for full posterior.
-
-For detailed equations and physics assumptions, see [CLAUDE.md](CLAUDE.md#architecture) and module docstrings under `cflibs/plasma/`, `cflibs/radiation/`, and `cflibs/inversion/physics/`.
+The complete equations, symbol definitions, and citations live in
+[**docs/physics/Equations.md**](docs/physics/Equations.md). The physical
+assumptions (LTE, optical thinness, single-zone uniformity, McWhirter
+criterion, etc.), their regimes of validity, and the diagnostics CF-LIBS
+exposes for detecting violations are in
+[**docs/physics/Assumptions_And_Validity.md**](docs/physics/Assumptions_And_Validity.md).
+A step-by-step walkthrough of the iterative solver is in
+[**docs/physics/Inversion_Algorithm.md**](docs/physics/Inversion_Algorithm.md).
 
 ---
 
@@ -260,18 +261,31 @@ Test markers: `requires_db`, `requires_jax`, `requires_bayesian`, `requires_unce
 
 ### Contributing
 
-See [CONTRIBUTING.md](/CONTRIBUTING.md) for coding style, type hints, physics documentation standards, and contribution workflow. See [AGENTS.md](/AGENTS.md) for agent (Scribe, Architect, etc.) roles and responsibilities.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for coding style, type hints, physics documentation standards, and contribution workflow. See [AGENTS.md](AGENTS.md) for agent (Scribe, Architect, etc.) roles and responsibilities.
 
 ---
 
 ## Key Files
 
-- **[CLAUDE.md](/CLAUDE.md)** — Detailed architecture, module map, data flow, CLI workflows (canonical reference for agents)
-- **[CONTRIBUTING.md](/CONTRIBUTING.md)** — Coding standards, contribution guidelines
-- **[AGENTS.md](/AGENTS.md)** — Agent roles and responsibilities
-- **[pyproject.toml](/pyproject.toml)** — Dependencies, build config, ruff TID251 physics-only rule
-- **[examples/](/examples)** — YAML config templates for forward model and inversion
-- **[tests/](/tests)** — Pytest suite with physics benchmarks and NIST parity checks
+User and scientific documentation:
+
+- **[docs/README.md](docs/README.md)** — Top-level documentation map.
+- **[docs/user/](docs/user/)** — Quick starts, user guide, hardware/manifold/echelle guides.
+- **[docs/physics/](docs/physics/)** — Equations, assumptions and validity, inversion algorithm.
+- **[docs/reference/](docs/reference/)** — API reference, codebase architecture, database generation.
+
+Project / dev / contribution:
+
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — Coding standards, contribution guidelines.
+- **[docs/development/](docs/development/)** — Evolution framework, deployment, internal dev notes.
+- **[pyproject.toml](pyproject.toml)** — Dependencies, build config, ruff TID251 physics-only rule.
+- **[examples/](examples/)** — YAML config templates for forward model and inversion.
+- **[tests/](tests/)** — Pytest suite with physics benchmarks and NIST parity checks.
+
+AI tooling (not user documentation):
+
+- **[CLAUDE.md](CLAUDE.md)** — Operating manual for Claude Code agents.
+- **[AGENTS.md](AGENTS.md)** — Agent roles and responsibilities.
 
 ---
 

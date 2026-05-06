@@ -3,8 +3,13 @@
 Complete guide for using the CF-LIBS library for forward modeling and analysis of LIBS spectra.
 
 If you are new to the repository, start with
-[Quick Start for Scientists](Quick_Start_For_Scientists.md). This guide is more detailed and
-assumes you are ready to edit configuration files or use the Python API.
+[Quick Start: Real Data](Quick_Start_Real_Data.md) (for analyzing measured spectra) or
+[Quick Start: Synthetic Spectra](Quick_Start_Synthetic.md) (for forward modeling).
+This guide is more detailed and assumes you are ready to edit configuration files
+or use the Python API.
+
+For the underlying equations and the physical assumptions of the inversion, see the
+[physics reference](../physics/README.md).
 
 ## Table of Contents
 
@@ -480,9 +485,9 @@ extractor = EchelleExtractor('calibration.json')
 
 ### Getting Help
 
-- Check the [API Reference](API_Reference.md)
-- Review [examples](../examples/)
-- See [Contributing Guide](../CONTRIBUTING.md) for development questions
+- Check the [API Reference](../reference/API_Reference.md)
+- Review [examples](../../examples/)
+- See [Contributing Guide](../../CONTRIBUTING.md) for development questions
 
 ---
 
@@ -572,8 +577,8 @@ for al_conc in al_concentrations:
 
 ## Next Steps
 
-- Explore the [API Reference](API_Reference.md) for detailed function documentation
-- Check out [examples](../examples/) for more use cases
-- Read about [contributing](../CONTRIBUTING.md) if you want to help develop CF-LIBS
+- Explore the [API Reference](../reference/API_Reference.md) for detailed function documentation
+- Check out [examples](../../examples/) for more use cases
+- Read about [contributing](../../CONTRIBUTING.md) if you want to help develop CF-LIBS
 
 For questions or issues, please open an issue on GitHub.

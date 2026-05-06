@@ -657,7 +657,7 @@ The inversion module is organized into 6 physics-aligned sub-packages that refle
 
 **Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work via compatibility shims.
 
-**Physics-only constraint:** The shipped CF-LIBS algorithm is physics-only (no neural networks or trained models). See [Evolution_Framework.md](Evolution_Framework.md) for the full forbidden/allowed specification and enforcement.
+**Physics-only constraint:** The shipped CF-LIBS algorithm is physics-only (no neural networks or trained models). See [Evolution_Framework.md](../development/Evolution_Framework.md) for the full forbidden/allowed specification and enforcement.
 
 ## CLI Module
 
@@ -718,4 +718,4 @@ All modules use descriptive error messages and proper exception types:
 
 ## Further Reading
 
-See the [User Guide](User_Guide.md), [Contributing Guide](../CONTRIBUTING.md), and [ROADMAP.md](../ROADMAP.md).
+See the [User Guide](../user/User_Guide.md), [Contributing Guide](../../CONTRIBUTING.md), and [ROADMAP.md](../../ROADMAP.md).

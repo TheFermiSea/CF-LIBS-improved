@@ -1,8 +1,17 @@
-# CF-LIBS Codebase Technical Documentation
+# CF-LIBS Codebase Architecture
 
 **Calibration-Free Laser-Induced Breakdown Spectroscopy**
 
-A Python library for quantitative elemental analysis without calibration standards, using plasma physics to calculate elemental compositions directly from spectral line intensities. The shipped algorithm is physics-only (no neural networks or trained models) — see [Evolution_Framework.md](Evolution_Framework.md) for the constraint spec.
+Python library for quantitative elemental analysis without calibration
+standards. This document is the **module-by-module architecture
+reference** for developers and contributors. Users looking for usage
+documentation should start at the [user guide](../user/User_Guide.md);
+users looking for the equations the code evaluates should start at the
+[physics reference](../physics/README.md).
+
+The shipped algorithm is physics-only (no neural networks or trained
+models) — see [Evolution_Framework.md](../development/Evolution_Framework.md)
+for the constraint spec.
 
 ---
 
@@ -587,7 +596,8 @@ def calculate_spectrum_emissivity(
 **Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work.
 
 For the CLI and configuration schema used by classic CF-LIBS inversion, see
-`docs/User_Guide.md` (Inversion section) and `docs/API_Reference.md` (CLI options).
+`docs/user/User_Guide.md` (Inversion section) and
+`docs/reference/API_Reference.md` (CLI options).
 
 ### Optional Dependency Flags
 
@@ -708,8 +718,8 @@ class BoltzmannPlotFitter:
 Convert a measured spectrum into CF-LIBS line observations by detecting peaks
 and matching them to database transitions:
 
-See `docs/User_Guide.md` for the `analysis` configuration fields that control
-line detection and selection.
+See `docs/user/User_Guide.md` for the `analysis` configuration fields that
+control line detection and selection.
 
 ```python
 from cflibs.inversion.line_detection import detect_line_observations
@@ -1689,7 +1699,7 @@ class PhysicsOnlyBlocklist:
 - **Blocklist scanner**: Rejects any evolved code that violates physics-only constraint
 - **Persistence layer**: Saves successful algorithm variants for review and integration
 
-See `docs/Evolution_Framework.md` for full specifications.
+See `docs/development/Evolution_Framework.md` for full specifications.
 
 ---
 
