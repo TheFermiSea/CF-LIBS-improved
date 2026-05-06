@@ -40,6 +40,11 @@ blocked_globs = [
     ".swarm/lineage/**",
     ".swarm/feedback/**",
     ".swarm/mutation-archive.jsonl",
+    # Hallucinated operational paths the architect invented on 2026-05-06 batch 1
+    "swarm/**",
+    "beads/**",
+    ".beads/**",
+    ".swarm/**",
 ]
 
 language_hint = """\
