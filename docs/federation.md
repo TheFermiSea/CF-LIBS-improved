@@ -12,7 +12,7 @@ it up and onboarding repos.
 
 ```
                         ┌──────────────────────────┐
-                        │   beads-hub LXC          │
+                        │   beads-lxc              │
                         │   ──────────────         │
                         │   dolt sql-server        │
                         │   :3306  (SQL)           │
@@ -56,7 +56,7 @@ it up and onboarding repos.
 
 In Proxmox:
 
-- Hostname: `beads-hub`
+- Hostname: `beads-lxc`
 - Distro: Debian 12 minimal
 - Resources: 2 vCPU, 1–2 GB RAM, 10 GB disk
 - Network: static IP on your management VLAN
@@ -68,30 +68,30 @@ Then on the host:
 pct enter <vmid>            # or ssh root@<ip>
 apt update && apt install -y curl ca-certificates openssl tar
 curl -fsSL https://tailscale.com/install.sh | sh
-tailscale up --hostname=beads-hub
+tailscale up --hostname=beads-lxc
 tailscale ip -4             # note this — clients will use it
 ```
 
 ### 2. Run the setup script
 
-Copy `scripts/setup-beads-hub.sh` from this repo into the LXC and execute it:
+Copy `scripts/setup-beads-lxc.sh` from this repo into the LXC and execute it:
 
 ```bash
-scp scripts/setup-beads-hub.sh root@beads-hub:/root/
-ssh root@beads-hub "bash /root/setup-beads-hub.sh"
+scp scripts/setup-beads-lxc.sh root@beads-lxc:/root/
+ssh root@beads-lxc "bash /root/setup-beads-lxc.sh"
 ```
 
 The script will:
 
 1. Create an unprivileged `dolt` system user.
 2. Install the pinned Dolt binary (`DOLT_VERSION` env var to override).
-3. Generate a random 40-character password and write `/etc/default/beads-hub`.
-4. Install `beads-hub.service` and enable+start it.
+3. Generate a random 40-character password and write `/etc/default/beads-dolt`.
+4. Install `beads-dolt.service` and enable+start it.
 
 Save the printed password — every client needs it. To retrieve later:
 
 ```bash
-ssh root@beads-hub "cat /etc/default/beads-hub"
+ssh root@beads-lxc "cat /etc/default/beads-dolt"
 ```
 
 ### 3. Restrict the network surface
@@ -101,18 +101,18 @@ Tailscale ACL example, locking 3306/50051 to specific tags:
 ```hujson
 {
   "tagOwners": {
-    "tag:beads-hub":     ["autogroup:admin"],
+    "tag:beads-lxc":     ["autogroup:admin"],
     "tag:beads-client":  ["autogroup:admin"]
   },
   "acls": [
     { "action": "accept",
       "src":    ["tag:beads-client"],
-      "dst":    ["tag:beads-hub:3306", "tag:beads-hub:50051"] }
+      "dst":    ["tag:beads-lxc:3306", "tag:beads-lxc:50051"] }
   ]
 }
 ```
 
-Then `tailscale set --advertise-tags=tag:beads-hub` on the LXC and
+Then `tailscale set --advertise-tags=tag:beads-lxc` on the LXC and
 `tag:beads-client` on each client.
 
 ### 4. Smoke test
@@ -201,9 +201,9 @@ Nothing. The hub is self-running.
 ### When `bd doctor` flags peer unreachable
 
 ```bash
-ssh root@beads-hub "systemctl status beads-hub.service"
-ssh root@beads-hub "journalctl -u beads-hub.service -n 50"
-tailscale status | grep beads-hub        # is the LXC online?
+ssh root@beads-lxc "systemctl status beads-dolt.service"
+ssh root@beads-lxc "journalctl -u beads-dolt.service -n 50"
+tailscale status | grep beads-lxc        # is the LXC online?
 ```
 
 ### Upgrading Dolt
@@ -212,8 +212,8 @@ Dolt is generally backward-compatible across minor versions, but pin the
 version on the hub for predictability:
 
 ```bash
-ssh root@beads-hub "DOLT_VERSION=<new-version> bash /root/setup-beads-hub.sh"
-systemctl restart beads-hub.service       # script does this for you
+ssh root@beads-lxc "DOLT_VERSION=<new-version> bash /root/setup-beads-lxc.sh"
+systemctl restart beads-dolt.service       # script does this for you
 ```
 
 ### Upgrading bd
@@ -246,9 +246,9 @@ sufficient backup strategies:
 ### Rotating the password
 
 ```bash
-ssh root@beads-hub
-sudo nano /etc/default/beads-hub        # change BEADS_DOLT_PASSWORD
-sudo systemctl restart beads-hub.service
+ssh root@beads-lxc
+sudo nano /etc/default/beads-dolt        # change BEADS_DOLT_PASSWORD
+sudo systemctl restart beads-dolt.service
 
 # Then on every client:
 bd federation remove-peer hub

@@ -12,7 +12,7 @@
 #
 # Required environment:
 #   BEADS_HUB_HOST       Hub IP / hostname (e.g. Tailscale IP of the LXC)
-#   BEADS_HUB_PASSWORD   Password from /etc/default/beads-hub on the hub
+#   BEADS_HUB_PASSWORD   Password from /etc/default/beads-dolt on the hub
 #
 # Optional environment:
 #   BEADS_HUB_USER       SQL user on the hub (default: beads)

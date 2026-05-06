@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# setup-beads-hub.sh — Provision a Dolt SQL server inside an LXC for beads
+# setup-beads-lxc.sh — Provision a Dolt SQL server inside an LXC for beads
 # federation. Run inside the container as root (or via sudo).
 #
 # What this does:
 #   1. Creates an unprivileged 'dolt' system user.
 #   2. Installs a pinned Dolt binary at /usr/local/bin/dolt.
-#   3. Generates a strong password and writes /etc/default/beads-hub.
-#   4. Installs and enables the beads-hub.service systemd unit.
+#   3. Generates a strong password and writes /etc/default/beads-dolt.
+#   4. Installs and enables the beads-dolt.service systemd unit.
 #   5. Starts the server listening on 0.0.0.0:3306 (SQL) and 0.0.0.0:50051
 #      (remotesapi gRPC). Restrict access at the network layer (Tailscale
 #      ACLs / firewall) — these ports are NOT auth-hardened against the
@@ -26,8 +26,8 @@ set -euo pipefail
 DOLT_VERSION="${DOLT_VERSION:-1.87.0}"
 DOLT_USER="${DOLT_USER:-beads}"
 DATA_DIR="${DATA_DIR:-/var/lib/dolt}"
-SERVICE_FILE="/etc/systemd/system/beads-hub.service"
-ENV_FILE="/etc/default/beads-hub"
+SERVICE_FILE="/etc/systemd/system/beads-dolt.service"
+ENV_FILE="/etc/default/beads-dolt"
 BIN_PATH="/usr/local/bin/dolt"
 
 if [[ "$EUID" -ne 0 ]]; then
@@ -77,7 +77,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
     password="$(openssl rand -base64 48 | tr -d '/+=\n' | head -c 40)"
     install -m 0640 -o root -g dolt /dev/null "$ENV_FILE"
     cat >"$ENV_FILE" <<EOF
-# Generated $(date -Iseconds) by setup-beads-hub.sh
+# Generated $(date -Iseconds) by setup-beads-lxc.sh
 BEADS_DOLT_USER=$DOLT_USER
 BEADS_DOLT_PASSWORD=$password
 EOF
@@ -110,7 +110,7 @@ Type=simple
 User=dolt
 Group=dolt
 WorkingDirectory=/var/lib/dolt
-EnvironmentFile=/etc/default/beads-hub
+EnvironmentFile=/etc/default/beads-dolt
 ExecStart=/usr/local/bin/dolt sql-server \
     --host 0.0.0.0 \
     --port 3306 \
@@ -141,11 +141,11 @@ UNIT
 
 # 6. Enable + start ----------------------------------------------------------
 systemctl daemon-reload
-systemctl enable --now beads-hub.service
+systemctl enable --now beads-dolt.service
 
 # 7. Status ------------------------------------------------------------------
 sleep 2
-systemctl --no-pager --lines=0 status beads-hub.service || true
+systemctl --no-pager --lines=0 status beads-dolt.service || true
 echo
 echo "Listening sockets:"
 ss -tlnp 2>/dev/null | grep -E ':(3306|50051)\b' || \
