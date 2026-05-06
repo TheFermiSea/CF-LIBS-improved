@@ -36,8 +36,11 @@ from cflibs.benchmark.dataset import (
 from cflibs.benchmark.loaders import load_benchmark
 from cflibs.benchmark.composition_metrics import (
     aitchison_distance,
+    load_subcompositional_pairs,
     per_element_error,
     rmse_composition,
+    stratify_per_element_errors,
+    subcompositional_ratio_errors,
 )
 from cflibs.core.logging_config import get_logger
 
@@ -576,6 +579,11 @@ class CompositionEvaluationRecord:
     error_tier: Optional[str] = None
     per_element_absolute_error: Dict[str, float] = field(default_factory=dict)
     per_element_relative_error: Dict[str, float] = field(default_factory=dict)
+    # Per-pair |log(r̂/r*)| subcompositional ratio errors keyed by
+    # ``"<num>/<den>"``; populated by the composition workflow runner so the
+    # values land in composition_records.json.  NaN entries indicate pairs
+    # that could not be scored (truth ratio undefined).
+    subcompositional_ratio_errors: Dict[str, float] = field(default_factory=dict)
     scored: bool = True
     failure_reason: Optional[str] = None
     annotations: Dict[str, Any] = field(default_factory=dict)
@@ -1456,6 +1464,7 @@ def _build_composition_success_record(
     aitchison = float(aitchison_distance(true_comp, concentrations))
     rmse = float(rmse_composition(true_comp, concentrations))
     per_element = per_element_error(true_comp, concentrations)
+    ratio_errors = subcompositional_ratio_errors(concentrations, true_comp)
     return CompositionEvaluationRecord(
         dataset_id=spectrum.dataset_id or "unknown",
         spectrum_id=spectrum.spectrum_id,
@@ -1492,6 +1501,7 @@ def _build_composition_success_record(
         per_element_relative_error={
             element: float(errors[1]) for element, errors in per_element.items()
         },
+        subcompositional_ratio_errors=ratio_errors,
         annotations={
             key: value for key, value in prediction.items() if key not in {"concentrations"}
         },
@@ -1914,7 +1924,80 @@ def _compute_composition_overall(
         ),
         "bootstrap_aitchison": bootstrap_ci(aitchisons),
         "tier_distribution": tier_distribution,
+        "per_stratum_summary": _compute_per_stratum_summary(pair_records),
+        "subcompositional_ratio_errors": _compute_subcompositional_ratio_summary(pair_records),
     }
+
+
+def _compute_per_stratum_summary(
+    pair_records: Sequence[CompositionEvaluationRecord],
+) -> Dict[str, Dict[str, Any]]:
+    """Build the majors / minors / traces stratified summary.
+
+    Stratifies by **certified** concentration so that a model cannot move
+    elements between strata by inflating its predictions.  Each (element,
+    spectrum) pair becomes a single record.
+    """
+    stratum_records: List[Dict[str, float]] = []
+    for record in pair_records:
+        if not record.scored:
+            continue
+        for element, true_value in record.true_composition.items():
+            stratum_records.append(
+                {
+                    "element": element,
+                    "true": float(true_value),
+                    "predicted": float(record.predicted_composition.get(element, 0.0)),
+                }
+            )
+    return stratify_per_element_errors(stratum_records)
+
+
+def _compute_subcompositional_ratio_summary(
+    pair_records: Sequence[CompositionEvaluationRecord],
+) -> Dict[str, Dict[str, Any]]:
+    """Aggregate per-spectrum |log(r̂/r*)| ratio errors into pair summaries.
+
+    Returns ``{pair_key: {n, mean, median, p95, max, pass}}`` where ``pass``
+    is ``True`` when ``max <= 0.20`` (per validation/protocol.yaml
+    ``ratio_log_error_max``).  Pairs with zero scored spectra report
+    ``pass=True`` (vacuous) with NaN summary statistics.
+    """
+    pair_keys: List[str] = []
+    for numerator, denominator in load_subcompositional_pairs():
+        pair_keys.append(f"{numerator}/{denominator}")
+
+    aggregated: Dict[str, List[float]] = {key: [] for key in pair_keys}
+    for record in pair_records:
+        if not record.scored or not record.subcompositional_ratio_errors:
+            continue
+        for key, value in record.subcompositional_ratio_errors.items():
+            if key in aggregated and value is not None and not np.isnan(float(value)):
+                aggregated[key].append(float(value))
+
+    summary: Dict[str, Dict[str, Any]] = {}
+    for key, values in aggregated.items():
+        if not values:
+            summary[key] = {
+                "n_spectra": 0,
+                "mean": float("nan"),
+                "median": float("nan"),
+                "p95": float("nan"),
+                "max": float("nan"),
+                "pass": True,
+            }
+            continue
+        arr = np.asarray(values, dtype=np.float64)
+        max_val = float(np.max(arr))
+        summary[key] = {
+            "n_spectra": int(arr.size),
+            "mean": float(np.mean(arr)),
+            "median": float(np.median(arr)),
+            "p95": float(np.percentile(arr, 95)),
+            "max": max_val,
+            "pass": max_val <= 0.20,
+        }
+    return summary
 
 
 def _compute_composition_per_element(

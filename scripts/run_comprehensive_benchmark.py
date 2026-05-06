@@ -33,7 +33,12 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
-from cflibs.benchmark.composition_metrics import aitchison_distance  # noqa: E402
+from cflibs.benchmark.composition_metrics import (  # noqa: E402
+    aitchison_distance,
+    load_subcompositional_pairs,
+    stratify_per_element_errors,
+    subcompositional_ratio_errors,
+)
 from cflibs.core.constants import EV_TO_K  # noqa: E402
 from cflibs.core.logging_config import get_logger  # noqa: E402
 from cflibs.inversion.boltzmann import BoltzmannPlotFitter, FitMethod, LineObservation  # noqa: E402
@@ -409,6 +414,11 @@ class BenchmarkResult:
     rmse_values: List[float]
     per_element_errors: Dict[str, List[float]]
     elapsed_seconds: float
+    # Per-(element, spectrum) records used to compute the stratified
+    # majors / minors / traces summary (stratified by certified value).
+    stratum_records: List[Dict[str, float]] = field(default_factory=list)
+    # Per-pair |log(r̂/r*)| accumulators keyed by ``"<num>/<den>"``.
+    subcompositional_ratio_errors: Dict[str, List[float]] = field(default_factory=dict)
     details: List[Dict] = field(default_factory=list)
 
     @property
@@ -447,6 +457,9 @@ def evaluate_pipeline(
     ait_dists = []
     rmse_vals = []
     per_el_errors: Dict[str, List[float]] = {}
+    stratum_records: List[Dict[str, float]] = []
+    pair_list = load_subcompositional_pairs()
+    ratio_acc: Dict[str, List[float]] = {f"{n}/{d}": [] for n, d in pair_list}
     n_fail = 0
     details = []
 
@@ -479,10 +492,23 @@ def evaluate_pipeline(
         ait_dists.append(ait)
         rmse_vals.append(rmse)
 
-        # Per-element errors
+        # Per-element errors + stratum records (stratified by certified value)
         for el in elements:
             err = abs(recovered.get(el, 0.0) - gt.get(el, 0.0))
             per_el_errors.setdefault(el, []).append(err)
+            stratum_records.append(
+                {
+                    "element": el,
+                    "true": float(gt.get(el, 0.0)),
+                    "predicted": float(recovered.get(el, 0.0)),
+                }
+            )
+
+        # Subcompositional ratio errors for this spectrum.
+        ratio_errs = subcompositional_ratio_errors(recovered, gt, pair_list)
+        for key, val in ratio_errs.items():
+            if val is not None and not np.isnan(val):
+                ratio_acc[key].append(float(val))
 
         details.append(
             {
@@ -492,6 +518,7 @@ def evaluate_pipeline(
                 "rmse": rmse,
                 "recovered": recovered,
                 "ground_truth": gt,
+                "subcompositional_ratio_errors": ratio_errs,
             }
         )
 
@@ -507,6 +534,8 @@ def evaluate_pipeline(
         rmse_values=rmse_vals,
         per_element_errors=per_el_errors,
         elapsed_seconds=elapsed,
+        stratum_records=stratum_records,
+        subcompositional_ratio_errors=ratio_acc,
         details=details,
     )
 
@@ -650,6 +679,29 @@ def main():
         "pipelines": {},
     }
     for r in results:
+        per_stratum = stratify_per_element_errors(r.stratum_records)
+        ratio_summary: Dict[str, Dict[str, Any]] = {}
+        for pair_key, vals in r.subcompositional_ratio_errors.items():
+            if not vals:
+                ratio_summary[pair_key] = {
+                    "n_spectra": 0,
+                    "mean": float("nan"),
+                    "median": float("nan"),
+                    "p95": float("nan"),
+                    "max": float("nan"),
+                    "pass": True,
+                }
+                continue
+            arr = np.asarray(vals, dtype=np.float64)
+            ratio_summary[pair_key] = {
+                "n_spectra": int(arr.size),
+                "mean": float(np.mean(arr)),
+                "median": float(np.median(arr)),
+                "p95": float(np.percentile(arr, 95)),
+                "max": float(np.max(arr)),
+                "pass": bool(float(np.max(arr)) <= 0.20),
+            }
+
         save_data["pipelines"][r.pipeline_name] = {
             "n_spectra": r.n_spectra,
             "n_succeeded": r.n_succeeded,
@@ -662,6 +714,8 @@ def main():
             "per_element_mae": {
                 el: float(np.mean(errs)) for el, errs in r.per_element_errors.items()
             },
+            "per_stratum_summary": per_stratum,
+            "subcompositional_ratio_errors": ratio_summary,
             "details": r.details,
         }
 

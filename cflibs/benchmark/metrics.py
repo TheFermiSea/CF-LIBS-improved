@@ -157,6 +157,15 @@ class EvaluationResult:
         Averaged MAE across all elements
     overall_r_squared : float
         Averaged R-squared across all elements
+    per_stratum_summary : Dict[str, Dict]
+        Stratified concentration summary keyed by ``majors`` /
+        ``minors`` / ``traces``.  Each entry holds ``n_elements``,
+        ``n_spectra``, ``mean_rd``, ``median_rd``, ``p95_rd``, and
+        ``pass`` (bool).  Stratification is by certified concentration.
+    subcompositional_ratio_errors : Dict[str, List[float]]
+        Per-pair |log(r̂/r*)| errors aggregated across spectra.  Keyed by
+        ``"<num>/<den>"`` matching the protocol pair list.  Empty list
+        when the pair could not be scored on any spectrum.
     algorithm_name : str
         Name of algorithm being evaluated
     algorithm_version : str
@@ -172,6 +181,8 @@ class EvaluationResult:
     overall_rmsep: float
     overall_mae: float
     overall_r_squared: float
+    per_stratum_summary: Dict[str, Dict] = field(default_factory=dict)
+    subcompositional_ratio_errors: Dict[str, List[float]] = field(default_factory=dict)
     algorithm_name: str = "unknown"
     algorithm_version: str = "unknown"
     metadata: Dict = field(default_factory=dict)
@@ -247,6 +258,8 @@ class EvaluationResult:
             "overall_rmsep": self.overall_rmsep,
             "overall_mae": self.overall_mae,
             "overall_r_squared": self.overall_r_squared,
+            "per_stratum_summary": self.per_stratum_summary,
+            "subcompositional_ratio_errors": self.subcompositional_ratio_errors,
             "algorithm_name": self.algorithm_name,
             "algorithm_version": self.algorithm_version,
             "metadata": self.metadata,
@@ -296,9 +309,13 @@ class BenchmarkMetrics:
         self,
         min_concentration: float = 0.001,  # 0.1% minimum for MAPE
         lod_method: str = "3sigma",
+        strata_thresholds: Optional[Dict[str, Dict[str, float]]] = None,
+        subcompositional_pairs: Optional[List[Tuple[str, str]]] = None,
     ):
         self.min_concentration = min_concentration
         self.lod_method = lod_method
+        self.strata_thresholds = strata_thresholds
+        self.subcompositional_pairs = subcompositional_pairs
 
     def evaluate(
         self,
@@ -367,6 +384,47 @@ class BenchmarkMetrics:
         overall_mae = np.mean([m.mae for m in element_metrics.values()])
         overall_r2 = np.mean([m.r_squared for m in element_metrics.values()])
 
+        # Stratified summary: stratify by certified concentration, NOT predicted.
+        # Each (element, spectrum) pair becomes one record so that an element
+        # whose certified value crosses a stratum boundary across spectra is
+        # counted in the appropriate bucket per-spectrum.
+        from cflibs.benchmark.composition_metrics import (
+            stratify_per_element_errors,
+            subcompositional_ratio_errors as _subcompositional_ratio_errors,
+            load_subcompositional_pairs,
+        )
+
+        stratum_records = []
+        for elem in elements:
+            true_arr = true_values[elem]
+            pred_arr = predictions[elem]
+            for t, p in zip(true_arr, pred_arr):
+                stratum_records.append({"element": elem, "true": float(t), "predicted": float(p)})
+
+        loq_lookup = {
+            elem: float(metrics_obj.loq) for elem, metrics_obj in element_metrics.items()
+        }
+        per_stratum_summary = stratify_per_element_errors(
+            stratum_records,
+            thresholds=self.strata_thresholds,
+            loq_lookup=loq_lookup,
+        )
+
+        # Subcompositional ratio errors: per-spectrum |log(r̂/r*)| for each
+        # configured pair, then aggregated as a list across spectra.
+        pair_list = self.subcompositional_pairs
+        if pair_list is None:
+            pair_list = load_subcompositional_pairs()
+
+        subcomp_errors: Dict[str, List[float]] = {f"{n}/{d}": [] for n, d in pair_list}
+        for spectrum_idx in range(n_spectra):
+            true_comp = {elem: float(true_values[elem][spectrum_idx]) for elem in elements}
+            pred_comp = {elem: float(predictions[elem][spectrum_idx]) for elem in elements}
+            errs = _subcompositional_ratio_errors(pred_comp, true_comp, pair_list)
+            for key, val in errs.items():
+                if not np.isnan(val):
+                    subcomp_errors[key].append(val)
+
         return EvaluationResult(
             dataset_name=dataset_name,
             split_name=split_name,
@@ -375,6 +433,8 @@ class BenchmarkMetrics:
             overall_rmsep=overall_rmsep,
             overall_mae=overall_mae,
             overall_r_squared=overall_r2,
+            per_stratum_summary=per_stratum_summary,
+            subcompositional_ratio_errors=subcomp_errors,
             algorithm_name=algorithm_name,
             algorithm_version=algorithm_version,
             metadata=metadata or {},
