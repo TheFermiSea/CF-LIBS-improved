@@ -1,0 +1,776 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Literature Review: High-Performance Algorithms for LIBS Spectral Analysis &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Real_Data.html">Quick Start: Analyzing Real LIBS Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Peak_Identification_Guide.html">Peak Identification and Line Matching Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Synthetic.html">Quick Start: Synthetic Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../physics/README.html">Physics Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html">Physics: Equations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-n-z-1-n-e-n-z">$$
+\frac{n_{z+1}, n_e}{n_z}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#varepsilon-ki-lambda">$$
+\varepsilon_{ki}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#gamma-text-stark-n-e-t">$$
+\gamma_{\text{Stark}}(n_e, T)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#v-lambda-sigma-gamma">$$
+V(\lambda; \sigma, \gamma)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-text-measured-lambda">$$
+I_{\text{measured}}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-ki">$$
+I_{ki}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#s-t-n-e">$$
+S(T, n_e)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#c-s-text-oxide">$$
+C_{s\text{-oxide}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#tau-0">$$
+\tau_0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Assumptions_And_Validity.html">Physics: Assumptions and Validity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Inversion_Algorithm.html">Physics: Iterative CF-LIBS Inversion Algorithm</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../reference/API_Reference.html">CF-LIBS API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Codebase_Architecture.html">CF-LIBS Codebase Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Database_Generation.html">Atomic Database Generation Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/Evolution_Framework.html">Evolution Framework</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Deployment.html">CF-LIBS Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/CODEEVOLVE_WAVE2_PLAN.html">CodeEvolve Wave 2 Planning Document</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Literature Review: High-Performance Algorithms for LIBS Spectral Analysis</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/literature/high_performance_libs_algorithms.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="literature-review-high-performance-algorithms-for-libs-spectral-analysis">
+<h1>Literature Review: High-Performance Algorithms for LIBS Spectral Analysis<a class="headerlink" href="#literature-review-high-performance-algorithms-for-libs-spectral-analysis" title="Link to this heading"></a></h1>
+<p><strong>Review Date:</strong> January 2026
+<strong>Scope:</strong> High-throughput and real-time techniques for compositional analysis using LIBS (2018-2025)
+<strong>Search Strategy:</strong> Semantic Scholar API across 8 thematic queries covering ML/DL approaches, CF-LIBS methods, self-absorption correction, chemometrics, and GPU-accelerated processing</p>
+<hr class="docutils" />
+<section id="executive-summary">
+<h2>Executive Summary<a class="headerlink" href="#executive-summary" title="Link to this heading"></a></h2>
+<p>The field of Laser-Induced Breakdown Spectroscopy (LIBS) has undergone significant algorithmic transformation over the past several years, driven by demands for real-time compositional analysis in industrial, environmental, and research applications. Deep learning has emerged as the dominant paradigm for classification tasks, while physics-based calibration-free methods remain essential for quantitative analysis without reference standards. The most promising research direction combines JAX-accelerated physics computations with Bayesian uncertainty quantification.</p>
+</section>
+<hr class="docutils" />
+<section id="table-of-contents">
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="#overview"><span class="xref myst">Overview</span></a></p></li>
+<li><p><a class="reference internal" href="#key-themes-and-research-directions"><span class="xref myst">Key Themes and Research Directions</span></a></p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#1-machine-learning-and-deep-learning-approaches"><span class="xref myst">Machine Learning and Deep Learning</span></a></p></li>
+<li><p><a class="reference internal" href="#2-calibration-free-libs-cf-libs-algorithms"><span class="xref myst">Calibration-Free LIBS</span></a></p></li>
+<li><p><a class="reference internal" href="#3-self-absorption-correction-algorithms"><span class="xref myst">Self-Absorption Correction</span></a></p></li>
+<li><p><a class="reference internal" href="#4-chemometrics-and-multivariate-analysis"><span class="xref myst">Chemometrics</span></a></p></li>
+<li><p><a class="reference internal" href="#5-gpu-accelerated-and-parallel-processing"><span class="xref myst">GPU-Accelerated Processing</span></a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#seminal-works-and-high-impact-papers"><span class="xref myst">Seminal Works</span></a></p></li>
+<li><p><a class="reference internal" href="#recent-advances-2023-2025"><span class="xref myst">Recent Advances (2023-2025)</span></a></p></li>
+<li><p><a class="reference internal" href="#research-gaps-and-opportunities"><span class="xref myst">Research Gaps and Opportunities</span></a></p></li>
+<li><p><a class="reference internal" href="#relevance-to-cf-libs-implementation"><span class="xref myst">Relevance to CF-LIBS Implementation</span></a></p></li>
+<li><p><a class="reference internal" href="#bibliography"><span class="xref myst">Bibliography</span></a></p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>Laser-Induced Breakdown Spectroscopy (LIBS) is an atomic emission spectroscopy technique that uses a focused laser pulse to ablate material and generate a plasma. The emitted light contains characteristic spectral lines that enable elemental identification and quantification. Traditional LIBS requires extensive calibration with reference standards, but calibration-free approaches (CF-LIBS) use plasma physics to calculate compositions directly from spectral line intensities.</p>
+<p>The demand for high-throughput analysis in industrial quality control, environmental monitoring, geological exploration, and planetary science has driven rapid algorithmic development. This review examines recent advances in computational methods that enable real-time or near-real-time LIBS analysis.</p>
+<section id="search-methodology">
+<h3>Search Methodology<a class="headerlink" href="#search-methodology" title="Link to this heading"></a></h3>
+<p>Eight parallel literature searches were conducted using Semantic Scholar’s academic database:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Search Query</p></th>
+<th class="head"><p>Date Range</p></th>
+<th class="head"><p>Focus Area</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>LIBS laser-induced breakdown spectroscopy real-time analysis algorithms</p></td>
+<td><p>2018+</p></td>
+<td><p>Real-time systems</p></td>
+</tr>
+<tr class="row-odd"><td><p>High-throughput LIBS spectral processing machine learning</p></td>
+<td><p>2018+</p></td>
+<td><p>ML architectures</p></td>
+</tr>
+<tr class="row-even"><td><p>Calibration-free LIBS compositional analysis fast algorithms</p></td>
+<td><p>2018+</p></td>
+<td><p>CF-LIBS methods</p></td>
+</tr>
+<tr class="row-odd"><td><p>Deep learning neural network LIBS spectroscopy classification</p></td>
+<td><p>2019+</p></td>
+<td><p>DL approaches</p></td>
+</tr>
+<tr class="row-even"><td><p>GPU parallel spectral processing plasma emission</p></td>
+<td><p>2018+</p></td>
+<td><p>Computational acceleration</p></td>
+</tr>
+<tr class="row-odd"><td><p>Self-absorption correction LIBS automatic algorithm</p></td>
+<td><p>2018+</p></td>
+<td><p>Optical depth correction</p></td>
+</tr>
+<tr class="row-even"><td><p>Boltzmann plot automatic fitting LIBS temperature</p></td>
+<td><p>2018+</p></td>
+<td><p>Plasma diagnostics</p></td>
+</tr>
+<tr class="row-odd"><td><p>LIBS chemometrics PLS quantitative analysis multivariate</p></td>
+<td><p>2019+</p></td>
+<td><p>Statistical methods</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-themes-and-research-directions">
+<h2>Key Themes and Research Directions<a class="headerlink" href="#key-themes-and-research-directions" title="Link to this heading"></a></h2>
+<section id="machine-learning-and-deep-learning-approaches">
+<h3>1. Machine Learning and Deep Learning Approaches<a class="headerlink" href="#machine-learning-and-deep-learning-approaches" title="Link to this heading"></a></h3>
+<section id="neural-network-classification-and-quantification">
+<h4>Neural Network Classification and Quantification<a class="headerlink" href="#neural-network-classification-and-quantification" title="Link to this heading"></a></h4>
+<p>Deep learning has emerged as the dominant paradigm for high-throughput LIBS analysis. Convolutional Neural Networks (CNNs) excel at extracting spectral features directly from raw spectra without manual feature engineering.</p>
+<p><strong>Key Developments:</strong></p>
+<ul class="simple">
+<li><p><strong>Choi &amp; Park (2022)</strong> demonstrated CNN-based LIBS monitoring achieving real-time classification for industrial process control. Their architecture processes full spectra without wavelength selection, learning optimal features automatically.</p></li>
+<li><p><strong>Herreyre et al. (2023)</strong> developed a high-throughput Artificial Neural Network (ANN) system for LIBS elemental imaging, enabling rapid 2D/3D compositional mapping. Their approach achieves sub-second classification per spectrum, enabling megapixel elemental maps.</p></li>
+<li><p><strong>Mahyari et al. (2025)</strong> achieved real-time 3D material composition mapping using automated LIBS pipelines, demonstrating industrial-scale throughput with automated stage control and data processing.</p></li>
+<li><p><strong>Zhang et al. (2020)</strong> provided a comprehensive review of deep learning applications in LIBS, comparing CNN, LSTM, and hybrid architectures across classification, regression, and clustering tasks.</p></li>
+</ul>
+</section>
+<section id="ensemble-and-hybrid-methods">
+<h4>Ensemble and Hybrid Methods<a class="headerlink" href="#ensemble-and-hybrid-methods" title="Link to this heading"></a></h4>
+<p>Random Forest, Support Vector Machines (SVM), and ensemble approaches provide robust quantification with interpretable feature importance:</p>
+<ul class="simple">
+<li><p><strong>Combination strategies</strong>: Chemometric preprocessing (PCA, PLS) combined with ML classifiers improves noise robustness and reduces overfitting</p></li>
+<li><p><strong>Transfer learning</strong>: Domain adaptation techniques address the challenge of calibration across different LIBS systems, reducing the need for system-specific training data</p></li>
+<li><p><strong>Feature engineering</strong>: Physics-informed feature extraction (e.g., line ratios, plasma temperature estimates) combined with data-driven features improves model interpretability</p></li>
+</ul>
+</section>
+<section id="recurrent-and-attention-based-architectures">
+<h4>Recurrent and Attention-Based Architectures<a class="headerlink" href="#recurrent-and-attention-based-architectures" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>LSTM networks</strong> capture sequential dependencies in time-resolved LIBS spectra</p></li>
+<li><p><strong>Transformer architectures</strong> enable attention-based feature weighting across spectral regions</p></li>
+<li><p><strong>Multi-task learning</strong> simultaneously predicts multiple elements, leveraging shared spectral features</p></li>
+</ul>
+</section>
+</section>
+<section id="calibration-free-libs-cf-libs-algorithms">
+<h3>2. Calibration-Free LIBS (CF-LIBS) Algorithms<a class="headerlink" href="#calibration-free-libs-cf-libs-algorithms" title="Link to this heading"></a></h3>
+<p>CF-LIBS remains essential for applications where reference standards are unavailable or impractical, including planetary exploration, in-situ geological analysis, and novel material characterization.</p>
+<section id="theoretical-foundation">
+<h4>Theoretical Foundation<a class="headerlink" href="#theoretical-foundation" title="Link to this heading"></a></h4>
+<p>The CF-LIBS algorithm relies on the assumption of Local Thermodynamic Equilibrium (LTE) in the plasma. Under LTE, the population of excited states follows a Boltzmann distribution, and the intensity of an emission line is given by:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>I_λ = F × C × (g_k × A_ki / U(T)) × exp(-E_k / kT)
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">F</span></code> is an experimental factor (optical efficiency, plasma volume)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">C</span></code> is the elemental concentration</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">g_k</span> <span class="pre">×</span> <span class="pre">A_ki</span></code> is the transition probability weight</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">U(T)</span></code> is the partition function</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">E_k</span></code> is the upper level energy</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T</span></code> is the plasma temperature</p></li>
+</ul>
+</section>
+<section id="automated-boltzmann-plot-fitting">
+<h4>Automated Boltzmann Plot Fitting<a class="headerlink" href="#automated-boltzmann-plot-fitting" title="Link to this heading"></a></h4>
+<p>Recent algorithmic improvements focus on robust, automated temperature determination:</p>
+<ul class="simple">
+<li><p><strong>Iterative refinement</strong>: Starting from an initial temperature estimate, algorithms iteratively update T and concentrations until convergence</p></li>
+<li><p><strong>Weighted regression</strong>: Line intensity uncertainties (from SNR) weight the Boltzmann plot fit, giving higher influence to reliable lines</p></li>
+<li><p><strong>Outlier rejection</strong>: RANSAC (Random Sample Consensus) and sigma-clipping algorithms identify and exclude anomalous points from self-absorbed or blended lines</p></li>
+<li><p><strong>Multi-element optimization</strong>: Joint fitting across multiple elements improves temperature accuracy by increasing the number of data points</p></li>
+</ul>
+</section>
+<section id="partition-function-computation">
+<h4>Partition Function Computation<a class="headerlink" href="#partition-function-computation" title="Link to this heading"></a></h4>
+<p>Partition functions must be evaluated efficiently for iterative algorithms:</p>
+<ul class="simple">
+<li><p><strong>Polynomial approximations</strong>: Irwin coefficients provide <code class="docutils literal notranslate"><span class="pre">log(U)</span> <span class="pre">=</span> <span class="pre">Σ</span> <span class="pre">a_n</span> <span class="pre">(log</span> <span class="pre">T)^n</span></code> fits accurate to &lt;1% over typical LIBS temperature ranges</p></li>
+<li><p><strong>Database integration</strong>: Pre-computed coefficients stored in SQLite enable O(1) lookup with LRU caching</p></li>
+<li><p><strong>JAX compatibility</strong>: Polynomial evaluation is differentiable, enabling gradient-based optimization</p></li>
+</ul>
+</section>
+<section id="closure-equation-methods">
+<h4>Closure Equation Methods<a class="headerlink" href="#closure-equation-methods" title="Link to this heading"></a></h4>
+<p>The closure equation provides the constraint needed to convert relative concentrations to absolute values:</p>
+<ul class="simple">
+<li><p><strong>Standard closure</strong>: <code class="docutils literal notranslate"><span class="pre">ΣC_i</span> <span class="pre">=</span> <span class="pre">1</span></code> assumes all elements are detected</p></li>
+<li><p><strong>Matrix-based closure</strong>: A “balance element” (often oxygen in geological samples) is calculated from stoichiometry</p></li>
+<li><p><strong>Oxide mode</strong>: Concentrations are reported as oxides with oxygen calculated from valence states</p></li>
+<li><p><strong>Iterative electron density</strong>: The Saha equation couples electron density to ionization equilibrium, requiring iteration</p></li>
+</ul>
+</section>
+</section>
+<section id="self-absorption-correction-algorithms">
+<h3>3. Self-Absorption Correction Algorithms<a class="headerlink" href="#self-absorption-correction-algorithms" title="Link to this heading"></a></h3>
+<p>Optically thick plasma conditions distort line intensities, introducing systematic errors in CF-LIBS quantification. Self-absorption preferentially affects strong resonance lines, causing measured intensities to underestimate true emission.</p>
+<section id="detection-methods">
+<h4>Detection Methods<a class="headerlink" href="#detection-methods" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Line shape analysis</strong>: Self-absorbed lines exhibit flattened peaks and broadened profiles</p></li>
+<li><p><strong>Intensity ratios</strong>: Comparing lines with different oscillator strengths from the same species reveals optical depth effects</p></li>
+<li><p><strong>Curve-of-growth analysis</strong>: Plotting intensity vs. concentration identifies the linear (optically thin) regime</p></li>
+</ul>
+</section>
+<section id="correction-algorithms">
+<h4>Correction Algorithms<a class="headerlink" href="#correction-algorithms" title="Link to this heading"></a></h4>
+<p>Recent advances include:</p>
+<ul class="simple">
+<li><p><strong>Curve-of-growth methods</strong>: Fitting observed intensities to theoretical curves accounting for optical depth</p></li>
+<li><p><strong>Intensity ratio techniques</strong>: Using optically thin reference lines to scale absorbed line intensities</p></li>
+<li><p><strong>Recursive correction</strong>: Iteratively estimating optical depth and correcting intensities until convergence</p></li>
+<li><p><strong>Escape factor models</strong>: Physics-based correction using plasma geometry and absorption coefficients</p></li>
+</ul>
+<p><strong>Key Papers:</strong></p>
+<ul class="simple">
+<li><p><strong>El Sherbini et al. (2020)</strong>: Demonstrated curve-of-growth self-absorption correction achieving &lt;5% error on strongly absorbed lines</p></li>
+<li><p><strong>Sun &amp; Yu (2021)</strong>: Automatic algorithm detecting and correcting self-absorption without user intervention</p></li>
+</ul>
+</section>
+<section id="machine-learning-approaches">
+<h4>Machine Learning Approaches<a class="headerlink" href="#machine-learning-approaches" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Simulated training data</strong>: Synthetic spectra with known optical depths train neural networks to predict correction factors</p></li>
+<li><p><strong>Transfer learning</strong>: Pre-trained models adapted to specific experimental conditions</p></li>
+</ul>
+</section>
+</section>
+<section id="chemometrics-and-multivariate-analysis">
+<h3>4. Chemometrics and Multivariate Analysis<a class="headerlink" href="#chemometrics-and-multivariate-analysis" title="Link to this heading"></a></h3>
+<p>Classical chemometric methods remain relevant, particularly in hybrid ML pipelines and for interpretable quantification.</p>
+<section id="partial-least-squares-pls-regression">
+<h4>Partial Least Squares (PLS) Regression<a class="headerlink" href="#partial-least-squares-pls-regression" title="Link to this heading"></a></h4>
+<p>PLS remains the workhorse of quantitative LIBS analysis:</p>
+<ul class="simple">
+<li><p><strong>PLS-DA</strong>: Discriminant analysis variant for classification tasks</p></li>
+<li><p><strong>PLSR</strong>: Regression variant for elemental concentration prediction</p></li>
+<li><p><strong>Optimal components</strong>: Cross-validation determines the number of latent variables, balancing bias and variance</p></li>
+</ul>
+<p><strong>Preprocessing Pipelines:</strong></p>
+<ol class="arabic simple">
+<li><p>Baseline correction (polynomial, SNIP, or wavelet-based)</p></li>
+<li><p>Normalization (total intensity, internal standard, or SNV)</p></li>
+<li><p>Smoothing (Savitzky-Golay or wavelet denoising)</p></li>
+<li><p>Variable selection (genetic algorithms, VIP scores, or selectivity ratios)</p></li>
+</ol>
+</section>
+<section id="principal-component-analysis-pca">
+<h4>Principal Component Analysis (PCA)<a class="headerlink" href="#principal-component-analysis-pca" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Dimensionality reduction</strong>: Compressing thousands of wavelengths to tens of principal components</p></li>
+<li><p><strong>Exploratory analysis</strong>: Score plots reveal sample clustering and outliers</p></li>
+<li><p><strong>Feature extraction</strong>: PC scores feed downstream classifiers (LDA, SVM, RF)</p></li>
+</ul>
+</section>
+<section id="other-multivariate-methods">
+<h4>Other Multivariate Methods<a class="headerlink" href="#other-multivariate-methods" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Independent Component Analysis (ICA)</strong>: Separates overlapping spectral contributions</p></li>
+<li><p><strong>Non-negative Matrix Factorization (NMF)</strong>: Physically interpretable decomposition</p></li>
+<li><p><strong>Sparse regression (LASSO, Elastic Net)</strong>: Automated wavelength selection</p></li>
+</ul>
+</section>
+</section>
+<section id="gpu-accelerated-and-parallel-processing">
+<h3>5. GPU-Accelerated and Parallel Processing<a class="headerlink" href="#gpu-accelerated-and-parallel-processing" title="Link to this heading"></a></h3>
+<p>High-throughput LIBS generates massive spectral datasets requiring computational acceleration for real-time analysis.</p>
+<section id="jax-based-implementations">
+<h4>JAX-Based Implementations<a class="headerlink" href="#jax-based-implementations" title="Link to this heading"></a></h4>
+<p>JAX enables automatic differentiation and just-in-time compilation for GPU execution:</p>
+<ul class="simple">
+<li><p><strong>Voigt profile computation</strong>: Vectorized complex error function evaluation achieving 100x speedup over CPU</p></li>
+<li><p><strong>Gradient-based optimization</strong>: Automatic derivatives for spectral fitting and temperature optimization</p></li>
+<li><p><strong>Batch processing</strong>: Simultaneous analysis of thousands of spectra</p></li>
+</ul>
+</section>
+<section id="cuda-accelerated-peak-fitting">
+<h4>CUDA-Accelerated Peak Fitting<a class="headerlink" href="#cuda-accelerated-peak-fitting" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Parallel Levenberg-Marquardt</strong>: Fitting multiple peaks simultaneously across GPU threads</p></li>
+<li><p><strong>Shared memory optimization</strong>: Caching atomic data for reduced memory bandwidth</p></li>
+<li><p><strong>Real-time deconvolution</strong>: Sub-millisecond peak fitting for LIBS imaging</p></li>
+</ul>
+</section>
+<section id="parallel-plasma-calculations">
+<h4>Parallel Plasma Calculations<a class="headerlink" href="#parallel-plasma-calculations" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Saha-Boltzmann equilibrium</strong>: Vectorized ionization balance across temperature grids</p></li>
+<li><p><strong>Stark width computation</strong>: Parallel electron density calculations from line broadening</p></li>
+<li><p><strong>Partition function evaluation</strong>: Batch polynomial evaluation for all species</p></li>
+</ul>
+</section>
+<section id="batch-processing-architectures">
+<h4>Batch Processing Architectures<a class="headerlink" href="#batch-processing-architectures" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Pipeline parallelism</strong>: Concurrent spectrum acquisition, preprocessing, and analysis</p></li>
+<li><p><strong>MapReduce patterns</strong>: Distributed processing for large-scale LIBS imaging datasets</p></li>
+<li><p><strong>Stream processing</strong>: Real-time analysis of continuous LIBS monitoring data</p></li>
+</ul>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="seminal-works-and-high-impact-papers">
+<h2>Seminal Works and High-Impact Papers<a class="headerlink" href="#seminal-works-and-high-impact-papers" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Paper</p></th>
+<th class="head"><p>Year</p></th>
+<th class="head"><p>Citations</p></th>
+<th class="head"><p>Contribution</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Hahn &amp; Omenetto, “LIBS: An Introduction and Overview”</p></td>
+<td><p>2012</p></td>
+<td><p>~2000+</p></td>
+<td><p>Foundational review establishing LIBS fundamentals</p></td>
+</tr>
+<tr class="row-odd"><td><p>Tognoni et al., “CF-LIBS: An Exhaustive Review”</p></td>
+<td><p>2010</p></td>
+<td><p>~800+</p></td>
+<td><p>Comprehensive CF-LIBS algorithm documentation</p></td>
+</tr>
+<tr class="row-even"><td><p>Ciucci et al., “New Procedure for Quantitative Elemental Analysis”</p></td>
+<td><p>1999</p></td>
+<td><p>~700+</p></td>
+<td><p>Original CF-LIBS methodology</p></td>
+</tr>
+<tr class="row-odd"><td><p>Zhang et al., “Deep Learning for LIBS”</p></td>
+<td><p>2020</p></td>
+<td><p>~150+</p></td>
+<td><p>CNN architectures for LIBS classification</p></td>
+</tr>
+<tr class="row-even"><td><p>Herreyre et al., “High-Throughput ANN for LIBS Imaging”</p></td>
+<td><p>2023</p></td>
+<td><p>Growing</p></td>
+<td><p>State-of-the-art high-throughput imaging</p></td>
+</tr>
+<tr class="row-odd"><td><p>Weideman, “Computation of the Complex Error Function”</p></td>
+<td><p>1994</p></td>
+<td><p>~500+</p></td>
+<td><p>Foundational algorithm for Voigt profile computation</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="recent-advances-2023-2025">
+<h2>Recent Advances (2023-2025)<a class="headerlink" href="#recent-advances-2023-2025" title="Link to this heading"></a></h2>
+<section id="real-time-3d-compositional-mapping">
+<h3>1. Real-Time 3D Compositional Mapping<a class="headerlink" href="#real-time-3d-compositional-mapping" title="Link to this heading"></a></h3>
+<p>Automated LIBS systems achieving sub-second per-pixel analysis for industrial inspection. Mahyari et al. (2025) demonstrated integrated hardware-software pipelines with:</p>
+<ul class="simple">
+<li><p>Automated XYZ stage control</p></li>
+<li><p>Real-time spectral acquisition and preprocessing</p></li>
+<li><p>GPU-accelerated classification and quantification</p></li>
+<li><p>3D visualization with sub-millimeter spatial resolution</p></li>
+</ul>
+</section>
+<section id="transfer-learning-for-cross-system-calibration">
+<h3>2. Transfer Learning for Cross-System Calibration<a class="headerlink" href="#transfer-learning-for-cross-system-calibration" title="Link to this heading"></a></h3>
+<p>Domain adaptation techniques enabling model portability across different LIBS instruments:</p>
+<ul class="simple">
+<li><p><strong>Adversarial training</strong>: Learns instrument-invariant features</p></li>
+<li><p><strong>Fine-tuning strategies</strong>: Minimal target-domain data requirements</p></li>
+<li><p><strong>Calibration transfer</strong>: Mathematical correction of instrumental differences</p></li>
+</ul>
+</section>
+<section id="physics-informed-neural-networks-pinns">
+<h3>3. Physics-Informed Neural Networks (PINNs)<a class="headerlink" href="#physics-informed-neural-networks-pinns" title="Link to this heading"></a></h3>
+<p>Hybrid approaches incorporating plasma physics constraints into deep learning:</p>
+<ul class="simple">
+<li><p><strong>Boltzmann constraint layers</strong>: Ensure predictions satisfy thermodynamic equilibrium</p></li>
+<li><p><strong>Saha regularization</strong>: Ionization balance as a soft constraint</p></li>
+<li><p><strong>Energy conservation</strong>: Physics-based loss functions improve extrapolation</p></li>
+</ul>
+</section>
+<section id="edge-computing-deployment">
+<h3>4. Edge Computing Deployment<a class="headerlink" href="#edge-computing-deployment" title="Link to this heading"></a></h3>
+<p>Optimized models for embedded systems enabling in-situ, standalone LIBS analysis:</p>
+<ul class="simple">
+<li><p><strong>Model quantization</strong>: INT8 inference for reduced memory and power</p></li>
+<li><p><strong>Pruning and distillation</strong>: Compact models maintaining accuracy</p></li>
+<li><p><strong>FPGA acceleration</strong>: Custom hardware for ultra-low-latency inference</p></li>
+</ul>
+</section>
+<section id="bayesian-uncertainty-quantification">
+<h3>5. Bayesian Uncertainty Quantification<a class="headerlink" href="#bayesian-uncertainty-quantification" title="Link to this heading"></a></h3>
+<p>Probabilistic approaches providing confidence intervals on CF-LIBS concentration estimates:</p>
+<ul class="simple">
+<li><p><strong>Bayesian neural networks</strong>: Epistemic uncertainty from weight distributions</p></li>
+<li><p><strong>Monte Carlo dropout</strong>: Approximate Bayesian inference in standard networks</p></li>
+<li><p><strong>Gaussian process regression</strong>: Non-parametric uncertainty with spectral covariance</p></li>
+<li><p><strong>MCMC sampling</strong>: Full posterior distributions on plasma parameters</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="research-gaps-and-opportunities">
+<h2>Research Gaps and Opportunities<a class="headerlink" href="#research-gaps-and-opportunities" title="Link to this heading"></a></h2>
+<section id="standardized-benchmarks">
+<h3>1. Standardized Benchmarks<a class="headerlink" href="#standardized-benchmarks" title="Link to this heading"></a></h3>
+<p><strong>Gap:</strong> Lack of common datasets and metrics for comparing algorithm performance across studies. Each publication uses different spectrometers, samples, and evaluation protocols.</p>
+<p><strong>Opportunity:</strong> Develop open LIBS spectral databases with:</p>
+<ul class="simple">
+<li><p>Certified reference material spectra</p></li>
+<li><p>Multiple instrumental conditions</p></li>
+<li><p>Standardized train/test splits</p></li>
+<li><p>Community-accepted evaluation metrics</p></li>
+</ul>
+</section>
+<section id="matrix-effect-correction">
+<h3>2. Matrix Effect Correction<a class="headerlink" href="#matrix-effect-correction" title="Link to this heading"></a></h3>
+<p><strong>Gap:</strong> Automated approaches for handling sample matrix variations remain underdeveloped. Matrix effects cause non-linear calibration curves and invalidate CF-LIBS assumptions.</p>
+<p><strong>Opportunity:</strong></p>
+<ul class="simple">
+<li><p>Physics-based matrix correction using plasma modeling</p></li>
+<li><p>Transfer learning across matrix types</p></li>
+<li><p>Self-normalizing approaches robust to matrix variations</p></li>
+</ul>
+</section>
+<section id="uncertainty-propagation">
+<h3>3. Uncertainty Propagation<a class="headerlink" href="#uncertainty-propagation" title="Link to this heading"></a></h3>
+<p><strong>Gap:</strong> End-to-end uncertainty quantification from spectrum to concentration is rarely implemented. Most methods report point estimates without confidence intervals.</p>
+<p><strong>Opportunity:</strong></p>
+<ul class="simple">
+<li><p>Bayesian CF-LIBS with posterior sampling</p></li>
+<li><p>Propagation of spectral noise through entire analysis pipeline</p></li>
+<li><p>Uncertainty-aware decision making for industrial QC</p></li>
+</ul>
+</section>
+<section id="temporal-dynamics">
+<h3>4. Temporal Dynamics<a class="headerlink" href="#temporal-dynamics" title="Link to this heading"></a></h3>
+<p><strong>Gap:</strong> Algorithms exploiting time-resolved LIBS data for improved accuracy are underutilized. Plasma conditions evolve over microsecond timescales.</p>
+<p><strong>Opportunity:</strong></p>
+<ul class="simple">
+<li><p>Gate-timing optimization algorithms</p></li>
+<li><p>Temporal feature extraction for classification</p></li>
+<li><p>Dynamic self-absorption correction during plasma evolution</p></li>
+</ul>
+</section>
+<section id="multi-element-joint-optimization">
+<h3>5. Multi-Element Joint Optimization<a class="headerlink" href="#multi-element-joint-optimization" title="Link to this heading"></a></h3>
+<p><strong>Gap:</strong> Sequential single-element analysis ignores correlations and constraints. Temperature and electron density should be consistent across all elements.</p>
+<p><strong>Opportunity:</strong></p>
+<ul class="simple">
+<li><p>Simultaneous optimization of T, n_e, and all concentrations</p></li>
+<li><p>Constraint satisfaction ensuring closure equation</p></li>
+<li><p>Graph neural networks modeling elemental correlations</p></li>
+</ul>
+</section>
+<section id="interpretable-machine-learning">
+<h3>6. Interpretable Machine Learning<a class="headerlink" href="#interpretable-machine-learning" title="Link to this heading"></a></h3>
+<p><strong>Gap:</strong> “Black box” predictions limit adoption in regulated industries. Understanding why a model makes predictions is essential for validation.</p>
+<p><strong>Opportunity:</strong></p>
+<ul class="simple">
+<li><p>Attention visualization showing influential wavelengths</p></li>
+<li><p>Physics-guided feature extraction</p></li>
+<li><p>Hybrid models combining interpretable components with flexible ML</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="relevance-to-cf-libs-implementation">
+<h2>Relevance to CF-LIBS Implementation<a class="headerlink" href="#relevance-to-cf-libs-implementation" title="Link to this heading"></a></h2>
+<p>Based on this literature review, the CF-LIBS library should prioritize the following algorithmic capabilities:</p>
+<section id="immediate-priorities-phase-2-3">
+<h3>Immediate Priorities (Phase 2-3)<a class="headerlink" href="#immediate-priorities-phase-2-3" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>JAX-Accelerated Voigt Profiles</strong> ✓</p>
+<ul class="simple">
+<li><p>GPU-enabled spectral fitting using Weideman rational approximation</p></li>
+<li><p>Status: Already implemented (<code class="docutils literal notranslate"><span class="pre">voigt_profile_jax</span></code>)</p></li>
+</ul>
+</li>
+<li><p><strong>Robust Boltzmann Fitting</strong></p>
+<ul class="simple">
+<li><p>Weighted regression accounting for line intensity uncertainties</p></li>
+<li><p>RANSAC outlier rejection for self-absorbed lines</p></li>
+<li><p>Sigma-clipping for anomalous data points</p></li>
+<li><p>Status: Partially implemented, needs hardening</p></li>
+</ul>
+</li>
+<li><p><strong>Iterative Self-Absorption Correction</strong></p>
+<ul class="simple">
+<li><p>Escape factor estimation from line shapes</p></li>
+<li><p>Recursive intensity correction with convergence monitoring</p></li>
+<li><p>Status: Framework exists, needs validation</p></li>
+</ul>
+</li>
+<li><p><strong>Line Quality Scoring</strong></p>
+<ul class="simple">
+<li><p>Composite score: SNR × isolation × atomic data reliability</p></li>
+<li><p>Automatic line selection for Boltzmann plots</p></li>
+<li><p>Status: Implemented, needs integration testing</p></li>
+</ul>
+</li>
+<li><p><strong>Bayesian Uncertainty Quantification</strong></p>
+<ul class="simple">
+<li><p>MCMC sampling for temperature and concentration posteriors</p></li>
+<li><p>Nested sampling for model comparison</p></li>
+<li><p>Status: MCMC implemented, needs refinement</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="future-directions-phase-4">
+<h3>Future Directions (Phase 4+)<a class="headerlink" href="#future-directions-phase-4" title="Link to this heading"></a></h3>
+<ol class="arabic simple" start="6">
+<li><p><strong>Multi-Element Joint Optimization</strong></p>
+<ul class="simple">
+<li><p>Simultaneous T, n_e, and concentration optimization</p></li>
+<li><p>Constraint satisfaction for closure equations</p></li>
+</ul>
+</li>
+<li><p><strong>Transfer Learning Framework</strong></p>
+<ul class="simple">
+<li><p>Calibration transfer between instruments</p></li>
+<li><p>Domain adaptation for matrix variations</p></li>
+</ul>
+</li>
+<li><p><strong>Real-Time Pipeline</strong></p>
+<ul class="simple">
+<li><p>Streaming spectrum analysis</p></li>
+<li><p>Edge deployment for portable LIBS</p></li>
+</ul>
+</li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="bibliography">
+<h2>Bibliography<a class="headerlink" href="#bibliography" title="Link to this heading"></a></h2>
+<section id="machine-learning-and-deep-learning">
+<h3>Machine Learning and Deep Learning<a class="headerlink" href="#machine-learning-and-deep-learning" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Choi, S. &amp; Park, K. (2022). CNN-based LIBS monitoring for real-time classification. <em>Spectrochimica Acta Part B</em>, 195, 106502.</p></li>
+<li><p>Herreyre, A., Semerok, A., Mauchien, P., &amp; Pichon, L. (2023). High-throughput artificial neural network for laser-induced breakdown spectroscopy elemental imaging. <em>Analytica Chimica Acta</em>, 1245, 340842.</p></li>
+<li><p>Zhang, T., Tang, H., &amp; Li, H. (2020). Deep learning applications in laser-induced breakdown spectroscopy: A review. <em>Trends in Analytical Chemistry</em>, 126, 115868.</p></li>
+<li><p>Yang, J., Yi, R., &amp; Li, X. (2021). Machine learning techniques in laser-induced breakdown spectroscopy: A review. <em>Plasma Science and Technology</em>, 23(7), 073001.</p></li>
+<li><p>Li, L., Wang, Z., Yuan, T., &amp; Hou, Z. (2019). A review of random forest algorithm applications in LIBS. <em>Applied Spectroscopy Reviews</em>, 54(5), 411-431.</p></li>
+</ul>
+</section>
+<section id="calibration-free-libs">
+<h3>Calibration-Free LIBS<a class="headerlink" href="#calibration-free-libs" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Tognoni, E., Cristoforetti, G., Legnaioli, S., &amp; Palleschi, V. (2010). Calibration-free laser-induced breakdown spectroscopy: State of the art. <em>Spectrochimica Acta Part B</em>, 65(1), 1-14.</p></li>
+<li><p>Ciucci, A., Corsi, M., Palleschi, V., Rastelli, S., Salvetti, A., &amp; Tognoni, E. (1999). New procedure for quantitative elemental analysis by laser-induced plasma spectroscopy. <em>Applied Spectroscopy</em>, 53(8), 960-964.</p></li>
+<li><p>Aragón, C., &amp; Aguilera, J. A. (2008). Characterization of laser induced plasmas by optical emission spectroscopy: A review of experiments and methods. <em>Spectrochimica Acta Part B</em>, 63(9), 893-916.</p></li>
+<li><p>Cristoforetti, G., De Giacomo, A., Dell’Aglio, M., Legnaioli, S., Tognoni, E., Palleschi, V., &amp; Omenetto, N. (2010). Local thermodynamic equilibrium in laser-induced breakdown spectroscopy: Beyond the McWhirter criterion. <em>Spectrochimica Acta Part B</em>, 65(1), 86-95.</p></li>
+</ul>
+</section>
+<section id="real-time-and-high-throughput-systems">
+<h3>Real-Time and High-Throughput Systems<a class="headerlink" href="#real-time-and-high-throughput-systems" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Mahyari, A., Chen, J., &amp; Singh, J. P. (2025). Real-time 3D material composition mapping using automated LIBS. <em>Journal of Analytical Atomic Spectrometry</em>, 40(1), 112-125.</p></li>
+<li><p>Andrade, D. F., Pereira-Filho, E. R., &amp; Amarasiriwardena, D. (2021). Current trends in laser-induced breakdown spectroscopy: A tutorial review. <em>Applied Spectroscopy Reviews</em>, 56(2), 98-114.</p></li>
+<li><p>Moros, J., &amp; Laserna, J. J. (2019). New chemometric strategies for rapid unmixing of LIBS spectra collected from heterogeneous samples. <em>Analytica Chimica Acta</em>, 1067, 68-79.</p></li>
+</ul>
+</section>
+<section id="self-absorption-correction">
+<h3>Self-Absorption Correction<a class="headerlink" href="#self-absorption-correction" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>El Sherbini, A. M., El Sherbini, T. M., Hegazy, H., Cristoforetti, G., Legnaioli, S., Pardini, L., &amp; Palleschi, V. (2020). Self-absorption correction in laser-induced breakdown spectroscopy using the curve-of-growth method. <em>Plasma Sources Science and Technology</em>, 29(4), 045018.</p></li>
+<li><p>Sun, L., &amp; Yu, H. (2021). Automatic self-absorption correction algorithm for calibration-free laser-induced breakdown spectroscopy. <em>Optics Express</em>, 29(10), 14869-14883.</p></li>
+<li><p>Bredice, F., Borges, F. O., Sobral, H., Villagran-Muniz, M., Di Rocco, H. O., Cristoforetti, G., &amp; Palleschi, V. (2006). Evaluation of self-absorption of manganese emission lines in laser induced breakdown spectroscopy measurements. <em>Spectrochimica Acta Part B</em>, 61(12), 1294-1303.</p></li>
+</ul>
+</section>
+<section id="chemometrics">
+<h3>Chemometrics<a class="headerlink" href="#chemometrics" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Clegg, S. M., Sklute, E., Dyar, M. D., Barefield, J. E., &amp; Wiens, R. C. (2017). Multivariate analysis of remote laser-induced breakdown spectroscopy spectra using partial least squares, principal component analysis, and related techniques. <em>Spectrochimica Acta Part B</em>, 129, 64-85.</p></li>
+<li><p>Dyar, M. D., Carmosino, M. L., Tucker, J. M., Brown, E. A., Clegg, S. M., Wiens, R. C., &amp; Treiman, A. H. (2021). Strategies for Mars rover LIBS analysis: Quantifying uncertainty in depth profiles for major elements. <em>Geostandards and Geoanalytical Research</em>, 45(1), 23-46.</p></li>
+<li><p>Pořízka, P., Klus, J., Képeš, E., Prochazka, D., Hahn, D. W., &amp; Kaiser, J. (2018). On the utilization of principal component analysis in laser-induced breakdown spectroscopy data analysis. <em>Spectrochimica Acta Part B</em>, 148, 65-82.</p></li>
+</ul>
+</section>
+<section id="gpu-and-parallel-processing">
+<h3>GPU and Parallel Processing<a class="headerlink" href="#gpu-and-parallel-processing" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Weideman, J. A. C. (1994). Computation of the complex error function. <em>SIAM Journal on Numerical Analysis</em>, 31(5), 1497-1518.</p></li>
+<li><p>Zaghloul, M. R., &amp; Ali, A. N. (2012). Algorithm 916: Computing the Faddeyeva and Voigt functions. <em>ACM Transactions on Mathematical Software</em>, 38(2), 1-22.</p></li>
+<li><p>Bradbury, J., Frostig, R., Hawkins, P., Johnson, M. J., Leary, C., Maclaurin, D., &amp; Wanderman-Milne, S. (2018). JAX: Composable transformations of Python+NumPy programs. <em>GitHub repository</em>.</p></li>
+</ul>
+</section>
+<section id="bayesian-methods">
+<h3>Bayesian Methods<a class="headerlink" href="#bayesian-methods" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Hoffman, M. D., &amp; Gelman, A. (2014). The No-U-Turn sampler: Adaptively setting path lengths in Hamiltonian Monte Carlo. <em>Journal of Machine Learning Research</em>, 15(1), 1593-1623.</p></li>
+<li><p>Phan, D., Pradhan, N., &amp; Jankowiak, M. (2019). Composable effects for flexible and accelerated probabilistic programming in NumPyro. <em>arXiv preprint arXiv:1912.11554</em>.</p></li>
+<li><p>Skilling, J. (2006). Nested sampling for general Bayesian computation. <em>Bayesian Analysis</em>, 1(4), 833-859.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="appendix-search-results-summary">
+<h2>Appendix: Search Results Summary<a class="headerlink" href="#appendix-search-results-summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Search Topic</p></th>
+<th class="head"><p>Papers Found</p></th>
+<th class="head"><p>Date Range</p></th>
+<th class="head"><p>Key Themes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Real-time LIBS algorithms</p></td>
+<td><p>50</p></td>
+<td><p>2018-2025</p></td>
+<td><p>Industrial monitoring, online analysis</p></td>
+</tr>
+<tr class="row-odd"><td><p>ML/DL for LIBS</p></td>
+<td><p>50</p></td>
+<td><p>2018-2025</p></td>
+<td><p>CNN, ANN, classification, regression</p></td>
+</tr>
+<tr class="row-even"><td><p>CF-LIBS fast algorithms</p></td>
+<td><p>50</p></td>
+<td><p>2018-2025</p></td>
+<td><p>Boltzmann plots, partition functions</p></td>
+</tr>
+<tr class="row-odd"><td><p>Deep learning classification</p></td>
+<td><p>50</p></td>
+<td><p>2019-2025</p></td>
+<td><p>CNN architectures, transfer learning</p></td>
+</tr>
+<tr class="row-even"><td><p>GPU parallel processing</p></td>
+<td><p>50</p></td>
+<td><p>2018-2025</p></td>
+<td><p>CUDA, JAX, batch processing</p></td>
+</tr>
+<tr class="row-odd"><td><p>Self-absorption correction</p></td>
+<td><p>50</p></td>
+<td><p>2018-2025</p></td>
+<td><p>Curve-of-growth, escape factors</p></td>
+</tr>
+<tr class="row-even"><td><p>Boltzmann plot fitting</p></td>
+<td><p>50</p></td>
+<td><p>2018-2025</p></td>
+<td><p>Temperature determination, outlier rejection</p></td>
+</tr>
+<tr class="row-odd"><td><p>Chemometrics PLS</p></td>
+<td><p>50</p></td>
+<td><p>2019-2025</p></td>
+<td><p>PLS, PCA, multivariate calibration</p></td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<p><em>This literature review was generated using systematic searches of the Semantic Scholar academic database. For the most current research, direct consultation of primary sources is recommended.</em></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

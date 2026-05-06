@@ -1,0 +1,294 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PRD: CF-LIBS Functional Recovery and Performance Hardening &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../user/Quick_Start_Real_Data.html">Quick Start: Analyzing Real LIBS Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user/Peak_Identification_Guide.html">Peak Identification and Line Matching Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user/Quick_Start_Synthetic.html">Quick Start: Synthetic Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user/User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user/Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user/Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user/Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/README.html">Physics Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html">Physics: Equations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#frac-n-z-1-n-e-n-z">$$
+\frac{n_{z+1}, n_e}{n_z}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#varepsilon-ki-lambda">$$
+\varepsilon_{ki}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#gamma-text-stark-n-e-t">$$
+\gamma_{\text{Stark}}(n_e, T)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#v-lambda-sigma-gamma">$$
+V(\lambda; \sigma, \gamma)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#i-text-measured-lambda">$$
+I_{\text{measured}}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#i-ki">$$
+I_{ki}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#s-t-n-e">$$
+S(T, n_e)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#c-s-text-oxide">$$
+C_{s\text{-oxide}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#tau-0">$$
+\tau_0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Equations.html#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Assumptions_And_Validity.html">Physics: Assumptions and Validity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../physics/Inversion_Algorithm.html">Physics: Iterative CF-LIBS Inversion Algorithm</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../reference/API_Reference.html">CF-LIBS API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../reference/Codebase_Architecture.html">CF-LIBS Codebase Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../reference/Database_Generation.html">Atomic Database Generation Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../development/Evolution_Framework.html">Evolution Framework</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../development/Deployment.html">CF-LIBS Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../development/CODEEVOLVE_WAVE2_PLAN.html">CodeEvolve Wave 2 Planning Document</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../development/REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">PRD: CF-LIBS Functional Recovery and Performance Hardening</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/planning/prds/cf-libs-remediation-prd.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="prd-cf-libs-functional-recovery-and-performance-hardening">
+<h1>PRD: CF-LIBS Functional Recovery and Performance Hardening<a class="headerlink" href="#prd-cf-libs-functional-recovery-and-performance-hardening" title="Link to this heading"></a></h1>
+<section id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
+<p>Deep review of the CF-LIBS repository found a mix of working physics modules, incomplete production claims, runtime import hazards, and broken CLI/script workflows. This program stabilizes the public entrypoints first, restores advertised capabilities that are currently non-functional, and then completes the unfinished model-library/vector-search path and performance hardening work.</p>
+</section>
+<section id="verified-findings">
+<h2>Verified Findings<a class="headerlink" href="#verified-findings" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.__init__</span></code> eagerly imports optional JAX/NumPyro modules and only catches <code class="docutils literal notranslate"><span class="pre">ImportError</span></code>, so unrelated runtime failures in optional stacks can crash imports of otherwise-usable submodules.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.radiation.profiles</span></code> constructs JAX arrays at import time, which crashes on Apple Metal in the current environment with <code class="docutils literal notranslate"><span class="pre">JaxRuntimeError:</span> <span class="pre">UNIMPLEMENTED:</span> <span class="pre">default_memory_space</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">supported</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.hybrid.HybridInverter</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">L-BFGS-B</span></code>, but <code class="docutils literal notranslate"><span class="pre">jax.scipy.optimize.minimize</span></code> in the installed JAX only supports <code class="docutils literal notranslate"><span class="pre">BFGS</span></code>; the current code silently falls back to the coarse guess instead of performing fine tuning.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.cli.main.dbgen_cmd</span></code> and <code class="docutils literal notranslate"><span class="pre">cflibs.atomic.database_generator.generate_database</span></code> accept <code class="docutils literal notranslate"><span class="pre">db_path</span></code> and filtering arguments but do not forward them into <code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">scripts/generate_model_library.py</span></code> depends on the environment’s editable install instead of the current checkout, validates imports before validating CLI arguments, contains a broken import path, and still emits placeholder zero spectra in chunk generation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.correlation_identifier</span></code> documents and advertises vector mode, but the public API is incomplete because it accepts only a <code class="docutils literal notranslate"><span class="pre">vector_index</span></code> and does not carry the embedding/model metadata needed to search raw spectra.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">setup.py</span></code> and <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> disagree on Python support and extras, increasing installation drift and making script behavior harder to reason about.</p></li>
+</ul>
+</section>
+<section id="goals">
+<h2>Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Make public imports and core CLIs safe to use in a default local development environment.</p></li>
+<li><p>Ensure advertised database-generation and hybrid-inversion workflows are actually functional.</p></li>
+<li><p>Harden script entrypoints so they operate against the current checkout rather than depending on external editable-install state.</p></li>
+<li><p>Replace incomplete vector/model-library workflow claims with working implementations and tests.</p></li>
+<li><p>Add regression tests for each restored workflow.</p></li>
+</ul>
+</section>
+<section id="non-goals">
+<h2>Non-Goals<a class="headerlink" href="#non-goals" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Full redesign of the plasma physics core in a single pass.</p></li>
+<li><p>Rewriting every inversion algorithm or manifold kernel before stabilizing entrypoints.</p></li>
+<li><p>Solving every long-tail optimization opportunity before restoring correctness.</p></li>
+</ul>
+</section>
+<section id="quality-gates">
+<h2>Quality Gates<a class="headerlink" href="#quality-gates" title="Link to this heading"></a></h2>
+<p>These commands must pass for every story:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">./.venv/bin/python</span> <span class="pre">-m</span> <span class="pre">ruff</span> <span class="pre">check</span> <span class="pre">cflibs</span> <span class="pre">tests</span> <span class="pre">scripts</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span> <span class="pre">./.venv/bin/python</span> <span class="pre">-m</span> <span class="pre">pytest</span> <span class="pre">tests/test_cli.py</span> <span class="pre">tests/test_generate_model_library.py</span> <span class="pre">tests/test_profiles.py</span> <span class="pre">tests/test_hybrid_inversion.py</span> <span class="pre">tests/test_correlation_identifier.py</span> <span class="pre">-q</span></code></p></li>
+</ul>
+<p>For packaging/script stories, also include:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">./.venv/bin/python</span> <span class="pre">-</span> <span class="pre">&lt;&lt;'PY'\nimport</span> <span class="pre">cflibs.radiation\nimport</span> <span class="pre">cflibs.inversion.hybrid\nprint('imports-ok')\nPY</span></code></p></li>
+</ul>
+<p>For model-library/vector stories, also include:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span> <span class="pre">./.venv/bin/python</span> <span class="pre">-m</span> <span class="pre">pytest</span> <span class="pre">tests/test_manifold.py</span> <span class="pre">tests/test_vector_index.py</span> <span class="pre">tests/test_correlation_identifier.py</span> <span class="pre">-q</span></code></p></li>
+</ul>
+</section>
+<section id="user-stories">
+<h2>User Stories<a class="headerlink" href="#user-stories" title="Link to this heading"></a></h2>
+<section id="us-001-stabilize-import-time-optional-dependency-handling">
+<h3>US-001: Stabilize import-time optional dependency handling<a class="headerlink" href="#us-001-stabilize-import-time-optional-dependency-handling" title="Link to this heading"></a></h3>
+<p>As a user importing CF-LIBS modules, I need optional JAX/Bayesian stacks to fail gracefully so unrelated workflows remain usable.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.radiation</span></code> imports without triggering JAX backend initialization failures in the reviewed local environment.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.hybrid</span></code> can be imported without optional Bayesian/radiation failures crashing the entire <code class="docutils literal notranslate"><span class="pre">cflibs.inversion</span></code> package.</p></li>
+<li><p>Optional feature flags remain accurate when optional modules are unavailable or fail during initialization.</p></li>
+<li><p>Regression tests cover subprocess/module import behavior.</p></li>
+</ul>
+</section>
+<section id="us-002-repair-hybrid-optimization-so-fine-tuning-actually-runs">
+<h3>US-002: Repair hybrid optimization so fine tuning actually runs<a class="headerlink" href="#us-002-repair-hybrid-optimization-so-fine-tuning-actually-runs" title="Link to this heading"></a></h3>
+<p>As a user of hybrid inversion, I need fine tuning to execute instead of silently returning the coarse manifold guess.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">HybridInverter.invert()</span></code> uses a supported optimizer path for the default method.</p></li>
+<li><p>Unsupported optimizer selections fail clearly or are routed to a tested fallback backend.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SpectralFitter.fit()</span></code> uses the same backend-selection rules.</p></li>
+<li><p>Regression tests verify the default optimization path performs at least one real optimization step.</p></li>
+</ul>
+</section>
+<section id="us-003-make-database-generation-cli-honor-its-own-arguments">
+<h3>US-003: Make database generation CLI honor its own arguments<a class="headerlink" href="#us-003-make-database-generation-cli-honor-its-own-arguments" title="Link to this heading"></a></h3>
+<p>As a user generating an atomic database, I need <code class="docutils literal notranslate"><span class="pre">--db-path</span></code> and element/filter arguments to affect the generated database.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">generate-db</span> <span class="pre">--db-path</span> <span class="pre">...</span> <span class="pre">--elements</span> <span class="pre">...</span></code> forwards those choices into the generator.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.atomic.database_generator.generate_database()</span></code> respects its function arguments instead of ignoring them.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code> exposes a callable or CLI path that accepts output/filter parameters.</p></li>
+<li><p>Regression tests cover argument propagation.</p></li>
+</ul>
+</section>
+<section id="us-004-harden-script-entrypoints-and-validation-order">
+<h3>US-004: Harden script entrypoints and validation order<a class="headerlink" href="#us-004-harden-script-entrypoints-and-validation-order" title="Link to this heading"></a></h3>
+<p>As a user running repository scripts directly, I need them to work from the current checkout and fail on invalid arguments before optional import/setup work.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">scripts/generate_model_library.py</span></code> resolves imports from the current checkout when run as a script.</p></li>
+<li><p>CLI validation for negative/invalid arguments runs before optional <code class="docutils literal notranslate"><span class="pre">cflibs.hpc</span></code> imports.</p></li>
+<li><p>Broken import paths in the script are corrected.</p></li>
+<li><p>Existing script tests pass and new regression tests cover the direct-run path.</p></li>
+</ul>
+</section>
+<section id="us-005-replace-placeholder-model-library-chunk-generation-with-real-spectra">
+<h3>US-005: Replace placeholder model-library chunk generation with real spectra<a class="headerlink" href="#us-005-replace-placeholder-model-library-chunk-generation-with-real-spectra" title="Link to this heading"></a></h3>
+<p>As a user building a model library, I need chunk generation to emit physical spectra rather than placeholder zeros.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">chunk</span></code> mode generates non-zero spectra from a real forward-model path.</p></li>
+<li><p>Chunk metadata is sufficient for consolidation and later vector indexing.</p></li>
+<li><p>Consolidated libraries carry the data needed by search/inversion workflows.</p></li>
+<li><p>Regression tests validate non-placeholder output and schema consistency.</p></li>
+</ul>
+</section>
+<section id="us-006-complete-vector-mode-correlation-identification-api">
+<h3>US-006: Complete vector-mode correlation identification API<a class="headerlink" href="#us-006-complete-vector-mode-correlation-identification-api" title="Link to this heading"></a></h3>
+<p>As a user of vector-based element identification, I need a public API that can embed measured spectra and use vector search without hidden state.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">CorrelationIdentifier</span></code> accepts the embedding/search context required for vector mode.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mode=&quot;auto&quot;</span></code> only selects vector mode when the full vector workflow is available.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mode=&quot;vector&quot;</span></code> returns detections rather than raising <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code>.</p></li>
+<li><p>Regression tests cover classic, auto, and vector modes.</p></li>
+</ul>
+</section>
+<section id="us-007-reconcile-packaging-metadata-and-script-runtime-assumptions">
+<h3>US-007: Reconcile packaging metadata and script/runtime assumptions<a class="headerlink" href="#us-007-reconcile-packaging-metadata-and-script-runtime-assumptions" title="Link to this heading"></a></h3>
+<p>As a developer installing CF-LIBS, I need a single, coherent packaging contract so editable installs and scripts resolve consistently.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">setup.py</span></code> and <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> agree on supported Python versions and extras, or legacy metadata is removed.</p></li>
+<li><p>Script/runtime assumptions are documented and tested against the supported install path.</p></li>
+<li><p>Development instructions no longer depend on stale editable-install targets.</p></li>
+</ul>
+</section>
+<section id="us-008-benchmark-and-optimize-the-most-expensive-audited-paths">
+<h3>US-008: Benchmark and optimize the most expensive audited paths<a class="headerlink" href="#us-008-benchmark-and-optimize-the-most-expensive-audited-paths" title="Link to this heading"></a></h3>
+<p>As a user running larger CF-LIBS workloads, I need the main atomic/inversion/manifold paths to avoid obvious performance cliffs.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>The audited hotspots are benchmarked with before/after numbers.</p></li>
+<li><p>At least one concrete performance improvement lands in the main forward/inversion/database path.</p></li>
+<li><p>Performance-sensitive code paths have regression coverage or benchmarks.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

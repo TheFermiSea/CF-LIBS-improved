@@ -1,0 +1,945 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comparative Evaluation of Element Identification Algorithms for Low-Resolution Laser-Induced Breakdown Spectroscopy &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Real_Data.html">Quick Start: Analyzing Real LIBS Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Peak_Identification_Guide.html">Peak Identification and Line Matching Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Synthetic.html">Quick Start: Synthetic Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../physics/README.html">Physics Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html">Physics: Equations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-n-z-1-n-e-n-z">$$
+\frac{n_{z+1}, n_e}{n_z}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#varepsilon-ki-lambda">$$
+\varepsilon_{ki}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#gamma-text-stark-n-e-t">$$
+\gamma_{\text{Stark}}(n_e, T)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#v-lambda-sigma-gamma">$$
+V(\lambda; \sigma, \gamma)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-text-measured-lambda">$$
+I_{\text{measured}}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-ki">$$
+I_{ki}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#s-t-n-e">$$
+S(T, n_e)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#c-s-text-oxide">$$
+C_{s\text{-oxide}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#tau-0">$$
+\tau_0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Assumptions_And_Validity.html">Physics: Assumptions and Validity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Inversion_Algorithm.html">Physics: Iterative CF-LIBS Inversion Algorithm</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../reference/API_Reference.html">CF-LIBS API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Codebase_Architecture.html">CF-LIBS Codebase Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Database_Generation.html">Atomic Database Generation Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/Evolution_Framework.html">Evolution Framework</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Deployment.html">CF-LIBS Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/CODEEVOLVE_WAVE2_PLAN.html">CodeEvolve Wave 2 Planning Document</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Comparative Evaluation of Element Identification Algorithms for Low-Resolution Laser-Induced Breakdown Spectroscopy</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/reports/element_id_benchmark_IEEE.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="comparative-evaluation-of-element-identification-algorithms-for-low-resolution-laser-induced-breakdown-spectroscopy">
+<h1>Comparative Evaluation of Element Identification Algorithms for Low-Resolution Laser-Induced Breakdown Spectroscopy<a class="headerlink" href="#comparative-evaluation-of-element-identification-algorithms-for-low-resolution-laser-induced-breakdown-spectroscopy" title="Link to this heading"></a></h1>
+<p><strong>B. Squires</strong></p>
+<p><em>CF-LIBS Project, Department of Physics</em></p>
+<hr class="docutils" />
+<p><em>Abstract</em> — Automated element identification in Calibration-Free Laser-Induced Breakdown Spectroscopy (CF-LIBS) is fundamentally limited at the low resolving powers (RP &lt; 1000) typical of field-deployed instruments, where severe spectral overlap renders peak-matching unreliable. We present a systematic benchmark of five identification pathways — ALIAS peak-matching, full-spectrum NNLS decomposition, a novel two-stage hybrid NNLS+ALIAS identifier, Voigt deconvolution with ALIAS, and forward-model concentration thresholding — evaluated on 74 LIBS spectra (13 pure elements, 61 minerals) from the Aalto University spectral library at RP = 300–1100. The hybrid NNLS+ALIAS approach in intersection mode achieves the best performance: precision P = 0.604, recall R = 0.713, F₁ = 0.654, representing a 17% F₁ improvement over the ALIAS baseline. Per-element analysis shows perfect precision (P = 1.00) for Si, Al, Fe, Li, Co, and Ni, while Mn and Na remain intractable false-positive sources across all methods. These results establish quantitative performance baselines and demonstrate that two-stage architectures combining global spectral fitting with peak-level confirmation are the current best approach at low resolving power.</p>
+<p><em>Keywords</em> — LIBS, calibration-free, element identification, spectral unmixing, NNLS, mineral analysis, peak-matching, resolving power</p>
+<hr class="docutils" />
+<section id="i-introduction">
+<h2>I. Introduction<a class="headerlink" href="#i-introduction" title="Link to this heading"></a></h2>
+<p>Laser-Induced Breakdown Spectroscopy (LIBS) generates atomic emission spectra from laser-produced microplasmas, enabling rapid elemental analysis without sample preparation [1], [2]. The Calibration-Free (CF-LIBS) methodology, introduced by Ciucci <em>et al.</em> [3] and reviewed by Tognoni <em>et al.</em> [4], eliminates the need for matrix-matched reference standards by modeling plasma emission from first principles using Saha-Boltzmann equilibrium and the closure equation (Σ Cₛ = 1). This approach has proven especially valuable in remote sensing contexts such as the ChemCam and SuperCam instruments on NASA’s Mars rovers [5]–[7], where calibration standards are unavailable.</p>
+<p>A critical prerequisite for CF-LIBS analysis is the identification of which elements are present — spectral lines must be correctly assigned to their emitting species before Boltzmann plots, temperature determination, and concentration calculation can proceed. At high resolving powers (RP &gt; 5000), this identification problem is comparatively tractable: spectral lines are well-resolved, and algorithms such as ALIAS can achieve high accuracy by matching observed peak positions against theoretical wavelengths from atomic databases [8]. However, at the low resolving powers typical of compact spectrometers (RP = 300–1000), severe spectral overlap, line blending, and the density of emission features render peak-matching unreliable. This is precisely the regime of interest for field-deployed and handheld LIBS instruments.</p>
+<p>The Mars LIBS instruments illustrate the state of the art. ChemCam and SuperCam employ multivariate regression (PLS, ICA) trained on libraries of hundreds of geological standards, achieving robust quantification of eight major elements [5], [7], [9]. However, these approaches require large calibration databases and are limited to the compositional space covered by the training set. A calibration-free identifier that works reliably at low RP would enable analysis of truly unknown samples.</p>
+<p>Recent work has begun to address this gap. Jahoda <em>et al.</em> [25] benchmarked multi-method mineral classification using CNN for Raman and cosine similarity for LIBS on the RRUFF and NIST databases, finding that static LIBS peak-matching achieved only 6.44% mineral identification accuracy — a result that validates the fundamental limitations of template-based approaches without temperature adaptation. Zeng <em>et al.</em> [26] proposed a hybrid SVM + peak-seeking algorithm for metal element identification on simulated alloy LIBS spectra, achieving 74.5% accuracy for general elements — a significant improvement over standalone SVM (8%) but still below the threshold for reliable CF-LIBS analysis. For quantitative analysis, ensemble CNNs have achieved RMSE 54% lower than PLS on the ChemCam calibration dataset [27], while SVM-PLSR sub-models reduce RMSEP by 34.8–62.4% across eight oxides [28]. Janovszky <em>et al.</em> [29] demonstrated &gt;92% mineral classification accuracy using random forests and LDA on granitoid rocks at RP ~1000. However, no published study systematically benchmarks element <em>identification</em> (as opposed to classification or quantification) at RP &lt; 1000 with precision, recall, and F₁ metrics.</p>
+<p>In this context, the present study makes four contributions. First, to our knowledge, it provides the first benchmark on real low-resolution LIBS spectra (RP &lt; 1000) that evaluates blind multi-label element identification using precision, recall, and F₁ rather than mineral-classification accuracy or quantitative error metrics alone. Second, it tests full-spectrum NNLS decomposition specifically as a method for blind element identification on real LIBS spectra, extending prior multivariate and unmixing-style LIBS work from compositional estimation to explicit detection decisions. Third, it evaluates a two-stage hybrid architecture in which NNLS supplies a high-recall candidate set and ALIAS supplies line-level confirmation; to our knowledge, no prior LIBS study combines these two components in this specific screening-plus-confirmation form. Fourth, the present Aalto benchmark establishes a quantitative low-resolution baseline and provides the low-RP anchor for a planned systematic performance-versus-resolving-power study spanning Aalto, MarSCoDe, SuperCam, and ChemCam datasets. Our immediate goal is therefore not to claim a final solution to low-RP LIBS identification, but to determine which current pathway is most promising and to quantify where the RP &lt; 1000 regime remains limiting.</p>
+</section>
+<hr class="docutils" />
+<section id="ii-methods">
+<h2>II. Methods<a class="headerlink" href="#ii-methods" title="Link to this heading"></a></h2>
+<section id="a-benchmark-dataset">
+<h3>A. Benchmark Dataset<a class="headerlink" href="#a-benchmark-dataset" title="Link to this heading"></a></h3>
+<p>The benchmark comprises 74 LIBS spectra from the Aalto University mineral spectral library [10], consisting of:</p>
+<ul class="simple">
+<li><p><strong>13 pure element spectra</strong> (Al, Co, Cr, Cu, Fe, Mg, Mn, Ni, Pb, Sn, Ti, V, Zn) measured on high-purity metallic targets, each with single-element ground truth.</p></li>
+<li><p><strong>61 mineral spectra</strong> covering 45 mineral species. The ground truth for each mineral is the set of metallic/semi-metallic major elements from its stoichiometric formula, restricted to a 22-element search list. Light elements (O, H, C, N, S, F, Cl, B) are excluded as they produce weak or ambiguous LIBS emission in air.</p></li>
+</ul>
+<p>The effective resolving power was estimated from isolated peak FWHM measurements, yielding RP = 300–1100 (median ≈ 600). All spectra cover 200–900 nm.</p>
+<blockquote>
+<div><p><strong>[Fig. 5]</strong> <em>Distribution of effective resolving power across 74 Aalto LIBS spectra. The median RP ≈ 600 places the benchmark firmly in the low-resolution regime where peak-matching is expected to be unreliable.</em></p>
+</div></blockquote>
+<p>The element search list contains 22 elements: Fe, Ca, Mg, Si, Al, Ti, Na, K, Mn, Cr, Ni, Cu, Co, V, Li, Sr, Ba, Zn, Pb, Mo, Zr, Sn — encompassing the major rock-forming and common trace elements in geological samples.</p>
+<p>For the 13 pure-element targets, the reference label set is the nominal single-element composition of the high-purity metallic sample. For the 61 mineral spectra, however, the reference label set is a proxy ground truth derived from the nominal stoichiometric formula of the reported mineral species rather than from specimen-specific quantitative assay. This choice is appropriate for a benchmark built from library metadata, but it has important limitations: natural samples may contain impurities, solid-solution substitutions, hydration, weathering products, surface contamination, and trace constituents not captured by the idealized formula; conversely, some formula-listed elements may be present below the LIBS detection limit or may emit too weakly under the present acquisition conditions to support reliable identification. Accordingly, false positives and false negatives should be interpreted relative to the declared formula-based composition, not as proof of absolute chemical absence or presence at the individual-specimen level.</p>
+</section>
+<section id="b-scoring-methodology">
+<h3>B. Scoring Methodology<a class="headerlink" href="#b-scoring-methodology" title="Link to this heading"></a></h3>
+<p>Each algorithm produces a set of detected elements per spectrum. Scoring follows standard information retrieval metrics computed against the ground-truth element set: True Positive (TP), False Positive (FP), False Negative (FN), and True Negative (TN). Precision, recall, F₁, and false positive rate (FPR) are computed globally (micro-averaged) across all 74 spectra. An “exact match” requires the detected set to equal the expected set exactly.</p>
+<p>Each pathway ultimately outputs a binary detection decision over the same 22-element evaluation universe defined above. For the ALIAS pathway, the candidate set is exactly this 22-element search list. For the NNLS, hybrid, and forward-model pathways, the spectral fit is performed using the full 76-element basis library described in Section II-C so that unresolved structure and interference from additional emitters can be absorbed by physically plausible basis components. However, coefficients assigned to elements outside the 22-element search list are treated as latent nuisance components rather than reported detections. Only the 22 scored elements are thresholded, reported, and used to compute all metrics. Thus, the decomposition may use a superset of elements for spectral fidelity, but all detection decisions and all comparative metrics are defined on the same 22-element candidate universe for every pathway.</p>
+</section>
+<section id="c-basis-library-generation">
+<h3>C. Basis Library Generation<a class="headerlink" href="#c-basis-library-generation" title="Link to this heading"></a></h3>
+<p>Pathways requiring basis spectra (NNLS, hybrid, forward model) share a common pre-computed basis library generated using Saha-Boltzmann physics [3], [11].</p>
+<p><strong>TABLE I.</strong> Basis library generation parameters.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Wavelength range</p></td>
+<td><p>200–900 nm</p></td>
+</tr>
+<tr class="row-odd"><td><p>Wavelength pixels</p></td>
+<td><p>4,096</p></td>
+</tr>
+<tr class="row-even"><td><p>Instrument FWHM</p></td>
+<td><p>0.5 nm (matched to RP ≈ 600–1000)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Temperature grid</p></td>
+<td><p>4,000–12,000 K, 30 linear steps</p></td>
+</tr>
+<tr class="row-even"><td><p>Electron density grid</p></td>
+<td><p>10¹⁵–5 × 10¹⁷ cm⁻³, 10 logarithmic steps</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ionization stages</p></td>
+<td><p>I, II</p></td>
+</tr>
+<tr class="row-even"><td><p>Grid points per element</p></td>
+<td><p>300</p></td>
+</tr>
+<tr class="row-odd"><td><p>Elements</p></td>
+<td><p>76 (all available in database)</p></td>
+</tr>
+</tbody>
+</table>
+<p>For each element and grid point (<em>T</em>, <em>nₑ</em>), the ionization balance is solved via the Saha equation, level populations are computed from the Boltzmann distribution, and emission spectra are constructed from atomic transition parameters (<em>A</em>ₖᵢ, <em>g</em>ₖ, <em>E</em>ₖ). Each spectrum is convolved with a Gaussian instrument profile (FWHM = 0.5 nm) and area-normalized. Partition functions use polynomial fits to the NIST compilation. The library is stored in HDF5 format.</p>
+<p>The basis library is constructed under the local-thermodynamic-equilibrium (LTE) assumption and therefore inherits the usual validity limits of Saha-Boltzmann modeling. A commonly used necessary condition is the McWhirter criterion, <em>n</em>ₑ ≥ 1.6 × 10¹² <em>T</em>¹ᐟ² (Δ<em>E</em>)³ cm⁻³, where Δ<em>E</em> is the largest energy gap (in eV) coupled by the relevant collisional-radiative processes [11], [17]. At the lowest density included in the library (<em>n</em>ₑ = 10¹⁵ cm⁻³), this criterion corresponds to Δ<em>E</em> ≤ 2.15 eV at 4000 K, 1.84 eV at 10,000 K, and 1.79 eV at 12,000 K; many line systems involving 2–4 eV gaps are therefore marginal or formally outside the LTE-safe range in the dilute corner of the grid. In addition, the present library includes only ionization stages I and II. At the hot/dilute edge of the grid this is not always sufficient, and for species with relatively low second ionization potentials stage III can become non-negligible; spectra in that corner should therefore be regarded as approximate rather than fully self-consistent. Finally, although the library is tabulated over <em>n</em>ₑ = 10¹⁵–5 × 10¹⁷ cm⁻³, the benchmarked NNLS and hybrid experiments reported in Section III use a fixed fallback value <em>n</em>ₑ = 10¹⁷ cm⁻³ when retrieving basis spectra rather than performing a free density sweep for each spectrum.</p>
+<p>A second simplification is the use of area-normalized spectra. Each library spectrum is normalized to unit area, and the observed spectrum is normalized to the same convention before NNLS fitting. This improves robustness to shot-to-shot brightness variation and instrument throughput differences, but it also discards absolute emissivity information that could otherwise help distinguish major from trace constituents. Accordingly, the NNLS coefficients reported here should be interpreted as weights over normalized spectral shapes rather than as direct physical concentrations or calibrated abundance fractions.</p>
+</section>
+<section id="d-identification-pathways">
+<h3>D. Identification Pathways<a class="headerlink" href="#d-identification-pathways" title="Link to this heading"></a></h3>
+<p>Before describing the individual pathways, it is useful to note the intrinsic information content of the low-resolution spectra considered here. Over the 200–900 nm band, the number of independent resolution elements is approximately <em>N</em>₍res₎ ≈ RP × ln(900/200), giving <em>N</em>₍res₎ ≈ 451 at RP = 300, 752 at RP = 500, and 902 at RP = 600. By contrast, the stage-I/II line list for the 22 scored elements contains 9422 catalogued transitions in the same wavelength range, corresponding to an average of 8.3 transitions per occupied 0.5 nm bin and as many as 41 in the densest bins. Accordingly, at RP ≈ 300–600 many observed “peaks” are unresolved blend envelopes rather than isolated physical lines. In this regime, ALIAS should be interpreted primarily as blend-envelope matching against temperature-weighted transition structure, not as one-to-one line assignment, and this low-RP information bottleneck motivates the inclusion of full-spectrum fitting pathways that use global spectral context.</p>
+<section id="alias-peak-matching-baseline">
+<h4>1) ALIAS Peak-Matching (Baseline)<a class="headerlink" href="#alias-peak-matching-baseline" title="Link to this heading"></a></h4>
+<p>The ALIAS (Automatic Line Identification and Spectral Analysis) algorithm [8], [31] identifies elements by matching detected experimental peaks against theoretical line positions. For each candidate element, the algorithm: (i) detects peaks via second-derivative enhancement; (ii) auto-calibrates the wavelength axis; (iii) estimates plasma temperature from Boltzmann plot fitting; (iv) screens elements by strength-weighted match rate; and (v) scores each element by an independent confidence level (CL) combining match quality, Boltzmann consistency, and statistical significance against chance coincidence. An element is detected if its CL exceeds the detection threshold. Swept parameters: detection threshold ∈ {0.02, 0.03, 0.05}, intensity threshold factor ∈ {3.0, 3.5}, chance window scale ∈ {0.3, 0.4}.</p>
+</section>
+<section id="full-spectrum-nnls-decomposition">
+<h4>2) Full-Spectrum NNLS Decomposition<a class="headerlink" href="#full-spectrum-nnls-decomposition" title="Link to this heading"></a></h4>
+<p>Inspired by spectral unmixing approaches [12], [13], this pathway decomposes the observed spectrum as a non-negative linear combination of single-element basis spectra:</p>
+<p><em>I</em>_obs(λ) ≈ Σᵢ <em>c</em>ᵢ · <em>B</em>ᵢ(λ; <em>T</em>, <em>n</em>ₑ) + <em>P</em>(λ)</p>
+<p>where <em>B</em>ᵢ are the basis spectra at estimated (<em>T</em>, <em>n</em>ₑ), <em>c</em>ᵢ ≥ 0 are element coefficients enforced by the NNLS constraint [13], and <em>P</em>(λ) is a polynomial continuum. An element is detected if its coefficient SNR exceeds a threshold. Swept parameters: detection SNR ∈ {1.0, 1.5, 2.0, 2.5, 3.0}, continuum degree ∈ {2, 3, 4}, fallback <em>T</em> ∈ {6000, 8000, 10000} K.</p>
+</section>
+<section id="hybrid-nnls-alias-two-stage">
+<h4>3) Hybrid NNLS+ALIAS (Two-Stage)<a class="headerlink" href="#hybrid-nnls-alias-two-stage" title="Link to this heading"></a></h4>
+<p>This novel approach combines the complementary strengths of NNLS (global spectral context, robust to blending) and ALIAS (individual line validation). The architecture is inspired by ChemCam/SuperCam’s two-stage pipeline [5], [7] and hierarchical spectral discrimination [14].</p>
+<blockquote>
+<div><p><strong>[Fig. 4]</strong> <em>Block diagram of the two-stage hybrid architecture. Stage 1: NNLS decomposes the full spectrum into element basis spectra with a lenient SNR threshold, producing a candidate set. Stage 2: ALIAS peak-matching is restricted to NNLS candidates, validating line-level evidence. In intersection mode, an element must pass both stages.</em></p>
+</div></blockquote>
+<p><strong>Stage 1 (NNLS Screening)</strong>: Full-spectrum NNLS decomposition with lenient SNR threshold (≥ 1.0–2.0) produces a candidate element set. This stage has high recall but admits false positives.</p>
+<p><strong>Stage 2 (ALIAS Confirmation)</strong>: ALIAS peak-matching restricted to NNLS candidates validates that detected elements have corresponding peak-level evidence.</p>
+<p>In <strong>intersection mode</strong>, an element must pass both stages. In <strong>union mode</strong>, an element passes if detected by either stage. Swept parameters: NNLS SNR ∈ {1.0, 1.5, 2.0}, ALIAS detection threshold ∈ {0.03, 0.05, 0.10}, mode ∈ {intersect, union}.</p>
+</section>
+<section id="voigt-deconvolution-alias">
+<h4>4) Voigt Deconvolution + ALIAS<a class="headerlink" href="#voigt-deconvolution-alias" title="Link to this heading"></a></h4>
+<p>This pathway pre-processes the spectrum with multi-peak Voigt deconvolution [15], [16] before running ALIAS: (i) baseline subtraction; (ii) peak detection; (iii) grouping of nearby peaks within 2 × FWHM; (iv) multi-peak Voigt fitting per group; (v) spectrum reconstruction from fitted profiles; (vi) ALIAS identification on the cleaned spectrum. Swept parameters: detection threshold ∈ {0.03, 0.05}.</p>
+</section>
+<section id="forward-model-concentration-thresholding">
+<h4>5) Forward-Model Concentration Thresholding<a class="headerlink" href="#forward-model-concentration-thresholding" title="Link to this heading"></a></h4>
+<p>NNLS decomposition with a concentration-based detection criterion: each element’s coefficient is normalized to a fractional weight (<em>c</em>ᵢ / Σ<em>c</em>ⱼ) over the area-normalized basis. Elements whose normalized weight exceeds a threshold are detected. Note that because both the basis and observed spectra are area-normalized (Section II-C), these weights reflect relative spectral shape contributions rather than physical abundances. Swept parameters: concentration threshold ∈ {0.001, 0.005, 0.01, 0.02, 0.05}, continuum degree ∈ {2, 3}.</p>
+</section>
+</section>
+<section id="e-evaluation-protocol">
+<h3>E. Evaluation Protocol<a class="headerlink" href="#e-evaluation-protocol" title="Link to this heading"></a></h3>
+<p>The results reported in Section III are single-pass point estimates on the full Aalto benchmark and should therefore be interpreted as preliminary screening results. For confirmatory evaluation, and for the planned expanded multi-instrument benchmark, hyperparameters will be selected within a nested grouped cross-validation design. On the Aalto dataset, the outer loop will use grouped leave-one-out validation because of the small sample size; on larger datasets, the outer loop will use 5-fold grouped stratified cross-validation. Grouping will be defined at the specimen/target level, or at the mineral-species level where appropriate, so that replicate or near-replicate spectra do not appear in both training and test folds. All threshold selection, model selection, and feature selection will be performed using only the inner training folds, and final performance estimates will be computed only from the held-out outer folds.</p>
+<p>To quantify uncertainty, all aggregate metrics will be reported with 95% bootstrap confidence intervals computed from spectrum-level resampling of the outer-fold predictions. Pairwise algorithm comparisons on matched spectra will use McNemar tests for binary outcomes such as exact-match success or per-element detection decisions, with multiplicity correction across pairwise tests. When comparing more than two algorithms across the same benchmark, algorithm ranks will be assessed with a Friedman omnibus test followed, when significant, by Nemenyi post-hoc comparisons [34]. In addition to micro-averaged precision, recall, and F₁, we will report macro-F₁, per-spectrum Jaccard index, Hamming loss, false positives per spectrum, exact-match rate, and per-element precision and recall with support counts. Results will also be stratified by spectrum type (pure elements versus minerals) and by label cardinality, i.e., the number of ground-truth elements present in a spectrum, to separate single-label behavior from increasingly difficult multi-label mineral identification.</p>
+</section>
+<section id="f-computational-complexity">
+<h3>F. Computational Complexity<a class="headerlink" href="#f-computational-complexity" title="Link to this heading"></a></h3>
+<p>The computational cost of each pathway scales differently with the number of elements <em>E</em>, detected peaks <em>P</em>, spectral pixels <em>N</em>, basis library elements <em>M</em>, peak groups <em>G</em>, and peaks per group <em>K</em>:</p>
+<ul class="simple">
+<li><p><strong>ALIAS</strong>: <em>O</em>(<em>E</em> · <em>P</em>) — each element is independently scored against each detected peak.</p></li>
+<li><p><strong>NNLS</strong>: <em>O</em>(<em>N</em> · <em>M</em>²) — dominated by the NNLS active-set algorithm solving a (<em>N</em> × <em>M</em>) system.</p></li>
+<li><p><strong>Hybrid</strong>: <em>O</em>(<em>N</em> · <em>M</em>² + <em>E</em> · <em>P</em>) — NNLS stage plus ALIAS stage.</p></li>
+<li><p><strong>Voigt+ALIAS</strong>: <em>O</em>(<em>G</em> · <em>K</em>³ + <em>E</em> · <em>P</em>) — dominated by nonlinear least-squares fitting of multi-peak Voigt profiles within each group.</p></li>
+<li><p><strong>Forward model</strong>: <em>O</em>(<em>N</em> · <em>M</em>²) — identical to NNLS with post-hoc thresholding.</p></li>
+</ul>
+<p>For the present benchmark (<em>N</em> = 4096, <em>M</em> = 76, <em>E</em> = 22, <em>P</em> ≈ 50–100, <em>G</em> ≈ 20–40, <em>K</em> ≈ 2–5), ALIAS is fastest (0.14 s/spectrum), NNLS and forward model are comparable (0.28 s), hybrid incurs modest overhead (0.39 s), and Voigt deconvolution is an order of magnitude slower (6.8 s) due to repeated nonlinear optimization.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="iii-results">
+<h2>III. Results<a class="headerlink" href="#iii-results" title="Link to this heading"></a></h2>
+<section id="a-pathway-comparison">
+<h3>A. Pathway Comparison<a class="headerlink" href="#a-pathway-comparison" title="Link to this heading"></a></h3>
+<p>Table II presents the best configuration for each pathway, ranked by F₁ score.</p>
+<p><strong>TABLE II.</strong> Best performance per pathway on 74 Aalto LIBS spectra (RP = 300–1100).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rank</p></th>
+<th class="head"><p>Pathway</p></th>
+<th class="head"><p>Configuration</p></th>
+<th class="head"><p><em>P</em></p></th>
+<th class="head"><p><em>R</em></p></th>
+<th class="head"><p><em>F</em>₁</p></th>
+<th class="head"><p>FPR</p></th>
+<th class="head"><p>Exact</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Hybrid (intersect)</p></td>
+<td><p>nsnr=1.5, adt=0.05</p></td>
+<td><p><strong>0.604</strong></p></td>
+<td><p>0.713</p></td>
+<td><p><strong>0.654</strong></p></td>
+<td><p>0.053</p></td>
+<td><p><strong>16/74</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>ALIAS</p></td>
+<td><p>dt=0.05, itf=3.0</p></td>
+<td><p>0.505</p></td>
+<td><p>0.629</p></td>
+<td><p>0.560</p></td>
+<td><p>0.070</p></td>
+<td><p>11/74</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Voigt+ALIAS</p></td>
+<td><p>dt=0.03</p></td>
+<td><p>0.488</p></td>
+<td><p>0.623</p></td>
+<td><p>0.547</p></td>
+<td><p>0.075</p></td>
+<td><p>8/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Forward model</p></td>
+<td><p>ct=0.05</p></td>
+<td><p>0.369</p></td>
+<td><p>0.796</p></td>
+<td><p>0.505</p></td>
+<td><p>0.148</p></td>
+<td><p>0/74</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Spectral NNLS</p></td>
+<td><p>snr=3.0, T=10kK</p></td>
+<td><p>0.293</p></td>
+<td><p><strong>0.940</strong></p></td>
+<td><p>0.447</p></td>
+<td><p>0.236</p></td>
+<td><p>2/74</p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p><strong>[Fig. 1]</strong> <em>Grouped bar chart comparing precision, recall, F₁, and false positive rate across the five identification pathways (best configuration each). The hybrid NNLS+ALIAS intersection method achieves the best F₁ and the lowest FPR. Spectral NNLS achieves the highest recall but at the cost of unacceptable precision.</em></p>
+</div></blockquote>
+<p>Key observations:</p>
+<ol class="arabic simple">
+<li><p><strong>NNLS has near-perfect recall (<em>R</em> = 0.94) but unacceptable precision (<em>P</em> = 0.29)</strong>: It detects nearly every true element but also flags many spurious elements per spectrum within the 22-element evaluation universe. The most persistent false positives are Na, V, Mg, K, and Pb — elements with dense line forests in the 200–900 nm range. (The 76-element basis also absorbs signal from non-scored emitters such as O, N, and H, but these are treated as nuisance components and do not enter the scoring.)</p></li>
+<li><p><strong>ALIAS has moderate precision (<em>P</em> = 0.50) and moderate recall (<em>R</em> = 0.63)</strong>: Precision is limited by Mn (30 FP), Na (20 FP), and Mg (15 FP). Recall is limited by Fe (15 FN), Si (17 FN), and Ca (14 FN).</p></li>
+<li><p><strong>The hybrid intersection effectively gates NNLS false positives</strong>: By requiring ALIAS confirmation of NNLS candidates, the intersection mode suppresses the many marginal detections that inflate NNLS false-positive counts within the 22-element evaluation universe. Mn and Na false positives persist because these elements pass both stages — NNLS assigns non-negligible coefficients (they genuinely have many lines), and ALIAS confirms chance peak matches.</p></li>
+<li><p><strong>Voigt deconvolution provides no net benefit</strong>: At RP &lt; 1000, peak overlap is so severe that the Voigt fitting problem is underdetermined for groups of 3+ peaks.</p></li>
+<li><p><strong>Forward-model concentration thresholding cannot distinguish trace from absent</strong>: Line-rich database elements (Mn, V, W, Na) receive non-negligible concentrations even when absent.</p></li>
+</ol>
+</section>
+<section id="b-per-element-analysis">
+<h3>B. Per-Element Analysis<a class="headerlink" href="#b-per-element-analysis" title="Link to this heading"></a></h3>
+<p>Table III presents the per-element precision and recall for the best hybrid and ALIAS configurations.</p>
+<p><strong>TABLE III.</strong> Per-element identification performance on 74 spectra.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element</p></th>
+<th class="head"><p>Hybrid <em>P</em></p></th>
+<th class="head"><p>Hybrid <em>R</em></p></th>
+<th class="head"><p>ALIAS <em>P</em></p></th>
+<th class="head"><p>ALIAS <em>R</em></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Si</p></td>
+<td><p><strong>1.00</strong></p></td>
+<td><p>0.95</p></td>
+<td><p>0.96</p></td>
+<td><p>0.60</p></td>
+</tr>
+<tr class="row-odd"><td><p>Al</p></td>
+<td><p><strong>1.00</strong></p></td>
+<td><p>0.90</p></td>
+<td><p>0.76</p></td>
+<td><p>0.76</p></td>
+</tr>
+<tr class="row-even"><td><p>Fe</p></td>
+<td><p><strong>1.00</strong></p></td>
+<td><p>0.44</p></td>
+<td><p>0.91</p></td>
+<td><p>0.40</p></td>
+</tr>
+<tr class="row-odd"><td><p>Li</p></td>
+<td><p><strong>1.00</strong></p></td>
+<td><p>1.00</p></td>
+<td><p>1.00</p></td>
+<td><p>1.00</p></td>
+</tr>
+<tr class="row-even"><td><p>Co</p></td>
+<td><p><strong>1.00</strong></p></td>
+<td><p>1.00</p></td>
+<td><p>0.33</p></td>
+<td><p>1.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ni</p></td>
+<td><p><strong>1.00</strong></p></td>
+<td><p>0.67</p></td>
+<td><p>0.50</p></td>
+<td><p>1.00</p></td>
+</tr>
+<tr class="row-even"><td><p>K</p></td>
+<td><p>0.67</p></td>
+<td><p>0.60</p></td>
+<td><p>0.54</p></td>
+<td><p>0.70</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca</p></td>
+<td><p>0.62</p></td>
+<td><p>0.40</p></td>
+<td><p>0.46</p></td>
+<td><p>0.30</p></td>
+</tr>
+<tr class="row-even"><td><p>Ti</p></td>
+<td><p>0.50</p></td>
+<td><p>1.00</p></td>
+<td><p>0.67</p></td>
+<td><p>1.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mg</p></td>
+<td><p>0.39</p></td>
+<td><p>0.81</p></td>
+<td><p>0.50</p></td>
+<td><p>0.94</p></td>
+</tr>
+<tr class="row-even"><td><p>Pb</p></td>
+<td><p>0.40</p></td>
+<td><p>1.00</p></td>
+<td><p>0.33</p></td>
+<td><p>1.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Na</p></td>
+<td><p>0.14</p></td>
+<td><p>0.80</p></td>
+<td><p>0.17</p></td>
+<td><p>0.80</p></td>
+</tr>
+<tr class="row-even"><td><p>Mn</p></td>
+<td><p>0.03</p></td>
+<td><p>1.00</p></td>
+<td><p>0.03</p></td>
+<td><p>1.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Zn</p></td>
+<td><p>0.00</p></td>
+<td><p>0.00</p></td>
+<td><p>0.00</p></td>
+<td><p>0.00</p></td>
+</tr>
+<tr class="row-even"><td><p>Zr</p></td>
+<td><p>0.00</p></td>
+<td><p>0.00</p></td>
+<td><p>0.00</p></td>
+<td><p>0.00</p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p><strong>[Fig. 3]</strong> <em>Per-element precision heatmap across four identification pathways (ALIAS, NNLS, Hybrid, Forward Model). Elements are ordered by hybrid precision (descending). The hybrid method achieves P = 1.00 for Si, Al, Fe, Li, Co, and Ni. Mn and Na are pathological false-positive sources across all methods.</em></p>
+</div></blockquote>
+<p>The hybrid method achieves <strong>perfect precision (<em>P</em> = 1.00)</strong> for Si, Al, Fe, Li, Co, and Ni — together accounting for 48% of all true positive detections. The NNLS stage provides global context to suppress false positives, while the ALIAS stage provides line-level confirmation.</p>
+<p>Mn and Na remain pathological false-positive sources. Mn has &gt; 500 transitions in 200–900 nm, creating a near-continuous pseudo-emission spectrum. Na’s D-lines (589.0/589.6 nm) are ubiquitous contaminants, and its sparse line list means any chance peak match near 589 nm triggers detection.</p>
+</section>
+<section id="c-intersection-vs-union-mode">
+<h3>C. Intersection vs. Union Mode<a class="headerlink" href="#c-intersection-vs-union-mode" title="Link to this heading"></a></h3>
+<p><strong>TABLE IV.</strong> Hybrid identifier behavior in intersection vs. union mode.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Mode</p></th>
+<th class="head"><p><em>P</em></p></th>
+<th class="head"><p><em>R</em></p></th>
+<th class="head"><p><em>F</em>₁</p></th>
+<th class="head"><p>FPR</p></th>
+<th class="head"><p>Exact</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Intersect</p></td>
+<td><p>0.604</p></td>
+<td><p>0.713</p></td>
+<td><p>0.654</p></td>
+<td><p>0.053</p></td>
+<td><p>16/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>Union</p></td>
+<td><p>0.308</p></td>
+<td><p>0.952</p></td>
+<td><p>0.466</p></td>
+<td><p>0.244</p></td>
+<td><p>1/74</p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p><strong>[Fig. 2]</strong> <em>Precision–recall scatter plot for 18 hybrid configurations. Intersection-mode configurations (circles) cluster at high precision/moderate recall; union-mode configurations (triangles) cluster at high recall/low precision. The Pareto front is marked, with the optimal F₁ point (star) at P = 0.604, R = 0.713. Iso-F₁ contours at F₁ = 0.4, 0.5, 0.6, and 0.7 are shown as dashed curves.</em></p>
+</div></blockquote>
+<p>Intersection mode sacrifices 24 percentage points of recall for 30 percentage points of precision. For CF-LIBS applications, precision is generally more important: a false positive element corrupts the Boltzmann plot, introduces errors in the closure equation, and cascades into incorrect concentrations for all elements.</p>
+</section>
+<section id="d-sensitivity-to-basis-library-temperature">
+<h3>D. Sensitivity to Basis Library Temperature<a class="headerlink" href="#d-sensitivity-to-basis-library-temperature" title="Link to this heading"></a></h3>
+<p><strong>TABLE V.</strong> NNLS performance vs. fallback temperature.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><em>T</em> (K)</p></th>
+<th class="head"><p>Best <em>P</em></p></th>
+<th class="head"><p>Best <em>R</em></p></th>
+<th class="head"><p>Best <em>F</em>₁</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>6,000</p></td>
+<td><p>0.272</p></td>
+<td><p>0.868</p></td>
+<td><p>0.414</p></td>
+</tr>
+<tr class="row-odd"><td><p>8,000</p></td>
+<td><p>0.282</p></td>
+<td><p>0.922</p></td>
+<td><p>0.431</p></td>
+</tr>
+<tr class="row-even"><td><p>10,000</p></td>
+<td><p>0.293</p></td>
+<td><p>0.940</p></td>
+<td><p>0.447</p></td>
+</tr>
+</tbody>
+</table>
+<p>Higher fallback temperature consistently improves performance, suggesting that the Aalto spectra correspond to relatively hot plasmas (<em>T</em> &gt; 8000 K), consistent with high laser fluences used in mineral analysis.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="iv-discussion">
+<h2>IV. Discussion<a class="headerlink" href="#iv-discussion" title="Link to this heading"></a></h2>
+<section id="a-the-rp-1000-barrier">
+<h3>A. The RP &lt; 1000 Barrier<a class="headerlink" href="#a-the-rp-1000-barrier" title="Link to this heading"></a></h3>
+<p>Our results quantitatively confirm the literature consensus that peak-matching approaches are fundamentally limited at RP &lt; 1000. The best ALIAS configuration achieves <em>P</em> = 0.505, consistent with the expectation that at RP ≈ 600, a 200–900 nm window contains ~100 detectable peaks against ~5000 catalogued transitions, giving a chance coincidence rate of ~10% per element-line. Elements with only 2–3 detectable lines (Na, K) are particularly vulnerable.</p>
+<p>The hybrid approach partially overcomes this barrier by requiring corroborating evidence from two orthogonal sources. However, the improvement is bounded by the weaker channel — ALIAS’s limitations propagate into the hybrid result via the intersection operation. The 17% F₁ improvement (0.559 → 0.654) represents the maximum gain achievable by adding a global fitting stage to peak-matching confirmation, without improving the peak-matcher itself.</p>
+</section>
+<section id="b-comparison-with-mars-libs-instruments">
+<h3>B. Comparison with Mars LIBS Instruments<a class="headerlink" href="#b-comparison-with-mars-libs-instruments" title="Link to this heading"></a></h3>
+<p>ChemCam operates at RP ≈ 2000–4000 across three channels (240–342, 382–469, 474–906 nm) [5]. Its PLS regression pipeline trained on 69–332 standards achieves robust quantification of SiO₂, TiO₂, Al₂O₃, FeOₜ, MgO, CaO, Na₂O, and K₂O [7]. Our CF-LIBS approach, operating at lower RP without calibration standards, cannot match ChemCam’s quantitative performance. However, our hybrid identifier achieves <em>P</em> = 1.00 for Si and Al — the two most abundant rock-forming elements — essential for downstream concentration calculation.</p>
+<p>MarSCoDe (RP ≈ 500–700) operates at resolving power comparable to our benchmark [9]. Its element identification relies on pre-selected spectral windows rather than blind identification. Our work establishes quantitative baselines for blind identification at comparable resolving power.</p>
+</section>
+<section id="c-the-mn-and-na-problem">
+<h3>C. The Mn and Na Problem<a class="headerlink" href="#c-the-mn-and-na-problem" title="Link to this heading"></a></h3>
+<p>Manganese and sodium represent the dominant failure mode across all algorithms. <strong>Mn</strong>: With &gt; 500 transitions in 200–900 nm, any sample with ≥ 5 detected peaks will have Mn “matches” at RP &lt; 1000. The false positive rate is determined by peak count, not Mn presence. <strong>Na</strong>: The D-lines (589.0/589.6 nm) are ubiquitous contaminants, and Na’s sparse line list means a single chance match suffices for detection. Both elements require RP-dependent treatment: exclusion from blind search or contaminant flagging at RP &lt; 1000.</p>
+</section>
+<section id="d-comparison-with-published-literature">
+<h3>D. Comparison with Published Literature<a class="headerlink" href="#d-comparison-with-published-literature" title="Link to this heading"></a></h3>
+<p><strong>TABLE VIII.</strong> Our results in the context of published LIBS element identification and classification benchmarks.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Dataset</p></th>
+<th class="head"><p>RP</p></th>
+<th class="head"><p>Metric</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Ref.</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Cosine similarity (NIST)</p></td>
+<td><p>Synthetic minerals</p></td>
+<td><p>varies</p></td>
+<td><p>Mineral accuracy</p></td>
+<td><p>6.44%</p></td>
+<td><p>[25]</p></td>
+</tr>
+<tr class="row-odd"><td><p>Hybrid SVM + peak-seeking</p></td>
+<td><p>Simulated alloys (31 el)</p></td>
+<td><p>N/A</p></td>
+<td><p>General el. accuracy</p></td>
+<td><p>74.5%</p></td>
+<td><p>[26]</p></td>
+</tr>
+<tr class="row-even"><td><p>PLS sub-model</p></td>
+<td><p>ChemCam (408 stds)</p></td>
+<td><p>2000–4000</p></td>
+<td><p>RMSEP (SiO₂)</p></td>
+<td><p>±5.30 wt%</p></td>
+<td><p>[7]</p></td>
+</tr>
+<tr class="row-odd"><td><p>SVM-PLSR blended</p></td>
+<td><p>ChemCam</p></td>
+<td><p>2000–4000</p></td>
+<td><p>RMSEP reduction</p></td>
+<td><p>34.8–62.4%</p></td>
+<td><p>[28]</p></td>
+</tr>
+<tr class="row-even"><td><p>ECNN end-to-end</p></td>
+<td><p>ChemCam</p></td>
+<td><p>2000–4000</p></td>
+<td><p>RMSE vs. PLS</p></td>
+<td><p>−54%</p></td>
+<td><p>[27]</p></td>
+</tr>
+<tr class="row-odd"><td><p>CC-BCD CNN</p></td>
+<td><p>MarSCoDe</p></td>
+<td><p>500–700</p></td>
+<td><p>Accuracy</p></td>
+<td><p>92.06%</p></td>
+<td><p>[30]</p></td>
+</tr>
+<tr class="row-even"><td><p>RF + LDA</p></td>
+<td><p>Granitoid minerals</p></td>
+<td><p>~1000</p></td>
+<td><p>Classification acc.</p></td>
+<td><p>&gt;92%</p></td>
+<td><p>[29]</p></td>
+</tr>
+<tr class="row-odd"><td><p>ALIAS peak-matching</p></td>
+<td><p>Aalto (74 spectra)</p></td>
+<td><p>300–1100</p></td>
+<td><p>P / R / F₁</p></td>
+<td><p>0.505 / 0.629 / 0.560</p></td>
+<td><p>This work</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Hybrid NNLS+ALIAS (∩)</strong></p></td>
+<td><p><strong>Aalto (74 spectra)</strong></p></td>
+<td><p><strong>300–1100</strong></p></td>
+<td><p><strong>P / R / F₁</strong></p></td>
+<td><p><strong>0.604 / 0.713 / 0.654</strong></p></td>
+<td><p><strong>This work</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p>Several key observations emerge from this comparison. First, our hybrid NNLS+ALIAS result (<em>P</em> = 0.604) represents the first published precision/recall benchmark for blind element identification at RP &lt; 1000 — all prior work at comparable resolving powers reports either classification accuracy (which conflates true negatives) or quantitative RMSEP (which assumes elements are already known). Second, Zeng <em>et al.</em>’s hybrid SVM + peak-seeking approach [26] is the closest methodological analog to our work, but their 74.5% accuracy was achieved on <em>simulated</em> alloy spectra with known element counts, whereas our benchmark uses <em>real</em> mineral spectra with variable compositions. Third, the Jahoda <em>et al.</em> [25] finding that static cosine similarity achieves only 6.44% on minerals confirms that temperature-adaptive reference spectra (as used in our NNLS basis library) are essential for identification at any resolving power.</p>
+</section>
+<section id="e-limitations-and-planned-expansions">
+<h3>E. Limitations and Planned Expansions<a class="headerlink" href="#e-limitations-and-planned-expansions" title="Link to this heading"></a></h3>
+<p>Several limitations of this preliminary study must be acknowledged:</p>
+<p><strong>Statistical limitations</strong>: All metrics reported here are single-pass point estimates without cross-validation or confidence intervals. With <em>N</em> = 74 spectra, some elements have only 1–3 positive examples (Mo: 1, Co: 1, Zr: 0 detected), rendering per-element precision estimates unreliable for rare elements. The planned HPC expansion addresses this by: (i) expanding to &gt;1000 spectra from ChemCam PDS (408 standards, RP 2000–4000), SuperCam PDS (334 samples, RP 2500), MarSCoDe (322 samples, RP 500–700), and PTAL (102 samples); (ii) implementing LOOCV for the Aalto dataset (<em>N</em> = 74) and 5-fold stratified CV for larger datasets; (iii) computing bootstrap 95% CIs (10,000 resamples) for all metrics; (iv) applying McNemar pairwise tests and Friedman omnibus tests with Nemenyi post-hoc analysis for multi-algorithm comparison.</p>
+<p><strong>Basis library mismatch</strong>: The current basis library uses a single FWHM = 0.5 nm, corresponding to RP ≈ 1000. For the lowest-RP spectra (RP ≈ 300, FWHM ≈ 1.7 nm), the basis spectra are over-resolved relative to the data, potentially biasing the NNLS decomposition. The HPC campaign generates basis libraries at 8 FWHM values (0.05–1.67 nm, RP 300–10000) and selects the resolution-matched library for each spectrum.</p>
+<p><strong>Self-absorption effects</strong>: Resonance lines are a particularly important unmodeled source of error in the present benchmark. A line-center optical depth may be estimated as <em>τ</em>₀ = (√π <em>e</em>² / (<em>m</em>ₑ <em>c</em> Δ<em>ν</em>ᴰ)) <em>f</em> <em>N</em>ₗ, where Δ<em>ν</em>ᴰ is the Doppler width, <em>f</em> the oscillator strength, and <em>N</em>ₗ the lower-state column density [17], [18]. Using the database oscillator strengths for Na I D2 (589.0 nm, <em>f</em> ≈ 0.64) and Ca II K (393.4 nm, <em>f</em> ≈ 0.68), together with representative LIBS conditions (<em>T</em> ≈ 10,000 K, <em>n</em>ₑ ≈ 10¹⁷ cm⁻³, total particle density <em>n</em>₍tot₎ ≈ 10¹⁸ cm⁻³, path length <em>L</em> ≈ 1 mm), yields the order-of-magnitude estimates <em>τ</em>₀(Na D2) ≈ 1.0 (<em>X</em>₍Na₎ / 10⁻⁴)(<em>n</em>₍tot₎ / 10¹⁸ cm⁻³)(<em>L</em> / 1 mm) and <em>τ</em>₀(Ca II K) ≈ 35 (<em>X</em>₍Ca₎ / 10⁻⁴)(<em>n</em>₍tot₎ / 10¹⁸ cm⁻³)(<em>L</em> / 1 mm). Although Stark broadening will reduce the line-center optical depth by a factor of a few, it does not alter the qualitative conclusion: Ca II H/K are likely optically thick for many Ca-bearing minerals, and Na D becomes optically thick once Na reaches roughly 0.01–0.1 at% or under somewhat cooler or denser plasma conditions. The most self-absorption-prone systems in the present wavelength range are therefore Na I, K I, Ca I/II, Mg I 285 nm, Sr II, and Ba II. Because both ALIAS and the present NNLS basis library assume optically thin emissivity, distortions in these resonance systems are a plausible contributor to the persistent Na- and Ca-related errors reported in Section III.</p>
+<p><strong>Single-instrument scope</strong>: All spectra originate from a single Aalto University spectrometer. Cross-instrument validation using MarSCoDe data (RP ≈ 500–700, comparable to Aalto) and ChemCam data (RP ≈ 2000–4000) is essential to demonstrate generalizability.</p>
+<p><strong>Downstream validation</strong>: This study evaluates element <em>identification</em> in isolation. Whether improved identification precision translates to improved CF-LIBS <em>concentration</em> accuracy requires end-to-end validation through the Boltzmann plot and closure equation pipeline — planned as part of the HPC expansion.</p>
+</section>
+<section id="f-prospects-for-machine-learning-enhancement">
+<h3>F. Prospects for Machine Learning Enhancement<a class="headerlink" href="#f-prospects-for-machine-learning-enhancement" title="Link to this heading"></a></h3>
+<p>The per-element precision/recall trade-offs suggest that simple threshold rules (SNR, CL, concentration) are suboptimal decision boundaries. The hybrid identifier naturally produces a rich feature vector per element: NNLS coefficient, NNLS SNR, ALIAS confidence level, ALIAS match count, Boltzmann <em>R</em>², and spectral residual norm. These features could train an element-specific classifier (e.g., SVM, random forest, or gradient-boosted trees) to learn nonlinear decision boundaries that adapt to each element’s spectral characteristics.</p>
+<p>The basis library provides a natural data augmentation strategy: synthetic spectra with known compositions can be generated at arbitrary (<em>T</em>, <em>n</em>ₑ) conditions and noise levels, producing effectively unlimited labeled training data. A classifier trained on 10⁴–10⁵ synthetic spectra and fine-tuned on the 74 Aalto spectra could plausibly achieve <em>P</em> &gt; 0.80 by learning, for example, that Mn detections at RP &lt; 1000 should be suppressed unless the NNLS coefficient exceeds 3× the median, or that Na requires confirmation from both D-lines rather than either alone.</p>
+<p>This approach preserves the physics-based interpretability of the CF-LIBS pipeline (the NNLS and ALIAS features are physically meaningful) while adding the discriminative power of learned classifiers. It represents the most promising path to exceeding the P ≈ 0.60 ceiling established in this work.</p>
+</section>
+<section id="e-implications-for-cf-libs-pipeline-design">
+<h3>E. Implications for CF-LIBS Pipeline Design<a class="headerlink" href="#e-implications-for-cf-libs-pipeline-design" title="Link to this heading"></a></h3>
+<p>The hybrid identifier’s performance suggests a recommended pipeline: (1) hybrid NNLS+ALIAS identification in intersection mode; (2) RP-dependent post-filtering to suppress Mn/Na at RP &lt; 1000; (3) prioritization of high-confidence elements (Si, Al, Fe, Ca, Mg, K) for Boltzmann plot construction; (4) iterative refinement using CF-LIBS concentration results to prune elements below physical thresholds.</p>
+</section>
+<section id="f-limitations-and-future-work">
+<h3>F. Limitations and Future Work<a class="headerlink" href="#f-limitations-and-future-work" title="Link to this heading"></a></h3>
+<p><strong>Higher FWHM basis libraries</strong>: FWHM = 0.5 nm may not be optimal for the lowest-RP spectra (RP ≈ 300–500). <strong>FAISS-indexed (<em>T</em>, <em>n</em>ₑ) estimation</strong>: Data-driven parameter estimation could improve NNLS precision. <strong>Mechelle 5000 benchmark</strong>: At RP ≈ 5000, ALIAS should approach &gt; 95% accuracy, establishing the upper bound on peak-matching. <strong>Improved deconvolution</strong>: Shoulder-detection and residual-completion approaches [16] may outperform standard curve fitting in severely blended regimes.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="v-conclusions">
+<h2>V. Conclusions<a class="headerlink" href="#v-conclusions" title="Link to this heading"></a></h2>
+<p>We have presented the first systematic benchmark of five element identification algorithms for CF-LIBS at low resolving power (RP = 300–1100) on 74 mineral and elemental spectra. The principal findings are:</p>
+<p>We have benchmarked five element-identification pathways for CF-LIBS on 74 elemental and mineral spectra acquired at low resolving power (RP = 300–1100). Within this dataset, the two-stage hybrid NNLS+ALIAS identifier provided the best overall balance of precision and recall (<em>P</em> = 0.604, <em>R</em> = 0.713, <em>F</em>₁ = 0.654, 16/74 exact matches), improving on the ALIAS baseline while avoiding the very high false-positive burden of unconstrained NNLS.</p>
+<p>Several conclusions follow from this benchmark. First, full-spectrum NNLS is valuable as a high-recall screening stage, but not as a standalone detector under the present thresholding scheme. Second, conventional peak-matching remains vulnerable to coincidence-driven false positives in the low-RP regime, especially for line-rich or contamination-prone elements such as Mn and Na. Third, combining global spectral fitting with line-level confirmation provides a measurable advantage over either strategy alone on the present dataset. Fourth, Voigt pre-deconvolution did not improve identification performance under these conditions, suggesting that unresolved blending at RP &lt; 1000 remains a primary obstacle rather than a preprocessing nuisance.</p>
+<p>Taken together, these results are best viewed as a benchmark and a quantitative negative result for blind low-resolution LIBS element identification: at RP &lt; 1000, currently available physics-based identification pathways remain useful but materially error-prone, and the dominant failure modes can now be stated quantitatively rather than anecdotally. To our knowledge, this study provides the first precision/recall/F₁ characterization of blind multi-label element identification on real LIBS spectra in this low-RP regime. The benchmark therefore establishes a reference point for future work on resolution-matched basis libraries, contaminant-aware decision rules, cross-instrument validation, and learned post-classifiers built on top of physics-based features.</p>
+</section>
+<hr class="docutils" />
+<section id="appendix-a-full-hybrid-sweep">
+<h2>Appendix A: Full Hybrid Sweep<a class="headerlink" href="#appendix-a-full-hybrid-sweep" title="Link to this heading"></a></h2>
+<p><strong>TABLE VI.</strong> Complete 18-configuration hybrid sweep results.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>NNLS SNR</p></th>
+<th class="head"><p>ALIAS <em>d</em>_t</p></th>
+<th class="head"><p>Mode</p></th>
+<th class="head"><p><em>P</em></p></th>
+<th class="head"><p><em>R</em></p></th>
+<th class="head"><p><em>F</em>₁</p></th>
+<th class="head"><p>FPR</p></th>
+<th class="head"><p>Exact</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>1.0</p></td>
+<td><p>0.03</p></td>
+<td><p>∩</p></td>
+<td><p>0.557</p></td>
+<td><p>0.737</p></td>
+<td><p>0.634</p></td>
+<td><p>0.067</p></td>
+<td><p>14/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>1.0</p></td>
+<td><p>0.03</p></td>
+<td><p>∪</p></td>
+<td><p>0.274</p></td>
+<td><p>0.952</p></td>
+<td><p>0.425</p></td>
+<td><p>0.289</p></td>
+<td><p>0/74</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>1.0</p></td>
+<td><p>0.05</p></td>
+<td><p>∩</p></td>
+<td><p>0.594</p></td>
+<td><p>0.719</p></td>
+<td><p>0.650</p></td>
+<td><p>0.056</p></td>
+<td><p>16/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>1.0</p></td>
+<td><p>0.05</p></td>
+<td><p>∪</p></td>
+<td><p>0.283</p></td>
+<td><p>0.952</p></td>
+<td><p>0.437</p></td>
+<td><p>0.275</p></td>
+<td><p>0/74</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>1.0</p></td>
+<td><p>0.10</p></td>
+<td><p>∩</p></td>
+<td><p>0.649</p></td>
+<td><p>0.521</p></td>
+<td><p>0.578</p></td>
+<td><p>0.032</p></td>
+<td><p>17/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>1.0</p></td>
+<td><p>0.10</p></td>
+<td><p>∪</p></td>
+<td><p>0.292</p></td>
+<td><p>0.952</p></td>
+<td><p>0.447</p></td>
+<td><p>0.264</p></td>
+<td><p>2/74</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>1.5</p></td>
+<td><p>0.03</p></td>
+<td><p>∩</p></td>
+<td><p>0.565</p></td>
+<td><p>0.731</p></td>
+<td><p>0.637</p></td>
+<td><p>0.064</p></td>
+<td><p>16/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>1.5</p></td>
+<td><p>0.03</p></td>
+<td><p>∪</p></td>
+<td><p>0.296</p></td>
+<td><p>0.952</p></td>
+<td><p>0.451</p></td>
+<td><p>0.259</p></td>
+<td><p>1/74</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>9</strong></p></td>
+<td><p><strong>1.5</strong></p></td>
+<td><p><strong>0.05</strong></p></td>
+<td><p><strong>∩</strong></p></td>
+<td><p><strong>0.604</strong></p></td>
+<td><p><strong>0.713</strong></p></td>
+<td><p><strong>0.654</strong></p></td>
+<td><p><strong>0.053</strong></p></td>
+<td><p><strong>16/74</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>1.5</p></td>
+<td><p>0.05</p></td>
+<td><p>∪</p></td>
+<td><p>0.308</p></td>
+<td><p>0.952</p></td>
+<td><p>0.466</p></td>
+<td><p>0.244</p></td>
+<td><p>1/74</p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>1.5</p></td>
+<td><p>0.10</p></td>
+<td><p>∩</p></td>
+<td><p>0.659</p></td>
+<td><p>0.521</p></td>
+<td><p>0.582</p></td>
+<td><p>0.031</p></td>
+<td><p>17/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>12</p></td>
+<td><p>1.5</p></td>
+<td><p>0.10</p></td>
+<td><p>∪</p></td>
+<td><p>0.319</p></td>
+<td><p>0.952</p></td>
+<td><p>0.477</p></td>
+<td><p>0.233</p></td>
+<td><p>3/74</p></td>
+</tr>
+<tr class="row-even"><td><p>13</p></td>
+<td><p>2.0</p></td>
+<td><p>0.03</p></td>
+<td><p>∩</p></td>
+<td><p>0.568</p></td>
+<td><p>0.725</p></td>
+<td><p>0.637</p></td>
+<td><p>0.063</p></td>
+<td><p>15/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>14</p></td>
+<td><p>2.0</p></td>
+<td><p>0.03</p></td>
+<td><p>∪</p></td>
+<td><p>0.310</p></td>
+<td><p>0.940</p></td>
+<td><p>0.467</p></td>
+<td><p>0.239</p></td>
+<td><p>1/74</p></td>
+</tr>
+<tr class="row-even"><td><p>15</p></td>
+<td><p>2.0</p></td>
+<td><p>0.05</p></td>
+<td><p>∩</p></td>
+<td><p>0.602</p></td>
+<td><p>0.707</p></td>
+<td><p>0.650</p></td>
+<td><p>0.053</p></td>
+<td><p>15/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>16</p></td>
+<td><p>2.0</p></td>
+<td><p>0.05</p></td>
+<td><p>∪</p></td>
+<td><p>0.326</p></td>
+<td><p>0.940</p></td>
+<td><p>0.484</p></td>
+<td><p>0.222</p></td>
+<td><p>1/74</p></td>
+</tr>
+<tr class="row-even"><td><p>17</p></td>
+<td><p>2.0</p></td>
+<td><p>0.10</p></td>
+<td><p>∩</p></td>
+<td><p>0.656</p></td>
+<td><p>0.515</p></td>
+<td><p>0.577</p></td>
+<td><p>0.031</p></td>
+<td><p>17/74</p></td>
+</tr>
+<tr class="row-odd"><td><p>18</p></td>
+<td><p>2.0</p></td>
+<td><p>0.10</p></td>
+<td><p>∪</p></td>
+<td><p>0.339</p></td>
+<td><p>0.940</p></td>
+<td><p>0.498</p></td>
+<td><p>0.209</p></td>
+<td><p>3/74</p></td>
+</tr>
+</tbody>
+</table>
+<p>∩ = intersection mode; ∪ = union mode. <strong>Bold</strong> = optimal <em>F</em>₁.</p>
+</section>
+<section id="appendix-b-computational-performance">
+<h2>Appendix B: Computational Performance<a class="headerlink" href="#appendix-b-computational-performance" title="Link to this heading"></a></h2>
+<p><strong>TABLE VII.</strong> Wall-clock timing on Apple M-series (single core).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Pathway</p></th>
+<th class="head"><p>Time/spectrum (s)</p></th>
+<th class="head"><p>Total, 74 spectra (s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>ALIAS</p></td>
+<td><p>0.14</p></td>
+<td><p>10.7</p></td>
+</tr>
+<tr class="row-odd"><td><p>Spectral NNLS</p></td>
+<td><p>0.28</p></td>
+<td><p>20.5</p></td>
+</tr>
+<tr class="row-even"><td><p>Hybrid (∩)</p></td>
+<td><p>0.39</p></td>
+<td><p>28.6</p></td>
+</tr>
+<tr class="row-odd"><td><p>Forward model</p></td>
+<td><p>0.27</p></td>
+<td><p>20.3</p></td>
+</tr>
+<tr class="row-even"><td><p>Voigt+ALIAS</p></td>
+<td><p>6.8</p></td>
+<td><p>500</p></td>
+</tr>
+</tbody>
+</table>
+<p>Basis library generation: 244 s for 76 elements × 300 grid points × 4096 pixels.</p>
+</section>
+<hr class="docutils" />
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<p>[1] D. A. Cremers and L. J. Radziemski, <em>Handbook of Laser-Induced Breakdown Spectroscopy</em>. Hoboken, NJ, USA: Wiley, 2006.</p>
+<p>[2] T. Kim and C. Lin, “Laser-induced breakdown spectroscopy,” <em>Nature Reviews Methods Primers</em>, vol. 5, 2025.</p>
+<p>[3] A. Ciucci, M. Corsi, V. Palleschi, S. Rastelli, A. Salvetti, and E. Tognoni, “New procedure for quantitative elemental analysis by laser-induced plasma spectroscopy,” <em>Appl. Spectrosc.</em>, vol. 53, no. 8, pp. 960–964, 1999.</p>
+<p>[4] E. Tognoni, G. Cristoforetti, S. Legnaioli, and V. Palleschi, “Calibration-free laser-induced breakdown spectroscopy: State of the art,” <em>Spectrochim. Acta Part B</em>, vol. 65, no. 1, pp. 1–14, 2010.</p>
+<p>[5] R. C. Wiens, S. Maurice, J. Lasue <em>et al.</em>, “Pre-flight calibration and initial data processing for the ChemCam laser-induced breakdown spectroscopy instrument on the Mars Science Laboratory rover,” <em>Spectrochim. Acta Part B</em>, vol. 82, pp. 1–27, 2013.</p>
+<p>[6] R. C. Wiens, S. Maurice, S. H. Robinson <em>et al.</em>, “The SuperCam instrument suite on the NASA Mars 2020 rover: Body unit and combined system tests,” <em>Space Sci. Rev.</em>, vol. 217, 2020.</p>
+<p>[7] S. M. Clegg, R. C. Wiens, R. B. Anderson <em>et al.</em>, “Recalibration of the Mars Science Laboratory ChemCam instrument with an expanded geochemical database,” <em>Spectrochim. Acta Part B</em>, vol. 129, pp. 64–85, 2017.</p>
+<p>[8] T. A. Labutin, S. M. Zaytsev, and A. M. Popov, “Automatic identification of emission lines in laser-induced plasma by correlation of model and experimental spectra,” <em>Anal. Chem.</em>, vol. 85, no. 4, pp. 1985–1990, 2013.</p>
+<p>[9] R. C. Wiens, A. Cousin, S. M. Clegg <em>et al.</em>, “Geochemistry of Mars with laser-induced breakdown spectroscopy (LIBS): ChemCam, SuperCam, and MarSCoDe,” <em>Minerals</em>, 2025.</p>
+<p>[10] I. Drozdovskiy, G. Ligeza, P. Jahoda <em>et al.</em>, “The PANGAEA mineralogical database,” <em>Data in Brief</em>, vol. 31, 2020.</p>
+<p>[11] T. Fujimoto and R. W. P. McWhirter, “Validity criteria for local thermodynamic equilibrium in plasma spectroscopy,” <em>Phys. Rev. A</em>, vol. 42, no. 11, pp. 6588–6601, 1990.</p>
+<p>[12] W. Wang, B. Ayhan, C. Kwan, H. Qi, and S. Vance, “A novel and effective multivariate method for compositional analysis using laser induced breakdown spectroscopy,” <em>IOP Conf. Ser.: Earth Environ. Sci.</em>, vol. 17, p. 012208, 2014.</p>
+<p>[13] C. L. Lawson and R. J. Hanson, <em>Solving Least Squares Problems</em>. Englewood Cliffs, NJ, USA: Prentice-Hall, 1974. (Reprinted: SIAM Classics Appl. Math., vol. 15, 1995.)</p>
+<p>[14] C. Eum, D. Jang, S. Lee, K. Cha, and H. Chung, “Alternative selection of Raman or LIBS spectral information in hierarchical discrimination of raw sapphires according to geographical origin,” <em>Talanta</em>, vol. 221, p. 121555, 2021.</p>
+<p>[15] M. Al-Jalali, I. F. Aljghami, and Y. Mahzia, “Voigt deconvolution method and its applications to pure oxygen absorption spectrum at 1270 nm band,” <em>Spectrochim. Acta Part A</em>, vol. 157, pp. 34–40, 2016.</p>
+<p>[16] P. Dai, P. Zheng, J. Wang, G. Chen, L. Li, and L. Guo, “From spectral interference to overlapped features: A full-spectrum LIBS Voigt decomposition strategy with shoulder detection and residual completion,” <em>Anal. Chem.</em>, 2026.</p>
+<p>[17] G. Cristoforetti, A. De Giacomo, M. Dell’Aglio <em>et al.</em>, “Local thermodynamic equilibrium in laser-induced breakdown spectroscopy: Beyond the McWhirter criterion,” <em>Spectrochim. Acta Part B</em>, vol. 65, no. 1, pp. 86–95, 2010.</p>
+<p>[18] H. R. Griem, <em>Principles of Plasma Spectroscopy</em>. Cambridge, U.K.: Cambridge Univ. Press, 1997.</p>
+<p>[19] R. S. Harmon, R. E. Russo, and R. R. Hark, “Applications of laser-induced breakdown spectroscopy for geochemical and environmental analysis: A comprehensive review,” <em>Spectrochim. Acta Part B</em>, vol. 87, pp. 11–26, 2013.</p>
+<p>[20] L. C. L. Borduchi, D. Milori, and P. Villas-Boas, “One-point calibration of Saha-Boltzmann plot to improve accuracy and precision of quantitative analysis using laser-induced breakdown spectroscopy,” <em>Spectrochim. Acta Part B</em>, 2019.</p>
+<p>[21] S. Michelena, M. Ferreira Da Costa, and J. Picheral, “Convergence guarantees for unmixing PSFs over a manifold with non-convex optimization,” in <em>Proc. IEEE Stat. Signal Process. Workshop (SSP)</em>, 2025, pp. 161–165.</p>
+<p>[22] H. Xu, X. Huang, X. Le, X. Zhong, Z. Lihua, and S. Jia, “Spectral lines overlap in vacuum arc plasmas of CuCr electrodes,” in <em>Proc. 31st Int. Symp. Discharges Elect. Insulation Vacuum (ISDEIV)</em>, 2025, pp. 1–3.</p>
+<p>[23] K. Shameem, K. S. Choudhari, A. Bankapur <em>et al.</em>, “A hybrid LIBS-Raman system combined with chemometrics: An efficient tool for plastic identification and sorting,” <em>Anal. Bioanal. Chem.</em>, vol. 409, pp. 3299–3308, 2017.</p>
+<p>[24] V. Palleschi, S. Legnaioli, F. Poggialini <em>et al.</em>, “Laser-induced breakdown spectroscopy,” <em>Nature Reviews Methods Primers</em>, vol. 5, 2025.</p>
+<p>[25] P. Jahoda, I. Drozdovskiy, S. Payler, L. Turchi, L. Bessone, and F. Sauro, “Machine learning for recognizing minerals from multispectral data,” <em>Analyst</em>, vol. 145, pp. 6726–6737, 2020. DOI: 10.1039/d0an01483d.</p>
+<p>[26] H. Zeng, Z. Zhang, and S. Liu, “A hybrid approach for metal element identification by using laser-induced breakdown spectroscopy data,” in <em>Proc. SPIE ESIT 2022</em>, vol. 12505, p. 1250527, 2023. DOI: 10.1117/12.2664527.</p>
+<p>[27] Y. Yu and M. Yao, “When convolutional neural networks meet laser-induced breakdown spectroscopy: End-to-end quantitative analysis modeling of ChemCam spectral data,” <em>Remote Sensing</em>, vol. 15, no. 13, p. 3422, 2023. DOI: 10.3390/rs15133422.</p>
+<p>[28] R. B. Anderson, S. M. Clegg, J. Frydenvang <em>et al.</em>, “Improved accuracy in quantitative laser-induced breakdown spectroscopy using sub-models,” <em>Spectrochim. Acta Part B</em>, vol. 129, pp. 49–57, 2017. DOI: 10.1016/j.sab.2016.12.002.</p>
+<p>[29] P. Janovszky, K. Jancsek, D. J. Palásti <em>et al.</em>, “Classification of minerals and the assessment of lithium and beryllium content in granitoid rocks by laser-induced breakdown spectroscopy,” <em>J. Anal. At. Spectrom.</em>, vol. 36, pp. 813–823, 2021. DOI: 10.1039/D1JA00032B.</p>
+<p>[30] S. Qu, J. Shen, L. Li <em>et al.</em>, “An inclusive library for quantitative analysis of the laser-induced breakdown spectra acquired by the Zhurong Mars rover,” <em>Astrophys. J.</em>, 2025. DOI: 10.3847/1538-4357/ae14ef.</p>
+<p>[31] J. Noël, S. Vishwakarma, and V. Palleschi, “ALIAS: Automatic Line Identification and Spectral Analysis,” <em>Spectrochim. Acta Part B</em>, 2025.</p>
+<p>[32] Z. Gajarska, E. Képeš, P. Pořízka, and J. Kaiser, “Automated assignment of emission lines in spectroscopy of complex samples using the ‘comb’ algorithm,” <em>J. Anal. At. Spectrom.</em>, vol. 39, pp. 1038–1050, 2024.</p>
+<p>[33] G. Amato, A. Cristoforetti, S. Legnaioli <em>et al.</em>, “An algorithm inspired by text retrieval for unassisted element identification from LIBS spectra,” <em>J. Anal. At. Spectrom.</em>, 2010.</p>
+<p>[34] J. E. Haddad, L. Canioni, and B. Bousquet, “Good practices in LIBS analysis: Review and advices,” <em>Spectrochim. Acta Part B</em>, vol. 101, pp. 171–182, 2014. DOI: 10.1016/j.sab.2014.08.039.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

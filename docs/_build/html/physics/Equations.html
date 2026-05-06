@@ -1,0 +1,691 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Physics: Equations &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Physics: Assumptions and Validity" href="Assumptions_And_Validity.html" />
+    <link rel="prev" title="Physics Reference" href="README.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/README.html">User Guides</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Real_Data.html">Quick Start: Analyzing Real LIBS Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Peak_Identification_Guide.html">Peak Identification and Line Matching Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Synthetic.html">Quick Start: Synthetic Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="README.html">Physics Reference</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Physics: Equations</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#notation-and-units">Notation and Units</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#boltzmann-distribution-excitation">1. Boltzmann Distribution (Excitation)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#saha-equation-ionization-balance">2. Saha Equation (Ionization Balance)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#frac-n-z-1-n-e-n-z">$$
+\frac{n_{z+1}, n_e}{n_z}</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#partition-function-irwin-polynomial">3. Partition Function (Irwin Polynomial)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#line-emissivity">4. Line Emissivity</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#varepsilon-ki-lambda">$$
+\varepsilon_{ki}(\lambda)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#line-profiles">5. Line Profiles</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#gamma-text-stark-n-e-t">$$
+\gamma_{\text{Stark}}(n_e, T)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#v-lambda-sigma-gamma">$$
+V(\lambda; \sigma, \gamma)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#optically-thin-transport">6. Optically Thin Transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#instrument-convolution">7. Instrument Convolution</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#i-text-measured-lambda">$$
+I_{\text{measured}}(\lambda)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#physics-boltzmann-plot">1. Boltzmann Plot</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#i-ki">$$
+I_{ki}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#saha-correction-map-ionic-lines-onto-the-neutral-plane">2. Saha Correction (Map Ionic Lines onto the Neutral Plane)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#s-t-n-e">$$
+S(T, n_e)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#physics-closure-equation">3. Closure Equation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#c-s-text-oxide">$$
+C_{s\text{-oxide}}</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#self-consistent-update-of-n-e">4. Self-Consistent Update of <code class="docutils literal notranslate"><span class="pre">n_e</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#convergence">5. Convergence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#physics-self-absorption-and-curve-of-growth">Self-Absorption and Curve of Growth</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#tau-0">$$
+\tau_0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#lte-validity-mcwhirter-criterion">LTE Validity: McWhirter Criterion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#physics-bayesian-forward-model">Bayesian Forward Model</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#physics-references">References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Assumptions_And_Validity.html">Physics: Assumptions and Validity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Inversion_Algorithm.html">Physics: Iterative CF-LIBS Inversion Algorithm</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../reference/README.html">Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/API_Reference.html">CF-LIBS API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Codebase_Architecture.html">CF-LIBS Codebase Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Database_Generation.html">Atomic Database Generation Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/README.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Evolution_Framework.html">Evolution Framework</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Deployment.html">CF-LIBS Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/CODEEVOLVE_WAVE2_PLAN.html">CodeEvolve Wave 2 Planning Document</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">CF-LIBS Documentation</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Physics: Equations</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/physics/Equations.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="physics-equations">
+<h1>Physics: Equations<a class="headerlink" href="#physics-equations" title="Link to this heading"></a></h1>
+<p>This document specifies every equation CF-LIBS evaluates: the forward model
+(plasma state → spectrum) and the inversion (spectrum → plasma state). It
+is the canonical reference for what the code computes and how each
+quantity is defined.</p>
+<p>For the <strong>assumptions</strong> these equations rest on (LTE, optical thinness,
+single-zone uniformity, …) and the <strong>regime of validity</strong> of each, see
+<a class="reference internal" href="Assumptions_And_Validity.html"><span class="std std-doc">Assumptions and Validity</span></a>.</p>
+<p>For derivations and citations, the references are listed at the end.</p>
+<hr class="docutils" />
+<section id="notation-and-units">
+<h2>Notation and Units<a class="headerlink" href="#notation-and-units" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symbol</p></th>
+<th class="head"><p>Meaning</p></th>
+<th class="head"><p>Unit (default in code)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">T</span></code>, <code class="docutils literal notranslate"><span class="pre">T_e</span></code></p></td>
+<td><p>Electron / excitation temperature</p></td>
+<td><p>K (also exposed as eV)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">T_g</span></code></p></td>
+<td><p>Gas / heavy-particle temperature</p></td>
+<td><p>K (defaults to <code class="docutils literal notranslate"><span class="pre">T_e</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">n_e</span></code></p></td>
+<td><p>Electron number density</p></td>
+<td><p>cm⁻³</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">n_s</span></code></p></td>
+<td><p>Number density of species <code class="docutils literal notranslate"><span class="pre">s</span></code></p></td>
+<td><p>cm⁻³</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">n_z</span></code>, <code class="docutils literal notranslate"><span class="pre">n_z+1</span></code></p></td>
+<td><p>Number density of ionization stage <code class="docutils literal notranslate"><span class="pre">z</span></code> and <code class="docutils literal notranslate"><span class="pre">z+1</span></code></p></td>
+<td><p>cm⁻³</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">C_s</span></code></p></td>
+<td><p>Mass fraction of element <code class="docutils literal notranslate"><span class="pre">s</span></code></p></td>
+<td><p>dimensionless</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">λ</span></code>, <code class="docutils literal notranslate"><span class="pre">λ₀</span></code></p></td>
+<td><p>Wavelength (running, line center)</p></td>
+<td><p>nm (vacuum)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">A_ki</span></code></p></td>
+<td><p>Einstein spontaneous-emission coefficient</p></td>
+<td><p>s⁻¹</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">g_k</span></code>, <code class="docutils literal notranslate"><span class="pre">g_i</span></code></p></td>
+<td><p>Statistical weights of upper / lower level</p></td>
+<td><p>dimensionless</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">E_k</span></code>, <code class="docutils literal notranslate"><span class="pre">E_i</span></code></p></td>
+<td><p>Upper / lower level energy</p></td>
+<td><p>eV</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">χ_z</span></code></p></td>
+<td><p>Ionization potential of stage <code class="docutils literal notranslate"><span class="pre">z</span></code></p></td>
+<td><p>eV</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">U_s(T)</span></code></p></td>
+<td><p>Internal partition function of species <code class="docutils literal notranslate"><span class="pre">s</span></code></p></td>
+<td><p>dimensionless</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">L</span></code></p></td>
+<td><p>Plasma path length along line of sight</p></td>
+<td><p>m</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">F</span></code></p></td>
+<td><p>Experimental factor (geometry × detector × etc.)</p></td>
+<td><p>system-dependent</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">k</span></code>, <code class="docutils literal notranslate"><span class="pre">k_B</span></code></p></td>
+<td><p>Boltzmann constant</p></td>
+<td><p>8.617333…×10⁻⁵ eV/K</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">h</span></code></p></td>
+<td><p>Planck constant</p></td>
+<td><p>6.62607015×10⁻³⁴ J·s</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">c</span></code></p></td>
+<td><p>Speed of light</p></td>
+<td><p>2.99792458×10⁸ m/s</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">m_e</span></code></p></td>
+<td><p>Electron mass</p></td>
+<td><p>9.1093837×10⁻³¹ kg</p></td>
+</tr>
+</tbody>
+</table>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs.core.constants</span></code> is the authoritative source; the values above are
+informational.</p>
+<hr class="docutils" />
+<p><strong>Forward model.</strong> The forward model maps a plasma state <code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">n_e,</span> <span class="pre">{C_s})</span></code>
+to a synthetic spectrum <code class="docutils literal notranslate"><span class="pre">I(λ)</span></code>. The pipeline is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>PlasmaState → Saha–Boltzmann → level populations
+            → line emissivity → ε(λ)
+            → optically thin transport → I_continuum-free(λ)
+            → instrument convolution → I(λ)
+</pre></div>
+</div>
+</section>
+<section id="boltzmann-distribution-excitation">
+<span id="physics-boltzmann-distribution"></span><h2>1. Boltzmann Distribution (Excitation)<a class="headerlink" href="#boltzmann-distribution-excitation" title="Link to this heading"></a></h2>
+<p>Within an ionization stage, the population of level <code class="docutils literal notranslate"><span class="pre">k</span></code> is</p>
+<p>$$
+\frac{n_k}{n_s^{(z)}} = \frac{g_k}{U_s^{(z)}(T)} \exp!\left(-\frac{E_k}{k_B T}\right)
+$$</p>
+<p>where <code class="docutils literal notranslate"><span class="pre">n_s^{(z)}</span></code> is the total density of species <code class="docutils literal notranslate"><span class="pre">s</span></code> in ionization stage
+<code class="docutils literal notranslate"><span class="pre">z</span></code>.</p>
+<p>Implemented in <code class="docutils literal notranslate"><span class="pre">cflibs.plasma.saha_boltzmann.SahaBoltzmannSolver.solve_level_population</span></code>.</p>
+</section>
+<section id="saha-equation-ionization-balance">
+<span id="physics-saha-equation"></span><h2>2. Saha Equation (Ionization Balance)<a class="headerlink" href="#saha-equation-ionization-balance" title="Link to this heading"></a></h2>
+<p>Between two adjacent ionization stages,</p>
+</section>
+</section>
+<section id="frac-n-z-1-n-e-n-z">
+<h1>$$
+\frac{n_{z+1}, n_e}{n_z}<a class="headerlink" href="#frac-n-z-1-n-e-n-z" title="Link to this heading"></a></h1>
+<p>\frac{2, U_{z+1}(T)}{U_z(T)}
+\left(\frac{2\pi m_e k_B T}{h^{2}}\right)^{3/2}
+\exp!\left(-\frac{\chi_z}{k_B T}\right).
+$$</p>
+<p>In code (<code class="docutils literal notranslate"><span class="pre">cflibs/plasma/saha_boltzmann.py</span></code>) this is rearranged with the
+constant <code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span></code> to operate in cm⁻³, eV, K. The factor of 2 is
+the electron statistical weight.</p>
+<p>For elements with multiple stages, the <code class="docutils literal notranslate"><span class="pre">solve_ionization_balance</span></code> routine
+solves the recursion <code class="docutils literal notranslate"><span class="pre">n_{z+1}/n_z</span></code> for <code class="docutils literal notranslate"><span class="pre">z</span> <span class="pre">=</span> <span class="pre">0,</span> <span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">…</span></code> constrained by</p>
+<p>$$
+\sum_{z} n_z = n_s,
+$$</p>
+<p>where <code class="docutils literal notranslate"><span class="pre">n_s</span></code> is the total number density of element <code class="docutils literal notranslate"><span class="pre">s</span></code>.</p>
+<section id="partition-function-irwin-polynomial">
+<span id="physics-partition-function"></span><h2>3. Partition Function (Irwin Polynomial)<a class="headerlink" href="#partition-function-irwin-polynomial" title="Link to this heading"></a></h2>
+<p>CF-LIBS uses the Irwin (1981) polynomial form</p>
+<p>$$
+\log_{10} U_s^{(z)}(T) = \sum_{n=0}^{N} a_n^{(s,z)} \big(\log_{10} T\big)^n,
+$$</p>
+<p>with coefficients <code class="docutils literal notranslate"><span class="pre">a_n</span></code> stored per <code class="docutils literal notranslate"><span class="pre">(element,</span> <span class="pre">ionization_stage)</span></code> in the
+<code class="docutils literal notranslate"><span class="pre">partition_functions</span></code> table. When coefficients are unavailable for a
+given species, the solver falls back to a direct sum over energy levels:</p>
+<p>$$
+U_s^{(z)}(T) = \sum_{k} g_k \exp!\left(-\frac{E_k}{k_B T}\right).
+$$</p>
+<p>Implemented in <code class="docutils literal notranslate"><span class="pre">SahaBoltzmannSolver.calculate_partition_function</span></code>.</p>
+</section>
+<section id="line-emissivity">
+<span id="physics-line-emissivity"></span><h2>4. Line Emissivity<a class="headerlink" href="#line-emissivity" title="Link to this heading"></a></h2>
+<p>For a single transition <code class="docutils literal notranslate"><span class="pre">k</span> <span class="pre">→</span> <span class="pre">i</span></code> with upper-level population <code class="docutils literal notranslate"><span class="pre">n_k</span></code>,</p>
+</section>
+</section>
+<section id="varepsilon-ki-lambda">
+<h1>$$
+\varepsilon_{ki}(\lambda)<a class="headerlink" href="#varepsilon-ki-lambda" title="Link to this heading"></a></h1>
+<p>\frac{h c}{4\pi, \lambda}, A_{ki}, n_k, \phi_{ki}(\lambda)
+\quad\big[\text{W m}^{-3},\text{nm}^{-1},\text{sr}^{-1}\big],
+$$</p>
+<p>where <code class="docutils literal notranslate"><span class="pre">φ_ki(λ)</span></code> is the area-normalized line profile (∫ φ dλ = 1).
+Implemented in <code class="docutils literal notranslate"><span class="pre">cflibs.radiation.emissivity.calculate_line_emissivity</span></code>.</p>
+<p>The total emissivity at wavelength <code class="docutils literal notranslate"><span class="pre">λ</span></code> is the sum over all transitions
+included in the model:</p>
+<p>$$
+\varepsilon(\lambda) = \sum_{ki} \varepsilon_{ki}(\lambda).
+$$</p>
+<section id="line-profiles">
+<span id="physics-line-profiles"></span><h2>5. Line Profiles<a class="headerlink" href="#line-profiles" title="Link to this heading"></a></h2>
+<p>Three profiles are available in <code class="docutils literal notranslate"><span class="pre">cflibs.radiation.profiles</span></code>:</p>
+<p><strong>Doppler / Gaussian</strong> (thermal motion of emitters of mass <code class="docutils literal notranslate"><span class="pre">m</span></code>):</p>
+<p>$$
+\sigma_D = \lambda_0 \sqrt{\frac{k_B T}{m c^{2}}},
+\qquad
+G(\lambda) = \frac{1}{\sigma_D \sqrt{2\pi}} \exp!\left[-\frac{(\lambda-\lambda_0)^2}{2\sigma_D^{2}}\right].
+$$</p>
+<p><strong>Stark / Lorentzian</strong> (electron impacts):</p>
+</section>
+</section>
+<section id="gamma-text-stark-n-e-t">
+<h1>$$
+\gamma_{\text{Stark}}(n_e, T)<a class="headerlink" href="#gamma-text-stark-n-e-t" title="Link to this heading"></a></h1>
+<p>w_{\text{ref}}
+\left(\frac{n_e}{n_{e,\text{ref}}}\right)
+\left(\frac{T}{T_{\text{ref}}}\right)^{-\alpha},
+$$</p>
+<p>with <code class="docutils literal notranslate"><span class="pre">w_ref</span></code>, <code class="docutils literal notranslate"><span class="pre">α</span></code> per-line in the atomic database (or estimated from the
+charge-state semi-empirical model when missing). Implemented in
+<code class="docutils literal notranslate"><span class="pre">cflibs.radiation.stark</span></code>.</p>
+<p><strong>Voigt</strong> (convolution of Gaussian and Lorentzian):</p>
+</section>
+<section id="v-lambda-sigma-gamma">
+<h1>$$
+V(\lambda; \sigma, \gamma)<a class="headerlink" href="#v-lambda-sigma-gamma" title="Link to this heading"></a></h1>
+<p>\frac{\operatorname{Re}!\big[w(z)\big]}{\sigma\sqrt{2\pi}},
+\qquad
+z = \frac{(\lambda-\lambda_0) + i\gamma}{\sigma\sqrt{2}},
+$$</p>
+<p>where <code class="docutils literal notranslate"><span class="pre">w(z)</span></code> is the Faddeeva function. The CPU implementation uses the
+Humlicek W4 algorithm (relative error &lt;10⁻⁴); the JAX implementation
+(<code class="docutils literal notranslate"><span class="pre">voigt_profile_jax</span></code>) uses the Weideman 32-term rational approximation,
+which is gradient-stable for MCMC and L-BFGS.</p>
+<section id="optically-thin-transport">
+<span id="physics-optically-thin-transport"></span><h2>6. Optically Thin Transport<a class="headerlink" href="#optically-thin-transport" title="Link to this heading"></a></h2>
+<p>For an optically thin plasma of uniform path length <code class="docutils literal notranslate"><span class="pre">L</span></code>, the spectral
+intensity emerging along the line of sight is</p>
+<p>$$
+I(\lambda) = \varepsilon(\lambda), L.
+$$</p>
+<p>This is the default. When self-absorption is non-negligible it must be
+corrected per line; see <a class="reference internal" href="#physics-self-absorption-and-curve-of-growth">Self-Absorption</a>
+below.</p>
+</section>
+<section id="instrument-convolution">
+<span id="physics-instrument-convolution"></span><h2>7. Instrument Convolution<a class="headerlink" href="#instrument-convolution" title="Link to this heading"></a></h2>
+<p>The spectrometer broadens every emission feature by its line-spread
+function. CF-LIBS approximates this as a Gaussian, with two modes:</p>
+<p><strong>Fixed FWHM</strong> (standard / monochromator):</p>
+<p>$$
+\sigma_{\text{inst}} = \frac{\text{FWHM}}{2\sqrt{2 \ln 2}}.
+$$</p>
+<p><strong>Resolving-power mode</strong> (echelle): if <code class="docutils literal notranslate"><span class="pre">R</span> <span class="pre">=</span> <span class="pre">λ/Δλ</span></code> is set,</p>
+<p>$$
+\text{FWHM}(\lambda) = \lambda / R,
+\qquad
+\sigma_{\text{inst}}(\lambda) = \frac{\lambda}{R, 2\sqrt{2 \ln 2}}.
+$$</p>
+<p>The convolution</p>
+</section>
+</section>
+<section id="i-text-measured-lambda">
+<h1>$$
+I_{\text{measured}}(\lambda)<a class="headerlink" href="#i-text-measured-lambda" title="Link to this heading"></a></h1>
+<p>\big(I \ast G_{\sigma_{\text{inst}}}\big)(\lambda)
+\cdot R_{\text{det}}(\lambda)
+$$</p>
+<p>multiplies in any optional spectral response <code class="docutils literal notranslate"><span class="pre">R_det(λ)</span></code>. Implemented in
+<code class="docutils literal notranslate"><span class="pre">cflibs.instrument.convolution.apply_instrument_function</span></code>.</p>
+<p>The Doppler/Stark width inside <code class="docutils literal notranslate"><span class="pre">φ_ki(λ)</span></code> and the instrument width are
+combined in quadrature in the Gaussian channel, producing a final Voigt
+with effective <code class="docutils literal notranslate"><span class="pre">σ²</span> <span class="pre">=</span> <span class="pre">σ_D²</span> <span class="pre">+</span> <span class="pre">σ_inst²</span></code> and Lorentzian wing <code class="docutils literal notranslate"><span class="pre">γ_Stark</span></code>.</p>
+<hr class="docutils" />
+<p><strong>Inversion.</strong> The iterative CF-LIBS solver
+(<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solver.IterativeCFLIBSSolver</span></code>) inverts the forward
+model. The algorithm is standard Ciucci/Tognoni CF-LIBS with refinements
+documented below.</p>
+<section id="physics-boltzmann-plot">
+<span id="boltzmann-plot"></span><span id="id1"></span><h2>1. Boltzmann Plot<a class="headerlink" href="#physics-boltzmann-plot" title="Link to this heading"></a></h2>
+<p>For an LTE plasma, the integrated intensity of line <code class="docutils literal notranslate"><span class="pre">k</span> <span class="pre">→</span> <span class="pre">i</span></code> is</p>
+</section>
+</section>
+<section id="i-ki">
+<h1>$$
+I_{ki}<a class="headerlink" href="#i-ki" title="Link to this heading"></a></h1>
+<p>F, C_s, \frac{g_k, A_{ki}}{U_s(T)}
+\exp!\left(-\frac{E_k}{k_B T}\right), \frac{1}{\lambda_{ki}}.
+$$</p>
+<p>Taking the natural log and rearranging:</p>
+</section>
+<section id="underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">
+<h1>$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}<a class="headerlink" href="#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y" title="Link to this heading"></a></h1>
+<p>-\underbrace{\frac{1}{k_B T}}<em>{\text{slope}}, E_k
++
+\underbrace{\ln!\left(\frac{F, C_s}{U_s(T)}\right)}</em>{q_s\ \text{(intercept)}}.
+$$</p>
+<p>Plotting <code class="docutils literal notranslate"><span class="pre">y</span></code> against <code class="docutils literal notranslate"><span class="pre">E_k</span></code> for a single species:</p>
+<ul class="simple">
+<li><p><strong>Slope</strong> = <code class="docutils literal notranslate"><span class="pre">−1</span> <span class="pre">/</span> <span class="pre">(k_B</span> <span class="pre">T)</span></code> → <code class="docutils literal notranslate"><span class="pre">T</span></code>.</p></li>
+<li><p><strong>Intercept</strong> <code class="docutils literal notranslate"><span class="pre">q_s</span></code> is element-specific and proportional to <code class="docutils literal notranslate"><span class="pre">ln(F</span> <span class="pre">C_s)</span></code>
+modulo <code class="docutils literal notranslate"><span class="pre">U_s(T)</span></code>.</p></li>
+</ul>
+<p>CF-LIBS fits the Boltzmann plot per element. With multiple elements, the
+solver enforces a <strong>common slope</strong> (all elements share the same plasma
+temperature) while letting each element have its own intercept. This is
+the multi-element common-slope fit, implemented in
+<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.boltzmann_fit</span></code>.</p>
+<p>Available fitting estimators (<code class="docutils literal notranslate"><span class="pre">FitMethod</span></code>):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">WEIGHTED_LS</span></code> — ordinary weighted least squares with intensity-error
+weights <code class="docutils literal notranslate"><span class="pre">w_i</span> <span class="pre">=</span> <span class="pre">1/σ_i²</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SIGMA_CLIP</span></code> — iterative re-fit dropping <code class="docutils literal notranslate"><span class="pre">&gt;3σ</span></code> outliers (default).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">RANSAC</span></code> — random sample consensus for heavy contamination.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">HUBER</span></code> — Huber M-estimator for medium-tail noise.</p></li>
+</ul>
+<section id="saha-correction-map-ionic-lines-onto-the-neutral-plane">
+<span id="physics-saha-correction"></span><h2>2. Saha Correction (Map Ionic Lines onto the Neutral Plane)<a class="headerlink" href="#saha-correction-map-ionic-lines-onto-the-neutral-plane" title="Link to this heading"></a></h2>
+<p>If only the neutral lines were used, ionic intensities would be discarded
+and the lever arm in <code class="docutils literal notranslate"><span class="pre">E_k</span></code> would shrink. Instead, every ionic-line
+intercept <code class="docutils literal notranslate"><span class="pre">q_s^{(z)}</span></code> is brought back to the neutral plane via Saha:</p>
+<p>$$
+q_s^{(0)} = q_s^{(z)} - z \ln S(T, n_e),
+$$</p>
+<p>where <code class="docutils literal notranslate"><span class="pre">S(T,</span> <span class="pre">n_e)</span></code> is the Saha factor for stage transitions:</p>
+</section>
+</section>
+<section id="s-t-n-e">
+<h1>$$
+S(T, n_e)<a class="headerlink" href="#s-t-n-e" title="Link to this heading"></a></h1>
+<p>\frac{1}{n_e}
+\left(\frac{2\pi m_e k_B T}{h^{2}}\right)^{3/2}
+\exp!\left(-\frac{\chi_{z-1}}{k_B T}\right)
+\frac{2 U_z(T)}{U_{z-1}(T)}.
+$$</p>
+<p>Implemented as <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver._saha_correction</span></code>. After this
+correction every line — neutral or ionic — sits on the same Boltzmann
+plot for its element.</p>
+<section id="physics-closure-equation">
+<span id="id2"></span><span id="closure-equation"></span><span id="id3"></span><h2>3. Closure Equation<a class="headerlink" href="#physics-closure-equation" title="Link to this heading"></a></h2>
+<p>The intercepts <code class="docutils literal notranslate"><span class="pre">q_s</span></code> of each element constrain <code class="docutils literal notranslate"><span class="pre">F</span> <span class="pre">C_s</span> <span class="pre">/</span> <span class="pre">U_s(T)</span></code>. Closure
+turns these into mass fractions by enforcing a normalization condition.</p>
+<p><strong>Standard mode</strong> (<code class="docutils literal notranslate"><span class="pre">closure_mode:</span> <span class="pre">standard</span></code>):</p>
+<p>$$
+\sum_s C_s = 1
+\quad\Rightarrow\quad
+F = \sum_s U_s(T), e^{q_s},
+\qquad
+C_s = \frac{U_s(T), e^{q_s}}{F}.
+$$</p>
+<p><strong>Matrix mode</strong> (<code class="docutils literal notranslate"><span class="pre">closure_mode:</span> <span class="pre">matrix</span></code>): if the matrix element <code class="docutils literal notranslate"><span class="pre">m</span></code> has a
+known mass fraction <code class="docutils literal notranslate"><span class="pre">C_m</span></code>,</p>
+<p>$$
+F = \frac{U_m(T), e^{q_m}}{C_m},
+\qquad
+C_s = \frac{U_s(T), e^{q_s}}{F}.
+$$</p>
+<p>Useful for steel (Fe is matrix), brass (Cu is matrix), Ti alloys (Ti is
+matrix), etc.</p>
+<p><strong>Oxide mode</strong> (<code class="docutils literal notranslate"><span class="pre">closure_mode:</span> <span class="pre">oxide</span></code>): for geological samples in which
+elements are reported as their stable oxides (SiO₂, Al₂O₃, Fe₂O₃, …),
+each element fraction <code class="docutils literal notranslate"><span class="pre">C_s</span></code> is converted to the corresponding oxide mass
+fraction using the stoichiometric ratio</p>
+</section>
+</section>
+<section id="c-s-text-oxide">
+<h1>$$
+C_{s\text{-oxide}}<a class="headerlink" href="#c-s-text-oxide" title="Link to this heading"></a></h1>
+<p>C_s \cdot \frac{M_{s\text{-oxide}}}{n_s, M_s},
+$$</p>
+<p>and oxides are normalized so that <code class="docutils literal notranslate"><span class="pre">Σ</span> <span class="pre">C_oxide</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p>
+<p>The closure code is in <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.closure</span></code>.</p>
+<section id="self-consistent-update-of-n-e">
+<span id="physics-ne-update"></span><h2>4. Self-Consistent Update of <code class="docutils literal notranslate"><span class="pre">n_e</span></code><a class="headerlink" href="#self-consistent-update-of-n-e" title="Link to this heading"></a></h2>
+<p>Saha couples <code class="docutils literal notranslate"><span class="pre">T</span></code> and <code class="docutils literal notranslate"><span class="pre">n_e</span></code>. After applying closure, the solver re-derives
+<code class="docutils literal notranslate"><span class="pre">n_e</span></code> from the inferred populations using the Saha equation again
+(consistency between observed <code class="docutils literal notranslate"><span class="pre">q_s</span></code> of neutral and ionic lines, plus
+charge balance <code class="docutils literal notranslate"><span class="pre">n_e</span> <span class="pre">=</span> <span class="pre">Σ_s</span> <span class="pre">C_s</span> <span class="pre">n_s</span> <span class="pre">×</span> <span class="pre">⟨z_s⟩</span></code>). The new <code class="docutils literal notranslate"><span class="pre">n_e</span></code> feeds back
+into the Saha correction in step 2.</p>
+</section>
+<section id="convergence">
+<span id="physics-convergence"></span><h2>5. Convergence<a class="headerlink" href="#convergence" title="Link to this heading"></a></h2>
+<p>Iterate steps 1–4 until both</p>
+<p>$$
+\frac{|T^{(k+1)} - T^{(k)}|}{T^{(k)}} &lt; \tau_T,
+\qquad
+\frac{|n_e^{(k+1)} - n_e^{(k)}|}{n_e^{(k)}} &lt; \tau_{n_e},
+$$</p>
+<p>where <code class="docutils literal notranslate"><span class="pre">τ_T</span></code> and <code class="docutils literal notranslate"><span class="pre">τ_n_e</span></code> are <code class="docutils literal notranslate"><span class="pre">t_tolerance_k</span></code> and <code class="docutils literal notranslate"><span class="pre">ne_tolerance_frac</span></code> from
+the analysis config. Default <code class="docutils literal notranslate"><span class="pre">max_iterations</span> <span class="pre">=</span> <span class="pre">20</span></code>.</p>
+<hr class="docutils" />
+</section>
+<section id="physics-self-absorption-and-curve-of-growth">
+<span id="self-absorption-and-curve-of-growth"></span><span id="id4"></span><h2>Self-Absorption and Curve of Growth<a class="headerlink" href="#physics-self-absorption-and-curve-of-growth" title="Link to this heading"></a></h2>
+<p>For an optically thin line, <code class="docutils literal notranslate"><span class="pre">I_obs</span> <span class="pre">∝</span> <span class="pre">n</span> <span class="pre">L</span></code>. As optical depth <code class="docutils literal notranslate"><span class="pre">τ</span></code> rises,
+the curve of growth bends and the linear regime fails:</p>
+</section>
+</section>
+<section id="tau-0">
+<h1>$$
+\tau_0<a class="headerlink" href="#tau-0" title="Link to this heading"></a></h1>
+</section>
+<section id="frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">
+<h1>\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}<a class="headerlink" href="#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin" title="Link to this heading"></a></h1>
+<p>\frac{1 - e^{-\tau_0}}{\tau_0}
+\quad\text{(Doppler core, no wings).}
+$$</p>
+<p>CF-LIBS implements two independent self-absorption corrections:</p>
+<ul class="simple">
+<li><p><strong>Iterative <code class="docutils literal notranslate"><span class="pre">SelfAbsorptionCorrector</span></code></strong> — estimates <code class="docutils literal notranslate"><span class="pre">τ</span></code> per line from
+the lower-level population (which itself depends on the not-yet-known
+composition), applies the curve-of-growth correction, and iterates.
+Lines exceeding <code class="docutils literal notranslate"><span class="pre">max_optical_depth</span></code> are masked rather than corrected.</p></li>
+<li><p><strong>CDSB (Column-Density Self-Absorption Correction)</strong> — uses the
+full Voigt curve of growth for stronger self-absorption regimes.
+Implemented in <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.cdsb</span></code>.</p></li>
+</ul>
+<p>Both methods rely on knowing the absolute column density <code class="docutils literal notranslate"><span class="pre">n_i</span> <span class="pre">L</span></code>, which
+in turn requires an absolute intensity calibration or a known-fraction
+matrix line as a reference. Without absolute calibration, exclude
+resonance and other strong/saturable lines (<code class="docutils literal notranslate"><span class="pre">exclude_resonance:</span> <span class="pre">true</span></code>)
+rather than attempting correction.</p>
+<hr class="docutils" />
+<section id="lte-validity-mcwhirter-criterion">
+<h2>LTE Validity: McWhirter Criterion<a class="headerlink" href="#lte-validity-mcwhirter-criterion" title="Link to this heading"></a></h2>
+<p>LTE in a homogeneous optically thin plasma requires that collisional
+de-excitation rates dominate radiative ones. The standard sufficiency
+criterion is</p>
+<p>$$
+n_e ;\ge; 1.6 \times 10^{12}; \sqrt{T}; (\Delta E)^{3} \quad \text{cm}^{-3},
+$$</p>
+<p>with <code class="docutils literal notranslate"><span class="pre">T</span></code> in K and <code class="docutils literal notranslate"><span class="pre">ΔE</span></code> in eV the largest energy gap encountered in the
+levels feeding the lines used. The solver evaluates this at convergence
+and reports <code class="docutils literal notranslate"><span class="pre">lte_mcwhirter_satisfied</span></code> and <code class="docutils literal notranslate"><span class="pre">lte_n_e_ratio</span></code> in
+<code class="docutils literal notranslate"><span class="pre">result.quality_metrics</span></code>. A violation invalidates the inferred <code class="docutils literal notranslate"><span class="pre">T</span></code> and
+composition even if the math converged.</p>
+<p>For the deeper conditions and how to act on a McWhirter violation, see
+<a class="reference internal" href="Assumptions_And_Validity.html"><span class="std std-doc">Assumptions and Validity</span></a>.</p>
+<hr class="docutils" />
+</section>
+<section id="physics-bayesian-forward-model">
+<span id="bayesian-forward-model"></span><span id="id5"></span><h2>Bayesian Forward Model<a class="headerlink" href="#physics-bayesian-forward-model" title="Link to this heading"></a></h2>
+<p>The Bayesian forward model
+(<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solve.bayesian.BayesianForwardModel</span></code>) wraps the same
+physics in JAX-traced form for MCMC and gradient-based fitting. Likelihood
+is</p>
+</section>
+</section>
+<section id="ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">
+<h1>$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})<a class="headerlink" href="#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p>\frac{1}{2} \sum_j \frac{(I_{\text{obs},j} - I_{\text{model},j})^2}{\sigma_j^2}</p></li>
+<li><p>\sum_j \ln \sqrt{2\pi \sigma_j^2}.
+$$</p></li>
+</ul>
+<p>Three noise models are exposed:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">gaussian</span></code> — <code class="docutils literal notranslate"><span class="pre">σ_j²</span> <span class="pre">=</span> <span class="pre">σ_readout²</span></code>, constant.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">poisson</span></code> — <code class="docutils literal notranslate"><span class="pre">σ_j²</span> <span class="pre">=</span> <span class="pre">I_j</span></code>, shot-noise dominated.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">combined</span></code> — <code class="docutils literal notranslate"><span class="pre">σ_j²</span> <span class="pre">=</span> <span class="pre">σ_readout²</span> <span class="pre">+</span> <span class="pre">α</span> <span class="pre">I_j</span> <span class="pre">+</span> <span class="pre">dark</span></code>, realistic CCD model.</p></li>
+</ul>
+<p>Standard priors (<code class="docutils literal notranslate"><span class="pre">PriorConfig</span></code>):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">T</span> <span class="pre">~</span> <span class="pre">Uniform(T_min_eV,</span> <span class="pre">T_max_eV)</span></code> or <code class="docutils literal notranslate"><span class="pre">LogUniform(...)</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_e</span> <span class="pre">~</span> <span class="pre">LogUniform(n_e_min,</span> <span class="pre">n_e_max)</span></code> (Jeffreys prior, scale-invariant).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{C_s}</span> <span class="pre">~</span> <span class="pre">Dirichlet(α)</span></code> so that <code class="docutils literal notranslate"><span class="pre">Σ</span> <span class="pre">C_s</span> <span class="pre">=</span> <span class="pre">1</span></code> is enforced by construction.</p></li>
+</ul>
+<p>Sampling uses NumPyro NUTS by default; nested sampling via dynesty is
+available for evidence calculation and model comparison.</p>
+<hr class="docutils" />
+<section id="physics-references">
+<span id="references"></span><span id="id6"></span><h2>References<a class="headerlink" href="#physics-references" title="Link to this heading"></a></h2>
+<p>The numbered references below are cited inline by <code class="docutils literal notranslate"><span class="pre">[n]</span></code>.</p>
+<ol class="arabic simple">
+<li><p>Ciucci, A., et al. <em>New procedure for quantitative elemental analysis
+by laser-induced plasma spectroscopy.</em> Applied Spectroscopy 53.8
+(1999): 960–964.</p></li>
+<li><p>Tognoni, E., et al. <em>Calibration-free laser-induced breakdown
+spectroscopy: state of the art.</em> Spectrochimica Acta B 65.1 (2010):
+1–14.</p></li>
+<li><p>Aragón, C., and J. A. Aguilera. <em>Characterization of laser induced
+plasmas by optical emission spectroscopy: A review of experiments and
+methods.</em> Spectrochimica Acta B 63.9 (2008): 893–916.</p></li>
+<li><p>Irwin, A. W. <em>Polynomial partition function approximations of 344
+atomic and molecular species.</em> Astrophys. J. Suppl. 45 (1981):
+621–633.</p></li>
+<li><p>Griem, H. R. <em>Spectral Line Broadening by Plasmas.</em> Academic Press
+(1974).</p></li>
+<li><p>Humlicek, J. <em>Optimized computation of the Voigt and complex
+probability functions.</em> JQSRT 27.4 (1982): 437–444.</p></li>
+<li><p>Salzmann, D. <em>Atomic Physics in Hot Plasmas.</em> Oxford University Press
+(1998).</p></li>
+<li><p>McWhirter, R. W. P. In <em>Plasma Diagnostic Techniques</em>, eds. Huddlestone
+&amp; Leonard (Academic Press, 1965), Ch. 5.</p></li>
+<li><p>Cristoforetti, G., et al. <em>Local thermodynamic equilibrium in
+laser-induced breakdown spectroscopy: beyond the McWhirter criterion.</em>
+Spectrochimica Acta B 65.1 (2010): 86–95.</p></li>
+<li><p>Hou, Z., et al. <em>A comprehensive review on calibration-free
+laser-induced breakdown spectroscopy.</em> Front. Phys. 16 (2021).</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="see-also">
+<h2>See Also<a class="headerlink" href="#see-also" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="Assumptions_And_Validity.html"><span class="std std-doc">Assumptions and Validity</span></a> — what each
+equation assumes about your plasma and when it fails.</p></li>
+<li><p><a class="reference internal" href="Inversion_Algorithm.html"><span class="std std-doc">Inversion Algorithm</span></a> — line-by-line walkthrough
+of the iterative CF-LIBS algorithm including pseudocode.</p></li>
+<li><p><a class="reference internal" href="../reference/Codebase_Architecture.html"><span class="std std-doc">Codebase Architecture</span></a> — where
+each equation lives in the source tree.</p></li>
+<li><p><a class="reference internal" href="../reference/API_Reference.html"><span class="std std-doc">API Reference</span></a> — call signatures.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="README.html" class="btn btn-neutral float-left" title="Physics Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Assumptions_And_Validity.html" class="btn btn-neutral float-right" title="Physics: Assumptions and Validity" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

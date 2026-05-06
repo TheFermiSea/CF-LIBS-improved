@@ -1,0 +1,733 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CodeEvolve Wave 2 Planning Document &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Analysis of libssa (v2.5.1)" href="REFERENCE_ANALYSIS_LIBSSA.html" />
+    <link rel="prev" title="CF-LIBS Deployment Guide" href="Deployment.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Real_Data.html">Quick Start: Analyzing Real LIBS Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Peak_Identification_Guide.html">Peak Identification and Line Matching Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Synthetic.html">Quick Start: Synthetic Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../physics/README.html">Physics Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html">Physics: Equations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-n-z-1-n-e-n-z">$$
+\frac{n_{z+1}, n_e}{n_z}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#varepsilon-ki-lambda">$$
+\varepsilon_{ki}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#gamma-text-stark-n-e-t">$$
+\gamma_{\text{Stark}}(n_e, T)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#v-lambda-sigma-gamma">$$
+V(\lambda; \sigma, \gamma)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-text-measured-lambda">$$
+I_{\text{measured}}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-ki">$$
+I_{ki}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#s-t-n-e">$$
+S(T, n_e)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#c-s-text-oxide">$$
+C_{s\text{-oxide}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#tau-0">$$
+\tau_0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Assumptions_And_Validity.html">Physics: Assumptions and Validity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Inversion_Algorithm.html">Physics: Iterative CF-LIBS Inversion Algorithm</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../reference/API_Reference.html">CF-LIBS API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Codebase_Architecture.html">CF-LIBS Codebase Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Database_Generation.html">Atomic Database Generation Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">CodeEvolve Wave 2 Planning Document</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#context-wave-1-results">Context: Wave 1 Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#key-numbers">Key Numbers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#what-the-optimizer-discovered">What the Optimizer Discovered</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#key-limitation">Key Limitation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#wave-2-strategy-escaping-the-local-minimum">Wave 2 Strategy: Escaping the Local Minimum</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#basis-library-improvements">1. Basis Library Improvements</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#algorithm-architecture-changes">2. Algorithm Architecture Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#optimization-strategy-changes">3. Optimization Strategy Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataset-expansion">4. Dataset Expansion</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#informed-by-literature">5. Informed by Literature</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#technical-improvements">6. Technical Improvements</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#session-planning">Session Planning</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#session-1-basis-library-new-algorithms-estimated-4-6-hours">Session 1: Basis Library + New Algorithms (estimated: 4–6 hours)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#session-2-optimization-framework-estimated-3-4-hours">Session 2: Optimization Framework (estimated: 3–4 hours)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#session-3-optimization-campaign-estimated-2-3-hours-active-overnight-gpu-runs">Session 3: Optimization Campaign (estimated: 2–3 hours active, overnight GPU runs)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#session-4-analysis-paper-update-estimated-3-4-hours">Session 4: Analysis + Paper Update (estimated: 3–4 hours)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#open-questions-for-human-decision">Open Questions for Human Decision</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#priority-1-blocking-session-1">Priority 1 (blocking Session 1)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#priority-2-blocking-session-2">Priority 2 (blocking Session 2)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#priority-3-nice-to-have">Priority 3 (nice to have)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#risk-assessment">Risk Assessment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#success-criteria">Success Criteria</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CodeEvolve Wave 2 Planning Document</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/development/CODEEVOLVE_WAVE2_PLAN.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="codeevolve-wave-2-planning-document">
+<h1>CodeEvolve Wave 2 Planning Document<a class="headerlink" href="#codeevolve-wave-2-planning-document" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-03-25
+<strong>Status:</strong> Draft / Brainstorming
+<strong>Author:</strong> Brian Squires (via Claude session)</p>
+<hr class="docutils" />
+<section id="context-wave-1-results">
+<h2>Context: Wave 1 Results<a class="headerlink" href="#context-wave-1-results" title="Link to this heading"></a></h2>
+<p>Wave 1 applied GPU-accelerated CMA-ES (Sep-CMA-ES variant) to optimize a 101-parameter multi-algorithm ensemble for element identification on 74 Aalto LIBS spectra at RP 300–1100.</p>
+<section id="key-numbers">
+<h3>Key Numbers<a class="headerlink" href="#key-numbers" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Metric</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Objective</p></td>
+<td><p>F_beta(0.5)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Best result</p></td>
+<td><p><strong>0.914</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Parameters</p></td>
+<td><p>101 (8 groups: algorithm weights, per-algorithm configs, 22 per-element thresholds, decision fusion)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Evaluations</p></td>
+<td><p>2 x 10^6 configurations in 58 seconds (35,300 evals/s)</p></td>
+</tr>
+<tr class="row-even"><td><p>Population</p></td>
+<td><p>4,096 candidates, 500 generations</p></td>
+</tr>
+<tr class="row-odd"><td><p>Baseline (manual grid search)</p></td>
+<td><p>F1 = 0.654 (hybrid NNLS+ALIAS, intersection mode)</p></td>
+</tr>
+<tr class="row-even"><td><p>Baseline (single-algo CMA-ES, 41 params)</p></td>
+<td><p>F_beta = 0.551</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="what-the-optimizer-discovered">
+<h3>What the Optimizer Discovered<a class="headerlink" href="#what-the-optimizer-discovered" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Default detection threshold:</strong> 0.30 -&gt; 0.90 (+200%). The hand-tuned baseline was dramatically too permissive.</p></li>
+<li><p><strong>NNLS dominant:</strong> weight 2.93 (next highest: Comb at 0.97). ALIAS, Correlation, Hybrid suppressed with negative weights.</p></li>
+<li><p><strong>Mn/Na nearly vetoed:</strong> per-element thresholds of 0.93 and 0.87 respectively, confirming their pathological false-positive status.</p></li>
+<li><p><strong>Reliable elements kept open:</strong> Fe (0.05), Si (0.12), Al (0.07) – consistent with the per-element benchmark analysis.</p></li>
+<li><p><strong>Decision fusion SNR center:</strong> 9.5, well above the 3-sigma IUPAC detection limit.</p></li>
+</ul>
+</section>
+<section id="key-limitation">
+<h3>Key Limitation<a class="headerlink" href="#key-limitation" title="Link to this heading"></a></h3>
+<p>The optimization operated on <strong>cached algorithm outputs</strong> (static .npz arrays from <code class="docutils literal notranslate"><span class="pre">generate_evolve_cache_v2.py</span></code>), not end-to-end through the forward model. The five algorithms (ALIAS, NNLS, Correlation, Comb, Hybrid) were run once on all 74 spectra, and the optimizer only learned how to combine/threshold those fixed outputs. This means:</p>
+<ol class="arabic simple">
+<li><p>The basis spectra are frozen (fixed T, ne, FWHM).</p></li>
+<li><p>Algorithm hyperparameters that affect the raw outputs (e.g., NNLS regularization, ALIAS peak detection sensitivity) are not jointly optimized.</p></li>
+<li><p>The optimizer cannot discover that a different basis library would produce better raw algorithm scores.</p></li>
+</ol>
+<p>The 0.914 result is therefore a <strong>strong local minimum within the combiner parameter space</strong>, but potentially far from the global optimum over the full (basis + algorithm + combiner) parameter space.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="wave-2-strategy-escaping-the-local-minimum">
+<h2>Wave 2 Strategy: Escaping the Local Minimum<a class="headerlink" href="#wave-2-strategy-escaping-the-local-minimum" title="Link to this heading"></a></h2>
+<p>The core question: how do we get beyond F_beta = 0.914 without simply overfitting harder to 74 spectra?</p>
+<p>Three axes of attack: (1) improve the inputs to the algorithms (basis library), (2) expand the algorithm ensemble (new identification pathways), (3) search more broadly in the optimization landscape.</p>
+<hr class="docutils" />
+<section id="basis-library-improvements">
+<h3>1. Basis Library Improvements<a class="headerlink" href="#basis-library-improvements" title="Link to this heading"></a></h3>
+<p>The current basis library uses a fixed T/ne grid with fixed Gaussian FWHM broadening. Several improvements are possible:</p>
+<p><strong>1a. Joint T/ne Grid Optimization</strong></p>
+<p>Currently the basis is generated at a fixed set of plasma conditions (e.g., T = 0.5–2.0 eV, ne = 1e15–1e18 cm^-3). The grid spacing was chosen by hand. Questions:</p>
+<ul class="simple">
+<li><p>Is the grid dense enough in the parameter regions that matter for element identification (vs. quantification)?</p></li>
+<li><p>Could we optimize the grid placement itself? E.g., adaptive mesh refinement: identify which (T, ne) values produce the most discriminative basis spectra for the problematic elements (Mn, Na, Ca), and add grid points there.</p></li>
+<li><p>Practical concern: regenerating the full basis library takes hours on GPU. Any grid change requires a full re-cache of algorithm outputs.</p></li>
+</ul>
+<p><strong>1b. Additional Ionization Stages (III, IV)</strong></p>
+<p>The current basis includes neutral (I) and singly-ionized (II) species. For higher-T plasmas or multi-pulse LIBS:</p>
+<ul class="simple">
+<li><p>Exact partition functions are now available for 83 elements (direct summation from NIST energy levels). Could this enable reliable basis spectra for Fe III, Ti III, etc.?</p></li>
+<li><p>At the Aalto RP and temperature range (T ~ 0.8–1.5 eV), Stage III populations are typically negligible. But for elements with low second ionization potentials (Ba, Sr, Ca), Stage III lines may be non-negligible.</p></li>
+<li><p><strong>Decision needed:</strong> Is the added complexity worth it for the current dataset? Probably not for Aalto spectra, but could matter for higher-T plasma sources.</p></li>
+</ul>
+<p><strong>1c. Wavelength-Dependent Instrument Response</strong></p>
+<p>The current basis uses a fixed Gaussian FWHM (1.0 nm). Real spectrometers have:</p>
+<ul class="simple">
+<li><p>Wavelength-dependent resolving power (RP varies from ~300 at 200 nm to ~1100 at 900 nm in the Aalto system).</p></li>
+<li><p>Non-Gaussian line shapes (especially echelle spectrometers).</p></li>
+<li><p>Efficiency curves that modulate relative line intensities.</p></li>
+</ul>
+<p>Implementing a wavelength-dependent FWHM(lambda) in the basis generation would produce more realistic basis spectra. This is a relatively straightforward change to <code class="docutils literal notranslate"><span class="pre">generate_evolve_cache_v2.py</span></code> / the <code class="docutils literal notranslate"><span class="pre">BasisLibrary</span></code> class.</p>
+<p><strong>1d. Continuum and Self-Absorption</strong></p>
+<p>The current basis is emission-only. Adding:</p>
+<ul class="simple">
+<li><p>Bremsstrahlung + recombination continuum would provide a more realistic spectral background, potentially improving NNLS decomposition.</p></li>
+<li><p>Self-absorption correction for strong lines (especially alkali resonance lines like Na D and Li 670 nm) would reduce the discrepancy between modeled and observed line ratios.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="algorithm-architecture-changes">
+<h3>2. Algorithm Architecture Changes<a class="headerlink" href="#algorithm-architecture-changes" title="Link to this heading"></a></h3>
+<p><strong>2a. New Identification Pathways</strong></p>
+<p>Candidates to add to the ensemble:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Pathway</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>Expected Strength</p></th>
+<th class="head"><p>Implementation Effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Deep learning spectral matching</p></td>
+<td><p>Train a CNN/transformer on synthetic spectra to output element presence probabilities</p></td>
+<td><p>Could learn non-linear spectral features invisible to linear methods</p></td>
+<td><p>High (need training data, architecture search)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Template correlation with learned templates</p></td>
+<td><p>Instead of fixed basis spectra, learn optimal template spectra per element that maximize discriminability</p></td>
+<td><p>Could overcome basis library limitations</p></td>
+<td><p>Medium</p></td>
+</tr>
+<tr class="row-even"><td><p>Multi-resolution NNLS</p></td>
+<td><p>Run NNLS at 2–3 different spectral resolutions (e.g., 0.5 nm, 1.0 nm, 2.0 nm) and combine</p></td>
+<td><p>Higher resolution may resolve blends; lower resolution may be more robust to noise</p></td>
+<td><p>Low (just re-bin and re-run)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Derivative spectroscopy</p></td>
+<td><p>Match on first/second derivatives of spectra</p></td>
+<td><p>Less sensitive to baseline/continuum; highlights sharp features</p></td>
+<td><p>Low</p></td>
+</tr>
+<tr class="row-even"><td><p>Mutual information scoring</p></td>
+<td><p>Score element presence by mutual information between basis spectrum and observed spectrum</p></td>
+<td><p>Non-linear alternative to correlation</p></td>
+<td><p>Medium</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>2b. Multi-Resolution Approach</strong></p>
+<p>This is low-hanging fruit. The idea:</p>
+<ol class="arabic simple">
+<li><p>Generate basis libraries at 3 resolutions: FWHM = 0.5, 1.0, 2.0 nm.</p></li>
+<li><p>Run NNLS independently at each resolution.</p></li>
+<li><p>Include all three sets of NNLS outputs in the ensemble cache.</p></li>
+<li><p>Let the optimizer learn resolution-dependent weights per element.</p></li>
+</ol>
+<p>Rationale: At FWHM = 0.5 nm, closely-spaced line multiplets (e.g., Fe 371–375 nm complex) become partially resolved, potentially improving Fe/Mn discrimination. At FWHM = 2.0 nm, noise is smoothed and broad spectral envelope features become more prominent, potentially improving detection of elements with many weak lines.</p>
+<p><strong>2c. Temporal/Spatial Averaging for Noisy Spectra</strong></p>
+<p>Some Aalto spectra are single-shot with high noise. If multi-shot data is available:</p>
+<ul class="simple">
+<li><p>Shot-to-shot averaging with outlier rejection.</p></li>
+<li><p>Spatial binning for spatially-resolved data.</p></li>
+<li><p>This is a data preprocessing change, not an algorithm change, but could significantly improve raw algorithm outputs.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="optimization-strategy-changes">
+<h3>3. Optimization Strategy Changes<a class="headerlink" href="#optimization-strategy-changes" title="Link to this heading"></a></h3>
+<p><strong>3a. Warm-Starting from Wave 1</strong></p>
+<p>Instead of random initialization, start CMA-ES from the Wave 1 optimum:</p>
+<ul class="simple">
+<li><p>Initialize mean at Wave 1 best parameters.</p></li>
+<li><p>Inflate the covariance matrix: sigma = 0.3–0.5 (instead of the typical 0.1–0.2 for fine-tuning).</p></li>
+<li><p>This explores a neighborhood around the known good solution while allowing escape to nearby basins.</p></li>
+</ul>
+<p><strong>3b. Large-Perturbation Restart</strong></p>
+<p>More aggressive: start from Wave 1 optimum but with sigma = 0.5–1.0, effectively treating it as a rough starting point. Combine with IPOP-CMA-ES (increasing population restart strategy) to systematically increase the search radius after each convergence.</p>
+<p><strong>3c. Alternative Objective Functions</strong></p>
+<p>Wave 1 used F_beta(0.5), which weights precision 2x over recall. Alternatives:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Objective</p></th>
+<th class="head"><p>Pros</p></th>
+<th class="head"><p>Cons</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1 (equal precision/recall)</p></td>
+<td><p>Standard metric, easier to compare with literature</p></td>
+<td><p>May not match CF-LIBS needs where FPs are more costly</p></td>
+</tr>
+<tr class="row-odd"><td><p>F_beta(0.3)</p></td>
+<td><p>Even stronger precision emphasis</p></td>
+<td><p>May over-suppress detections</p></td>
+</tr>
+<tr class="row-even"><td><p>Multi-objective Pareto (precision vs recall)</p></td>
+<td><p>Produces a front of solutions; user picks operating point</p></td>
+<td><p>More complex, slower convergence</p></td>
+</tr>
+<tr class="row-odd"><td><p>Log-loss on per-element probabilities</p></td>
+<td><p>Smooth, differentiable; penalizes confident wrong answers</p></td>
+<td><p>Requires probability-calibrated outputs</p></td>
+</tr>
+<tr class="row-even"><td><p>Exact-match rate</p></td>
+<td><p>Directly optimizes the hardest metric (22/74 = 30% is current best)</p></td>
+<td><p>Very sparse gradient signal; many plateaus</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>3d. Population-Based Training (PBT)</strong></p>
+<p>Instead of a single CMA-ES run, maintain a population of diverse configurations and evolve them with different mutation strategies:</p>
+<ul class="simple">
+<li><p>Some individuals explore algorithm weight space.</p></li>
+<li><p>Some individuals explore per-element threshold space.</p></li>
+<li><p>Some individuals explore algorithm hyperparameters.</p></li>
+<li><p>Periodically share good strategies across sub-populations.</p></li>
+</ul>
+<p>This is essentially an island-model evolutionary approach. Could be implemented on top of the existing CMA-ES infrastructure.</p>
+<p><strong>3e. Quality-Diversity Search (MAP-Elites)</strong></p>
+<p>Use MAP-Elites or similar quality-diversity algorithms with behavior descriptors:</p>
+<ul class="simple">
+<li><p>Number of elements detected (mean across spectra).</p></li>
+<li><p>Precision/recall balance (P/(P+R) ratio).</p></li>
+<li><p>Computational cost.</p></li>
+</ul>
+<p>This would produce a diverse archive of high-performing configurations, revealing whether there are fundamentally different strategies at similar performance levels.</p>
+<p><strong>3f. Bayesian Optimization</strong></p>
+<p>For the outer loop (choosing which algorithm configurations to cache and which combiner architecture to use), Bayesian optimization (GP-UCB or TPE) could be more sample-efficient than CMA-ES. Particularly relevant if basis library regeneration is in the loop, since each evaluation is expensive.</p>
+</section>
+<hr class="docutils" />
+<section id="dataset-expansion">
+<h3>4. Dataset Expansion<a class="headerlink" href="#dataset-expansion" title="Link to this heading"></a></h3>
+<p><strong>4a. Synthetic Spectra with Known Ground Truth</strong></p>
+<p>Generate synthetic LIBS spectra using the forward model:</p>
+<ul class="simple">
+<li><p>500–1000 spectra covering diverse compositions (pure elements, binary mixtures, geological compositions).</p></li>
+<li><p>Known ground truth by construction.</p></li>
+<li><p>Add realistic noise (Poisson + readout + baseline).</p></li>
+<li><p>Use for training (optimize on synthetic) / validation (evaluate on Aalto) split.</p></li>
+</ul>
+<p>Risk: synthetic spectra may not capture all the pathologies of real spectra (matrix effects, self-absorption, continuum structure, detector artifacts).</p>
+<p><strong>4b. Cross-Validation on Aalto Spectra</strong></p>
+<p>Current approach: optimize on all 74 spectra, evaluate on all 74 spectra. This is a train-on-test setup.</p>
+<p>Proposed: k-fold cross-validation (k=5, so 59 train / 15 test per fold). This gives:</p>
+<ul class="simple">
+<li><p>Honest generalization estimate.</p></li>
+<li><p>Per-fold variance as uncertainty on the F_beta estimate.</p></li>
+<li><p>Risk: 15 spectra per fold may be too few for stable per-element metrics.</p></li>
+</ul>
+<p>Alternative: leave-one-mineral-out cross-validation (train on 73, test on 1, repeat). Very expensive but mineral-level generalization is what we actually care about.</p>
+<p><strong>4c. ChemCam Calibration Target Spectra</strong></p>
+<p>The CCCT data (6 targets with certified oxide compositions) is already validated in the paper. Additionally:</p>
+<ul class="simple">
+<li><p>ChemCam has published calibration standard spectra (69–332 standards from Clegg 2017).</p></li>
+<li><p>If accessible, these would provide a large, independent validation set at RP 2000–4000.</p></li>
+<li><p>Caveat: different RP range than Aalto; results would test generalization across instruments, not within-instrument performance.</p></li>
+</ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">data/chemcam_standards/</span></code> directory exists (newly added, untracked) – this may already be in progress.</p>
+<p><strong>4d. Adversarial Spectra</strong></p>
+<p>Generate spectra specifically designed to challenge the Wave 1 optimum:</p>
+<ul class="simple">
+<li><p>Spectra where Mn is truly present (test whether the near-veto threshold is too aggressive).</p></li>
+<li><p>Spectra with trace Na in a geological matrix.</p></li>
+<li><p>Binary mixtures of elements with highly overlapping spectra (Fe+Mn, Ca+Na).</p></li>
+<li><p>Very low SNR spectra.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="informed-by-literature">
+<h3>5. Informed by Literature<a class="headerlink" href="#informed-by-literature" title="Link to this heading"></a></h3>
+<p><strong>5a. Hackem-LIBS (Zeng et al. 2020)</strong></p>
+<p>Heterogeneous stacking ensemble for LIBS quantification. Key idea: train a meta-learner (e.g., ridge regression or gradient boosting) on the outputs of diverse base models. Could we use a stacking architecture where Wave 1’s optimized ensemble is one of several “base learners,” with a second-level model that learns when to trust each base learner?</p>
+<p>Relevance: our current combiner is a fixed weighted-sum with per-element thresholds. A stacking approach could learn non-linear combinations (e.g., “trust NNLS for Fe only when the Comb score is also above X”).</p>
+<p><strong>5b. OPSIAL (Tan 2019)</strong></p>
+<p>Forward-model fitting approach to element identification. Instead of matching peaks or decomposing spectra, OPSIAL fits a radiative transfer model line-by-line to the observed spectrum. Could OPSIAL-style line-by-line fitting improve the forward-model identification pathway (currently the weakest at F1 = 0.505)?</p>
+<p>Relevance: our current forward-model pathway uses concentration thresholding on NNLS coefficients, which is crude. A proper line-by-line fit with residual analysis could distinguish true contributions from fitting artifacts.</p>
+<p><strong>5c. ExoAtom (Ni et al. 2025)</strong></p>
+<p>Expanded atomic line lists beyond NIST ASD. ExoAtom compiles line data from Kurucz, VALD, and other sources, providing more complete line lists especially for:</p>
+<ul class="simple">
+<li><p>Rare earth elements.</p></li>
+<li><p>High-excitation transitions missing from NIST.</p></li>
+<li><p>Isotopic shifts.</p></li>
+</ul>
+<p>Could additional line data improve basis spectra completeness and reduce false negatives for elements with incomplete NIST coverage (Zn, Zr are currently undetectable partly due to insufficient database coverage)?</p>
+<p><strong>5d. Barklem &amp; Collet (2016)</strong></p>
+<p>Partition functions for 284 atomic species via direct summation over experimental and theoretical energy levels. This validates our direct-summation approach (currently implemented for 83 elements). Could provide:</p>
+<ul class="simple">
+<li><p>Cross-checks for our partition function values.</p></li>
+<li><p>Extension to additional species not in our current database.</p></li>
+<li><p>Temperature-dependent partition function derivatives for sensitivity analysis.</p></li>
+</ul>
+<p><strong>5e. Additional References to Investigate</strong></p>
+<ul class="simple">
+<li><p>Kim et al. 2025: recent deep learning approaches to LIBS element identification.</p></li>
+<li><p>Dai et al. 2026: if available, any advances in low-RP LIBS identification.</p></li>
+<li><p>Eum et al. 2021: ensemble approaches for LIBS classification.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="technical-improvements">
+<h3>6. Technical Improvements<a class="headerlink" href="#technical-improvements" title="Link to this heading"></a></h3>
+<p><strong>6a. End-to-End Differentiable Pipeline</strong></p>
+<p>The most ambitious improvement: make the full pipeline differentiable via JAX so that gradient-based optimization can propagate through:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">parameters</span> <span class="o">-&gt;</span> <span class="n">basis</span> <span class="n">library</span> <span class="o">-&gt;</span> <span class="n">algorithm</span> <span class="n">outputs</span> <span class="o">-&gt;</span> <span class="n">combiner</span> <span class="o">-&gt;</span> <span class="n">F_beta</span> <span class="n">score</span>
+</pre></div>
+</div>
+<p>Currently only the last two steps (combiner -&gt; F_beta) are optimized. Making the full chain differentiable would allow:</p>
+<ul class="simple">
+<li><p>Joint optimization of basis library parameters (T, ne, FWHM) alongside combiner parameters.</p></li>
+<li><p>Gradient-based discovery of which basis configurations are most discriminative.</p></li>
+<li><p>Potential for dramatic performance improvements by co-adapting all stages.</p></li>
+</ul>
+<p>Challenges:</p>
+<ul class="simple">
+<li><p>NNLS decomposition is not trivially differentiable (requires implicit differentiation or unrolled optimization).</p></li>
+<li><p>ALIAS peak-matching involves discrete operations (peak detection, thresholding) that need relaxation for differentiability.</p></li>
+<li><p>The F_beta score involves discrete TP/FP/FN counts that need a soft approximation.</p></li>
+<li><p>Full pipeline evaluation is ~0.39s per spectrum (vs. microseconds for cached outputs); 2M evaluations would take weeks instead of 58 seconds.</p></li>
+</ul>
+<p>Compromise: make the basis generation differentiable but keep the algorithm outputs cached. Periodically regenerate the cache at the current basis parameters, then optimize the combiner. This “alternating optimization” approach is much cheaper than full end-to-end.</p>
+<p><strong>6b. Bayesian Optimization for Outer Loop</strong></p>
+<p>Use Gaussian Process-based Bayesian optimization (e.g., via BoTorch) for:</p>
+<ul class="simple">
+<li><p>Selecting which new algorithms to add to the ensemble.</p></li>
+<li><p>Choosing basis library parameters.</p></li>
+<li><p>Hyperparameter optimization of the CMA-ES itself (population size, sigma, learning rates).</p></li>
+</ul>
+<p>This is appropriate when evaluations are expensive (e.g., each requires regenerating the basis + re-caching).</p>
+<p><strong>6c. Warm-Starting CMA-ES from Wave 1</strong></p>
+<p>Initialize CMA-ES with:</p>
+<ul class="simple">
+<li><p>Mean = Wave 1 best parameters.</p></li>
+<li><p>Covariance = Wave 1 final covariance matrix (if saved) inflated by factor of 4–16.</p></li>
+<li><p>Sigma = 0.3–0.5 (vs. the converged sigma from Wave 1 which is likely &lt; 0.01).</p></li>
+</ul>
+<p>This preserves the learned correlation structure while allowing broad exploration.</p>
+<p><strong>6d. Adaptive Per-Element Search List</strong></p>
+<p>Currently the search list is fixed at 22 elements. The optimizer could also learn:</p>
+<ul class="simple">
+<li><p>Which elements to include/exclude from the search list.</p></li>
+<li><p>Per-spectrum adaptive element lists based on a quick first-pass screening.</p></li>
+</ul>
+<p>This would require expanding the parameter space but could help with the Mn/Na problem (simply exclude them from the search).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="session-planning">
+<h2>Session Planning<a class="headerlink" href="#session-planning" title="Link to this heading"></a></h2>
+<section id="session-1-basis-library-new-algorithms-estimated-4-6-hours">
+<h3>Session 1: Basis Library + New Algorithms (estimated: 4–6 hours)<a class="headerlink" href="#session-1-basis-library-new-algorithms-estimated-4-6-hours" title="Link to this heading"></a></h3>
+<p><strong>Goals:</strong></p>
+<ul class="simple">
+<li><p>Implement wavelength-dependent FWHM in basis generation.</p></li>
+<li><p>Generate multi-resolution basis libraries (0.5, 1.0, 2.0 nm).</p></li>
+<li><p>Add derivative spectroscopy and multi-resolution NNLS as new identification pathways.</p></li>
+<li><p>Regenerate the evolve cache with all new algorithm outputs.</p></li>
+</ul>
+<p><strong>Deliverables:</strong></p>
+<ul class="simple">
+<li><p>Updated <code class="docutils literal notranslate"><span class="pre">generate_evolve_cache_v3.py</span></code> with new algorithms.</p></li>
+<li><p>New basis libraries in <code class="docutils literal notranslate"><span class="pre">output/evolve_cache/</span></code>.</p></li>
+<li><p>Updated cache .npz with additional algorithm output arrays.</p></li>
+</ul>
+<p><strong>Prerequisites:</strong></p>
+<ul class="simple">
+<li><p>GPU access (vasp-01/02/03) for basis generation.</p></li>
+<li><p>Decision on which new algorithms to implement.</p></li>
+</ul>
+</section>
+<section id="session-2-optimization-framework-estimated-3-4-hours">
+<h3>Session 2: Optimization Framework (estimated: 3–4 hours)<a class="headerlink" href="#session-2-optimization-framework-estimated-3-4-hours" title="Link to this heading"></a></h3>
+<p><strong>Goals:</strong></p>
+<ul class="simple">
+<li><p>Implement train/test split infrastructure (k-fold and leave-one-mineral-out).</p></li>
+<li><p>Add alternative objective functions (F1, multi-objective Pareto, log-loss).</p></li>
+<li><p>Implement warm-start from Wave 1 optimum.</p></li>
+<li><p>Add IPOP-CMA-ES restart strategy.</p></li>
+</ul>
+<p><strong>Deliverables:</strong></p>
+<ul class="simple">
+<li><p>Updated optimization script with cross-validation support.</p></li>
+<li><p>Multi-objective optimization mode.</p></li>
+<li><p>Warm-start configuration file pointing to Wave 1 parameters.</p></li>
+</ul>
+<p><strong>Prerequisites:</strong></p>
+<ul class="simple">
+<li><p>Wave 1 final parameters saved in a loadable format.</p></li>
+<li><p>Decision on objective function(s).</p></li>
+</ul>
+</section>
+<section id="session-3-optimization-campaign-estimated-2-3-hours-active-overnight-gpu-runs">
+<h3>Session 3: Optimization Campaign (estimated: 2–3 hours active, overnight GPU runs)<a class="headerlink" href="#session-3-optimization-campaign-estimated-2-3-hours-active-overnight-gpu-runs" title="Link to this heading"></a></h3>
+<p><strong>Goals:</strong></p>
+<ul class="simple">
+<li><p>Run Wave 2 optimization with expanded algorithm set + warm start.</p></li>
+<li><p>Run cross-validation experiments.</p></li>
+<li><p>Compare F_beta across: Wave 1 baseline, Wave 2 warm-start, Wave 2 cold-start, multi-objective Pareto.</p></li>
+</ul>
+<p><strong>Deliverables:</strong></p>
+<ul class="simple">
+<li><p>Wave 2 optimization results (best parameters, convergence curves).</p></li>
+<li><p>Cross-validation F_beta estimates with confidence intervals.</p></li>
+<li><p>Pareto front if multi-objective was run.</p></li>
+</ul>
+<p><strong>Prerequisites:</strong></p>
+<ul class="simple">
+<li><p>Sessions 1 and 2 complete.</p></li>
+<li><p>GPU allocation for overnight runs.</p></li>
+</ul>
+</section>
+<section id="session-4-analysis-paper-update-estimated-3-4-hours">
+<h3>Session 4: Analysis + Paper Update (estimated: 3–4 hours)<a class="headerlink" href="#session-4-analysis-paper-update-estimated-3-4-hours" title="Link to this heading"></a></h3>
+<p><strong>Goals:</strong></p>
+<ul class="simple">
+<li><p>Analyze Wave 2 results vs. Wave 1.</p></li>
+<li><p>Per-element breakdown of improvements/regressions.</p></li>
+<li><p>Update paper results section if Wave 2 improves on Wave 1.</p></li>
+<li><p>Document what worked and what didn’t.</p></li>
+</ul>
+<p><strong>Deliverables:</strong></p>
+<ul class="simple">
+<li><p>Updated results tables in paper (if improved).</p></li>
+<li><p>Wave 2 analysis report in <code class="docutils literal notranslate"><span class="pre">docs/reports/</span></code>.</p></li>
+<li><p>Updated CLAUDE.md if workflow changed.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="open-questions-for-human-decision">
+<h2>Open Questions for Human Decision<a class="headerlink" href="#open-questions-for-human-decision" title="Link to this heading"></a></h2>
+<section id="priority-1-blocking-session-1">
+<h3>Priority 1 (blocking Session 1)<a class="headerlink" href="#priority-1-blocking-session-1" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Which new identification pathways are worth implementing?</strong></p>
+<ul class="simple">
+<li><p>Multi-resolution NNLS is low effort / moderate reward. Recommend yes.</p></li>
+<li><p>Derivative spectroscopy is low effort / unknown reward. Recommend yes.</p></li>
+<li><p>Deep learning is high effort / potentially high reward. Recommend defer to Wave 3.</p></li>
+<li><p>Template correlation with learned templates is medium effort. Recommend defer.</p></li>
+</ul>
+</li>
+<li><p><strong>Should we implement wavelength-dependent FWHM?</strong></p>
+<ul class="simple">
+<li><p>This requires knowing the Aalto spectrometer’s FWHM(lambda) function. Is this characterized?</p></li>
+</ul>
+</li>
+<li><p><strong>Budget: how many GPU-hours are available for Wave 2?</strong></p>
+<ul class="simple">
+<li><p>Basis generation: ~1–2 hours per resolution per FWHM.</p></li>
+<li><p>Cache generation: ~30 min per algorithm set.</p></li>
+<li><p>Optimization runs: ~1–5 min each, but many runs needed for cross-validation.</p></li>
+<li><p>Estimated total: 10–20 GPU-hours.</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="priority-2-blocking-session-2">
+<h3>Priority 2 (blocking Session 2)<a class="headerlink" href="#priority-2-blocking-session-2" title="Link to this heading"></a></h3>
+<ol class="arabic simple" start="4">
+<li><p><strong>Should we re-run Wave 1 with a train/test split before Wave 2?</strong></p>
+<ul class="simple">
+<li><p>This would establish a honest baseline for comparison.</p></li>
+<li><p>Without it, we cannot claim Wave 2 is better (both could be overfitting).</p></li>
+<li><p>Recommendation: yes, run 5-fold CV on Wave 1 configuration first.</p></li>
+</ul>
+</li>
+<li><p><strong>Should we pursue end-to-end differentiability or stay with cached outputs?</strong></p>
+<ul class="simple">
+<li><p>End-to-end is the principled approach but dramatically more expensive.</p></li>
+<li><p>Recommendation: stay with cached outputs for Wave 2, but implement the alternating optimization as a stretch goal.</p></li>
+</ul>
+</li>
+<li><p><strong>F_beta(0.5) or try a different objective?</strong></p>
+<ul class="simple">
+<li><p>F_beta(0.5) strongly favors precision. The Wave 1 result (0.914) may already be near the precision ceiling.</p></li>
+<li><p>Switching to F1 would test whether we can improve recall without sacrificing precision.</p></li>
+<li><p>Multi-objective Pareto would give the most information but is harder to summarize.</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="priority-3-nice-to-have">
+<h3>Priority 3 (nice to have)<a class="headerlink" href="#priority-3-nice-to-have" title="Link to this heading"></a></h3>
+<ol class="arabic simple" start="7">
+<li><p><strong>Should we expand the element search list beyond 22?</strong></p>
+<ul class="simple">
+<li><p>Adding more elements increases the false-positive surface area.</p></li>
+<li><p>But some geological applications need rare earths, Be, B, etc.</p></li>
+</ul>
+</li>
+<li><p><strong>Should we incorporate the ChemCam standards data</strong> (in <code class="docutils literal notranslate"><span class="pre">data/chemcam_standards/</span></code>) for validation?</p>
+<ul class="simple">
+<li><p>Different RP range, so it tests cross-instrument generalization.</p></li>
+<li><p>May not be directly comparable with Aalto results.</p></li>
+</ul>
+</li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="risk-assessment">
+<h2>Risk Assessment<a class="headerlink" href="#risk-assessment" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Risk</p></th>
+<th class="head"><p>Probability</p></th>
+<th class="head"><p>Impact</p></th>
+<th class="head"><p>Mitigation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Wave 2 shows no improvement over Wave 1</p></td>
+<td><p>Medium</p></td>
+<td><p>Low</p></td>
+<td><p>Wave 1 is already a strong result; paper is publishable as-is</p></td>
+</tr>
+<tr class="row-odd"><td><p>Cross-validation reveals Wave 1 overfitting</p></td>
+<td><p>Medium</p></td>
+<td><p>Medium</p></td>
+<td><p>Expected behavior; honest CV score is still valuable for the paper</p></td>
+</tr>
+<tr class="row-even"><td><p>Basis regeneration takes too long</p></td>
+<td><p>Low</p></td>
+<td><p>Medium</p></td>
+<td><p>Use existing basis as fallback; only regenerate at priority resolutions</p></td>
+</tr>
+<tr class="row-odd"><td><p>New algorithms degrade ensemble</p></td>
+<td><p>Low</p></td>
+<td><p>Low</p></td>
+<td><p>Optimizer can learn to ignore them (assign zero weight)</p></td>
+</tr>
+<tr class="row-even"><td><p>End-to-end pipeline is infeasible</p></td>
+<td><p>High</p></td>
+<td><p>Low</p></td>
+<td><p>Stay with cached outputs; defer to Wave 3</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="success-criteria">
+<h2>Success Criteria<a class="headerlink" href="#success-criteria" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Minimum:</strong> Establish honest cross-validated F_beta for Wave 1 configuration. This is valuable even if Wave 2 doesn’t improve on it.</p></li>
+<li><p><strong>Target:</strong> Wave 2 cross-validated F_beta &gt; Wave 1 cross-validated F_beta by at least 2 percentage points.</p></li>
+<li><p><strong>Stretch:</strong> F_beta(0.5) &gt; 0.93 on cross-validated test folds, or Pareto front that dominates Wave 1 in both precision and recall.</p></li>
+<li><p><strong>Bonus:</strong> Identify a physically interpretable new strategy (e.g., “multi-resolution NNLS resolves Fe/Mn confusion”) that merits discussion in the paper.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Deployment.html" class="btn btn-neutral float-left" title="CF-LIBS Deployment Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="REFERENCE_ANALYSIS_LIBSSA.html" class="btn btn-neutral float-right" title="Analysis of libssa (v2.5.1)" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

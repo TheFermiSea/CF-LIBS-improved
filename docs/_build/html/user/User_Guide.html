@@ -1,0 +1,855 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS User Guide &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Manifold Generation Guide" href="Manifold_Generation_Guide.html" />
+    <link rel="prev" title="Quick Start: Synthetic Spectra" href="Quick_Start_Synthetic.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="README.html">User Guides</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_Real_Data.html">Quick Start: Analyzing Real LIBS Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Peak_Identification_Guide.html">Peak Identification and Line Matching Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_Synthetic.html">Quick Start: Synthetic Spectra</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">CF-LIBS User Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#requirements">Requirements</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#installation-methods">Installation Methods</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#from-source-development">From Source (Development)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#with-optional-dependencies">With Optional Dependencies</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#verify-installation">Verify Installation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#quick-start">Quick Start</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#generate-your-first-spectrum">Generate Your First Spectrum</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#forward-modeling">Forward Modeling</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#using-the-python-api">Using the Python API</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#basic-example">Basic Example</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#understanding-plasma-parameters">Understanding Plasma Parameters</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#electron-temperature-t-e">Electron Temperature (T_e)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#electron-density-n-e">Electron Density (n_e)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#species-densities">Species Densities</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#instrument-parameters">Instrument Parameters</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#resolution-fwhm">Resolution (FWHM)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#response-curve">Response Curve</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#echellogram-extraction">Echellogram Extraction</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#basic-usage">Basic Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#calibration-file-format">Calibration File Format</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#extraction-options">Extraction Options</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-files">Configuration Files</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#structure">Structure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#plasma-configuration">Plasma Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#instrument-configuration">Instrument Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#spectrum-configuration">Spectrum Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-configurations">Example Configurations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#advanced-usage">Advanced Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#inversion-classic-cf-libs">Inversion (Classic CF-LIBS)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#inversion-configuration">Inversion Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#custom-partition-functions">Custom Partition Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#multi-species-plasmas">Multi-Species Plasmas</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#extracting-individual-orders">Extracting Individual Orders</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#batch-processing">Batch Processing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#bayesian-inference">Bayesian Inference</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#inversion-diagnostics">Inversion Diagnostics</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#troubleshooting">Troubleshooting</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#common-issues">Common Issues</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#atomic-database-not-found">“Atomic database not found”</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#no-orders-calibrated">“No orders calibrated”</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#invalid-plasma-state">“Invalid plasma state”</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#wavelength-grid-must-be-evenly-spaced">“Wavelength grid must be evenly spaced”</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#performance-tips">Performance Tips</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#getting-help">Getting Help</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#example-1-ti-6al-4v-alloy">Example 1: Ti-6Al-4V Alloy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-2-temperature-scan">Example 2: Temperature Scan</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-3-composition-scan">Example 3: Composition Scan</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../physics/README.html">Physics Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html">Physics: Equations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-n-z-1-n-e-n-z">$$
+\frac{n_{z+1}, n_e}{n_z}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#varepsilon-ki-lambda">$$
+\varepsilon_{ki}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#gamma-text-stark-n-e-t">$$
+\gamma_{\text{Stark}}(n_e, T)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#v-lambda-sigma-gamma">$$
+V(\lambda; \sigma, \gamma)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-text-measured-lambda">$$
+I_{\text{measured}}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-ki">$$
+I_{ki}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#s-t-n-e">$$
+S(T, n_e)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#c-s-text-oxide">$$
+C_{s\text{-oxide}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#tau-0">$$
+\tau_0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Assumptions_And_Validity.html">Physics: Assumptions and Validity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Inversion_Algorithm.html">Physics: Iterative CF-LIBS Inversion Algorithm</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../reference/README.html">Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/API_Reference.html">CF-LIBS API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Codebase_Architecture.html">CF-LIBS Codebase Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Database_Generation.html">Atomic Database Generation Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/README.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Evolution_Framework.html">Evolution Framework</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Deployment.html">CF-LIBS Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/CODEEVOLVE_WAVE2_PLAN.html">CodeEvolve Wave 2 Planning Document</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">CF-LIBS Documentation</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS User Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/user/User_Guide.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-user-guide">
+<h1>CF-LIBS User Guide<a class="headerlink" href="#cf-libs-user-guide" title="Link to this heading"></a></h1>
+<p>Complete guide for using the CF-LIBS library for forward modeling and analysis of LIBS spectra.</p>
+<p>If you are new to the repository, start with
+<a class="reference internal" href="Quick_Start_Real_Data.html"><span class="std std-doc">Quick Start: Real Data</span></a> (for analyzing measured spectra) or
+<a class="reference internal" href="Quick_Start_Synthetic.html"><span class="std std-doc">Quick Start: Synthetic Spectra</span></a> (for forward modeling).
+This guide is more detailed and assumes you are ready to edit configuration files
+or use the Python API.</p>
+<p>For the underlying equations and the physical assumptions of the inversion, see the
+<a class="reference internal" href="../physics/README.html"><span class="std std-doc">physics reference</span></a>.</p>
+<section id="table-of-contents">
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="#installation">Installation</a></p></li>
+<li><p><a class="reference internal" href="#quick-start">Quick Start</a></p></li>
+<li><p><a class="reference internal" href="#forward-modeling">Forward Modeling</a></p></li>
+<li><p><a class="reference internal" href="#echellogram-extraction">Echellogram Extraction</a></p></li>
+<li><p><a class="reference internal" href="#configuration-files">Configuration Files</a></p></li>
+<li><p><a class="reference internal" href="#advanced-usage">Advanced Usage</a></p></li>
+<li><p><a class="reference internal" href="#troubleshooting">Troubleshooting</a></p></li>
+<li><p><a class="reference internal" href="#examples">Examples</a></p></li>
+</ol>
+<hr class="docutils" />
+</section>
+<section id="installation">
+<span id="id1"></span><h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
+<section id="requirements">
+<h3>Requirements<a class="headerlink" href="#requirements" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Python 3.8 or higher</p></li>
+<li><p>NumPy &gt;= 1.20.0</p></li>
+<li><p>SciPy &gt;= 1.7.0</p></li>
+<li><p>Pandas &gt;= 1.3.0</p></li>
+<li><p>PyYAML &gt;= 5.4.0</p></li>
+</ul>
+</section>
+<section id="installation-methods">
+<h3>Installation Methods<a class="headerlink" href="#installation-methods" title="Link to this heading"></a></h3>
+<section id="from-source-development">
+<h4>From Source (Development)<a class="headerlink" href="#from-source-development" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/yourusername/CF-LIBS.git
+<span class="nb">cd</span><span class="w"> </span>CF-LIBS
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</pre></div>
+</div>
+</section>
+<section id="with-optional-dependencies">
+<h4>With Optional Dependencies<a class="headerlink" href="#with-optional-dependencies" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># With JAX (for future manifold generation)</span>
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[jax]&quot;</span>
+
+<span class="c1"># With HDF5 support</span>
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[hdf5]&quot;</span>
+
+<span class="c1"># With all optional dependencies</span>
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[all]&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="verify-installation">
+<h3>Verify Installation<a class="headerlink" href="#verify-installation" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">cflibs</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">cflibs</span><span class="o">.</span><span class="n">__version__</span><span class="p">)</span>  <span class="c1"># Should print 0.1.0</span>
+</pre></div>
+</div>
+<hr class="docutils" />
+</section>
+</section>
+<section id="quick-start">
+<span id="id2"></span><h2>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h2>
+<section id="generate-your-first-spectrum">
+<h3>Generate Your First Spectrum<a class="headerlink" href="#generate-your-first-spectrum" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Create a configuration file</strong> (<code class="docutils literal notranslate"><span class="pre">my_config.yaml</span></code>):</p></li>
+</ol>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">atomic_database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libs_production.db</span>
+
+<span class="nt">plasma</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">single_zone_lte</span>
+<span class="w">  </span><span class="nt">Te</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10000.0</span>
+<span class="w">  </span><span class="nt">ne</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e17</span>
+<span class="w">  </span><span class="nt">species</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Fe</span>
+<span class="w">      </span><span class="nt">number_density</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e15</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">H</span>
+<span class="w">      </span><span class="nt">number_density</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e16</span>
+
+<span class="nt">instrument</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">resolution_fwhm_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.05</span>
+
+<span class="nt">spectrum</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">lambda_min_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200.0</span>
+<span class="w">  </span><span class="nt">lambda_max_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">800.0</span>
+<span class="w">  </span><span class="nt">delta_lambda_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.01</span>
+<span class="w">  </span><span class="nt">path_length_m</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.01</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Generate the spectrum</strong>:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>forward<span class="w"> </span>my_config.yaml<span class="w"> </span>--output<span class="w"> </span>spectrum.csv
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p><strong>Load and plot</strong> (Python):</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+
+<span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="s1">&#39;spectrum.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s1">&#39;,&#39;</span><span class="p">,</span> <span class="n">skiprows</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">wavelength</span> <span class="o">=</span> <span class="n">data</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+<span class="n">intensity</span> <span class="o">=</span> <span class="n">data</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">wavelength</span><span class="p">,</span> <span class="n">intensity</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Wavelength (nm)&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Intensity (W m⁻² nm⁻¹ sr⁻¹)&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Synthetic LIBS Spectrum&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+<hr class="docutils" />
+</section>
+</section>
+<section id="forward-modeling">
+<span id="id3"></span><h2>Forward Modeling<a class="headerlink" href="#forward-modeling" title="Link to this heading"></a></h2>
+<section id="using-the-python-api">
+<h3>Using the Python API<a class="headerlink" href="#using-the-python-api" title="Link to this heading"></a></h3>
+<section id="basic-example">
+<h4>Basic Example<a class="headerlink" href="#basic-example" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.plasma</span> <span class="kn">import</span> <span class="n">SingleZoneLTEPlasma</span>
+<span class="kn">from</span> <span class="nn">cflibs.atomic</span> <span class="kn">import</span> <span class="n">AtomicDatabase</span>
+<span class="kn">from</span> <span class="nn">cflibs.instrument</span> <span class="kn">import</span> <span class="n">InstrumentModel</span>
+<span class="kn">from</span> <span class="nn">cflibs.radiation</span> <span class="kn">import</span> <span class="n">SpectrumModel</span>
+
+<span class="c1"># 1. Load atomic database</span>
+<span class="n">atomic_db</span> <span class="o">=</span> <span class="n">AtomicDatabase</span><span class="p">(</span><span class="s2">&quot;libs_production.db&quot;</span><span class="p">)</span>
+
+<span class="c1"># 2. Create plasma state</span>
+<span class="n">plasma</span> <span class="o">=</span> <span class="n">SingleZoneLTEPlasma</span><span class="p">(</span>
+    <span class="n">T_e</span><span class="o">=</span><span class="mf">10000.0</span><span class="p">,</span>  <span class="c1"># Electron temperature in K</span>
+    <span class="n">n_e</span><span class="o">=</span><span class="mf">1e17</span><span class="p">,</span>     <span class="c1"># Electron density in cm^-3</span>
+    <span class="n">species</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;Fe&quot;</span><span class="p">:</span> <span class="mf">1e15</span><span class="p">,</span>  <span class="c1"># Iron density in cm^-3</span>
+        <span class="s2">&quot;H&quot;</span><span class="p">:</span>  <span class="mf">1e16</span><span class="p">,</span>  <span class="c1"># Hydrogen density in cm^-3</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># 3. Create instrument model</span>
+<span class="n">instrument</span> <span class="o">=</span> <span class="n">InstrumentModel</span><span class="p">(</span><span class="n">resolution_fwhm_nm</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+
+<span class="c1"># 4. Create spectrum model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">SpectrumModel</span><span class="p">(</span>
+    <span class="n">plasma</span><span class="o">=</span><span class="n">plasma</span><span class="p">,</span>
+    <span class="n">atomic_db</span><span class="o">=</span><span class="n">atomic_db</span><span class="p">,</span>
+    <span class="n">instrument</span><span class="o">=</span><span class="n">instrument</span><span class="p">,</span>
+    <span class="n">lambda_min</span><span class="o">=</span><span class="mf">200.0</span><span class="p">,</span>    <span class="c1"># Minimum wavelength in nm</span>
+    <span class="n">lambda_max</span><span class="o">=</span><span class="mf">800.0</span><span class="p">,</span>    <span class="c1"># Maximum wavelength in nm</span>
+    <span class="n">delta_lambda</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>   <span class="c1"># Wavelength step in nm</span>
+    <span class="n">path_length_m</span><span class="o">=</span><span class="mf">0.01</span>   <span class="c1"># Plasma path length in meters</span>
+<span class="p">)</span>
+
+<span class="c1"># 5. Compute spectrum</span>
+<span class="n">wavelength</span><span class="p">,</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">compute_spectrum</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="understanding-plasma-parameters">
+<h3>Understanding Plasma Parameters<a class="headerlink" href="#understanding-plasma-parameters" title="Link to this heading"></a></h3>
+<section id="electron-temperature-t-e">
+<h4>Electron Temperature (T_e)<a class="headerlink" href="#electron-temperature-t-e" title="Link to this heading"></a></h4>
+<p>The electron temperature determines the excitation and ionization balance. Typical values:</p>
+<ul class="simple">
+<li><p><strong>Low temperature</strong>: 5,000 - 8,000 K (weak ionization, mostly neutral lines)</p></li>
+<li><p><strong>Medium temperature</strong>: 8,000 - 15,000 K (balanced neutral/ion lines)</p></li>
+<li><p><strong>High temperature</strong>: 15,000 - 25,000 K (strong ionization, many ion lines)</p></li>
+</ul>
+</section>
+<section id="electron-density-n-e">
+<h4>Electron Density (n_e)<a class="headerlink" href="#electron-density-n-e" title="Link to this heading"></a></h4>
+<p>The electron density affects:</p>
+<ul class="simple">
+<li><p>Ionization balance (via Saha equation)</p></li>
+<li><p>Line broadening (Stark effect, Phase 2)</p></li>
+<li><p>LTE validity (McWhirter criterion)</p></li>
+</ul>
+<p>Typical values: 10¹⁶ - 10¹⁸ cm⁻³</p>
+</section>
+<section id="species-densities">
+<h4>Species Densities<a class="headerlink" href="#species-densities" title="Link to this heading"></a></h4>
+<p>Number densities of each element in cm⁻³. The relative values determine the composition.</p>
+<p><strong>Example</strong>: For a 90% Ti, 6% Al, 4% V alloy:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">species</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;Ti&quot;</span><span class="p">:</span> <span class="mf">9.0e15</span><span class="p">,</span>  <span class="c1"># 90% of 1e16 total</span>
+    <span class="s2">&quot;Al&quot;</span><span class="p">:</span> <span class="mf">6.0e14</span><span class="p">,</span>  <span class="c1"># 6% of 1e16 total</span>
+    <span class="s2">&quot;V&quot;</span><span class="p">:</span>  <span class="mf">4.0e14</span><span class="p">,</span>  <span class="c1"># 4% of 1e16 total</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="instrument-parameters">
+<h3>Instrument Parameters<a class="headerlink" href="#instrument-parameters" title="Link to this heading"></a></h3>
+<section id="resolution-fwhm">
+<h4>Resolution (FWHM)<a class="headerlink" href="#resolution-fwhm" title="Link to this heading"></a></h4>
+<p>The instrument resolution determines line broadening. Typical values:</p>
+<ul class="simple">
+<li><p><strong>High resolution</strong>: 0.01 - 0.05 nm (echelle spectrometers)</p></li>
+<li><p><strong>Medium resolution</strong>: 0.1 - 0.5 nm (standard spectrometers)</p></li>
+<li><p><strong>Low resolution</strong>: &gt; 0.5 nm (simple spectrometers)</p></li>
+</ul>
+</section>
+<section id="response-curve">
+<h4>Response Curve<a class="headerlink" href="#response-curve" title="Link to this heading"></a></h4>
+<p>Optional spectral response curve to account for detector/optics efficiency:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Load from file</span>
+<span class="n">instrument</span> <span class="o">=</span> <span class="n">InstrumentModel</span><span class="p">(</span>
+    <span class="n">resolution_fwhm_nm</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+    <span class="n">response_curve</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="s1">&#39;response_curve.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s1">&#39;,&#39;</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<hr class="docutils" />
+</section>
+</section>
+</section>
+<section id="echellogram-extraction">
+<span id="id4"></span><h2>Echellogram Extraction<a class="headerlink" href="#echellogram-extraction" title="Link to this heading"></a></h2>
+<section id="basic-usage">
+<h3>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.instrument</span> <span class="kn">import</span> <span class="n">EchelleExtractor</span>
+<span class="kn">from</span> <span class="nn">cflibs.io</span> <span class="kn">import</span> <span class="n">save_spectrum</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="c1"># Load calibration</span>
+<span class="n">extractor</span> <span class="o">=</span> <span class="n">EchelleExtractor</span><span class="p">(</span><span class="s1">&#39;calibration.json&#39;</span><span class="p">)</span>
+
+<span class="c1"># Load 2D image (from FITS, TIFF, or NumPy)</span>
+<span class="n">image_2d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;echellogram.npy&#39;</span><span class="p">)</span>  <span class="c1"># Shape: (height, width)</span>
+
+<span class="c1"># Extract 1D spectrum</span>
+<span class="n">wavelength</span><span class="p">,</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">extractor</span><span class="o">.</span><span class="n">extract_spectrum</span><span class="p">(</span>
+    <span class="n">image_2d</span><span class="p">,</span>
+    <span class="n">wavelength_step_nm</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+    <span class="n">merge_method</span><span class="o">=</span><span class="s1">&#39;weighted_average&#39;</span>
+<span class="p">)</span>
+
+<span class="c1"># Save result</span>
+<span class="n">save_spectrum</span><span class="p">(</span><span class="s1">&#39;extracted_spectrum.csv&#39;</span><span class="p">,</span> <span class="n">wavelength</span><span class="p">,</span> <span class="n">intensity</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="calibration-file-format">
+<h3>Calibration File Format<a class="headerlink" href="#calibration-file-format" title="Link to this heading"></a></h3>
+<p>The calibration file is a JSON file with polynomial coefficients:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;order_50&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;y_coeffs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0001</span><span class="p">,</span><span class="w"> </span><span class="mf">0.1</span><span class="p">,</span><span class="w"> </span><span class="mi">500</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;wl_coeffs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">0.05</span><span class="p">,</span><span class="w"> </span><span class="mf">300.0</span><span class="p">]</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;order_49&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;y_coeffs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0001</span><span class="p">,</span><span class="w"> </span><span class="mf">0.1</span><span class="p">,</span><span class="w"> </span><span class="mi">700</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;wl_coeffs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">0.05</span><span class="p">,</span><span class="w"> </span><span class="mf">350.0</span><span class="p">]</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Where:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">y_coeffs</span></code>: Polynomial coefficients for trace position y(x) = a₂x² + a₁x + a₀</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wl_coeffs</span></code>: Polynomial coefficients for wavelength λ(x) = k₁x + k₀</p></li>
+</ul>
+</section>
+<section id="extraction-options">
+<h3>Extraction Options<a class="headerlink" href="#extraction-options" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Custom extraction window</span>
+<span class="n">extractor</span> <span class="o">=</span> <span class="n">EchelleExtractor</span><span class="p">(</span>
+    <span class="n">calibration_file</span><span class="o">=</span><span class="s1">&#39;calibration.json&#39;</span><span class="p">,</span>
+    <span class="n">extraction_window</span><span class="o">=</span><span class="mi">7</span>  <span class="c1"># Use ±7 pixels instead of default ±5</span>
+<span class="p">)</span>
+
+<span class="c1"># Custom merge method</span>
+<span class="n">wavelength</span><span class="p">,</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">extractor</span><span class="o">.</span><span class="n">extract_spectrum</span><span class="p">(</span>
+    <span class="n">image_2d</span><span class="p">,</span>
+    <span class="n">wavelength_step_nm</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>      <span class="c1"># Higher resolution</span>
+    <span class="n">merge_method</span><span class="o">=</span><span class="s1">&#39;max&#39;</span><span class="p">,</span>            <span class="c1"># Use maximum in overlaps</span>
+    <span class="n">min_valid_pixels</span><span class="o">=</span><span class="mi">20</span>            <span class="c1"># Require at least 20 valid pixels</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<hr class="docutils" />
+</section>
+</section>
+<section id="configuration-files">
+<span id="id5"></span><h2>Configuration Files<a class="headerlink" href="#configuration-files" title="Link to this heading"></a></h2>
+<section id="structure">
+<h3>Structure<a class="headerlink" href="#structure" title="Link to this heading"></a></h3>
+<p>Configuration files use YAML or JSON format:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># Required sections</span>
+<span class="nt">atomic_database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;path&gt;</span>
+<span class="nt">plasma</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;plasma_config&gt;</span>
+<span class="nt">instrument</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;instrument_config&gt;</span>
+<span class="nt">spectrum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;spectrum_config&gt;</span>
+
+<span class="c1"># Optional sections</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">author</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Your</span><span class="nv"> </span><span class="s">Name&quot;</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Simulation</span><span class="nv"> </span><span class="s">description&quot;</span>
+<span class="w">  </span><span class="nt">date</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2025-01-01&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="plasma-configuration">
+<h3>Plasma Configuration<a class="headerlink" href="#plasma-configuration" title="Link to this heading"></a></h3>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">plasma</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">single_zone_lte</span><span class="w">      </span><span class="c1"># Currently only this model</span>
+<span class="w">  </span><span class="nt">Te</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10000.0</span><span class="w">                  </span><span class="c1"># Electron temperature in K</span>
+<span class="w">  </span><span class="nt">ne</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e17</span><span class="w">                   </span><span class="c1"># Electron density in cm^-3</span>
+<span class="w">  </span><span class="nt">Tg</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span><span class="w">                     </span><span class="c1"># Gas temperature (optional, defaults to Te)</span>
+<span class="w">  </span><span class="nt">pressure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w">                </span><span class="c1"># Pressure in atm (optional)</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="nt">species</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Fe</span>
+<span class="w">      </span><span class="nt">number_density</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e15</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">H</span>
+<span class="w">      </span><span class="nt">number_density</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e16</span>
+</pre></div>
+</div>
+</section>
+<section id="instrument-configuration">
+<h3>Instrument Configuration<a class="headerlink" href="#instrument-configuration" title="Link to this heading"></a></h3>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">instrument</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">resolution_fwhm_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.05</span><span class="w">     </span><span class="c1"># Required: Resolution (FWHM) in nm</span>
+<span class="w">  </span><span class="nt">response_curve</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span><span class="w">         </span><span class="c1"># Optional: Path to response curve CSV</span>
+</pre></div>
+</div>
+</section>
+<section id="spectrum-configuration">
+<h3>Spectrum Configuration<a class="headerlink" href="#spectrum-configuration" title="Link to this heading"></a></h3>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">spectrum</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">lambda_min_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200.0</span><span class="w">         </span><span class="c1"># Minimum wavelength in nm</span>
+<span class="w">  </span><span class="nt">lambda_max_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">800.0</span><span class="w">         </span><span class="c1"># Maximum wavelength in nm</span>
+<span class="w">  </span><span class="nt">delta_lambda_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.01</span><span class="w">        </span><span class="c1"># Wavelength step in nm</span>
+<span class="w">  </span><span class="nt">path_length_m</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.01</span><span class="w">          </span><span class="c1"># Plasma path length in meters</span>
+</pre></div>
+</div>
+</section>
+<section id="example-configurations">
+<h3>Example Configurations<a class="headerlink" href="#example-configurations" title="Link to this heading"></a></h3>
+<p>See <code class="docutils literal notranslate"><span class="pre">examples/config_example.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">examples/config_ti64.yaml</span></code> for complete examples.</p>
+<hr class="docutils" />
+</section>
+</section>
+<section id="advanced-usage">
+<span id="id6"></span><h2>Advanced Usage<a class="headerlink" href="#advanced-usage" title="Link to this heading"></a></h2>
+<section id="inversion-classic-cf-libs">
+<h3>Inversion (Classic CF-LIBS)<a class="headerlink" href="#inversion-classic-cf-libs" title="Link to this heading"></a></h3>
+<p>The CLI supports classic CF-LIBS inversion using detected spectral lines.
+Provide a spectrum file plus an inversion config.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>invert<span class="w"> </span>spectrum.csv<span class="w"> </span>--elements<span class="w"> </span>Fe<span class="w"> </span>Cu<span class="w"> </span>--config<span class="w"> </span>examples/inversion_config_example.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output<span class="w"> </span>inversion_results.json
+</pre></div>
+</div>
+</section>
+<section id="inversion-configuration">
+<h3>Inversion Configuration<a class="headerlink" href="#inversion-configuration" title="Link to this heading"></a></h3>
+<p>Inversion settings live under the <code class="docutils literal notranslate"><span class="pre">analysis</span></code> section. Minimal schema:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">atomic_database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libs_production.db</span>
+
+<span class="nt">analysis</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">elements</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;Fe&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;Cu&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">closure_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span><span class="w">  </span><span class="c1"># standard | matrix | oxide</span>
+<span class="w">  </span><span class="nt">min_snr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10.0</span>
+<span class="w">  </span><span class="nt">min_energy_spread_ev</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2.0</span>
+<span class="w">  </span><span class="nt">min_lines_per_element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">  </span><span class="nt">exclude_resonance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">isolation_wavelength_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<span class="w">  </span><span class="nt">max_lines_per_element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<span class="w">  </span><span class="nt">wavelength_tolerance_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<span class="w">  </span><span class="nt">min_peak_height</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.01</span>
+<span class="w">  </span><span class="nt">peak_width_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.2</span>
+<span class="w">  </span><span class="nt">max_iterations</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<span class="w">  </span><span class="nt">t_tolerance_k</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100.0</span>
+<span class="w">  </span><span class="nt">ne_tolerance_frac</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<span class="w">  </span><span class="nt">pressure_pa</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">101325.0</span>
+<span class="w">  </span><span class="nt">min_relative_intensity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+<span class="w">  </span><span class="c1"># closure_kwargs:</span>
+<span class="w">  </span><span class="c1">#   matrix_element: Fe</span>
+<span class="w">  </span><span class="c1">#   oxide_elements: [&quot;Si&quot;, &quot;Al&quot;, &quot;Ca&quot;]</span>
+</pre></div>
+</div>
+<p>If you omit <code class="docutils literal notranslate"><span class="pre">--elements</span></code>, the CLI uses <code class="docutils literal notranslate"><span class="pre">analysis.elements</span></code>.</p>
+</section>
+<section id="custom-partition-functions">
+<h3>Custom Partition Functions<a class="headerlink" href="#custom-partition-functions" title="Link to this heading"></a></h3>
+<p>The Saha-Boltzmann solver automatically calculates partition functions from energy levels. If energy levels are not available, it uses approximations.</p>
+</section>
+<section id="multi-species-plasmas">
+<h3>Multi-Species Plasmas<a class="headerlink" href="#multi-species-plasmas" title="Link to this heading"></a></h3>
+<p>You can include any number of species:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">plasma</span> <span class="o">=</span> <span class="n">SingleZoneLTEPlasma</span><span class="p">(</span>
+    <span class="n">T_e</span><span class="o">=</span><span class="mf">12000.0</span><span class="p">,</span>
+    <span class="n">n_e</span><span class="o">=</span><span class="mf">1e17</span><span class="p">,</span>
+    <span class="n">species</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;Ti&quot;</span><span class="p">:</span> <span class="mf">8.0e15</span><span class="p">,</span>
+        <span class="s2">&quot;Al&quot;</span><span class="p">:</span> <span class="mf">6.0e14</span><span class="p">,</span>
+        <span class="s2">&quot;V&quot;</span><span class="p">:</span>  <span class="mf">4.0e14</span><span class="p">,</span>
+        <span class="s2">&quot;Fe&quot;</span><span class="p">:</span> <span class="mf">1.0e13</span><span class="p">,</span>  <span class="c1"># Trace element</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="extracting-individual-orders">
+<h3>Extracting Individual Orders<a class="headerlink" href="#extracting-individual-orders" title="Link to this heading"></a></h3>
+<p>For debugging or analysis:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Extract a single order</span>
+<span class="n">wl_order</span><span class="p">,</span> <span class="n">flux_order</span> <span class="o">=</span> <span class="n">extractor</span><span class="o">.</span><span class="n">extract_order</span><span class="p">(</span>
+    <span class="n">image_2d</span><span class="p">,</span>
+    <span class="n">order_name</span><span class="o">=</span><span class="s1">&#39;order_50&#39;</span><span class="p">,</span>
+    <span class="n">background_subtract</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="batch-processing">
+<h3>Batch Processing<a class="headerlink" href="#batch-processing" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">glob</span>
+<span class="kn">from</span> <span class="nn">cflibs.core.config</span> <span class="kn">import</span> <span class="n">load_config</span>
+<span class="kn">from</span> <span class="nn">cflibs.radiation</span> <span class="kn">import</span> <span class="n">SpectrumModel</span>
+<span class="c1"># ... (setup code)</span>
+
+<span class="n">configs</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;configs/*.yaml&#39;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">config_file</span> <span class="ow">in</span> <span class="n">configs</span><span class="p">:</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">load_config</span><span class="p">(</span><span class="n">config_file</span><span class="p">)</span>
+    <span class="c1"># ... (process each config)</span>
+</pre></div>
+</div>
+</section>
+<section id="bayesian-inference">
+<span id="id7"></span><h3>Bayesian Inference<a class="headerlink" href="#bayesian-inference" title="Link to this heading"></a></h3>
+<p>Bayesian inversion is available through the dedicated <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">bayesian</span></code>
+command when the optional NumPyro stack is installed:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[bayesian]&quot;</span>
+cflibs<span class="w"> </span>bayesian<span class="w"> </span>spectrum.csv<span class="w"> </span>--elements<span class="w"> </span>Fe,Cr,Ni<span class="w"> </span>--output<span class="w"> </span>posterior.nc
+</pre></div>
+</div>
+<p>Use this path when you need posterior intervals, chain diagnostics, and
+posterior-predictive checks rather than a single point estimate.</p>
+</section>
+<section id="inversion-diagnostics">
+<span id="id8"></span><h3>Inversion Diagnostics<a class="headerlink" href="#inversion-diagnostics" title="Link to this heading"></a></h3>
+<p>For difficult spectra, inspect more than the final concentrations:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">result.boltzmann_fits</span></code> for per-element slopes, intercepts, and <code class="docutils literal notranslate"><span class="pre">R²</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">result.convergence_history</span></code> to see whether <code class="docutils literal notranslate"><span class="pre">T</span></code> and <code class="docutils literal notranslate"><span class="pre">n_e</span></code> stabilized.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">result.quality_metrics</span></code> for McWhirter, consistency, and self-absorption flags.</p></li>
+<li><p>DEBUG logging from <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">analyze</span></code> / <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">invert</span></code> to see why lines were rejected.</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+</section>
+<section id="troubleshooting">
+<span id="id9"></span><h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading"></a></h2>
+<section id="common-issues">
+<h3>Common Issues<a class="headerlink" href="#common-issues" title="Link to this heading"></a></h3>
+<section id="atomic-database-not-found">
+<h4>“Atomic database not found”<a class="headerlink" href="#atomic-database-not-found" title="Link to this heading"></a></h4>
+<p><strong>Problem</strong>: The database file doesn’t exist.</p>
+<p><strong>Solution</strong>: Use the bundled example database or generate a new one:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>forward<span class="w"> </span>examples/config_example.yaml<span class="w"> </span>--output<span class="w"> </span>spectrum.csv
+cflibs<span class="w"> </span>generate-db<span class="w"> </span>--db-path<span class="w"> </span>libs_production.db
+</pre></div>
+</div>
+</section>
+<section id="no-orders-calibrated">
+<h4>“No orders calibrated”<a class="headerlink" href="#no-orders-calibrated" title="Link to this heading"></a></h4>
+<p><strong>Problem</strong>: Echelle extractor has no calibration loaded.</p>
+<p><strong>Solution</strong>: Load calibration file:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">extractor</span> <span class="o">=</span> <span class="n">EchelleExtractor</span><span class="p">(</span><span class="s1">&#39;calibration.json&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="invalid-plasma-state">
+<h4>“Invalid plasma state”<a class="headerlink" href="#invalid-plasma-state" title="Link to this heading"></a></h4>
+<p><strong>Problem</strong>: Plasma parameters are invalid (negative temperatures, etc.).</p>
+<p><strong>Solution</strong>: Check your configuration:</p>
+<ul class="simple">
+<li><p>T_e &gt; 0</p></li>
+<li><p>n_e &gt; 0</p></li>
+<li><p>All species densities &gt; 0</p></li>
+</ul>
+</section>
+<section id="wavelength-grid-must-be-evenly-spaced">
+<h4>“Wavelength grid must be evenly spaced”<a class="headerlink" href="#wavelength-grid-must-be-evenly-spaced" title="Link to this heading"></a></h4>
+<p><strong>Problem</strong>: Trying to apply instrument function to non-uniform grid.</p>
+<p><strong>Solution</strong>: Use evenly spaced wavelength grids for convolution.</p>
+</section>
+</section>
+<section id="performance-tips">
+<h3>Performance Tips<a class="headerlink" href="#performance-tips" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Filter transitions</strong>: Use <code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code> to reduce computation</p></li>
+<li><p><strong>Reduce wavelength range</strong>: Only compute the range you need</p></li>
+<li><p><strong>Increase wavelength step</strong>: Use larger <code class="docutils literal notranslate"><span class="pre">delta_lambda</span></code> for faster computation</p></li>
+<li><p><strong>Cache atomic database</strong>: Keep database connection open for multiple calculations</p></li>
+</ol>
+</section>
+<section id="getting-help">
+<h3>Getting Help<a class="headerlink" href="#getting-help" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Check the <a class="reference internal" href="../reference/API_Reference.html"><span class="std std-doc">API Reference</span></a></p></li>
+<li><p>Review the <code class="docutils literal notranslate"><span class="pre">examples/</span></code> directory in the repository root</p></li>
+<li><p>See <code class="docutils literal notranslate"><span class="pre">CONTRIBUTING.md</span></code> for development questions</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+</section>
+<section id="examples">
+<span id="id10"></span><h2>Examples<a class="headerlink" href="#examples" title="Link to this heading"></a></h2>
+<section id="example-1-ti-6al-4v-alloy">
+<h3>Example 1: Ti-6Al-4V Alloy<a class="headerlink" href="#example-1-ti-6al-4v-alloy" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.plasma</span> <span class="kn">import</span> <span class="n">SingleZoneLTEPlasma</span>
+<span class="kn">from</span> <span class="nn">cflibs.atomic</span> <span class="kn">import</span> <span class="n">AtomicDatabase</span>
+<span class="kn">from</span> <span class="nn">cflibs.radiation</span> <span class="kn">import</span> <span class="n">SpectrumModel</span>
+<span class="kn">from</span> <span class="nn">cflibs.instrument</span> <span class="kn">import</span> <span class="n">InstrumentModel</span>
+
+<span class="c1"># Load database</span>
+<span class="n">atomic_db</span> <span class="o">=</span> <span class="n">AtomicDatabase</span><span class="p">(</span><span class="s2">&quot;libs_production.db&quot;</span><span class="p">)</span>
+
+<span class="c1"># Ti-6Al-4V composition</span>
+<span class="n">plasma</span> <span class="o">=</span> <span class="n">SingleZoneLTEPlasma</span><span class="p">(</span>
+    <span class="n">T_e</span><span class="o">=</span><span class="mf">12000.0</span><span class="p">,</span>
+    <span class="n">n_e</span><span class="o">=</span><span class="mf">1e17</span><span class="p">,</span>
+    <span class="n">species</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;Ti&quot;</span><span class="p">:</span> <span class="mf">8.0e15</span><span class="p">,</span>  <span class="c1"># ~90%</span>
+        <span class="s2">&quot;Al&quot;</span><span class="p">:</span> <span class="mf">6.0e14</span><span class="p">,</span>  <span class="c1"># ~6%</span>
+        <span class="s2">&quot;V&quot;</span><span class="p">:</span>  <span class="mf">4.0e14</span><span class="p">,</span>  <span class="c1"># ~4%</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># High-resolution instrument</span>
+<span class="n">instrument</span> <span class="o">=</span> <span class="n">InstrumentModel</span><span class="p">(</span><span class="n">resolution_fwhm_nm</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+
+<span class="c1"># UV-NIR range</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">SpectrumModel</span><span class="p">(</span>
+    <span class="n">plasma</span><span class="p">,</span> <span class="n">atomic_db</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span>
+    <span class="n">lambda_min</span><span class="o">=</span><span class="mf">300.0</span><span class="p">,</span>
+    <span class="n">lambda_max</span><span class="o">=</span><span class="mf">500.0</span><span class="p">,</span>
+    <span class="n">delta_lambda</span><span class="o">=</span><span class="mf">0.005</span>
+<span class="p">)</span>
+
+<span class="n">wavelength</span><span class="p">,</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">compute_spectrum</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="example-2-temperature-scan">
+<h3>Example 2: Temperature Scan<a class="headerlink" href="#example-2-temperature-scan" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+
+<span class="n">temperatures</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">8000</span><span class="p">,</span> <span class="mi">15000</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+<span class="n">spectra</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="k">for</span> <span class="n">T_e</span> <span class="ow">in</span> <span class="n">temperatures</span><span class="p">:</span>
+    <span class="n">plasma</span> <span class="o">=</span> <span class="n">SingleZoneLTEPlasma</span><span class="p">(</span>
+        <span class="n">T_e</span><span class="o">=</span><span class="n">T_e</span><span class="p">,</span>
+        <span class="n">n_e</span><span class="o">=</span><span class="mf">1e17</span><span class="p">,</span>
+        <span class="n">species</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Fe&quot;</span><span class="p">:</span> <span class="mf">1e15</span><span class="p">}</span>
+    <span class="p">)</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">SpectrumModel</span><span class="p">(</span><span class="n">plasma</span><span class="p">,</span> <span class="n">atomic_db</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">)</span>
+    <span class="n">wl</span><span class="p">,</span> <span class="n">I</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">compute_spectrum</span><span class="p">()</span>
+    <span class="n">spectra</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">T_e</span><span class="p">,</span> <span class="n">I</span><span class="p">))</span>
+
+<span class="c1"># Plot temperature dependence</span>
+<span class="k">for</span> <span class="n">T_e</span><span class="p">,</span> <span class="n">I</span> <span class="ow">in</span> <span class="n">spectra</span><span class="p">:</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">wl</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;T=</span><span class="si">{</span><span class="n">T_e</span><span class="si">:</span><span class="s1">.0f</span><span class="si">}</span><span class="s1"> K&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="example-3-composition-scan">
+<h3>Example 3: Composition Scan<a class="headerlink" href="#example-3-composition-scan" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">al_concentrations</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.12</span><span class="p">,</span> <span class="mi">13</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">al_conc</span> <span class="ow">in</span> <span class="n">al_concentrations</span><span class="p">:</span>
+    <span class="n">ti_conc</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">al_conc</span>
+    <span class="n">plasma</span> <span class="o">=</span> <span class="n">SingleZoneLTEPlasma</span><span class="p">(</span>
+        <span class="n">T_e</span><span class="o">=</span><span class="mf">10000.0</span><span class="p">,</span>
+        <span class="n">n_e</span><span class="o">=</span><span class="mf">1e17</span><span class="p">,</span>
+        <span class="n">species</span><span class="o">=</span><span class="p">{</span>
+            <span class="s2">&quot;Ti&quot;</span><span class="p">:</span> <span class="n">ti_conc</span> <span class="o">*</span> <span class="mf">1e16</span><span class="p">,</span>
+            <span class="s2">&quot;Al&quot;</span><span class="p">:</span> <span class="n">al_conc</span> <span class="o">*</span> <span class="mf">1e16</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
+    <span class="c1"># ... compute spectrum</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Explore the <a class="reference internal" href="../reference/API_Reference.html"><span class="std std-doc">API Reference</span></a> for detailed function documentation</p></li>
+<li><p>Check out the <code class="docutils literal notranslate"><span class="pre">examples/</span></code> directory for more use cases</p></li>
+<li><p>Read <code class="docutils literal notranslate"><span class="pre">CONTRIBUTING.md</span></code> if you want to help develop CF-LIBS</p></li>
+</ul>
+<p>For questions or issues, please open an issue on GitHub.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Quick_Start_Synthetic.html" class="btn btn-neutral float-left" title="Quick Start: Synthetic Spectra" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Manifold_Generation_Guide.html" class="btn btn-neutral float-right" title="Manifold Generation Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

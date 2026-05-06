@@ -1,0 +1,629 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PRD: Physics And Algorithmic Fidelity Overhaul &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Real_Data.html">Quick Start: Analyzing Real LIBS Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Peak_Identification_Guide.html">Peak Identification and Line Matching Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Synthetic.html">Quick Start: Synthetic Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../physics/README.html">Physics Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html">Physics: Equations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-n-z-1-n-e-n-z">$$
+\frac{n_{z+1}, n_e}{n_z}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#varepsilon-ki-lambda">$$
+\varepsilon_{ki}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#gamma-text-stark-n-e-t">$$
+\gamma_{\text{Stark}}(n_e, T)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#v-lambda-sigma-gamma">$$
+V(\lambda; \sigma, \gamma)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-text-measured-lambda">$$
+I_{\text{measured}}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-ki">$$
+I_{ki}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#s-t-n-e">$$
+S(T, n_e)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#c-s-text-oxide">$$
+C_{s\text{-oxide}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#tau-0">$$
+\tau_0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Assumptions_And_Validity.html">Physics: Assumptions and Validity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Inversion_Algorithm.html">Physics: Iterative CF-LIBS Inversion Algorithm</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../reference/API_Reference.html">CF-LIBS API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Codebase_Architecture.html">CF-LIBS Codebase Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Database_Generation.html">Atomic Database Generation Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/Evolution_Framework.html">Evolution Framework</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Deployment.html">CF-LIBS Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/CODEEVOLVE_WAVE2_PLAN.html">CodeEvolve Wave 2 Planning Document</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">PRD: Physics And Algorithmic Fidelity Overhaul</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/validation/2026-03-05_physics_algorithm_epic_prd.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="prd-physics-and-algorithmic-fidelity-overhaul">
+<h1>PRD: Physics And Algorithmic Fidelity Overhaul<a class="headerlink" href="#prd-physics-and-algorithmic-fidelity-overhaul" title="Link to this heading"></a></h1>
+<section id="context">
+<h2>Context<a class="headerlink" href="#context" title="Link to this heading"></a></h2>
+<p>This PRD captures a physics-first review of the CF-LIBS codebase and defines a
+hierarchical remediation program focused on plasma thermodynamics, radiative
+modeling, inversion correctness, identifiability, and numerical performance.</p>
+<p>The review intentionally excludes codebase architecture concerns. The goal is to
+improve physical fidelity, remove inconsistent state semantics, strengthen
+validation, and recover computational efficiency without masking physically
+meaningful observables.</p>
+</section>
+<section id="review-summary">
+<h2>Review Summary<a class="headerlink" href="#review-summary" title="Link to this heading"></a></h2>
+<p>The current implementation is productive and broad in scope, but several core
+paths mix physically different quantities or normalize away signals that should
+be available to the inference process.</p>
+<p>Observed themes:</p>
+<ol class="arabic simple">
+<li><p>Plasma-state semantics are inconsistent across modules.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/plasma/saha_boltzmann.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solver.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/bayesian.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py</span></code></p></li>
+</ul>
+</li>
+<li><p>The line-population and transition bookkeeping is too coarse for a
+spectroscopic code path.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/plasma/saha_boltzmann.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/atomic/database.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/atomic/structures.py</span></code></p></li>
+</ul>
+</li>
+<li><p>Forward-model fidelity differs substantially between the classic spectrum
+model, the Bayesian forward model, and the manifold generator.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/bayesian.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py</span></code></p></li>
+</ul>
+</li>
+<li><p>Retrieval and embedding paths normalize away absolute intensity information
+that is physically informative for density, path length, throughput, and
+self-absorption.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/loader.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/vector_index.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/hybrid.py</span></code></p></li>
+</ul>
+</li>
+<li><p>Validation is mostly qualitative or monotonic.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_physics_invariants.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_plasma.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_radiation.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_bayesian.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_manifold_physics.py</span></code></p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="primary-findings">
+<h2>Primary Findings<a class="headerlink" href="#primary-findings" title="Link to this heading"></a></h2>
+<section id="f1-plasma-composition-heavy-particle-density-and-electron-density-are-not">
+<h3>F1. Plasma composition, heavy-particle density, and electron density are not<a class="headerlink" href="#f1-plasma-composition-heavy-particle-density-and-electron-density-are-not" title="Link to this heading"></a></h3>
+<p>treated as distinct physical quantities</p>
+<p>The forward-model implementations use element concentrations in places where a
+heavy-particle density scale should exist independently of <code class="docutils literal notranslate"><span class="pre">n_e</span></code>. This couples
+composition to electron density and makes abundances partially responsible for
+setting emissivity scale in a way that is not physically transparent.</p>
+</section>
+<section id="f2-the-production-saha-boltzmann-implementation-is-only-partially-coupled">
+<h3>F2. The production Saha-Boltzmann implementation is only partially coupled<a class="headerlink" href="#f2-the-production-saha-boltzmann-implementation-is-only-partially-coupled" title="Link to this heading"></a></h3>
+<p>The plasma solver uses a sequential neutral -&gt; ion -&gt; doubly ionized update and
+accepts <code class="docutils literal notranslate"><span class="pre">n_e</span></code> as an external input rather than solving a fully coupled
+ionization-plus-charge-neutrality system. This is acceptable as a temporary
+approximation but should not remain the canonical implementation for a physics
+library.</p>
+</section>
+<section id="f3-spectroscopic-state-identity-is-underspecified">
+<h3>F3. Spectroscopic state identity is underspecified<a class="headerlink" href="#f3-spectroscopic-state-identity-is-underspecified" title="Link to this heading"></a></h3>
+<p>Level populations are keyed by <code class="docutils literal notranslate"><span class="pre">(element,</span> <span class="pre">stage,</span> <span class="pre">energy)</span></code>. The database preserves
+additional distinctions such as statistical weight and line-specific metadata.
+This creates a risk of aliasing distinct upper states when energies coincide or
+are rounded together.</p>
+</section>
+<section id="f4-forward-model-fidelity-is-inconsistent-across-implementations">
+<h3>F4. Forward-model fidelity is inconsistent across implementations<a class="headerlink" href="#f4-forward-model-fidelity-is-inconsistent-across-implementations" title="Link to this heading"></a></h3>
+<p>The classic spectrum model uses a legacy scalar broadening mode and transition
+prefiltering by relative intensity, while Bayesian and manifold paths render
+Voigt/Stark profiles with different assumptions. The repo currently has multiple
+“truth” implementations rather than one validated kernel shared across contexts.</p>
+</section>
+<section id="f5-retrieval-discards-amplitude-information-too-early">
+<h3>F5. Retrieval discards amplitude information too early<a class="headerlink" href="#f5-retrieval-discards-amplitude-information-too-early" title="Link to this heading"></a></h3>
+<p>Cosine similarity, area normalization, and L2 normalization are useful for some
+tasks, but they are currently treated as default retrieval behavior. That makes
+the manifold insensitive to absolute-intensity cues that should help infer <code class="docutils literal notranslate"><span class="pre">n_e</span></code>,
+path length, throughput, and optical-depth effects.</p>
+</section>
+<section id="f6-some-correction-modules-are-empirical-placeholders-not-model-backed">
+<h3>F6. Some correction modules are empirical placeholders, not model-backed<a class="headerlink" href="#f6-some-correction-modules-are-empirical-placeholders-not-model-backed" title="Link to this heading"></a></h3>
+<p>corrections</p>
+<p>Matrix effects and parts of the non-ideal correction stack are represented by
+hard-coded empirical factors or simplified escape-factor models. These are valid
+placeholders, but they should be clearly separated from physics-backed models and
+carried with provenance.</p>
+</section>
+<section id="f7-validation-does-not-yet-enforce-quantitative-physical-agreement">
+<h3>F7. Validation does not yet enforce quantitative physical agreement<a class="headerlink" href="#f7-validation-does-not-yet-enforce-quantitative-physical-agreement" title="Link to this heading"></a></h3>
+<p>The test suite checks non-negativity, monotonicity, and basic scaling. It does
+not yet establish cross-model agreement, recovery accuracy, reference parity, or
+acceptable error envelopes for key observables such as line ratios, widths,
+ionization fractions, and synthetic inversion recovery.</p>
+</section>
+</section>
+<section id="goals">
+<h2>Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Make plasma-state semantics explicit and consistent across the forward and
+inverse pipelines.</p></li>
+<li><p>Establish one validated forward-physics kernel family shared by classic,
+Bayesian, and manifold workflows.</p></li>
+<li><p>Preserve physically informative observables during retrieval and inversion.</p></li>
+<li><p>Improve non-ideal plasma handling without hiding approximation boundaries.</p></li>
+<li><p>Add quantitative validation targets and performance budgets.</p></li>
+</ol>
+</section>
+<section id="non-goals">
+<h2>Non-Goals<a class="headerlink" href="#non-goals" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Re-architecting the package layout.</p></li>
+<li><p>Replacing all empirical models with first-principles collisional-radiative
+physics in one pass.</p></li>
+<li><p>Building a fully non-LTE solver in this update.</p></li>
+<li><p>Redesigning the CLI or documentation site structure.</p></li>
+</ol>
+</section>
+<section id="quality-gates">
+<h2>Quality Gates<a class="headerlink" href="#quality-gates" title="Link to this heading"></a></h2>
+<p>These commands must pass for every implementation bead unless a bead is
+documentation-only:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ruff</span> <span class="pre">check</span> <span class="pre">cflibs/</span> <span class="pre">tests/</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">black</span> <span class="pre">--check</span> <span class="pre">cflibs/</span> <span class="pre">tests/</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span> <span class="pre">pytest</span> <span class="pre">tests/test_plasma.py</span> <span class="pre">tests/test_radiation.py</span> <span class="pre">tests/test_physics_invariants.py</span> <span class="pre">-v</span></code></p></li>
+</ul>
+<p>For inversion-focused beads, also include:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span> <span class="pre">pytest</span> <span class="pre">tests/test_boltzmann.py</span> <span class="pre">tests/test_solver.py</span> <span class="pre">tests/test_bayesian.py</span> <span class="pre">tests/test_hybrid_inversion.py</span> <span class="pre">-v</span></code></p></li>
+</ul>
+<p>For manifold-focused beads, also include:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span> <span class="pre">pytest</span> <span class="pre">tests/test_manifold.py</span> <span class="pre">tests/test_manifold_physics.py</span> <span class="pre">tests/test_vector_index.py</span> <span class="pre">-v</span></code></p></li>
+</ul>
+<p>For performance-sensitive beads, also include:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">tests/test_benchmark.py</span> <span class="pre">-v</span></code></p></li>
+</ul>
+</section>
+<section id="workstreams">
+<h2>Workstreams<a class="headerlink" href="#workstreams" title="Link to this heading"></a></h2>
+</section>
+<section id="ws1-plasma-state-semantics-and-thermodynamic-closure">
+<h2>WS1. Plasma State Semantics And Thermodynamic Closure<a class="headerlink" href="#ws1-plasma-state-semantics-and-thermodynamic-closure" title="Link to this heading"></a></h2>
+<section id="ws1-01-define-canonical-plasma-state-semantics">
+<h3>WS1-01: Define canonical plasma state semantics<a class="headerlink" href="#ws1-01-define-canonical-plasma-state-semantics" title="Link to this heading"></a></h3>
+<p>As a developer, I need a single documented definition for temperature,
+electron-density, heavy-particle density, abundance, path length, and
+composition so all forward and inverse models use the same physical state.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Introduce a shared specification for abundance and density semantics used by
+classic, Bayesian, and manifold paths.</p></li>
+<li><p>Provide conversion helpers between mass fractions, number fractions,
+heavy-particle densities, and element number densities.</p></li>
+<li><p>Remove ambiguous places where concentrations are multiplied directly by <code class="docutils literal notranslate"><span class="pre">n_e</span></code>
+without an explicit physical scale.</p></li>
+</ul>
+</section>
+<section id="ws1-02-replace-sequential-ionization-updates-with-a-coupled-multi-stage-lte-solve">
+<h3>WS1-02: Replace sequential ionization updates with a coupled multi-stage LTE solve<a class="headerlink" href="#ws1-02-replace-sequential-ionization-updates-with-a-coupled-multi-stage-lte-solve" title="Link to this heading"></a></h3>
+<p>As a model developer, I need ionization balance to be solved as a coupled system
+with an explicit charge-neutrality target so stage populations remain physically
+consistent.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Solve neutral, singly ionized, and doubly ionized populations from one coupled
+system rather than sequential remainder splitting.</p></li>
+<li><p>Support a configurable number of ionization stages based on available data.</p></li>
+<li><p>Expose diagnostics for charge-neutrality residual and stage-population sum.</p></li>
+</ul>
+</section>
+<section id="ws1-03-harden-partition-function-evaluation">
+<h3>WS1-03: Harden partition-function evaluation<a class="headerlink" href="#ws1-03-harden-partition-function-evaluation" title="Link to this heading"></a></h3>
+<p>As a spectroscopic modeler, I need partition-function evaluation to respect data
+validity ranges and avoid undocumented constant fallbacks in production paths.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Validate polynomial coefficients against their supported temperature range.</p></li>
+<li><p>Use cached direct-sum fallback when polynomial fits are unavailable.</p></li>
+<li><p>Emit structured warnings or errors when a species falls back to approximate
+partition behavior.</p></li>
+</ul>
+</section>
+<section id="ws1-04-fix-spectroscopic-state-identity">
+<h3>WS1-04: Fix spectroscopic state identity<a class="headerlink" href="#ws1-04-fix-spectroscopic-state-identity" title="Link to this heading"></a></h3>
+<p>As a line-population solver, I need upper-state populations to be indexed by a
+stable level identity rather than energy alone so degenerate or rounded states do
+not alias.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Add or derive a stable state identifier for energy levels and transitions.</p></li>
+<li><p>Replace <code class="docutils literal notranslate"><span class="pre">(element,</span> <span class="pre">stage,</span> <span class="pre">E_k)</span></code> population keys in forward paths.</p></li>
+<li><p>Add regression tests that distinguish multiple states with identical or
+near-identical energies.</p></li>
+</ul>
+</section>
+</section>
+<section id="ws2-forward-radiation-kernel-fidelity">
+<h2>WS2. Forward Radiation Kernel Fidelity<a class="headerlink" href="#ws2-forward-radiation-kernel-fidelity" title="Link to this heading"></a></h2>
+<section id="ws2-01-unify-forward-model-kernels-across-classic-bayesian-and-manifold-paths">
+<h3>WS2-01: Unify forward-model kernels across classic, Bayesian, and manifold paths<a class="headerlink" href="#ws2-01-unify-forward-model-kernels-across-classic-bayesian-and-manifold-paths" title="Link to this heading"></a></h3>
+<p>As a maintainer, I need the repo to share one validated set of kernels for
+population, emissivity, line-shape, and instrument response so the main forward
+paths do not drift apart physically.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Identify and extract shared kernels for LTE populations, emissivity, and
+broadening.</p></li>
+<li><p>Remove duplicated physics logic where reasonable.</p></li>
+<li><p>Add equivalence tests across <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code>, <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">ManifoldGenerator</span></code> on matched assumptions.</p></li>
+</ul>
+</section>
+<section id="ws2-02-replace-legacy-scalar-broadening-defaults-with-a-physically-parameterized-stack">
+<h3>WS2-02: Replace legacy scalar broadening defaults with a physically parameterized stack<a class="headerlink" href="#ws2-02-replace-legacy-scalar-broadening-defaults-with-a-physically-parameterized-stack" title="Link to this heading"></a></h3>
+<p>As a user, I need the default forward model to represent Doppler, Stark, and
+instrument broadening consistently instead of relying on a global ad hoc sigma.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Make broadening configuration explicit and physically parameterized.</p></li>
+<li><p>Ensure manifold instrument FWHM configuration is actually used during
+generation.</p></li>
+<li><p>Preserve backwards-compatible legacy mode only as an opt-in compatibility path.</p></li>
+</ul>
+</section>
+<section id="ws2-03-replace-hard-transition-prefilters-with-error-bounded-line-pruning">
+<h3>WS2-03: Replace hard transition prefilters with error-bounded line pruning<a class="headerlink" href="#ws2-03-replace-hard-transition-prefilters-with-error-bounded-line-pruning" title="Link to this heading"></a></h3>
+<p>As a spectrum synthesizer, I need weak-line pruning to be based on quantified
+error budgets rather than a fixed relative-intensity cutoff that can bias
+continuum-like weak-line sums and diagnostic ratios.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Replace fixed <code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code> production defaults with pruning logic
+tied to expected emissivity contribution or local visibility.</p></li>
+<li><p>Add tests showing that weak-line pruning does not materially change target
+ratios or integrated intensity beyond a declared tolerance.</p></li>
+<li><p>Keep a high-fidelity mode with no pruning except explicit wavelength range
+filtering.</p></li>
+</ul>
+</section>
+<section id="ws2-04-add-optically-thick-hooks-to-the-forward-spectrum-path">
+<h3>WS2-04: Add optically thick hooks to the forward spectrum path<a class="headerlink" href="#ws2-04-add-optically-thick-hooks-to-the-forward-spectrum-path" title="Link to this heading"></a></h3>
+<p>As a physicist, I need the forward model to support optional self-absorption or
+escape-factor corrections so intensity-scale discrepancies are not forced into
+composition or density parameters.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Add an optional non-ideal radiative transfer hook to the classic forward model.</p></li>
+<li><p>Support at least one documented escape-factor or self-absorption mode with
+clear limits.</p></li>
+<li><p>Keep the default optically thin path explicit and well documented.</p></li>
+</ul>
+</section>
+</section>
+<section id="ws3-classic-cf-libs-inversion-correctness">
+<h2>WS3. Classic CF-LIBS Inversion Correctness<a class="headerlink" href="#ws3-classic-cf-libs-inversion-correctness" title="Link to this heading"></a></h2>
+<section id="ws3-01-re-derive-and-implement-the-ionic-to-neutral-correction-consistently">
+<h3>WS3-01: Re-derive and implement the ionic-to-neutral correction consistently<a class="headerlink" href="#ws3-01-re-derive-and-implement-the-ionic-to-neutral-correction-consistently" title="Link to this heading"></a></h3>
+<p>As an inversion developer, I need the Saha-Boltzmann line correction to be
+re-derived from the state semantics introduced in WS1 so ionic and neutral lines
+share a physically consistent Boltzmann plane.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Document the exact transformed regression variable for neutral and ionic lines.</p></li>
+<li><p>Recompute the correction from the canonical plasma state.</p></li>
+<li><p>Add tests on synthetic data with known temperature and mixed ionization stages.</p></li>
+</ul>
+</section>
+<section id="ws3-02-rework-closure-and-pressure-balance-updates-around-explicit-species-densities">
+<h3>WS3-02: Rework closure and pressure-balance updates around explicit species densities<a class="headerlink" href="#ws3-02-rework-closure-and-pressure-balance-updates-around-explicit-species-densities" title="Link to this heading"></a></h3>
+<p>As an analyst, I need closure and <code class="docutils literal notranslate"><span class="pre">n_e</span></code> updates to operate on physically
+interpretable densities and concentrations instead of mixing normalization,
+abundance, and charge-balance terms.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Separate abundance normalization from thermodynamic state updates.</p></li>
+<li><p>Compute electron-density updates from explicit species populations and an
+auditable pressure/closure model.</p></li>
+<li><p>Add convergence diagnostics that report which constraint is limiting.</p></li>
+</ul>
+</section>
+<section id="ws3-03-add-robust-convergence-and-failure-diagnostics">
+<h3>WS3-03: Add robust convergence and failure diagnostics<a class="headerlink" href="#ws3-03-add-robust-convergence-and-failure-diagnostics" title="Link to this heading"></a></h3>
+<p>As a user, I need the classic solver to explain whether failures come from line
+selection, partition data, thermodynamic inconsistency, or numerical stagnation.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Record per-iteration temperature, density, closure, and charge-balance
+residuals.</p></li>
+<li><p>Detect non-physical slope or intercept states before silently clamping.</p></li>
+<li><p>Expose termination reasons in the result object.</p></li>
+</ul>
+</section>
+<section id="ws3-04-add-line-quality-screening-tied-to-self-absorption-and-matrix-sensitivity">
+<h3>WS3-04: Add line-quality screening tied to self-absorption and matrix sensitivity<a class="headerlink" href="#ws3-04-add-line-quality-screening-tied-to-self-absorption-and-matrix-sensitivity" title="Link to this heading"></a></h3>
+<p>As a spectroscopic workflow, I need the inversion to reject lines that are
+systematically unsafe for Boltzmann fitting rather than trusting all line picks
+equally.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Integrate self-absorption and line-quality metadata into the classic inversion.</p></li>
+<li><p>Provide configurable masks for resonance lines, saturated lines, and matrix-
+sensitive lines.</p></li>
+<li><p>Demonstrate improved recovery on synthetic or curated benchmark cases.</p></li>
+</ul>
+</section>
+</section>
+<section id="ws4-bayesian-and-manifold-identifiability">
+<h2>WS4. Bayesian And Manifold Identifiability<a class="headerlink" href="#ws4-bayesian-and-manifold-identifiability" title="Link to this heading"></a></h2>
+<section id="ws4-01-decouple-abundance-from-electron-density-in-bayesian-and-manifold-forward-models">
+<h3>WS4-01: Decouple abundance from electron density in Bayesian and manifold forward models<a class="headerlink" href="#ws4-01-decouple-abundance-from-electron-density-in-bayesian-and-manifold-forward-models" title="Link to this heading"></a></h3>
+<p>As a probabilistic modeler, I need composition, heavy-particle density, and
+electron density to be parameterized independently so the posterior does not
+encode the wrong physical coupling.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Introduce an explicit heavy-particle density or emissivity-scale parameter.</p></li>
+<li><p>Remove <code class="docutils literal notranslate"><span class="pre">N_species_total</span> <span class="pre">=</span> <span class="pre">concentration</span> <span class="pre">*</span> <span class="pre">n_e</span></code> semantics from Bayesian and
+manifold forward models.</p></li>
+<li><p>Update priors, config objects, and parameter export accordingly.</p></li>
+</ul>
+</section>
+<section id="ws4-02-preserve-amplitude-information-in-retrieval-and-coarse-search">
+<h3>WS4-02: Preserve amplitude information in retrieval and coarse search<a class="headerlink" href="#ws4-02-preserve-amplitude-information-in-retrieval-and-coarse-search" title="Link to this heading"></a></h3>
+<p>As an inversion workflow, I need manifold lookup modes that retain absolute or
+semi-absolute scale information instead of defaulting to cosine-style shape-only
+matching.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Add weighted chi-squared or noise-aware distance metrics.</p></li>
+<li><p>Support nuisance scaling parameters where scale mismatch is expected.</p></li>
+<li><p>Benchmark retrieval accuracy against cosine, correlation, and Euclidean modes.</p></li>
+</ul>
+</section>
+<section id="ws4-03-rework-spectral-embeddings-to-retain-physically-meaningful-structure">
+<h3>WS4-03: Rework spectral embeddings to retain physically meaningful structure<a class="headerlink" href="#ws4-03-rework-spectral-embeddings-to-retain-physically-meaningful-structure" title="Link to this heading"></a></h3>
+<p>As a fast-search pipeline, I need embeddings that are useful for search without
+erasing density- and throughput-sensitive information by construction.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Evaluate alternatives to unconditional area normalization plus L2 normalization.</p></li>
+<li><p>Add ablation/performance tests for retrieval quality across temperature,
+density, and abundance perturbations.</p></li>
+<li><p>Keep approximate nearest-neighbor acceleration but make the representation
+physically motivated.</p></li>
+</ul>
+</section>
+<section id="ws4-04-align-hybrid-inversion-with-the-corrected-manifold-semantics">
+<h3>WS4-04: Align hybrid inversion with the corrected manifold semantics<a class="headerlink" href="#ws4-04-align-hybrid-inversion-with-the-corrected-manifold-semantics" title="Link to this heading"></a></h3>
+<p>As a user of the hybrid inverter, I need coarse initialization and fine
+optimization to operate in the same parameterization so the local optimizer does
+not “repair” a biased manifold guess.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Update hybrid inversion packing/unpacking and loss definitions to the new
+semantics.</p></li>
+<li><p>Add consistency tests between manifold seed, Bayesian forward model, and
+optimized result.</p></li>
+<li><p>Quantify recovery error before and after the semantic fix.</p></li>
+</ul>
+</section>
+</section>
+<section id="ws5-non-ideal-plasma-corrections">
+<h2>WS5. Non-Ideal Plasma Corrections<a class="headerlink" href="#ws5-non-ideal-plasma-corrections" title="Link to this heading"></a></h2>
+<section id="ws5-01-upgrade-self-absorption-correction-beyond-the-gaussian-single-zone-assumption">
+<h3>WS5-01: Upgrade self-absorption correction beyond the Gaussian single-zone assumption<a class="headerlink" href="#ws5-01-upgrade-self-absorption-correction-beyond-the-gaussian-single-zone-assumption" title="Link to this heading"></a></h3>
+<p>As a user, I need self-absorption correction modes that better reflect Voigt
+profiles and stratified plasmas so strong-line corrections are not overtrusted.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Keep the current escape-factor model as a documented baseline.</p></li>
+<li><p>Add at least one improved mode that is Voigt-aware or explicitly two-zone.</p></li>
+<li><p>Add tests showing when correction should switch to masking rather than
+extrapolation.</p></li>
+</ul>
+</section>
+<section id="ws5-02-replace-hard-coded-matrix-effect-defaults-with-provenance-backed-data">
+<h3>WS5-02: Replace hard-coded matrix-effect defaults with provenance-backed data<a class="headerlink" href="#ws5-02-replace-hard-coded-matrix-effect-defaults-with-provenance-backed-data" title="Link to this heading"></a></h3>
+<p>As a quantitative analysis workflow, I need matrix-effect corrections to carry
+their source, valid range, and uncertainty rather than relying on undocumented
+default tables.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Store correction provenance and calibration range alongside each factor.</p></li>
+<li><p>Separate example/demo factors from production defaults.</p></li>
+<li><p>Add validation that renormalization does not hide physically impossible output.</p></li>
+</ul>
+</section>
+<section id="ws5-03-add-explicit-lte-validity-guardrails-to-inference-paths">
+<h3>WS5-03: Add explicit LTE validity guardrails to inference paths<a class="headerlink" href="#ws5-03-add-explicit-lte-validity-guardrails-to-inference-paths" title="Link to this heading"></a></h3>
+<p>As a diagnostician, I need forward and inverse workflows to report when LTE is
+only weakly supported so users do not over-interpret parameter estimates.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Surface McWhirter validity metrics and margins in classic, Bayesian, and
+temporal workflows.</p></li>
+<li><p>Distinguish “soft penalty” from “physics satisfied” in outputs.</p></li>
+<li><p>Add tests at good-LTE, marginal-LTE, and invalid-LTE operating points.</p></li>
+</ul>
+</section>
+</section>
+<section id="ws6-validation-benchmarking-and-performance">
+<h2>WS6. Validation, Benchmarking, And Performance<a class="headerlink" href="#ws6-validation-benchmarking-and-performance" title="Link to this heading"></a></h2>
+<section id="ws6-01-build-quantitative-physics-reference-sets">
+<h3>WS6-01: Build quantitative physics reference sets<a class="headerlink" href="#ws6-01-build-quantitative-physics-reference-sets" title="Link to this heading"></a></h3>
+<p>As a maintainer, I need curated reference cases for ionization fractions, line
+ratios, Stark widths, and representative spectra so changes can be checked
+against known targets.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Add reference datasets with provenance.</p></li>
+<li><p>Define allowed tolerances for each target observable.</p></li>
+<li><p>Cover at least one parity subset for spectrum shape and one for plasma-state
+diagnostics.</p></li>
+</ul>
+</section>
+<section id="ws6-02-add-cross-model-equivalence-tests">
+<h3>WS6-02: Add cross-model equivalence tests<a class="headerlink" href="#ws6-02-add-cross-model-equivalence-tests" title="Link to this heading"></a></h3>
+<p>As a library, I need tests that ensure the classic forward model, Bayesian
+forward model, and manifold generator agree when run under matched assumptions.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Compare spectra, line intensities, and width trends under aligned settings.</p></li>
+<li><p>Fail when semantic drift appears across implementations.</p></li>
+<li><p>Include both CPU and JAX-backed coverage where practical.</p></li>
+</ul>
+</section>
+<section id="ws6-03-add-recovery-and-identifiability-benchmarks">
+<h3>WS6-03: Add recovery and identifiability benchmarks<a class="headerlink" href="#ws6-03-add-recovery-and-identifiability-benchmarks" title="Link to this heading"></a></h3>
+<p>As an inference library, I need end-to-end synthetic recovery benchmarks that
+measure not just fit quality but whether the correct plasma state is
+recoverable.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Benchmark temperature, density, and abundance recovery error.</p></li>
+<li><p>Include ambiguity cases where shape-only metrics should fail.</p></li>
+<li><p>Report which parameters are identifiable under each retrieval mode.</p></li>
+</ul>
+</section>
+<section id="ws6-04-profile-and-optimize-the-dominant-numerical-kernels">
+<h3>WS6-04: Profile and optimize the dominant numerical kernels<a class="headerlink" href="#ws6-04-profile-and-optimize-the-dominant-numerical-kernels" title="Link to this heading"></a></h3>
+<p>As a performance-oriented codebase, I need to know which kernels dominate runtime
+and memory so optimizations target the real bottlenecks instead of cosmetic
+vectorization.</p>
+<p>Acceptance Criteria:</p>
+<ul class="simple">
+<li><p>Profile classic, Bayesian, and manifold kernels on representative workloads.</p></li>
+<li><p>Optimize the top hotspots with documented before/after measurements.</p></li>
+<li><p>Keep physics equivalence tests green after each optimization.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

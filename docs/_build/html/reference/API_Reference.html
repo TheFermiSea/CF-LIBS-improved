@@ -1,0 +1,1119 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS API Reference &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="CF-LIBS Codebase Architecture" href="Codebase_Architecture.html" />
+    <link rel="prev" title="Reference" href="README.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user/README.html">User Guides</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Real_Data.html">Quick Start: Analyzing Real LIBS Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Peak_Identification_Guide.html">Peak Identification and Line Matching Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Quick_Start_Synthetic.html">Quick Start: Synthetic Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../physics/README.html">Physics Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html">Physics: Equations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-n-z-1-n-e-n-z">$$
+\frac{n_{z+1}, n_e}{n_z}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#varepsilon-ki-lambda">$$
+\varepsilon_{ki}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#gamma-text-stark-n-e-t">$$
+\gamma_{\text{Stark}}(n_e, T)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#v-lambda-sigma-gamma">$$
+V(\lambda; \sigma, \gamma)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-text-measured-lambda">$$
+I_{\text{measured}}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-ki">$$
+I_{ki}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#s-t-n-e">$$
+S(T, n_e)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#c-s-text-oxide">$$
+C_{s\text{-oxide}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#tau-0">$$
+\tau_0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Assumptions_And_Validity.html">Physics: Assumptions and Validity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Inversion_Algorithm.html">Physics: Iterative CF-LIBS Inversion Algorithm</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="README.html">Reference</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">CF-LIBS API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core-module">Core Module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#constants-cflibs-core-constants">Constants (<code class="docutils literal notranslate"><span class="pre">cflibs.core.constants</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#fundamental-constants">Fundamental Constants</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#atomic-physics-constants">Atomic Physics Constants</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#conversion-factors">Conversion Factors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#plasma-physics-constants">Plasma Physics Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#units-cflibs-core-units">Units (<code class="docutils literal notranslate"><span class="pre">cflibs.core.units</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#convert-temperature-value-from-unit-to-unit"><code class="docutils literal notranslate"><span class="pre">convert_temperature(value,</span> <span class="pre">from_unit,</span> <span class="pre">to_unit)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#convert-density-value-from-unit-to-unit"><code class="docutils literal notranslate"><span class="pre">convert_density(value,</span> <span class="pre">from_unit,</span> <span class="pre">to_unit)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#convert-wavelength-value-from-unit-to-unit"><code class="docutils literal notranslate"><span class="pre">convert_wavelength(value,</span> <span class="pre">from_unit,</span> <span class="pre">to_unit)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#convert-energy-value-from-unit-to-unit"><code class="docutils literal notranslate"><span class="pre">convert_energy(value,</span> <span class="pre">from_unit,</span> <span class="pre">to_unit)</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#configuration-cflibs-core-config">Configuration (<code class="docutils literal notranslate"><span class="pre">cflibs.core.config</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#load-config-config-path"><code class="docutils literal notranslate"><span class="pre">load_config(config_path)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validate-plasma-config-config"><code class="docutils literal notranslate"><span class="pre">validate_plasma_config(config)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validate-instrument-config-config"><code class="docutils literal notranslate"><span class="pre">validate_instrument_config(config)</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#logging-cflibs-core-logging-config">Logging (<code class="docutils literal notranslate"><span class="pre">cflibs.core.logging_config</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#setup-logging-level-info-format-string-none-stream-none"><code class="docutils literal notranslate"><span class="pre">setup_logging(level='INFO',</span> <span class="pre">format_string=None,</span> <span class="pre">stream=None)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#get-logger-name"><code class="docutils literal notranslate"><span class="pre">get_logger(name)</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#atomic-module">Atomic Module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#structures-cflibs-atomic-structures">Structures (<code class="docutils literal notranslate"><span class="pre">cflibs.atomic.structures</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#energylevel"><code class="docutils literal notranslate"><span class="pre">EnergyLevel</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#transition"><code class="docutils literal notranslate"><span class="pre">Transition</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#speciesphysics"><code class="docutils literal notranslate"><span class="pre">SpeciesPhysics</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#database-cflibs-atomic-database">Database (<code class="docutils literal notranslate"><span class="pre">cflibs.atomic.database</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#atomicdatabase"><code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#plasma-module">Plasma Module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#state-cflibs-plasma-state">State (<code class="docutils literal notranslate"><span class="pre">cflibs.plasma.state</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#plasmastate"><code class="docutils literal notranslate"><span class="pre">PlasmaState</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#singlezonelteplasma"><code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#saha-boltzmann-cflibs-plasma-saha-boltzmann">Saha-Boltzmann (<code class="docutils literal notranslate"><span class="pre">cflibs.plasma.saha_boltzmann</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#sahaboltzmannsolver"><code class="docutils literal notranslate"><span class="pre">SahaBoltzmannSolver</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#radiation-module">Radiation Module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#profiles-cflibs-radiation-profiles">Profiles (<code class="docutils literal notranslate"><span class="pre">cflibs.radiation.profiles</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#gaussian-profile-wavelength-center-sigma-amplitude-1-0"><code class="docutils literal notranslate"><span class="pre">gaussian_profile(wavelength,</span> <span class="pre">center,</span> <span class="pre">sigma,</span> <span class="pre">amplitude=1.0)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#doppler-width-wavelength-nm-t-ev-mass-amu"><code class="docutils literal notranslate"><span class="pre">doppler_width(wavelength_nm,</span> <span class="pre">T_eV,</span> <span class="pre">mass_amu)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#apply-gaussian-broadening-wavelength-grid-line-wavelengths-line-intensities-sigma-nm"><code class="docutils literal notranslate"><span class="pre">apply_gaussian_broadening(wavelength_grid,</span> <span class="pre">line_wavelengths,</span> <span class="pre">line_intensities,</span> <span class="pre">sigma_nm)</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#emissivity-cflibs-radiation-emissivity">Emissivity (<code class="docutils literal notranslate"><span class="pre">cflibs.radiation.emissivity</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#calculate-line-emissivity-transition-upper-level-population-cm3-wavelength-nm-none"><code class="docutils literal notranslate"><span class="pre">calculate_line_emissivity(transition,</span> <span class="pre">upper_level_population_cm3,</span> <span class="pre">wavelength_nm=None)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#calculate-spectrum-emissivity-transitions-populations-wavelength-grid-sigma-nm"><code class="docutils literal notranslate"><span class="pre">calculate_spectrum_emissivity(transitions,</span> <span class="pre">populations,</span> <span class="pre">wavelength_grid,</span> <span class="pre">sigma_nm)</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#spectrum-model-cflibs-radiation-spectrum-model">Spectrum Model (<code class="docutils literal notranslate"><span class="pre">cflibs.radiation.spectrum_model</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#spectrummodel"><code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#instrument-module">Instrument Module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#model-cflibs-instrument-model">Model (<code class="docutils literal notranslate"><span class="pre">cflibs.instrument.model</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#instrumentmodel"><code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#convolution-cflibs-instrument-convolution">Convolution (<code class="docutils literal notranslate"><span class="pre">cflibs.instrument.convolution</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#apply-instrument-function-wavelength-intensity-sigma-nm"><code class="docutils literal notranslate"><span class="pre">apply_instrument_function(wavelength,</span> <span class="pre">intensity,</span> <span class="pre">sigma_nm)</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#echelle-cflibs-instrument-echelle">Echelle (<code class="docutils literal notranslate"><span class="pre">cflibs.instrument.echelle</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#echelleextractor"><code class="docutils literal notranslate"><span class="pre">EchelleExtractor</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#i-o-module">I/O Module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#spectrum-cflibs-io-spectrum">Spectrum (<code class="docutils literal notranslate"><span class="pre">cflibs.io.spectrum</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#load-spectrum-file-path"><code class="docutils literal notranslate"><span class="pre">load_spectrum(file_path)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#save-spectrum-file-path-wavelength-intensity-header-none"><code class="docutils literal notranslate"><span class="pre">save_spectrum(file_path,</span> <span class="pre">wavelength,</span> <span class="pre">intensity,</span> <span class="pre">header=None)</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#inversion-module">Inversion Module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#peak-identification-and-line-matching">Peak Identification and Line Matching</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#preprocessing-cflibs-inversion-preprocessing">Preprocessing (<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.preprocessing</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#classic-line-observation-builder-cflibs-inversion-line-detection">Classic Line Observation Builder (<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.line_detection</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#element-identifiers-cflibs-inversion-identify">Element Identifiers (<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.identify</span></code>)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#cli-module">CLI Module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#main-cflibs-cli-main">Main (<code class="docutils literal notranslate"><span class="pre">cflibs.cli.main</span></code>)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#error-handling">Error Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Codebase_Architecture.html">CF-LIBS Codebase Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/README.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Evolution_Framework.html">Evolution Framework</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Deployment.html">CF-LIBS Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/CODEEVOLVE_WAVE2_PLAN.html">CodeEvolve Wave 2 Planning Document</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">CF-LIBS Documentation</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS API Reference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/reference/API_Reference.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-api-reference">
+<h1>CF-LIBS API Reference<a class="headerlink" href="#cf-libs-api-reference" title="Link to this heading"></a></h1>
+<p>Complete API documentation for the CF-LIBS library.</p>
+<section id="table-of-contents">
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="#core-module">Core Module</a></p></li>
+<li><p><a class="reference internal" href="#atomic-module">Atomic Module</a></p></li>
+<li><p><a class="reference internal" href="#plasma-module">Plasma Module</a></p></li>
+<li><p><a class="reference internal" href="#radiation-module">Radiation Module</a></p></li>
+<li><p><a class="reference internal" href="#instrument-module">Instrument Module</a></p></li>
+<li><p><a class="reference internal" href="#io-module">I/O Module</a></p></li>
+<li><p><a class="reference internal" href="#cli-module">CLI Module</a></p></li>
+</ol>
+<hr class="docutils" />
+</section>
+<section id="core-module">
+<span id="id1"></span><h2>Core Module<a class="headerlink" href="#core-module" title="Link to this heading"></a></h2>
+<section id="constants-cflibs-core-constants">
+<h3>Constants (<code class="docutils literal notranslate"><span class="pre">cflibs.core.constants</span></code>)<a class="headerlink" href="#constants-cflibs-core-constants" title="Link to this heading"></a></h3>
+<p>Physical constants for CF-LIBS calculations.</p>
+<section id="fundamental-constants">
+<h4>Fundamental Constants<a class="headerlink" href="#fundamental-constants" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">KB</span></code> (float): Boltzmann constant in J/K = 1.380649e-23</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">KB_EV</span></code> (float): Boltzmann constant in eV/K = 8.617333262e-5</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">H_PLANCK</span></code> (float): Planck constant in J·s = 6.62607015e-34</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">H_PLANCK_EV</span></code> (float): Planck constant in eV·s = 4.135667696e-15</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">C_LIGHT</span></code> (float): Speed of light in m/s = 2.99792458e8</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">M_E</span></code> (float): Electron mass in kg = 9.1093837015e-31</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">E_CHARGE</span></code> (float): Elementary charge in C = 1.602176634e-19</p></li>
+</ul>
+</section>
+<section id="atomic-physics-constants">
+<h4>Atomic Physics Constants<a class="headerlink" href="#atomic-physics-constants" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">RYDBERG</span></code> (float): Rydberg constant in m⁻¹ = 10973731.568160</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">A_BOHR</span></code> (float): Bohr radius in m = 5.29177210903e-11</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ALPHA_FS</span></code> (float): Fine structure constant = 7.2973525693e-3</p></li>
+</ul>
+</section>
+<section id="conversion-factors">
+<h4>Conversion Factors<a class="headerlink" href="#conversion-factors" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">EV_TO_J</span></code> (float): Electron-volt to Joule conversion</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">J_TO_EV</span></code> (float): Joule to electron-volt conversion</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">CM_TO_EV</span></code> (float): Wavenumber (cm⁻¹) to eV conversion = 1.23984193e-4</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">EV_TO_CM</span></code> (float): eV to wavenumber conversion</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">K_TO_EV</span></code> (float): Kelvin to eV conversion</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">EV_TO_K</span></code> (float): eV to Kelvin conversion</p></li>
+</ul>
+</section>
+<section id="plasma-physics-constants">
+<h4>Plasma Physics Constants<a class="headerlink" href="#plasma-physics-constants" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span></code> (float): Saha equation constant = 6.042e21 cm⁻³</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MCWHIRTER_CONST</span></code> (float): McWhirter criterion constant = 1.6e12 cm⁻³</p></li>
+</ul>
+</section>
+</section>
+<section id="units-cflibs-core-units">
+<h3>Units (<code class="docutils literal notranslate"><span class="pre">cflibs.core.units</span></code>)<a class="headerlink" href="#units-cflibs-core-units" title="Link to this heading"></a></h3>
+<p>Unit conversion utilities.</p>
+<section id="convert-temperature-value-from-unit-to-unit">
+<h4><code class="docutils literal notranslate"><span class="pre">convert_temperature(value,</span> <span class="pre">from_unit,</span> <span class="pre">to_unit)</span></code><a class="headerlink" href="#convert-temperature-value-from-unit-to-unit" title="Link to this heading"></a></h4>
+<p>Convert temperature between units.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code> (float or array): Temperature value(s)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">from_unit</span></code> (str): Source unit (‘K’, ‘eV’, ‘C’)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">to_unit</span></code> (str): Target unit (‘K’, ‘eV’, ‘C’)</p></li>
+</ul>
+<p><strong>Returns:</strong> float or array - Converted temperature</p>
+<p><strong>Example:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">T_ev</span> <span class="o">=</span> <span class="n">convert_temperature</span><span class="p">(</span><span class="mi">10000</span><span class="p">,</span> <span class="s1">&#39;K&#39;</span><span class="p">,</span> <span class="s1">&#39;eV&#39;</span><span class="p">)</span>  <span class="c1"># ~0.86 eV</span>
+</pre></div>
+</div>
+</section>
+<section id="convert-density-value-from-unit-to-unit">
+<h4><code class="docutils literal notranslate"><span class="pre">convert_density(value,</span> <span class="pre">from_unit,</span> <span class="pre">to_unit)</span></code><a class="headerlink" href="#convert-density-value-from-unit-to-unit" title="Link to this heading"></a></h4>
+<p>Convert number density between units.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code> (float or array): Density value(s)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">from_unit</span></code> (str): Source unit (‘m^-3’, ‘cm^-3’)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">to_unit</span></code> (str): Target unit (‘m^-3’, ‘cm^-3’)</p></li>
+</ul>
+<p><strong>Returns:</strong> float or array - Converted density</p>
+</section>
+<section id="convert-wavelength-value-from-unit-to-unit">
+<h4><code class="docutils literal notranslate"><span class="pre">convert_wavelength(value,</span> <span class="pre">from_unit,</span> <span class="pre">to_unit)</span></code><a class="headerlink" href="#convert-wavelength-value-from-unit-to-unit" title="Link to this heading"></a></h4>
+<p>Convert wavelength between units.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code> (float or array): Wavelength value(s)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">from_unit</span></code> (str): Source unit (‘m’, ‘nm’, ‘um’, ‘A’, ‘cm^-1’)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">to_unit</span></code> (str): Target unit (‘m’, ‘nm’, ‘um’, ‘A’, ‘cm^-1’)</p></li>
+</ul>
+<p><strong>Returns:</strong> float or array - Converted wavelength</p>
+</section>
+<section id="convert-energy-value-from-unit-to-unit">
+<h4><code class="docutils literal notranslate"><span class="pre">convert_energy(value,</span> <span class="pre">from_unit,</span> <span class="pre">to_unit)</span></code><a class="headerlink" href="#convert-energy-value-from-unit-to-unit" title="Link to this heading"></a></h4>
+<p>Convert energy between units.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code> (float or array): Energy value(s)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">from_unit</span></code> (str): Source unit (‘J’, ‘eV’, ‘cm^-1’)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">to_unit</span></code> (str): Target unit (‘J’, ‘eV’, ‘cm^-1’)</p></li>
+</ul>
+<p><strong>Returns:</strong> float or array - Converted energy</p>
+</section>
+</section>
+<section id="configuration-cflibs-core-config">
+<h3>Configuration (<code class="docutils literal notranslate"><span class="pre">cflibs.core.config</span></code>)<a class="headerlink" href="#configuration-cflibs-core-config" title="Link to this heading"></a></h3>
+<p>Configuration management utilities.</p>
+<section id="load-config-config-path">
+<h4><code class="docutils literal notranslate"><span class="pre">load_config(config_path)</span></code><a class="headerlink" href="#load-config-config-path" title="Link to this heading"></a></h4>
+<p>Load configuration from YAML or JSON file.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">config_path</span></code> (str or Path): Path to configuration file</p></li>
+</ul>
+<p><strong>Returns:</strong> dict - Configuration dictionary</p>
+<p><strong>Raises:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">FileNotFoundError</span></code>: If config file does not exist</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ValueError</span></code>: If file format is not supported</p></li>
+</ul>
+</section>
+<section id="validate-plasma-config-config">
+<h4><code class="docutils literal notranslate"><span class="pre">validate_plasma_config(config)</span></code><a class="headerlink" href="#validate-plasma-config-config" title="Link to this heading"></a></h4>
+<p>Validate plasma configuration structure.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">config</span></code> (dict): Configuration dictionary</p></li>
+</ul>
+<p><strong>Returns:</strong> bool - True if valid</p>
+<p><strong>Raises:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ValueError</span></code>: If configuration is invalid</p></li>
+</ul>
+</section>
+<section id="validate-instrument-config-config">
+<h4><code class="docutils literal notranslate"><span class="pre">validate_instrument_config(config)</span></code><a class="headerlink" href="#validate-instrument-config-config" title="Link to this heading"></a></h4>
+<p>Validate instrument configuration structure.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">config</span></code> (dict): Configuration dictionary</p></li>
+</ul>
+<p><strong>Returns:</strong> bool - True if valid</p>
+<p><strong>Raises:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ValueError</span></code>: If configuration is invalid</p></li>
+</ul>
+</section>
+</section>
+<section id="logging-cflibs-core-logging-config">
+<h3>Logging (<code class="docutils literal notranslate"><span class="pre">cflibs.core.logging_config</span></code>)<a class="headerlink" href="#logging-cflibs-core-logging-config" title="Link to this heading"></a></h3>
+<p>Logging configuration utilities.</p>
+<section id="setup-logging-level-info-format-string-none-stream-none">
+<h4><code class="docutils literal notranslate"><span class="pre">setup_logging(level='INFO',</span> <span class="pre">format_string=None,</span> <span class="pre">stream=None)</span></code><a class="headerlink" href="#setup-logging-level-info-format-string-none-stream-none" title="Link to this heading"></a></h4>
+<p>Configure logging for CF-LIBS.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">level</span></code> (str): Logging level (‘DEBUG’, ‘INFO’, ‘WARNING’, ‘ERROR’, ‘CRITICAL’)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">format_string</span></code> (str, optional): Custom format string</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stream</span></code> (file-like, optional): Stream to write logs to</p></li>
+</ul>
+</section>
+<section id="get-logger-name">
+<h4><code class="docutils literal notranslate"><span class="pre">get_logger(name)</span></code><a class="headerlink" href="#get-logger-name" title="Link to this heading"></a></h4>
+<p>Get a logger instance for a module.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code> (str): Logger name (typically <code class="docutils literal notranslate"><span class="pre">__name__</span></code>)</p></li>
+</ul>
+<p><strong>Returns:</strong> logging.Logger - Logger instance</p>
+<hr class="docutils" />
+</section>
+</section>
+</section>
+<section id="atomic-module">
+<span id="id2"></span><h2>Atomic Module<a class="headerlink" href="#atomic-module" title="Link to this heading"></a></h2>
+<section id="structures-cflibs-atomic-structures">
+<h3>Structures (<code class="docutils literal notranslate"><span class="pre">cflibs.atomic.structures</span></code>)<a class="headerlink" href="#structures-cflibs-atomic-structures" title="Link to this heading"></a></h3>
+<section id="energylevel">
+<h4><code class="docutils literal notranslate"><span class="pre">EnergyLevel</span></code><a class="headerlink" href="#energylevel" title="Link to this heading"></a></h4>
+<p>Data structure for atomic energy levels.</p>
+<p><strong>Attributes:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> (int): Ionization stage (1=neutral, 2=singly ionized)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">energy_ev</span></code> (float): Energy above ground state in eV</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">g</span></code> (int): Statistical weight (degeneracy)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">j</span></code> (float, optional): Total angular momentum quantum number</p></li>
+</ul>
+</section>
+<section id="transition">
+<h4><code class="docutils literal notranslate"><span class="pre">Transition</span></code><a class="headerlink" href="#transition" title="Link to this heading"></a></h4>
+<p>Data structure for atomic transitions.</p>
+<p><strong>Attributes:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> (int): Ionization stage</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_nm</span></code> (float): Transition wavelength in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">A_ki</span></code> (float): Einstein A coefficient in s⁻¹</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">E_k_ev</span></code> (float): Upper level energy in eV</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">E_i_ev</span></code> (float): Lower level energy in eV</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">g_k</span></code> (int): Upper level statistical weight</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">g_i</span></code> (int): Lower level statistical weight</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">relative_intensity</span></code> (float, optional): Relative intensity from database</p></li>
+</ul>
+<p><strong>Properties:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">energy_diff_ev</span></code> (float): Energy difference between upper and lower levels</p></li>
+</ul>
+</section>
+<section id="speciesphysics">
+<h4><code class="docutils literal notranslate"><span class="pre">SpeciesPhysics</span></code><a class="headerlink" href="#speciesphysics" title="Link to this heading"></a></h4>
+<p>Physical properties of an atomic species.</p>
+<p><strong>Attributes:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> (int): Ionization stage</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_potential_ev</span></code> (float): Ionization potential in eV</p></li>
+</ul>
+</section>
+</section>
+<section id="database-cflibs-atomic-database">
+<h3>Database (<code class="docutils literal notranslate"><span class="pre">cflibs.atomic.database</span></code>)<a class="headerlink" href="#database-cflibs-atomic-database" title="Link to this heading"></a></h3>
+<section id="atomicdatabase">
+<h4><code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code><a class="headerlink" href="#atomicdatabase" title="Link to this heading"></a></h4>
+<p>Interface to atomic data stored in SQLite database.</p>
+<p><strong>Methods:</strong></p>
+<section id="init-db-path">
+<h5><code class="docutils literal notranslate"><span class="pre">__init__(db_path)</span></code><a class="headerlink" href="#init-db-path" title="Link to this heading"></a></h5>
+<p>Initialize database connection.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">db_path</span></code> (str): Path to SQLite database file</p></li>
+</ul>
+<p><strong>Raises:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">FileNotFoundError</span></code>: If database file does not exist</p></li>
+</ul>
+</section>
+<section id="get-transitions-element-ionization-stage-none-wavelength-min-none-wavelength-max-none-min-relative-intensity-none">
+<h5><code class="docutils literal notranslate"><span class="pre">get_transitions(element,</span> <span class="pre">ionization_stage=None,</span> <span class="pre">wavelength_min=None,</span> <span class="pre">wavelength_max=None,</span> <span class="pre">min_relative_intensity=None)</span></code><a class="headerlink" href="#get-transitions-element-ionization-stage-none-wavelength-min-none-wavelength-max-none-min-relative-intensity-none" title="Link to this heading"></a></h5>
+<p>Get transitions for an element.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> (int, optional): Filter by ionization stage</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_min</span></code> (float, optional): Minimum wavelength in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_max</span></code> (float, optional): Maximum wavelength in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code> (float, optional): Minimum relative intensity</p></li>
+</ul>
+<p><strong>Returns:</strong> List[Transition] - List of transition objects</p>
+</section>
+<section id="get-energy-levels-element-ionization-stage">
+<h5><code class="docutils literal notranslate"><span class="pre">get_energy_levels(element,</span> <span class="pre">ionization_stage)</span></code><a class="headerlink" href="#get-energy-levels-element-ionization-stage" title="Link to this heading"></a></h5>
+<p>Get energy levels for a species.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> (int): Ionization stage</p></li>
+</ul>
+<p><strong>Returns:</strong> List[EnergyLevel] - List of energy level objects</p>
+</section>
+<section id="get-ionization-potential-element-ionization-stage">
+<h5><code class="docutils literal notranslate"><span class="pre">get_ionization_potential(element,</span> <span class="pre">ionization_stage)</span></code><a class="headerlink" href="#get-ionization-potential-element-ionization-stage" title="Link to this heading"></a></h5>
+<p>Get ionization potential for a species.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> (int): Ionization stage</p></li>
+</ul>
+<p><strong>Returns:</strong> float or None - Ionization potential in eV</p>
+</section>
+<section id="get-species-physics-element-ionization-stage">
+<h5><code class="docutils literal notranslate"><span class="pre">get_species_physics(element,</span> <span class="pre">ionization_stage)</span></code><a class="headerlink" href="#get-species-physics-element-ionization-stage" title="Link to this heading"></a></h5>
+<p>Get physical properties for a species.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> (int): Ionization stage</p></li>
+</ul>
+<p><strong>Returns:</strong> SpeciesPhysics or None</p>
+</section>
+<section id="get-available-elements">
+<h5><code class="docutils literal notranslate"><span class="pre">get_available_elements()</span></code><a class="headerlink" href="#get-available-elements" title="Link to this heading"></a></h5>
+<p>Get list of elements available in the database.</p>
+<p><strong>Returns:</strong> List[str] - List of element symbols</p>
+</section>
+<section id="close">
+<h5><code class="docutils literal notranslate"><span class="pre">close()</span></code><a class="headerlink" href="#close" title="Link to this heading"></a></h5>
+<p>Close database connection.</p>
+<hr class="docutils" />
+</section>
+</section>
+</section>
+</section>
+<section id="plasma-module">
+<span id="id3"></span><h2>Plasma Module<a class="headerlink" href="#plasma-module" title="Link to this heading"></a></h2>
+<section id="state-cflibs-plasma-state">
+<h3>State (<code class="docutils literal notranslate"><span class="pre">cflibs.plasma.state</span></code>)<a class="headerlink" href="#state-cflibs-plasma-state" title="Link to this heading"></a></h3>
+<section id="plasmastate">
+<h4><code class="docutils literal notranslate"><span class="pre">PlasmaState</span></code><a class="headerlink" href="#plasmastate" title="Link to this heading"></a></h4>
+<p>Base plasma state representation.</p>
+<p><strong>Attributes:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">T_e</span></code> (float): Electron temperature in K</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_e</span></code> (float): Electron density in cm⁻³</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">species</span></code> (Dict[str, float]): Species number densities in cm⁻³</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T_g</span></code> (float, optional): Gas temperature in K (defaults to T_e)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pressure</span></code> (float, optional): Pressure in atm</p></li>
+</ul>
+<p><strong>Properties:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">T_e_eV</span></code> (float): Electron temperature in eV</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T_g_eV</span></code> (float): Gas temperature in eV</p></li>
+</ul>
+</section>
+<section id="singlezonelteplasma">
+<h4><code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code><a class="headerlink" href="#singlezonelteplasma" title="Link to this heading"></a></h4>
+<p>Single-zone LTE plasma model.</p>
+<p><strong>Inherits from:</strong> <code class="docutils literal notranslate"><span class="pre">PlasmaState</span></code></p>
+<p><strong>Methods:</strong></p>
+<section id="init-t-e-n-e-species-t-g-none-pressure-none">
+<h5><code class="docutils literal notranslate"><span class="pre">__init__(T_e,</span> <span class="pre">n_e,</span> <span class="pre">species,</span> <span class="pre">T_g=None,</span> <span class="pre">pressure=None)</span></code><a class="headerlink" href="#init-t-e-n-e-species-t-g-none-pressure-none" title="Link to this heading"></a></h5>
+<p>Initialize single-zone LTE plasma.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">T_e</span></code> (float): Electron temperature in K</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_e</span></code> (float): Electron density in cm⁻³</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">species</span></code> (Dict[str, float]): Species number densities in cm⁻³</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T_g</span></code> (float, optional): Gas temperature in K</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pressure</span></code> (float, optional): Pressure in atm</p></li>
+</ul>
+</section>
+<section id="validate">
+<h5><code class="docutils literal notranslate"><span class="pre">validate()</span></code><a class="headerlink" href="#validate" title="Link to this heading"></a></h5>
+<p>Validate plasma state.</p>
+<p><strong>Returns:</strong> bool - True if valid</p>
+<p><strong>Raises:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ValueError</span></code>: If plasma state is invalid</p></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="saha-boltzmann-cflibs-plasma-saha-boltzmann">
+<h3>Saha-Boltzmann (<code class="docutils literal notranslate"><span class="pre">cflibs.plasma.saha_boltzmann</span></code>)<a class="headerlink" href="#saha-boltzmann-cflibs-plasma-saha-boltzmann" title="Link to this heading"></a></h3>
+<section id="sahaboltzmannsolver">
+<h4><code class="docutils literal notranslate"><span class="pre">SahaBoltzmannSolver</span></code><a class="headerlink" href="#sahaboltzmannsolver" title="Link to this heading"></a></h4>
+<p>Solves Saha-Boltzmann equations for LTE plasma.</p>
+<p><strong>Methods:</strong></p>
+<section id="init-atomic-db-ipd-model-none">
+<h5><code class="docutils literal notranslate"><span class="pre">__init__(atomic_db,</span> <span class="pre">ipd_model=None)</span></code><a class="headerlink" href="#init-atomic-db-ipd-model-none" title="Link to this heading"></a></h5>
+<p>Initialize solver.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">atomic_db</span></code> (AtomicDataSource): Atomic database</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ipd_model</span></code> (Optional[IPDModel]): Ionization-potential depression model; <code class="docutils literal notranslate"><span class="pre">None</span></code> disables IPD corrections.</p></li>
+</ul>
+</section>
+<section id="solve-ionization-balance-element-t-e-ev-n-e-cm3-total-density-cm3">
+<h5><code class="docutils literal notranslate"><span class="pre">solve_ionization_balance(element,</span> <span class="pre">T_e_eV,</span> <span class="pre">n_e_cm3,</span> <span class="pre">total_density_cm3)</span></code><a class="headerlink" href="#solve-ionization-balance-element-t-e-ev-n-e-cm3-total-density-cm3" title="Link to this heading"></a></h5>
+<p>Solve ionization balance using Saha equation.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T_e_eV</span></code> (float): Electron temperature in eV</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_e_cm3</span></code> (float): Electron density in cm⁻³</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">total_density_cm3</span></code> (float): Total element density in cm⁻³</p></li>
+</ul>
+<p><strong>Returns:</strong> Dict[int, float] - Dictionary mapping ionization stage to number density</p>
+</section>
+<section id="calculate-partition-function-element-ionization-stage-t-e-ev-max-energy-ev-50-0">
+<h5><code class="docutils literal notranslate"><span class="pre">calculate_partition_function(element,</span> <span class="pre">ionization_stage,</span> <span class="pre">T_e_eV,</span> <span class="pre">max_energy_ev=50.0)</span></code><a class="headerlink" href="#calculate-partition-function-element-ionization-stage-t-e-ev-max-energy-ev-50-0" title="Link to this heading"></a></h5>
+<p>Calculate partition function for a species.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> (int): Ionization stage</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T_e_eV</span></code> (float): Electron temperature in eV</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">max_energy_ev</span></code> (float): Maximum energy level to include</p></li>
+</ul>
+<p><strong>Returns:</strong> float - Partition function</p>
+</section>
+<section id="solve-level-population-element-ionization-stage-stage-density-cm3-t-e-ev">
+<h5><code class="docutils literal notranslate"><span class="pre">solve_level_population(element,</span> <span class="pre">ionization_stage,</span> <span class="pre">stage_density_cm3,</span> <span class="pre">T_e_eV)</span></code><a class="headerlink" href="#solve-level-population-element-ionization-stage-stage-density-cm3-t-e-ev" title="Link to this heading"></a></h5>
+<p>Solve Boltzmann distribution for level populations.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">element</span></code> (str): Element symbol</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> (int): Ionization stage</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stage_density_cm3</span></code> (float): Total density of this ionization stage</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T_e_eV</span></code> (float): Electron temperature in eV</p></li>
+</ul>
+<p><strong>Returns:</strong> Dict[Tuple[str, int, float], float] - Level populations</p>
+</section>
+<section id="solve-plasma-plasma">
+<h5><code class="docutils literal notranslate"><span class="pre">solve_plasma(plasma)</span></code><a class="headerlink" href="#solve-plasma-plasma" title="Link to this heading"></a></h5>
+<p>Solve complete Saha-Boltzmann system for a plasma.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">plasma</span></code> (SingleZoneLTEPlasma): Plasma state</p></li>
+</ul>
+<p><strong>Returns:</strong> Dict[Tuple[str, int, float], float] - All level populations</p>
+<hr class="docutils" />
+</section>
+</section>
+</section>
+</section>
+<section id="radiation-module">
+<span id="id4"></span><h2>Radiation Module<a class="headerlink" href="#radiation-module" title="Link to this heading"></a></h2>
+<section id="profiles-cflibs-radiation-profiles">
+<h3>Profiles (<code class="docutils literal notranslate"><span class="pre">cflibs.radiation.profiles</span></code>)<a class="headerlink" href="#profiles-cflibs-radiation-profiles" title="Link to this heading"></a></h3>
+<section id="gaussian-profile-wavelength-center-sigma-amplitude-1-0">
+<h4><code class="docutils literal notranslate"><span class="pre">gaussian_profile(wavelength,</span> <span class="pre">center,</span> <span class="pre">sigma,</span> <span class="pre">amplitude=1.0)</span></code><a class="headerlink" href="#gaussian-profile-wavelength-center-sigma-amplitude-1-0" title="Link to this heading"></a></h4>
+<p>Calculate Gaussian line profile.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength</span></code> (float or array): Wavelength(s) in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">center</span></code> (float): Line center wavelength in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sigma</span></code> (float): Standard deviation in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">amplitude</span></code> (float): Integrated area (not peak height). Peak height equals <code class="docutils literal notranslate"><span class="pre">amplitude</span> <span class="pre">/</span> <span class="pre">(sigma</span> <span class="pre">*</span> <span class="pre">sqrt(2*pi))</span></code>.</p></li>
+</ul>
+<p><strong>Returns:</strong> float or array - Profile value(s)</p>
+</section>
+<section id="doppler-width-wavelength-nm-t-ev-mass-amu">
+<h4><code class="docutils literal notranslate"><span class="pre">doppler_width(wavelength_nm,</span> <span class="pre">T_eV,</span> <span class="pre">mass_amu)</span></code><a class="headerlink" href="#doppler-width-wavelength-nm-t-ev-mass-amu" title="Link to this heading"></a></h4>
+<p>Calculate Doppler broadening width (FWHM).</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_nm</span></code> (float): Wavelength in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T_eV</span></code> (float): Temperature in eV</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mass_amu</span></code> (float): Atomic mass in atomic mass units</p></li>
+</ul>
+<p><strong>Returns:</strong> float - Doppler FWHM in nm</p>
+</section>
+<section id="apply-gaussian-broadening-wavelength-grid-line-wavelengths-line-intensities-sigma-nm">
+<h4><code class="docutils literal notranslate"><span class="pre">apply_gaussian_broadening(wavelength_grid,</span> <span class="pre">line_wavelengths,</span> <span class="pre">line_intensities,</span> <span class="pre">sigma_nm)</span></code><a class="headerlink" href="#apply-gaussian-broadening-wavelength-grid-line-wavelengths-line-intensities-sigma-nm" title="Link to this heading"></a></h4>
+<p>Apply Gaussian broadening to spectral lines.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_grid</span></code> (array): Wavelength grid in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">line_wavelengths</span></code> (array): Line center wavelengths in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">line_intensities</span></code> (array): Line intensities</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sigma_nm</span></code> (float): Gaussian standard deviation in nm</p></li>
+</ul>
+<p><strong>Returns:</strong> array - Broadened spectrum</p>
+</section>
+</section>
+<section id="emissivity-cflibs-radiation-emissivity">
+<h3>Emissivity (<code class="docutils literal notranslate"><span class="pre">cflibs.radiation.emissivity</span></code>)<a class="headerlink" href="#emissivity-cflibs-radiation-emissivity" title="Link to this heading"></a></h3>
+<section id="calculate-line-emissivity-transition-upper-level-population-cm3-wavelength-nm-none">
+<h4><code class="docutils literal notranslate"><span class="pre">calculate_line_emissivity(transition,</span> <span class="pre">upper_level_population_cm3,</span> <span class="pre">wavelength_nm=None)</span></code><a class="headerlink" href="#calculate-line-emissivity-transition-upper-level-population-cm3-wavelength-nm-none" title="Link to this heading"></a></h4>
+<p>Calculate spectral emissivity for a transition.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">transition</span></code> (Transition): Atomic transition</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">upper_level_population_cm3</span></code> (float): Population of upper level in cm⁻³</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_nm</span></code> (float, optional): Wavelength in nm</p></li>
+</ul>
+<p><strong>Returns:</strong> float - Spectral emissivity in W m⁻³ nm⁻¹</p>
+</section>
+<section id="calculate-spectrum-emissivity-transitions-populations-wavelength-grid-sigma-nm">
+<h4><code class="docutils literal notranslate"><span class="pre">calculate_spectrum_emissivity(transitions,</span> <span class="pre">populations,</span> <span class="pre">wavelength_grid,</span> <span class="pre">sigma_nm)</span></code><a class="headerlink" href="#calculate-spectrum-emissivity-transitions-populations-wavelength-grid-sigma-nm" title="Link to this heading"></a></h4>
+<p>Calculate total spectral emissivity on a wavelength grid.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">transitions</span></code> (List[Transition]): List of transitions</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">populations</span></code> (Dict): Level populations from Saha-Boltzmann solver</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_grid</span></code> (array): Wavelength grid in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sigma_nm</span></code> (float): Gaussian broadening width in nm</p></li>
+</ul>
+<p><strong>Returns:</strong> array - Spectral emissivity in W m⁻³ nm⁻¹</p>
+</section>
+</section>
+<section id="spectrum-model-cflibs-radiation-spectrum-model">
+<h3>Spectrum Model (<code class="docutils literal notranslate"><span class="pre">cflibs.radiation.spectrum_model</span></code>)<a class="headerlink" href="#spectrum-model-cflibs-radiation-spectrum-model" title="Link to this heading"></a></h3>
+<section id="spectrummodel">
+<h4><code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code><a class="headerlink" href="#spectrummodel" title="Link to this heading"></a></h4>
+<p>Forward model for computing synthetic LIBS spectra.</p>
+<p><strong>Methods:</strong></p>
+<section id="init-plasma-atomic-db-instrument-lambda-min-lambda-max-delta-lambda-path-length-m-0-01-use-jax-false-broadening-mode-broadeningmode-legacy">
+<h5><code class="docutils literal notranslate"><span class="pre">__init__(plasma,</span> <span class="pre">atomic_db,</span> <span class="pre">instrument,</span> <span class="pre">lambda_min,</span> <span class="pre">lambda_max,</span> <span class="pre">delta_lambda,</span> <span class="pre">path_length_m=0.01,</span> <span class="pre">use_jax=False,</span> <span class="pre">broadening_mode=BroadeningMode.LEGACY)</span></code><a class="headerlink" href="#init-plasma-atomic-db-instrument-lambda-min-lambda-max-delta-lambda-path-length-m-0-01-use-jax-false-broadening-mode-broadeningmode-legacy" title="Link to this heading"></a></h5>
+<p>Initialize spectrum model.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">plasma</span></code> (SingleZoneLTEPlasma): Plasma state</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">atomic_db</span></code> (AtomicDatabase): Atomic database</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">instrument</span></code> (InstrumentModel): Instrument model</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lambda_min</span></code> (float): Minimum wavelength in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lambda_max</span></code> (float): Maximum wavelength in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">delta_lambda</span></code> (float): Wavelength step in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">path_length_m</span></code> (float): Plasma path length in meters (default 0.01 = 1 cm)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_jax</span></code> (bool): Enable JAX-accelerated evaluation path</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">broadening_mode</span></code> (BroadeningMode): Line-broadening variant (LEGACY / RESOLVING_POWER). See <code class="docutils literal notranslate"><span class="pre">cflibs.radiation.BroadeningMode</span></code>.</p></li>
+</ul>
+</section>
+<section id="compute-spectrum">
+<h5><code class="docutils literal notranslate"><span class="pre">compute_spectrum()</span></code><a class="headerlink" href="#compute-spectrum" title="Link to this heading"></a></h5>
+<p>Compute synthetic spectrum.</p>
+<p><strong>Returns:</strong> Tuple[array, array] - (wavelength, intensity)</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength</span></code>: Wavelength grid in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">intensity</span></code>: Spectral intensity in W m⁻² nm⁻¹ sr⁻¹</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+</section>
+</section>
+</section>
+<section id="instrument-module">
+<span id="id5"></span><h2>Instrument Module<a class="headerlink" href="#instrument-module" title="Link to this heading"></a></h2>
+<section id="model-cflibs-instrument-model">
+<h3>Model (<code class="docutils literal notranslate"><span class="pre">cflibs.instrument.model</span></code>)<a class="headerlink" href="#model-cflibs-instrument-model" title="Link to this heading"></a></h3>
+<section id="instrumentmodel">
+<h4><code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code><a class="headerlink" href="#instrumentmodel" title="Link to this heading"></a></h4>
+<p>Model for spectrometer instrument response. Supports two resolution modes:</p>
+<ul class="simple">
+<li><p><strong>Fixed-FWHM mode</strong> (default): constant <code class="docutils literal notranslate"><span class="pre">resolution_fwhm_nm</span></code> across the spectrum.</p></li>
+<li><p><strong>Resolving-power mode</strong>: <code class="docutils literal notranslate"><span class="pre">resolution_fwhm_nm</span></code> scales with wavelength as <code class="docutils literal notranslate"><span class="pre">λ</span> <span class="pre">/</span> <span class="pre">R</span></code>. Enabled when <code class="docutils literal notranslate"><span class="pre">resolving_power</span></code> is set and positive.</p></li>
+</ul>
+<p><strong>Attributes:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">resolution_fwhm_nm</span></code> (float): Instrument FWHM in nm (fixed-FWHM mode).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">resolving_power</span></code> (Optional[float]): Dimensionless resolving power R = λ/Δλ. When set (&gt; 0), resolution scales with wavelength and this overrides <code class="docutils literal notranslate"><span class="pre">resolution_fwhm_nm</span></code> at query time.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">response_curve</span></code> (array, optional): Spectral response curve.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_calibration</span></code> (callable, optional): Pixel-to-wavelength function.</p></li>
+</ul>
+<p><strong>Properties:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">resolution_sigma_nm</span></code> (float): Gaussian standard deviation derived from <code class="docutils literal notranslate"><span class="pre">resolution_fwhm_nm</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">is_resolving_power_mode</span></code> (bool): True iff <code class="docutils literal notranslate"><span class="pre">resolving_power</span></code> is set and positive.</p></li>
+</ul>
+<p><strong>Methods:</strong></p>
+<section id="sigma-at-wavelength-wavelength-nm">
+<h5><code class="docutils literal notranslate"><span class="pre">sigma_at_wavelength(wavelength_nm)</span></code><a class="headerlink" href="#sigma-at-wavelength-wavelength-nm" title="Link to this heading"></a></h5>
+<p>Return Gaussian σ (nm) at the given wavelength. In resolving-power mode, FWHM = <code class="docutils literal notranslate"><span class="pre">wavelength_nm</span> <span class="pre">/</span> <span class="pre">resolving_power</span></code>; otherwise returns the fixed-FWHM σ.</p>
+</section>
+<section id="from-resolving-power-resolving-power-response-curve-none-classmethod">
+<h5><code class="docutils literal notranslate"><span class="pre">from_resolving_power(resolving_power,</span> <span class="pre">response_curve=None)</span></code> (classmethod)<a class="headerlink" href="#from-resolving-power-resolving-power-response-curve-none-classmethod" title="Link to this heading"></a></h5>
+<p>Construct an <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code> in resolving-power mode.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">resolving_power</span></code> (float): Dimensionless R, must be positive.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">response_curve</span></code> (Optional[array]): Optional spectral response curve.</p></li>
+</ul>
+<p><strong>Raises:</strong> <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if <code class="docutils literal notranslate"><span class="pre">resolving_power</span> <span class="pre">&lt;=</span> <span class="pre">0</span></code>.</p>
+</section>
+<section id="from-file-config-path">
+<h5><code class="docutils literal notranslate"><span class="pre">from_file(config_path)</span></code><a class="headerlink" href="#from-file-config-path" title="Link to this heading"></a></h5>
+<p>Load instrument model from configuration file.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">config_path</span></code> (Path): Path to configuration file</p></li>
+</ul>
+<p><strong>Returns:</strong> InstrumentModel</p>
+</section>
+<section id="apply-response-wavelength-intensity">
+<h5><code class="docutils literal notranslate"><span class="pre">apply_response(wavelength,</span> <span class="pre">intensity)</span></code><a class="headerlink" href="#apply-response-wavelength-intensity" title="Link to this heading"></a></h5>
+<p>Apply spectral response curve.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength</span></code> (array): Wavelength grid in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">intensity</span></code> (array): Intensity spectrum</p></li>
+</ul>
+<p><strong>Returns:</strong> array - Intensity with response applied</p>
+</section>
+</section>
+</section>
+<section id="convolution-cflibs-instrument-convolution">
+<h3>Convolution (<code class="docutils literal notranslate"><span class="pre">cflibs.instrument.convolution</span></code>)<a class="headerlink" href="#convolution-cflibs-instrument-convolution" title="Link to this heading"></a></h3>
+<section id="apply-instrument-function-wavelength-intensity-sigma-nm">
+<h4><code class="docutils literal notranslate"><span class="pre">apply_instrument_function(wavelength,</span> <span class="pre">intensity,</span> <span class="pre">sigma_nm)</span></code><a class="headerlink" href="#apply-instrument-function-wavelength-intensity-sigma-nm" title="Link to this heading"></a></h4>
+<p>Apply Gaussian instrument function via convolution.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength</span></code> (array): Wavelength grid in nm (must be evenly spaced)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">intensity</span></code> (array): Intensity spectrum</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sigma_nm</span></code> (float): Gaussian standard deviation in nm</p></li>
+</ul>
+<p><strong>Returns:</strong> array - Convolved intensity spectrum</p>
+<p><strong>Raises:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ValueError</span></code>: If wavelength grid is not evenly spaced</p></li>
+</ul>
+</section>
+</section>
+<section id="echelle-cflibs-instrument-echelle">
+<h3>Echelle (<code class="docutils literal notranslate"><span class="pre">cflibs.instrument.echelle</span></code>)<a class="headerlink" href="#echelle-cflibs-instrument-echelle" title="Link to this heading"></a></h3>
+<section id="echelleextractor">
+<h4><code class="docutils literal notranslate"><span class="pre">EchelleExtractor</span></code><a class="headerlink" href="#echelleextractor" title="Link to this heading"></a></h4>
+<p>Extracts 1D spectra from 2D echellogram images.</p>
+<p><strong>Methods:</strong></p>
+<section id="init-calibration-file-none-extraction-window-5">
+<h5><code class="docutils literal notranslate"><span class="pre">__init__(calibration_file=None,</span> <span class="pre">extraction_window=5)</span></code><a class="headerlink" href="#init-calibration-file-none-extraction-window-5" title="Link to this heading"></a></h5>
+<p>Initialize echelle extractor.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">calibration_file</span></code> (str, optional): Path to JSON calibration file</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">extraction_window</span></code> (int): Number of pixels above/below trace center</p></li>
+</ul>
+</section>
+<section id="load-calibration-filepath">
+<h5><code class="docutils literal notranslate"><span class="pre">load_calibration(filepath)</span></code><a class="headerlink" href="#load-calibration-filepath" title="Link to this heading"></a></h5>
+<p>Load order trace and wavelength calibration polynomials.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">filepath</span></code> (str): Path to JSON calibration file</p></li>
+</ul>
+<p><strong>Raises:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">FileNotFoundError</span></code>: If calibration file does not exist</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ValueError</span></code>: If calibration file format is invalid</p></li>
+</ul>
+</section>
+<section id="extract-order-image-2d-order-name-background-subtract-true">
+<h5><code class="docutils literal notranslate"><span class="pre">extract_order(image_2d,</span> <span class="pre">order_name,</span> <span class="pre">background_subtract=True)</span></code><a class="headerlink" href="#extract-order-image-2d-order-name-background-subtract-true" title="Link to this heading"></a></h5>
+<p>Extract spectrum from a single order.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">image_2d</span></code> (array): 2D image array (height, width)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">order_name</span></code> (str): Name of the order to extract</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">background_subtract</span></code> (bool): Whether to subtract background</p></li>
+</ul>
+<p><strong>Returns:</strong> Tuple[array, array] - (wavelengths, flux)</p>
+</section>
+<section id="extract-spectrum-image-2d-wavelength-step-nm-0-05-merge-method-weighted-average-min-valid-pixels-10">
+<h5><code class="docutils literal notranslate"><span class="pre">extract_spectrum(image_2d,</span> <span class="pre">wavelength_step_nm=0.05,</span> <span class="pre">merge_method='weighted_average',</span> <span class="pre">min_valid_pixels=10)</span></code><a class="headerlink" href="#extract-spectrum-image-2d-wavelength-step-nm-0-05-merge-method-weighted-average-min-valid-pixels-10" title="Link to this heading"></a></h5>
+<p>Extract complete 1D spectrum from 2D echellogram.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">image_2d</span></code> (array): 2D echellogram image</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_step_nm</span></code> (float): Wavelength step for output grid</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">merge_method</span></code> (str): Method for merging (‘weighted_average’, ‘simple_average’, ‘max’)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">min_valid_pixels</span></code> (int): Minimum valid pixels required per order</p></li>
+</ul>
+<p><strong>Returns:</strong> Tuple[array, array] - (wavelengths, intensity)</p>
+<hr class="docutils" />
+</section>
+</section>
+</section>
+</section>
+<section id="i-o-module">
+<span id="io-module"></span><h2>I/O Module<a class="headerlink" href="#i-o-module" title="Link to this heading"></a></h2>
+<section id="spectrum-cflibs-io-spectrum">
+<h3>Spectrum (<code class="docutils literal notranslate"><span class="pre">cflibs.io.spectrum</span></code>)<a class="headerlink" href="#spectrum-cflibs-io-spectrum" title="Link to this heading"></a></h3>
+<section id="load-spectrum-file-path">
+<h4><code class="docutils literal notranslate"><span class="pre">load_spectrum(file_path)</span></code><a class="headerlink" href="#load-spectrum-file-path" title="Link to this heading"></a></h4>
+<p>Load spectrum from file.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">file_path</span></code> (str): Path to spectrum file (CSV or similar)</p></li>
+</ul>
+<p><strong>Returns:</strong> Tuple[array, array] - (wavelength, intensity)</p>
+<p><strong>Raises:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ValueError</span></code>: If file format is not supported</p></li>
+</ul>
+</section>
+<section id="save-spectrum-file-path-wavelength-intensity-header-none">
+<h4><code class="docutils literal notranslate"><span class="pre">save_spectrum(file_path,</span> <span class="pre">wavelength,</span> <span class="pre">intensity,</span> <span class="pre">header=None)</span></code><a class="headerlink" href="#save-spectrum-file-path-wavelength-intensity-header-none" title="Link to this heading"></a></h4>
+<p>Save spectrum to file.</p>
+<p><strong>Parameters:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">file_path</span></code> (str): Output file path</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength</span></code> (array): Wavelength array in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">intensity</span></code> (array): Intensity array</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">header</span></code> (str, optional): Header comment</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+</section>
+</section>
+<section id="inversion-module">
+<span id="id6"></span><h2>Inversion Module<a class="headerlink" href="#inversion-module" title="Link to this heading"></a></h2>
+<p>The inversion module is organized into 6 physics-aligned sub-packages that reflect the CF-LIBS measurement→physics→inference pipeline:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Sub-package</p></th>
+<th class="head"><p>Role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.common</span></code></p></td>
+<td><p>Data structures (LineObservation, BoltzmannFitResult), PCA pipeline</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.preprocess</span></code></p></td>
+<td><p>Signal processing (baseline, noise, deconvolution, wavelength calibration)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics</span></code></p></td>
+<td><p>Saha-Boltzmann solver, closure equations, CDSB, Stark broadening, line selection, uncertainties</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.identify</span></code></p></td>
+<td><p>Element identification (ALIAS, comb, correlation, spectral NNLS, BIC selection)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solve</span></code></p></td>
+<td><p>Plasma inference (iterative CF-LIBS, ILR solver, Bayesian MCMC, manifold coarse-to-fine)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs.inversion.runtime</span></code></p></td>
+<td><p>Real-time: DAQ streaming, temporal gate optimization, hardware interface</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Backward compatibility:</strong> Old flat import paths (e.g., <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solver</span> <span class="pre">import</span> <span class="pre">X</span></code>) still work via compatibility shims.</p>
+<p><strong>Physics-only constraint:</strong> The shipped CF-LIBS algorithm is physics-only (no neural networks or trained models). See <a class="reference internal" href="../development/Evolution_Framework.html"><span class="std std-doc">Evolution_Framework.md</span></a> for the full forbidden/allowed specification and enforcement.</p>
+<section id="peak-identification-and-line-matching">
+<h3>Peak Identification and Line Matching<a class="headerlink" href="#peak-identification-and-line-matching" title="Link to this heading"></a></h3>
+<p>The user-facing workflow is described in
+<a class="reference internal" href="../user/Peak_Identification_Guide.html"><span class="std std-doc">Peak Identification and Line Matching</span></a>.
+This section maps that workflow to the public APIs.</p>
+<section id="preprocessing-cflibs-inversion-preprocessing">
+<h4>Preprocessing (<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.preprocessing</span></code>)<a class="headerlink" href="#preprocessing-cflibs-inversion-preprocessing" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">BaselineMethod</span></code>: <code class="docutils literal notranslate"><span class="pre">MEDIAN</span></code>, <code class="docutils literal notranslate"><span class="pre">SNIP</span></code>, or <code class="docutils literal notranslate"><span class="pre">ALS</span></code> baseline strategy.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">estimate_baseline(wavelength,</span> <span class="pre">intensity,</span> <span class="pre">window_nm=10.0)</span></code>: moving-median
+baseline estimate.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">estimate_baseline_snip(...)</span></code>: SNIP baseline estimate for sharp peaks on a
+slowly varying continuum.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">estimate_baseline_als(...)</span></code>: asymmetric least-squares baseline estimate.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">estimate_noise(intensity,</span> <span class="pre">baseline)</span></code>: iterative sigma-clipped MAD noise
+estimate.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">detect_peaks(...)</span></code>: baseline-subtracted, noise-thresholded peak detection.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">detect_peaks_auto(...)</span></code>: convenience wrapper that estimates baseline/noise
+before calling <code class="docutils literal notranslate"><span class="pre">detect_peaks</span></code>.</p></li>
+</ul>
+</section>
+<section id="classic-line-observation-builder-cflibs-inversion-line-detection">
+<h4>Classic Line Observation Builder (<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.line_detection</span></code>)<a class="headerlink" href="#classic-line-observation-builder-cflibs-inversion-line-detection" title="Link to this heading"></a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">detect_line_observations(...)</span></code> is the bridge from raw spectra to the classic
+CF-LIBS solver. It loads candidate transitions, detects peaks, applies optional
+<code class="docutils literal notranslate"><span class="pre">kdet</span></code> prefiltering, scans global wavelength shifts, scores comb matches, and
+returns a <code class="docutils literal notranslate"><span class="pre">LineDetectionResult</span></code> with:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">observations</span></code>: <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> inputs for the iterative solver.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">resonance_lines</span></code>: transition keys marked as self-absorption risk.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">total_peaks</span></code>, <code class="docutils literal notranslate"><span class="pre">matched_peaks</span></code>, <code class="docutils literal notranslate"><span class="pre">unmatched_peaks</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">applied_shift_nm</span></code>: selected global wavelength shift.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">warnings</span></code>: machine-readable diagnostics such as <code class="docutils literal notranslate"><span class="pre">no_peaks_detected</span></code>,
+<code class="docutils literal notranslate"><span class="pre">comb_no_elements_passed</span></code>, or <code class="docutils literal notranslate"><span class="pre">no_peaks_matched</span></code>.</p></li>
+</ul>
+</section>
+<section id="element-identifiers-cflibs-inversion-identify">
+<h4>Element Identifiers (<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.identify</span></code>)<a class="headerlink" href="#element-identifiers-cflibs-inversion-identify" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Class</p></th>
+<th class="head"><p>Use case</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ALIASIdentifier</span></code></p></td>
+<td><p>Interpretable ALIAS scoring with theoretical emissivities, detection-rate, wavelength-shift, and confidence terms.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CombIdentifier</span></code></p></td>
+<td><p>Element fingerprint matching with triangular comb teeth and local template correlation.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CorrelationIdentifier</span></code></p></td>
+<td><p>Model-spectrum correlation over <code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">n_e)</span></code> grids or vector-indexed libraries.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SpectralNNLSIdentifier</span></code></p></td>
+<td><p>Full-spectrum non-negative decomposition into single-element basis spectra.</p></td>
+</tr>
+</tbody>
+</table>
+<p>All identifiers return <code class="docutils literal notranslate"><span class="pre">ElementIdentificationResult</span></code>, which separates detected
+and rejected elements and carries per-element score/confidence metadata. For
+quantitative CF-LIBS, use these identifiers to produce a defensible candidate
+list, then pass selected elements through <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> and
+<code class="docutils literal notranslate"><span class="pre">LineSelector</span></code> before solving.</p>
+</section>
+</section>
+</section>
+<section id="cli-module">
+<span id="id7"></span><h2>CLI Module<a class="headerlink" href="#cli-module" title="Link to this heading"></a></h2>
+<section id="main-cflibs-cli-main">
+<h3>Main (<code class="docutils literal notranslate"><span class="pre">cflibs.cli.main</span></code>)<a class="headerlink" href="#main-cflibs-cli-main" title="Link to this heading"></a></h3>
+<section id="main">
+<h4><code class="docutils literal notranslate"><span class="pre">main()</span></code><a class="headerlink" href="#main" title="Link to this heading"></a></h4>
+<p>Main CLI entry point.</p>
+<p><strong>Commands:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">forward</span> <span class="pre">&lt;config&gt;</span></code> - Generate synthetic spectrum</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">invert</span> <span class="pre">&lt;spectrum&gt;</span> <span class="pre">[--config]</span></code> - Invert measured spectrum (classic CF-LIBS)</p></li>
+</ul>
+<p><strong>Options:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--log-level</span></code> - Set logging level (DEBUG, INFO, WARNING, ERROR)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--output</span></code> - Output file path</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--config</span></code> - Configuration file path</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--elements</span></code> - Elements to include in inversion (overrides config)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--tolerance-nm</span></code> - Wavelength matching tolerance in nm</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--min-peak-height</span></code> - Minimum peak height (fraction of max intensity)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--peak-width-nm</span></code> - Peak integration width in nm</p></li>
+</ul>
+<p><strong>Inversion Config (analysis section):</strong></p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">atomic_database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libs_production.db</span>
+
+<span class="nt">analysis</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">elements</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;Fe&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;Cu&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">closure_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span><span class="w">  </span><span class="c1"># standard | matrix | oxide</span>
+<span class="w">  </span><span class="nt">min_snr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10.0</span>
+<span class="w">  </span><span class="nt">min_energy_spread_ev</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2.0</span>
+<span class="w">  </span><span class="nt">min_lines_per_element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">  </span><span class="nt">exclude_resonance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">isolation_wavelength_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<span class="w">  </span><span class="nt">max_lines_per_element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<span class="w">  </span><span class="nt">wavelength_tolerance_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<span class="w">  </span><span class="nt">min_peak_height</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.01</span>
+<span class="w">  </span><span class="nt">peak_width_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.2</span>
+<span class="w">  </span><span class="nt">max_iterations</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<span class="w">  </span><span class="nt">t_tolerance_k</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100.0</span>
+<span class="w">  </span><span class="nt">ne_tolerance_frac</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<span class="w">  </span><span class="nt">pressure_pa</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">101325.0</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="error-handling">
+<h2>Error Handling<a class="headerlink" href="#error-handling" title="Link to this heading"></a></h2>
+<p>All modules use descriptive error messages and proper exception types:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">FileNotFoundError</span></code>: Missing files</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ValueError</span></code>: Invalid parameters or data</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">KeyError</span></code>: Missing keys in dictionaries</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TypeError</span></code>: Type mismatches</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="further-reading">
+<h2>Further Reading<a class="headerlink" href="#further-reading" title="Link to this heading"></a></h2>
+<p>See the <a class="reference internal" href="../user/User_Guide.html"><span class="std std-doc">User Guide</span></a>, <code class="docutils literal notranslate"><span class="pre">CONTRIBUTING.md</span></code>, and <code class="docutils literal notranslate"><span class="pre">ROADMAP.md</span></code>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="README.html" class="btn btn-neutral float-left" title="Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Codebase_Architecture.html" class="btn btn-neutral float-right" title="CF-LIBS Codebase Architecture" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -7,12 +7,14 @@ This module provides:
 - Factory fixtures for generating synthetic test data
 """
 
+import ast
 import os
-import pytest
-import numpy as np
 import sqlite3
 import tempfile
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 # Force JAX to use CPU backend before any JAX imports.
 # Metal backend is abandoned (jax-metal incompatible with JAX >= 0.6)
@@ -26,42 +28,13 @@ try:
 except ImportError:
     pass
 
-from cflibs.atomic.structures import Transition, EnergyLevel
+from cflibs.atomic.structures import EnergyLevel, Transition
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.state import SingleZoneLTEPlasma
 
 
-def pytest_collection_modifyitems(config, items):
-    """Auto-skip tests marked ``requires_*`` when their optional dependency is missing
-    or broken.
-
-    The ``requires_*`` markers declared in pytest.ini are descriptive labels; they
-    do not skip on their own. This hook makes them functional: for each marker
-    listed below, probe the dependency once during collection and attach a
-    ``pytest.mark.skip`` to every item carrying that marker when the probe fails.
-
-    The probe has two parts: (1) the bare module imports, and (2) any cflibs
-    flag the production code uses to decide whether the dependency is usable.
-    Both must succeed — on Python 3.12 we have seen environments where the
-    top-level ``import numpyro`` succeeds but cflibs's deeper
-    ``from numpyro.infer import MCMC, NUTS, init_to_uniform`` block raises
-    ``ImportError`` (so ``cflibs.inversion.solve.bayesian.HAS_NUMPYRO`` is
-    ``False``). A bare-module-only probe would pass and the test would then
-    crash with cflibs's own ``ImportError("NumPyro required")`` instead of
-    being skipped.
-
-    Catches any ``Exception`` (not just ``ImportError``) because real-world
-    failure modes for optional native deps include broken-wheel
-    ``RuntimeError``s, partial installs that surface as ``AttributeError``,
-    and ``OSError`` from missing shared libraries. A failed probe must never
-    abort collection.
-
-    Closes CF-LIBS-improved-48c2.
-    """
-    # marker_name -> (probes, hint)
-    # probes is a list of (module_name, attr) pairs:
-    #   - if attr is None, just import the module
-    #   - if attr is a string, also assert getattr(module, attr) is truthy
+def _get_missing_optional_dependencies() -> dict[str, tuple[str, str, str]]:
+    """Probe optional dependencies once and return missing markers."""
     optional_deps: dict[str, tuple[list[tuple[str, str | None]], str]] = {
         "requires_jax": ([("jax", None)], 'pip install ".[jax-cpu]"'),
         "requires_bayesian": (
@@ -107,6 +80,90 @@ def pytest_collection_modifyitems(config, items):
     ]
     if not any(p.exists() for p in candidates):
         missing["requires_db"] = ("ASD_da/libs_production.db", "download atomic database", "missing_file")
+    return missing
+
+
+def _infer_optional_dependency_markers(path: Path) -> set[str]:
+    """Infer optional dependency markers from module contents before import."""
+    markers: set[str] = set()
+    try:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return markers
+
+    marker_names = (
+        "requires_jax",
+        "requires_bayesian",
+        "requires_uncertainty",
+        "requires_rust",
+        "requires_db",
+    )
+    for marker_name in marker_names:
+        if marker_name in source:
+            markers.add(marker_name)
+
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            imported_names = {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported_names = {node.module.split(".")[0]}
+        else:
+            continue
+
+        if "jax" in imported_names:
+            markers.add("requires_jax")
+        if "numpyro" in imported_names or "dynesty" in imported_names or "arviz" in imported_names:
+            markers.add("requires_bayesian")
+        if "uncertainties" in imported_names:
+            markers.add("requires_uncertainty")
+        if "_core" in imported_names:
+            markers.add("requires_rust")
+
+    return markers
+
+
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool:
+    """Skip optional-dependency test modules before import-time failures occur."""
+    if collection_path.suffix != ".py" or "tests" not in collection_path.parts:
+        return False
+
+    missing = _get_missing_optional_dependencies()
+    if not missing:
+        return False
+
+    required_markers = _infer_optional_dependency_markers(collection_path)
+    return any(marker in missing for marker in required_markers)
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip tests marked ``requires_*`` when their optional dependency is missing
+    or broken.
+
+    The ``requires_*`` markers declared in pytest.ini are descriptive labels; they
+    do not skip on their own. This hook makes them functional: for each marker
+    listed below, probe the dependency once during collection and attach a
+    ``pytest.mark.skip`` to every item carrying that marker when the probe fails.
+
+    The probe has two parts: (1) the bare module imports, and (2) any cflibs
+    flag the production code uses to decide whether the dependency is usable.
+    Both must succeed — on Python 3.12 we have seen environments where the
+    top-level ``import numpyro`` succeeds but cflibs's deeper
+    ``from numpyro.infer import MCMC, NUTS, init_to_uniform`` block raises
+    ``ImportError`` (so ``cflibs.inversion.solve.bayesian.HAS_NUMPYRO`` is
+    ``False``). A bare-module-only probe would pass and the test would then
+    crash with cflibs's own ``ImportError("NumPyro required")`` instead of
+    being skipped.
+
+    Catches any ``Exception`` (not just ``ImportError``) because real-world
+    failure modes for optional native deps include broken-wheel
+    ``RuntimeError``s, partial installs that surface as ``AttributeError``,
+    and ``OSError`` from missing shared libraries. A failed probe must never
+    abort collection.
+
+    Closes CF-LIBS-improved-48c2.
+    """
+    missing = _get_missing_optional_dependencies()
 
     if not missing:
         return

@@ -1,0 +1,561 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hardware Interfaces Documentation &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Echellogram Processing Guide" href="Echellogram_Processing_Guide.html" />
+    <link rel="prev" title="Manifold Generation Guide" href="Manifold_Generation_Guide.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_Real_Data.html">Quick Start: Analyzing Real LIBS Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Peak_Identification_Guide.html">Peak Identification and Line Matching Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_Synthetic.html">Quick Start: Synthetic Spectra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Hardware Interfaces Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#component-types">Component Types</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#spectrograph-detector">1. Spectrograph/Detector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#laser">2. Laser</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#motion-stages">3. Motion Stages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#powder-flow-regulator">4. Powder Flow Regulator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#hardware-manager">Hardware Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#factory-pattern">Factory Pattern</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-files">Configuration Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#custom-implementations">Custom Implementations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#status-monitoring">Status Monitoring</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#error-handling">Error Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#context-managers">Context Managers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#integration-with-gui">Integration with GUI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#placeholder-implementations">Placeholder Implementations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#future-enhancements">Future Enhancements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#api-reference">API Reference</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../physics/README.html">Physics Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html">Physics: Equations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-n-z-1-n-e-n-z">$$
+\frac{n_{z+1}, n_e}{n_z}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#varepsilon-ki-lambda">$$
+\varepsilon_{ki}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#gamma-text-stark-n-e-t">$$
+\gamma_{\text{Stark}}(n_e, T)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#v-lambda-sigma-gamma">$$
+V(\lambda; \sigma, \gamma)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-text-measured-lambda">$$
+I_{\text{measured}}(\lambda)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#i-ki">$$
+I_{ki}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#underbrace-ln-left-frac-i-ki-lambda-ki-g-k-a-ki-right-y">$$
+\underbrace{\ln!\left(\frac{I_{ki}, \lambda_{ki}}{g_k, A_{ki}}\right)}_{y}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#s-t-n-e">$$
+S(T, n_e)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#c-s-text-oxide">$$
+C_{s\text{-oxide}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#tau-0">$$
+\tau_0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#frac-pi-e-2-m-e-c-f-ki-n-i-l-frac-1-delta-nu-d-qquad-frac-i-text-obs-i-text-thin">\frac{\pi e^2}{m_e c}, f_{ki}, n_i, L, \frac{1}{\Delta\nu_D},
+\qquad
+\frac{I_{\text{obs}}}{I_{\text{thin}}}</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Equations.html#ln-p-mathbf-i-text-obs-mid-t-n-e-mathbf-c">$$
+\ln p(\mathbf{I}_{\text{obs}} \mid T, n_e, \mathbf{C})</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Assumptions_And_Validity.html">Physics: Assumptions and Validity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../physics/Inversion_Algorithm.html">Physics: Iterative CF-LIBS Inversion Algorithm</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../reference/API_Reference.html">CF-LIBS API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Codebase_Architecture.html">CF-LIBS Codebase Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reference/Database_Generation.html">Atomic Database Generation Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/Evolution_Framework.html">Evolution Framework</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/Deployment.html">CF-LIBS Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/CODEEVOLVE_WAVE2_PLAN.html">CodeEvolve Wave 2 Planning Document</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Hardware Interfaces Documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/user/Hardware_Interfaces.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="hardware-interfaces-documentation">
+<h1>Hardware Interfaces Documentation<a class="headerlink" href="#hardware-interfaces-documentation" title="Link to this heading"></a></h1>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>CF-LIBS provides a comprehensive hardware interface system for integrating with physical instrumentation. The system is designed to be modular and extensible, allowing easy integration with custom GUI applications and hardware control systems.</p>
+</section>
+<section id="architecture">
+<h2>Architecture<a class="headerlink" href="#architecture" title="Link to this heading"></a></h2>
+<p>The hardware interface system follows these design principles:</p>
+<ol class="arabic simple">
+<li><p><strong>Abstract Base Classes</strong>: All hardware components implement standardized interfaces</p></li>
+<li><p><strong>Placeholder Implementations</strong>: Default implementations for development and testing</p></li>
+<li><p><strong>Factory Pattern</strong>: Centralized component creation and registration</p></li>
+<li><p><strong>Manager Pattern</strong>: Coordinated management of multiple components</p></li>
+<li><p><strong>Configuration-Driven</strong>: Hardware setup via YAML/JSON configuration files</p></li>
+</ol>
+</section>
+<section id="component-types">
+<h2>Component Types<a class="headerlink" href="#component-types" title="Link to this heading"></a></h2>
+<section id="spectrograph-detector">
+<h3>1. Spectrograph/Detector<a class="headerlink" href="#spectrograph-detector" title="Link to this heading"></a></h3>
+<p><strong>Interface</strong>: <code class="docutils literal notranslate"><span class="pre">SpectrographInterface</span></code></p>
+<p><strong>Capabilities</strong>:</p>
+<ul class="simple">
+<li><p>Exposure time control</p></li>
+<li><p>Gain adjustment</p></li>
+<li><p>Spectrum acquisition</p></li>
+<li><p>Wavelength calibration</p></li>
+<li><p>Detector information queries</p></li>
+</ul>
+<p><strong>Example</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.hardware</span> <span class="kn">import</span> <span class="n">SpectrographHardware</span>
+
+<span class="c1"># Create spectrograph</span>
+<span class="n">spec</span> <span class="o">=</span> <span class="n">SpectrographHardware</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;main_spectrograph&quot;</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="s1">&#39;Andor iDus&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;resolution_nm&#39;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span>
+        <span class="s1">&#39;wavelength_range&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mf">200.0</span><span class="p">,</span> <span class="mf">800.0</span><span class="p">),</span>
+        <span class="s1">&#39;pixels&#39;</span><span class="p">:</span> <span class="mi">2048</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># Connect and initialize</span>
+<span class="k">with</span> <span class="n">spec</span><span class="p">:</span>
+    <span class="c1"># Set exposure time</span>
+    <span class="n">spec</span><span class="o">.</span><span class="n">set_exposure_time</span><span class="p">(</span><span class="mf">100.0</span><span class="p">)</span>  <span class="c1"># ms</span>
+    
+    <span class="c1"># Acquire spectrum</span>
+    <span class="n">wavelength</span><span class="p">,</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">acquire_spectrum</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="laser">
+<h3>2. Laser<a class="headerlink" href="#laser" title="Link to this heading"></a></h3>
+<p><strong>Interface</strong>: <code class="docutils literal notranslate"><span class="pre">LaserInterface</span></code></p>
+<p><strong>Capabilities</strong>:</p>
+<ul class="simple">
+<li><p>Power/energy control</p></li>
+<li><p>Repetition rate setting</p></li>
+<li><p>Pulse firing</p></li>
+<li><p>Safety interlock control</p></li>
+<li><p>Laser information queries</p></li>
+</ul>
+<p><strong>Example</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.hardware</span> <span class="kn">import</span> <span class="n">LaserHardware</span>
+
+<span class="c1"># Create laser</span>
+<span class="n">laser</span> <span class="o">=</span> <span class="n">LaserHardware</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;main_laser&quot;</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="s1">&#39;Nd:YAG&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;wavelength_nm&#39;</span><span class="p">:</span> <span class="mf">1064.0</span><span class="p">,</span>
+        <span class="s1">&#39;max_power_mW&#39;</span><span class="p">:</span> <span class="mf">1000.0</span><span class="p">,</span>
+        <span class="s1">&#39;max_energy_mJ&#39;</span><span class="p">:</span> <span class="mf">100.0</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># Connect and control</span>
+<span class="k">with</span> <span class="n">laser</span><span class="p">:</span>
+    <span class="n">laser</span><span class="o">.</span><span class="n">enable</span><span class="p">()</span>
+    <span class="n">laser</span><span class="o">.</span><span class="n">set_pulse_energy</span><span class="p">(</span><span class="mf">50.0</span><span class="p">)</span>  <span class="c1"># mJ</span>
+    <span class="n">laser</span><span class="o">.</span><span class="n">set_repetition_rate</span><span class="p">(</span><span class="mf">10.0</span><span class="p">)</span>  <span class="c1"># Hz</span>
+    <span class="n">laser</span><span class="o">.</span><span class="n">fire</span><span class="p">(</span><span class="n">n_pulses</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="motion-stages">
+<h3>3. Motion Stages<a class="headerlink" href="#motion-stages" title="Link to this heading"></a></h3>
+<p><strong>Interface</strong>: <code class="docutils literal notranslate"><span class="pre">MotionStageInterface</span></code></p>
+<p><strong>Capabilities</strong>:</p>
+<ul class="simple">
+<li><p>Multi-axis positioning</p></li>
+<li><p>Relative movements</p></li>
+<li><p>Homing/referencing</p></li>
+<li><p>Velocity control</p></li>
+<li><p>Position queries</p></li>
+</ul>
+<p><strong>Example</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.hardware</span> <span class="kn">import</span> <span class="n">MotionStageHardware</span>
+
+<span class="c1"># Create motion stage</span>
+<span class="n">stage</span> <span class="o">=</span> <span class="n">MotionStageHardware</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;xyz_stage&quot;</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;axes&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">,</span> <span class="s1">&#39;Y&#39;</span><span class="p">,</span> <span class="s1">&#39;Z&#39;</span><span class="p">],</span>
+        <span class="s1">&#39;travel_range&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;X&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">100.0</span><span class="p">),</span>
+            <span class="s1">&#39;Y&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">100.0</span><span class="p">),</span>
+            <span class="s1">&#39;Z&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">50.0</span><span class="p">)</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># Connect and move</span>
+<span class="k">with</span> <span class="n">stage</span><span class="p">:</span>
+    <span class="c1"># Home all axes</span>
+    <span class="n">stage</span><span class="o">.</span><span class="n">home</span><span class="p">()</span>
+    
+    <span class="c1"># Move to position</span>
+    <span class="n">stage</span><span class="o">.</span><span class="n">move_to</span><span class="p">(</span><span class="s1">&#39;X&#39;</span><span class="p">,</span> <span class="mf">50.0</span><span class="p">,</span> <span class="n">wait</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    
+    <span class="c1"># Relative movement</span>
+    <span class="n">stage</span><span class="o">.</span><span class="n">move_relative</span><span class="p">(</span><span class="s1">&#39;Y&#39;</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">)</span>
+    
+    <span class="c1"># Get position</span>
+    <span class="n">pos</span> <span class="o">=</span> <span class="n">stage</span><span class="o">.</span><span class="n">get_position</span><span class="p">(</span><span class="s1">&#39;X&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="powder-flow-regulator">
+<h3>4. Powder Flow Regulator<a class="headerlink" href="#powder-flow-regulator" title="Link to this heading"></a></h3>
+<p><strong>Interface</strong>: <code class="docutils literal notranslate"><span class="pre">FlowRegulatorInterface</span></code></p>
+<p><strong>Capabilities</strong>:</p>
+<ul class="simple">
+<li><p>Flow rate control</p></li>
+<li><p>Valve control</p></li>
+<li><p>Flow start/stop</p></li>
+<li><p>Powder level monitoring</p></li>
+</ul>
+<p><strong>Example</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.hardware</span> <span class="kn">import</span> <span class="n">FlowRegulatorHardware</span>
+
+<span class="c1"># Create flow regulator</span>
+<span class="n">flow</span> <span class="o">=</span> <span class="n">FlowRegulatorHardware</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;powder_feeder&quot;</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="s1">&#39;Vibra Screw&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;max_flow_rate_g_s&#39;</span><span class="p">:</span> <span class="mf">10.0</span><span class="p">,</span>
+        <span class="s1">&#39;min_flow_rate_g_s&#39;</span><span class="p">:</span> <span class="mf">0.01</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># Connect and control</span>
+<span class="k">with</span> <span class="n">flow</span><span class="p">:</span>
+    <span class="c1"># Set flow rate</span>
+    <span class="n">flow</span><span class="o">.</span><span class="n">set_flow_rate</span><span class="p">(</span><span class="mf">5.0</span><span class="p">)</span>  <span class="c1"># g/s</span>
+    
+    <span class="c1"># Open valve and start flow</span>
+    <span class="n">flow</span><span class="o">.</span><span class="n">open_valve</span><span class="p">()</span>
+    <span class="n">flow</span><span class="o">.</span><span class="n">start_flow</span><span class="p">()</span>
+    
+    <span class="c1"># Monitor powder level</span>
+    <span class="n">level</span> <span class="o">=</span> <span class="n">flow</span><span class="o">.</span><span class="n">get_powder_level</span><span class="p">()</span>
+    
+    <span class="c1"># Stop flow</span>
+    <span class="n">flow</span><span class="o">.</span><span class="n">stop_flow</span><span class="p">()</span>
+    <span class="n">flow</span><span class="o">.</span><span class="n">close_valve</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="hardware-manager">
+<h2>Hardware Manager<a class="headerlink" href="#hardware-manager" title="Link to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">HardwareManager</span></code> class provides centralized management of all hardware components:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.hardware</span> <span class="kn">import</span> <span class="n">HardwareManager</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+
+<span class="c1"># Create manager from config file</span>
+<span class="n">manager</span> <span class="o">=</span> <span class="n">HardwareManager</span><span class="p">(</span><span class="n">config_path</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;hardware_config.yaml&quot;</span><span class="p">))</span>
+
+<span class="c1"># Connect all components</span>
+<span class="k">with</span> <span class="n">manager</span><span class="p">:</span>
+    <span class="c1"># Get status of all components</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">get_all_status</span><span class="p">()</span>
+    
+    <span class="c1"># Get ready components</span>
+    <span class="n">ready</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">get_ready_components</span><span class="p">()</span>
+    
+    <span class="c1"># Access specific components</span>
+    <span class="n">laser</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">get_component</span><span class="p">(</span><span class="s2">&quot;main_laser&quot;</span><span class="p">)</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">get_component</span><span class="p">(</span><span class="s2">&quot;main_spectrograph&quot;</span><span class="p">)</span>
+    
+    <span class="c1"># Coordinated operation</span>
+    <span class="n">laser</span><span class="o">.</span><span class="n">fire</span><span class="p">()</span>
+    <span class="n">wavelength</span><span class="p">,</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">acquire_spectrum</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="factory-pattern">
+<h2>Factory Pattern<a class="headerlink" href="#factory-pattern" title="Link to this heading"></a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">HardwareFactory</span></code> to create components programmatically:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.hardware</span> <span class="kn">import</span> <span class="n">HardwareFactory</span>
+
+<span class="c1"># Create component</span>
+<span class="n">laser</span> <span class="o">=</span> <span class="n">HardwareFactory</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+    <span class="n">component_type</span><span class="o">=</span><span class="s1">&#39;laser&#39;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s1">&#39;main_laser&#39;</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;wavelength_nm&#39;</span><span class="p">:</span> <span class="mf">1064.0</span><span class="p">,</span>
+        <span class="s1">&#39;max_power_mW&#39;</span><span class="p">:</span> <span class="mf">1000.0</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1"># Register custom implementation</span>
+<span class="n">HardwareFactory</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;laser&#39;</span><span class="p">,</span> <span class="s1">&#39;custom_model&#39;</span><span class="p">,</span> <span class="n">CustomLaserClass</span><span class="p">)</span>
+
+<span class="c1"># List available components</span>
+<span class="n">components</span> <span class="o">=</span> <span class="n">HardwareFactory</span><span class="o">.</span><span class="n">list_components</span><span class="p">(</span><span class="s1">&#39;laser&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="configuration-files">
+<h2>Configuration Files<a class="headerlink" href="#configuration-files" title="Link to this heading"></a></h2>
+<p>Hardware can be configured via YAML or JSON files:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">hardware</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">spectrograph</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;main_spectrograph&quot;</span>
+<span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Andor</span><span class="nv"> </span><span class="s">iDus&quot;</span>
+<span class="w">    </span><span class="nt">resolution_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<span class="w">    </span><span class="nt">wavelength_range</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">200.0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">800.0</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">pixels</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2048</span>
+<span class="w">  </span>
+<span class="w">  </span><span class="nt">laser</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;main_laser&quot;</span>
+<span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Nd:YAG&quot;</span>
+<span class="w">    </span><span class="nt">wavelength_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1064.0</span>
+<span class="w">    </span><span class="nt">max_power_mW</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000.0</span>
+</pre></div>
+</div>
+<p>Load configuration:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.hardware</span> <span class="kn">import</span> <span class="n">HardwareManager</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+
+<span class="n">manager</span> <span class="o">=</span> <span class="n">HardwareManager</span><span class="p">(</span><span class="n">config_path</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;hardware_config.yaml&quot;</span><span class="p">))</span>
+</pre></div>
+</div>
+</section>
+<section id="custom-implementations">
+<h2>Custom Implementations<a class="headerlink" href="#custom-implementations" title="Link to this heading"></a></h2>
+<p>To integrate custom hardware drivers:</p>
+<ol class="arabic simple">
+<li><p><strong>Create Implementation Class</strong>:</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.hardware.abc</span> <span class="kn">import</span> <span class="n">LaserInterface</span>
+
+<span class="k">class</span> <span class="nc">CustomLaser</span><span class="p">(</span><span class="n">LaserInterface</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Custom connection logic</span>
+        <span class="k">pass</span>
+    
+    <span class="k">def</span> <span class="nf">set_power</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">power_mW</span><span class="p">):</span>
+        <span class="c1"># Custom power control</span>
+        <span class="k">pass</span>
+    
+    <span class="c1"># ... implement all required methods</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Register with Factory</strong>:</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">cflibs.hardware</span> <span class="kn">import</span> <span class="n">HardwareFactory</span>
+
+<span class="n">HardwareFactory</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;laser&#39;</span><span class="p">,</span> <span class="s1">&#39;custom_model&#39;</span><span class="p">,</span> <span class="n">CustomLaser</span><span class="p">)</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p><strong>Use in Configuration</strong>:</p></li>
+</ol>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">hardware</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">laser</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;custom_laser&quot;</span>
+<span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;custom_model&quot;</span>
+<span class="w">    </span><span class="c1"># ... custom config</span>
+</pre></div>
+</div>
+</section>
+<section id="status-monitoring">
+<h2>Status Monitoring<a class="headerlink" href="#status-monitoring" title="Link to this heading"></a></h2>
+<p>All components provide status information:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Get component status</span>
+<span class="n">status</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">get_status</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">status</span><span class="p">)</span>
+<span class="c1"># {</span>
+<span class="c1">#     &#39;name&#39;: &#39;main_laser&#39;,</span>
+<span class="c1">#     &#39;status&#39;: &#39;ready&#39;,</span>
+<span class="c1">#     &#39;power_mW&#39;: 500.0,</span>
+<span class="c1">#     &#39;enabled&#39;: True</span>
+<span class="c1"># }</span>
+
+<span class="c1"># Check connection status</span>
+<span class="k">if</span> <span class="n">component</span><span class="o">.</span><span class="n">is_connected</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Component is connected&quot;</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="n">component</span><span class="o">.</span><span class="n">is_ready</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Component is ready for operation&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="error-handling">
+<h2>Error Handling<a class="headerlink" href="#error-handling" title="Link to this heading"></a></h2>
+<p>Components provide error information:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">component</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">HardwareStatus</span><span class="o">.</span><span class="n">ERROR</span><span class="p">:</span>
+    <span class="n">error_msg</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">error_message</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">error_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="context-managers">
+<h2>Context Managers<a class="headerlink" href="#context-managers" title="Link to this heading"></a></h2>
+<p>All components support context managers for automatic cleanup:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">component</span><span class="p">:</span>
+    <span class="c1"># Component automatically connects and initializes</span>
+    <span class="n">component</span><span class="o">.</span><span class="n">do_operation</span><span class="p">()</span>
+<span class="c1"># Component automatically disconnects</span>
+</pre></div>
+</div>
+</section>
+<section id="integration-with-gui">
+<h2>Integration with GUI<a class="headerlink" href="#integration-with-gui" title="Link to this heading"></a></h2>
+<p>The hardware interfaces are designed for easy GUI integration:</p>
+<ol class="arabic simple">
+<li><p><strong>Status Updates</strong>: Components provide status dictionaries that can be displayed</p></li>
+<li><p><strong>Event Callbacks</strong>: (Future) Components can emit events for GUI updates</p></li>
+<li><p><strong>Thread Safety</strong>: Components can be accessed from GUI threads</p></li>
+<li><p><strong>Configuration</strong>: GUI can load/save hardware configurations</p></li>
+</ol>
+</section>
+<section id="placeholder-implementations">
+<h2>Placeholder Implementations<a class="headerlink" href="#placeholder-implementations" title="Link to this heading"></a></h2>
+<p>Current implementations are placeholders that:</p>
+<ul class="simple">
+<li><p>Log all operations</p></li>
+<li><p>Return placeholder data (zeros, default values)</p></li>
+<li><p>Do not connect to actual hardware</p></li>
+<li><p>Are suitable for development and testing</p></li>
+</ul>
+<p>Replace with actual hardware drivers when integrating with physical systems.</p>
+</section>
+<section id="future-enhancements">
+<h2>Future Enhancements<a class="headerlink" href="#future-enhancements" title="Link to this heading"></a></h2>
+<p>Planned features:</p>
+<ul class="simple">
+<li><p>[ ] Event/callback system for status updates</p></li>
+<li><p>[ ] Thread-safe operation queues</p></li>
+<li><p>[ ] Hardware simulation mode</p></li>
+<li><p>[ ] Calibration data persistence</p></li>
+<li><p>[ ] Multi-device synchronization</p></li>
+<li><p>[ ] Hardware health monitoring</p></li>
+<li><p>[ ] Automatic reconnection on failure</p></li>
+</ul>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading"></a></h2>
+<p>See <code class="docutils literal notranslate"><span class="pre">examples/hardware_config_example.yaml</span></code> for a complete configuration example.</p>
+</section>
+<section id="api-reference">
+<h2>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading"></a></h2>
+<p>See module docstrings for detailed API documentation:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.hardware.abc</span></code> - Abstract base classes</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.hardware.spectrograph</span></code> - Spectrograph implementation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.hardware.laser</span></code> - Laser implementation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.hardware.stages</span></code> - Motion stage implementation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.hardware.flow</span></code> - Flow regulator implementation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.hardware.factory</span></code> - Factory pattern</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.hardware.manager</span></code> - Hardware manager</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Manifold_Generation_Guide.html" class="btn btn-neutral float-left" title="Manifold Generation Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Echellogram_Processing_Guide.html" class="btn btn-neutral float-right" title="Echellogram Processing Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
