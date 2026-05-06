@@ -458,6 +458,8 @@ class AtomicDataUncertainty:
 
     default_A_uncertainty: float = 0.10
     per_line_uncertainties: Optional[Dict[float, float]] = None
+    default_E_uncertainty: float = 0.001  # Default energy uncertainty in eV
+    per_line_E_uncertainties: Optional[Dict[float, float]] = None
 
     def get_uncertainty(self, wavelength_nm: float) -> float:
         """Get fractional uncertainty for A_ki at given wavelength."""
@@ -465,14 +467,20 @@ class AtomicDataUncertainty:
             return self.per_line_uncertainties[wavelength_nm]
         return self.default_A_uncertainty
 
+    def get_energy_uncertainty(self, wavelength_nm: float) -> float:
+        """Get absolute energy uncertainty (eV) for upper level at given wavelength."""
+        if self.per_line_E_uncertainties and wavelength_nm in self.per_line_E_uncertainties:
+            return self.per_line_E_uncertainties[wavelength_nm]
+        return self.default_E_uncertainty
+
     @classmethod
     def from_transitions(cls, transitions: List[Any]) -> "AtomicDataUncertainty":
-        """Build from Transition objects that carry aki_uncertainty.
+        """Build from Transition objects that carry aki_uncertainty and energy_uncertainty.
 
         Parameters
         ----------
         transitions : list of Transition
-            Transitions with optional ``aki_uncertainty`` attribute.
+            Transitions with optional ``aki_uncertainty`` and ``energy_uncertainty_ev`` attributes.
 
         Returns
         -------
@@ -480,12 +488,17 @@ class AtomicDataUncertainty:
             Instance with per-line uncertainties populated from the database.
         """
         per_line: Dict[float, float] = {}
+        per_line_e: Dict[float, float] = {}
         uncertainties_found = []
         for t in transitions:
             unc = getattr(t, "aki_uncertainty", None)
             if unc is not None:
                 per_line[t.wavelength_nm] = unc
                 uncertainties_found.append(unc)
+
+            e_unc = getattr(t, "energy_uncertainty_ev", None)
+            if e_unc is not None:
+                per_line_e[t.wavelength_nm] = e_unc
 
         # Compute a sensible default from the median of available values
         if uncertainties_found:
@@ -496,6 +509,7 @@ class AtomicDataUncertainty:
         return cls(
             default_A_uncertainty=default,
             per_line_uncertainties=per_line if per_line else None,
+            per_line_E_uncertainties=per_line_e if per_line_e else None,
         )
 
 
@@ -942,6 +956,14 @@ class MonteCarloUQ:
                     # Ensure positive A_ki
                     A_ki = max(A_ki, 1.0)
 
+            # Perturb E_k_ev (Picking up reduced energy uncertainty from database)
+            E_k_ev = obs.E_k_ev
+            if perturbation_type in (PerturbationType.ATOMIC_DATA, PerturbationType.COMBINED):
+                if atomic_uncertainty is not None:
+                    sigma_E = atomic_uncertainty.get_energy_uncertainty(obs.wavelength_nm)
+                    if sigma_E > 0:
+                        E_k_ev = E_k_ev + rng.normal(0, sigma_E)
+
             perturbed.append(
                 LineObservation(
                     wavelength_nm=obs.wavelength_nm,
@@ -949,7 +971,7 @@ class MonteCarloUQ:
                     intensity_uncertainty=obs.intensity_uncertainty,
                     element=obs.element,
                     ionization_stage=obs.ionization_stage,
-                    E_k_ev=obs.E_k_ev,
+                    E_k_ev=E_k_ev,
                     g_k=obs.g_k,
                     A_ki=A_ki,
                 )
