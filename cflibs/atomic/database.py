@@ -256,30 +256,39 @@ class AtomicDatabase(AtomicDataSource):
 
     @staticmethod
     def _populate_aki_uncertainties(cursor: sqlite3.Cursor):
-        """Assign aki_uncertainty using heuristic based on relative intensity.
+        """Assign aki_uncertainty using Kramida/NIST data or intensity heuristic.
 
-        Since our database was generated from NIST ASD without explicit accuracy
-        grades, we assign uncertainty estimates based on line properties:
-        - Lines with high relative intensity (>100) and from well-studied
-          elements get lower uncertainty (~5-10%, grade B)
-        - Lines with low relative intensity get higher uncertainty (~25%, grade C)
-        - Lines with no relative intensity get 50% uncertainty (grade D)
-
-        When explicit NIST accuracy grades are available (via future ingestion),
-        those should override these heuristics.
+        1. If accuracy_grade is present but numerical uncertainty is missing,
+           map grade to sigma using NIST standards.
+        2. For lines missing both numerical uncertainty and accuracy grade,
+           assign estimates based on relative intensity as a proxy for quality.
         """
         from cflibs.atomic.reference_data import NIST_GRADE_UNCERTAINTY
 
+        # 1. First, backfill numerical uncertainty from known accuracy grades where missing
+        n_from_grade = 0
+        for grade, unc in NIST_GRADE_UNCERTAINTY.items():
+            cursor.execute(
+                "UPDATE lines SET aki_uncertainty = ? "
+                "WHERE aki IS NOT NULL AND accuracy_grade = ? AND aki_uncertainty IS NULL",
+                (unc, grade),
+            )
+            n_from_grade += cursor.rowcount
+
+        if n_from_grade > 0:
+            logger.info("Assigned aki_uncertainty from accuracy_grade for %d lines", n_from_grade)
+
+        # 2. Heuristic: assign based on relative intensity for lines missing both
         unc_b = NIST_GRADE_UNCERTAINTY["B"]
         unc_c = NIST_GRADE_UNCERTAINTY["C"]
         unc_d = NIST_GRADE_UNCERTAINTY["D"]
         unc_e = NIST_GRADE_UNCERTAINTY["E"]
 
-        # Heuristic: assign based on relative intensity as a proxy for data quality
         # rel_int > 100 → well-measured lines (B grade)
         cursor.execute(
             f"UPDATE lines SET aki_uncertainty = {unc_b}, accuracy_grade = 'B' "
-            "WHERE aki IS NOT NULL AND rel_int IS NOT NULL AND rel_int > 100"
+            "WHERE aki IS NOT NULL AND rel_int IS NOT NULL AND rel_int > 100 "
+            "AND aki_uncertainty IS NULL AND accuracy_grade IS NULL"
         )
         n_b = cursor.rowcount
 
@@ -287,7 +296,7 @@ class AtomicDatabase(AtomicDataSource):
         cursor.execute(
             f"UPDATE lines SET aki_uncertainty = {unc_c}, accuracy_grade = 'C' "
             "WHERE aki IS NOT NULL AND rel_int IS NOT NULL AND rel_int > 10 "
-            "AND aki_uncertainty IS NULL"
+            "AND aki_uncertainty IS NULL AND accuracy_grade IS NULL"
         )
         n_c = cursor.rowcount
 
@@ -295,19 +304,19 @@ class AtomicDatabase(AtomicDataSource):
         cursor.execute(
             f"UPDATE lines SET aki_uncertainty = {unc_d}, accuracy_grade = 'D' "
             "WHERE aki IS NOT NULL AND rel_int IS NOT NULL AND rel_int >= 1 "
-            "AND aki_uncertainty IS NULL"
+            "AND aki_uncertainty IS NULL AND accuracy_grade IS NULL"
         )
         n_d = cursor.rowcount
 
         # Everything else: worst case (E grade)
         cursor.execute(
             f"UPDATE lines SET aki_uncertainty = {unc_e}, accuracy_grade = 'E' "
-            "WHERE aki IS NOT NULL AND aki_uncertainty IS NULL"
+            "WHERE aki IS NOT NULL AND aki_uncertainty IS NULL AND accuracy_grade IS NULL"
         )
         n_e = cursor.rowcount
 
         logger.info(
-            "Assigned aki_uncertainty: B=%d, C=%d, D=%d, E=%d lines",
+            "Heuristic assignment (missing both): B=%d, C=%d, D=%d, E=%d lines",
             n_b,
             n_c,
             n_d,
