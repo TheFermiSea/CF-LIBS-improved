@@ -246,6 +246,8 @@ def build_production_db(
             gi REAL,
             gk REAL,
             rel_int REAL,
+            aki_uncertainty REAL,
+            accuracy_grade TEXT,
             UNIQUE(element, sp_num, wavelength_nm, ek_ev)
         )
     """
@@ -340,6 +342,9 @@ def build_production_db(
                         "gi": clean["g_i"],
                         "gk": clean["g_k"],
                         "rel_int": pd.to_numeric(clean["intens"], errors="coerce").fillna(0),
+                        "aki_uncertainty": pd.to_numeric(clean.get("unc_Aki"), errors="coerce")
+                        / 100.0,
+                        "accuracy_grade": clean.get("acc"),
                     }
                 )
 
