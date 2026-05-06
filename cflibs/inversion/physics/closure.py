@@ -28,6 +28,7 @@ class ClosureMode(Enum):
     MATRIX = "matrix"
     OXIDE = "oxide"
     ILR = "ilr"
+    PWLR = "pwlr"
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +123,48 @@ def ilr_inverse(coords: np.ndarray, D: int) -> np.ndarray:
     clr = coords @ V.T  # (D-1,) @ (D-1, D) -> (D,)
     comp = np.exp(clr)
     return comp / np.sum(comp, axis=-1, keepdims=True)
+
+
+def plr_transform(composition: np.ndarray) -> np.ndarray:
+    """
+    Pivot log-ratio (PLR) transform (a form of ALR).
+
+    Uses the first element as the pivot. Maps a D-part composition to
+    (D-1) log-ratio coordinates.
+
+    Parameters
+    ----------
+    composition : np.ndarray
+        Composition vector(s) on the simplex, shape (D,) or (N, D).
+
+    Returns
+    -------
+    np.ndarray
+        PLR coordinates, shape (D-1,) or (N, D-1).
+    """
+    log_comp = np.log(np.clip(composition, 1e-10, None))
+    return log_comp[..., 1:] - log_comp[..., :1]
+
+
+def plr_inverse(coords: np.ndarray) -> np.ndarray:
+    """
+    Inverse PLR transform: map from R^(D-1) back to the D-simplex.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        PLR coordinates, shape (D-1,) or (N, D-1).
+
+    Returns
+    -------
+    np.ndarray
+        Composition on the simplex (sums to 1), shape (D,) or (N, D).
+    """
+    ratios = np.exp(coords)
+    ones_shape = list(ratios.shape)
+    ones_shape[-1] = 1
+    ratios_with_pivot = np.concatenate([np.ones(ones_shape), ratios], axis=-1)
+    return ratios_with_pivot / np.sum(ratios_with_pivot, axis=-1, keepdims=True)
 
 
 def _validated_abundance_multiplier(
@@ -461,6 +504,72 @@ class ClosureEquation:
             experimental_factor=F,
             total_measured=total_measured,
             mode="ilr",
+        )
+
+    @staticmethod
+    def apply_pwlr(
+        intercepts: Dict[str, float],
+        partition_funcs: Dict[str, float],
+        abundance_multipliers: Optional[Dict[str, float]] = None,
+    ) -> ClosureResult:
+        """
+        Apply PWLR (Pivot Log-Ratio) based closure.
+
+        Uses the pivot log-ratio transform as an alternative to ILR. PLR
+        provides a quasi-isometric coordinate system that is easier to
+        interpret than ILR and handles compositional zeros more gracefully
+        during optimization.
+
+        Parameters
+        ----------
+        intercepts : Dict[str, float]
+            Boltzmann plot intercepts q_s for each element.
+        partition_funcs : Dict[str, float]
+            Partition function values U_s(T) for each element.
+        abundance_multipliers : Dict[str, float], optional
+            Optional per-element scaling factors. Defaults to unity.
+
+        Returns
+        -------
+        ClosureResult
+            Concentrations on the simplex (sum=1, all positive).
+        """
+        # Build ordered element list and raw relative concentrations
+        elements = []
+        rel_values = []
+        total_measured = 0.0
+
+        for element, q_s in intercepts.items():
+            if element not in partition_funcs:
+                logger.warning(f"Missing partition function for {element} in PWLR closure")
+                continue
+
+            U_s = partition_funcs[element]
+            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
+            rel_C = multiplier * U_s * np.exp(q_s)
+            elements.append(element)
+            rel_values.append(rel_C)
+            total_measured += rel_C
+
+        if total_measured == 0 or len(elements) < 2:
+            logger.error("PWLR closure requires at least 2 elements with non-zero concentration")
+            return ClosureResult({}, 0.0, 0.0, "pwlr")
+
+        # Normalize to simplex, then round-trip through PLR
+        raw = np.array(rel_values)
+        simplex = raw / np.sum(raw)
+        coords = plr_transform(simplex)
+        final_simplex = plr_inverse(coords)
+
+        F = total_measured  # experimental factor matches standard definition
+
+        concentrations = {el: float(final_simplex[i]) for i, el in enumerate(elements)}
+
+        return ClosureResult(
+            concentrations=concentrations,
+            experimental_factor=F,
+            total_measured=total_measured,
+            mode="pwlr",
         )
 
     @staticmethod
