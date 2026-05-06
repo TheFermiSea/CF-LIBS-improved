@@ -96,24 +96,27 @@ ssh root@beads-lxc "cat /etc/default/beads-dolt"
 
 ### 3. Restrict the network surface
 
-Tailscale ACL example, locking 3306/50051 to specific tags:
+Use whatever tag your Tailnet ACL already defines for backend infrastructure
+(e.g. `tag:server`). The LXC advertises that tag at `tailscale up` time:
 
-```hujson
-{
-  "tagOwners": {
-    "tag:beads-lxc":     ["autogroup:admin"],
-    "tag:beads-client":  ["autogroup:admin"]
-  },
-  "acls": [
-    { "action": "accept",
-      "src":    ["tag:beads-client"],
-      "dst":    ["tag:beads-lxc:3306", "tag:beads-lxc:50051"] }
-  ]
-}
+```bash
+tailscale up --hostname=beads-lxc --advertise-tags=tag:server --ssh
 ```
 
-Then `tailscale set --advertise-tags=tag:beads-lxc` on the LXC and
-`tag:beads-client` on each client.
+Tailscale ACL fragment locking ports `3306` and `50051` to clients tagged
+`tag:beads-client` (or `autogroup:member`, etc.):
+
+```hujson
+"acls": [
+  { "action": "accept",
+    "src":    ["autogroup:member"],
+    "dst":    ["tag:server:3306", "tag:server:50051"] }
+]
+```
+
+If `tag:server` is not yet defined in your tailnet, add it to `tagOwners`
+in the admin console first, otherwise `tailscale up` returns
+`requested tags [tag:server] are invalid or not permitted`.
 
 ### 4. Smoke test
 
