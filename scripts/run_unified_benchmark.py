@@ -118,6 +118,77 @@ def _run_composition_phase(
     )
 
 
+def _build_perturbation_pipeline_fn(runner, id_workflow: str, comp_workflow: str):
+    """Return a per-spectrum pipeline callable for the perturbation battery.
+
+    The unified runner's composition workflows operate on a *dataset*, not
+    a single spectrum.  For the perturbation battery we wrap a single
+    spectrum into a one-element :class:`BenchmarkDataset`-like object and
+    extract the composition prediction from the resulting record.
+
+    The implementation deliberately uses ``getattr`` / dictionary lookups
+    so that the script does not hard-couple to the runner's internal
+    record schema; if the schema lacks a recognised "predicted
+    composition" key, the resulting pipeline returns an empty dict and
+    the perturbation report records the spectrum's contribution as a
+    zero-Δ row -- the harness itself will not crash.
+    """
+    from cflibs.benchmark.dataset import BenchmarkDataset, DataSplit
+
+    def pipeline_fn(spectrum):
+        # Build a one-spectrum ad-hoc dataset.  We re-use the dataset's
+        # default split machinery so the runner's contract is satisfied.
+        ds = BenchmarkDataset(
+            name="_perturb_singleton",
+            description="single-spectrum perturbation evaluation",
+            spectra=[spectrum],
+            splits={
+                "default": DataSplit(
+                    train_indices=[],
+                    test_indices=[0],
+                    name="default",
+                )
+            },
+        )
+        try:
+            records, _ = runner.run_composition(
+                [ds],
+                id_workflow_names=[id_workflow],
+                composition_workflow_names=[comp_workflow],
+                max_outer_folds=1,
+            )
+        except Exception:
+            return {}
+        if not records:
+            return {}
+        first = records[0]
+        # Try common keys / attributes.
+        for attr in ("predicted_composition", "composition_pred", "composition"):
+            v = getattr(first, attr, None)
+            if isinstance(v, dict) and v:
+                return {str(k): float(val) for k, val in v.items()}
+            if isinstance(first, dict) and isinstance(first.get(attr), dict) and first[attr]:
+                return {str(k): float(val) for k, val in first[attr].items()}
+        return {}
+
+    return pipeline_fn
+
+
+def _collect_spectra_with_truth(datasets):
+    """Flatten the selected datasets into a list of spectra that carry a
+    non-trivial ``true_composition``.
+
+    Per the perturbation report's contract, only spectra with a known
+    composition can contribute meaningfully to Δd_A computation.
+    """
+    out = []
+    for ds in datasets:
+        for s in ds.spectra:
+            if s.true_composition:
+                out.append(s)
+    return out
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the unified LIBS benchmark pipeline.")
     parser.add_argument(
@@ -178,6 +249,34 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Limit the number of outer folds evaluated per dataset.",
+    )
+    parser.add_argument(
+        "--perturb",
+        action="store_true",
+        help=(
+            "After the main benchmark, run the robustness perturbation "
+            "battery (line-dropout + outlier injection) on the loaded "
+            "spectra and emit perturbation_report.json alongside the "
+            "other outputs."
+        ),
+    )
+    parser.add_argument(
+        "--perturb-seed",
+        type=int,
+        default=42,
+        help=(
+            "Seed for the outlier-injection RNG when --perturb is set "
+            "(default 42).  Determines reproducibility of the report."
+        ),
+    )
+    parser.add_argument(
+        "--perturb-max-spectra",
+        type=int,
+        default=None,
+        help=(
+            "Optional cap on the number of spectra fed to the perturbation "
+            "battery.  Useful for smoke runs."
+        ),
     )
     return parser
 
@@ -308,7 +407,72 @@ def main(argv: Sequence[str] | None = None) -> int:
             "Physical-consistency gate BLOCKED — see "
             f"{pc_path.resolve()} for details."
         )
+        # Skip the perturbation battery when the Tier-1 gate has
+        # already blocked: there is no reason to spend GPU time
+        # perturbing a pipeline that's failing first-principles physics.
         return 2
+
+    if args.perturb:
+        import numpy as np
+
+        from cflibs.benchmark.robustness import (
+            default_perturbations,
+            run_perturbation_battery,
+        )
+
+        perturb_spectra = _collect_spectra_with_truth(composition_datasets)
+        if args.perturb_max_spectra is not None:
+            perturb_spectra = perturb_spectra[: args.perturb_max_spectra]
+
+        if not perturb_spectra:
+            print(
+                "[--perturb] No composition-truth spectra available; "
+                "skipping perturbation battery."
+            )
+        elif not (id_workflows and composition_workflows):
+            print(
+                "[--perturb] Need at least one id workflow and one "
+                "composition workflow; skipping."
+            )
+        else:
+            id_wf = id_workflows[0]
+            comp_wf = composition_workflows[0]
+            print(
+                f"[--perturb] Running perturbation battery on "
+                f"{len(perturb_spectra)} spectra using "
+                f"{id_wf}/{comp_wf} as the pipeline."
+            )
+            rng = np.random.default_rng(args.perturb_seed)
+            perturbations = default_perturbations(rng=rng)
+            pipeline_fn = _build_perturbation_pipeline_fn(runner, id_wf, comp_wf)
+            report = run_perturbation_battery(
+                pipeline_fn,
+                perturb_spectra,
+                perturbations=perturbations,
+            )
+            report_path = args.output_dir / "perturbation_report.json"
+            report.save_json(report_path)
+            print(
+                f"[--perturb] Wrote {report_path.resolve()} "
+                f"({len(report.results)} rows)."
+            )
+            for name, summary in report.reduce_to_summary(
+                bootstrap_iterations=200,
+                rng=np.random.default_rng(args.perturb_seed + 1),
+            ).items():
+                threshold = (
+                    f"<{summary.threshold:.3f}"
+                    if summary.threshold is not None
+                    else "n/a"
+                )
+                print(
+                    f"[--perturb]   {name}: mean Δd_A={summary.mean_delta_d_a:.4f} "
+                    f"(threshold {threshold}, "
+                    f"95%% CI [{summary.bootstrap_ci_lo:.4f}, "
+                    f"{summary.bootstrap_ci_hi:.4f}], "
+                    f"n={summary.n_spectra})"
+                )
+
     return 0
 
 
