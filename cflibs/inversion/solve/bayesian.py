@@ -1447,6 +1447,11 @@ def bayesian_model(
     # --- Forward Model ---
     predicted = forward_model.forward(T_eV, log_ne, concentrations)
 
+    # --- McWhirter Criterion Penalty ---
+    # Optional soft penalty to favor LTE-consistent regions of parameter space
+    penalty = mcwhirter_log_penalty(T_eV, log_ne)
+    numpyro.factor("mcwhirter_penalty", penalty)
+
     # --- Additive polynomial baseline (bremsstrahlung continuum) ---
     if prior_config.baseline_degree > 0:
         if prior_config.baseline_degree > forward_model._max_baseline_degree:
@@ -1484,7 +1489,9 @@ def bayesian_model(
     sigma = jnp.sqrt(jnp.maximum(variance, 1e-6))
 
     # Observe data
-    numpyro.sample("obs", dist.Normal(pred_safe, sigma), obs=observed)
+    # Use StudentT for robustness against outliers (e.g. cosmic rays)
+    # df=5 is a common choice for robust regression
+    numpyro.sample("obs", dist.StudentT(df=5.0, loc=pred_safe, scale=sigma), obs=observed)
 
 
 class MCMCSampler:
@@ -1710,17 +1717,19 @@ class MCMCSampler:
 
                 # R-hat (should be < 1.01 for convergence)
                 rhat_data = az.rhat(idata)
-                for var in ["T_eV", "log_ne"]:
+                for var in ["T_eV", "log_ne", "concentrations"]:
                     if var in rhat_data:
-                        val = float(rhat_data[var].values)
-                        r_hat[var] = val
+                        # For concentrations, it's an array. We take the max R-hat.
+                        val = np.max(rhat_data[var].values)
+                        r_hat[var] = float(val)
 
                 # ESS (effective sample size)
                 ess_data = az.ess(idata)
-                for var in ["T_eV", "log_ne"]:
+                for var in ["T_eV", "log_ne", "concentrations"]:
                     if var in ess_data:
-                        val = float(ess_data[var].values)
-                        ess[var] = val
+                        # For concentrations, we take the min ESS.
+                        val = np.min(ess_data[var].values)
+                        ess[var] = float(val)
 
             except Exception as e:
                 logger.warning(f"ArviZ diagnostics failed: {e}")
@@ -1739,9 +1748,13 @@ class MCMCSampler:
         r_hat = {}
         ess = {}
 
-        for var in ["T_eV", "log_ne"]:
+        for var in ["T_eV", "log_ne", "concentrations"]:
             if var in samples:
-                s = np.array(samples[var]).flatten()
+                s = np.array(samples[var])
+                # Flatten chains if present
+                if s.ndim > 1:
+                    s = s.reshape(-1, s.shape[-1]) if var == "concentrations" else s.flatten()
+
                 # Simple ESS estimate using autocorrelation
                 n = len(s)
                 ess[var] = float(n)  # Naive - assume all samples independent
