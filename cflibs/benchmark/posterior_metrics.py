@@ -337,13 +337,10 @@ def _to_inference_data(samples: Dict[str, np.ndarray], log_likelihood: Optional[
         raise RuntimeError("arviz is required for InferenceData construction")
     import xarray as xr  # noqa: F401  (import side-effects for arviz)
 
-    posterior_dict: Dict[str, Any] = {}
-    for name, arr in samples.items():
-        if arr.ndim == 2:
-            posterior_dict[name] = arr
-        else:
-            # Multi-dimensional parameters expand to dim coordinates.
-            posterior_dict[name] = arr
+    # ArviZ from_dict accepts (chains, draws) for 2-D arrays and
+    # (chains, draws, *dims) for higher-dim arrays, so the same
+    # assignment works for both shapes.
+    posterior_dict: Dict[str, Any] = {name: arr for name, arr in samples.items()}
 
     kwargs: Dict[str, Any] = {"posterior": posterior_dict}
     if log_likelihood is not None:
