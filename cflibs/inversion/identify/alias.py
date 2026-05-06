@@ -76,6 +76,11 @@ class ALIASIdentifier:
     relative_cl_threshold : float, optional
         CL must be >= max_CL * relative_cl_threshold to count as detected.
         Set to 0 to disable the relative threshold (default: 0.1)
+    boltzmann_r2_min : float, optional
+        Minimum Boltzmann-plot R^2 required for candidates with at least three
+        matched lines. Must be finite and in [0, 1]. Candidates with fewer
+        than three expected lines are exempt because no meaningful Boltzmann
+        regression can be performed (default: 0.85).
     """
 
     # Temperature bounds for physics validation
@@ -161,7 +166,11 @@ class ALIASIdentifier:
         self.reference_temperature = reference_temperature
         self.max_screening_candidates = max_screening_candidates
         self.relative_cl_threshold = relative_cl_threshold
-        self.boltzmann_r2_min = boltzmann_r2_min
+        if not (np.isfinite(boltzmann_r2_min) and 0.0 <= boltzmann_r2_min <= 1.0):
+            raise ValueError(
+                f"boltzmann_r2_min must be finite and in [0, 1], got {boltzmann_r2_min!r}"
+            )
+        self.boltzmann_r2_min = float(boltzmann_r2_min)
 
         # Create Saha-Boltzmann solver
         self.solver = SahaBoltzmannSolver(atomic_db)
@@ -570,11 +579,14 @@ class ALIASIdentifier:
             detected = CL >= adaptive_dt
 
             # Physics-grounded hard gates (Task wzus):
-            # (a) Require >= 3 matched lines (reject singletons and doublets)
-            # (b) Require Boltzmann R^2 >= boltzmann_r2_min (default 0.85)
-            if N_matched < 3:
+            # (a) Require up to three matched lines, but do not reject species
+            #     that only have one or two expected observable lines.
+            # (b) Require Boltzmann R^2 >= boltzmann_r2_min only when at least
+            #     three matched lines make a regression meaningful.
+            min_required_matches = max(1, min(3, int(N_expected)))
+            if N_matched < min_required_matches:
                 detected = False
-            if boltz_r2 < self.boltzmann_r2_min:
+            if N_matched >= 3 and boltz_r2 < self.boltzmann_r2_min:
                 detected = False
 
             # Create IdentifiedLine objects for matched lines
@@ -631,6 +643,7 @@ class ALIASIdentifier:
                     "N_penalty": min(1.0, math.sqrt(N_expected / 5.0)) if N_expected > 0 else 0.0,
                     "boltzmann_factor": boltz_factor,
                     "boltzmann_r2": boltz_r2,
+                    "min_required_matches": min_required_matches,
                     "sparse_nnls_coeff": cand.get("sparse_nnls_coeff", 0.0),
                     "nnls_significant": cand.get("nnls_significant", True),
                     "effective_R": self._effective_R,
@@ -1089,7 +1102,6 @@ class ALIASIdentifier:
             if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
                 continue
 
-            y = math.log(I_obs * trans.wavelength_nm / (trans.g_k * trans.A_ki))
             observations.append(
                 LineObservation(
                     element=element,
@@ -1099,8 +1111,7 @@ class ALIASIdentifier:
                     g_k=trans.g_k,
                     A_ki=trans.A_ki,
                     intensity=I_obs,
-                    y_value=y,
-                    y_uncertainty=0.1,  # Default uncertainty for identification
+                    intensity_uncertainty=max(abs(I_obs) * 0.1, 1e-12),
                 )
             )
 
@@ -1110,7 +1121,8 @@ class ALIASIdentifier:
         # Need some spread in E_k for meaningful fit
         E_k_arr = np.array([obs.E_k_ev for obs in observations])
         if np.ptp(E_k_arr) < 0.5:
-            return 1.0, 1.0  # All same energy level, can't fit but don't penalize
+            # No meaningful Boltzmann regression is possible.
+            return 0.5, 0.0
 
         try:
             fitter = BoltzmannPlotFitter()
