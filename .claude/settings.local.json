@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(rmdir benchmarks:*)"
+      "Bash(rmdir benchmarks:*)",
+      "Bash(mkdir -p /tmp/cflibs-review)"
     ]
   }
 }
