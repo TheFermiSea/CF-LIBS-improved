@@ -577,3 +577,143 @@ def test_aki_weighting_handles_missing_uncertainty():
 
     assert np.isfinite(result.temperature_K)
     assert abs(result.temperature_K - T_target) / T_target < 0.05
+
+
+# ============================================================================
+# Tests for multiplet-aware Boltzmann fitting (multiplet_groups argument)
+# ============================================================================
+
+
+def _make_multiplet_pair(
+    E_k_eV_a: float,
+    E_k_eV_b: float,
+    T_K: float,
+    intercept_const: float = 10.0,
+    g_k: int = 2,
+    A_ki: float = 1e7,
+    wavelength_nm: float = 500.0,
+    noise: float = 0.0,
+    seed: int = 0,
+) -> tuple[LineObservation, LineObservation]:
+    """Return two LineObservation objects forming a fine-structure multiplet pair."""
+    rng = np.random.default_rng(seed)
+    T_eV = T_K * KB_EV
+
+    obs_list = []
+    for Ek in (E_k_eV_a, E_k_eV_b):
+        expected_y = np.log(intercept_const) - Ek / T_eV
+        y = expected_y + rng.normal(0, noise)
+        # Back-calculate intensity from y = ln(I * lam / (g * A))
+        intensity = np.exp(y) * g_k * A_ki / wavelength_nm
+        obs_list.append(
+            LineObservation(
+                wavelength_nm=wavelength_nm,
+                intensity=intensity,
+                intensity_uncertainty=intensity * 0.05,
+                element="Fe",
+                ionization_stage=1,
+                E_k_ev=Ek,
+                g_k=g_k,
+                A_ki=A_ki,
+            )
+        )
+    return obs_list[0], obs_list[1]
+
+
+class TestMultipletGroupsFit:
+    """Unit tests for the multiplet_groups aggregation path in BoltzmannPlotFitter."""
+
+    def test_aggregated_y_value(self):
+        """Aggregated y must equal ln(sum(I*lambda) / sum(gA)) analytically."""
+        obs_a, obs_b = _make_multiplet_pair(3.0, 3.02, T_K=9000.0)
+
+        # Compute expected aggregate by hand
+        gA_a = obs_a.g_k * obs_a.A_ki
+        gA_b = obs_b.g_k * obs_b.A_ki
+        I_lam_a = gA_a * np.exp(obs_a.y_value)
+        I_lam_b = gA_b * np.exp(obs_b.y_value)
+        expected_y = np.log((I_lam_a + I_lam_b) / (gA_a + gA_b))
+
+        # The aggregated point should produce the expected y via the fit intercept
+        # at the aggregated x.  We verify indirectly: pair the multiplet group with
+        # several well-spread clean lines and check the intercept + temperature.
+        other_lines = create_synthetic_lines(9000.0, n_points=8, noise_level=0.0, seed=5)
+        all_obs = [obs_a, obs_b] + other_lines
+        groups = ["mp1", "mp1"] + [f"ind_{i}" for i in range(len(other_lines))]
+
+        fitter = BoltzmannPlotFitter(outlier_sigma=1e6, max_iterations=1)
+        result = fitter.fit(all_obs, multiplet_groups=groups)
+
+        # Temperature should be close to 9000 K despite the multiplet being merged
+        assert np.isfinite(result.temperature_K)
+        assert abs(result.temperature_K - 9000.0) / 9000.0 < 0.05
+
+        # Verify the aggregated y value against direct calculation using the fit line
+        x_agg = (obs_a.E_k_ev * gA_a + obs_b.E_k_ev * gA_b) / (gA_a + gA_b)
+        y_from_fit = result.slope * x_agg + result.intercept
+        assert abs(y_from_fit - expected_y) < 0.05  # tight: noise-free data
+
+    def test_singleton_group_matches_legacy(self):
+        """Singleton groups and None groups must produce the same result as no grouping."""
+        lines = create_synthetic_lines(9000.0, n_points=8, noise_level=0.01, seed=42)
+
+        fitter = BoltzmannPlotFitter(outlier_sigma=1e6, max_iterations=1)
+        legacy = fitter.fit(lines)
+
+        # Each line gets its own unique group ID → no aggregation
+        unique_groups = list(range(len(lines)))
+        grouped = fitter.fit(lines, multiplet_groups=unique_groups)
+
+        assert grouped.temperature_K == pytest.approx(legacy.temperature_K, rel=1e-9)
+        assert grouped.slope == pytest.approx(legacy.slope, rel=1e-9)
+
+        # None entries must also fall through unchanged
+        none_groups = [None] * len(lines)
+        grouped_none = fitter.fit(lines, multiplet_groups=none_groups)
+        assert grouped_none.temperature_K == pytest.approx(legacy.temperature_K, rel=1e-9)
+
+    def test_rejected_points_are_observation_indices(self):
+        """rejected_points and inlier_mask must index into the original observations list."""
+        # Build 8 clean lines + 1 obvious outlier; put the outlier in a singleton group
+        T_target = 9000.0
+        lines = create_synthetic_lines(T_target, n_points=8, noise_level=0.005, seed=7)
+
+        # Add an outlier at index 8 with a dramatically wrong intensity
+        outlier = LineObservation(
+            wavelength_nm=1.0,
+            intensity=lines[0].intensity * 1e-6,  # absurdly low
+            intensity_uncertainty=lines[0].intensity_uncertainty,
+            element="Fe",
+            ionization_stage=1,
+            E_k_ev=2.5,
+            g_k=1,
+            A_ki=1.0,
+        )
+        all_obs = lines + [outlier]
+        # Groups: pair lines[0] and lines[1] into a multiplet; rest are independent
+        groups = ["mp1", "mp1"] + [f"ind_{i}" for i in range(2, 8)] + ["outlier"]
+
+        fitter = BoltzmannPlotFitter(outlier_sigma=2.0, max_iterations=10)
+        result = fitter.fit(all_obs, multiplet_groups=groups)
+
+        # Verify that rejected_points and inlier_mask are expressed in observation space
+        assert len(result.inlier_mask) == len(
+            all_obs
+        ), "inlier_mask length must equal number of observations, not aggregated points"
+        assert max(result.rejected_points, default=0) < len(
+            all_obs
+        ), "rejected_points must be valid observation indices"
+        # The outlier (index 8) should have been rejected
+        assert (
+            8 in result.rejected_points
+        ), f"Obvious outlier at index 8 not in rejected_points={result.rejected_points}"
+        assert not result.inlier_mask[8], "Outlier observation must not be an inlier"
+
+    def test_aggregation_to_single_point_raises(self):
+        """Aggregating all observations into one group must raise ValueError (< 2 points)."""
+        lines = create_synthetic_lines(9000.0, n_points=5, noise_level=0.01, seed=0)
+        groups = ["same"] * len(lines)  # all in one group → single aggregated point
+
+        fitter = BoltzmannPlotFitter()
+        with pytest.raises(ValueError, match="2 valid"):
+            fitter.fit(lines, multiplet_groups=groups)
