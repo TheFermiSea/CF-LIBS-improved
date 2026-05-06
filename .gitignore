@@ -102,6 +102,12 @@ conductor/setup_state.json
 .asta/
 .gitnexus/
 .claude/skills/gitnexus/
+.claude/scheduled_tasks.lock
+.agents/
+
+# Local PR-review notes (ephemeral, agent-generated)
+PR_REVIEW_FEEDBACK.md
+PR_STACKING_STRATEGY.md
 
 # Local benchmark/calibration datasets (not source-controlled)
 data/chemcam_calib/
