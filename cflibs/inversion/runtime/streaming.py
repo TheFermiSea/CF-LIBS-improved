@@ -1174,13 +1174,21 @@ class EdgeOptimizedModel:
 
             @jax.jit
             def _boltzmann_slope(energies: jnp.ndarray, y_values: jnp.ndarray) -> jnp.ndarray:
-                """Fast Boltzmann slope calculation. Returns a 0-d JAX scalar."""
+                """Fast Boltzmann slope calculation. Returns a 0-d JAX scalar.
+
+                Guarded against the degenerate case of all-equal energies
+                (denominator → 0), in which case the slope is ill-defined and
+                we return ``inf`` rather than NaN so downstream comparisons
+                still work.
+                """
                 n = len(energies)
                 sum_x = jnp.sum(energies)
                 sum_y = jnp.sum(y_values)
                 sum_xy = jnp.sum(energies * y_values)
                 sum_x2 = jnp.sum(energies**2)
-                slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x**2)
+                denom = n * sum_x2 - sum_x**2
+                denom = jnp.where(jnp.abs(denom) > 1e-30, denom, jnp.inf)
+                slope = (n * sum_xy - sum_x * sum_y) / denom
                 return slope
 
             self._compiled_functions["boltzmann_slope"] = _boltzmann_slope

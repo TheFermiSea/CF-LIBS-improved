@@ -107,7 +107,7 @@ cflibs analyze data/aalto_libs/elements/Fe_spectrum.csv \
 
 Expected output (numbers will differ slightly with version):
 
-```
+```text
 Temperature : 9821 ± 412 K
 n_e         : 1.18e+17 cm^-3
 Converged   : True (7 iterations)
@@ -296,7 +296,7 @@ The output prints `WARNING: McWhirter criterion NOT satisfied`. This means
 the inferred `n_e` is below the threshold required for LTE to hold given
 the observed line set:
 
-```
+```text
 n_e ≥ 1.6 × 10¹² × √T × (ΔE)³   [cm⁻³, T in K, ΔE in eV]
 ```
 

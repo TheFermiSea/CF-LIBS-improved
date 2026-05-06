@@ -361,7 +361,7 @@ Solve ionization balance using Saha equation.
 
 **Returns:** Dict[int, float] - Dictionary mapping ionization stage to number density
 
-##### `calculate_partition_function(element, ionization_stage, T_e_eV, max_energy_ev=50.0)`
+##### `calculate_partition_function(element, ionization_stage, T_e_eV, max_energy_ev=None)`
 
 Calculate partition function for a species.
 
@@ -369,11 +369,16 @@ Calculate partition function for a species.
 - `element` (str): Element symbol
 - `ionization_stage` (int): Ionization stage
 - `T_e_eV` (float): Electron temperature in eV
-- `max_energy_ev` (float): Maximum energy level to include
+- `max_energy_ev` (float, optional): Maximum energy level to include in the
+  Boltzmann sum. When `None` (default), the implementation uses
+  `0.98 × ionization_potential` as the cap so auto-ionizing levels above the
+  IP are excluded; only when no IP is available does it fall back to a
+  hard-coded `50.0` eV cap. Passing an explicit float overrides this physical
+  capping.
 
 **Returns:** float - Partition function
 
-##### `solve_level_population(element, ionization_stage, stage_density_cm3, T_e_eV)`
+##### `solve_level_population(element, ionization_stage, stage_density_cm3, T_e_eV, n_e_cm3=None)`
 
 Solve Boltzmann distribution for level populations.
 
@@ -382,6 +387,9 @@ Solve Boltzmann distribution for level populations.
 - `ionization_stage` (int): Ionization stage
 - `stage_density_cm3` (float): Total density of this ionization stage
 - `T_e_eV` (float): Electron temperature in eV
+- `n_e_cm3` (float, optional): Electron density in cm⁻³. When provided, drives
+  the IPD-adjusted energy cutoff used by `calculate_partition_function`; when
+  `None` (default), no IPD cap is applied.
 
 **Returns:** Dict[Tuple[str, int, float], float] - Level populations
 

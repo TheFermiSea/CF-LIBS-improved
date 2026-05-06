@@ -603,8 +603,8 @@ def calculate_spectrum_emissivity(
 **Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work.
 
 For the CLI and configuration schema used by classic CF-LIBS inversion, see
-`docs/user/User_Guide.md` (Inversion section) and
-`docs/reference/API_Reference.md` (CLI options).
+`../user/User_Guide.md` (Inversion section) and
+`API_Reference.md` (CLI options).
 
 ### Optional Dependency Flags
 
@@ -653,7 +653,7 @@ only consumes vetted line observations.
 
 This is the path used by `cflibs analyze`, `cflibs invert`, and `cflibs batch`:
 
-```
+```text
 raw spectrum -> detect peaks -> load candidate transitions
              -> kdet prefilter -> comb shift scan
              -> transition/peak matching -> LineObservation list
@@ -786,7 +786,7 @@ class BoltzmannPlotFitter:
 Convert a measured spectrum into CF-LIBS line observations by detecting peaks
 and matching them to database transitions:
 
-See `docs/user/User_Guide.md` for the `analysis` configuration fields that
+See `../user/User_Guide.md` for the `analysis` configuration fields that
 control line detection and selection.
 
 ```python
@@ -1770,7 +1770,7 @@ class PhysicsOnlyBlocklist:
 - **Blocklist scanner**: Rejects any evolved code that violates physics-only constraint
 - **Persistence layer**: Saves successful algorithm variants for review and integration
 
-See `docs/development/Evolution_Framework.md` for full specifications.
+See `../development/Evolution_Framework.md` for full specifications.
 
 ---
 

@@ -11,7 +11,7 @@ physics lives under [`physics/README.md`](physics/README.md).
 
 ## Layout
 
-```
+```text
 docs/
 ├── user/         User-facing scientific documentation
 │                  (start here if you have a LIBS spectrum)

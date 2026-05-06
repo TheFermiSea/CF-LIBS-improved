@@ -44,7 +44,7 @@ informational.
 **Forward model.** The forward model maps a plasma state `(T, n_e, {C_s})`
 to a synthetic spectrum `I(λ)`. The pipeline is:
 
-```
+```text
 PlasmaState → Saha–Boltzmann → level populations
             → line emissivity → ε(λ)
             → optically thin transport → I_continuum-free(λ)
@@ -185,7 +185,7 @@ I(\lambda) = \varepsilon(\lambda)\, L.
 $$
 
 This is the default. When self-absorption is non-negligible it must be
-corrected per line; see [Self-Absorption](#physics-self-absorption-and-curve-of-growth)
+corrected per line; see [Self-Absorption](#self-absorption-and-curve-of-growth)
 below.
 
 (physics-instrument-convolution)=

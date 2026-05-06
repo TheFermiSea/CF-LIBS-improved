@@ -143,11 +143,15 @@ disable_error_code = ["no-redef", "misc", "no-any-return"]
 # stubs) use syntax or patterns mypy chokes on under our pinned `python_version`.
 # Skip following their imports — cflibs uses them through `Any`-typed shims.
 [[tool.mypy.overrides]]
+# Bare-root entries are sufficient: with `follow_imports = "skip"`, mypy
+# stops at the package boundary and never recurses into `zarr.core`,
+# `numpyro.distributions`, etc., so the `*.*` siblings are redundant
+# (mypy reports them as "unused section" when both forms are listed).
 module = [
-    "zarr.*",
-    "numpyro.*",
-    "arviz.*",
-    "dynesty.*",
+    "zarr",
+    "numpyro",
+    "arviz",
+    "dynesty",
 ]
 follow_imports = "skip"
 

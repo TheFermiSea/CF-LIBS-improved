@@ -563,13 +563,17 @@ class CDSBPlotter:
                 )
                 continue
 
-            # Calculate correction factor
-            if tau < self.tau_min_correction:
-                # Optically thin - no correction needed
-                correction_factor = 1.0
-            elif tau < 1e-6:
+            # Calculate correction factor.  Branch order matters: the
+            # numerically-stable Taylor approximation must be checked BEFORE
+            # the `tau < tau_min_correction` short-circuit, otherwise (since
+            # `tau_min_correction` defaults to 0.05 ≫ 1e-6) the Taylor branch
+            # is dead code and any tau in (0, 1e-6) returns the wrong factor.
+            if tau < 1e-6:
                 # Very small tau: (1 - exp(-tau))/tau -> 1 - tau/2
                 correction_factor = 1.0 / (1.0 - tau / 2.0)
+            elif tau < self.tau_min_correction:
+                # Optically thin - no correction needed
+                correction_factor = 1.0
             elif tau > 50:
                 # Large tau: (1 - exp(-tau))/tau -> 1/tau
                 correction_factor = tau

@@ -105,19 +105,31 @@ def _infer_optional_dependency_markers(path: Path) -> set[str]:
 
     for node in tree.body:
         if isinstance(node, ast.Import):
-            imported_names = {alias.name.split(".")[0] for alias in node.names}
+            # `import a.b.c` → keep both root and full dotted path.
+            imported_names = set()
+            for alias in node.names:
+                imported_names.add(alias.name)
+                imported_names.add(alias.name.split(".")[0])
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
-            imported_names = {node.module.split(".")[0]}
+            # `from a.b.c import x` → keep both `a` and `a.b.c` so deeper
+            # submodule probes (e.g. `cflibs._core`,
+            # `cflibs.inversion.solve.bayesian`) can match.
+            imported_names = {node.module, node.module.split(".")[0]}
         else:
             continue
 
         if "jax" in imported_names:
             markers.add("requires_jax")
-        if "numpyro" in imported_names or "dynesty" in imported_names or "arviz" in imported_names:
+        if (
+            "numpyro" in imported_names
+            or "dynesty" in imported_names
+            or "arviz" in imported_names
+            or any(name.startswith("cflibs.inversion.solve.bayesian") for name in imported_names)
+        ):
             markers.add("requires_bayesian")
         if "uncertainties" in imported_names:
             markers.add("requires_uncertainty")
-        if "_core" in imported_names:
+        if any(name == "_core" or name.endswith("._core") for name in imported_names):
             markers.add("requires_rust")
 
     return markers

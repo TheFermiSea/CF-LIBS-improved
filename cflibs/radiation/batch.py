@@ -115,8 +115,9 @@ def compute_spectrum_grid(
     -------
     parameters : List[Dict[str, float]]
         List of parameter dictionaries for each spectrum
-    spectra : List[Tuple[np.ndarray, np.ndarray]]
-        List of (wavelength, intensity) tuples
+    spectra : List[Tuple[Optional[np.ndarray], Optional[np.ndarray]]]
+        List of (wavelength, intensity) tuples. Failed spectra produce
+        ``(None, None)`` to preserve index alignment with ``parameters``.
 
     Example
     -------
@@ -189,8 +190,9 @@ def compute_spectrum_ensemble(
     -------
     parameters : List[Dict[str, float]]
         List of sampled parameter dictionaries
-    spectra : List[Tuple[np.ndarray, np.ndarray]]
-        List of (wavelength, intensity) tuples
+    spectra : List[Tuple[Optional[np.ndarray], Optional[np.ndarray]]]
+        List of (wavelength, intensity) tuples. Failed spectra produce
+        ``(None, None)`` to preserve index alignment with ``parameters``.
 
     Example
     -------

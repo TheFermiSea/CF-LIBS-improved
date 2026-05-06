@@ -44,7 +44,7 @@ A `CFLIBSResult`:
 
 ## Algorithm
 
-```
+```text
 Inputs : observations [LineObservation], config
 Output : (T, n_e, {C_s}) with uncertainties
 
@@ -181,12 +181,14 @@ The analytical UQ path is:
 3. `T_uncertainty = |∂T/∂slope| · σ_slope = (k_B T²) · σ_slope`.
 4. For each element, `C_s = exp(q_s) U_s(T) / F` gives the
    propagation
-   ```
+
+   ```text
    σ²_C_s = (∂C_s/∂q_s)² σ²_q_s
           + Σ_t≠s (∂C_s/∂q_t)² σ²_q_t
           + cross terms via Σ_q
           + (∂C_s/∂T)² σ²_T
    ```
+
    The `uncertainties` package handles correlation bookkeeping
    automatically; CF-LIBS just builds an `ufloat`-decorated version of
    the closure expression.

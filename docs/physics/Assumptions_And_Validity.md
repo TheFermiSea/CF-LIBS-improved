@@ -48,7 +48,7 @@ Electron-impact rates `n_e ⟨σv⟩_collision` between a level and any other
 level must dominate radiative decay rates `A`. The standard sufficiency
 criterion (McWhirter) is
 
-```
+```text
 n_e ≥ 1.6 × 10¹² × √T × (ΔE)³   [cm⁻³, T in K, ΔE in eV]
 ```
 
@@ -83,7 +83,7 @@ in the analysis. CF-LIBS evaluates this at convergence and reports
 
 `cflibs analyze --uncertainty analytical` prints
 
-```
+```text
 WARNING: McWhirter criterion NOT satisfied (n_e ratio = 0.34)
 ```
 
@@ -125,7 +125,7 @@ not re-absorb significantly along the integration path.
 
 The optical depth at line center,
 
-```
+```text
 τ₀ = (πe² / m_e c) f_ki n_i L / Δν_D,
 ```
 

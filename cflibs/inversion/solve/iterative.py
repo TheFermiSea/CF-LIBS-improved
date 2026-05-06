@@ -43,8 +43,11 @@ class CFLIBSResult:
         Number of iterations performed
     converged : bool
         Whether solver converged within tolerance
-    quality_metrics : Dict[str, float]
-        Quality metrics (R², chi², etc.)
+    quality_metrics : Dict[str, Any]
+        Quality metrics and solver annotations. Numeric scores
+        (e.g. ``r_squared_last``, ``lte_n_e_ratio``, ``n_lines``), boolean
+        flags (e.g. ``lte_mcwhirter_satisfied``), and string labels
+        (e.g. ``boltzmann_covariance_element``, ``warning``).
     boltzmann_covariance : np.ndarray, optional
         2x2 covariance matrix of a representative pooled Boltzmann fit
         (slope, intercept). For multi-element uncertainty solves this stores

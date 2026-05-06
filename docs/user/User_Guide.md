@@ -351,6 +351,7 @@ See `examples/config_example.yaml` and `examples/config_ti64.yaml` for complete 
 ---
 
 (advanced-usage)=
+
 ## Advanced Usage
 
 ### Inversion (Classic CF-LIBS)
@@ -443,6 +444,7 @@ for config_file in configs:
 ```
 
 (bayesian-inference)=
+
 ### Bayesian Inference
 
 Bayesian inversion is available through the dedicated `cflibs bayesian`
@@ -457,6 +459,7 @@ Use this path when you need posterior intervals, chain diagnostics, and
 posterior-predictive checks rather than a single point estimate.
 
 (inversion-diagnostics)=
+
 ### Inversion Diagnostics
 
 For difficult spectra, inspect more than the final concentrations:
@@ -517,8 +520,8 @@ extractor = EchelleExtractor('calibration.json')
 ### Getting Help
 
 - Check the [API Reference](../reference/API_Reference.md)
-- Review the `examples/` directory in the repository root
-- See `CONTRIBUTING.md` for development questions
+- Review the [`examples/`](../../examples/) directory in the repository root
+- See [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for development questions
 
 ---
 
@@ -610,7 +613,7 @@ for al_conc in al_concentrations:
 ## Next Steps
 
 - Explore the [API Reference](../reference/API_Reference.md) for detailed function documentation
-- Check out the `examples/` directory for more use cases
-- Read `CONTRIBUTING.md` if you want to help develop CF-LIBS
+- Check out the [`examples/`](../../examples/) directory for more use cases
+- Read [`CONTRIBUTING.md`](../../CONTRIBUTING.md) if you want to help develop CF-LIBS
 
 For questions or issues, please open an issue on GitHub.
