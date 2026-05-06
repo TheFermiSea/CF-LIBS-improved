@@ -79,8 +79,8 @@ class ALIASIdentifier:
     boltzmann_r2_min : float, optional
         Minimum Boltzmann-plot R^2 required for candidates with at least three
         matched lines. Must be finite and in [0, 1]. Candidates with fewer
-        than three expected lines are exempt because no meaningful Boltzmann
-        regression can be performed (default: 0.85).
+        than three matched lines are rejected before committing identification
+        because no meaningful Boltzmann regression can be performed (default: 0.85).
     """
 
     # Temperature bounds for physics validation
@@ -621,11 +621,11 @@ class ALIASIdentifier:
             detected = CL >= adaptive_dt
 
             # Physics-grounded hard gates (Task wzus):
-            # (a) Require up to three matched lines, but do not reject species
-            #     that only have one or two expected observable lines.
+            # (a) Require at least three matched lines, rejecting single-line
+            #     and doublet-only identifications.
             # (b) Require Boltzmann R^2 >= boltzmann_r2_min only when at least
             #     three matched lines make a regression meaningful.
-            min_required_matches = max(1, min(3, int(N_expected)))
+            min_required_matches = 3
             if N_matched < min_required_matches:
                 detected = False
             if N_matched >= 3 and boltz_r2 < self.boltzmann_r2_min:
