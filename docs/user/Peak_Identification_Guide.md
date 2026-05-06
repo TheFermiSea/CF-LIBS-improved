@@ -295,3 +295,4 @@ print(result.concentrations)
 6. Shin, J., et al. (2020). "Automatic impurity spectral line identification algorithm with noise reduction for fusion plasmas." *Fusion Engineering and Design*. DOI: 10.1016/j.fusengdes.2020.111459.
 7. Lin, et al. (2025). "Research on laser-induced breakdown spectroscopy peak detection algorithm based on adaptive window width symmetric zero-area conversion." DOI: 10.1080/22297928.2025.2556488.
 8. Matsumura, T., Takahashi, T., Nagata, K., Ando, Y., Yada, A., Thornton, B., and Kuwatani, T. (2024). "High-Throughput Calibration-Free Laser-Induced Breakdown Spectroscopy." *ACS Earth and Space Chemistry*, 8, 1259-1271.
+9. John, L. M., and Anoop, K. K. (2023). "A numerical procedure for understanding the self-absorption effects in laser induced breakdown spectroscopy." *RSC Advances*, 13, 29613-29624. DOI: 10.1039/D3RA06226K.
