@@ -585,26 +585,26 @@ def test_aki_weighting_handles_missing_uncertainty():
 
 
 def _make_multiplet_pair(
-    E_k_eV_a: float,
-    E_k_eV_b: float,
-    T_K: float,
+    e_k_ev_a: float,
+    e_k_ev_b: float,
+    temperature_k: float,
     intercept_const: float = 10.0,
     g_k: int = 2,
-    A_ki: float = 1e7,
+    a_ki: float = 1e7,
     wavelength_nm: float = 500.0,
     noise: float = 0.0,
     seed: int = 0,
 ) -> tuple[LineObservation, LineObservation]:
     """Return two LineObservation objects forming a fine-structure multiplet pair."""
     rng = np.random.default_rng(seed)
-    T_eV = T_K * KB_EV
+    temperature_ev = temperature_k * KB_EV
 
     obs_list = []
-    for Ek in (E_k_eV_a, E_k_eV_b):
-        expected_y = np.log(intercept_const) - Ek / T_eV
+    for energy_ev in (e_k_ev_a, e_k_ev_b):
+        expected_y = np.log(intercept_const) - energy_ev / temperature_ev
         y = expected_y + rng.normal(0, noise)
         # Back-calculate intensity from y = ln(I * lam / (g * A))
-        intensity = np.exp(y) * g_k * A_ki / wavelength_nm
+        intensity = np.exp(y) * g_k * a_ki / wavelength_nm
         obs_list.append(
             LineObservation(
                 wavelength_nm=wavelength_nm,
@@ -612,9 +612,9 @@ def _make_multiplet_pair(
                 intensity_uncertainty=intensity * 0.05,
                 element="Fe",
                 ionization_stage=1,
-                E_k_ev=Ek,
+                E_k_ev=energy_ev,
                 g_k=g_k,
-                A_ki=A_ki,
+                A_ki=a_ki,
             )
         )
     return obs_list[0], obs_list[1]
@@ -625,14 +625,14 @@ class TestMultipletGroupsFit:
 
     def test_aggregated_y_value(self):
         """Aggregated y must equal ln(sum(I*lambda) / sum(gA)) analytically."""
-        obs_a, obs_b = _make_multiplet_pair(3.0, 3.02, T_K=9000.0)
+        obs_a, obs_b = _make_multiplet_pair(3.0, 3.02, temperature_k=9000.0)
 
         # Compute expected aggregate by hand
-        gA_a = obs_a.g_k * obs_a.A_ki
-        gA_b = obs_b.g_k * obs_b.A_ki
-        I_lam_a = gA_a * np.exp(obs_a.y_value)
-        I_lam_b = gA_b * np.exp(obs_b.y_value)
-        expected_y = np.log((I_lam_a + I_lam_b) / (gA_a + gA_b))
+        ga_a = obs_a.g_k * obs_a.A_ki
+        ga_b = obs_b.g_k * obs_b.A_ki
+        i_lam_a = ga_a * np.exp(obs_a.y_value)
+        i_lam_b = ga_b * np.exp(obs_b.y_value)
+        expected_y = np.log((i_lam_a + i_lam_b) / (ga_a + ga_b))
 
         # The aggregated point should produce the expected y via the fit intercept
         # at the aggregated x.  We verify indirectly: pair the multiplet group with
@@ -649,7 +649,7 @@ class TestMultipletGroupsFit:
         assert abs(result.temperature_K - 9000.0) / 9000.0 < 0.05
 
         # Verify the aggregated y value against direct calculation using the fit line
-        x_agg = (obs_a.E_k_ev * gA_a + obs_b.E_k_ev * gA_b) / (gA_a + gA_b)
+        x_agg = (obs_a.E_k_ev * ga_a + obs_b.E_k_ev * ga_b) / (ga_a + ga_b)
         y_from_fit = result.slope * x_agg + result.intercept
         assert abs(y_from_fit - expected_y) < 0.05  # tight: noise-free data
 
@@ -675,8 +675,10 @@ class TestMultipletGroupsFit:
     def test_rejected_points_are_observation_indices(self):
         """rejected_points and inlier_mask must index into the original observations list."""
         # Build 8 clean lines + 1 obvious outlier; put the outlier in a singleton group
-        T_target = 9000.0
-        lines = create_synthetic_lines(T_target, n_points=8, noise_level=0.005, seed=7)
+        target_temperature = 9000.0
+        lines = create_synthetic_lines(
+            target_temperature, n_points=8, noise_level=0.005, seed=7
+        )
 
         # Add an outlier at index 8 with a dramatically wrong intensity
         outlier = LineObservation(

@@ -148,91 +148,9 @@ class BoltzmannPlotFitter:
         if len(observations) < 2:
             raise ValueError("Need at least 2 points for a fit")
 
-        # agg_to_obs_indices[i] lists the original observation indices that
-        # contributed to aggregated point i.  Set only when multiplet_groups is used
-        # so that we can translate result indices back to observation space.
-        agg_to_obs_indices: list[list[int]] | None = None
-
-        if multiplet_groups is not None:
-            if len(multiplet_groups) != len(observations):
-                raise ValueError("multiplet_groups must have same length as observations")
-
-            # Group indices by group_id; None means "do not aggregate"
-            groups: dict[str | int | None, list[int]] = {}
-            group_order: list[str | int | None] = []
-            for i, gid in enumerate(multiplet_groups):
-                if gid not in groups:
-                    groups[gid] = []
-                    group_order.append(gid)
-                groups[gid].append(i)
-
-            x_agg: list[float] = []
-            y_agg: list[float] = []
-            y_err_agg: list[float] = []
-            agg_to_obs_indices = []
-
-            for gid in group_order:
-                idxs = groups[gid]
-                if gid is None or len(idxs) == 1:
-                    # Treat as independent lines — delegate to _build_sigma_y so
-                    # the aki_uncertainty logic (including debug logging) is not
-                    # duplicated here.
-                    single_obs = [observations[i] for i in idxs]
-                    single_sigma = self._build_sigma_y(single_obs, aki_uncertainty_weighting)
-                    for j, idx in enumerate(idxs):
-                        obs = observations[idx]
-                        x_agg.append(obs.E_k_ev)
-                        y_agg.append(obs.y_value)
-                        y_err_agg.append(float(single_sigma[j]))
-                        agg_to_obs_indices.append([idx])
-                else:
-                    # Aggregate multiplet: ln(sum(I*lambda) / sum(gA))
-                    sum_ga = 0.0
-                    sum_i_lam = 0.0
-                    sum_e_ga = 0.0
-                    var_i_lam = 0.0
-                    var_ga = 0.0
-                    for idx in idxs:
-                        obs = observations[idx]
-                        ga = obs.g_k * obs.A_ki
-                        if ga <= 0.0:
-                            continue
-                        i_lam = ga * np.exp(obs.y_value)
-                        sum_ga += ga
-                        sum_i_lam += i_lam
-                        sum_e_ga += obs.E_k_ev * ga
-                        var_i_lam += (i_lam * obs.y_uncertainty) ** 2
-                        unc = obs.aki_uncertainty
-                        if (
-                            aki_uncertainty_weighting
-                            and unc is not None
-                            and np.isfinite(unc)
-                            and unc > 0
-                        ):
-                            var_ga += (ga * unc) ** 2
-
-                    if sum_ga == 0.0 or sum_i_lam <= 0.0:
-                        x_agg.append(np.nan)
-                        y_agg.append(np.nan)
-                        y_err_agg.append(np.nan)
-                    else:
-                        x_agg.append(sum_e_ga / sum_ga)
-                        y_agg.append(np.log(sum_i_lam / sum_ga))
-                        # Propagation: Var(ln(sum I / sum gA)) ~= Var(sum I)/(sum I)^2
-                        # + Var(sum gA)/(sum gA)^2.
-                        rel_var_i = var_i_lam / (sum_i_lam**2)
-                        rel_var_ga = var_ga / (sum_ga**2)
-                        y_err_agg.append(np.sqrt(rel_var_i + rel_var_ga))
-                    agg_to_obs_indices.append(list(idxs))
-
-            x_all = np.array(x_agg)
-            y_all = np.array(y_agg)
-            y_err_all = np.array(y_err_agg)
-        else:
-            # Prepare arrays normally
-            x_all = np.array([obs.E_k_ev for obs in observations])
-            y_all = np.array([obs.y_value for obs in observations])
-            y_err_all = self._build_sigma_y(observations, aki_uncertainty_weighting)
+        x_all, y_all, y_err_all, agg_to_obs_indices = self._prepare_fit_arrays(
+            observations, aki_uncertainty_weighting, multiplet_groups
+        )
 
         # Handle cases where y calculation failed (e.g. negative intensity)
         valid_mask = np.isfinite(y_all)
@@ -266,6 +184,127 @@ class BoltzmannPlotFitter:
             )
 
         return result
+
+    def _prepare_fit_arrays(
+        self,
+        observations: list[LineObservation],
+        aki_uncertainty_weighting: bool,
+        multiplet_groups: list[str | int | None] | None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[list[int]] | None]:
+        """Build fit arrays, optionally aggregating unresolved multiplet groups."""
+        if multiplet_groups is None:
+            return (
+                np.array([obs.E_k_ev for obs in observations]),
+                np.array([obs.y_value for obs in observations]),
+                self._build_sigma_y(observations, aki_uncertainty_weighting),
+                None,
+            )
+
+        if len(multiplet_groups) != len(observations):
+            raise ValueError("multiplet_groups must have same length as observations")
+
+        groups = self._group_multiplet_indices(multiplet_groups)
+        x_agg: list[float] = []
+        y_agg: list[float] = []
+        y_err_agg: list[float] = []
+        agg_to_obs_indices: list[list[int]] = []
+
+        for gid, idxs in groups:
+            if gid is None or len(idxs) == 1:
+                self._append_independent_observations(
+                    observations,
+                    idxs,
+                    aki_uncertainty_weighting,
+                    x_agg,
+                    y_agg,
+                    y_err_agg,
+                    agg_to_obs_indices,
+                )
+                continue
+
+            x_val, y_val, y_err = self._aggregate_multiplet_observations(
+                observations, idxs, aki_uncertainty_weighting
+            )
+            x_agg.append(x_val)
+            y_agg.append(y_val)
+            y_err_agg.append(y_err)
+            agg_to_obs_indices.append(list(idxs))
+
+        return (
+            np.array(x_agg),
+            np.array(y_agg),
+            np.array(y_err_agg),
+            agg_to_obs_indices,
+        )
+
+    @staticmethod
+    def _group_multiplet_indices(
+        multiplet_groups: list[str | int | None],
+    ) -> list[tuple[str | int | None, list[int]]]:
+        """Group observation indices in first-seen order."""
+        groups: dict[str | int | None, list[int]] = {}
+        group_order: list[str | int | None] = []
+        for idx, gid in enumerate(multiplet_groups):
+            if gid not in groups:
+                groups[gid] = []
+                group_order.append(gid)
+            groups[gid].append(idx)
+        return [(gid, groups[gid]) for gid in group_order]
+
+    def _append_independent_observations(
+        self,
+        observations: list[LineObservation],
+        indices: list[int],
+        aki_uncertainty_weighting: bool,
+        x_agg: list[float],
+        y_agg: list[float],
+        y_err_agg: list[float],
+        agg_to_obs_indices: list[list[int]],
+    ) -> None:
+        """Append non-aggregated observations to the fit arrays."""
+        single_obs = [observations[idx] for idx in indices]
+        single_sigma = self._build_sigma_y(single_obs, aki_uncertainty_weighting)
+        for sigma_idx, obs_idx in enumerate(indices):
+            obs = observations[obs_idx]
+            x_agg.append(obs.E_k_ev)
+            y_agg.append(obs.y_value)
+            y_err_agg.append(float(single_sigma[sigma_idx]))
+            agg_to_obs_indices.append([obs_idx])
+
+    @staticmethod
+    def _aggregate_multiplet_observations(
+        observations: list[LineObservation],
+        indices: list[int],
+        aki_uncertainty_weighting: bool,
+    ) -> tuple[float, float, float]:
+        """Return one Wakil-style aggregate point for a multiplet group."""
+        sum_ga = 0.0
+        sum_i_lam = 0.0
+        sum_e_ga = 0.0
+        var_i_lam = 0.0
+        var_ga = 0.0
+
+        for idx in indices:
+            obs = observations[idx]
+            ga = obs.g_k * obs.A_ki
+            if ga <= 0.0:
+                continue
+            i_lam = ga * np.exp(obs.y_value)
+            sum_ga += ga
+            sum_i_lam += i_lam
+            sum_e_ga += obs.E_k_ev * ga
+            var_i_lam += (i_lam * obs.y_uncertainty) ** 2
+
+            unc = obs.aki_uncertainty
+            if aki_uncertainty_weighting and unc is not None and np.isfinite(unc) and unc > 0:
+                var_ga += (ga * unc) ** 2
+
+        if sum_ga <= 0.0 or sum_i_lam <= 0.0:
+            return np.nan, np.nan, np.nan
+
+        rel_var_i = var_i_lam / (sum_i_lam**2)
+        rel_var_ga = var_ga / (sum_ga**2)
+        return sum_e_ga / sum_ga, np.log(sum_i_lam / sum_ga), np.sqrt(rel_var_i + rel_var_ga)
 
     def _fit_sigma_clip(
         self,
