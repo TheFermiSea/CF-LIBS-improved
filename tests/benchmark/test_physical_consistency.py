@@ -65,7 +65,7 @@ def test_lte_consistency_known_bad_aalto_case():
 
 def test_lte_consistency_threshold_constant_matches_spec():
     # Sanity-check the exported constant matches Cristoforetti 2010.
-    assert LTE_CONSISTENCY_MAX == 0.15
+    assert math.isclose(LTE_CONSISTENCY_MAX, 0.15)
 
 
 def test_lte_consistency_rejects_missing():
@@ -224,7 +224,7 @@ def test_closure_residual_fail_over_closed():
 
 
 def test_closure_residual_threshold_constant():
-    assert CLOSURE_RESIDUAL_MAX == 0.10
+    assert math.isclose(CLOSURE_RESIDUAL_MAX, 0.10)
 
 
 def test_closure_residual_rejects_empty():
