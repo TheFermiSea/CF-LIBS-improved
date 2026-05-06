@@ -621,6 +621,66 @@ if HAS_UNCERTAINTIES:
 | `HAS_NESTED` | dynesty | `NestedSampler`, evidence calculation |
 | `HAS_UNCERTAINTIES` | uncertainties | Correlation-aware error propagation |
 
+
+### Element Identification Architecture
+
+Scientific background and user-level tuning guidance live in
+[Peak Identification and Line Matching](../user/Peak_Identification_Guide.md).
+For developers, the important boundary is that element identification creates
+candidate elements and `LineObservation` objects; the iterative CF-LIBS solver
+only consumes vetted line observations.
+
+**Preprocessing (`cflibs.inversion.preprocess`)**
+
+- `preprocessing.py` is the canonical peak-detection implementation.
+- Baseline options are median, SNIP, and ALS.
+- Noise is estimated from sigma-clipped MAD residuals.
+- Peak detection uses baseline-subtracted height/prominence thresholds,
+  resolving-power-aware spacing, minimum-FWHM cosmic-ray filtering, and optional
+  second-derivative confirmation.
+- Deconvolution utilities in `deconvolution.py` can resolve overlapping peaks
+  before line observations are built.
+
+**Classic line observation path (`cflibs.inversion.identify.line_detection`)**
+
+This is the path used by `cflibs analyze`, `cflibs invert`, and `cflibs batch`:
+
+```
+raw spectrum -> detect peaks -> load candidate transitions
+             -> kdet prefilter -> comb shift scan
+             -> transition/peak matching -> LineObservation list
+             -> resonance-line set -> LineSelector -> solver
+```
+
+The function `detect_line_observations` deliberately requires a candidate
+element list. That keeps the quantitative inversion tied to prior knowledge or
+to an explicitly reviewed element-identification result instead of a blind
+periodic-table sweep.
+
+**Element-level identifiers (`cflibs.inversion.identify`)**
+
+- `alias.py`: ALIAS-style scoring after simplified LTE emissivity simulation.
+  It exposes similarity, detection-rate, wavelength-shift, and confidence
+  terms suitable for explaining candidate decisions.
+- `comb.py`: element fingerprints represented as comb teeth. It is useful for
+  coherent wavelength shifts and broadening but does not fully model line-specific
+  Stark shifts.
+- `correlation.py`: Labutin-style model-spectrum correlation, with optional
+  vector-index acceleration when a validated spectral library exists.
+- `spectral_nnls.py`: full-spectrum NNLS decomposition against single-element
+  basis spectra; best used as a candidate prefilter for large search spaces.
+- `hybrid.py` and `candidate_prefilter.py`: orchestration helpers that combine
+  full-spectrum and line-level evidence.
+
+**Data contracts**
+
+- `ElementIdentificationResult` records detected/rejected elements, matched and
+  unmatched lines, peak counts, algorithm name, and score metadata.
+- `LineDetectionResult` records solver-ready `LineObservation` objects plus
+  resonance-line keys, applied wavelength shift, peak counts, and warnings.
+- `LineSelector` is the last quality gate before inversion. It filters by SNR,
+  line count, energy spread, isolation, and resonance-line policy.
+
 ### Result Formatting Utilities (`result_base.py`)
 
 Shared mixins for consistent result formatting across result classes:

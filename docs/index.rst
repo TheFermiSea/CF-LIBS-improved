@@ -26,6 +26,7 @@ For new users analyzing measured LIBS spectra, start with
    :caption: User Guides
 
    user/Quick_Start_Real_Data
+   user/Peak_Identification_Guide
    user/Quick_Start_Synthetic
    user/User_Guide
    user/Manifold_Generation_Guide

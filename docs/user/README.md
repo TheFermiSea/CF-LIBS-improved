@@ -6,6 +6,7 @@ a LIBS spectrum and want results.
 | Document | Use it for |
 |----------|-----------|
 | [Quick_Start_Real_Data.md](Quick_Start_Real_Data.md) | **Primary entry point.** Extract plasma temperature, electron density, and elemental composition from a measured spectrum. |
+| [Peak_Identification_Guide.md](Peak_Identification_Guide.md) | Detect peaks, identify candidate elements, match lines to NIST transitions, and prepare `LineObservation` inputs for inversion. |
 | [Quick_Start_Synthetic.md](Quick_Start_Synthetic.md) | Generate a synthetic spectrum from known plasma parameters (experimental design / sanity checks). |
 | [User_Guide.md](User_Guide.md) | Full configuration reference, Python API examples, troubleshooting catalogue. |
 | [Manifold_Generation_Guide.md](Manifold_Generation_Guide.md) | Pre-compute large spectral lookup tables for fast bulk inversion. |

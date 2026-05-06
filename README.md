@@ -23,6 +23,8 @@ If that is what you want, start here:
 
 → **[Quick Start: Real Data](docs/user/Quick_Start_Real_Data.md)** — analyze a measured spectrum.
 
+→ **[Peak Identification and Line Matching](docs/user/Peak_Identification_Guide.md)** — understand how CF-LIBS detects peaks, identifies candidate elements, and prepares line observations before inversion.
+
 If instead you want to generate a synthetic spectrum from known plasma parameters
 (experimental design, sanity checks, benchmarking), start here:
 
@@ -270,7 +272,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for coding style, type hints, physics doc
 User and scientific documentation:
 
 - **[docs/README.md](docs/README.md)** — Top-level documentation map.
-- **[docs/user/](docs/user/)** — Quick starts, user guide, hardware/manifold/echelle guides.
+- **[docs/user/](docs/user/)** — Quick starts, peak identification, user guide, hardware/manifold/echelle guides.
 - **[docs/physics/](docs/physics/)** — Equations, assumptions and validity, inversion algorithm.
 - **[docs/reference/](docs/reference/)** — API reference, codebase architecture, database generation.
 

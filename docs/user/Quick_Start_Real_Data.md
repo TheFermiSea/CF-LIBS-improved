@@ -118,9 +118,12 @@ Concentrations:
 
 What just happened:
 
-1. **Line detection** scanned the spectrum for peaks above
-   `min_peak_height` and matched them to NIST transitions for the requested
-   elements within `wavelength_tolerance_nm`.
+1. **Line detection and identification** estimated the baseline/noise,
+   scanned the spectrum for peaks above `min_peak_height`, corrected for any
+   global wavelength shift, and matched accepted peaks to NIST transitions for
+   the requested elements within `wavelength_tolerance_nm`. See
+   [Peak Identification and Line Matching](Peak_Identification_Guide.md) for
+   the details and literature context.
 2. **Line selection** kept only lines with high SNR, sufficient energy
    spread for a stable Boltzmann plot, and good spectral isolation.
    Resonance lines (high self-absorption risk) were excluded.
@@ -167,7 +170,9 @@ elements you have physical reason to expect.
 If you genuinely do not know what is in the sample, use the identification
 tools first (`cflibs invert` with hybrid identification, or
 `cflibs.inversion.identify` from Python) to get a candidate list, then run
-`cflibs analyze` with that list.
+`cflibs analyze` with that list. The full peak detection, wavelength-shift,
+line-matching, ALIAS/comb/correlation, and full-spectrum NNLS workflow is
+described in [Peak Identification and Line Matching](Peak_Identification_Guide.md).
 
 ---
 
@@ -422,6 +427,9 @@ and the diagnostics CF-LIBS exposes to detect failure, is in
 
 ## See Also
 
+- [Peak Identification and Line Matching](Peak_Identification_Guide.md) —
+  choosing candidate elements, detecting peaks, matching lines, and diagnosing
+  false positives before quantitative inversion.
 - [Quick Start: Synthetic Spectra](Quick_Start_Synthetic.md) — generating a
   spectrum from known parameters, for experimental design or model checks.
 - [User Guide](User_Guide.md) — full configuration reference, Python API

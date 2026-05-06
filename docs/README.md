@@ -35,6 +35,7 @@ docs/
 | You are … | Start here |
 |-----------|-----------|
 | A scientist with a measured LIBS spectrum | [user/Quick_Start_Real_Data.md](user/Quick_Start_Real_Data.md) |
+| Identifying elements and matching peaks before inversion | [user/Peak_Identification_Guide.md](user/Peak_Identification_Guide.md) |
 | Generating synthetic spectra for experimental design | [user/Quick_Start_Synthetic.md](user/Quick_Start_Synthetic.md) |
 | Reading deeper user-level configuration and Python API | [user/User_Guide.md](user/User_Guide.md) |
 | Looking for the equations the code evaluates | [physics/Equations.md](physics/Equations.md) |

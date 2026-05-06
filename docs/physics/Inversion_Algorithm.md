@@ -7,7 +7,10 @@ This is a step-by-step walkthrough of the iterative CF-LIBS solver
 when those equations are physically valid.
 
 The reader is assumed to have seen at least one CF-LIBS paper (e.g.,
-Tognoni et al. 2010 [2]; Hou et al. 2021 [10]).
+Tognoni et al. 2010 [2]; Hou et al. 2021 [10]). This page starts after
+line identification has produced `LineObservation` objects; for the
+preceding peak-detection and element-identification workflow, see
+[Peak Identification and Line Matching](../user/Peak_Identification_Guide.md).
 
 ---
 
@@ -116,7 +119,7 @@ UNCERTAINTY (selectable):
 
 | Step | Module |
 |------|--------|
-| Line detection | `cflibs.inversion.line_detection.detect_line_observations` |
+| Peak detection and line matching | `cflibs.inversion.line_detection.detect_line_observations`; see [Peak Identification and Line Matching](../user/Peak_Identification_Guide.md) |
 | Line scoring + selection | `cflibs.inversion.line_selection.LineSelector` |
 | Saha correction | `IterativeCFLIBSSolver._saha_correction` |
 | Common-slope Boltzmann fit | `cflibs.inversion.physics.boltzmann_fit` (and `boltzmann.py` shim) |
@@ -213,6 +216,8 @@ priors used.
   step is physically valid.
 - [Quick Start: Real Data](../user/Quick_Start_Real_Data.md) — running
   the inversion from the CLI.
+- [Peak Identification and Line Matching](../user/Peak_Identification_Guide.md) —
+  how raw spectra become solver-ready `LineObservation` objects.
 - [User Guide § Inversion Diagnostics](../user/User_Guide.md#inversion-diagnostics) —
   inspecting per-element Boltzmann fits, residuals, and convergence
   history.
