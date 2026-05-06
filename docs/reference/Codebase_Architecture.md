@@ -46,7 +46,7 @@ CF-LIBS (Calibration-Free LIBS) enables quantitative elemental analysis from las
 
 ### Status
 
-See [ROADMAP.md](../ROADMAP.md) for current work streams and the epic tracking in beads.
+See [ROADMAP.md](../../ROADMAP.md) for current work streams and the epic tracking in beads.
 
 ---
 
