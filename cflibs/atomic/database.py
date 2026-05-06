@@ -176,7 +176,46 @@ class AtomicDatabase(AtomicDataSource):
             logger.info("Backfilling %d lines missing aki_uncertainty...", n_missing)
             self._populate_aki_uncertainties(cursor)
 
+        # 8. Check stark_widths table for STARK-B data
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='stark_widths'"
+        )
+        if not cursor.fetchone():
+            logger.info("Migrating schema: Creating stark_widths table")
+            cursor.execute("""
+                CREATE TABLE stark_widths (
+                    element TEXT,
+                    sp_num INTEGER,
+                    wavelength_nm REAL,
+                    t_k REAL,
+                    ne_cm3 REAL,
+                    w_pm REAL,
+                    PRIMARY KEY (element, sp_num, wavelength_nm, t_k, ne_cm3)
+                )
+            """)
+
+        # 9. Auto-populate stark_widths if empty
+        cursor.execute("SELECT COUNT(*) FROM stark_widths")
+        if cursor.fetchone()[0] == 0:
+            self._populate_stark_widths(cursor)
+
         conn.commit()
+
+    @staticmethod
+    def _populate_stark_widths(cursor: sqlite3.Cursor):
+        """Populate stark_widths with STARK-B semiclassical data."""
+        try:
+            from cflibs.atomic.reference_data import STARK_B_WIDTHS
+
+            # Data format: (element, sp_num, wavelength_nm, t_k, ne_cm3, w_pm)
+            cursor.executemany(
+                "INSERT OR REPLACE INTO stark_widths (element, sp_num, wavelength_nm, t_k, ne_cm3, w_pm) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                STARK_B_WIDTHS,
+            )
+            logger.info("Populated %d STARK-B width entries", len(STARK_B_WIDTHS))
+        except ImportError:
+            logger.warning("STARK_B_WIDTHS not found in reference_data, skipping ingestion.")
 
     @staticmethod
     def _populate_energy_levels(cursor: sqlite3.Cursor):
@@ -605,6 +644,41 @@ class AtomicDatabase(AtomicDataSource):
             ionization_potential_ev=ip_ev,
             atomic_mass=atomic_mass,
         )
+
+    def get_stark_width_grid(
+        self, element: str, ionization_stage: int, wavelength_nm: float, tolerance_nm: float = 0.1
+    ) -> pd.DataFrame:
+        """
+        Get the (T, ne, w) grid for a specific line from STARK-B data.
+
+        Parameters
+        ----------
+        element : str
+            Element symbol
+        ionization_stage : int
+            Ionization stage (1=neutral, 2=singly ionized)
+        wavelength_nm : float
+            Wavelength in nm
+        tolerance_nm : float
+            Wavelength matching tolerance
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns [t_k, ne_cm3, w_pm]
+        """
+        query = """
+            SELECT t_k, ne_cm3, w_pm
+            FROM stark_widths
+            WHERE element = ? AND sp_num = ?
+            AND ABS(wavelength_nm - ?) < ?
+            ORDER BY t_k, ne_cm3
+        """
+        with self._get_connection() as conn:
+            df = pd.read_sql_query(
+                query, conn, params=(element, ionization_stage, wavelength_nm, tolerance_nm)
+            )
+        return df
 
     def get_stark_parameters(
         self, element: str, ionization_stage: int, wavelength_nm: float, tolerance_nm: float = 0.01
