@@ -580,11 +580,15 @@ class BoltzmannPlotFitter:
             obs_inlier_mask = np.zeros(n_observations, dtype=bool)
             for agg_i, is_inlier in enumerate(result.inlier_mask):
                 for obs_i in agg_to_obs_indices[agg_i]:
-                    obs_inlier_mask[obs_i] = bool(is_inlier)
+                    obs_inlier_mask[obs_i] = is_inlier
         else:
             obs_inlier_mask = None
 
-        n_points = int(np.sum(obs_inlier_mask)) if obs_inlier_mask is not None else result.n_points
+        n_points = (
+            int(np.sum(obs_inlier_mask))
+            if obs_inlier_mask is not None
+            else n_observations - len(obs_rejected)
+        )
 
         return BoltzmannFitResult(
             temperature_K=result.temperature_K,

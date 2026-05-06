@@ -680,7 +680,7 @@ class TestMultipletGroupsFit:
 
         # Add an outlier at index 8 with a dramatically wrong intensity
         outlier = LineObservation(
-            wavelength_nm=1.0,
+            wavelength_nm=500.0,
             intensity=lines[0].intensity * 1e-6,  # absurdly low
             intensity_uncertainty=lines[0].intensity_uncertainty,
             element="Fe",
