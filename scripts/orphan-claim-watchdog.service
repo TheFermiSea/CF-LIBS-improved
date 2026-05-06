@@ -4,7 +4,9 @@ After=network.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/Users/briansquires/code/CF-LIBS-improved
-Environment=PATH=/Users/briansquires/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
+# Deploy target is ai-proxy (Linux LXC). Per beefcake-swarm CLAUDE.md
+# the swarm's working trees live under /home/brian/code/.
+WorkingDirectory=/home/brian/code/CF-LIBS-improved
+Environment=PATH=/home/brian/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=BEADS_NO_DAEMON=1
-ExecStart=/usr/bin/env python3 /Users/briansquires/code/CF-LIBS-improved/scripts/orphan-claim-watchdog.py
+ExecStart=/usr/bin/env python3 /home/brian/code/CF-LIBS-improved/scripts/orphan-claim-watchdog.py
