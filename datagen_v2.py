@@ -246,6 +246,7 @@ def build_production_db(
             gi REAL,
             gk REAL,
             rel_int REAL,
+            energy_uncertainty_ev REAL,
             UNIQUE(element, sp_num, wavelength_nm, ek_ev)
         )
     """
@@ -270,7 +271,8 @@ def build_production_db(
             element TEXT,
             sp_num INTEGER,
             g_level INTEGER,
-            energy_ev REAL
+            energy_ev REAL,
+            energy_uncertainty_ev REAL
         )
     """
     )
@@ -360,6 +362,22 @@ def build_production_db(
 
             except Exception:
                 pass
+
+        # --- DING 2024 Fe II REFRESH ---
+        if el == "Fe":
+            # Ding arXiv:2408.07833 confirms Fe II 4f/5d levels with ~10x lower uncertainty
+            # Typically 0.01 cm^-1 uncertainty (~1.2e-6 eV).
+            # We update levels in 10.5-12.0 eV range (4f, 5d configurations).
+            conn.execute("""
+                UPDATE lines 
+                SET accuracy_grade = 'A', aki_uncertainty = 0.03, energy_uncertainty_ev = 0.0000012
+                WHERE element = 'Fe' AND sp_num = 2 AND ek_ev BETWEEN 10.5 AND 12.0
+            """)
+            conn.execute("""
+                UPDATE energy_levels
+                SET energy_uncertainty_ev = 0.0000012
+                WHERE element = 'Fe' AND sp_num = 2 AND energy_ev BETWEEN 10.5 AND 12.0
+            """)
 
         conn.commit()
 

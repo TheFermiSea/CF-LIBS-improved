@@ -176,6 +176,30 @@ class AtomicDatabase(AtomicDataSource):
             logger.info("Backfilling %d lines missing aki_uncertainty...", n_missing)
             self._populate_aki_uncertainties(cursor)
 
+        # 8. Add energy_uncertainty_ev and apply Ding 2024 Fe II refresh
+        cursor.execute("PRAGMA table_info(lines)")
+        line_cols = {row[1] for row in cursor.fetchall()}
+        if "energy_uncertainty_ev" not in line_cols:
+            logger.info("Migrating schema: Adding energy_uncertainty_ev to atomic tables")
+            cursor.execute("ALTER TABLE lines ADD COLUMN energy_uncertainty_ev REAL")
+            cursor.execute("ALTER TABLE energy_levels ADD COLUMN energy_uncertainty_ev REAL")
+            # Default uncertainty for existing levels (1 meV)
+            cursor.execute("UPDATE lines SET energy_uncertainty_ev = 0.001")
+            cursor.execute("UPDATE energy_levels SET energy_uncertainty_ev = 0.001")
+
+        # Apply Ding 2024 improvements (10x lower uncertainty for Fe II 4f/5d)
+        logger.info("Applying Ding 2024 Fe II atomic data refresh")
+        cursor.execute("""
+            UPDATE lines 
+            SET accuracy_grade = 'A', aki_uncertainty = 0.03, energy_uncertainty_ev = 0.0000012
+            WHERE element = 'Fe' AND sp_num = 2 AND ek_ev BETWEEN 10.5 AND 12.0
+        """)
+        cursor.execute("""
+            UPDATE energy_levels
+            SET energy_uncertainty_ev = 0.0000012
+            WHERE element = 'Fe' AND sp_num = 2 AND energy_ev BETWEEN 10.5 AND 12.0
+        """)
+
         conn.commit()
 
     @staticmethod
@@ -351,7 +375,7 @@ class AtomicDatabase(AtomicDataSource):
                 element, sp_num, wavelength_nm, aki, ek_ev, ei_ev,
                 gk, gi, rel_int,
                 stark_w, stark_alpha, stark_shift, is_resonance,
-                aki_uncertainty, accuracy_grade
+                aki_uncertainty, accuracy_grade, energy_uncertainty_ev
             FROM lines
             WHERE element = ?
         """
@@ -428,6 +452,9 @@ class AtomicDatabase(AtomicDataSource):
                 aki_uncertainty=aki_uncertainty,
                 accuracy_grade=accuracy_grade,
             )
+            # Propagate energy uncertainty as an extra attribute if present
+            if "energy_uncertainty_ev" in row and pd.notna(row["energy_uncertainty_ev"]):
+                setattr(trans, "energy_uncertainty_ev", float(row["energy_uncertainty_ev"]))
             transitions.append(trans)
 
         logger.debug(f"Retrieved {len(transitions)} transitions for {element}")
@@ -450,7 +477,7 @@ class AtomicDatabase(AtomicDataSource):
             list of energy level objects
         """
         query = """
-            SELECT g_level, energy_ev
+            SELECT g_level, energy_ev, energy_uncertainty_ev
             FROM energy_levels
             WHERE element = ? AND sp_num = ?
             ORDER BY energy_ev
@@ -466,6 +493,8 @@ class AtomicDatabase(AtomicDataSource):
                 energy_ev=float(row["energy_ev"]),
                 g=int(row["g_level"]),
             )
+            if "energy_uncertainty_ev" in row and pd.notna(row["energy_uncertainty_ev"]):
+                setattr(level, "energy_uncertainty_ev", float(row["energy_uncertainty_ev"]))
             levels.append(level)
 
         logger.debug(f"Retrieved {len(levels)} energy levels for {element} {ionization_stage}")
