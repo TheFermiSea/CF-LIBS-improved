@@ -57,8 +57,6 @@ def test_outlier_injection_perturbation(dummy_spectrum):
 
     assert len(changed_indices) == n_inject
 
-    np.std(dummy_spectrum.intensity)
-
     # Check noise statistics roughly if n_inject was larger, but with 5 items we can just verify differences
     noise_added = perturbed.intensity[changed_indices] - dummy_spectrum.intensity[changed_indices]
     assert np.any(np.abs(noise_added) > 0.0)
