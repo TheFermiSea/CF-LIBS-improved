@@ -179,6 +179,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Limit the number of outer folds evaluated per dataset.",
     )
+    parser.add_argument(
+        "--perturb",
+        action="store_true",
+        help="Run robustness perturbation tests on composition workflows.",
+    )
     return parser
 
 
@@ -244,6 +249,79 @@ def main(argv: Sequence[str] | None = None) -> int:
             composition_workflows,
             args.max_outer_folds,
         )
+
+        if args.perturb:
+            from cflibs.benchmark.robustness import (
+                line_dropout_perturbation,
+                outlier_injection_perturbation,
+                run_perturbation_battery,
+            )
+            print("\n--- Running Perturbation Battery ---")
+            perturbations = {
+                "line_dropout": lambda spec: line_dropout_perturbation(spec, top_n=3),
+                "outlier_injection": lambda spec: outlier_injection_perturbation(
+                    spec, fraction=0.05, sigma_mult=5.0
+                ),
+            }
+
+            # Gather all spectra from composition datasets
+            all_spectra = []
+            for ds in composition_datasets:
+                all_spectra.extend(ds.spectra)
+
+            # We use the first composition workflow for the perturbation battery for simplicity
+            # Or iterate through all of them. The requirement says "run_perturbation_battery(pipeline_fn, spectra, perturbations)"
+            # Let's test the first configured workflow.
+            for comp_wf in composition_workflows:
+                # We need a pipeline fn that matches the signature (wavelengths, intensities, elements)
+                # We can wrap the runner's composition registry
+                runner.composition_registry[comp_wf]
+                print(f"Running perturbations for {comp_wf}...")
+
+                def make_pipeline_fn(wf_name):
+                    def pipeline_fn(wavelengths, intensities, elements):
+                        # In the real benchmark, the ID workflow provides the elements.
+                        # We just pass the ground truth elements here.
+                        from cflibs.inversion.element_id import ElementIdentificationResult
+                        mock_id = ElementIdentificationResult(
+                            identified_elements=set(elements),
+                            score=1.0,
+                            peak_matches=[]
+                        )
+                        # We also need a mock workflow instance
+                        # For robustness tests, we can instantiate a fresh workflow with default params
+                        wf_instance = runner.composition_registry[wf_name](db=runner.db)
+                        res = wf_instance.estimate(
+                            wavelengths,
+                            intensities,
+                            identification=mock_id,
+                        )
+                        return {"concentrations": res.concentrations}
+                    return pipeline_fn
+
+                report = run_perturbation_battery(
+                    make_pipeline_fn(comp_wf),
+                    all_spectra,
+                    perturbations,
+                    pipeline_name=comp_wf
+                )
+
+                print(f"Perturbation Report for {comp_wf}:")
+                for p_name in perturbations:
+                    deltas = report.delta_d_A[p_name].values()
+                    valid_deltas = [d for d in deltas if d != float("inf")]
+                    if valid_deltas:
+                        avg_delta = sum(valid_deltas) / len(valid_deltas)
+                        max_delta = max(valid_deltas)
+                        print(f"  {p_name}: Avg delta_d_A = {avg_delta:.4f}, Max delta_d_A = {max_delta:.4f}")
+
+                        # Tier-2 alarms
+                        if p_name == "line_dropout" and avg_delta > 0.02:
+                            print(f"  ALARM: {comp_wf} {p_name} delta_d_A ({avg_delta:.4f}) exceeds threshold 0.02!")
+                        elif p_name == "outlier_injection" and avg_delta > 0.05:
+                            print(f"  ALARM: {comp_wf} {p_name} delta_d_A ({avg_delta:.4f}) exceeds threshold 0.05!")
+                    else:
+                        print(f"  {p_name}: No valid delta_d_A values computed.")
 
     outputs = runner.write_outputs(
         output_dir=args.output_dir,
