@@ -27,6 +27,12 @@ from cflibs.benchmark.posterior_metrics import (
     compute_posterior_diagnostics,
 )
 
+try:
+    import arviz as az
+    HAS_ARVIZ = True
+except ImportError:
+    HAS_ARVIZ = False
+
 
 # ---------------------------------------------------------------------------
 # Test fixtures
@@ -348,3 +354,33 @@ def test_composition_record_carries_posterior_diagnostics(tmp_path):
     out.write_text(json.dumps([asdict(record)], indent=2, default=str))
     reloaded = json.loads(out.read_text())
     assert reloaded[0]["annotations"]["posterior_diagnostics"]["n_chains"] == 4
+
+
+# ---------------------------------------------------------------------------
+# PSIS-LOO Smoke Test
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(not HAS_ARVIZ, reason="ArviZ not installed")
+def test_psis_loo_diagnostics_end_to_end():
+    """Verify that providing log_likelihood enables PSIS-LOO metrics."""
+    rng = np.random.default_rng(123)
+    n_chains = 4
+    n_draws = 500
+    n_obs = 50
+
+    # Generate some fake log-likelihoods that should produce a valid LOO result
+    # For a simple model, log-likelihoods should be around -1 to -2.
+    log_lik = rng.normal(-1.0, 0.5, size=(n_chains, n_draws, n_obs))
+
+    samples = {"concentrations": rng.normal(0.5, 0.05, size=(n_chains, n_draws, 3))}
+    prediction = {
+        "posterior_samples": samples,
+        "log_likelihood": log_lik,
+    }
+
+    diag = compute_posterior_diagnostics(samples, prediction=prediction)
+
+    assert diag.psis_loo_elpd is not None
+    assert diag.psis_loo_k_hat_max is not None
+    assert math.isfinite(diag.psis_loo_elpd)
+    assert diag.psis_loo_k_hat_max < 1.0  # Should be reasonable for fake iid data

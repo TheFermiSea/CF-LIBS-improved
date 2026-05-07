@@ -726,6 +726,9 @@ class MCMCResult:
     # ArviZ InferenceData (for plotting)
     inference_data: Any = None
 
+    # Pointwise log-likelihood (shape: n_chains, n_samples, n_obs)
+    log_likelihood: Optional[np.ndarray] = None
+
     # Derived quantities
     @property
     def n_e_mean(self) -> float:
@@ -1486,6 +1489,10 @@ def bayesian_model(
     # Observe data
     numpyro.sample("obs", dist.Normal(pred_safe, sigma), obs=observed)
 
+    # Pointwise log-likelihood for PSIS-LOO / WAIC (shape: n_obs)
+    log_lik = dist.Normal(pred_safe, sigma).log_prob(observed)
+    numpyro.deterministic("log_lik", log_lik)
+
 
 class MCMCSampler:
     """
@@ -1682,6 +1689,7 @@ class MCMCSampler:
             n_chains=num_chains,
             n_warmup=num_warmup,
             inference_data=self._to_arviz(mcmc) if HAS_ARVIZ else None,
+            log_likelihood=self._extract_log_likelihood(samples, num_chains),
         )
 
         logger.info(
@@ -1730,6 +1738,18 @@ class MCMCSampler:
             r_hat, ess = self._simple_diagnostics(mcmc, num_chains)
 
         return r_hat, ess
+
+    def _extract_log_likelihood(self, samples: Dict[str, Any], num_chains: int) -> Optional[np.ndarray]:
+        """Extract and format pointwise log-likelihood from samples."""
+        if "log_lik" not in samples:
+            return None
+
+        log_lik = np.array(samples["log_lik"])
+        # Ensure (n_chains, n_samples, n_obs) shape
+        if num_chains == 1 and log_lik.ndim == 2:
+            log_lik = log_lik[np.newaxis, ...]
+
+        return log_lik
 
     def _simple_diagnostics(
         self, mcmc: Any, num_chains: int
