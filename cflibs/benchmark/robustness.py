@@ -82,15 +82,16 @@ def run_perturbation_battery(
         elements = sorted(true_conc.keys())
 
         # Baseline
+        d_a_base = float("inf")
         try:
             res_base = pipeline_fn(spec.wavelength_nm, spec.intensity, elements)
             pred_base = res_base.get("concentrations", {})
-            d_A_base = aitchison_distance(true_conc, pred_base) if pred_base else float("inf")
+            if pred_base:
+                d_a_base = aitchison_distance(true_conc, pred_base)
         except Exception as e:
             logger.warning(f"Baseline pipeline failed for {spec_id}: {e}")
-            d_A_base = float("inf")
 
-        report.baseline_d_A[spec_id] = d_A_base
+        report.baseline_d_A[spec_id] = d_a_base
 
         for p_name, p_fn in perturbations.items():
             if p_name not in report.perturbed_d_A:
@@ -100,18 +101,19 @@ def run_perturbation_battery(
 
             p_spec = p_fn(spec)
 
+            d_a_p = float("inf")
             try:
                 res_p = pipeline_fn(p_spec.wavelength_nm, p_spec.intensity, elements)
                 pred_p = res_p.get("concentrations", {})
-                d_A_p = aitchison_distance(true_conc, pred_p) if pred_p else float("inf")
+                if pred_p:
+                    d_a_p = aitchison_distance(true_conc, pred_p)
             except Exception as e:
                 logger.warning(f"Perturbed pipeline ({p_name}) failed for {spec_id}: {e}")
-                d_A_p = float("inf")
 
-            report.perturbed_d_A[p_name][spec_id] = d_A_p
-            if d_A_base != float("inf") and d_A_p != float("inf"):
-                report.delta_d_A[p_name][spec_id] = d_A_p - d_A_base
-            else:
+            report.perturbed_d_A[p_name][spec_id] = d_a_p
+            if np.isinf(d_a_base) or np.isinf(d_a_p):
                 report.delta_d_A[p_name][spec_id] = float("inf")
+            else:
+                report.delta_d_A[p_name][spec_id] = d_a_p - d_a_base
 
     return report

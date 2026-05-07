@@ -306,10 +306,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     pipeline_name=comp_wf
                 )
 
+                import math
+
                 print(f"Perturbation Report for {comp_wf}:")
                 for p_name in perturbations:
                     deltas = report.delta_d_A[p_name].values()
-                    valid_deltas = [d for d in deltas if d != float("inf")]
+                    valid_deltas = [d for d in deltas if not math.isinf(d)]
                     if valid_deltas:
                         avg_delta = sum(valid_deltas) / len(valid_deltas)
                         max_delta = max(valid_deltas)
