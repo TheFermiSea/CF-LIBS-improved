@@ -102,6 +102,7 @@ class BoltzmannPlotFitter:
         self,
         observations: list[LineObservation],
         aki_uncertainty_weighting: bool = True,
+        reject_outliers: bool = True,
     ) -> BoltzmannFitResult:
         """
         Perform robust linear regression on Boltzmann plot data.
@@ -147,13 +148,24 @@ class BoltzmannPlotFitter:
         if not np.all(valid_mask):
             logger.warning(f"Excluding {np.sum(~valid_mask)} points with invalid Y values")
 
-        # Route to appropriate fitting method
-        if self.method == FitMethod.RANSAC:
-            return self._fit_ransac(x_all, y_all, y_err_all, valid_mask)
-        elif self.method == FitMethod.HUBER:
-            return self._fit_huber(x_all, y_all, y_err_all, valid_mask)
-        else:  # SIGMA_CLIP (default)
-            return self._fit_sigma_clip(x_all, y_all, y_err_all, valid_mask)
+        original_max_iterations = self.max_iterations
+        original_method = self.method
+
+        if not reject_outliers:
+            self.max_iterations = 1
+            self.method = FitMethod.SIGMA_CLIP
+
+        try:
+            # Route to appropriate fitting method
+            if self.method == FitMethod.RANSAC:
+                return self._fit_ransac(x_all, y_all, y_err_all, valid_mask)
+            elif self.method == FitMethod.HUBER:
+                return self._fit_huber(x_all, y_all, y_err_all, valid_mask)
+            else:  # SIGMA_CLIP (default)
+                return self._fit_sigma_clip(x_all, y_all, y_err_all, valid_mask)
+        finally:
+            self.max_iterations = original_max_iterations
+            self.method = original_method
 
     def _fit_sigma_clip(
         self,
