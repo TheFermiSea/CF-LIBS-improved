@@ -280,6 +280,24 @@ def test_benchmark_metrics_evaluate_emits_per_stratum_summary():
     d = result.to_dict()
     assert "per_stratum_summary" in d
     assert d["per_stratum_summary"]["majors"]["n_spectra"] == 4
+    assert d["per_stratum_summary"]["majors"]["n_elements"] == 2
+
+
+def test_evaluation_result_summary_formatting():
+    metrics = BenchmarkMetrics()
+    predictions = {"Si": [0.30], "Fe": [0.10]}
+    true_values = {"Si": [0.30], "Fe": [0.10]}
+    result = metrics.evaluate(predictions, true_values)
+
+    summary = result.summary()
+    assert "Stratified Composition Summary:" in summary
+    assert "Majors " in summary
+    assert "PASS" in summary
+    assert "Mean RD=  0.0%" in summary
+    assert "Median RD=  0.0%" in summary
+    assert "P95 RD=  0.0%" in summary
+    assert "n_elems= 2" in summary
+    assert "n_spectra=  2" in summary
 
 
 def test_benchmark_metrics_default_thresholds_match_protocol_spec():
