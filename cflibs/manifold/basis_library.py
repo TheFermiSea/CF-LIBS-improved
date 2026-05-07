@@ -41,6 +41,7 @@ class BasisLibraryConfig:
     density_steps: int = 20
     ionization_stages: Tuple[int, ...] = (1, 2)
     instrument_fwhm_nm: float = 0.05
+    elements: Optional[Tuple[str, ...]] = None
     # Total density used for ionization balance.  Only affects intermediate
     # magnitudes; final spectra are area-normalised so the value cancels.
     total_density_cm3: float = 1.0
@@ -76,6 +77,8 @@ class BasisLibraryConfig:
             raise ValueError("ionization_stages must be non-empty")
         if any(s < 1 for s in self.ionization_stages):
             raise ValueError("ionization_stages must contain positive integers")
+        if self.elements is not None and not self.elements:
+            raise ValueError("elements must be non-empty when provided")
 
 
 class BasisLibraryGenerator:
@@ -206,7 +209,14 @@ class BasisLibraryGenerator:
         cfg.validate()
 
         wl_grid, sigma, params = self._build_grids(cfg)
-        elements = self.atomic_db.get_available_elements()
+        if cfg.elements is None:
+            elements = list(self.atomic_db.get_available_elements())
+        else:
+            available = set(self.atomic_db.get_available_elements())
+            missing = sorted(set(cfg.elements) - available)
+            if missing:
+                raise ValueError(f"Requested elements not available in database: {missing}")
+            elements = list(cfg.elements)
         n_el = len(elements)
         n_grid = params.shape[0]
         spectra = np.zeros((n_el, n_grid, cfg.pixels), dtype=np.float32)

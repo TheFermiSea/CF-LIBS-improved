@@ -2,15 +2,20 @@
 Unit tests for shared element identification data structures.
 """
 
+from pathlib import Path
+
+import numpy as np
 import pytest
+from cflibs.atomic.structures import Transition
+from cflibs.inversion.boltzmann import LineObservation
 from cflibs.inversion.element_id import (
     IdentifiedLine,
     ElementIdentification,
     ElementIdentificationResult,
     to_line_observations,
 )
-from cflibs.atomic.structures import Transition
-from cflibs.inversion.boltzmann import LineObservation
+from scripts.benchmark_element_id import score_result
+from scripts.calibrate_alias import DatasetCase
 
 pytestmark = pytest.mark.unit
 
@@ -215,6 +220,54 @@ def test_element_identification_result_creation(mock_transition, mock_transition
     assert result.algorithm == "alias"
     assert result.parameters["threshold"] == 0.5
     assert len(result.warnings) == 1
+
+
+def test_benchmark_score_ignores_detections_outside_search_universe():
+    """Benchmark metrics should use the case search universe consistently."""
+    fe_id = ElementIdentification(
+        element="Fe",
+        detected=True,
+        score=1.0,
+        confidence=1.0,
+        n_matched_lines=0,
+        n_total_lines=0,
+        matched_lines=[],
+        unmatched_lines=[],
+        metadata={},
+    )
+    o_id = ElementIdentification(
+        element="O",
+        detected=True,
+        score=1.0,
+        confidence=1.0,
+        n_matched_lines=0,
+        n_total_lines=0,
+        matched_lines=[],
+        unmatched_lines=[],
+        metadata={},
+    )
+    result = ElementIdentificationResult(
+        detected_elements=[fe_id, o_id],
+        rejected_elements=[],
+        all_elements=[fe_id, o_id],
+        experimental_peaks=[],
+        n_peaks=0,
+        n_matched_peaks=0,
+        n_unmatched_peaks=0,
+        algorithm="test",
+        parameters={},
+    )
+    case = DatasetCase(
+        name="test",
+        path=Path("test.csv"),
+        elements=["Fe", "Ca"],
+        expected={"Fe"},
+        resolving_power=1000.0,
+        wavelength=np.array([200.0, 201.0]),
+        spectrum=np.array([0.0, 1.0]),
+    )
+
+    assert score_result(result, case) == (1, 0, 0, 1, True)
 
 
 def test_to_line_observations_conversion(mock_transition, mock_transition_ti):

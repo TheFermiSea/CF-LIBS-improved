@@ -349,8 +349,8 @@ def _score_one(
         max_lines_per_element=int(max_lines_per_element),
     )
     result = identifier.identify(case.wavelength, case.spectrum)
-    detected = {e.element for e in result.detected_elements}
     searched = set(case.elements)
+    detected = {e.element for e in result.detected_elements} & searched
 
     tp = len(detected & case.expected)
     fp = len(detected - case.expected)

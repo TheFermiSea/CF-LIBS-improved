@@ -103,8 +103,8 @@ def score_result(
     case: DatasetCase,
 ) -> Tuple[int, int, int, int, bool]:
     """Score one identification result against ground truth."""
-    detected = {e.element for e in result.detected_elements}
     searched = set(case.elements)
+    detected = {e.element for e in result.detected_elements} & searched
     tp = len(detected & case.expected)
     fp = len(detected - case.expected)
     fn = len(case.expected - detected)
@@ -144,10 +144,12 @@ def run_pathway(
         evaluated += 1
 
         detected = {e.element for e in result.detected_elements}
+        searched = set(case.elements)
         per_case.append(
             {
                 "case": case.name,
-                "detected": sorted(detected),
+                "detected": sorted(detected & searched),
+                "detected_outside_search": sorted(detected - searched),
                 "expected": sorted(case.expected),
                 "tp": ctp,
                 "fp": cfp,
@@ -205,6 +207,19 @@ def generate_basis_library(
         logger.info("Basis library already exists: %s", out_path)
         return out_path
 
+    with AtomicDatabase(db_path) as db:
+        available = set(db.get_available_elements())
+    basis_elements = [el for el in elements if el in available]
+    missing = sorted(set(elements) - available)
+    if missing:
+        logger.warning(
+            "Skipping %d requested basis element(s) absent from database: %s",
+            len(missing),
+            ", ".join(missing),
+        )
+    if not basis_elements:
+        raise ValueError("No requested elements are available for basis library generation")
+
     config = BasisLibraryConfig(
         db_path=db_path,
         output_path=str(out_path),
@@ -216,6 +231,7 @@ def generate_basis_library(
         density_steps=density_steps,
         ionization_stages=(1, 2),
         instrument_fwhm_nm=fwhm_nm,
+        elements=tuple(basis_elements),
     )
 
     logger.info("Generating basis library at FWHM=%.2f nm -> %s", fwhm_nm, out_path)
@@ -230,6 +246,19 @@ def generate_basis_library(
 # ---------------------------------------------------------------------------
 # Pathway factories
 # ---------------------------------------------------------------------------
+
+
+def _restrict_result_to_elements(
+    result: ElementIdentificationResult,
+    elements: List[str],
+) -> None:
+    """Restrict an identification result in-place to a declared element universe."""
+    allowed = set(elements)
+    result.all_elements = [e for e in result.all_elements if e.element in allowed]
+    result.detected_elements = [e for e in result.detected_elements if e.element in allowed]
+    result.rejected_elements = [e for e in result.rejected_elements if e.element in allowed]
+    result.parameters["n_elements_tested"] = len(allowed)
+    result.parameters["n_detected"] = len(result.detected_elements)
 
 
 def make_alias_configs(
@@ -281,6 +310,13 @@ def make_nnls_configs(
     from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
 
     basis = BasisLibrary(str(basis_lib_path))
+    scored_elements = [el for el in AALTO_SEARCH_ELEMENTS if el in set(basis.elements)]
+    missing_scored = sorted(set(AALTO_SEARCH_ELEMENTS) - set(scored_elements))
+    if missing_scored:
+        logger.warning(
+            "NNLS basis is missing scored element(s); they cannot be detected by this pathway: %s",
+            ", ".join(missing_scored),
+        )
     configs = []
 
     for snr in [1.0, 1.5, 2.0, 2.5, 3.0]:
@@ -303,7 +339,9 @@ def make_nnls_configs(
                             fallback_T_K=cfg["fallback_T_K"],
                             fallback_ne_cm3=1e17,
                         )
-                        return identifier.identify(wl, sp)
+                        result = identifier.identify(wl, sp)
+                        _restrict_result_to_elements(result, scored_elements)
+                        return result
 
                     return identify
 
@@ -324,6 +362,13 @@ def make_hybrid_configs(
     from cflibs.inversion.hybrid_identifier import HybridIdentifier
 
     basis = BasisLibrary(str(basis_lib_path))
+    scored_elements = [el for el in AALTO_SEARCH_ELEMENTS if el in set(basis.elements)]
+    missing_scored = sorted(set(AALTO_SEARCH_ELEMENTS) - set(scored_elements))
+    if missing_scored:
+        logger.warning(
+            "Hybrid basis is missing scored element(s); they cannot be detected by this pathway: %s",
+            ", ".join(missing_scored),
+        )
     configs = []
 
     for nnls_snr in [1.0, 1.5, 2.0]:
@@ -343,7 +388,7 @@ def make_hybrid_configs(
                         identifier = HybridIdentifier(
                             atomic_db=db,
                             basis_library=basis,
-                            elements=AALTO_SEARCH_ELEMENTS,
+                            elements=scored_elements,
                             resolving_power=rp,
                             nnls_detection_snr=cfg["nnls_detection_snr"],
                             alias_detection_threshold=cfg["alias_detection_threshold"],
@@ -457,6 +502,14 @@ def make_nnls_concentration_configs(
     from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
 
     basis = BasisLibrary(str(basis_lib_path))
+    scored_elements = [el for el in AALTO_SEARCH_ELEMENTS if el in set(basis.elements)]
+    missing_scored = sorted(set(AALTO_SEARCH_ELEMENTS) - set(scored_elements))
+    if missing_scored:
+        logger.warning(
+            "Concentration-threshold basis is missing scored element(s); "
+            "they cannot be detected by this pathway: %s",
+            ", ".join(missing_scored),
+        )
     configs = []
 
     # Forward-model proxy via NNLS with concentration thresholding.
@@ -480,6 +533,7 @@ def make_nnls_concentration_configs(
                         fallback_ne_cm3=1e17,
                     )
                     result = identifier.identify(wl, sp)
+                    _restrict_result_to_elements(result, scored_elements)
 
                     # Re-threshold by concentration
                     ct = cfg["concentration_threshold"]

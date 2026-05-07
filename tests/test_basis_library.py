@@ -82,6 +82,11 @@ class TestBasisLibraryConfig:
         cfg = _small_config(temp_db, "out.h5")
         cfg.validate()  # should not raise
 
+    def test_validate_rejects_empty_element_subset(self):
+        cfg = BasisLibraryConfig(db_path="x.db", elements=())
+        with pytest.raises(ValueError, match="elements"):
+            cfg.validate()
+
 
 # ---------------------------------------------------------------------------
 # Generator
@@ -147,6 +152,16 @@ class TestBasisLibraryGenerator:
             wl = lib.wavelength
             np.testing.assert_allclose(wl[0], 370.0, atol=0.1)
             np.testing.assert_allclose(wl[-1], 380.0, atol=0.1)
+
+    def test_respects_element_subset(self, temp_db, h5_path):
+        cfg = _small_config(temp_db, h5_path)
+        cfg.elements = ("Fe", "H")
+        gen = BasisLibraryGenerator(cfg)
+        gen.generate()
+
+        with BasisLibrary(h5_path) as lib:
+            assert lib.elements == ["Fe", "H"]
+            assert lib.n_elements == 2
 
     def test_basis_matrix_shape(self, temp_db, h5_path):
         cfg = _small_config(temp_db, h5_path)
