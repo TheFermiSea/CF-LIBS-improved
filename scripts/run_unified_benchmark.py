@@ -471,22 +471,43 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"[--perturb] Wrote {report_path.resolve()} "
                 f"({len(report.results)} rows)."
             )
-            for name, summary in report.reduce_to_summary(
+            summaries = report.reduce_to_summary(
                 bootstrap_iterations=200,
                 rng=np.random.default_rng(args.perturb_seed + 1),
-            ).items():
+            )
+            for name, summary in summaries.items():
                 threshold = (
                     f"<{summary.threshold:.3f}"
                     if summary.threshold is not None
                     else "n/a"
                 )
+                status = "PASS"
+                if summary.threshold is not None and summary.mean_delta_d_a >= summary.threshold:
+                    status = "ALARM"
+
                 print(
-                    f"[--perturb]   {name}: mean Δd_A={summary.mean_delta_d_a:.4f} "
+                    f"[--perturb]   {name}: {status} mean Δd_A={summary.mean_delta_d_a:.4f} "
                     f"(threshold {threshold}, "
                     f"95%% CI [{summary.bootstrap_ci_lo:.4f}, "
                     f"{summary.bootstrap_ci_hi:.4f}], "
                     f"n={summary.n_spectra})"
                 )
+                if status == "ALARM":
+                    print(f"[--perturb]   Tier-2 ALARM: {name} exceeds robustness threshold.")
+
+            # Update composition_summary.json with robustness results.
+            if summary_path.exists():
+                try:
+                    with summary_path.open("r") as f:
+                        summary_doc = _json.load(f)
+                except (OSError, _json.JSONDecodeError):
+                    summary_doc = {}
+                if isinstance(summary_doc, dict):
+                    summary_doc["robustness_perturbation"] = {
+                        k: v.to_dict() for k, v in summaries.items()
+                    }
+                    with summary_path.open("w") as f:
+                        _json.dump(summary_doc, f, indent=2)
 
     return 0
 

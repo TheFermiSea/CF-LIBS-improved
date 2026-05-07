@@ -494,3 +494,8 @@ def test_reduce_to_summary_with_bootstrap(synthetic_spectrum: BenchmarkSpectrum)
         assert s.bootstrap_ci_lo <= s.mean_delta_d_a <= s.bootstrap_ci_hi
         assert s.fraction_passing is not None
         assert 0.0 <= s.fraction_passing <= 1.0
+
+        # Verify that fraction_passing + fraction_failing == 1.0
+        assert s.fraction_failing is not None
+        # why: Ensuring aggregate failure statistics are consistent for Tier-2 alarm logic.
+        assert abs(s.fraction_passing + s.fraction_failing - 1.0) < 1e-9

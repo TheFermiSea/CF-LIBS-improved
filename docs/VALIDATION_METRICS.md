@@ -170,6 +170,8 @@ signal — log it even when within bounds.
 | Outlier injection | Inject $N(0, 5\sigma)$ into 5% of channels; require $\Delta d_A < 0.05$ |
 | Self-absorption stress | Verify $\sigma(T)/T < 0.01$ before applying SA correction (Völker & Gornushkin 2023) |
 
+**Note:** The threshold applies to the mean $\Delta d_A$ across the dataset. Exceeding it triggers a Tier-2 alarm reported in the benchmark summary.
+
 Student-t likelihoods (PR #58) should beat $L_2$ on the outlier-injection
 test — failure to do so is itself a Tier-2 alarm against the PR.
 
