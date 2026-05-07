@@ -214,6 +214,12 @@ below assume the swarm WILL find loopholes given enough iterations.
 3. **Adversarial-twin run** — A parallel agent is told the metric *and*
    told to game it. If its gains match the candidate PR's, the candidate
    is presumed gamed and rejected.
+   - **Edge case: Both fail.** If both candidate and adversarial fail to
+     improve the metric, the PR is rejected (no progress).
+   - **Edge case: Adversarial improves physics.** If an adversarial run
+     accidentally discovers a real scientific improvement, the PR is still
+     blocked if overlap > 50%. The improvement must be re-submitted via a
+     clean scientific profile to ensure it wasn't a lucky overfit.
 4. **Internal/external precision-ratio guardrail** — Tier-2 alarm if
    internal repeatability ≪ external accuracy (model is overconfident,
    fitting noise; stellar-survey practice from Holtzman 2015 / GALAH).
@@ -257,7 +263,6 @@ The current benchmark **does not** emit:
   itself only fires when an inversion populates per-spectrum
   `t_neutral_k` and `t_ion_k`, which is still TODO)
 - Robustness perturbation tests (line-dropout, outlier injection)
-- Adversarial-twin run
 - Sequestered held-out separation
 - Frozen-v0 reference baseline
 
