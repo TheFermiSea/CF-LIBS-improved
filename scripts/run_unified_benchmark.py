@@ -9,13 +9,10 @@ composition workflows, and writes the benchmark artifacts to an output directory
 from __future__ import annotations
 
 import argparse
-import math
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Sequence
-
-import numpy as np
+from typing import TYPE_CHECKING, Iterable, Sequence
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
@@ -95,9 +92,7 @@ def _run_identification_phase(
     max_outer_folds: int | None,
 ):
     if not identification_datasets:
-        parser.error(
-            "No identification-capable datasets were found in the selected data directory."
-        )
+        parser.error("No identification-capable datasets were found in the selected data directory.")
     return runner.run_identification(
         identification_datasets,
         workflow_names=id_workflows,
@@ -123,172 +118,7 @@ def _run_composition_phase(
     )
 
 
-def _selected_composition_config(
-    runner,
-    composition_selections: Sequence[dict[str, Any]],
-    workflow_name: str,
-) -> dict[str, Any]:
-    for selection in composition_selections:
-        if selection.get("composition_workflow_name") == workflow_name:
-            return dict(selection.get("config", {}))
-    return dict(runner.composition_registry[workflow_name].parameter_grid[0])
-
-
-def _truth_identification_result(elements: Sequence[str]):
-    from cflibs.inversion.element_id import ElementIdentification, ElementIdentificationResult
-
-    detected = [
-        ElementIdentification(
-            element=element,
-            detected=True,
-            score=1.0,
-            confidence=1.0,
-            n_matched_lines=0,
-            n_total_lines=0,
-            matched_lines=[],
-            unmatched_lines=[],
-            metadata={"source": "truth_for_perturbation"},
-        )
-        for element in elements
-    ]
-    return ElementIdentificationResult(
-        detected_elements=detected,
-        rejected_elements=[],
-        all_elements=detected,
-        experimental_peaks=[],
-        n_peaks=0,
-        n_matched_peaks=0,
-        n_unmatched_peaks=0,
-        algorithm="truth_for_perturbation",
-        parameters={"elements": list(elements), "candidate_elements": list(elements)},
-        warnings=[],
-    )
-
-
-def _build_perturbation_pipeline(
-    runner,
-    workflow_name: str,
-    spectra,
-    config: dict[str, Any],
-):
-    from cflibs.benchmark.dataset import BenchmarkSpectrum
-
-    workflow = runner.composition_registry[workflow_name]
-    predictor = workflow.fit_predictor(runner.context, spectra, config)
-    templates: dict[tuple[str, ...], BenchmarkSpectrum] = {}
-    for spectrum in spectra:
-        elements = tuple(
-            sorted(element for element, value in spectrum.true_composition.items() if value > 0)
-        )
-        templates.setdefault(elements, spectrum)
-    fallback_template = spectra[0]
-
-    def pipeline_fn(wavelengths, intensities, elements):
-        candidate_elements = list(elements)
-        template = templates.get(tuple(candidate_elements), fallback_template)
-        payload = template.to_dict()
-        payload.update(
-            {
-                "spectrum_id": f"{template.spectrum_id}_perturbation_eval",
-                "wavelength_nm": np.asarray(wavelengths, dtype=np.float64),
-                "intensity": np.asarray(intensities, dtype=np.float64),
-            }
-        )
-        spectrum = BenchmarkSpectrum.from_dict(payload)
-        result = predictor(
-            spectrum,
-            candidate_elements,
-            _truth_identification_result(candidate_elements),
-        )
-        return result
-
-    return pipeline_fn
-
-
-def _print_perturbation_report(report, perturbation_names: Sequence[str]) -> None:
-    print(f"Perturbation Report for {report.pipeline_name}:")
-    for perturbation_name in perturbation_names:
-        deltas = report.delta_d_a[perturbation_name].values()
-        valid_deltas = [delta for delta in deltas if math.isfinite(delta)]
-        if not valid_deltas:
-            print(f"  {perturbation_name}: No valid delta_d_A values computed.")
-            continue
-
-        avg_delta = sum(valid_deltas) / len(valid_deltas)
-        max_delta = max(valid_deltas)
-        print(
-            f"  {perturbation_name}: Avg delta_d_A = {avg_delta:.4f}, "
-            f"Max delta_d_A = {max_delta:.4f}"
-        )
-
-        if perturbation_name == "line_dropout" and avg_delta > 0.02:
-            print(
-                f"  ALARM: {report.pipeline_name} {perturbation_name} "
-                f"delta_d_A ({avg_delta:.4f}) exceeds threshold 0.02!"
-            )
-        elif perturbation_name == "outlier_injection" and avg_delta > 0.05:
-            print(
-                f"  ALARM: {report.pipeline_name} {perturbation_name} "
-                f"delta_d_A ({avg_delta:.4f}) exceeds threshold 0.05!"
-            )
-
-
-def _run_perturbation_phase(
-    runner,
-    composition_datasets,
-    composition_workflows: Sequence[str],
-    composition_selections: Sequence[dict[str, Any]],
-) -> None:
-    from cflibs.benchmark.robustness import (
-        line_dropout_perturbation,
-        outlier_injection_perturbation,
-        run_perturbation_battery,
-    )
-
-    print("\n--- Running Perturbation Battery ---")
-    rng = np.random.default_rng(42)
-    perturbations = {
-        "line_dropout": lambda spec: line_dropout_perturbation(spec, top_n=3),
-        "outlier_injection": lambda spec: outlier_injection_perturbation(
-            spec, fraction=0.05, sigma_mult=5.0, rng=rng
-        ),
-    }
-
-    all_spectra = [
-        spectrum
-        for dataset in composition_datasets
-        for spectrum in dataset.spectra
-        if spectrum.true_composition
-    ]
-    if not all_spectra:
-        print("No composition spectra available for perturbation battery.")
-        return
-
-    for workflow_name in composition_workflows:
-        print(f"Running perturbations for {workflow_name}...")
-        config = _selected_composition_config(runner, composition_selections, workflow_name)
-        pipeline_fn = _build_perturbation_pipeline(runner, workflow_name, all_spectra, config)
-        report = run_perturbation_battery(
-            pipeline_fn,
-            all_spectra,
-            perturbations,
-            pipeline_name=workflow_name,
-        )
-        _print_perturbation_report(report, tuple(perturbations))
-
-
 def _build_parser() -> argparse.ArgumentParser:
-    """
-    Create and configure the command-line argument parser for the unified LIBS benchmark.
-
-    Defines CLI options for database and data paths, basis and synthetic corpus inputs,
-    output directory, which benchmark sections and workflows to run, runtime controls
-    (such as quick mode and max outer folds), and an optional flag to run robustness
-    perturbation tests on composition workflows.
-
-    Returns:
-        argparse.ArgumentParser: A configured parser ready to parse the benchmark CLI.
-    """
     parser = argparse.ArgumentParser(description="Run the unified LIBS benchmark pipeline.")
     parser.add_argument(
         "--db-path",
@@ -349,26 +179,10 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Limit the number of outer folds evaluated per dataset.",
     )
-    parser.add_argument(
-        "--perturb",
-        action="store_true",
-        help="Run robustness perturbation tests on composition workflows.",
-    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """
-    Run the unified LIBS benchmark pipeline using command-line arguments.
-
-    Parses CLI arguments, configures and validates resources, runs identification and/or composition benchmark phases (optionally running a robustness perturbation battery), writes output files, and prints summary status.
-
-    Parameters:
-        argv (Sequence[str] | None): Command-line arguments to parse; when None, the program's actual argv is used.
-
-    Returns:
-        int: Process exit code (0 on success).
-    """
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -400,12 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     datasets = load_default_datasets(args.data_dir, synthetic_corpus_path=args.synthetic_corpus)
     identification_datasets = _select_datasets(
         datasets,
-        truth_types=(
-            TruthType.ASSAY,
-            TruthType.FORMULA_PROXY,
-            TruthType.SYNTHETIC,
-            TruthType.BLIND,
-        ),
+        truth_types=(TruthType.ASSAY, TruthType.FORMULA_PROXY, TruthType.SYNTHETIC, TruthType.BLIND),
     )
     composition_datasets = _select_datasets(
         datasets,
@@ -426,11 +235,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.max_outer_folds,
         )
 
-    if args.perturb and args.sections not in {"all", "composition"}:
-        print(
-            "--perturb is only supported with --sections all or --sections composition; skipping."
-        )
-
     if args.sections in {"all", "composition"}:
         composition_records, composition_selections = _run_composition_phase(
             parser,
@@ -440,14 +244,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             composition_workflows,
             args.max_outer_folds,
         )
-
-        if args.perturb:
-            _run_perturbation_phase(
-                runner,
-                composition_datasets,
-                composition_workflows,
-                composition_selections,
-            )
 
     outputs = runner.write_outputs(
         output_dir=args.output_dir,
