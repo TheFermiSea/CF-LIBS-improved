@@ -120,6 +120,7 @@ def _run_boltzmann_pipeline_lazy(
     fit_method: Any,
     closure_mode: str,
     elements: Optional[List[str]] = None,
+    weighting: Optional[str] = None,
 ) -> Optional[Dict[str, float]]:
     return _load_repo_script_module("run_comprehensive_benchmark").run_boltzmann_pipeline(
         spectrum,
@@ -127,6 +128,7 @@ def _run_boltzmann_pipeline_lazy(
         fit_method=fit_method,
         closure_mode=closure_mode,
         elements=elements,
+        weighting=weighting,
     )
 
 
@@ -1104,6 +1106,7 @@ def _fit_iterative_pipeline(
                 fit_method=config["fit_method"],
                 closure_mode=str(config["closure_mode"]),
                 elements=elements,
+                weighting=config.get("weighting"),
             )
         if result is None:
             raise RuntimeError("Iterative composition workflow failed")
@@ -1156,16 +1159,16 @@ def build_composition_workflow_registry(quick: bool = False) -> Dict[str, Compos
     from cflibs.inversion.boltzmann import FitMethod
 
     iterative_configs = [
-        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard"},
-        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr"},
+        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard", "weighting": "aki_inverse_variance"},
+        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr", "weighting": "aki_inverse_variance"},
     ]
     if not quick:
         iterative_configs.extend(
             [
-                {"fit_method": FitMethod.RANSAC, "closure_mode": "standard"},
-                {"fit_method": FitMethod.RANSAC, "closure_mode": "ilr"},
-                {"fit_method": FitMethod.HUBER, "closure_mode": "standard"},
-                {"fit_method": FitMethod.HUBER, "closure_mode": "ilr"},
+                {"fit_method": FitMethod.RANSAC, "closure_mode": "standard", "weighting": "aki_inverse_variance"},
+                {"fit_method": FitMethod.RANSAC, "closure_mode": "ilr", "weighting": "aki_inverse_variance"},
+                {"fit_method": FitMethod.HUBER, "closure_mode": "standard", "weighting": "aki_inverse_variance"},
+                {"fit_method": FitMethod.HUBER, "closure_mode": "ilr", "weighting": "aki_inverse_variance"},
             ]
         )
 
