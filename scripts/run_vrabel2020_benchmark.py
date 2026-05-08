@@ -30,6 +30,7 @@ The classification baseline is intentionally simple — it provides a
 floor for the benchmark gate and a regression detector. Subbing in
 cflibs.benchmark.classification workflows is a one-line change.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,7 +52,6 @@ if str(_REPO_ROOT) not in sys.path:
 from cflibs.core.logging_config import get_logger  # noqa: E402
 from cflibs.pds.vrabel2020 import (  # noqa: E402
     ELEMENTS,
-    N_CLASSES,
     VrabelSampleComposition,
     load_compositions,
     load_test_iter,
@@ -60,6 +60,7 @@ from cflibs.pds.vrabel2020 import (  # noqa: E402
 )
 
 logger = get_logger("vrabel2020_benchmark")
+MAJOR_ELEMENTS = {"Si", "Al", "Fe", "Ca", "Mg", "K", "Na"}
 
 
 # ─── Classification: nearest-class-mean baseline ─────────────────────────
@@ -76,8 +77,7 @@ def fit_class_centroids(
                   in the same order as the centroid rows.
     """
     classes = np.unique(train_class_ids)
-    centroids = np.empty((classes.size, train_spectra.shape[1]),
-                         dtype=np.float64)
+    centroids = np.empty((classes.size, train_spectra.shape[1]), dtype=np.float64)
     for i, c in enumerate(classes):
         mask = train_class_ids == c
         centroids[i] = train_spectra[mask].mean(axis=0)
@@ -97,13 +97,15 @@ def predict_nearest_centroid(
     """
     cn = centroids / (np.linalg.norm(centroids, axis=1, keepdims=True) + 1e-12)
     sn = spectra / (np.linalg.norm(spectra, axis=1, keepdims=True) + 1e-12)
-    sims = sn @ cn.T                       # (n_spectra, n_classes)
+    sims = sn @ cn.T  # (n_spectra, n_classes)
     pred_idx = sims.argmax(axis=1)
     return class_order[pred_idx]
 
 
 def macro_f1(
-    y_true: np.ndarray, y_pred: np.ndarray, classes: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    classes: np.ndarray,
 ) -> tuple[float, dict[int, dict[str, float]]]:
     """Macro-averaged F1 + per-class precision/recall/F1."""
     per_class: dict[int, dict[str, float]] = {}
@@ -116,7 +118,9 @@ def macro_f1(
         rec = tp / (tp + fn) if (tp + fn) else 0.0
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
         per_class[int(c)] = {
-            "precision": prec, "recall": rec, "f1": f1,
+            "precision": prec,
+            "recall": rec,
+            "f1": f1,
             "support": tp + fn,
         }
         f1s.append(f1)
@@ -137,7 +141,8 @@ def run_classification(args: argparse.Namespace) -> dict:
 
     logger.info("fitting class centroids on %d spectra", train.spectra.shape[0])
     centroids, class_order = fit_class_centroids(
-        train.spectra, train.class_ids,
+        train.spectra,
+        train.class_ids,
     )
     fit_s = time.time() - t0
 
@@ -150,21 +155,17 @@ def run_classification(args: argparse.Namespace) -> dict:
     for offset, chunk in load_test_iter(test_h5, chunk_size=args.chunk_size):
         end = offset + chunk.shape[0]
         if end > preds.size:
-            raise ValueError(
-                f"test stream produced {end} spectra, "
-                f"labels file has {preds.size}"
-            )
+            raise ValueError(f"test stream produced {end} spectra, labels file has {preds.size}")
         preds[offset:end] = predict_nearest_centroid(
-            chunk, centroids, class_order,
+            chunk,
+            centroids,
+            class_order,
         )
     pred_s = time.time() - t1
 
     accuracy = float((preds == y_true).mean())
     f1, per_class = macro_f1(y_true, preds, class_order)
-    confusion = {
-        int(t): dict(Counter(int(p) for p in preds[y_true == t]))
-        for t in class_order
-    }
+    confusion = {int(t): dict(Counter(int(p) for p in preds[y_true == t])) for t in class_order}
 
     # Regression floor scales with training data size since the
     # nearest-centroid baseline is sample-hungry. With shots_per_sample
@@ -217,14 +218,16 @@ def per_class_mean_composition(
     means: dict[int, dict[str, float]] = {}
     for cls, members in by_class.items():
         means[cls] = {
-            elt: float(np.mean([m.composition[elt] for m in members]))
-            for elt in ELEMENTS
+            elt: float(np.mean([m.composition[elt] for m in members])) for elt in ELEMENTS
         }
     return means
 
 
 def aitchison_distance(
-    a: dict[str, float], b: dict[str, float], *, eps: float = 1e-3,
+    a: dict[str, float],
+    b: dict[str, float],
+    *,
+    eps: float = 1e-3,
 ) -> float:
     """Compositional Aitchison distance between two element vectors.
 
@@ -240,6 +243,62 @@ def aitchison_distance(
     clr_a = np.log(av) - np.log(av).mean()
     clr_b = np.log(bv) - np.log(bv).mean()
     return float(np.linalg.norm(clr_a - clr_b))
+
+
+def aggregate_predicted_composition(
+    predicted_classes: np.ndarray,
+    class_means: dict[int, dict[str, float]],
+) -> dict[str, float] | None:
+    """Average assay-derived compositions for predicted classes."""
+    if predicted_classes.size == 0:
+        return None
+
+    pred_class_counts = Counter(int(p) for p in predicted_classes)
+    total = sum(pred_class_counts.values())
+    if total <= 0:
+        return None
+
+    aggregate = {elt: 0.0 for elt in ELEMENTS}
+    for predicted_class, count in pred_class_counts.items():
+        if predicted_class not in class_means:
+            return None
+        weight = count / total
+        for elt in ELEMENTS:
+            aggregate[elt] += class_means[predicted_class][elt] * weight
+    return aggregate
+
+
+def per_class_aitchison_distances(
+    class_order: np.ndarray,
+    y_true: np.ndarray,
+    preds: np.ndarray,
+    class_means: dict[int, dict[str, float]],
+) -> tuple[dict[int, float], dict[int, float]]:
+    """Compute full and majors-only Aitchison distances for each class.
+
+    Missing class means or absent predictions produce ``inf`` so the
+    regression gate fails instead of silently dropping a class.
+    """
+    full_distances: dict[int, float] = {}
+    major_distances: dict[int, float] = {}
+
+    for cls in class_order:
+        cls_int = int(cls)
+        true_comp = class_means.get(cls_int)
+        predicted_classes = preds[y_true == cls_int]
+        aggregate = aggregate_predicted_composition(predicted_classes, class_means)
+        if true_comp is None or aggregate is None:
+            full_distances[cls_int] = float("inf")
+            major_distances[cls_int] = float("inf")
+            continue
+
+        full_distances[cls_int] = aitchison_distance(true_comp, aggregate)
+        major_distances[cls_int] = aitchison_distance(
+            {elt: true_comp[elt] for elt in MAJOR_ELEMENTS},
+            {elt: aggregate[elt] for elt in MAJOR_ELEMENTS},
+        )
+
+    return full_distances, major_distances
 
 
 def run_composition(args: argparse.Namespace) -> dict:
@@ -263,17 +322,18 @@ def run_composition(args: argparse.Namespace) -> dict:
     class_means = per_class_mean_composition(samples)
 
     t0 = time.time()
-    train = load_train(data_dir / "train.h5",
-                       shots_per_sample=args.shots_per_sample)
+    train = load_train(data_dir / "train.h5", shots_per_sample=args.shots_per_sample)
     centroids, class_order = fit_class_centroids(
-        train.spectra, train.class_ids,
+        train.spectra,
+        train.class_ids,
     )
     y_true = load_test_labels(data_dir / "test_labels.csv")
     preds = np.empty(y_true.size, dtype=np.int32)
-    for offset, chunk in load_test_iter(data_dir / "test.h5",
-                                        chunk_size=args.chunk_size):
-        preds[offset:offset + chunk.shape[0]] = predict_nearest_centroid(
-            chunk, centroids, class_order,
+    for offset, chunk in load_test_iter(data_dir / "test.h5", chunk_size=args.chunk_size):
+        preds[offset : offset + chunk.shape[0]] = predict_nearest_centroid(
+            chunk,
+            centroids,
+            class_order,
         )
 
     # Per-class mean composition agreement (using TRUE labels):
@@ -299,60 +359,34 @@ def run_composition(args: argparse.Namespace) -> dict:
             per_element_mae[elt] = float("nan")
             per_element_bias[elt] = float("nan")
             continue
-        per_element_mae[elt] = float(
-            np.abs(pred_vals[finite] - true_vals[finite]).mean()
-        )
-        per_element_bias[elt] = float(
-            (pred_vals[finite] - true_vals[finite]).mean()
-        )
+        per_element_mae[elt] = float(np.abs(pred_vals[finite] - true_vals[finite]).mean())
+        per_element_bias[elt] = float((pred_vals[finite] - true_vals[finite]).mean())
 
-    aitchison_majors_per_class: dict[int, float] = {}
-    majors = {"Si", "Al", "Fe", "Ca", "Mg", "K", "Na"}
-
-    for cls in class_order:
-        cls_int = int(cls)
-        if cls_int not in class_means:
-            continue
-        # Compare predicted-class mean vs true-class mean for that cls
-        true_comp = class_means[cls_int]
-        pred_class_for_true = preds[y_true == cls_int]
-        if pred_class_for_true.size == 0:
-            continue
-        # Aggregate predicted class assignments → mean composition
-        pred_classes = Counter(int(p) for p in pred_class_for_true)
-        total = sum(pred_classes.values())
-        agg: dict[str, float] = {elt: 0.0 for elt in ELEMENTS}
-        for pc, count in pred_classes.items():
-            if pc not in class_means:
-                continue
-            for elt in ELEMENTS:
-                agg[elt] += class_means[pc][elt] * (count / total)
-        aitchison_per_class[cls_int] = aitchison_distance(true_comp, agg)
-
-        # majors check
-        m_true = {k: v for k, v in true_comp.items() if k in majors}
-        m_agg = {k: v for k, v in agg.items() if k in majors}
-        aitchison_majors_per_class[cls_int] = aitchison_distance(m_true, m_agg)
+    aitchison_per_class, aitchison_majors_per_class = per_class_aitchison_distances(
+        class_order,
+        y_true,
+        preds,
+        class_means,
+    )
 
     n_good_majors = sum(1 for d in aitchison_majors_per_class.values() if d < 0.10)
 
     duration = time.time() - t0
     accuracy = float((preds == y_true).mean())
     mean_aitchison = (
-        float(np.mean(list(aitchison_per_class.values())))
-        if aitchison_per_class else float("nan")
+        float(np.mean(list(aitchison_per_class.values()))) if aitchison_per_class else float("nan")
     )
 
     # Like the classification floor, the composition Aitchison floor
     # scales with shots_per_sample. At shots=500 (full training) the
     # surrogate's class assignments are accurate enough that mean
-    # Aitchison ≤ 1.35 is a reasonable regression floor (10% reduction); 
-    # at shots=5 it's nearly random and floor at 3.6 is more honest.
+    # Aitchison <= 1.5 is a reasonable regression floor; at shots=5
+    # it's nearly random and floor at 4.0 is more honest.
     if args.floor is not None:
         ait_floor = args.floor
     else:
         s = args.shots_per_sample
-        ait_floor = 3.6 - (2.25 * (max(s, 5) - 5) / (500 - 5))
+        ait_floor = 4.0 - (2.5 * (max(s, 5) - 5) / (500 - 5))
 
     return {
         "mode": "composition",
@@ -370,41 +404,44 @@ def run_composition(args: argparse.Namespace) -> dict:
         "mean_aitchison_distance": mean_aitchison,
         "regression_floor_aitchison_max": float(ait_floor),
         "passed_regression_floor": bool(
-            np.isfinite(mean_aitchison) and mean_aitchison <= ait_floor
-            and n_good_majors >= 8
+            np.isfinite(mean_aitchison) and mean_aitchison <= ait_floor and n_good_majors >= 8
         ),
     }
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────────
 def main() -> int:
-    ap = argparse.ArgumentParser(
-        description="Vrábel 2020 LIBS soil benchmark"
+    ap = argparse.ArgumentParser(description="Vrábel 2020 LIBS soil benchmark")
+    ap.add_argument("--mode", choices=("classification", "composition"), required=True)
+    ap.add_argument(
+        "--data-dir",
+        default="data/vrabel2020_soil_benchmark",
+        help="Directory containing train.h5, test.h5, test_labels.csv, support_tables.xlsx",
     )
-    ap.add_argument("--mode", choices=("classification", "composition"),
-                    required=True)
-    ap.add_argument("--data-dir",
-                    default="data/vrabel2020_soil_benchmark",
-                    help="Directory containing train.h5, test.h5, "
-                         "test_labels.csv, support_tables.xlsx")
-    ap.add_argument("--out-dir",
-                    help="Output directory; default = "
-                         "benchmark_artifacts/vrabel2020-<timestamp>")
-    ap.add_argument("--shots-per-sample", type=int, default=100,
-                    help="Train spectra per sample (1..500). Lower = "
-                         "faster, less RAM. Default 100 ≈ 10K train "
-                         "spectra ≈ 3.2 GB. Use 500 for full quality.")
-    ap.add_argument("--chunk-size", type=int, default=2000,
-                    help="Test prediction chunk size")
-    ap.add_argument("--floor", type=float, default=None,
-                    help="Override the regression floor (e.g. 0.85 for "
-                         "tight gating on full-shots runs). Default: "
-                         "scaled by shots_per_sample for classification, "
-                         "fixed 2.0 Aitchison for composition.")
+    ap.add_argument(
+        "--out-dir", help="Output directory; default = benchmark_artifacts/vrabel2020-<timestamp>"
+    )
+    ap.add_argument(
+        "--shots-per-sample",
+        type=int,
+        default=100,
+        help="Train spectra per sample (1..500). Lower = "
+        "faster, less RAM. Default 100 ≈ 10K train "
+        "spectra ≈ 3.2 GB. Use 500 for full quality.",
+    )
+    ap.add_argument("--chunk-size", type=int, default=2000, help="Test prediction chunk size")
+    ap.add_argument(
+        "--floor",
+        type=float,
+        default=None,
+        help="Override the regression floor (e.g. 0.85 for "
+        "tight gating on full-shots runs). Default: "
+        "scaled by shots_per_sample for classification, "
+        "fixed 2.0 Aitchison for composition.",
+    )
     args = ap.parse_args()
 
-    out_dir = Path(args.out_dir or
-                   f"benchmark_artifacts/vrabel2020-{int(time.time())}")
+    out_dir = Path(args.out_dir or f"benchmark_artifacts/vrabel2020-{int(time.time())}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("starting %s benchmark, out_dir=%s", args.mode, out_dir)

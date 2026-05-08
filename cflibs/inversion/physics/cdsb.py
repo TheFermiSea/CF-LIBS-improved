@@ -201,13 +201,15 @@ class CDSBPlotter:
     def __init__(
         self,
         plasma_length_cm: float = 0.1,
-        max_iterations: int = 50,
-        convergence_tolerance: float = 0.001,
+        max_iterations: int = 20,
+        convergence_tolerance: float = 0.01,
         tau_max: float = 10.0,
         tau_min_correction: float = 0.05,
         fit_method: FitMethod = FitMethod.SIGMA_CLIP,
         outlier_sigma: float = 3.0,
         resonance_weight: float = 0.5,
+        initial_tau_base: float = 0.5,
+        resonance_tau_boost: float = 1.5,
     ):
         """
         Initialize CD-SB plotter.
@@ -231,6 +233,12 @@ class CDSBPlotter:
         resonance_weight : float
             Weight factor for resonance lines in fit (0-1, lower = downweight).
             Resonance lines have highest self-absorption and may be less reliable.
+        initial_tau_base : float
+            Empirical base optical-depth estimate for strong lines at reference
+            conditions (default: 0.5).
+        resonance_tau_boost : float
+            Multiplicative initial-tau boost for explicitly flagged resonance
+            lines (default: 1.5).
         """
         self.plasma_length_cm = plasma_length_cm
         self.max_iterations = max_iterations
@@ -240,6 +248,8 @@ class CDSBPlotter:
         self.fit_method = fit_method
         self.outlier_sigma = outlier_sigma
         self.resonance_weight = resonance_weight
+        self.initial_tau_base = initial_tau_base
+        self.resonance_tau_boost = resonance_tau_boost
 
         # Internal Boltzmann fitter
         self._boltzmann_fitter = BoltzmannPlotFitter(
@@ -474,17 +484,19 @@ class CDSBPlotter:
             # Path length scaling (linear)
             length_factor = self.plasma_length_cm / L_ref
 
-            # Empirical tau estimate
-            # Base tau ~ 0.8 for a strong resonance line at reference conditions.
-            # Increased for soil matrices (high Si, Al, Fe) per Vrabel2020 tuning.
-            base_tau = 0.8
-
-            tau = base_tau * population_factor * line_strength * density_factor * length_factor
+            # Empirical tau estimate for a strong line at reference conditions.
+            tau = (
+                self.initial_tau_base
+                * population_factor
+                * line_strength
+                * density_factor
+                * length_factor
+            )
 
             # Resonance lines (E_i ~ 0) naturally get higher tau through population_factor
-            # Add boost for explicitly flagged resonance lines (majors in soil)
+            # Add a configurable boost for explicitly flagged resonance lines.
             if obs.is_resonance:
-                tau *= 2.0
+                tau *= self.resonance_tau_boost
 
             # Clamp to physically reasonable range
             tau_values[obs.wavelength_nm] = max(0.0, min(tau, 10.0))

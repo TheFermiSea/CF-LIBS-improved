@@ -1,20 +1,28 @@
-import numpy as np
 import pytest
 from cflibs.inversion.physics.cdsb import CDSBPlotter, CDSBLineObservation
 
-def test_cdsb_plotter_tuned_defaults():
-    """Verify that CDSBPlotter uses the tuned defaults for Vrabel2020."""
-    plotter = CDSBPlotter()
-    assert plotter.max_iterations == 50
-    assert plotter.convergence_tolerance == 0.001
 
-def test_estimate_initial_tau_scaling():
-    """Verify that initial tau estimation uses the increased base_tau and resonance boost."""
+@pytest.mark.unit
+def test_cdsb_plotter_defaults_remain_legacy():
+    """Verify that Vrabel tuning does not change global CD-SB defaults."""
     plotter = CDSBPlotter()
-    
+    assert plotter.max_iterations == 20
+    assert plotter.convergence_tolerance == pytest.approx(0.01)
+    assert plotter.initial_tau_base == pytest.approx(0.5)
+    assert plotter.resonance_tau_boost == pytest.approx(1.5)
+
+
+@pytest.mark.unit
+def test_estimate_initial_tau_scaling():
+    """Verify explicit tuning can increase resonance-line initial tau."""
+    plotter = CDSBPlotter(
+        initial_tau_base=0.8,
+        resonance_tau_boost=2.0,
+    )
+
     # Create a resonance line and a non-resonance line
     obs_res = CDSBLineObservation(
-        wavelength_nm=285.21, # Mg I resonance
+        wavelength_nm=285.21,  # Mg I resonance
         intensity=1000.0,
         intensity_uncertainty=10.0,
         element="Mg",
@@ -24,11 +32,11 @@ def test_estimate_initial_tau_scaling():
         g_k=3,
         g_i=1,
         A_ki=4.91e8,
-        is_resonance=True
+        is_resonance=True,
     )
-    
+
     obs_non_res = CDSBLineObservation(
-        wavelength_nm=383.8, # Mg I non-resonance
+        wavelength_nm=383.8,  # Mg I non-resonance
         intensity=1000.0,
         intensity_uncertainty=10.0,
         element="Mg",
@@ -38,18 +46,18 @@ def test_estimate_initial_tau_scaling():
         g_k=5,
         g_i=3,
         A_ki=1.6e8,
-        is_resonance=False
+        is_resonance=False,
     )
-    
+
     partition_funcs = {"Mg": 2.0}
     tau_values = plotter._estimate_initial_tau(
         [obs_res, obs_non_res],
         T_K=10000.0,
         n_e=1e17,
         partition_funcs=partition_funcs,
-        stark_widths_nm=None
+        stark_widths_nm=None,
     )
-    
+
     # Verify resonance line has significantly higher tau
     assert tau_values[285.21] > 3.0
     assert tau_values[383.8] < tau_values[285.21]
