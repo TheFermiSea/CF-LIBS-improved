@@ -52,6 +52,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
+from cflibs.benchmark.datasets.usgs import USGSDataset  # noqa: E402
 from cflibs.core.logging_config import get_logger  # noqa: E402
 from cflibs.inversion.boltzmann import (  # noqa: E402
     BoltzmannPlotFitter,
@@ -960,6 +961,11 @@ def main() -> None:
         help="Path to mineral spectra directory",
     )
     parser.add_argument(
+        "--usgs-dir",
+        default=None,
+        help="Path to USGS spectra directory (defaults to repo/data/usgs_geostandards)",
+    )
+    parser.add_argument(
         "--output",
         default="validation/accuracy/results/ablation_results.json",
         help="Output JSON path",
@@ -1039,10 +1045,41 @@ def main() -> None:
             }
         )
 
+    print(f"Loaded {len(spectra)} mineral spectra")
+
+    # Load USGS spectra if files are present
+    usgs_ds = USGSDataset(data_dir=args.usgs_dir)
+    usgs_count = 0
+    for sid in usgs_ds.available_samples():
+        benchmark_spec = usgs_ds.get_spectrum(sid)
+        if benchmark_spec is None:
+            continue
+
+        # Renormalize USGS composition over LIBS_DETECTABLE elements to sum to 1.0
+        # for fair comparison with the solver's normalized output.
+        true_comp = benchmark_spec.true_composition
+        det_elements = {k: v for k, v in true_comp.items() if k in LIBS_DETECTABLE}
+        det_total = sum(det_elements.values())
+
+        if det_total > 0:
+            stoich = {k: v / det_total for k, v in det_elements.items()}
+            spectra.append(
+                {
+                    "wavelength": benchmark_spec.wavelength_nm,
+                    "intensity": benchmark_spec.intensity,
+                    "mineral": sid,
+                    "file": f"usgs_{sid.lower()}",
+                    "stoichiometric": stoich,
+                    "expected_elements": set(stoich.keys()),
+                }
+            )
+            usgs_count += 1
+
+    if usgs_count > 0:
+        print(f"Added {usgs_count} USGS geochemical standards")
+
     if args.max_spectra:
         spectra = spectra[: args.max_spectra]
-
-    print(f"Loaded {len(spectra)} mineral spectra")
 
     if not spectra:
         print("ERROR: No spectra loaded")
