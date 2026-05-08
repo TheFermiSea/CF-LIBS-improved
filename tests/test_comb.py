@@ -646,4 +646,4 @@ def test_max_lines_per_element_parameter(atomic_db):
 def test_default_min_correlation_lowered(atomic_db):
     """Test that default min_correlation is lowered for trace-element recall."""
     identifier = CombIdentifier(atomic_db)
-    assert identifier.min_correlation == 0.05
+    assert identifier.min_correlation == pytest.approx(0.05)

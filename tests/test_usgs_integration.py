@@ -30,9 +30,8 @@ def test_usgs_spectrum_loading(tmp_path):
     usgs_dir.mkdir()
 
     # BHVO-2.csv naming convention
-    df = pd.DataFrame(
-        {"wavelength": np.linspace(200, 900, 1000), "intensity": np.random.rand(1000)}
-    )
+    rng = np.random.default_rng(42)
+    df = pd.DataFrame({"wavelength": np.linspace(200, 900, 1000), "intensity": rng.random(1000)})
     df.to_csv(usgs_dir / "BHVO-2.csv", index=False)
 
     ds = USGSDataset(data_dir=usgs_dir)
