@@ -83,6 +83,7 @@ from cflibs.io.spectrum import load_spectrum
 __all__ = [
     "CERTIFIED_COMPOSITIONS",
     "DEFAULT_DATA_DIR",
+    "ELEMENTAL_ANALYTE_KEYS",
     "OXIDE_TO_ELEMENT_FACTOR",
     "USGSStandardComposition",
     "USGSDataset",
@@ -135,16 +136,12 @@ OXIDE_TO_ELEMENT_FACTOR: dict[str, tuple[str, float]] = {
     "Na2O": ("Na", 0.74186),
     "K2O": ("K", 0.83014),
     "P2O5": ("P", 0.43643),
-    # Trace elements (reported as elements in ppm, converted to wt%)
-    "V": ("V", 1.0),
-    "Cr": ("Cr", 1.0),
-    "Ni": ("Ni", 1.0),
-    "Co": ("Co", 1.0),
-    "Sr": ("Sr", 1.0),
-    "Y": ("Y", 1.0),
-    "Zr": ("Zr", 1.0),
 }
 """Map oxide formula -> (element symbol, cation mass fraction)."""
+
+
+ELEMENTAL_ANALYTE_KEYS = frozenset({"V", "Cr", "Ni", "Co", "Sr", "Y", "Zr"})
+"""Elemental analytes reported directly as wt%, not oxide formulas."""
 
 
 def oxide_to_element_wt(oxide_wt_percent: dict[str, float]) -> dict[str, float]:
@@ -158,8 +155,9 @@ def oxide_to_element_wt(oxide_wt_percent: dict[str, float]) -> dict[str, float]:
     Parameters
     ----------
     oxide_wt_percent : dict[str, float]
-        Oxide formula -> mass percent (g / 100 g sample). Unknown oxides are
-        ignored with no error so callers can pass through LOI / H2O / CO2.
+    Oxide formula or direct elemental analyte -> mass percent (g / 100 g
+        sample). Unknown oxides are ignored with no error so callers can pass
+        through LOI / H2O / CO2.
 
     Returns
     -------
@@ -174,9 +172,12 @@ def oxide_to_element_wt(oxide_wt_percent: dict[str, float]) -> dict[str, float]:
     {'Si': 46.74...}
     """
     out: dict[str, float] = {}
-    for oxide, wt in oxide_wt_percent.items():
+    for analyte, wt in oxide_wt_percent.items():
+        if analyte in ELEMENTAL_ANALYTE_KEYS:
+            out[analyte] = out.get(analyte, 0.0) + float(wt)
+            continue
         try:
-            element, factor = OXIDE_TO_ELEMENT_FACTOR[oxide]
+            element, factor = OXIDE_TO_ELEMENT_FACTOR[analyte]
         except KeyError:
             continue
         out[element] = out.get(element, 0.0) + float(wt) * factor
@@ -202,12 +203,14 @@ class USGSStandardComposition:
     rock_type : str
         Petrologic classification (``"basalt"``, ``"andesite"``, ``"granite"``).
     oxide_wt_percent : dict[str, float]
-        Oxide formula (e.g. ``"SiO2"``, ``"Fe2O3T"``) -> mass percent
-        (g / 100 g sample). Iron is reported as ``"Fe2O3T"`` (total iron
-        expressed as Fe2O3) per Jochum et al. (2016).
+        Oxide formula (e.g. ``"SiO2"``, ``"Fe2O3T"``) or direct elemental
+        trace analyte (e.g. ``"V"``) -> mass percent (g / 100 g sample).
+        Iron is reported as ``"Fe2O3T"`` (total iron expressed as Fe2O3)
+        per Jochum et al. (2016).
     oxide_uncertainty_wt_percent : dict[str, float]
-        Oxide formula -> 95% confidence-level uncertainty in mass percent,
-        per Table 3 of Jochum et al. (2016).
+        Oxide formula or direct elemental trace analyte -> 95%
+        confidence-level uncertainty in mass percent, per Table 3 of Jochum
+        et al. (2016) when available.
     locality : str
         Sample collection locality.
     information_sheet_url : str
@@ -250,9 +253,12 @@ class USGSStandardComposition:
         out: dict[str, float] = {}
         # Track variance contributions, then sqrt at the end.
         variance: dict[str, float] = {}
-        for oxide, sigma in self.oxide_uncertainty_wt_percent.items():
+        for analyte, sigma in self.oxide_uncertainty_wt_percent.items():
+            if analyte in ELEMENTAL_ANALYTE_KEYS:
+                variance[analyte] = variance.get(analyte, 0.0) + float(sigma) ** 2
+                continue
             try:
-                element, factor = OXIDE_TO_ELEMENT_FACTOR[oxide]
+                element, factor = OXIDE_TO_ELEMENT_FACTOR[analyte]
             except KeyError:
                 continue
             variance[element] = variance.get(element, 0.0) + (factor * float(sigma)) ** 2
@@ -312,6 +318,10 @@ _BHVO_2 = USGSStandardComposition(
         "V": 0.0014,
         "Cr": 0.0023,
         "Ni": 0.0006,
+        "Co": np.nan,
+        "Sr": np.nan,
+        "Y": np.nan,
+        "Zr": np.nan,
     },
     locality="Halemaumau Crater, Kilauea Caldera, Hawaii (1919 pahoehoe flow)",
     information_sheet_url=(
@@ -363,6 +373,10 @@ _AGV_2 = USGSStandardComposition(
         "V": 0.0006,
         "Cr": 0.0002,
         "Ni": 0.0002,
+        "Co": np.nan,
+        "Sr": np.nan,
+        "Y": np.nan,
+        "Zr": np.nan,
     },
     locality="Guano Valley, Lake County, Oregon",
     information_sheet_url=(
@@ -414,6 +428,10 @@ _BCR_2 = USGSStandardComposition(
         "V": 0.0016,
         "Cr": 0.0002,
         "Ni": 0.0002,
+        "Co": np.nan,
+        "Sr": np.nan,
+        "Y": np.nan,
+        "Zr": np.nan,
     },
     locality="Bridal Veil Flow Quarry, ~26 mi east of Portland, Oregon (1996)",
     information_sheet_url=(
@@ -465,6 +483,10 @@ _G_2 = USGSStandardComposition(
         "V": 0.0003,
         "Cr": 0.0001,
         "Ni": 0.0001,
+        "Co": np.nan,
+        "Sr": np.nan,
+        "Y": np.nan,
+        "Zr": np.nan,
     },
     locality="Sullivan quarry, Bradford, Rhode Island",
     information_sheet_url="",
@@ -553,8 +575,7 @@ class USGSDataset:
             return CERTIFIED_COMPOSITIONS[standard_id]
         except KeyError as exc:
             raise KeyError(
-                f"Unknown USGS standard id {standard_id!r}; "
-                f"available: {self.available_samples()}"
+                f"Unknown USGS standard id {standard_id!r}; available: {self.available_samples()}"
             ) from exc
 
     def get_spectrum(self, standard_id: str) -> Optional[BenchmarkSpectrum]:
@@ -575,8 +596,7 @@ class USGSDataset:
         """
         if standard_id not in CERTIFIED_COMPOSITIONS:
             raise KeyError(
-                f"Unknown USGS standard id {standard_id!r}; "
-                f"available: {self.available_samples()}"
+                f"Unknown USGS standard id {standard_id!r}; available: {self.available_samples()}"
             )
 
         spectrum_path = self._locate_spectrum_file(standard_id)

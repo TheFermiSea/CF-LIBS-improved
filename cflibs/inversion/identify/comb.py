@@ -63,6 +63,9 @@ class CombIdentifier:
         center wavelength / resolving_power instead of fixed 0.1 nm (default: None).
     min_aki_gk : float, optional
         Minimum observable line strength A_ki * g_k (default: 1e4).
+    fingerprint_top_k : int, optional
+        Maximum number of active teeth contributing to the fingerprint
+        numerator and denominator (default: 10).
 
     Attributes
     ----------
@@ -108,7 +111,10 @@ class CombIdentifier:
         max_lines_per_element: int = 50,
         reference_temperature: float = 10000.0,
         min_aki_gk: float = 5e3,
+        fingerprint_top_k: int = 10,
     ):
+        if fingerprint_top_k <= 0:
+            raise ValueError("fingerprint_top_k must be positive")
         self.atomic_db = atomic_db
         self.resolving_power = resolving_power
         self.baseline_window_nm = baseline_window_nm
@@ -126,6 +132,7 @@ class CombIdentifier:
         self.max_lines_per_element = max_lines_per_element
         self.reference_temperature = reference_temperature
         self.min_aki_gk = min_aki_gk
+        self.fingerprint_top_k = fingerprint_top_k
 
     def identify(
         self, wavelength: np.ndarray, intensity: np.ndarray
@@ -208,6 +215,7 @@ class CombIdentifier:
                 "max_shift_pts": float(self.max_shift_pts),
                 "min_width_pts": float(self.min_width_pts),
                 "max_width_factor": self.max_width_factor,
+                "fingerprint_top_k": float(self.fingerprint_top_k),
             },
         )
 
@@ -294,7 +302,9 @@ class CombIdentifier:
 
             # Create ElementIdentification
             n_active_teeth = sum(1 for t in teeth if t["active"])
-            detected = fingerprint >= self.min_correlation and n_active_teeth >= self.min_active_teeth
+            detected = (
+                fingerprint >= self.min_correlation and n_active_teeth >= self.min_active_teeth
+            )
             element_id = ElementIdentification(
                 element=element,
                 detected=detected,
@@ -682,9 +692,13 @@ class CombIdentifier:
         active_teeth = [t for t in teeth if t["active"]]
         if not active_teeth:
             return 0.0
-        # Sum of active correlations divided by capped teeth count
-        total_correlation = sum(t["best_correlation"] for t in active_teeth)
-        # Cap denominator at 10 to improve recall for trace elements
-        denominator = min(len(teeth), 10)
-        fingerprint = total_correlation / denominator
-        return fingerprint
+        # Sum the best active correlations only, and divide by the same capped
+        # count so dense line lists improve recall without allowing scores > 1.
+        active_correlations = sorted(
+            (float(t["best_correlation"]) for t in active_teeth),
+            reverse=True,
+        )
+        denominator = min(len(teeth), self.fingerprint_top_k)
+        top_correlations = active_correlations[:denominator]
+        fingerprint = sum(top_correlations) / denominator
+        return float(np.clip(fingerprint, 0.0, 1.0))
