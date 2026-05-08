@@ -114,6 +114,18 @@ def _load_real_spectra_lazy(data_dir: Path) -> List[Dict[str, Any]]:
     return _load_repo_script_module("run_comprehensive_benchmark").load_real_spectra(data_dir)
 
 
+SUPPORTED_BOLTZMANN_WEIGHTINGS = {None, "aki_inverse_variance", "intensity_only"}
+
+
+def _validate_boltzmann_weighting(weighting: Optional[str]) -> Optional[str]:
+    if weighting not in SUPPORTED_BOLTZMANN_WEIGHTINGS:
+        allowed = ", ".join(sorted(w for w in SUPPORTED_BOLTZMANN_WEIGHTINGS if w is not None))
+        raise ValueError(
+            f"Unsupported Boltzmann weighting {weighting!r}; expected one of {allowed}"
+        )
+    return weighting
+
+
 def _run_boltzmann_pipeline_lazy(
     spectrum: Dict[str, Any],
     db: Any,
@@ -128,7 +140,7 @@ def _run_boltzmann_pipeline_lazy(
         fit_method=fit_method,
         closure_mode=closure_mode,
         elements=elements,
-        weighting=weighting,
+        weighting=_validate_boltzmann_weighting(weighting),
     )
 
 
@@ -1085,6 +1097,8 @@ def _fit_iterative_pipeline(
 ) -> Callable[
     [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
 ]:
+    weighting = _validate_boltzmann_weighting(config.get("weighting"))
+
     def predictor(
         spectrum: BenchmarkSpectrum,
         candidate_elements: Sequence[str],
@@ -1106,7 +1120,7 @@ def _fit_iterative_pipeline(
                 fit_method=config["fit_method"],
                 closure_mode=str(config["closure_mode"]),
                 elements=elements,
-                weighting=config.get("weighting"),
+                weighting=weighting,
             )
         if result is None:
             raise RuntimeError("Iterative composition workflow failed")
@@ -1158,17 +1172,22 @@ def _fit_hybrid_manifold_pipeline(
 def build_composition_workflow_registry(quick: bool = False) -> Dict[str, CompositionWorkflowSpec]:
     from cflibs.inversion.boltzmann import FitMethod
 
+    weighting = _validate_boltzmann_weighting("aki_inverse_variance")
     iterative_configs = [
-        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard", "weighting": "aki_inverse_variance"},
-        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr", "weighting": "aki_inverse_variance"},
+        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard", "weighting": weighting},
+        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr", "weighting": weighting},
     ]
     if not quick:
         iterative_configs.extend(
             [
-                {"fit_method": FitMethod.RANSAC, "closure_mode": "standard", "weighting": "aki_inverse_variance"},
-                {"fit_method": FitMethod.RANSAC, "closure_mode": "ilr", "weighting": "aki_inverse_variance"},
-                {"fit_method": FitMethod.HUBER, "closure_mode": "standard", "weighting": "aki_inverse_variance"},
-                {"fit_method": FitMethod.HUBER, "closure_mode": "ilr", "weighting": "aki_inverse_variance"},
+                {
+                    "fit_method": FitMethod.RANSAC,
+                    "closure_mode": "standard",
+                    "weighting": weighting,
+                },
+                {"fit_method": FitMethod.RANSAC, "closure_mode": "ilr", "weighting": weighting},
+                {"fit_method": FitMethod.HUBER, "closure_mode": "standard", "weighting": weighting},
+                {"fit_method": FitMethod.HUBER, "closure_mode": "ilr", "weighting": weighting},
             ]
         )
 
@@ -1519,9 +1538,7 @@ def _compose_annotations(
     """Drop bulky posterior-sample arrays out of the annotations dict and
     tack the computed posterior diagnostics on instead."""
     annotations: Dict[str, Any] = {
-        key: value
-        for key, value in prediction.items()
-        if key not in _POSTERIOR_EXCLUDE_KEYS
+        key: value for key, value in prediction.items() if key not in _POSTERIOR_EXCLUDE_KEYS
     }
     if posterior_diag is not None:
         annotations["posterior_diagnostics"] = posterior_diag
@@ -1546,9 +1563,7 @@ def _build_composition_success_record(
     rmse = float(rmse_composition(true_comp, concentrations))
     per_element = per_element_error(true_comp, concentrations)
     ratio_errors = subcompositional_ratio_errors(concentrations, true_comp)
-    posterior_diag = _maybe_compute_posterior_diagnostics(
-        prediction, candidate_elements, true_comp
-    )
+    posterior_diag = _maybe_compute_posterior_diagnostics(prediction, candidate_elements, true_comp)
     return CompositionEvaluationRecord(
         dataset_id=spectrum.dataset_id or "unknown",
         spectrum_id=spectrum.spectrum_id,
