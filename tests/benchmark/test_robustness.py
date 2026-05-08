@@ -10,6 +10,12 @@ from cflibs.benchmark.robustness import (
 
 @pytest.fixture
 def dummy_spectrum():
+    """
+    Create a deterministic BenchmarkSpectrum used for tests.
+    
+    Returns:
+        BenchmarkSpectrum: A spectrum with id "test_spec_1", wavelengths linearly spaced from 200 to 300 nm (100 points), intensities linearly increasing from 1 to 100 (so the top three intensities are the final three channels), true composition {"Fe": 0.8, "Cr": 0.2}, fixed InstrumentalConditions (1064 nm laser, 50.0 mJ, 5.0 ns pulse width, 10.0 Hz repetition, 100.0 µm spot), and SampleMetadata(sample_id="dummy_1").
+    """
     return BenchmarkSpectrum(
         spectrum_id="test_spec_1",
         wavelength_nm=np.linspace(200, 300, 100),
@@ -62,6 +68,15 @@ def test_outlier_injection_perturbation(dummy_spectrum):
     assert np.any(np.abs(noise_added) > 0.0)
 
 def test_run_perturbation_battery(dummy_spectrum):
+    """
+    Validates that run_perturbation_battery produces expected baseline, perturbed, and delta error metrics when a line-dropout perturbation is applied.
+    
+    Sets up a dummy pipeline that returns a "perfect" composition when the total intensity exceeds a threshold and a "bad" composition otherwise, applies a line dropout perturbation that reduces the total intensity, runs the perturbation battery on a single test spectrum, and asserts:
+    - the returned report uses the expected pipeline name;
+    - the baseline absolute difference for the test spectrum is 0.0 (perfect match);
+    - the perturbed absolute difference for the test spectrum under "line_dropout" is greater than 0.0 (degraded match);
+    - the delta absolute difference for the test spectrum under "line_dropout" is greater than 0.0.
+    """
     def dummy_pipeline(wavelengths, intensities, elements):
         # A simple dummy pipeline that returns a composition based on the sum of intensities
         # If intensity is unmodified, sum is 5050

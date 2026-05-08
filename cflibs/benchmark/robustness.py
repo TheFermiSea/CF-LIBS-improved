@@ -20,7 +20,14 @@ def line_dropout_perturbation(
     spectrum: BenchmarkSpectrum, top_n: int = 3
 ) -> BenchmarkSpectrum:
     """
-    Remove the top_n highest intensity channels by setting them to 0.0.
+    Create a deep copy of a spectrum with its `top_n` highest-intensity channels set to 0.0.
+    
+    Parameters:
+        spectrum (BenchmarkSpectrum): Input spectrum to copy and perturb.
+        top_n (int): Number of channels with the highest intensity to zero. If `top_n` is less than or equal to 0 or the spectrum has no intensity channels, the function returns an unmodified copy.
+    
+    Returns:
+        BenchmarkSpectrum: The perturbed spectrum with the specified channels' intensities set to 0.0.
     """
     perturbed = copy.deepcopy(spectrum)
     if top_n <= 0 or len(perturbed.intensity) == 0:
@@ -38,7 +45,16 @@ def outlier_injection_perturbation(
     rng: Optional[np.random.Generator] = None,
 ) -> BenchmarkSpectrum:
     """
-    Inject N(0, sigma_mult * std(intensity)) noise into `fraction` of channels.
+    Create a copy of a BenchmarkSpectrum and add additive Gaussian outlier noise to a subset of its intensity channels.
+    
+    Parameters:
+        spectrum (BenchmarkSpectrum): Source spectrum to copy and perturb.
+        fraction (float): Fraction of channels to inject noise into (0.0 to 1.0). If the computed number of channels to modify is 0, the copy is returned unchanged.
+        sigma_mult (float): Multiplier applied to the standard deviation of the spectrum's intensities to determine the noise standard deviation.
+        rng (Optional[np.random.Generator]): Random number generator to use for selecting channels and sampling noise. If None, a new default RNG is created.
+    
+    Returns:
+        BenchmarkSpectrum: A deep-copied spectrum with additive Gaussian noise applied to the selected channels.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -72,7 +88,20 @@ def run_perturbation_battery(
     pipeline_name: str = "pipeline",
 ) -> PerturbationReport:
     """
-    Run pipeline on original and perturbed spectra, computing delta Aitchison distance.
+    Run a pipeline on each original spectrum and on each provided perturbation, recording Aitchison distances and their changes.
+    
+    Parameters:
+        pipeline_fn (Callable[[np.ndarray, np.ndarray, List[str]], Dict[str, Any]]): Function that predicts concentrations given wavelength array, intensity array, and ordered element list. It should return a mapping that may contain a "concentrations" dict.
+        spectra (Sequence[BenchmarkSpectrum]): Sequence of spectra to evaluate; each must provide `spectrum_id`, `wavelength_nm`, `intensity`, and `true_composition`.
+        perturbations (Dict[str, Callable[[BenchmarkSpectrum], BenchmarkSpectrum]]): Mapping of perturbation name to a function that returns a perturbed BenchmarkSpectrum when given an original.
+        pipeline_name (str): Human-readable name for the pipeline under test used in the returned report.
+    
+    Returns:
+        PerturbationReport: Contains per-spectrum baseline Aitchison distances, per-perturbation perturbed distances, and per-perturbation deltas (perturbed minus baseline).
+    
+    Notes:
+        - If the pipeline raises an exception or returns no "concentrations" for a run, that run's Aitchison distance is recorded as infinity.
+        - Deltas are recorded as infinity if either the baseline or perturbed distance is infinity.
     """
     report = PerturbationReport(pipeline_name=pipeline_name)
 

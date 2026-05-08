@@ -119,6 +119,17 @@ def _run_composition_phase(
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """
+    Create and configure the command-line argument parser for the unified LIBS benchmark.
+    
+    Defines CLI options for database and data paths, basis and synthetic corpus inputs,
+    output directory, which benchmark sections and workflows to run, runtime controls
+    (such as quick mode and max outer folds), and an optional flag to run robustness
+    perturbation tests on composition workflows.
+    
+    Returns:
+        argparse.ArgumentParser: A configured parser ready to parse the benchmark CLI.
+    """
     parser = argparse.ArgumentParser(description="Run the unified LIBS benchmark pipeline.")
     parser.add_argument(
         "--db-path",
@@ -188,6 +199,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """
+    Run the unified LIBS benchmark pipeline using command-line arguments.
+    
+    Parses CLI arguments, configures and validates resources, runs identification and/or composition benchmark phases (optionally running a robustness perturbation battery), writes output files, and prints summary status.
+    
+    Parameters:
+        argv (Sequence[str] | None): Command-line arguments to parse; when None, the program's actual argv is used.
+    
+    Returns:
+        int: Process exit code (0 on success).
+    """
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -279,6 +301,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"Running perturbations for {comp_wf}...")
 
                 def make_pipeline_fn(wf_name):
+                    """
+                    Create a callable pipeline that runs the named composition workflow to estimate concentrations from a single spectrum and a set of elements.
+                    
+                    The returned function accepts wavelengths, intensities, and a collection of elements (used as the identification result) and returns a mapping containing the workflow's estimated concentrations. The workflow implementation is instantiated from runner.composition_registry using the provided workflow name.
+                    
+                    Parameters:
+                        wf_name (str): Name of the composition workflow to instantiate from runner.composition_registry.
+                    
+                    Returns:
+                        callable: A function with signature (wavelengths, intensities, elements) -> dict containing the key "concentrations" with the workflow's estimated concentrations.
+                    """
                     def pipeline_fn(wavelengths, intensities, elements):
                         # In the real benchmark, the ID workflow provides the elements.
                         # We just pass the ground truth elements here.
