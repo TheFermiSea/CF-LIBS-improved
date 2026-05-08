@@ -379,7 +379,9 @@ def test_identify_empty_wavelength_range(atomic_db):
 def test_identify_high_correlation_threshold(atomic_db, synthetic_libs_spectrum):
     """Test identify with very high correlation threshold."""
     identifier = CombIdentifier(
-        atomic_db, elements=["Fe", "H"], min_correlation=0.95  # Very high threshold
+        atomic_db,
+        elements=["Fe", "H"],
+        min_correlation=0.95,  # Very high threshold
     )
 
     spectrum = synthetic_libs_spectrum(
@@ -608,14 +610,14 @@ def test_false_positive_noise_only(atomic_db):
 
     result = identifier.identify(wavelength, intensity)
     # No element should be detected in pure noise
-    assert (
-        len(result.detected_elements) == 0
-    ), f"False positives on noise: {[e.element for e in result.detected_elements]}"
+    assert len(result.detected_elements) == 0, (
+        f"False positives on noise: {[e.element for e in result.detected_elements]}"
+    )
 
 
 def test_coverage_penalty_reduces_score(atomic_db):
-    """Elements with few active teeth out of many should score low."""
-    identifier = CombIdentifier(atomic_db)
+    """Elements can still use full-line-list coverage penalties when requested."""
+    identifier = CombIdentifier(atomic_db, fingerprint_top_k=50)
 
     # Build teeth list: 3 active out of 50 total
     teeth = []
@@ -626,7 +628,8 @@ def test_coverage_penalty_reduces_score(atomic_db):
             teeth.append({"active": False, "best_correlation": 0.1})
 
     score = identifier._compute_fingerprint(teeth)
-    # 3 * 0.9 / 50 = 0.054, should be much less than min_correlation
+    # 3 * 0.9 / 50 = 0.054, preserving the legacy full-coverage penalty
+    # when the caller opts out of the default top-k trace-element scoring.
     assert score < 0.1, f"Score {score} too high for 3/50 active teeth"
 
 
@@ -641,6 +644,6 @@ def test_max_lines_per_element_parameter(atomic_db):
 
 
 def test_default_min_correlation_lowered(atomic_db):
-    """Test that default min_correlation is 0.10."""
+    """Test that default min_correlation is lowered for trace-element recall."""
     identifier = CombIdentifier(atomic_db)
-    assert identifier.min_correlation == 0.10
+    assert identifier.min_correlation == pytest.approx(0.05)
