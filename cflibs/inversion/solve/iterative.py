@@ -365,7 +365,7 @@ class IterativeCFLIBSSolver:
 
         Parameters:
             observations (List[LineObservation]): Spectral line observations to invert; lines are grouped by element.
-            closure_mode (str): Closure method for converting Boltzmann intercepts to concentrations. One of "standard", "matrix", "oxide", "ilr", or "pwlr".
+            closure_mode (str): Closure method for converting Boltzmann intercepts to concentrations. One of "standard", "matrix", "oxide", "ilr", "pwlr", or "dirichlet_residual".
             **closure_kwargs: Additional keyword arguments forwarded to the chosen closure method (for example, a matrix_element for "matrix" mode).
 
         Returns:
@@ -488,6 +488,13 @@ class IterativeCFLIBSSolver:
                     abundance_multipliers=abundance_multipliers,
                     **closure_kwargs,
                 )
+            elif closure_mode == "dirichlet_residual":
+                closure_res = ClosureEquation.apply_dirichlet_residual(
+                    intercepts,
+                    partition_funcs,
+                    abundance_multipliers=abundance_multipliers,
+                    **closure_kwargs,
+                )
             else:
                 closure_res = ClosureEquation.apply_standard(
                     intercepts,
@@ -582,7 +589,7 @@ class IterativeCFLIBSSolver:
 
         Parameters:
             observations (List[LineObservation]): Spectral lines with intensity uncertainties.
-            closure_mode (str): Closure algorithm to use ('standard', 'matrix', 'oxide', 'ilr', or 'pwlr').
+            closure_mode (str): Closure algorithm to use ('standard', 'matrix', 'oxide', 'ilr', 'pwlr', or 'dirichlet_residual').
             **closure_kwargs: Arguments passed to the chosen closure routine (e.g. 'matrix_element',
                 'matrix_fraction', or 'oxide_stoichiometry').
 
@@ -691,7 +698,7 @@ class IterativeCFLIBSSolver:
                 closure_kwargs.get("oxide_stoichiometry", {}),
                 abundance_multipliers=abundance_multipliers,
             )
-        elif closure_mode in {"ilr", "pwlr"}:
+        elif closure_mode in {"ilr", "pwlr", "dirichlet_residual"}:
             concentrations_u = propagate_through_closure_standard(
                 intercepts_u,
                 partition_funcs,
