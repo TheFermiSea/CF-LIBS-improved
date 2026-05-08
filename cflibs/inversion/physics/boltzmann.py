@@ -59,13 +59,13 @@ class BoltzmannPlotFitter:
 
     def __init__(
         self,
-        outlier_sigma: float = 3.0,
-        max_iterations: int = 5,
+        outlier_sigma: float = 2.5,
+        max_iterations: int = 10,
         method: FitMethod = FitMethod.SIGMA_CLIP,
         ransac_min_samples: int = 2,
         ransac_residual_threshold: float | None = None,
         ransac_max_trials: int = 100,
-        huber_epsilon: float = 1.35,
+        huber_epsilon: float = 1.2,
     ):
         """
         Initialize fitter.
@@ -73,9 +73,10 @@ class BoltzmannPlotFitter:
         Parameters
         ----------
         outlier_sigma : float
-            Sigma threshold for outlier rejection (sigma_clip method)
+            Sigma threshold for outlier rejection (sigma_clip method).
+            Default: 2.5 (stricter than legacy 3.0 for mineral matrices).
         max_iterations : int
-            Maximum iterations for sigma clipping
+            Maximum iterations for sigma clipping. Default: 10.
         method : FitMethod
             Fitting method to use (SIGMA_CLIP, RANSAC, or HUBER)
         ransac_min_samples : int
@@ -87,8 +88,8 @@ class BoltzmannPlotFitter:
             Maximum RANSAC iterations (default: 100)
         huber_epsilon : float
             Huber loss transition point. Points with standardized residuals
-            below this use squared loss; above use linear loss. Default: 1.35
-            (95% efficiency for Gaussian errors)
+            below this use squared loss; above use linear loss. Default: 1.2
+            (aggression tuned for Aalto benchmark).
         """
         self.outlier_sigma = outlier_sigma
         self.max_iterations = max_iterations
@@ -426,7 +427,8 @@ class BoltzmannPlotFitter:
             m_init, c_init = np.polyfit(x, y, 1, w=weights)
             residuals_init = np.abs(y - (m_init * x + c_init))
             mad = np.median(residuals_init)
-            threshold = 3.0 * mad * 1.4826  # Scale MAD to std dev estimate
+            # Use the instance outlier_sigma for consistency across methods
+            threshold = self.outlier_sigma * mad * 1.4826  # Scale MAD to std dev estimate
 
         best_inliers = None
         best_n_inliers = 0
