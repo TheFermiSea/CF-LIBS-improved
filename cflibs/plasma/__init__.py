@@ -8,14 +8,20 @@ This module provides:
 - Multi-zone plasma models
 """
 
-from cflibs.plasma.state import PlasmaState, SingleZoneLTEPlasma
-from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver, ionization_potential_lowering
+from cflibs.plasma.state import PlasmaState, SingleZoneLTEPlasma, SingleZoneLTEPlasmaJax
+from cflibs.plasma.saha_boltzmann import (
+    SahaBoltzmannSolver,
+    SahaBoltzmannSolverJax,
+    ionization_potential_lowering,
+)
 from cflibs.plasma.lte_validator import LTEValidator, LTEReport, LTECheckResult
 
 __all__ = [
     "PlasmaState",
     "SingleZoneLTEPlasma",
+    "SingleZoneLTEPlasmaJax",
     "SahaBoltzmannSolver",
+    "SahaBoltzmannSolverJax",
     "ionization_potential_lowering",
     "LTEValidator",
     "LTEReport",

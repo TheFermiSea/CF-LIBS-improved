@@ -8,6 +8,14 @@ import math
 from dataclasses import dataclass
 from typing import Mapping
 
+try:
+    import jax.numpy as jnp
+
+    HAS_JAX = True
+except ImportError:  # pragma: no cover - JAX is a runtime dep but stay defensive
+    HAS_JAX = False
+    jnp = None  # type: ignore[assignment]
+
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
 
@@ -417,3 +425,88 @@ class TwoRegionPlasma(SingleZoneLTEPlasma):
                 f"> T_core ({self.T_core:.1f} K)"
             )
         return True
+
+
+class SingleZoneLTEPlasmaJax(SingleZoneLTEPlasma):
+    """JAX-friendly wrapper around :class:`SingleZoneLTEPlasma`.
+
+    This subclass exposes ``T_e``, ``n_e`` and the per-element densities as
+    ``jnp.ndarray`` views in addition to the existing Python-float
+    attributes. The Python-float surface is preserved verbatim so existing
+    consumers (validation, charge-neutrality check, ``solve_*`` methods)
+    keep working without modification — that means a ``SingleZoneLTEPlasmaJax``
+    is interchangeable with a plain ``SingleZoneLTEPlasma`` everywhere it
+    appears in the forward model.
+
+    Use this class when you want to feed the plasma's tensors into a
+    JIT-compiled forward kernel (e.g. ``SpectrumModelJax``) without
+    re-converting on every call.
+    """
+
+    def __init__(
+        self,
+        T_e: float,
+        n_e: float,
+        species: dict[str, float],
+        T_g: float | None = None,
+        pressure: float | None = None,
+    ):
+        super().__init__(T_e=T_e, n_e=n_e, species=species, T_g=T_g, pressure=pressure)
+        if HAS_JAX:
+            # Stable iteration order — Python 3.7+ dicts preserve insertion
+            # order, which is what we want for the (element -> density) view.
+            self._species_keys: tuple[str, ...] = tuple(species.keys())
+            self._T_e_jax = jnp.asarray(float(T_e))
+            self._n_e_jax = jnp.asarray(float(n_e))
+            self._species_densities_jax = jnp.asarray(
+                [float(species[k]) for k in self._species_keys]
+            )
+        else:  # pragma: no cover - JAX should be installed in this repo
+            self._species_keys = tuple(species.keys())
+            self._T_e_jax = None
+            self._n_e_jax = None
+            self._species_densities_jax = None
+
+    @property
+    def T_e_jax(self) -> "jnp.ndarray":
+        """Electron temperature in K as a 0-d ``jnp.ndarray``."""
+        if not HAS_JAX:  # pragma: no cover
+            raise ImportError("JAX is required for T_e_jax")
+        return self._T_e_jax
+
+    @property
+    def T_e_eV_jax(self) -> "jnp.ndarray":
+        """Electron temperature in eV as a 0-d ``jnp.ndarray``."""
+        if not HAS_JAX:  # pragma: no cover
+            raise ImportError("JAX is required for T_e_eV_jax")
+        return self._T_e_jax * KB_EV
+
+    @property
+    def n_e_jax(self) -> "jnp.ndarray":
+        """Electron density in cm^-3 as a 0-d ``jnp.ndarray``."""
+        if not HAS_JAX:  # pragma: no cover
+            raise ImportError("JAX is required for n_e_jax")
+        return self._n_e_jax
+
+    @property
+    def species_keys(self) -> tuple[str, ...]:
+        """Stable element-symbol ordering matching ``species_densities_jax``."""
+        return self._species_keys
+
+    @property
+    def species_densities_jax(self) -> "jnp.ndarray":
+        """1-D ``jnp.ndarray`` of element number densities, ordered by ``species_keys``."""
+        if not HAS_JAX:  # pragma: no cover
+            raise ImportError("JAX is required for species_densities_jax")
+        return self._species_densities_jax
+
+    @classmethod
+    def from_plasma(cls, plasma: SingleZoneLTEPlasma) -> "SingleZoneLTEPlasmaJax":
+        """Construct a JAX plasma view from an existing NumPy plasma."""
+        return cls(
+            T_e=plasma.T_e,
+            n_e=plasma.n_e,
+            species=dict(plasma.species),
+            T_g=plasma.T_g,
+            pressure=plasma.pressure,
+        )
