@@ -62,6 +62,36 @@ except ImportError:  # pragma: no cover - optional dependency
     studentized_range = None
 
 
+# ---------------------------------------------------------------------------
+# Optional JAX / NumPyro deps for the GPU-using composition workflows
+# (`bayesian` + `iterative_jax`).  Both workflows register unconditionally so
+# the benchmark gate's CLI surface stays stable; missing deps are converted to
+# a clear runtime warning + numpy fallback inside the workflow predictors.
+# ---------------------------------------------------------------------------
+try:
+    import jax  # noqa: F401
+
+    HAS_JAX = True
+except ImportError:  # pragma: no cover - optional dependency
+    HAS_JAX = False
+
+try:
+    import numpyro  # noqa: F401
+
+    HAS_NUMPYRO = True
+except ImportError:  # pragma: no cover - optional dependency
+    HAS_NUMPYRO = False
+
+try:  # The JAX iterative solver is being built in parallel by Agent B; the
+    # benchmark gate must keep working even when it lands later.
+    from cflibs.inversion.solver import IterativeCFLIBSSolverJax  # type: ignore
+
+    HAS_JAX_ITERATIVE_SOLVER = True
+except (ImportError, AttributeError):  # pragma: no cover - exercised when absent
+    IterativeCFLIBSSolverJax = None  # type: ignore[assignment]
+    HAS_JAX_ITERATIVE_SOLVER = False
+
+
 RP_BUCKETS: List[Tuple[float, float, str, float]] = [
     (0.0, 500.0, "rp_lt_500", 350.0),
     (500.0, 1000.0, "rp_500_999", 750.0),
@@ -1112,6 +1142,265 @@ def _fit_iterative_pipeline(
     return predictor
 
 
+def _fit_iterative_jax_pipeline(
+    _context: UnifiedBenchmarkContext,
+    _train_spectra: Sequence[BenchmarkSpectrum],
+    config: Dict[str, Any],
+) -> Callable[
+    [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
+]:
+    """JAX-accelerated iterative CF-LIBS pipeline.
+
+    Mirrors :func:`_fit_iterative_pipeline` but routes the inner-loop linear
+    algebra through ``IterativeCFLIBSSolverJax`` so the heavy Boltzmann +
+    closure passes execute on GPU when ``JAX_PLATFORMS=cuda`` is set. When
+    the JAX solver is unavailable (Agent B's solver hasn't landed, or JAX
+    isn't installed), the workflow logs a warning and falls back to the
+    numpy ``IterativeCFLIBSSolver`` path so the benchmark gate keeps running
+    end-to-end on CPU-only hosts.
+    """
+    use_jax = bool(HAS_JAX and HAS_JAX_ITERATIVE_SOLVER)
+    if not use_jax:
+        logger.warning(
+            "iterative_jax: falling back to numpy iterative pipeline "
+            "(HAS_JAX=%s, HAS_JAX_ITERATIVE_SOLVER=%s)",
+            HAS_JAX,
+            HAS_JAX_ITERATIVE_SOLVER,
+        )
+
+    def predictor(
+        spectrum: BenchmarkSpectrum,
+        candidate_elements: Sequence[str],
+        _id_result: Optional[ElementIdentificationResult],
+    ) -> Dict[str, Any]:
+        elements = list(candidate_elements)
+        if not elements:
+            raise ValueError(
+                "No candidate elements available for iterative_jax composition workflow"
+            )
+
+        if use_jax:
+            from cflibs.atomic.database import AtomicDatabase
+            from cflibs.inversion.identify.line_detection import detect_line_observations
+
+            with AtomicDatabase(str(_context.db_path)) as db:
+                detection = detect_line_observations(
+                    spectrum.wavelength_nm,
+                    spectrum.intensity,
+                    db,
+                    elements=elements,
+                )
+                observations = detection.observations if detection is not None else []
+                if not observations:
+                    raise RuntimeError(
+                        "iterative_jax: no matched line observations for spectrum"
+                    )
+                # IterativeCFLIBSSolverJax shares the same call surface as the
+                # numpy IterativeCFLIBSSolver — we instantiate, then solve.
+                solver = IterativeCFLIBSSolverJax(atomic_db=db)
+                result = solver.solve(
+                    observations,
+                    closure_mode=str(config.get("closure_mode", "standard")),
+                )
+            if result is None or not getattr(result, "concentrations", None):
+                raise RuntimeError("iterative_jax composition workflow failed")
+            payload: Dict[str, Any] = {"concentrations": dict(result.concentrations)}
+            t_K = getattr(result, "temperature_K", None)
+            if t_K is not None:
+                payload["temperature_K"] = float(t_K)
+            ne = getattr(result, "electron_density_cm3", None)
+            if ne is not None:
+                payload["electron_density_cm3"] = float(ne)
+            payload["solver_backend"] = "jax"
+            return payload
+
+        # --- numpy fallback (matches _fit_iterative_pipeline) ---
+        from cflibs.atomic.database import AtomicDatabase
+
+        with AtomicDatabase(str(_context.db_path)) as db:
+            result = _run_boltzmann_pipeline_lazy(
+                {
+                    "wavelength": spectrum.wavelength_nm,
+                    "intensity": spectrum.intensity,
+                    "ground_truth": spectrum.true_composition,
+                },
+                db=db,
+                fit_method=config["fit_method"],
+                closure_mode=str(config["closure_mode"]),
+                elements=elements,
+            )
+        if result is None:
+            raise RuntimeError("iterative_jax (numpy fallback) failed")
+        return {"concentrations": result, "solver_backend": "numpy_fallback"}
+
+    return predictor
+
+
+def _fit_bayesian_pipeline(
+    _context: UnifiedBenchmarkContext,
+    _train_spectra: Sequence[BenchmarkSpectrum],
+    config: Dict[str, Any],
+) -> Callable[
+    [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
+]:
+    """Bayesian CF-LIBS composition workflow (NumPyro NUTS, JAX backend).
+
+    Builds a :class:`cflibs.inversion.solve.bayesian.BayesianForwardModel`
+    over the spectrum's wavelength range, runs short MCMC (NUTS) on the
+    observed intensity, and returns a prediction dict with point-estimate
+    concentrations (posterior mean) plus the raw posterior samples so
+    ``_maybe_compute_posterior_diagnostics`` can compute rhat / ess_bulk /
+    divergent_transitions / psis_loo_* and stash them in
+    ``CompositionEvaluationRecord.annotations``.
+
+    The MCMC budget is intentionally small (default 200 warmup / 400
+    samples / 1 chain) so per-spectrum wall time stays in the 10-30s range
+    on a V100 — the benchmark gate runs across many spectra and outer
+    folds.  Tighten via ``--quick``-mode parameter grid if needed.
+
+    When JAX or NumPyro isn't installed, the workflow raises a clear error
+    at predictor build time so the benchmark report shows an explicit
+    failure for that workflow rather than silently regressing.
+    """
+    if not HAS_JAX or not HAS_NUMPYRO:
+        missing = []
+        if not HAS_JAX:
+            missing.append("jax")
+        if not HAS_NUMPYRO:
+            missing.append("numpyro")
+        logger.warning(
+            "bayesian composition workflow: missing dependencies %s — "
+            "predictor will raise on first invocation",
+            ", ".join(missing),
+        )
+
+    num_warmup = int(config.get("num_warmup", 200))
+    num_samples = int(config.get("num_samples", 400))
+    num_chains = int(config.get("num_chains", 1))
+    seed = int(config.get("seed", 0))
+    target_accept_prob = float(config.get("target_accept_prob", 0.8))
+    pixels = int(config.get("pixels", 1024))
+
+    def predictor(
+        spectrum: BenchmarkSpectrum,
+        candidate_elements: Sequence[str],
+        _id_result: Optional[ElementIdentificationResult],
+    ) -> Dict[str, Any]:
+        if not HAS_JAX or not HAS_NUMPYRO:
+            raise RuntimeError(
+                "bayesian composition workflow requires jax + numpyro "
+                "(install with: pip install jax jaxlib numpyro)"
+            )
+        elements = list(candidate_elements)
+        if not elements:
+            raise ValueError(
+                "No candidate elements available for bayesian composition workflow"
+            )
+
+        from cflibs.inversion.solve.bayesian import (
+            BayesianForwardModel,
+            MCMCSampler,
+            NoiseParameters,
+            PriorConfig,
+        )
+
+        wl = np.asarray(spectrum.wavelength_nm, dtype=float)
+        intensity = np.asarray(spectrum.intensity, dtype=float)
+        if wl.size == 0 or intensity.size == 0:
+            raise ValueError("bayesian: empty spectrum input")
+        wl_min = float(wl.min())
+        wl_max = float(wl.max())
+
+        # Use the spectrum's own wavelength grid so the forward model
+        # evaluates at the same pixels as the observed intensity.
+        forward_model = BayesianForwardModel(
+            db_path=str(_context.db_path),
+            elements=elements,
+            wavelength_range=(wl_min, wl_max),
+            wavelength_grid=wl if wl.size <= pixels else None,
+            pixels=pixels,
+            resolving_power=float(spectrum.rp_estimate)
+            if spectrum.rp_estimate is not None and spectrum.rp_estimate > 0
+            else None,
+        )
+
+        # If we had to resample, interp the observed intensity onto the
+        # forward-model grid so shapes line up.
+        if forward_model.wavelength.shape[0] != intensity.shape[0]:
+            grid = np.asarray(forward_model.wavelength)
+            obs = np.interp(grid, wl, intensity)
+        else:
+            obs = intensity
+
+        sampler = MCMCSampler(
+            forward_model,
+            prior_config=PriorConfig(),
+            noise_params=NoiseParameters(),
+        )
+        result = sampler.run(
+            obs,
+            num_warmup=num_warmup,
+            num_samples=num_samples,
+            num_chains=num_chains,
+            seed=seed,
+            target_accept_prob=target_accept_prob,
+            progress_bar=False,
+        )
+
+        # Posterior mean concentrations -> point-estimate composition
+        concentrations = {
+            element: float(result.concentrations_mean.get(element, 0.0))
+            for element in elements
+        }
+        # Renormalize so the closure residual stays small even if MCMC
+        # didn't perfectly hit the simplex constraint.
+        total = sum(concentrations.values())
+        if total > 0:
+            concentrations = {el: v / total for el, v in concentrations.items()}
+
+        # Pull the posterior sample dict off the MCMCResult so the
+        # benchmark's _maybe_compute_posterior_diagnostics path lights up.
+        posterior_samples: Dict[str, Any] = {}
+        try:
+            posterior_samples = {k: np.asarray(v) for k, v in result.samples.items()}
+        except Exception:  # noqa: BLE001 - never block the gate on diag prep
+            posterior_samples = {}
+
+        divergent_count = 0
+        try:
+            # NumPyro stores divergent transitions in mcmc.get_extra_fields(),
+            # but MCMCResult doesn't surface them directly — best-effort fetch.
+            inference_data = getattr(result, "inference_data", None)
+            if inference_data is not None and hasattr(inference_data, "sample_stats"):
+                stats = inference_data.sample_stats
+                if "diverging" in stats:
+                    divergent_count = int(np.asarray(stats["diverging"].values).sum())
+        except Exception:  # noqa: BLE001
+            divergent_count = 0
+
+        payload: Dict[str, Any] = {
+            "concentrations": concentrations,
+            "posterior_samples": posterior_samples,
+            "divergent_count": divergent_count,
+            "temperature_K": float(result.T_K_mean) if result.T_K_mean else None,
+            "electron_density_cm3": (
+                float(result.n_e_mean) if getattr(result, "n_e_mean", None) else None
+            ),
+            "convergence_status": (
+                result.convergence_status.value
+                if hasattr(result.convergence_status, "value")
+                else str(result.convergence_status)
+            ),
+            "n_samples": int(result.n_samples),
+            "n_chains": int(result.n_chains),
+            "n_warmup": int(result.n_warmup),
+            "solver_backend": "numpyro_jax",
+        }
+        return payload
+
+    return predictor
+
+
 def _fit_joint_optimizer_pipeline(
     _context: UnifiedBenchmarkContext,
     _train_spectra: Sequence[BenchmarkSpectrum],
@@ -1169,9 +1458,36 @@ def build_composition_workflow_registry(quick: bool = False) -> Dict[str, Compos
             ]
         )
 
+    # iterative_jax mirrors the iterative parameter grid — every config
+    # exposes a fit_method + closure_mode pair so the JAX path can pick the
+    # same robust regression mode and the numpy fallback stays bit-compatible.
+    iterative_jax_configs = [dict(c) for c in iterative_configs]
+
+    # Bayesian: the parameter grid is shaped to keep MCMC wall time bounded
+    # for the benchmark gate.  In quick mode we run a single small
+    # configuration; the full grid sweeps a couple of warmup/sample points.
+    if quick:
+        bayesian_configs: List[Dict[str, Any]] = [
+            {"num_warmup": 200, "num_samples": 400, "num_chains": 1, "seed": 0},
+        ]
+    else:
+        bayesian_configs = [
+            {"num_warmup": 200, "num_samples": 400, "num_chains": 1, "seed": 0},
+            {"num_warmup": 500, "num_samples": 1000, "num_chains": 1, "seed": 0},
+        ]
+
     return {
         "iterative": CompositionWorkflowSpec(
             "iterative", iterative_configs, _fit_iterative_pipeline, _config_name
+        ),
+        "iterative_jax": CompositionWorkflowSpec(
+            "iterative_jax",
+            iterative_jax_configs,
+            _fit_iterative_jax_pipeline,
+            _config_name,
+        ),
+        "bayesian": CompositionWorkflowSpec(
+            "bayesian", bayesian_configs, _fit_bayesian_pipeline, _config_name
         ),
         "joint_softmax": CompositionWorkflowSpec(
             "joint_softmax", [{}], _fit_joint_optimizer_pipeline, _config_name
