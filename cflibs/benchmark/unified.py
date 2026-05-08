@@ -1107,7 +1107,13 @@ def _fit_iterative_pipeline(
             )
         if result is None:
             raise RuntimeError("Iterative composition workflow failed")
-        return {"concentrations": result}
+        
+        total_conc = sum(result.values())
+        prediction = {"concentrations": result}
+        if total_conc < 0.999:
+            prediction["gamma_residual"] = float(max(0.0, 1.0 - total_conc))
+            
+        return prediction
 
     return predictor
 
@@ -1158,6 +1164,7 @@ def build_composition_workflow_registry(quick: bool = False) -> Dict[str, Compos
     iterative_configs = [
         {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard"},
         {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr"},
+        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "dirichlet_residual"},
     ]
     if not quick:
         iterative_configs.extend(

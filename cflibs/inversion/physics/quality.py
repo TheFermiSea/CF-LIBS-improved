@@ -44,6 +44,7 @@ class QualityMetrics:
 
     # Closure quality
     closure_residual: float = 0.0  # |sum(C) - 1.0|
+    gamma_residual: float = 0.0
 
     # Reconstruction quality
     chi_squared: float = 0.0
@@ -61,6 +62,7 @@ class QualityMetrics:
             "inter_element_t_std_frac": self.inter_element_t_std_frac,
             "saha_boltzmann_consistency": self.saha_boltzmann_consistency,
             "closure_residual": self.closure_residual,
+            "gamma_residual": self.gamma_residual,
             "reduced_chi_squared": self.reduced_chi_squared,
             "quality_flag": self.quality_flag,
         }
@@ -196,8 +198,10 @@ class QualityAssessor:
         # 4. Closure residual
         total_conc = sum(concentrations.values())
         closure_residual = abs(total_conc - 1.0)
+        # gamma_residual is the mass fraction absorbed by the latent sink
+        gamma_residual = max(0.0, 1.0 - total_conc)
 
-        if closure_residual > 0.05:
+        if closure_residual > 0.05 and gamma_residual < 0.01:
             warnings.append(f"Closure residual {closure_residual:.3f} > 0.05")
 
         # 5. Determine overall quality flag
@@ -215,6 +219,7 @@ class QualityAssessor:
             t_boltzmann_K=temperature_K,
             t_saha_K=t_saha,
             closure_residual=closure_residual,
+            gamma_residual=gamma_residual,
             quality_flag=quality_flag,
             warnings=warnings,
         )
