@@ -577,6 +577,9 @@ class IterativeCFLIBSSolver:
         }
         quality_metrics.update(lte_report.quality_metrics)
 
+        if self.two_region and T_corona is None:
+            T_corona = 0.8 * T_K
+
         return CFLIBSResult(
             temperature_K=T_K,
             temperature_uncertainty_K=0.0,  # See solve_with_uncertainty for propagation

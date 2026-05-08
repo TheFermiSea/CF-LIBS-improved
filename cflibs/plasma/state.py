@@ -406,11 +406,6 @@ class TwoRegionPlasma(SingleZoneLTEPlasma):
             f"n_e={n_e:.2e} cm^-3"
         )
 
-    @property
-    def T_e(self) -> float:
-        """Return core temperature as primary electron temperature."""
-        return self.T_core
-
     def validate(self) -> bool:
         """Validate two-region plasma state."""
         super().validate()
