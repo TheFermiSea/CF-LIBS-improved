@@ -120,6 +120,7 @@ def _run_boltzmann_pipeline_lazy(
     fit_method: Any,
     closure_mode: str,
     elements: Optional[List[str]] = None,
+    **kwargs: Any,
 ) -> Optional[Dict[str, float]]:
     return _load_repo_script_module("run_comprehensive_benchmark").run_boltzmann_pipeline(
         spectrum,
@@ -127,6 +128,7 @@ def _run_boltzmann_pipeline_lazy(
         fit_method=fit_method,
         closure_mode=closure_mode,
         elements=elements,
+        **kwargs,
     )
 
 
@@ -1094,6 +1096,10 @@ def _fit_iterative_pipeline(
         if not elements:
             raise ValueError("No candidate elements available for iterative composition workflow")
         with AtomicDatabase(str(_context.db_path)) as db:
+            # Extract solver-specific parameters from config (e.g., two_region)
+            solver_kwargs = {
+                k: v for k, v in config.items() if k not in {"fit_method", "closure_mode"}
+            }
             result = _run_boltzmann_pipeline_lazy(
                 {
                     "wavelength": spectrum.wavelength_nm,
@@ -1104,6 +1110,7 @@ def _fit_iterative_pipeline(
                 fit_method=config["fit_method"],
                 closure_mode=str(config["closure_mode"]),
                 elements=elements,
+                **solver_kwargs,
             )
         if result is None:
             raise RuntimeError("Iterative composition workflow failed")
@@ -1158,6 +1165,7 @@ def build_composition_workflow_registry(quick: bool = False) -> Dict[str, Compos
     iterative_configs = [
         {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard"},
         {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr"},
+        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard", "two_region": True},
     ]
     if not quick:
         iterative_configs.extend(
