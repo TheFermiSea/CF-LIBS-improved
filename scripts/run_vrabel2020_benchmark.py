@@ -306,6 +306,9 @@ def run_composition(args: argparse.Namespace) -> dict:
             (pred_vals[finite] - true_vals[finite]).mean()
         )
 
+    aitchison_majors_per_class: dict[int, float] = {}
+    majors = {"Si", "Al", "Fe", "Ca", "Mg", "K", "Na"}
+
     for cls in class_order:
         cls_int = int(cls)
         if cls_int not in class_means:
@@ -326,6 +329,13 @@ def run_composition(args: argparse.Namespace) -> dict:
                 agg[elt] += class_means[pc][elt] * (count / total)
         aitchison_per_class[cls_int] = aitchison_distance(true_comp, agg)
 
+        # majors check
+        m_true = {k: v for k, v in true_comp.items() if k in majors}
+        m_agg = {k: v for k, v in agg.items() if k in majors}
+        aitchison_majors_per_class[cls_int] = aitchison_distance(m_true, m_agg)
+
+    n_good_majors = sum(1 for d in aitchison_majors_per_class.values() if d < 0.10)
+
     duration = time.time() - t0
     accuracy = float((preds == y_true).mean())
     mean_aitchison = (
@@ -336,13 +346,13 @@ def run_composition(args: argparse.Namespace) -> dict:
     # Like the classification floor, the composition Aitchison floor
     # scales with shots_per_sample. At shots=500 (full training) the
     # surrogate's class assignments are accurate enough that mean
-    # Aitchison ≤ 1.5 is a reasonable regression floor; at shots=5
-    # it's nearly random and floor at 4.0 is more honest.
+    # Aitchison ≤ 1.35 is a reasonable regression floor (10% reduction); 
+    # at shots=5 it's nearly random and floor at 3.6 is more honest.
     if args.floor is not None:
         ait_floor = args.floor
     else:
         s = args.shots_per_sample
-        ait_floor = 4.0 - (2.5 * (max(s, 5) - 5) / (500 - 5))
+        ait_floor = 3.6 - (2.25 * (max(s, 5) - 5) / (500 - 5))
 
     return {
         "mode": "composition",
@@ -355,10 +365,13 @@ def run_composition(args: argparse.Namespace) -> dict:
         "per_element_mae_wt_pct": per_element_mae,
         "per_element_bias_wt_pct": per_element_bias,
         "aitchison_distance_per_class": aitchison_per_class,
+        "aitchison_majors_per_class": aitchison_majors_per_class,
+        "n_classes_good_majors": n_good_majors,
         "mean_aitchison_distance": mean_aitchison,
         "regression_floor_aitchison_max": float(ait_floor),
         "passed_regression_floor": bool(
             np.isfinite(mean_aitchison) and mean_aitchison <= ait_floor
+            and n_good_majors >= 8
         ),
     }
 

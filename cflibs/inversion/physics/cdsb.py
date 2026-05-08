@@ -201,8 +201,8 @@ class CDSBPlotter:
     def __init__(
         self,
         plasma_length_cm: float = 0.1,
-        max_iterations: int = 20,
-        convergence_tolerance: float = 0.01,
+        max_iterations: int = 50,
+        convergence_tolerance: float = 0.001,
         tau_max: float = 10.0,
         tau_min_correction: float = 0.05,
         fit_method: FitMethod = FitMethod.SIGMA_CLIP,
@@ -475,15 +475,16 @@ class CDSBPlotter:
             length_factor = self.plasma_length_cm / L_ref
 
             # Empirical tau estimate
-            # Base tau ~ 0.5 for a strong resonance line at reference conditions
-            base_tau = 0.5
+            # Base tau ~ 0.8 for a strong resonance line at reference conditions.
+            # Increased for soil matrices (high Si, Al, Fe) per Vrabel2020 tuning.
+            base_tau = 0.8
 
             tau = base_tau * population_factor * line_strength * density_factor * length_factor
 
             # Resonance lines (E_i ~ 0) naturally get higher tau through population_factor
-            # Add modest boost for explicitly flagged resonance lines
+            # Add boost for explicitly flagged resonance lines (majors in soil)
             if obs.is_resonance:
-                tau *= 1.5
+                tau *= 2.0
 
             # Clamp to physically reasonable range
             tau_values[obs.wavelength_nm] = max(0.0, min(tau, 10.0))
