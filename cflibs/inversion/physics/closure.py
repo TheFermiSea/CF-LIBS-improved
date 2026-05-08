@@ -34,6 +34,7 @@ class ClosureMode(Enum):
     OXIDE = "oxide"
     ILR = "ilr"
     PWLR = "pwlr"
+    DIRICHLET_RESIDUAL = "dirichlet_residual"
 
 
 # ---------------------------------------------------------------------------

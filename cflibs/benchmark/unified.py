@@ -1114,7 +1114,14 @@ def _fit_iterative_pipeline(
             )
         if result is None:
             raise RuntimeError("Iterative composition workflow failed")
-        return {"concentrations": result}
+
+        closure_mode = str(config["closure_mode"])
+        prediction = {"concentrations": result}
+        if closure_mode == "dirichlet_residual":
+            total_conc = sum(result.values())
+            prediction["gamma_residual"] = float(max(0.0, 1.0 - total_conc))
+
+        return prediction
 
     return predictor
 
@@ -1165,6 +1172,7 @@ def build_composition_workflow_registry(quick: bool = False) -> Dict[str, Compos
     iterative_configs = [
         {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard"},
         {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr"},
+        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "dirichlet_residual"},
         {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard", "two_region": True},
     ]
     if not quick:
@@ -1524,9 +1532,7 @@ def _compose_annotations(
     """Drop bulky posterior-sample arrays out of the annotations dict and
     tack the computed posterior diagnostics on instead."""
     annotations: Dict[str, Any] = {
-        key: value
-        for key, value in prediction.items()
-        if key not in _POSTERIOR_EXCLUDE_KEYS
+        key: value for key, value in prediction.items() if key not in _POSTERIOR_EXCLUDE_KEYS
     }
     if posterior_diag is not None:
         annotations["posterior_diagnostics"] = posterior_diag
@@ -1551,9 +1557,7 @@ def _build_composition_success_record(
     rmse = float(rmse_composition(true_comp, concentrations))
     per_element = per_element_error(true_comp, concentrations)
     ratio_errors = subcompositional_ratio_errors(concentrations, true_comp)
-    posterior_diag = _maybe_compute_posterior_diagnostics(
-        prediction, candidate_elements, true_comp
-    )
+    posterior_diag = _maybe_compute_posterior_diagnostics(prediction, candidate_elements, true_comp)
     return CompositionEvaluationRecord(
         dataset_id=spectrum.dataset_id or "unknown",
         spectrum_id=spectrum.spectrum_id,

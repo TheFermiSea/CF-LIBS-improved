@@ -11,8 +11,10 @@ import pytest
 
 from cflibs.inversion.closure import (
     ClosureEquation,
+    ClosureMode,
     DirichletResidualResult,
 )
+from cflibs.inversion.physics.quality import QualityAssessor, QualityMetrics
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -310,6 +312,43 @@ class TestDiagnostics:
         res = ClosureEquation.apply_dirichlet_residual(intercepts, pfs, mode="simple")
 
         assert res.experimental_factor == pytest.approx(res.raw_closure_sum, rel=1e-10)
+
+
+class TestGammaResidualReporting:
+    """Verify residual reporting is explicit and not inferred for all under-closure."""
+
+    def test_closure_mode_enum(self):
+        assert ClosureMode.DIRICHLET_RESIDUAL.value == "dirichlet_residual"
+
+    def test_quality_metrics_gamma_residual_serializes(self):
+        metrics = QualityMetrics(
+            r_squared_boltzmann=0.99,
+            closure_residual=0.05,
+            gamma_residual=0.05,
+        )
+
+        assert metrics.gamma_residual == pytest.approx(0.05)
+        assert metrics.to_dict()["gamma_residual"] == pytest.approx(0.05)
+
+    def test_quality_assessor_only_suppresses_warning_for_explicit_gamma(self):
+        assessor = QualityAssessor()
+        kwargs = {
+            "observations": [],
+            "temperature_K": 10000.0,
+            "electron_density_cm3": 1.0e17,
+            "concentrations": {"Fe": 0.80},
+            "ionization_potentials": {"Fe": 7.9},
+            "partition_funcs_I": {"Fe": 1.0},
+            "partition_funcs_II": {"Fe": 1.0},
+        }
+
+        standard_metrics = assessor.assess(**kwargs)
+        residual_metrics = assessor.assess(**kwargs, gamma_residual=0.20)
+
+        assert standard_metrics.gamma_residual == pytest.approx(0.0)
+        assert standard_metrics.warnings
+        assert residual_metrics.gamma_residual == pytest.approx(0.20)
+        assert residual_metrics.warnings == []
 
 
 # ---------------------------------------------------------------------------
