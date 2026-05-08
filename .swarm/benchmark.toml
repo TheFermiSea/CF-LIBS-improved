@@ -41,11 +41,13 @@ run_command_template = [
 ]
 
 # Orchestrator-side wall-clock cap. The bench script picks a per-tier
-# inner timeout (BENCH_TIMEOUT_LIGHT=600, BENCH_TIMEOUT_HEAVY=2400,
-# BENCH_TIMEOUT_NIGHTLY=5400 by default) so this outer cap must exceed
-# the largest of those plus rsync + drain + cuda-cache + restore overhead.
-# Sized for the nightly tier (~50-60 min wall-clock end-to-end).
-timeout_secs = 6000
+# inner timeout (BENCH_TIMEOUT_LIGHT=3600, BENCH_TIMEOUT_HEAVY=10800,
+# BENCH_TIMEOUT_NIGHTLY=21600 — 1/3/6 hr — sized for real JAX inversion
+# pipeline runs on V100). This outer cap must exceed the largest of those
+# plus rsync + drain + cuda-cache + restore overhead. Real GPU benchmarks
+# on the full JAX pipeline (bayesian NUTS + iterative_jax across all
+# datasets) routinely consume 4-6 hours wall-clock end-to-end.
+timeout_secs = 25200  # 7 hr — exceeds nightly inner (6 hr) + 10% margin
 
 # Block PR creation on benchmark failure. The architect's swarm/<id>
 # branch is preserved (run.py keep_on_fail=True for benchmark gate
