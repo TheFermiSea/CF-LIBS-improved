@@ -44,6 +44,7 @@ class QualityMetrics:
 
     # Closure quality
     closure_residual: float = 0.0  # |sum(C) - 1.0|
+    gamma_residual: float = 0.0
 
     # Reconstruction quality
     chi_squared: float = 0.0
@@ -61,6 +62,7 @@ class QualityMetrics:
             "inter_element_t_std_frac": self.inter_element_t_std_frac,
             "saha_boltzmann_consistency": self.saha_boltzmann_consistency,
             "closure_residual": self.closure_residual,
+            "gamma_residual": self.gamma_residual,
             "reduced_chi_squared": self.reduced_chi_squared,
             "quality_flag": self.quality_flag,
         }
@@ -133,6 +135,7 @@ class QualityAssessor:
         ionization_potentials: Dict[str, float],
         partition_funcs_I: Dict[str, float],
         partition_funcs_II: Dict[str, float],
+        gamma_residual: Optional[float] = None,
     ) -> QualityMetrics:
         """
         Compute quality metrics for a CF-LIBS result.
@@ -153,6 +156,10 @@ class QualityAssessor:
             Neutral partition functions U_I(T)
         partition_funcs_II : Dict[str, float]
             Ion partition functions U_II(T)
+        gamma_residual : float, optional
+            Explicit latent residual mass fraction from a residual-aware
+            closure mode. When omitted, under-closure is reported as a
+            standard closure residual warning.
 
         Returns
         -------
@@ -196,8 +203,9 @@ class QualityAssessor:
         # 4. Closure residual
         total_conc = sum(concentrations.values())
         closure_residual = abs(total_conc - 1.0)
+        gamma_residual_value = 0.0 if gamma_residual is None else float(gamma_residual)
 
-        if closure_residual > 0.05:
+        if closure_residual > 0.05 and gamma_residual_value < 0.01:
             warnings.append(f"Closure residual {closure_residual:.3f} > 0.05")
 
         # 5. Determine overall quality flag
@@ -215,6 +223,7 @@ class QualityAssessor:
             t_boltzmann_K=temperature_K,
             t_saha_K=t_saha,
             closure_residual=closure_residual,
+            gamma_residual=gamma_residual_value,
             quality_flag=quality_flag,
             warnings=warnings,
         )

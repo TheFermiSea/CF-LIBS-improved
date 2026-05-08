@@ -316,6 +316,7 @@ def run_boltzmann_pipeline(
     closure_mode: str = "standard",
     elements: Optional[List[str]] = None,
     weighting: Optional[str] = None,
+    **solver_kwargs,
 ) -> Optional[Dict[str, float]]:
     """Run full CF-LIBS pipeline: peak detect → DB match → Boltzmann → closure.
 
@@ -346,6 +347,7 @@ def run_boltzmann_pipeline(
         solver = IterativeCFLIBSSolver(
             atomic_db=db,
             aki_uncertainty_weighting=aki_uncertainty_weighting,
+            **solver_kwargs,
         )
         result = solver.solve(observations, closure_mode=closure_mode)
 
@@ -392,6 +394,8 @@ def run_boltzmann_pipeline(
         # Apply closure
         if closure_mode == "ilr":
             cr = ClosureEquation.apply_ilr(element_intercepts, partition_funcs)
+        elif closure_mode == "dirichlet_residual":
+            cr = ClosureEquation.apply_dirichlet_residual(element_intercepts, partition_funcs)
         else:
             cr = ClosureEquation.apply_standard(element_intercepts, partition_funcs)
 
@@ -404,7 +408,7 @@ def run_boltzmann_pipeline(
             if el not in conc:
                 conc[el] = 0.0
         total = sum(conc.values())
-        if total > 0:
+        if total > 0 and closure_mode != "dirichlet_residual":
             conc = {el: v / total for el, v in conc.items()}
         return conc
 

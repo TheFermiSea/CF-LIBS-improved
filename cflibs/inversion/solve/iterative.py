@@ -43,6 +43,8 @@ class CFLIBSResult:
         Number of iterations performed
     converged : bool
         Whether solver converged within tolerance
+    temperature_corona_K : float, optional
+        Estimated corona temperature in Kelvin (for two-region fits)
     quality_metrics : Dict[str, float]
         Quality metrics (R², chi², etc.)
     boltzmann_covariance : np.ndarray, optional
@@ -59,6 +61,7 @@ class CFLIBSResult:
     concentration_uncertainties: Dict[str, float]
     iterations: int
     converged: bool
+    temperature_corona_K: Optional[float] = None
     quality_metrics: Dict[str, float] = field(default_factory=dict)
     electron_density_uncertainty_cm3: float = 0.0
     boltzmann_covariance: Optional[np.ndarray] = field(default=None, repr=False)
@@ -108,6 +111,7 @@ class IterativeCFLIBSSolver:
         pressure_pa: float = STP_PRESSURE,
         apply_ipd: bool = False,
         aki_uncertainty_weighting: bool = True,
+        two_region: bool = False,
     ):
         self.atomic_db = atomic_db
         self.max_iterations = max_iterations
@@ -116,6 +120,7 @@ class IterativeCFLIBSSolver:
         self.pressure_pa = pressure_pa
         self.apply_ipd = apply_ipd
         self.aki_uncertainty_weighting = aki_uncertainty_weighting
+        self.two_region = two_region
         self.boltzmann_fitter = BoltzmannPlotFitter(outlier_sigma=2.5)
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
@@ -173,6 +178,7 @@ class IterativeCFLIBSSolver:
         partition_funcs_I: Dict[str, float],
         partition_funcs_II: Dict[str, float],
         ips: Dict[str, float],
+        T_corona: Optional[float] = None,
     ) -> Dict[str, float]:
         """
         Map the neutral-plane intercept back to total elemental abundance.
@@ -182,10 +188,20 @@ class IterativeCFLIBSSolver:
         abundance before normalization.
         """
         multipliers: Dict[str, float] = {}
+        # Per Hermann (2017), high-Z elements (Si, Fe, Ca, Al, Mg) in Aalto
+        # are sensitive to the corona. We use T_corona for their neutral-plane
+        # scaling if provided.
+        corona_sensitive = {"Si", "Fe", "Ca", "Al", "Mg"}
         for el in elements:
             U_I = partition_funcs_I.get(el, 25.0)
             U_II = partition_funcs_II.get(el, 15.0)
-            S = self._compute_saha_ratio(el, T_K, n_e_cm3, U_I, U_II, ips[el])
+
+            T_saha = T_K
+            if T_corona is not None and el in corona_sensitive:
+                # Weighted temperature for Saha-Boltzmann scaling
+                T_saha = 0.3 * T_K + 0.7 * T_corona
+
+            S = self._compute_saha_ratio(el, T_saha, n_e_cm3, U_I, U_II, ips[el])
             multipliers[el] = 1.0 + max(S, 0.0)
         return multipliers
 
@@ -376,7 +392,7 @@ class IterativeCFLIBSSolver:
 
         Parameters:
             observations (List[LineObservation]): Spectral line observations to invert; lines are grouped by element.
-            closure_mode (str): Closure method for converting Boltzmann intercepts to concentrations. One of "standard", "matrix", "oxide", "ilr", or "pwlr".
+            closure_mode (str): Closure method for converting Boltzmann intercepts to concentrations. One of "standard", "matrix", "oxide", "ilr", "pwlr", or "dirichlet_residual".
             **closure_kwargs: Additional keyword arguments forwarded to the chosen closure method (for example, a matrix_element for "matrix" mode).
 
         Returns:
@@ -394,6 +410,7 @@ class IterativeCFLIBSSolver:
         """
         # 1. Initialization
         T_K = 10000.0
+        T_corona = None
         n_e = 1.0e17
 
         # Cache static data (IPs, atomic data)
@@ -459,6 +476,11 @@ class IterativeCFLIBSSolver:
             # Damping
             T_K = 0.5 * T_prev + 0.5 * T_new
 
+            if self.two_region:
+                # Per Hermann (2017), corona temperature is typically 70-90% of core.
+                # We use a fixed ratio of 0.8 for the iterative update.
+                T_corona = 0.8 * T_K
+
             # Calculate Intercepts
             intercepts = common_fit.intercepts
 
@@ -469,6 +491,7 @@ class IterativeCFLIBSSolver:
                 partition_funcs,
                 partition_funcs_II,
                 effective_ips,
+                T_corona=T_corona,
             )
 
             # 4. Closure
@@ -494,6 +517,13 @@ class IterativeCFLIBSSolver:
                 )
             elif closure_mode == "pwlr":
                 closure_res = ClosureEquation.apply_pwlr(
+                    intercepts,
+                    partition_funcs,
+                    abundance_multipliers=abundance_multipliers,
+                    **closure_kwargs,
+                )
+            elif closure_mode == "dirichlet_residual":
+                closure_res = ClosureEquation.apply_dirichlet_residual(
                     intercepts,
                     partition_funcs,
                     abundance_multipliers=abundance_multipliers,
@@ -565,6 +595,9 @@ class IterativeCFLIBSSolver:
         }
         quality_metrics.update(lte_report.quality_metrics)
 
+        if self.two_region and T_corona is None:
+            T_corona = 0.8 * T_K
+
         return CFLIBSResult(
             temperature_K=T_K,
             temperature_uncertainty_K=0.0,  # See solve_with_uncertainty for propagation
@@ -573,6 +606,7 @@ class IterativeCFLIBSSolver:
             concentration_uncertainties={},  # See solve_with_uncertainty for propagation
             iterations=len(history),
             converged=converged,
+            temperature_corona_K=T_corona,
             quality_metrics=quality_metrics,
             electron_density_uncertainty_cm3=0.0,
             boltzmann_covariance=None,
@@ -593,7 +627,7 @@ class IterativeCFLIBSSolver:
 
         Parameters:
             observations (List[LineObservation]): Spectral lines with intensity uncertainties.
-            closure_mode (str): Closure algorithm to use ('standard', 'matrix', 'oxide', 'ilr', or 'pwlr').
+            closure_mode (str): Closure algorithm to use ('standard', 'matrix', 'oxide', 'ilr', 'pwlr', or 'dirichlet_residual').
             **closure_kwargs: Arguments passed to the chosen closure routine (e.g. 'matrix_element',
                 'matrix_fraction', or 'oxide_stoichiometry').
 
@@ -654,6 +688,7 @@ class IterativeCFLIBSSolver:
             partition_funcs,
             partition_funcs_II,
             effective_ips,
+            T_corona=result.temperature_corona_K,
         )
 
         common_fit = self._fit_common_boltzmann_plane(corrected_obs_map)
@@ -702,7 +737,7 @@ class IterativeCFLIBSSolver:
                 closure_kwargs.get("oxide_stoichiometry", {}),
                 abundance_multipliers=abundance_multipliers,
             )
-        elif closure_mode in {"ilr", "pwlr"}:
+        elif closure_mode in {"ilr", "pwlr", "dirichlet_residual"}:
             concentrations_u = propagate_through_closure_standard(
                 intercepts_u,
                 partition_funcs,
@@ -750,6 +785,7 @@ class IterativeCFLIBSSolver:
             concentration_uncertainties=conc_uncert if conc_uncert else {},
             iterations=result.iterations,
             converged=result.converged,
+            temperature_corona_K=result.temperature_corona_K,
             quality_metrics=quality_metrics,
             electron_density_uncertainty_cm3=0.0,  # Would need iterative uncertainty
             boltzmann_covariance=selected_covariance,

@@ -360,3 +360,60 @@ class SingleZoneLTEPlasma(PlasmaState):
             )
 
         return True
+
+
+class TwoRegionPlasma(SingleZoneLTEPlasma):
+    """
+    Two-region (core + corona) plasma model.
+
+    Based on Hermann (2017), modeling the plasma as a hot core
+    and a cooler corona. This helps reduce bias for high-Z elements
+    emitting from outer shells.
+    """
+
+    def __init__(
+        self,
+        T_core: float,
+        T_corona: float,
+        n_e: float,
+        species: dict[str, float],
+        T_g: float | None = None,
+        pressure: float | None = None,
+    ):
+        """
+        Initialize two-region plasma.
+
+        Parameters
+        ----------
+        T_core : float
+            Core temperature in K
+        T_corona : float
+            Corona temperature in K
+        n_e : float
+            Electron density in cm^-3
+        species : dict[str, float]
+            Element number densities in cm^-3
+        T_g : float, optional
+            Gas temperature in K
+        pressure : float, optional
+            Pressure in atm
+        """
+        super().__init__(T_core, n_e, species, T_g, pressure)
+        self.T_core = T_core
+        self.T_corona = T_corona
+        logger.info(
+            f"Created TwoRegionPlasma: T_core={T_core:.1f} K, T_corona={T_corona:.1f} K, "
+            f"n_e={n_e:.2e} cm^-3"
+        )
+
+    def validate(self) -> bool:
+        """Validate two-region plasma state."""
+        super().validate()
+        if self.T_corona <= 0:
+            raise ValueError("Corona temperature must be positive")
+        if self.T_corona > self.T_core:
+            logger.warning(
+                f"Unphysical temperature gradient: T_corona ({self.T_corona:.1f} K) "
+                f"> T_core ({self.T_core:.1f} K)"
+            )
+        return True

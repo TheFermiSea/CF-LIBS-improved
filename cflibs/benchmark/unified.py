@@ -132,15 +132,17 @@ def _run_boltzmann_pipeline_lazy(
     fit_method: Any,
     closure_mode: str,
     elements: Optional[List[str]] = None,
-    weighting: Optional[str] = None,
+    **kwargs: Any,
 ) -> Optional[Dict[str, float]]:
+    if "weighting" in kwargs:
+        kwargs["weighting"] = _validate_boltzmann_weighting(kwargs["weighting"])
     return _load_repo_script_module("run_comprehensive_benchmark").run_boltzmann_pipeline(
         spectrum,
         db=db,
         fit_method=fit_method,
         closure_mode=closure_mode,
         elements=elements,
-        weighting=_validate_boltzmann_weighting(weighting),
+        **kwargs,
     )
 
 
@@ -1110,6 +1112,11 @@ def _fit_iterative_pipeline(
         if not elements:
             raise ValueError("No candidate elements available for iterative composition workflow")
         with AtomicDatabase(str(_context.db_path)) as db:
+            # Extract solver-specific parameters from config (e.g., two_region)
+            solver_kwargs = {
+                k: v for k, v in config.items() if k not in {"fit_method", "closure_mode"}
+            }
+            solver_kwargs["weighting"] = weighting
             result = _run_boltzmann_pipeline_lazy(
                 {
                     "wavelength": spectrum.wavelength_nm,
@@ -1120,11 +1127,18 @@ def _fit_iterative_pipeline(
                 fit_method=config["fit_method"],
                 closure_mode=str(config["closure_mode"]),
                 elements=elements,
-                weighting=weighting,
+                **solver_kwargs,
             )
         if result is None:
             raise RuntimeError("Iterative composition workflow failed")
-        return {"concentrations": result}
+
+        closure_mode = str(config["closure_mode"])
+        prediction = {"concentrations": result}
+        if closure_mode == "dirichlet_residual":
+            total_conc = sum(result.values())
+            prediction["gamma_residual"] = float(max(0.0, 1.0 - total_conc))
+
+        return prediction
 
     return predictor
 
@@ -1176,6 +1190,17 @@ def build_composition_workflow_registry(quick: bool = False) -> Dict[str, Compos
     iterative_configs = [
         {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard", "weighting": weighting},
         {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr", "weighting": weighting},
+        {
+            "fit_method": FitMethod.SIGMA_CLIP,
+            "closure_mode": "dirichlet_residual",
+            "weighting": weighting,
+        },
+        {
+            "fit_method": FitMethod.SIGMA_CLIP,
+            "closure_mode": "standard",
+            "two_region": True,
+            "weighting": weighting,
+        },
     ]
     if not quick:
         iterative_configs.extend(
