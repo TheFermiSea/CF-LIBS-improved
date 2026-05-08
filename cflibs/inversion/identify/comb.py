@@ -97,16 +97,17 @@ class CombIdentifier:
         resolving_power: Optional[float] = None,
         baseline_window_nm: float = 10.0,
         threshold_percentile: float = 85.0,
-        min_correlation: float = 0.10,
+        min_correlation: float = 0.05,
         tooth_activation_threshold: float = 0.5,
+        min_active_teeth: int = 2,
         max_shift_pts: int = 5,
         min_width_pts: int = 5,
         max_width_factor: float = 1.0,
-        relative_threshold_scale: float = 1.5,
+        relative_threshold_scale: float = 1.2,
         elements: Optional[List[str]] = None,
         max_lines_per_element: int = 50,
         reference_temperature: float = 10000.0,
-        min_aki_gk: float = 1e4,
+        min_aki_gk: float = 5e3,
     ):
         self.atomic_db = atomic_db
         self.resolving_power = resolving_power
@@ -116,6 +117,7 @@ class CombIdentifier:
         self.tooth_activation_threshold = (
             tooth_activation_threshold  # per-tooth threshold (paper: 0.5)
         )
+        self.min_active_teeth = min_active_teeth
         self.max_shift_pts = max_shift_pts
         self.min_width_pts = min_width_pts
         self.max_width_factor = max_width_factor
@@ -291,7 +293,8 @@ class CombIdentifier:
             element_teeth[element] = teeth
 
             # Create ElementIdentification
-            detected = fingerprint >= self.min_correlation
+            n_active_teeth = sum(1 for t in teeth if t["active"])
+            detected = fingerprint >= self.min_correlation and n_active_teeth >= self.min_active_teeth
             element_id = ElementIdentification(
                 element=element,
                 detected=detected,
@@ -303,7 +306,7 @@ class CombIdentifier:
                 unmatched_lines=unmatched_lines,
                 metadata={
                     "fingerprint": fingerprint,
-                    "n_active_teeth": sum(1 for t in teeth if t["active"]),
+                    "n_active_teeth": n_active_teeth,
                     "n_total_teeth": len(teeth),
                 },
             )
@@ -660,9 +663,9 @@ class CombIdentifier:
         """
         Compute fingerprint as coverage-penalized mean correlation.
 
-        Score = sum(active correlations) / total teeth count.
-        This penalizes elements with few active teeth out of many total,
-        preventing false positives when only a handful of lines match noise.
+        Score = sum(active correlations) / denominator.
+        The denominator is capped to avoid over-penalizing elements with many
+        potential lines (like trace elements in a dense database).
 
         Parameters
         ----------
@@ -679,7 +682,9 @@ class CombIdentifier:
         active_teeth = [t for t in teeth if t["active"]]
         if not active_teeth:
             return 0.0
-        # Sum of active correlations divided by TOTAL teeth count
+        # Sum of active correlations divided by capped teeth count
         total_correlation = sum(t["best_correlation"] for t in active_teeth)
-        fingerprint = total_correlation / len(teeth)
+        # Cap denominator at 10 to improve recall for trace elements
+        denominator = min(len(teeth), 10)
+        fingerprint = total_correlation / denominator
         return fingerprint
