@@ -39,7 +39,11 @@ _ATTRIBUTE_EXPORT_GROUPS = {
         "ilr_transform",
         "ilr_inverse",
     ],
-    "cflibs.inversion.solve.iterative": ["IterativeCFLIBSSolver", "CFLIBSResult"],
+    "cflibs.inversion.solve.iterative": [
+        "IterativeCFLIBSSolver",
+        "IterativeCFLIBSSolverJax",
+        "CFLIBSResult",
+    ],
     "cflibs.inversion.solve.closed_form": ["ClosedFormILRSolver", "ClosedFormConfig"],
     "cflibs.inversion.physics.quality": [
         "QualityMetrics",
@@ -235,6 +239,7 @@ __all__ = [
     "ilr_transform",
     "ilr_inverse",
     "IterativeCFLIBSSolver",
+    "IterativeCFLIBSSolverJax",
     "CFLIBSResult",
     "ClosedFormILRSolver",
     "ClosedFormConfig",

@@ -252,7 +252,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--composition-workflows",
         nargs="*",
         default=None,
-        help="Composition workflows to run. Defaults to all available workflows.",
+        help=(
+            "Composition workflows to run. Defaults to all available "
+            "workflows. Available: iterative (numpy CF-LIBS), "
+            "iterative_jax (GPU-accelerated CF-LIBS via JAX, falls back "
+            "to numpy when IterativeCFLIBSSolverJax/JAX unavailable), "
+            "bayesian (NumPyro NUTS over the JAX forward model — "
+            "exercises GPU when JAX_PLATFORMS=cuda is set; emits "
+            "rhat/ess/divergent_transitions/psis_loo posterior "
+            "diagnostics), joint_softmax, hybrid_manifold."
+        ),
     )
     parser.add_argument(
         "--quick",
