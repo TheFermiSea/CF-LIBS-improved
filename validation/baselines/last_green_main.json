@@ -1,0 +1,33 @@
+{
+  "schema_version": "0.1.0",
+  "computed_at": "2026-05-08T01:18:00Z",
+  "source": "median-of-medians across 5 most-recent comprehensive_results.json on vasp-03 NFS (commits 5aa5611, a5b892a, 24e1e83, a8260cd, a374e3b — all dev-tip benchmark dispatches between 2026-05-07T17:36 and 18:48 UTC)",
+  "n_source_runs": 5,
+  "notes": "Initial bootstrap baseline for the Aitchison-d_A delta gate (Milestone A, 2026-05-08). All 6 comprehensive-runner pipelines currently produce identical median d_A = 4.0003 — a fixed point from deterministic synthetic compositions. Subsequent PRs will be measured against this baseline; any PR that perturbs a pipeline's median (in either direction) will surface as 'improved' or 'regressed' in the gate output. Initial run is in advisory mode (cfg.advisory_mode=true) — d_A regressions warn but do not block until the empirical noise distribution stabilises (target: ≥16 PRs across ≥2 datasets, MAD < 0.5× median). Promotion is currently MANUAL — automate via scripts/promote-baseline.py (deferred from Milestone A scope).",
+  "per_dataset": {
+    "pipeline:HUBER+ilr": {
+      "median_d_a": 4.00031940507848,
+      "n_runs_aggregated": 5
+    },
+    "pipeline:HUBER+standard": {
+      "median_d_a": 4.00031940507848,
+      "n_runs_aggregated": 5
+    },
+    "pipeline:RANSAC+ilr": {
+      "median_d_a": 4.00031940507848,
+      "n_runs_aggregated": 5
+    },
+    "pipeline:RANSAC+standard": {
+      "median_d_a": 4.00031940507848,
+      "n_runs_aggregated": 5
+    },
+    "pipeline:SIGMA_CLIP+ilr": {
+      "median_d_a": 4.00031940507848,
+      "n_runs_aggregated": 5
+    },
+    "pipeline:SIGMA_CLIP+standard": {
+      "median_d_a": 4.00031940507848,
+      "n_runs_aggregated": 5
+    }
+  }
+}
