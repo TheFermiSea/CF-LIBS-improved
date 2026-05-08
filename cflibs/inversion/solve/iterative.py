@@ -110,6 +110,7 @@ class IterativeCFLIBSSolver:
         ne_tolerance_frac: float = 0.1,
         pressure_pa: float = STP_PRESSURE,
         apply_ipd: bool = False,
+        aki_uncertainty_weighting: bool = True,
         two_region: bool = False,
     ):
         self.atomic_db = atomic_db
@@ -118,8 +119,17 @@ class IterativeCFLIBSSolver:
         self.ne_tolerance_frac = ne_tolerance_frac
         self.pressure_pa = pressure_pa
         self.apply_ipd = apply_ipd
+        self.aki_uncertainty_weighting = aki_uncertainty_weighting
         self.two_region = two_region
         self.boltzmann_fitter = BoltzmannPlotFitter(outlier_sigma=2.5)
+
+    def _line_y_uncertainty(self, obs: LineObservation) -> float:
+        """Return fit-space uncertainty with optional A_ki contribution."""
+        sigma_y = obs.y_uncertainty
+        unc = obs.aki_uncertainty
+        if self.aki_uncertainty_weighting and unc is not None and np.isfinite(unc) and unc > 0:
+            sigma_y = float(np.sqrt(sigma_y**2 + float(unc) ** 2))
+        return sigma_y
 
     def _evaluate_partition_function(
         self, element: str, ionization_stage: int, T_K: float
@@ -306,8 +316,9 @@ class IterativeCFLIBSSolver:
 
             xs = np.array([o.E_k_ev for o in obs_list], dtype=float)
             ys = np.array([o.y_value for o in obs_list], dtype=float)
+            y_uncertainties = np.array([self._line_y_uncertainty(o) for o in obs_list])
             ws = np.array(
-                [1.0 / o.y_uncertainty**2 if o.y_uncertainty > 0 else 1.0 for o in obs_list],
+                [1.0 / sigma_y**2 if sigma_y > 0 else 1.0 for sigma_y in y_uncertainties],
                 dtype=float,
             )
 

@@ -50,6 +50,15 @@ from cflibs.plasma.state import SingleZoneLTEPlasma  # noqa: E402
 from cflibs.instrument.model import InstrumentModel  # noqa: E402
 
 logger = get_logger("comprehensive_benchmark")
+SUPPORTED_WEIGHTINGS = {None, "aki_inverse_variance", "intensity_only"}
+
+
+def _use_aki_uncertainty_weighting(weighting: Optional[str]) -> bool:
+    if weighting not in SUPPORTED_WEIGHTINGS:
+        allowed = ", ".join(sorted(w for w in SUPPORTED_WEIGHTINGS if w is not None))
+        raise ValueError(f"Unsupported weighting={weighting!r}; expected one of: {allowed}")
+    return weighting != "intensity_only"
+
 
 # ============================================================================
 # Known compositions for real samples
@@ -306,6 +315,8 @@ def run_boltzmann_pipeline(
     fit_method: FitMethod = FitMethod.SIGMA_CLIP,
     closure_mode: str = "standard",
     elements: Optional[List[str]] = None,
+    weighting: Optional[str] = None,
+    **solver_kwargs,
 ) -> Optional[Dict[str, float]]:
     """Run full CF-LIBS pipeline: peak detect → DB match → Boltzmann → closure.
 
@@ -319,6 +330,7 @@ def run_boltzmann_pipeline(
         return None
     if elements is None:
         elements = list(gt.keys())
+    aki_uncertainty_weighting = _use_aki_uncertainty_weighting(weighting)
 
     try:
         # 1. Detect peaks
@@ -332,7 +344,11 @@ def run_boltzmann_pipeline(
             return None
 
         # 3. Run iterative solver
-        solver = IterativeCFLIBSSolver(atomic_db=db)
+        solver = IterativeCFLIBSSolver(
+            atomic_db=db,
+            aki_uncertainty_weighting=aki_uncertainty_weighting,
+            **solver_kwargs,
+        )
         result = solver.solve(observations, closure_mode=closure_mode)
 
         if result is not None and result.concentrations:
@@ -357,7 +373,7 @@ def run_boltzmann_pipeline(
             el_obs = [o for o in observations if o.element == el]
             if len(el_obs) < 2:
                 continue
-            fit = fitter.fit(el_obs)
+            fit = fitter.fit(el_obs, aki_uncertainty_weighting=aki_uncertainty_weighting)
             if fit.temperature_K > 0 and np.isfinite(fit.temperature_K):
                 temperatures.append(fit.temperature_K)
                 element_intercepts[el] = fit.intercept

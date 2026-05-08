@@ -114,6 +114,18 @@ def _load_real_spectra_lazy(data_dir: Path) -> List[Dict[str, Any]]:
     return _load_repo_script_module("run_comprehensive_benchmark").load_real_spectra(data_dir)
 
 
+SUPPORTED_BOLTZMANN_WEIGHTINGS = {None, "aki_inverse_variance", "intensity_only"}
+
+
+def _validate_boltzmann_weighting(weighting: Optional[str]) -> Optional[str]:
+    if weighting not in SUPPORTED_BOLTZMANN_WEIGHTINGS:
+        allowed = ", ".join(sorted(w for w in SUPPORTED_BOLTZMANN_WEIGHTINGS if w is not None))
+        raise ValueError(
+            f"Unsupported Boltzmann weighting {weighting!r}; expected one of {allowed}"
+        )
+    return weighting
+
+
 def _run_boltzmann_pipeline_lazy(
     spectrum: Dict[str, Any],
     db: Any,
@@ -122,6 +134,8 @@ def _run_boltzmann_pipeline_lazy(
     elements: Optional[List[str]] = None,
     **kwargs: Any,
 ) -> Optional[Dict[str, float]]:
+    if "weighting" in kwargs:
+        kwargs["weighting"] = _validate_boltzmann_weighting(kwargs["weighting"])
     return _load_repo_script_module("run_comprehensive_benchmark").run_boltzmann_pipeline(
         spectrum,
         db=db,
@@ -1085,6 +1099,8 @@ def _fit_iterative_pipeline(
 ) -> Callable[
     [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
 ]:
+    weighting = _validate_boltzmann_weighting(config.get("weighting"))
+
     def predictor(
         spectrum: BenchmarkSpectrum,
         candidate_elements: Sequence[str],
@@ -1100,6 +1116,7 @@ def _fit_iterative_pipeline(
             solver_kwargs = {
                 k: v for k, v in config.items() if k not in {"fit_method", "closure_mode"}
             }
+            solver_kwargs["weighting"] = weighting
             result = _run_boltzmann_pipeline_lazy(
                 {
                     "wavelength": spectrum.wavelength_nm,
@@ -1169,19 +1186,33 @@ def _fit_hybrid_manifold_pipeline(
 def build_composition_workflow_registry(quick: bool = False) -> Dict[str, CompositionWorkflowSpec]:
     from cflibs.inversion.boltzmann import FitMethod
 
+    weighting = _validate_boltzmann_weighting("aki_inverse_variance")
     iterative_configs = [
-        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard"},
-        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr"},
-        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "dirichlet_residual"},
-        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard", "two_region": True},
+        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard", "weighting": weighting},
+        {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "ilr", "weighting": weighting},
+        {
+            "fit_method": FitMethod.SIGMA_CLIP,
+            "closure_mode": "dirichlet_residual",
+            "weighting": weighting,
+        },
+        {
+            "fit_method": FitMethod.SIGMA_CLIP,
+            "closure_mode": "standard",
+            "two_region": True,
+            "weighting": weighting,
+        },
     ]
     if not quick:
         iterative_configs.extend(
             [
-                {"fit_method": FitMethod.RANSAC, "closure_mode": "standard"},
-                {"fit_method": FitMethod.RANSAC, "closure_mode": "ilr"},
-                {"fit_method": FitMethod.HUBER, "closure_mode": "standard"},
-                {"fit_method": FitMethod.HUBER, "closure_mode": "ilr"},
+                {
+                    "fit_method": FitMethod.RANSAC,
+                    "closure_mode": "standard",
+                    "weighting": weighting,
+                },
+                {"fit_method": FitMethod.RANSAC, "closure_mode": "ilr", "weighting": weighting},
+                {"fit_method": FitMethod.HUBER, "closure_mode": "standard", "weighting": weighting},
+                {"fit_method": FitMethod.HUBER, "closure_mode": "ilr", "weighting": weighting},
             ]
         )
 
