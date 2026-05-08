@@ -8,12 +8,13 @@ This module provides:
 - Echellogram extraction for 2D spectral images
 """
 
-from cflibs.instrument.model import InstrumentModel
+from cflibs.instrument.model import InstrumentModel, InstrumentModelJax
 from cflibs.instrument.convolution import apply_instrument_function, apply_instrument_function_jax
 from cflibs.instrument.echelle import EchelleExtractor
 
 __all__ = [
     "InstrumentModel",
+    "InstrumentModelJax",
     "apply_instrument_function",
     "apply_instrument_function_jax",
     "EchelleExtractor",

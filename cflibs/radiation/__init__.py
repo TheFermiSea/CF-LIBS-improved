@@ -16,7 +16,12 @@ from cflibs.radiation.profiles import (
     doppler_width,
     resolving_power_sigma,
 )
-from cflibs.radiation.spectrum_model import SpectrumModel
+from cflibs.radiation.spectrum_model import (
+    SpectrumModel,
+    SpectrumModelJax,
+    planck_radiance,
+    planck_radiance_jax,
+)
 from cflibs.radiation.batch import (
     compute_spectrum_batch,
     compute_spectrum_grid,
@@ -33,6 +38,9 @@ __all__ = [
     "doppler_width",
     "resolving_power_sigma",
     "SpectrumModel",
+    "SpectrumModelJax",
+    "planck_radiance",
+    "planck_radiance_jax",
     "compute_spectrum_batch",
     "compute_spectrum_grid",
     "compute_spectrum_ensemble",
