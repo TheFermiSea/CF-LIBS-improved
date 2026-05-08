@@ -239,9 +239,29 @@ class EvaluationResult:
             f"  Overall RMSEP: {self.overall_rmsep*100:.3f}%",
             f"  Overall MAE: {self.overall_mae*100:.3f}%",
             f"  Overall R^2: {self.overall_r_squared:.3f}",
+        ]
+
+        if self.per_stratum_summary:
+            lines.append("")
+            lines.append("Stratified Composition Summary:")
+            for stratum in ["majors", "minors", "traces"]:
+                if stratum in self.per_stratum_summary:
+                    stats = self.per_stratum_summary[stratum]
+                    status = "PASS" if stats.get("pass") else "FAIL"
+                    mean_rd = stats.get("mean_rd", float("nan"))
+                    median_rd = stats.get("median_rd", float("nan"))
+                    n_spec = stats.get("n_spectra", 0)
+                    n_elem = stats.get("n_elements", 0)
+                    lines.append(
+                        f"  {stratum.capitalize():<7}: {status} (Mean RD={mean_rd*100:5.1f}%, "
+                        f"Median RD={median_rd*100:5.1f}%, P95 RD={stats.get('p95_rd', 0.0)*100:5.1f}%, "
+                        f"n_elems={n_elem:2d}, n_spectra={n_spec:3d})"
+                    )
+
+        lines.extend([
             "",
             "Per-element results:",
-        ]
+        ])
 
         for elem in self.elements:
             lines.append(f"  {self.element_metrics[elem].summary()}")
