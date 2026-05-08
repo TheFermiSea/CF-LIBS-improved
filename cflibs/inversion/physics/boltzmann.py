@@ -89,7 +89,7 @@ class BoltzmannPlotFitter:
         huber_epsilon : float
             Huber loss transition point. Points with standardized residuals
             below this use squared loss; above use linear loss. Default: 1.2
-            (aggression tuned for Aalto benchmark).
+            (stricter than the legacy 1.35 setting).
         """
         self.outlier_sigma = outlier_sigma
         self.max_iterations = max_iterations
@@ -429,6 +429,8 @@ class BoltzmannPlotFitter:
             mad = np.median(residuals_init)
             # Use the instance outlier_sigma for consistency across methods
             threshold = self.outlier_sigma * mad * 1.4826  # Scale MAD to std dev estimate
+            y_scale = max(float(np.max(np.abs(y))), 1.0)
+            threshold = max(threshold, np.finfo(float).eps * y_scale)
 
         best_inliers = None
         best_n_inliers = 0
@@ -452,7 +454,7 @@ class BoltzmannPlotFitter:
 
             # Count inliers
             residuals = np.abs(y - (m * x + c))
-            inliers = residuals < threshold
+            inliers = residuals <= threshold
             n_inliers = np.sum(inliers)
 
             if n_inliers > best_n_inliers:
