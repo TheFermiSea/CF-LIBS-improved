@@ -263,8 +263,14 @@ class CombIdentifier:
             unmatched_lines = []
 
             for trans in transitions:
+                omega_stark = getattr(trans, "omega_stark", 0.0) or 0.0
                 tooth_result = self._correlate_tooth(
-                    wavelength, intensity, baseline, trans.wavelength_nm, threshold
+                    wavelength,
+                    intensity,
+                    baseline,
+                    trans.wavelength_nm,
+                    threshold,
+                    omega_stark=omega_stark,
                 )
                 tooth_result["transition"] = trans
                 teeth.append(tooth_result)
@@ -505,6 +511,7 @@ class CombIdentifier:
         baseline: np.ndarray,
         center_nm: float,
         threshold: float,
+        omega_stark: float = 0.0,
     ) -> dict:
         """
         Correlate triangular template with spectral data at a given wavelength.
@@ -537,9 +544,16 @@ class CombIdentifier:
         dwl = np.median(np.diff(wavelength))
         # Derive resolution from resolving power if available, else fallback
         if self.resolving_power:
-            resolution_nm = center_nm / self.resolving_power
+            fwhm_inst = center_nm / self.resolving_power
         else:
-            resolution_nm = 0.1
+            fwhm_inst = 0.1
+
+        # Stark-aware tolerance: sqrt(fwhm_inst**2 + omega_stark**2)
+        if omega_stark > 0:
+            resolution_nm = math.sqrt(fwhm_inst**2 + omega_stark**2)
+        else:
+            resolution_nm = 0.05  # fallback_fixed
+
         max_width_pts = int((resolution_nm * self.max_width_factor) / dwl)
         max_width_pts = max(self.min_width_pts, max_width_pts)
 

@@ -613,9 +613,21 @@ class CorrelationIdentifier:
         # Build candidate matches: (distance, peak_idx, trans_idx)
         candidates = []
         for t_idx, trans in enumerate(transitions):
+            # Stark-aware tolerance: sqrt(fwhm_inst**2 + omega_stark**2)
+            if self.resolving_power:
+                fwhm_inst = trans.wavelength_nm / self.resolving_power
+            else:
+                fwhm_inst = self.instrument_fwhm_nm
+
+            omega_stark = getattr(trans, "omega_stark", 0.0) or 0.0
+            if omega_stark > 0:
+                tolerance = math.sqrt(fwhm_inst**2 + omega_stark**2)
+            else:
+                tolerance = 0.05  # fallback_fixed
+
             distances = np.abs(peak_wavelengths - trans.wavelength_nm)
             for p_idx in range(len(peak_wavelengths)):
-                if distances[p_idx] <= self.wavelength_tolerance_nm:
+                if distances[p_idx] <= tolerance:
                     candidates.append((distances[p_idx], p_idx, t_idx))
 
         # Greedy one-to-one: sort by distance, assign first-come
