@@ -100,13 +100,13 @@ class CombIdentifier:
         resolving_power: Optional[float] = None,
         baseline_window_nm: float = 10.0,
         threshold_percentile: float = 85.0,
-        min_correlation: float = 0.05,
+        min_correlation: float = 0.10,
         tooth_activation_threshold: float = 0.5,
         min_active_teeth: int = 2,
         max_shift_pts: int = 5,
         min_width_pts: int = 5,
         max_width_factor: float = 1.0,
-        relative_threshold_scale: float = 1.2,
+        relative_threshold_scale: float = 1.5,
         elements: Optional[List[str]] = None,
         max_lines_per_element: int = 50,
         reference_temperature: float = 10000.0,
@@ -212,6 +212,7 @@ class CombIdentifier:
                 "baseline_window_nm": self.baseline_window_nm,
                 "threshold_percentile": self.threshold_percentile,
                 "min_correlation": self.min_correlation,
+                "relative_threshold_scale": self.relative_threshold_scale,
                 "max_shift_pts": float(self.max_shift_pts),
                 "min_width_pts": float(self.min_width_pts),
                 "max_width_factor": self.max_width_factor,
@@ -302,9 +303,17 @@ class CombIdentifier:
 
             # Create ElementIdentification
             n_active_teeth = sum(1 for t in teeth if t["active"])
-            detected = (
-                fingerprint >= self.min_correlation and n_active_teeth >= self.min_active_teeth
-            )
+
+            # Tier-2 elements (Mn, Na, K) often show low SNR and crowded lines.
+            # We tighten thresholds and require more line confirmations (N>=3)
+            # to reduce false positives while keeping detections robust.
+            min_corr = self.min_correlation
+            min_teeth = self.min_active_teeth
+            if element in {"Mn", "Na", "K"}:
+                min_corr = max(min_corr, 0.12)
+                min_teeth = max(min_teeth, 3)
+
+            detected = fingerprint >= min_corr and n_active_teeth >= min_teeth
             element_id = ElementIdentification(
                 element=element,
                 detected=detected,
