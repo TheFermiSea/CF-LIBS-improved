@@ -176,6 +176,11 @@ REFERENCE_STARK_WIDTHS = {
 }
 
 
+def _has_column(cur: sqlite3.Cursor, table: str, col: str) -> bool:
+    cur.execute(f"PRAGMA table_info({table})")
+    return any(row[1] == col for row in cur.fetchall())
+
+
 def populate_stark_widths(db_path: Path, dry_run: bool = False) -> dict[str, int]:
     """Populate stark_w, stark_alpha, stark_shift columns in the lines table.
 
@@ -184,9 +189,26 @@ def populate_stark_widths(db_path: Path, dry_run: bool = False) -> dict[str, int
 
     for each line where the (element, sp_num) has a reference entry.
 
+    Provenance: when ``stark_w_source`` exists in the schema (post
+    ``scripts/migrate_add_broadening_columns.py``), this function
+
+      * leaves rows that already have ``stark_w_source = "stark_b"``
+        (line-specific literature value) untouched,
+      * sets ``stark_w_source = "konjevic_lambda_sq_scaled"`` on every
+        row it writes, AND on rows where ``stark_w_source IS NULL`` even
+        if ``stark_w`` was already populated by the legacy run of this
+        same script.
+
     Returns a stats dict: {populated, skipped, total}.
     """
-    stats = {"populated": 0, "skipped": 0, "total": 0, "elements_covered": 0}
+    stats = {
+        "populated": 0,
+        "skipped": 0,
+        "total": 0,
+        "elements_covered": 0,
+        "preserved_stark_b": 0,
+        "tagged_lambda_sq": 0,
+    }
     if not db_path.exists():
         raise FileNotFoundError(f"Database not found: {db_path}")
 
@@ -195,20 +217,33 @@ def populate_stark_widths(db_path: Path, dry_run: bool = False) -> dict[str, int
     cur.execute("SELECT COUNT(*) FROM lines")
     stats["total"] = cur.fetchone()[0]
 
+    has_source_col = _has_column(cur, "lines", "stark_w_source")
+
     elements_present: set[str] = set()
     for (elem, ion_stage), (w_ref_pm, lambda_ref_nm, alpha, d_over_w) in REFERENCE_STARK_WIDTHS.items():
-        cur.execute(
-            "SELECT id, wavelength_nm FROM lines WHERE element = ? AND sp_num = ?",
-            (elem, ion_stage),
-        )
+        # If provenance column exists, also fetch it to skip stark_b rows.
+        if has_source_col:
+            cur.execute(
+                "SELECT id, wavelength_nm, stark_w_source FROM lines WHERE element = ? AND sp_num = ?",
+                (elem, ion_stage),
+            )
+        else:
+            cur.execute(
+                "SELECT id, wavelength_nm, NULL FROM lines WHERE element = ? AND sp_num = ?",
+                (elem, ion_stage),
+            )
         rows = cur.fetchall()
         if not rows:
             stats["skipped"] += 0  # not counted as skip; just no lines for this ion
             continue
         elements_present.add(f"{elem} {ion_stage}")
-        for line_id, wl in rows:
+        for line_id, wl, source in rows:
             if wl is None or wl <= 0:
                 stats["skipped"] += 1
+                continue
+            if source == "stark_b":
+                # Preserve line-specific literature value; do not overwrite.
+                stats["preserved_stark_b"] += 1
                 continue
             # Quadratic Stark scaling: w(λ) ≈ w_ref × (λ/λ_ref)^2
             scale = (wl / lambda_ref_nm) ** 2
@@ -218,11 +253,27 @@ def populate_stark_widths(db_path: Path, dry_run: bool = False) -> dict[str, int
             w_nm = w_pm * 1.0e-3
             shift_nm = shift_pm * 1.0e-3
             if not dry_run:
-                cur.execute(
-                    "UPDATE lines SET stark_w = ?, stark_alpha = ?, stark_shift = ? WHERE id = ?",
-                    (w_nm, alpha, shift_nm, line_id),
-                )
+                if has_source_col:
+                    cur.execute(
+                        "UPDATE lines SET stark_w = ?, stark_alpha = ?, "
+                        "stark_shift = ?, stark_w_source = ? WHERE id = ?",
+                        (w_nm, alpha, shift_nm, "konjevic_lambda_sq_scaled", line_id),
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE lines SET stark_w = ?, stark_alpha = ?, stark_shift = ? WHERE id = ?",
+                        (w_nm, alpha, shift_nm, line_id),
+                    )
             stats["populated"] += 1
+            stats["tagged_lambda_sq"] += 1
+
+    # Backfill provenance for any pre-existing stark_w that is still
+    # NULL-sourced — the audit shows PR #99 left these unlabelled.
+    if has_source_col and not dry_run:
+        cur.execute(
+            "UPDATE lines SET stark_w_source = 'konjevic_lambda_sq_scaled' "
+            "WHERE stark_w IS NOT NULL AND stark_w_source IS NULL"
+        )
 
     if not dry_run:
         conn.commit()
