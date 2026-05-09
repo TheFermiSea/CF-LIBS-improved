@@ -131,7 +131,9 @@ class ElementIdentificationResult:
     warnings: List[str] = field(default_factory=list)
 
 
-def to_line_observations(result: ElementIdentificationResult) -> List[LineObservation]:
+def to_line_observations(
+    result: ElementIdentificationResult, min_intensity_floor: Optional[float] = None
+) -> List[LineObservation]:
     """
     Convert ElementIdentificationResult to LineObservation list for Boltzmann/solver pipeline.
 
@@ -141,6 +143,9 @@ def to_line_observations(result: ElementIdentificationResult) -> List[LineObserv
     ----------
     result : ElementIdentificationResult
         Element identification result to convert
+    min_intensity_floor : float, optional
+        Minimum intensity floor for uncertainty calculation. If not provided,
+        uses the value from result.parameters['min_intensity_floor'] or 1e-6.
 
     Returns
     -------
@@ -149,6 +154,9 @@ def to_line_observations(result: ElementIdentificationResult) -> List[LineObserv
     """
     observations = []
     seen = set()
+
+    if min_intensity_floor is None:
+        min_intensity_floor = result.parameters.get("min_intensity_floor", 1e-6)
 
     for element_id in result.detected_elements:
         for line in element_id.matched_lines:
@@ -162,8 +170,8 @@ def to_line_observations(result: ElementIdentificationResult) -> List[LineObserv
                 continue
             seen.add(key)
 
-            # Create LineObservation with 2% intensity uncertainty floor at 1e-6
-            intensity_uncertainty = max(line.intensity_exp * 0.02, 1e-6)
+            # Create LineObservation with 2% intensity uncertainty floor
+            intensity_uncertainty = max(line.intensity_exp * 0.02, min_intensity_floor)
 
             obs = LineObservation(
                 wavelength_nm=line.wavelength_th_nm,
