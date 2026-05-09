@@ -7,9 +7,34 @@ Two computation methods are provided:
    levels from the atomic database, with plasma-truncated cutoff at
    E_max = IP - Δχ(nₑ, T).  Based on Alimohamadi & Ferland (2022, PASP 134).
 
-2. **Polynomial** (legacy): log U = Σ aₙ (log T)ⁿ (Irwin 1981 form).  Retained
-   for backward compatibility but NOT recommended — errors up to 66% for some
-   species.
+2. **Polynomial** (Irwin 1981 form, NATURAL-LOG basis): the implementation
+   evaluates::
+
+       ln U(T) = a0 + a1·ln T + a2·(ln T)² + a3·(ln T)³ + a4·(ln T)⁴
+
+   i.e. a 4th-order polynomial in ``ln T`` whose value is ``ln U``.  This is
+   mathematically equivalent to Irwin (1981 ApJS 45 621) once a basis change
+   ``log10 ↔ ln`` is applied to the coefficients — Irwin tabulated his fits
+   in ``log10 T``/``log10 U``, but the present code stores natural-log
+   coefficients (per the historical NIST-ASD-fit convention used by this
+   project).  When ingesting Irwin's published Table II coefficients, run
+   them through :func:`irwin_log10_to_ln_coeffs` first.
+
+   Stored in ``partition_functions`` (a0..a4, t_min, t_max, source).  Less
+   accurate than direct summation when energy levels are available
+   (errors up to 66 % for some species) — use only as a fallback when the
+   ``energy_levels`` table is missing rows for a species.
+
+Historical note (2026-05-09 fix): the previous docstring ambiguously said
+"log U = Σ aₙ (log T)ⁿ" without specifying base.  The implementation has
+always used natural log (``np.log``), and the 13 partition_functions rows
+in the production DB at the time of audit were fit to that convention.
+The 30–60 % poly-vs-direct-sum discrepancy noted in the audit was caused
+by *stale fit data* (the polynomial coefficients were fit against an
+older energy_levels snapshot than the one currently in the DB), not by a
+math/convention mismatch.  Re-fitting from the current EL table — which
+is what :mod:`scripts.populate_partition_functions` does — restores the
+consistency.
 """
 
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -332,21 +357,34 @@ def get_levels_for_species(
 
 def polynomial_partition_function(T_K: float, coefficients: List[float]) -> float:
     """
-    Evaluate partition function using Irwin polynomial form.
+    Evaluate partition function using the Irwin (1981) polynomial form,
+    *natural-log basis*.
 
-    log(U) = sum(a_n * (log T)^n)
+    The function evaluates::
+
+        ln U(T) = Σ_{n=0..4} a_n · (ln T)^n
+
+    Note: the polynomial argument is the **natural** logarithm of T, and
+    the polynomial value is the **natural** logarithm of U.  Irwin's
+    published Table II uses base-10 logs; convert his coefficients with
+    :func:`irwin_log10_to_ln_coeffs` before storing them as ``a_n`` here.
 
     Parameters
     ----------
     T_K : float
         Temperature in Kelvin
     coefficients : List[float]
-        Polynomial coefficients [a0, a1, a2, a3, a4]
+        Polynomial coefficients [a0, a1, a2, a3, a4], natural-log basis.
 
     Returns
     -------
     float
-        Partition function value U(T)
+        Partition function value U(T) = exp(Σ a_n (ln T)^n).
+
+    See Also
+    --------
+    irwin_log10_to_ln_coeffs : Convert log10-basis Irwin coefficients
+        to the natural-log basis used here.
     """
     if T_K <= 1.0:
         return 1.0
@@ -358,6 +396,37 @@ def polynomial_partition_function(T_K: float, coefficients: List[float]) -> floa
         ln_U += a * (ln_T**i)
 
     return np.exp(ln_U)
+
+
+def irwin_log10_to_ln_coeffs(b: List[float]) -> List[float]:
+    """Convert Irwin-style (log10/log10) coefficients to natural-log basis.
+
+    If Irwin tabulates::
+
+        log10 U(T) = Σ_{n=0..4} b_n · (log10 T)^n
+
+    then because ln x = ln(10)·log10 x, the equivalent natural-log
+    expansion ``ln U = Σ a_n (ln T)^n`` has::
+
+        a_n = ln(10)^(1-n) · b_n
+
+    Apply this once per published Irwin row before storing into the
+    ``partition_functions`` table (whose stored a_n are natural-log).
+
+    Parameters
+    ----------
+    b : list of float
+        Irwin (1981) Table II coefficients [b0, b1, b2, b3, b4]
+        in the log10 basis.
+
+    Returns
+    -------
+    list of float
+        Equivalent coefficients [a0, a1, a2, a3, a4] in the natural-log
+        basis, suitable for direct insertion into ``partition_functions``.
+    """
+    ln10 = float(np.log(10.0))
+    return [bn * ln10 ** (1 - n) for n, bn in enumerate(b)]
 
 
 if HAS_JAX:
