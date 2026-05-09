@@ -689,9 +689,42 @@ class UnifiedBenchmarkContext:
         return self._basis_cache[cache_key], selected_fwhm, abs(selected_fwhm - target_fwhm)
 
 
+def _class_default_config(
+    cls: Any, keys: Sequence[str]
+) -> Dict[str, Any]:
+    """Pull keyword defaults from ``cls.__init__`` signature.
+
+    Used by the workflow-config grids so that architect-modified class
+    defaults flow into ``tune_id_workflow``'s grid search. Without this,
+    ``_build_alias_predictor`` (and siblings) pass explicit grid values
+    that override the defaults — diagnosed 2026-05-09 from PRs #101-#108
+    when architect default-changes had no observable effect on benchmark
+    predictions because the explicit grid bypassed them.
+    """
+    import inspect
+    try:
+        sig = inspect.signature(cls.__init__)
+    except (TypeError, ValueError):
+        return {}
+    out: Dict[str, Any] = {}
+    for k in keys:
+        param = sig.parameters.get(k)
+        if param is None or param.default is inspect.Parameter.empty:
+            continue
+        out[k] = param.default
+    return out
+
+
 def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
+    from cflibs.inversion.alias_identifier import ALIASIdentifier
+    arch_defaults = _class_default_config(
+        ALIASIdentifier,
+        ("detection_threshold", "intensity_threshold_factor",
+         "chance_window_scale", "max_lines_per_element"),
+    )
     if quick:
         return [
+            arch_defaults,
             {
                 "detection_threshold": 0.03,
                 "intensity_threshold_factor": 3.0,
@@ -705,7 +738,7 @@ def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
                 "max_lines_per_element": 30,
             },
         ]
-    configs: List[Dict[str, Any]] = []
+    configs: List[Dict[str, Any]] = [arch_defaults]
     for dt in [0.02, 0.03, 0.05]:
         for itf in [3.0, 3.5]:
             for cws in [0.3, 0.4]:
@@ -721,15 +754,22 @@ def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
 
 
 def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
+    from cflibs.inversion.comb_identifier import CombIdentifier
+    arch_defaults = _class_default_config(
+        CombIdentifier,
+        ("min_correlation", "tooth_activation_threshold",
+         "relative_threshold_scale"),
+    )
     if quick:
         return [
+            arch_defaults,
             {
                 "min_correlation": 0.08,
                 "tooth_activation_threshold": 0.35,
                 "relative_threshold_scale": 1.4,
-            }
+            },
         ]
-    configs: List[Dict[str, Any]] = []
+    configs: List[Dict[str, Any]] = [arch_defaults]
     for min_correlation in [0.05, 0.08]:
         for tooth_activation_threshold in [0.30, 0.35, 0.40]:
             for relative_threshold_scale in [1.2, 1.4]:
@@ -744,11 +784,17 @@ def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
 
 
 def _correlation_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
+    from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+    arch_defaults = _class_default_config(
+        CorrelationIdentifier,
+        ("min_confidence", "relative_threshold_scale", "min_line_strength"),
+    )
     if quick:
         return [
-            {"min_confidence": 0.008, "relative_threshold_scale": 1.2, "min_line_strength": 1000.0}
+            arch_defaults,
+            {"min_confidence": 0.008, "relative_threshold_scale": 1.2, "min_line_strength": 1000.0},
         ]
-    configs: List[Dict[str, Any]] = []
+    configs: List[Dict[str, Any]] = [arch_defaults]
     for min_confidence in [0.005, 0.008, 0.015]:
         for threshold_scale in [1.0, 1.2]:
             configs.append(
