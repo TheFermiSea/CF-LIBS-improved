@@ -1293,6 +1293,29 @@ def _fit_bayesian_pipeline(
     at predictor build time so the benchmark report shows an explicit
     failure for that workflow rather than silently regressing.
     """
+    if HAS_JAX and HAS_NUMPYRO:
+        import jax
+        import numpyro
+
+        # Ensure we use GPU if available; NumPyro sometimes defaults to CPU
+        # even if JAX sees the GPU unless explicitly pinned.
+        try:
+            numpyro.set_platform("gpu")
+        except Exception as e:
+            logger.debug("NumPyro GPU pinning failed (falling back to JAX default): %s", e)
+
+        # Match iterative_jax fix (PR #269) for numerical stability
+        jax.config.update("jax_enable_x64", True)
+
+        # If running multiple chains, NumPyro needs to know how many devices
+        # to use for parallelism (mostly relevant for CPU fallback).
+        num_chains = int(config.get("num_chains", 1))
+        if num_chains > 1:
+            try:
+                numpyro.set_host_device_count(num_chains)
+            except Exception as e:
+                logger.debug("Failed to set host device count: %s", e)
+
     if not HAS_JAX or not HAS_NUMPYRO:
         missing = []
         if not HAS_JAX:
@@ -1368,15 +1391,37 @@ def _fit_bayesian_pipeline(
             prior_config=PriorConfig(),
             noise_params=NoiseParameters(),
         )
-        result = sampler.run(
-            obs,
-            num_warmup=num_warmup,
-            num_samples=num_samples,
-            num_chains=num_chains,
-            seed=seed,
-            target_accept_prob=target_accept_prob,
-            progress_bar=False,
-        )
+
+        # Explicitly use GPU device context if available to ensure NUTS
+        # gradient evaluations don't fall back to CPU.
+        import jax
+
+        try:
+            gpu_device = jax.devices("gpu")[0]
+        except (RuntimeError, IndexError):
+            gpu_device = None
+
+        if gpu_device:
+            with jax.default_device(gpu_device):
+                result = sampler.run(
+                    obs,
+                    num_warmup=num_warmup,
+                    num_samples=num_samples,
+                    num_chains=num_chains,
+                    seed=seed,
+                    target_accept_prob=target_accept_prob,
+                    progress_bar=False,
+                )
+        else:
+            result = sampler.run(
+                obs,
+                num_warmup=num_warmup,
+                num_samples=num_samples,
+                num_chains=num_chains,
+                seed=seed,
+                target_accept_prob=target_accept_prob,
+                progress_bar=False,
+            )
 
         # Posterior mean concentrations -> point-estimate composition
         concentrations = {
