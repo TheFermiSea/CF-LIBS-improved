@@ -68,6 +68,15 @@ class HybridIdentifier:
     require_both : bool
         If True (default), element must pass BOTH stages.
         If False, element passes if it passes EITHER stage (union mode).
+    quorum_threshold : int
+        Number of identifiers that must agree for detection (default 2).
+        Used when multiple identifiers are active (Alias, Comb, Correlation).
+    mode : str
+        Identification mode: 'quorum' (default) or 'union'.
+    comb_detection_threshold : float
+        Detection threshold for CombIdentifier (default 0.1).
+    correlation_threshold : float
+        Detection threshold for CorrelationIdentifier (default 0.7).
     """
 
     def __init__(
@@ -82,6 +91,10 @@ class HybridIdentifier:
         alias_intensity_factor: float = 3.0,
         alias_chance_window_scale: float = 0.4,
         alias_max_lines: int = 30,
+        comb_detection_threshold: float = 0.1,
+        correlation_threshold: float = 0.7,
+        quorum_threshold: int = 2,
+        mode: str = "quorum",
         fallback_T_K: float = 8000.0,
         fallback_ne_cm3: float = 1e17,
         require_both: bool = True,
@@ -96,6 +109,10 @@ class HybridIdentifier:
         self.alias_intensity_factor = alias_intensity_factor
         self.alias_chance_window_scale = alias_chance_window_scale
         self.alias_max_lines = alias_max_lines
+        self.comb_detection_threshold = comb_detection_threshold
+        self.correlation_threshold = correlation_threshold
+        self.quorum_threshold = quorum_threshold
+        self.mode = mode
         self.fallback_T_K = fallback_T_K
         self.fallback_ne_cm3 = fallback_ne_cm3
         self.require_both = require_both
@@ -106,18 +123,20 @@ class HybridIdentifier:
         intensity: np.ndarray,
     ) -> ElementIdentificationResult:
         """
-        Run two-stage identification.
+        Run multi-stage convergent identification.
 
         Returns
         -------
         ElementIdentificationResult
-            Elements detected by both (or either) stage, with metadata
-            recording per-stage decisions.
+            Elements detected by quorum/union of methods, with metadata
+            recording per-method decisions.
         """
         from cflibs.inversion.alias_identifier import ALIASIdentifier
+        from cflibs.inversion.comb_identifier import CombIdentifier
+        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
         from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
 
-        # ---- Stage 1: NNLS screening ----
+        # ---- Stage 1: NNLS screening (optional candidate reduction) ----
         nnls_id = SpectralNNLSIdentifier(
             basis_library=self.basis_library,
             detection_snr=self.nnls_detection_snr,
@@ -128,24 +147,18 @@ class HybridIdentifier:
         nnls_result = nnls_id.identify(wavelength, intensity)
         nnls_detected: Set[str] = {e.element for e in nnls_result.detected_elements}
 
-        # Build a map of NNLS scores for metadata
-        nnls_scores: Dict[str, float] = {}
-        nnls_snrs: Dict[str, float] = {}
-        for e in nnls_result.all_elements:
-            nnls_scores[e.element] = e.score
-            nnls_snrs[e.element] = e.metadata.get("nnls_snr", 0.0)
+        # Candidate elements for expensive secondary checks
+        candidates = self.elements
+        if self.require_both and nnls_detected:
+            candidates = [e for e in self.elements if e in nnls_detected]
+        if not candidates:
+            candidates = self.elements
 
-        # ---- Stage 2: ALIAS confirmation ----
-        # Restrict ALIAS to NNLS candidates when require_both=True
-        alias_elements = (
-            [e for e in self.elements if e in nnls_detected] if self.require_both else self.elements
-        )
-        if not alias_elements:
-            alias_elements = self.elements
-
+        # ---- Stage 2: Convergent Identification (Alias + Comb + Correlation) ----
+        # 1. Alias
         alias_id = ALIASIdentifier(
             atomic_db=self.atomic_db,
-            elements=alias_elements,
+            elements=candidates,
             resolving_power=self.resolving_power,
             intensity_threshold_factor=self.alias_intensity_factor,
             detection_threshold=self.alias_detection_threshold,
@@ -155,55 +168,76 @@ class HybridIdentifier:
         alias_result = alias_id.identify(wavelength, intensity)
         alias_detected: Set[str] = {e.element for e in alias_result.detected_elements}
 
-        # Build ALIAS score map
-        alias_scores: Dict[str, float] = {}
-        alias_elements_map: Dict[str, ElementIdentification] = {}
-        for e in alias_result.all_elements:
-            alias_scores[e.element] = e.score
-            alias_elements_map[e.element] = e
+        # 2. Comb
+        comb_id = CombIdentifier(
+            atomic_db=self.atomic_db,
+            elements=candidates,
+            resolving_power=self.resolving_power,
+            detection_threshold=self.comb_detection_threshold,
+        )
+        comb_result = comb_id.identify(wavelength, intensity)
+        comb_detected: Set[str] = {e.element for e in comb_result.detected_elements}
 
-        # ---- Combine stages ----
-        if self.require_both:
-            final_detected = nnls_detected & alias_detected
-        else:
-            final_detected = nnls_detected | alias_detected
+        # 3. Correlation
+        corr_id = CorrelationIdentifier(
+            atomic_db=self.atomic_db,
+            elements=candidates,
+            detection_threshold=self.correlation_threshold,
+        )
+        corr_result = corr_id.identify(wavelength, intensity)
+        corr_detected: Set[str] = {e.element for e in corr_result.detected_elements}
+
+        # Collect scores and metadata
+        alias_map = {e.element: e for e in alias_result.all_elements}
+        comb_map = {e.element: e for e in comb_result.all_elements}
+        corr_map = {e.element: e for e in corr_result.all_elements}
+        nnls_map = {e.element: e for e in nnls_result.all_elements}
 
         all_element_ids: List[ElementIdentification] = []
+        q_thresh = self.quorum_threshold if self.mode == "quorum" else 1
+
         for element in self.elements:
-            detected = element in final_detected
-            in_nnls = element in nnls_detected
             in_alias = element in alias_detected
+            in_comb = element in comb_detected
+            in_corr = element in corr_detected
+            in_nnls = element in nnls_detected
 
-            alias_eid = alias_elements_map.get(element)
-            matched_lines = alias_eid.matched_lines if alias_eid else []
-            unmatched_lines = alias_eid.unmatched_lines if alias_eid else []
-            n_matched = alias_eid.n_matched_lines if alias_eid else 0
-            n_total = alias_eid.n_total_lines if alias_eid else 0
+            vote_count = sum([in_alias, in_comb, in_corr])
+            detected = vote_count >= q_thresh
 
-            s_nnls = nnls_scores.get(element, 0.0)
-            s_alias = alias_scores.get(element, 0.0)
-            combined_score = float(np.sqrt(max(s_nnls, 0) * max(s_alias, 0)))
+            # Score calculation (geometric mean of active identifiers)
+            s_alias = alias_map.get(element).score if element in alias_map else 0.0
+            s_comb = comb_map.get(element).score if element in comb_map else 0.0
+            s_corr = corr_map.get(element).score if element in corr_map else 0.0
+            s_nnls = nnls_map.get(element).score if element in nnls_map else 0.0
 
+            active_scores = [s for s in [s_alias, s_comb, s_corr] if s > 0]
+            if active_scores:
+                combined_score = float(np.power(np.prod(active_scores), 1.0 / len(active_scores)))
+            else:
+                combined_score = 0.0
+
+            alias_eid = alias_map.get(element)
             eid = ElementIdentification(
                 element=element,
                 detected=detected,
                 score=combined_score,
                 confidence=combined_score,
-                n_matched_lines=n_matched,
-                n_total_lines=n_total,
-                matched_lines=matched_lines,
-                unmatched_lines=unmatched_lines,
+                n_matched_lines=alias_eid.n_matched_lines if alias_eid else 0,
+                n_total_lines=alias_eid.n_total_lines if alias_eid else 0,
+                matched_lines=alias_eid.matched_lines if alias_eid else [],
+                unmatched_lines=alias_eid.unmatched_lines if alias_eid else [],
                 metadata={
                     "nnls_detected": in_nnls,
                     "alias_detected": in_alias,
+                    "comb_detected": in_comb,
+                    "correlation_detected": in_corr,
+                    "vote_count": int(vote_count),
                     "nnls_score": s_nnls,
                     "alias_score": s_alias,
-                    "nnls_snr": nnls_snrs.get(element, 0.0),
-                    "stage": (
-                        "both"
-                        if in_nnls and in_alias
-                        else "nnls_only" if in_nnls else "alias_only" if in_alias else "neither"
-                    ),
+                    "comb_score": s_comb,
+                    "correlation_score": s_corr,
+                    "mode": self.mode,
                 },
             )
             all_element_ids.append(eid)
@@ -219,13 +253,14 @@ class HybridIdentifier:
             n_peaks=alias_result.n_peaks,
             n_matched_peaks=alias_result.n_matched_peaks,
             n_unmatched_peaks=alias_result.n_unmatched_peaks,
-            algorithm="hybrid_nnls_alias",
+            algorithm=f"hybrid_quorum_{self.mode}",
             parameters={
                 "nnls_detection_snr": self.nnls_detection_snr,
                 "alias_detection_threshold": self.alias_detection_threshold,
-                "require_both": float(self.require_both),
-                "n_nnls_candidates": len(nnls_detected),
-                "n_alias_confirmed": len(alias_detected),
-                "n_final_detected": len(final_detected),
+                "comb_detection_threshold": self.comb_detection_threshold,
+                "correlation_threshold": self.correlation_threshold,
+                "quorum_threshold": int(self.quorum_threshold),
+                "mode": self.mode,
+                "n_final_detected": len(detected_elements),
             },
         )
