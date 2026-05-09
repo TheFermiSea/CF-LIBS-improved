@@ -1,33 +1,21 @@
 {
   "schema_version": "0.1.0",
-  "computed_at": "2026-05-08T01:18:00Z",
-  "source": "median-of-medians across 5 most-recent comprehensive_results.json on vasp-03 NFS (commits 5aa5611, a5b892a, 24e1e83, a8260cd, a374e3b — all dev-tip benchmark dispatches between 2026-05-07T17:36 and 18:48 UTC)",
-  "n_source_runs": 5,
-  "notes": "Initial bootstrap baseline for the Aitchison-d_A delta gate (Milestone A, 2026-05-08). All 6 comprehensive-runner pipelines currently produce identical median d_A = 4.0003 — a fixed point from deterministic synthetic compositions. Subsequent PRs will be measured against this baseline; any PR that perturbs a pipeline's median (in either direction) will surface as 'improved' or 'regressed' in the gate output. Initial run is in advisory mode (cfg.advisory_mode=true) — d_A regressions warn but do not block until the empirical noise distribution stabilises (target: ≥16 PRs across ≥2 datasets, MAD < 0.5× median). Promotion is currently MANUAL — automate via scripts/promote-baseline.py (deferred from Milestone A scope).",
+  "computed_at": "2026-05-09T10:30:00Z",
+  "source": "Median across 4 light-tier benchmark runs on dev-tip 9569712 (PR #101 ibot, #102 53x9, #103 7nmw, #105 k7jk — all produced bit-identical predictions due to the per-sha NFS staging bug fixed in beefcake-swarm PR #272). The aitchison values are the actual unified-runner outputs from cflibs/benchmark/unified.py composition_records.json grouped by dataset_id. Per-dataset Stark-aware light-tier iterative_jax solver with id_workflow_name in {alias, comb}.",
+  "n_source_runs": 4,
+  "notes": "Schema-corrected baseline (2026-05-09): the prior bootstrap baseline keyed entries by 'pipeline:HUBER+ilr' etc., but the actual unified runner emits records keyed by dataset_id ('aalto_libs', 'aa1100_substrate', ...). Since baseline.get(dataset_id) returned None, the per-dataset regression check in python/benchmark_gate.py:build_composition_delta silently classified +722% cross-dataset regressions as 'flat'. PR #272 (beefcake-swarm) adds a cross-dataset regression catch as defense-in-depth; this baseline file fixes the data layer so per-dataset regression detection works correctly. Initial baseline values are pathologically high (d_A 19-46) — they reflect the algorithm's CURRENT performance on hard mixture spectra (aa1100 is Al alloy, aalto is multi-element). Future architect improvements that LOWER d_A will register as 'improved'. The bayesian workflow on aalto_libs achieves d_A=9.48 (vs iterative_jax 19.54), demonstrating the gate IS sensitive to workflow choice once code paths are isolated.",
   "per_dataset": {
-    "pipeline:HUBER+ilr": {
-      "median_d_a": 4.00031940507848,
-      "n_runs_aggregated": 5
+    "aalto_libs": {
+      "median_d_a": 19.5381,
+      "n_runs_aggregated": 4,
+      "n_spectra_per_run": 2,
+      "workflow": "iterative_jax (alias+comb id workflows merged)"
     },
-    "pipeline:HUBER+standard": {
-      "median_d_a": 4.00031940507848,
-      "n_runs_aggregated": 5
-    },
-    "pipeline:RANSAC+ilr": {
-      "median_d_a": 4.00031940507848,
-      "n_runs_aggregated": 5
-    },
-    "pipeline:RANSAC+standard": {
-      "median_d_a": 4.00031940507848,
-      "n_runs_aggregated": 5
-    },
-    "pipeline:SIGMA_CLIP+ilr": {
-      "median_d_a": 4.00031940507848,
-      "n_runs_aggregated": 5
-    },
-    "pipeline:SIGMA_CLIP+standard": {
-      "median_d_a": 4.00031940507848,
-      "n_runs_aggregated": 5
+    "aa1100_substrate": {
+      "median_d_a": 46.2618,
+      "n_runs_aggregated": 4,
+      "n_spectra_per_run": 9,
+      "workflow": "iterative_jax (alias+comb id workflows merged)"
     }
   }
 }
