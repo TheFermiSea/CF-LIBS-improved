@@ -1378,16 +1378,38 @@ def _fit_bayesian_pipeline(
             progress_bar=False,
         )
 
-        # Posterior mean concentrations -> point-estimate composition
-        concentrations = {
-            element: float(result.concentrations_mean.get(element, 0.0))
-            for element in elements
-        }
+        # Posterior mean concentrations -> point-estimate composition.
+        # We pull the raw samples and compute the mean across the chain/sample
+        # axes to ensure we have a valid point estimate even if the result
+        # object's summary attributes are sparse.
+        samples = result.samples
+        concentrations = {}
+        if "concentrations" in samples:
+            raw_samples = np.asarray(samples["concentrations"])
+            # Handle both (chains, samples, elements) and (samples, elements)
+            mean_vals = np.mean(raw_samples, axis=tuple(range(raw_samples.ndim - 1)))
+            for i, element in enumerate(elements):
+                concentrations[element] = float(mean_vals[i])
+        else:
+            # Fallback to result.concentrations_mean if samples are missing
+            concentrations = {
+                element: float(result.concentrations_mean.get(element, 0.0))
+                for element in elements
+            }
+
         # Renormalize so the closure residual stays small even if MCMC
         # didn't perfectly hit the simplex constraint.
         total = sum(concentrations.values())
         if total > 0:
             concentrations = {el: v / total for el, v in concentrations.items()}
+
+        # Compute Aitchison distance if truth is available
+        aitchison = None
+        if spectrum.true_composition:
+            try:
+                aitchison = aitchison_distance(spectrum.true_composition, concentrations)
+            except Exception:  # noqa: BLE001
+                aitchison = None
 
         # Pull the posterior sample dict off the MCMCResult so the
         # benchmark's _maybe_compute_posterior_diagnostics path lights up.
@@ -1411,6 +1433,8 @@ def _fit_bayesian_pipeline(
 
         payload: Dict[str, Any] = {
             "concentrations": concentrations,
+            "predicted_composition": concentrations,
+            "aitchison": aitchison,
             "posterior_samples": posterior_samples,
             "divergent_count": divergent_count,
             "temperature_K": float(result.T_K_mean) if result.T_K_mean else None,

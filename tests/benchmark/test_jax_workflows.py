@@ -242,6 +242,11 @@ def test_bayesian_predictor_runs_end_to_end(synthetic_spectrum, context):
     prediction = predictor(synthetic_spectrum, ["Fe", "Ca"], None)
     assert isinstance(prediction, dict)
     assert "concentrations" in prediction
+    assert "predicted_composition" in prediction
+    assert "aitchison" in prediction
+    assert prediction["aitchison"] is not None
+    assert 0.0 <= prediction["aitchison"] <= 20.0  # physical range check
+
     concentrations = prediction["concentrations"]
     assert set(concentrations.keys()) == {"Fe", "Ca"}
     # closure: posterior-mean concentrations are renormalized to the simplex.
@@ -306,6 +311,8 @@ def _make_bayesian_record(spectrum: BenchmarkSpectrum):
     posterior = rng.normal(loc=truth_arr, scale=0.02, size=(2, 200, len(elements)))
     prediction: Dict[str, object] = {
         "concentrations": dict(spectrum.true_composition),
+        "predicted_composition": dict(spectrum.true_composition),
+        "aitchison": 0.0,
         "posterior_samples": {"concentrations": posterior},
         "divergent_count": 0,
         "temperature_K": 9000.0,
