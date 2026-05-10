@@ -15,7 +15,7 @@ Pipeline:
 import numpy as np
 from enum import Enum
 from scipy.signal import find_peaks, peak_widths
-from scipy.ndimage import median_filter
+from scipy.ndimage import median_filter, percentile_filter
 from typing import List, Optional, Tuple
 
 from cflibs.core.logging_config import get_logger
@@ -70,11 +70,15 @@ class BaselineMethod(Enum):
     ALS : str
         Asymmetric Least Squares smoothing.  Best for spectra with broad
         continuum features.
+    PERCENTILE : str
+        Rolling percentile filter baseline.  Best for spectra with many
+        emission peaks and sparse continuum.
     """
 
     MEDIAN = "median"
     SNIP = "snip"
     ALS = "als"
+    PERCENTILE = "percentile"
 
 
 def estimate_baseline_snip(
@@ -263,6 +267,45 @@ def estimate_baseline_als(
     return z
 
 
+def estimate_baseline_percentile(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    window_nm: float = 10.0,
+    percentile: float = 10.0,
+) -> np.ndarray:
+    """Robust baseline estimation via rolling percentile filter.
+
+    Parameters
+    ----------
+    wavelength : np.ndarray
+        Wavelength array in nm
+    intensity : np.ndarray
+        Intensity array
+    window_nm : float
+        Filter window width in nm (default 10.0)
+    percentile : float
+        Percentile to use (default 10.0).  Low values (e.g. 10-20) are
+        best for preserving weak peaks in emission-rich spectra.
+
+    Returns
+    -------
+    np.ndarray
+        Estimated baseline
+    """
+    if wavelength.size < 2:
+        return intensity.copy()
+    spacing = float(np.median(np.abs(np.diff(wavelength))))
+    if not np.isfinite(spacing) or spacing <= 0:
+        spacing = 1.0
+    window_pts = max(3, int(window_nm / spacing))
+    # Clamp to array length to prevent errors
+    max_window = len(intensity) if len(intensity) % 2 == 1 else len(intensity) - 1
+    window_pts = min(window_pts, max(3, max_window))
+    if window_pts % 2 == 0:
+        window_pts += 1  # ensure odd
+    return percentile_filter(intensity, percentile=percentile, size=window_pts)
+
+
 def estimate_noise(intensity: np.ndarray, baseline: np.ndarray) -> float:
     """Iterative sigma-clipped MAD noise estimation.
 
@@ -317,6 +360,7 @@ def detect_peaks(
     min_distance_px: Optional[int] = None,
     min_fwhm_pixels: float = 1.5,
     use_second_derivative: bool = False,
+    min_intensity_floor: float = 0.0,
 ) -> List[Tuple[int, float]]:
     """Unified peak detection above baseline.
 
@@ -353,6 +397,11 @@ def detect_peaks(
         If True, apply second-derivative confirmation: peaks must have
         positive curvature (-d2I/dlambda2 > 0) within a +/-2 pixel
         neighborhood (default False).
+    min_intensity_floor : float
+        Absolute minimum intensity threshold (default 0.0). If provided,
+        this acts as a sensitivity override: peaks above this floor
+        will be detected even if they fall below the noise-derived
+        threshold (noise * threshold_factor).
 
     Returns
     -------
@@ -361,6 +410,11 @@ def detect_peaks(
     """
     corrected = intensity - baseline
     threshold = noise * threshold_factor
+    if min_intensity_floor > 0:
+        # Override threshold if min_intensity_floor is lower, allowing
+        # detection of weak peaks in high-noise regions.
+        threshold = min(threshold, min_intensity_floor)
+
     prominence = noise * prominence_factor
 
     # Minimum distance between peaks
@@ -427,6 +481,7 @@ def detect_peaks_auto(
     min_fwhm_pixels: float = 1.5,
     use_second_derivative: bool = False,
     baseline_method: BaselineMethod = BaselineMethod.MEDIAN,
+    min_intensity_floor: float = 0.0,
 ) -> Tuple[List[Tuple[int, float]], np.ndarray, float]:
     """Convenience wrapper: estimate baseline/noise, then detect peaks.
 
@@ -457,7 +512,10 @@ def detect_peaks_auto(
     baseline_method : BaselineMethod
         Baseline estimation method (default ``BaselineMethod.MEDIAN``).
         ``SNIP`` uses Statistics-sensitive Non-linear Iterative Peak-clipping;
-        ``ALS`` uses Asymmetric Least Squares smoothing.
+        ``ALS`` uses Asymmetric Least Squares smoothing;
+        ``PERCENTILE`` uses a rolling percentile filter.
+    min_intensity_floor : float
+        Absolute minimum intensity threshold (default 0.0).
 
     Returns
     -------
@@ -475,6 +533,10 @@ def detect_peaks_auto(
         baseline = estimate_baseline_snip(wavelength, intensity)
     elif baseline_method == BaselineMethod.ALS:
         baseline = estimate_baseline_als(wavelength, intensity)
+    elif baseline_method == BaselineMethod.PERCENTILE:
+        baseline = estimate_baseline_percentile(
+            wavelength, intensity, window_nm=baseline_window_nm
+        )
     elif baseline_method == BaselineMethod.MEDIAN:
         baseline = estimate_baseline(wavelength, intensity, window_nm=baseline_window_nm)
     else:
@@ -492,6 +554,7 @@ def detect_peaks_auto(
         min_distance_px=min_distance_px,
         min_fwhm_pixels=min_fwhm_pixels,
         use_second_derivative=use_second_derivative,
+        min_intensity_floor=min_intensity_floor,
     )
     return peaks, baseline, noise
 
