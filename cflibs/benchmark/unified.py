@@ -1424,16 +1424,33 @@ def _fit_bayesian_pipeline(
             progress_bar=False,
         )
 
-        # Posterior mean concentrations -> point-estimate composition
-        concentrations = {
-            element: float(result.concentrations_mean.get(element, 0.0))
-            for element in elements
-        }
+        # Posterior mean concentrations -> point-estimate composition.
+        # We compute this from the raw samples to ensure we have the mean
+        # even if the result object's summary is unpopulated.
+        samples = result.samples
+        if "concentrations" in samples:
+            conc_samples = np.asarray(samples["concentrations"])
+            # Handle both (samples, elements) and (chains, samples, elements)
+            mean_concs = np.mean(conc_samples, axis=tuple(range(conc_samples.ndim - 1)))
+            concentrations = {
+                element: float(mean_concs[i]) for i, element in enumerate(elements)
+            }
+        else:
+            concentrations = {
+                element: float(result.concentrations_mean.get(element, 0.0))
+                for element in elements
+            }
+
         # Renormalize so the closure residual stays small even if MCMC
         # didn't perfectly hit the simplex constraint.
         total = sum(concentrations.values())
         if total > 0:
             concentrations = {el: v / total for el, v in concentrations.items()}
+
+        # Compute Aitchison distance if truth is available
+        aitchison = None
+        if spectrum.true_composition:
+            aitchison = aitchison_distance(spectrum.true_composition, concentrations)
 
         # Pull the posterior sample dict off the MCMCResult so the
         # benchmark's _maybe_compute_posterior_diagnostics path lights up.
@@ -1457,6 +1474,7 @@ def _fit_bayesian_pipeline(
 
         payload: Dict[str, Any] = {
             "concentrations": concentrations,
+            "aitchison": aitchison,
             "posterior_samples": posterior_samples,
             "divergent_count": divergent_count,
             "temperature_K": float(result.T_K_mean) if result.T_K_mean else None,
