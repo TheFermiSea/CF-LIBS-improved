@@ -26,7 +26,7 @@ logger = get_logger("inversion.preprocessing")
 def estimate_baseline(
     wavelength: np.ndarray, intensity: np.ndarray, window_nm: float = 10.0
 ) -> np.ndarray:
-    """Robust baseline estimation via median filter.
+    """Robust baseline estimation via Asymmetric Least Squares (ALS).
 
     Parameters
     ----------
@@ -35,25 +35,16 @@ def estimate_baseline(
     intensity : np.ndarray
         Intensity array
     window_nm : float
-        Filter window width in nm (default 10.0)
+        Filter window width in nm (unused for ALS, kept for API compatibility)
 
     Returns
     -------
     np.ndarray
         Estimated baseline
     """
-    if wavelength.size < 2:
-        return intensity.copy()
-    spacing = float(np.median(np.abs(np.diff(wavelength))))
-    if not np.isfinite(spacing) or spacing <= 0:
-        spacing = 1.0  # safe fallback instead of 1e-10
-    window_pts = max(3, int(window_nm / spacing))
-    # Clamp to array length to prevent hangs
-    max_window = len(intensity) if len(intensity) % 2 == 1 else len(intensity) - 1
-    window_pts = min(window_pts, max(3, max_window))
-    if window_pts % 2 == 0:
-        window_pts += 1  # ensure odd
-    return median_filter(intensity, size=window_pts)
+    # Default to ALS as it preserves weak lines better in low-SNR regions.
+    # window_nm is ignored but kept for backward compatibility.
+    return estimate_baseline_als(wavelength, intensity)
 
 
 class BaselineMethod(Enum):
@@ -62,7 +53,7 @@ class BaselineMethod(Enum):
     Attributes
     ----------
     MEDIAN : str
-        Median filter baseline (fast, robust default).
+        Median filter baseline (deprecated, now uses ALS for better sensitivity).
     SNIP : str
         Statistics-sensitive Non-linear Iterative Peak-clipping with LLS
         transform.  Best for spectra with sharp peaks on slowly varying
@@ -480,7 +471,7 @@ def detect_peaks_auto(
     baseline_window_nm: float = 10.0,
     min_fwhm_pixels: float = 1.5,
     use_second_derivative: bool = False,
-    baseline_method: BaselineMethod = BaselineMethod.MEDIAN,
+    baseline_method: BaselineMethod = BaselineMethod.ALS,
     min_intensity_floor: float = 0.0,
 ) -> Tuple[List[Tuple[int, float]], np.ndarray, float]:
     """Convenience wrapper: estimate baseline/noise, then detect peaks.

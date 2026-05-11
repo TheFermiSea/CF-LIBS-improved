@@ -137,6 +137,7 @@ def is_element_detected(
     n_matched_lines: int,
     min_score: float,
     min_lines: int,
+    min_intensity_floor: float = 0.0,
 ) -> bool:
     """
     Decision rule for element detection with Tier-2 FP protection.
@@ -153,6 +154,8 @@ def is_element_detected(
         Global minimum score threshold
     min_lines : int
         Global minimum line count
+    min_intensity_floor : float
+        Absolute minimum intensity threshold (default 0.0).
 
     Returns
     -------
