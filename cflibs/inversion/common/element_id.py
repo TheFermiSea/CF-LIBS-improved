@@ -6,7 +6,8 @@ Bridge function to_line_observations() converts results for downstream Boltzmann
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Any
+from enum import Enum
+from typing import List, Dict, Tuple, Any, Optional, Type
 from cflibs.atomic.structures import Transition
 from cflibs.inversion.boltzmann import LineObservation
 
@@ -129,6 +130,54 @@ class ElementIdentificationResult:
     algorithm: str
     parameters: Dict[str, Any] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
+
+
+class ElementTier(Enum):
+    """Classification of elements by expected concentration and ID difficulty."""
+    MAJOR = "major"
+    MINOR = "minor"
+    TRACE = "trace"
+
+
+# Standard major elements in geological/industrial LIBS
+MAJOR_ELEMENTS = {"H", "C", "N", "O", "Na", "Mg", "Al", "Si", "P", "S", "K", "Ca", "Ti", "Mn", "Fe"}
+
+
+def get_element_tier(element: str) -> ElementTier:
+    """Categorize element into Major, Minor, or Trace tier."""
+    if element in MAJOR_ELEMENTS:
+        return ElementTier.MAJOR
+    # Minor elements (common but lower concentration)
+    if element in {"Li", "Be", "B", "F", "Cl", "V", "Cr", "Co", "Ni", "Cu", "Zn", "Sr", "Ba"}:
+        return ElementTier.MINOR
+    return ElementTier.TRACE
+
+
+def get_default_identifier_config(element: str) -> Dict[str, Any]:
+    """
+    Get default identification configuration for an element.
+    
+    Trace elements default to Hybrid (2-of-3 quorum) for high confidence.
+    Majors default to ALIAS (1-of-1) for speed and sensitivity.
+    """
+    tier = get_element_tier(element)
+    if tier == ElementTier.TRACE:
+        return {
+            "algorithm": "hybrid_quorum",
+            "min_votes": 2,
+            "nnls_screening": True,
+        }
+    elif tier == ElementTier.MINOR:
+        return {
+            "algorithm": "hybrid_quorum",
+            "min_votes": 1,  # Union mode for minor elements
+            "nnls_screening": True,
+        }
+    else:
+        return {
+            "algorithm": "alias",
+            "detection_threshold": 0.05,
+        }
 
 
 def to_line_observations(result: ElementIdentificationResult) -> List[LineObservation]:
