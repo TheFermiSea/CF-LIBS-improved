@@ -19,6 +19,7 @@ from cflibs.inversion.element_id import (
     IdentifiedLine,
     ElementIdentification,
     ElementIdentificationResult,
+    is_element_detected,
 )
 from cflibs.inversion.preprocessing import detect_peaks_auto
 from cflibs.core.logging_config import get_logger
@@ -100,13 +101,13 @@ class CombIdentifier:
         resolving_power: Optional[float] = None,
         baseline_window_nm: float = 10.0,
         threshold_percentile: float = 85.0,
-        min_correlation: float = 0.05,
+        min_correlation: float = 0.10,
         tooth_activation_threshold: float = 0.5,
         min_active_teeth: int = 2,
         max_shift_pts: int = 5,
         min_width_pts: int = 5,
         max_width_factor: float = 1.0,
-        relative_threshold_scale: float = 1.2,
+        relative_threshold_scale: float = 1.5,
         elements: Optional[List[str]] = None,
         max_lines_per_element: int = 50,
         reference_temperature: float = 10000.0,
@@ -212,6 +213,7 @@ class CombIdentifier:
                 "baseline_window_nm": self.baseline_window_nm,
                 "threshold_percentile": self.threshold_percentile,
                 "min_correlation": self.min_correlation,
+                "min_active_teeth": float(self.min_active_teeth),
                 "max_shift_pts": float(self.max_shift_pts),
                 "min_width_pts": float(self.min_width_pts),
                 "max_width_factor": self.max_width_factor,
@@ -302,8 +304,12 @@ class CombIdentifier:
 
             # Create ElementIdentification
             n_active_teeth = sum(1 for t in teeth if t["active"])
-            detected = (
-                fingerprint >= self.min_correlation and n_active_teeth >= self.min_active_teeth
+            detected = is_element_detected(
+                element,
+                fingerprint,
+                n_active_teeth,
+                self.min_correlation,
+                self.min_active_teeth,
             )
             element_id = ElementIdentification(
                 element=element,

@@ -131,6 +131,49 @@ class ElementIdentificationResult:
     warnings: List[str] = field(default_factory=list)
 
 
+def is_element_detected(
+    element: str,
+    score: float,
+    n_matched_lines: int,
+    min_score: float,
+    min_lines: int,
+) -> bool:
+    """
+    Decision rule for element detection with Tier-2 FP protection.
+
+    Parameters
+    ----------
+    element : str
+        Element symbol
+    score : float
+        Identification score (fingerprint)
+    n_matched_lines : int
+        Number of active lines/teeth
+    min_score : float
+        Global minimum score threshold
+    min_lines : int
+        Global minimum line count
+
+    Returns
+    -------
+    bool
+        True if element should be considered detected
+    """
+    if score < min_score:
+        return False
+
+    # Enforce global minimum lines
+    if n_matched_lines < min_lines:
+        return False
+
+    # Tier-2 FP reduction: Mn, Na, K always require at least 2 lines
+    # per validation/protocol.yaml §tier2_alarms.fp_rate_track_elements
+    if element in ("Mn", "Na", "K") and n_matched_lines < 2:
+        return False
+
+    return True
+
+
 def to_line_observations(result: ElementIdentificationResult) -> List[LineObservation]:
     """
     Convert ElementIdentificationResult to LineObservation list for Boltzmann/solver pipeline.
