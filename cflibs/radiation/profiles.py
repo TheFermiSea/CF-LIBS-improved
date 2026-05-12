@@ -46,11 +46,19 @@ class BroadeningMode(str, Enum):
         (broadening is fully captured in the per-line profile).
     PHYSICAL_DOPPLER : Per-line physical Doppler width via doppler_width(),
         with downstream instrument convolution still applied.
+    LDM_GAUSSIAN : Per-line Gaussian broadening via the Line Distribution
+        Method (LDM/DIT, van den Bekerom & Pannier 2021). Equivalent to
+        ``PHYSICAL_DOPPLER`` within ``O(dx_σ²)`` of the σ-grid spacing, but
+        ``O(N_σ · N_λ · log N_λ)`` instead of ``O(N_lines · N_λ)`` so it
+        wins at large line counts. Default OFF in CLI flows — must be
+        opted into explicitly (ADR-0001 T1-4). Downstream instrument
+        convolution is still applied, like ``PHYSICAL_DOPPLER``.
     """
 
     LEGACY = "legacy"
     NIST_PARITY = "nist_parity"
     PHYSICAL_DOPPLER = "physical_doppler"
+    LDM_GAUSSIAN = "ldm_gaussian"
 
 
 def resolving_power_sigma(wavelength_nm: float, resolving_power: float) -> float:

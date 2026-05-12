@@ -16,6 +16,12 @@ from cflibs.radiation.profiles import (
     doppler_width,
     resolving_power_sigma,
 )
+from cflibs.radiation.ldm import (
+    DEFAULT_N_SIGMA,
+    broaden_lines_ldm,
+    build_sigma_grid,
+    ldm_broaden,
+)
 from cflibs.radiation.spectrum_model import (
     SpectrumModel,
     SpectrumModelJax,
@@ -30,11 +36,15 @@ from cflibs.radiation.batch import (
 
 __all__ = [
     "BroadeningMode",
+    "DEFAULT_N_SIGMA",
     "calculate_line_emissivity",
     "calculate_spectrum_emissivity",
     "gaussian_profile",
     "apply_gaussian_broadening",
     "apply_gaussian_broadening_per_line",
+    "broaden_lines_ldm",
+    "build_sigma_grid",
+    "ldm_broaden",
     "doppler_width",
     "resolving_power_sigma",
     "SpectrumModel",

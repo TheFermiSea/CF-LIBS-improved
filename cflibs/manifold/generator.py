@@ -619,6 +619,88 @@ class ManifoldGenerator:
         return intensity
 
     @staticmethod
+    def _compute_spectrum_snapshot_ldm(
+        wl_grid: jnp.ndarray,
+        T_eV: float,
+        n_e: float,
+        concentrations: jnp.ndarray,
+        atomic_data: Tuple,
+        sigma_grid: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Compute a single-snapshot spectrum via the LDM Gaussian path.
+
+        This is the manifold-sweep specialisation of
+        :func:`cflibs.radiation.ldm.ldm_broaden`. The σ-grid layout is
+        passed as a closed-over array (built once at manifold-init in
+        :meth:`generate_manifold`) so it stays jit-static across all
+        grid points — only the per-line intensities recompute per (T, n_e,
+        concentration) sample. Stark broadening is currently NOT modelled
+        on this path (LDM 1-D is Gaussian-only; the 2-D Voigt extension is
+        scope for a follow-up bead).
+
+        See spec ``docs/adr/specs/T1-4-ldm-broadening.md`` §7.
+
+        Parameters
+        ----------
+        wl_grid : array
+            Uniform wavelength grid in nm.
+        T_eV, n_e : float
+            Plasma temperature / electron density.
+        concentrations : array
+            Element concentrations.
+        atomic_data : Tuple
+            Atomic data from :meth:`_load_atomic_data`.
+        sigma_grid : array
+            Pre-built log-σ grid; constructed via
+            :func:`cflibs.radiation.ldm.build_sigma_grid` at manifold init.
+
+        Returns
+        -------
+        array
+            Spectral intensity on ``wl_grid`` in arbitrary CF-LIBS units.
+        """
+        from cflibs.radiation.ldm import ldm_broaden
+
+        (
+            l_wl,
+            l_aki,
+            _l_ek,
+            _l_gk,
+            _l_ip,
+            _l_z,
+            _l_el_idx,
+            _partition_coeffs,
+            _ionization_potentials,
+            _l_stark_w,
+            _l_stark_alpha,
+            l_mass_amu,
+        ) = atomic_data
+
+        n_upper = ManifoldGenerator._saha_eggert_solver(
+            T_eV,
+            n_e,
+            concentrations,
+            atomic_data,
+        )
+
+        # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
+        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
+
+        # Doppler sigma + instrument floor (FWHM 0.05 nm; matches legacy path)
+        mass_kg = l_mass_amu * M_PROTON
+        sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
+        sigma_inst = 0.05 / 2.355
+        sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
+
+        return ldm_broaden(
+            line_wavelengths=l_wl,
+            line_intensities=epsilon,
+            line_sigmas=sigma_total,
+            wavelength_grid=wl_grid,
+            sigma_grid=sigma_grid,
+        )
+
+    @staticmethod
     @jit
     def _time_integrated_spectrum(
         wl_grid: jnp.ndarray,
