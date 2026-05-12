@@ -159,7 +159,7 @@ Shared decorator from T1-1 (`cflibs.core.jax_runtime.jit_if_available`) wraps `_
 
 ## 10. Test plan
 
-New file: `tests/test_iterative_lax.py`.
+New file: `tests/inversion/test_iterative_lax.py`.
 
 - `test_lax_while_loop_parity_vs_python` — parametrize all six closure modes; rtol=1e-5.
 - `test_vmap_batched_solve` — 16 perturbed observation arrays; shape `(16,)` for `T_K`/`n_e_cm3`, `(16, E)` for concentrations.
@@ -190,4 +190,4 @@ Existing: enumerate via `pytest --collect-only tests/ -k iterative`:
 - **Enables T4-1** (`lax.custom_root` implicit-diff).
 - **Compatible with T2-7** (bisection on `log n_e`) — nested while_loop layers on top.
 
-**Files touched:** `cflibs/inversion/solve/iterative.py` (modified), `tests/test_iterative_lax.py` (new). Estimated 1 day.
+**Files touched:** `cflibs/inversion/solve/iterative.py` (modified), `tests/inversion/test_iterative_lax.py` (new). Estimated 1 day.

@@ -1,6 +1,6 @@
 # T1-5 Implementation Spec — Chunked `lax.scan` + Checkpoint Over Wavelength Grid
 
-**Bead:** `CF-LIBS-improved-ke4z` · **ADR:** [ADR-0001](../ADR-0001-radis-jaxrts-pattern-survey.md) §5.2 C-P8, §5.5, §8.1 row T1-5 · **Wave:** 3 (parallel with T1-6) · **Hard deps:** T1-1 (`5oar`) + T1-4 (`e5o8`) · **Estimated effort:** ~3 days · **Reference:** exojax `OpaPremodit.xsmatrix` + `exojax.signal.ola.overlap_and_add_matrix`
+**Bead:** `CF-LIBS-improved-ke4z` · **ADR:** [ADR-0001](../ADR-0001-radis-jaxrts-pattern-survey.md) §5.2 C-P8, §5.5, §8.1 row T1-5 · **Wave:** 3 (parallel with T1-6) · **Hard deps:** T1-1 (`5oar`) + T1-4 (`e5o8`) · **Estimated effort:** ~3 days · **Reference:** exojax `OpaPremodit.xsmatrix` + `exojax.signal.ola.overlap_and_add_matrix` · **Revision:** 2026-05-12 (cross-audit) — canonical field name `line_wavelengths_nm`; test paths nested under `tests/radiation/`
 
 ## 1. Goals
 
@@ -32,7 +32,7 @@ def forward_model_chunked(
                              wavelength_grid, sigma_grid, broadening_mode=broadening_mode)
 
     chunks, line_masks = _split_wavelength_grid(
-        wavelength_grid, atomic_snapshot.line_wavelengths,
+        wavelength_grid, atomic_snapshot.line_wavelengths_nm,
         nstitch=nstitch, overlap=overlap,
     )  # chunks: (nstitch, div_length + 2*overlap); line_masks: (nstitch, N_lines)
 
@@ -116,7 +116,7 @@ T1-4 reduces effective line count (5000 → 24 σ-layers per chunk). T1-5 chunks
 
 ## 9. Test plan
 
-**New** `tests/test_chunked_scan.py`:
+**New** `tests/radiation/test_chunked_scan.py`:
 - `test_parity_nstitch_1_vs_4` — rtol=1e-5 (fp64) / 1e-4 (fp32 Metal).
 - `test_parity_nstitch_sweep` — parametrize `nstitch ∈ {1, 2, 4, 8, 16}`; all match within tolerance.
 - `test_grad_finite_chunked` — `jax.grad` w.r.t. `T_eV` finite; numerical parity rtol=1e-4.
@@ -126,7 +126,7 @@ T1-4 reduces effective line count (5000 → 24 σ-layers per chunk). T1-5 chunks
 - `test_nist_parity_rejects_chunking` — assertion error if `nstitch > 1` with NIST_PARITY.
 - `test_nlambda_not_divisible` — pad-and-mask last chunk; explicit case where `N_λ % nstitch ≠ 0`.
 
-**New** `tests/test_memory_bench.py` (`@pytest.mark.slow`):
+**New** `tests/radiation/test_memory_bench.py` (`@pytest.mark.slow`):
 - `test_peak_memory_reduction` — `jax.profiler.memory_profile`, assert nstitch=4 peak ≤0.4× nstitch=1 peak on (5000, 30000).
 
 **Existing** `tests/test_manifold.py`: golden checksums unchanged at `nstitch=1`; new parametrization with `nstitch=4` matches within rtol=1e-5. `pytest -m "physics" tests/test_radiation.py` identical at default `nstitch=1`.
@@ -158,8 +158,8 @@ T1-5 not a dep of T1-2/T1-6, but they should adopt `forward_model_chunked` once 
 | `cflibs/manifold/batch_forward.py` | swap `voigt_spectrum_jax` at L395 | `batch_forward_model` (L400) uses chunked forward |
 | `cflibs/core/jax_policy.py` | — | wire `nstitch` + `overlap_factor` consumers |
 | `tests/test_ldm_broaden.py` | NEW | — |
-| `tests/test_chunked_scan.py` | — | NEW |
-| `tests/test_memory_bench.py` | — | NEW |
+| `tests/radiation/test_chunked_scan.py` | — | NEW |
+| `tests/radiation/test_memory_bench.py` | — | NEW |
 
 ## 13. Cross-cutting verification
 

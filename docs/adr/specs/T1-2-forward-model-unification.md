@@ -1,6 +1,6 @@
 # T1-2 Implementation Spec — Unified Forward-Model Kernel
 
-**Bead:** `CF-LIBS-improved-swgm` · **ADR:** [ADR-0001](../ADR-0001-radis-jaxrts-pattern-survey.md) §8.1 row T1-2 · **Wave:** 2 (parallel with T1-3 and T1-4) · **Hard deps:** T1-1 (`5oar`) · **Estimated effort:** medium-high
+**Bead:** `CF-LIBS-improved-swgm` · **ADR:** [ADR-0001](../ADR-0001-radis-jaxrts-pattern-survey.md) §8.1 row T1-2 · **Wave:** 2 (lands AFTER T1-4 in wave 2 — sequential ordering; both touch `spectrum_model.py` dispatch and `batch_forward.py:L395`) · **Hard deps:** T1-1 (`5oar`) — requires the pytree registration + `AtomicDatabase.snapshot()` builder folded into T1-1 · **Estimated effort:** medium-high · **Revision:** 2026-05-12 (cross-audit) — adds `sigma_grid` parameter, clarifies NIST_PARITY per-line σ_inst handling, scopes `bayesian.py` adaptation to in-place edit
 
 ## 1. Goals
 
@@ -28,6 +28,11 @@ def forward_model(
     atomic_snapshot: AtomicSnapshot,
     instrument: InstrumentModel,
     wavelength_grid: jnp.ndarray,            # (N_wl,) policy.real_dtype
+    sigma_grid: jnp.ndarray | None = None,   # (N_σ,) — REQUIRED for LDM_GAUSSIAN;
+                                              # None for PHYSICAL_DOPPLER/NIST_PARITY/LEGACY.
+                                              # Host builds via T1-4's broaden_lines_ldm
+                                              # path; threaded through here so T1-5's
+                                              # chunked variant can scan over chunks.
     *,
     broadening_mode: BroadeningMode,         # static (enum hashable)
     path_length_m: float,                    # traced
@@ -104,22 +109,27 @@ def batch_forward_model(
 
 `BatchAtomicData` is renamed/aliased to `AtomicSnapshot`. `single_spectrum_forward` retired; existing callers import `forward_model` directly.
 
-### 3.3 `BayesianForwardModel.forward` → direct import
+### 3.3 `BayesianForwardModel.forward` → in-place import (NOT a new file)
+
+**Important:** T1-2 does **not** create `cflibs/inversion/solve/bayesian/forward.py` — that directory doesn't exist until T1-6 decomposes the monolith. Instead, T1-2 edits the **existing** `cflibs/inversion/solve/bayesian.py:1071` in place: replace the body of `BayesianForwardModel._compute_spectrum` (and any Voigt/Saha-Boltzmann helpers it calls inline) with a single delegating call to `cflibs.radiation.kernels.forward_model`. T1-6 then carries this in-place edit over to `bayesian/forward.py` during its decomposition.
 
 ```python
-# cflibs/inversion/solve/bayesian/forward.py (T1-6)
+# cflibs/inversion/solve/bayesian.py (in-place edit at the existing class)
 from cflibs.radiation.kernels import forward_model
 
 class BayesianForwardModel:
-    def forward(self, T_eV, log_ne, concentrations, total_species_density_cm3=None):
+    def _compute_spectrum(self, T_eV, log_ne, concentrations, total_species_density_cm3=None):
         plasma = self._pack_plasma(T_eV, log_ne, concentrations, total_species_density_cm3)
         return forward_model(
             plasma, self._snapshot, self._instrument, self.wavelength,
+            sigma_grid=None,                          # PHYSICAL_DOPPLER path; no LDM
             broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
             path_length_m=self.path_length_m,
             apply_self_absorption=False,
         )
 ```
+
+`AtomicDataArrays` (existing at `bayesian.py:539`) gets a `@classmethod from_snapshot(cls, snap: AtomicSnapshot) -> AtomicDataArrays` adapter so legacy callers keep their interface; `BayesianForwardModel.__init__` switches to storing `self._snapshot: AtomicSnapshot` directly. T1-6 will retire `AtomicDataArrays` if it proves unnecessary post-decomposition.
 
 Chebyshev baseline stays in `BayesianForwardModel` as an additive post-step — sampler-level state, not physics.
 
@@ -139,7 +149,7 @@ Saha-Boltzmann delegated to `cflibs/plasma/kernels.py::saha_boltzmann_population
 | Per-line sigma fallback (`emissivity.py:123-130`) | NumPy fallback | per-line sigma natively | per-line sigma natively | **`single_spectrum_forward` form wins.** Per-line sigma is canonical; scalar = degenerate case `jnp.full((N_lines,), σ)`. Fallback in `emissivity.py` deleted |
 | BroadeningMode branches (`spectrum_model.py:247-250`) | LEGACY/NIST_PARITY/PHYSICAL_DOPPLER | Voigt via `voigt_spectrum_jax` | Voigt via Weideman Faddeeva | Single function, branched on `broadening_mode` as **static** arg. LEGACY retained but emits `DeprecationWarning` from host. Weideman path becomes canonical Voigt |
 | Radiative transfer | Always applied | Not applied | Not applied | **`apply_self_absorption: bool` static flag.** Default `True` for `SpectrumModel`, `False` for manifold + Bayesian |
-| Instrument convolution | Separate scipy/JAX step (`spectrum_model.py:283-301`) | Not applied | Folded into per-line sigma (Voigt-normalization preserving) | **Bayesian approach wins.** Instrument σ added in quadrature to per-line Gaussian. Separate convolution removed except for LEGACY back-compat |
+| Instrument convolution | Separate scipy/JAX step (`spectrum_model.py:283-301`) | Not applied | Folded into per-line sigma (Voigt-normalization preserving) | **Bayesian approach wins.** Instrument σ added in quadrature to per-line Gaussian. For NIST_PARITY mode (resolving-power R, wavelength-dependent), kernel evaluates `σ_inst(λ_i) = λ_i / (R · 2√(2 ln 2))` per-line inline from `instrument.resolving_power` + `atomic_snapshot.line_wavelengths_nm`. For fixed-FWHM mode, scalar σ broadcast. Separate convolution removed except for LEGACY back-compat. |
 | Saha-Boltzmann | `solve_plasma` dict per-element (NumPy) | Inline scan over stages (JAX) | Two-stage explicit | Single helper `saha_boltzmann_populations(plasma, snapshot)` returning `(N_lines,)` upper-level array. `lax.scan` over stages canonical |
 | Precision | fp64 hardcoded (`spectrum_model.py:460`) | fp64 hardcoded (`batch_forward.py:322-328`) | `_JAX_REAL_DTYPE` policy-aware | **Bayesian approach wins.** All casts through `jax_policy().real_dtype` |
 

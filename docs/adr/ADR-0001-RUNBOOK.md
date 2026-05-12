@@ -37,9 +37,10 @@ T1-3 ◄┘ (parallel-safe with T1-1; cflibs/inversion/solve/ is in T1-1 carve-o
 
 | Wave | Beads | Parallel? | Pre-condition |
 |---|---|---|---|
-| 1 | T1-1 (`5oar`) + T1-3 (`14p6`) | yes (disjoint files: T1-1 carves out `cflibs/inversion/solve/`) | branched off `dev` |
-| 2 | T1-2 (`swgm`) + T1-4 (`e5o8`) | yes | T1-1 merged to integration; T1-3 may still be in flight |
-| 3 | T1-5 (`ke4z`) + T1-6 (`0mor`) | yes | T1-2 (for T1-6) + T1-4 (for T1-5) merged |
+| **0** | wave-0 baseline + CI gate fix + JAX pin bump + spec test-path fixups (see §11) | yes (file-disjoint) | branched off `dev`; **must merge to integration before any T1 starts** |
+| 1 | T1-1 (`5oar`) + T1-3 (`14p6`) | yes (disjoint files: T1-1 carves out `cflibs/inversion/solve/`) | wave-0 merged |
+| 2 | T1-4 (`e5o8`) **first**, then T1-2 (`swgm`) — **sequential within wave** | NO — both touch `spectrum_model.py` dispatch (L243-253) and `batch_forward.py:L395` | T1-1 merged to integration; T1-3 may still be in flight |
+| 3 | T1-5 (`ke4z`) + T1-6 (`0mor`) | yes (file-disjoint) | T1-2 (for T1-6) + T1-4 (for T1-5) merged |
 
 **Tier-2 (T2-1..T2-8) deferred** to a follow-up integration cycle. **Tier-3** polish folds into routine cleanup beads. **Tier-4** (`lax.custom_root`) needs its own research bead with literature precursor.
 
@@ -72,6 +73,11 @@ Project hard constraints (NON-NEGOTIABLE):
   - JAX-metal has no fp64; new kernels must accept fp32 and document precision behaviour.
 
 Workflow:
+  0. BOOTSTRAP (mandatory before reading anything else, also on resume after compaction):
+     a. `bd memories adr-0001` — surfaces the integration-branch state memory.
+     b. `bd show {BEAD_ID}` — recovers --description, --notes, --design fields.
+     c. `mcp__serena__list_memories` then `mcp__serena__read_memory("architecture_and_data_flow")`
+        and any project memories with "jax" or "convention" in the name.
   1. `bd update {BEAD_ID} --status in_progress`.
   2. Read the spec file (docs/adr/specs/{T1-N}-*.md) end-to-end before any code.
      Stop and ask if anything is unclear — never expand scope (see runbook § 7).
@@ -109,6 +115,16 @@ git pull --ff-only
 # 4.2 Spawn a wave-N bead in a worktree (orchestrator):
 git worktree add .worktrees/T1-1 -b feat/adr-0001/T1-1-host-kernel-split \
                                      origin/feat/adr-0001-pattern-survey-impl
+
+# Share the main .venv to avoid 6-12 GiB redundant installs across 6 worktrees.
+# Sub-branches MUST NOT mutate this venv -- any pyproject.toml dep change goes
+# through a separate PR against the integration branch first.
+ln -s ../../.venv .worktrees/T1-1/.venv
+
+# Flip bench-pause flag on shared GPU nodes so the post-merge benchmark from a
+# prior dev push does not race the manual gate runs in this worktree.
+bash scripts/bench-pause.sh --remote slurm-ctl   # released in §4.5
+
 cd .worktrees/T1-1
 bd update CF-LIBS-improved-5oar --status in_progress
 
@@ -128,6 +144,8 @@ git -C /home/brian/code/CF-LIBS-improved push
 # 4.5 Clean up worktree:
 git -C /home/brian/code/CF-LIBS-improved worktree remove .worktrees/T1-1
 bd close CF-LIBS-improved-5oar
+# Release bench-pause once the wave's last bead has merged:
+bash scripts/bench-resume.sh --remote slurm-ctl
 ```
 
 ## 5. Gate checks before merging a sub-branch to integration
@@ -199,7 +217,29 @@ Prefer `git revert -m 1 <merge-commit>` over hard-reset. Open a follow-up bead d
 - [ ] Tier-4 (T4-1 `lax.custom_root` implicit-diff) filed as research bead with literature-review precursor
 - [ ] Session-end hand-off note posted: short summary + commit SHA + list of follow-up beads
 
-## 10. Quick reference — spec files
+## 10. Wave-0 prerequisite work (file-disjoint, must merge before T1 begins)
+
+Auditor I (infrastructure-gap pass, 2026-05-12) identified five must-land items before any T1 sub-branch opens. These are filed as separate beads blocking the T1 set:
+
+| Bead | Title | Why it must land first |
+|---|---|---|
+| (file) | Wave-0: capture ADR-0001 baseline (`.adr-0001-baseline.txt` + `.adr-0001-baseline-{cov,bench}.json`) on dev tip | Runbook §6 gates ("≥ pre-ADR baseline", "within 5%") are unenforceable without this anchor |
+| (file) | CI workflow: trigger `ci.yml` on `dev` + integration branch; add `black --check`; drop `not requires_jax` filter; set `JAX_PLATFORMS=cpu` | Sub-branch PRs currently land without CI signal; runbook §5 gates not enforced |
+| (file) | Bump JAX floor to `>=0.4.30` + add `psutil>=5.9` to `dev`/`ci`/`local` extras | T1-5 §10 requires `jax>=0.4.30` for stable `checkpoint_policies` API; T1-5 §5 references `psutil` with no pin |
+| (file) | Codify shared `.venv` symlink + forbid in-worktree pip installs (runbook §4 already updated; bead tracks pyproject sanity) | Avoids 6-12 GiB redundant installs across 6 worktrees |
+| (file) | Refresh `bd remember adr-0001-integration-branch` to point at runbook §3 spawn template + bootstrap sequence | Subagent cold-start needs the bootstrap path explicit |
+
+All five run in parallel (file-disjoint). Block all six T1 beads on their union.
+
+## 11. Recent-merge interactions (audited 2026-05-12)
+
+Three commits landed on `origin/dev` between ADR-0001 draft and tightening:
+
+- **1df84df** (NFS-share `/data`): zero impact on Tier-1; pure cluster deployment.
+- **4d83f25** (JAX persistent compile cache + bench-pause): T1-1 perf criterion (AC #8) requires **warm-cache measurement** — run twice, compare second invocation. Runbook §4.2 now flips the bench-pause flag during worktree work to avoid race with post-merge benchmarks (`scripts/bench-pause.sh`).
+- **ba1f043** (Parquet result schema): no impact on Tier-1 — runbook §6 benchmark-parity gate uses `scripts/benchmark_synthetic_identifiers.py` (legacy JSON output), not the new `UnifiedBenchmarkRunner.write_outputs` Parquet path.
+
+## 12. Quick reference — spec files
 
 | Bead ID | Short name | Spec file |
 |---|---|---|

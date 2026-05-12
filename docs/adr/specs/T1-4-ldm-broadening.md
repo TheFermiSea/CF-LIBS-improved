@@ -118,7 +118,7 @@ Same swap in `cflibs/manifold/batch_forward.py::single_spectrum_forward` (L292-3
 
 ## 9. Test plan
 
-**New** `tests/test_ldm_broaden.py`:
+**New** `tests/radiation/test_ldm_broaden.py`:
 - `test_parity_vs_physical_doppler` — 200-line synthetic, rtol=1e-4.
 - `test_grid_step_convergence` — sweep `N_σ ∈ {8, 16, 24, 32}`; assert max relative error decreases as `O(dx_σ²)`.
 - `test_vmap_over_intensities` — vmap over 64 intensity vectors, parity with map+stack.
@@ -139,4 +139,4 @@ Same swap in `cflibs/manifold/batch_forward.py::single_spectrum_forward` (L292-3
 
 - **Hard dep T1-1** (`5oar`): host/kernel split, `AtomicSnapshot`, `JaxMemoryPolicy`.
 - **Lands before T1-5** (`ke4z`): T1-5's chunking applies to T1-4's LDM kernel.
-- **Files touched:** `cflibs/radiation/{kernels.py, host.py, profiles.py, spectrum_model.py}`, `cflibs/manifold/{generator.py, batch_forward.py}`, new `tests/test_ldm_broaden.py`. No new third-party deps.
+- **Files touched:** `cflibs/radiation/{kernels.py, host.py, profiles.py, spectrum_model.py}`, `cflibs/manifold/{generator.py, batch_forward.py}`, new `tests/radiation/test_ldm_broaden.py`. No new third-party deps.

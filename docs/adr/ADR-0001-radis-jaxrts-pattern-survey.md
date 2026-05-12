@@ -440,16 +440,18 @@ Twenty-one candidates from streams B/C/D, deduplicated where streams converged. 
 
 ### 8.2 Tier 2 — Medium impact, single-stream backing or moderate effort
 
-| # | Pattern | Source | Target | Impact | Effort |
-|---|---|---|---|---|---|
-| T2-1 | `@custom_jvp` on piecewise profile cutoffs (Voigt, Stark) | C-P12 | `cflibs/inversion/physics/stark.py`, `cflibs/radiation/profiles.py` | Medium-High (gradient correctness for joint L-BFGS-B + HMC) | Low-Medium |
-| T2-2 | Frozen-dataclass snapshots (`AtomicSnapshot`, `JaxMemoryPolicy`) | C-P9, C-P10, B-P5 | `cflibs/atomic/database.py`, new `cflibs/core/jax_policy.py` | Medium | Low (~1 day) |
-| T2-3 | Manual `register_pytree_node` on `SingleZoneLTEPlasma` + `InstrumentModel` | C-P1 | `cflibs/plasma/state.py`, `cflibs/instrument/model.py` | Medium (eliminates jit recompile on element-list change) | Low (~1 day each) |
-| T2-4 | Two-stage line DataFrame (`lines_raw` / `lines_scaled`) | B-P5 | `cflibs/inversion/physics/boltzmann.py`, `cflibs/atomic/database.py` | High (eliminates redundant SQLite hits inside the solver loop) | Low |
-| T2-5 | `PartitionFunctionSource` ABC (polynomial + summation backends) | B-P7, C-P11 | `cflibs/plasma/partition.py`, `cflibs/atomic/database.py` | Medium-High (cross-validation; non-LTE path) | Low-Medium |
-| T2-6 | Named-model template registry | D-P2 | `cflibs/inversion/forward_models/__init__.py` (new), `cflibs/radiation/spectrum_model.py`, `cflibs/inversion/solve/iterative.py` | Medium | Low-Medium |
-| T2-7 | `lax.while_loop`-based bisection on `log n_e` (replaces scipy.optimize.brentq) | C-P3 | `cflibs/inversion/solve/iterative.py` inner step | Medium | Low (~1 day) |
-| T2-8 | `input` / `params` / `misc` config namespacing on `SpectrumModel` | B-P1 | `cflibs/core/config.py`, `cflibs/radiation/spectrum_model.py` | Medium (clean batch loops; hashable for memoization) | Low |
+> **Revision 2026-05-12 (cross-audit):** T2-3 and T2-6 entirely folded into Tier-1 (T1-1 and T1-6 respectively); T2-4 retired as duplicate of T2-2's snapshot story + T1-3's pre-fetch; T2-2 scope rewritten as schema-evolution only (carrier + builder absorbed into T1-1). T2-1, T2-5, T2-7, T2-8 unchanged.
+
+| # | Pattern | Source | Target | Impact | Effort | Status |
+|---|---|---|---|---|---|---|
+| T2-1 | `@custom_jvp` on piecewise profile cutoffs (Voigt, Stark) | C-P12 | `cflibs/inversion/physics/stark.py`, `cflibs/radiation/profiles.py` | Medium-High | Low-Medium | DEFERRED |
+| T2-2 | **Schema evolution** for `AtomicSnapshot` (extra arrays, per-line metadata beyond T1-1 minimum) | C-P9, C-P10, B-P5 | `cflibs/atomic/database.py` | Medium | Low (~1 day) | **CARRIER + BUILDER FOLDED INTO T1-1**; only schema evolution remains in T2 |
+| ~~T2-3~~ | ~~Manual `register_pytree_node` on `SingleZoneLTEPlasma` + `InstrumentModel`~~ | — | — | — | — | **RETIRED — fully folded into T1-1** (T1-2 hard-requires) |
+| ~~T2-4~~ | ~~Two-stage line DataFrame `lines_raw` / `lines_scaled`~~ | — | — | — | — | **RETIRED — duplicate** of T2-2 + T1-3 pre-fetch. Pandas hygiene remnant → Tier-3 |
+| T2-5 | `PartitionFunctionSource` ABC (polynomial + summation backends) | B-P7, C-P11 | `cflibs/plasma/partition.py`, `cflibs/atomic/database.py` | Medium-High | Low-Medium | DEFERRED |
+| ~~T2-6~~ | ~~Named-model template registry~~ | — | — | — | — | **RETIRED — fully folded into T1-6** (`cflibs/inversion/forward_models/`) |
+| T2-7 | `lax.while_loop`-based bisection on `log n_e` (replaces scipy.optimize.brentq) | C-P3 | `cflibs/inversion/solve/iterative.py` inner step | Medium | Low (~1 day) | DEFERRED (begins after T1-3) |
+| T2-8 | `input` / `params` / `misc` config namespacing on `SpectrumModel` | B-P1 | `cflibs/core/config.py`, `cflibs/radiation/spectrum_model.py` | Medium | Low | DEFERRED (T1-5's `memory_policy` arg is forerunner) |
 
 ### 8.3 Tier 3 — Polish, convention, dev-experience
 
@@ -554,4 +556,6 @@ All Tier-1 beads filed and tightened on 2026-05-12 with per-bead implementation 
 
 T1-3 sits in wave 1 (not wave 2 as the original ranking suggested) because Stream A's T1-1 spec explicitly carves `cflibs/inversion/solve/` out of T1-1 scope — T1-3 owns its local host/kernel split of `iterative.py` and can run concurrently with T1-1.
 
-Tier-2 candidates (T2-1 through T2-8) remain unfiled — to be planned in a separate cycle after Tier-1 lands on `dev`. Tier-3 polish items fold into routine cleanup beads. Tier-4 (`lax.custom_root` implicit-diff) deserves a research bead with a literature-review precursor.
+**Wave-0 prerequisite beads** (from cross-audit 2026-05-12) block all six T1 beads — see `ADR-0001-RUNBOOK.md` §10 for the list (baseline capture, CI workflow fix, JAX 0.4.30 + psutil pin, `.venv` symlink policy, bd memory refresh).
+
+**Tier-2 cleanup from cross-audit:** T2-3 and T2-6 retired (folded into T1-1 and T1-6); T2-4 retired (duplicate). T2-2 scope narrowed to schema evolution. T2-1, T2-5, T2-7, T2-8 remain unfiled and deferrable. Tier-3 polish items fold into routine cleanup beads. Tier-4 (`lax.custom_root` implicit-diff) deserves a research bead with a literature-review precursor.
