@@ -52,15 +52,9 @@ ALLOWED_TRY_IMPORT_JAX: frozenset[str] = frozenset(
 )
 
 
-# T1-1 in-progress migration tail — these files will be removed from the
-# allowlist as each commit in the §8 migration order lands. The presence
-# of this list is itself a temporary scaffold; once empty, delete it.
-_T1_1_IN_PROGRESS: frozenset[str] = frozenset(
-    {
-        "cflibs/manifold/generator.py",
-        "cflibs/manifold/loader.py",
-    }
-)
+# T1-1 in-progress migration tail — empty: all 5 §8 migration commits have
+# landed. Kept as documentation of where the scaffold lived.
+_T1_1_IN_PROGRESS: frozenset[str] = frozenset()
 
 
 def _has_try_import_jax(tree: ast.AST) -> bool:

@@ -25,14 +25,7 @@ except ImportError:
     HAS_ZARR = False
     zarr = None
 
-try:
-    import jax.numpy as jnp
-
-    HAS_JAX = True
-except ImportError:
-    HAS_JAX = False
-    jnp = None
-
+from cflibs.core.jax_runtime import HAS_JAX, jnp  # noqa: F401
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("manifold.loader")
