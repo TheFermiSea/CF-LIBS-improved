@@ -614,9 +614,9 @@ class ALIASIdentifier:
     n_e_steps : int, optional
         Number of electron density grid points (default: 3)
     intensity_threshold_factor : float, optional
-        Peak detection threshold = factor × noise_estimate (default: 4.0)
+        Peak detection threshold = factor × noise_estimate (default: 2.0)
     detection_threshold : float, optional
-        Minimum confidence level for element detection (default: 0.02)
+        Minimum confidence level for element detection (default: 0.01)
     chance_window_scale : float, optional
         Scale factor for chance-coincidence windows used in fill-factor estimation.
         The chance half-window is `chance_window_scale * (lambda / R)`.
@@ -692,8 +692,8 @@ class ALIASIdentifier:
         n_e_range_cm3: Tuple[float, float] = (1e16, 5e17),
         T_steps: int = 7,
         n_e_steps: int = 3,
-        intensity_threshold_factor: float = 3.0,
-        detection_threshold: float = 0.02,
+        intensity_threshold_factor: float = 2.0,
+        detection_threshold: float = 0.01,
         chance_window_scale: float = 0.4,
         elements: Optional[List[str]] = None,
         max_lines_per_element: int = 20,
