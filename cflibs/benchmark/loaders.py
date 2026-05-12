@@ -749,6 +749,213 @@ def _load_nist_srm_612(data_dir: Optional[Path] = None) -> Optional[BenchmarkDat
     return _load_crm_dataset("nist_srm_612", data_dir)
 
 
+def _load_vrabel2020_soils(
+    data_dir: Optional[Path] = None,
+    max_spectra_per_sample: Optional[int] = 50,
+) -> Optional[BenchmarkDataset]:
+    """
+    Load the Vrabel et al. 2020 LIBS soil benchmark dataset.
+
+    Reference
+    ---------
+    Vrabel, J., et al. (2020). "Benchmark classification dataset for
+    laser-induced breakdown spectroscopy." *Scientific Data* 7:175.
+    doi:10.1038/s41597-020-0396-8
+
+    The published benchmark contains 100 soil/ore samples × 500 spectra each
+    in the training set (50,000 total) and ~20,000 spectra in the test set,
+    measured at 40,002 wavelength bins from 200–1000 nm. Each sample has a
+    certified composition for 10 elements (Al, Ca, Cr, Cu, Fe, K, Mg, Na, Pb, Si)
+    with reported uncertainties.
+
+    Data location
+    -------------
+    ``<repo>/data/vrabel2020_soil_benchmark/``:
+
+    * ``train.h5`` — 7.1 GB HDF5 with /Spectra/NNN groups (one per sample,
+      each shape (40002, 500)).
+    * ``test.h5`` — 3.0 GB HDF5 with /UNKNOWN/* test groups.
+    * ``support_tables.xlsx`` — MIXED_composition sheet (100 samples × 10 elements
+      in weight-percent) and MIXED_uncertainty sheet.
+    * ``test_labels.csv`` — 20,000 integer class labels (1–12).
+
+    Memory note
+    -----------
+    Loading all 50,000 train spectra at full resolution would require ~16 GB in
+    memory.  ``max_spectra_per_sample`` (default 50) caps the per-sample shot
+    count so the default load is ~5,000 spectra × ~1.6 GB.  Pass ``None`` to
+    load the full 50k.
+
+    Parameters
+    ----------
+    data_dir : Path, optional
+        Root data directory.  Defaults to ``<repo>/data/``.
+    max_spectra_per_sample : int or None, default 50
+        Cap shots loaded per sample.  ``None`` loads everything (50k spectra,
+        ~16 GB RAM).  Lower values produce smaller / faster benchmarks.
+
+    Returns
+    -------
+    BenchmarkDataset or None
+        Returns ``None`` if the Vrabel data is not present in tree.
+    """
+    from cflibs.benchmark.dataset import (
+        BenchmarkSpectrum,
+        InstrumentalConditions,
+        MatrixType,
+        SampleMetadata,
+        SampleType,
+    )
+
+    if data_dir is None:
+        data_dir = _REPO_DATA_DIR
+    vrabel_dir = Path(data_dir) / "vrabel2020_soil_benchmark"
+    train_path = vrabel_dir / "train.h5"
+    support_path = vrabel_dir / "support_tables.xlsx"
+
+    if not (train_path.is_file() and support_path.is_file()):
+        logger.debug(
+            "Vrabel 2020 data not found in %s (skipped; need train.h5 + support_tables.xlsx)",
+            vrabel_dir,
+        )
+        return None
+
+    try:
+        import h5py
+        import openpyxl
+    except ImportError as exc:  # pragma: no cover — optional deps
+        logger.warning("Vrabel loader needs h5py + openpyxl: %s", exc)
+        return None
+
+    # Read certified compositions from the MIXED_composition sheet:
+    # row = sample ID (1..100), columns = Class ID, Al, Ca, Cr, Cu, Fe, K, Mg, Na, Pb, Si.
+    # Values are weight-percent; divide by 100 for mass fraction.
+    wb = openpyxl.load_workbook(support_path, read_only=True, data_only=True)
+    ws = wb["MIXED_composition"]
+    rows = list(ws.iter_rows(values_only=True))
+    header = list(rows[0])
+    element_cols = {h: i for i, h in enumerate(header) if h not in ("Sample ID", "Class ID")}
+    elements = sorted(element_cols.keys())
+
+    sample_compositions: Dict[int, Dict[str, float]] = {}
+    sample_class: Dict[int, int] = {}
+    for row in rows[1:]:
+        if not row or row[0] is None:
+            continue
+        sample_id = int(row[0])
+        sample_class[sample_id] = int(row[1])
+        comp = {
+            el: float(row[idx]) / 100.0 if row[idx] is not None else 0.0
+            for el, idx in element_cols.items()
+        }
+        sample_compositions[sample_id] = comp
+    wb.close()
+
+    spectra = []
+    with h5py.File(train_path, "r") as f:
+        # /Wavelengths/1: shape (40002,), 200–1000 nm.
+        wavelength_nm = np.asarray(f["Wavelengths"]["1"][:], dtype=float)
+        spectral_range = (float(wavelength_nm.min()), float(wavelength_nm.max()))
+
+        # /Spectra/NNN: shape (40002, 500), one per sample.
+        spectra_grp = f["Spectra"]
+        sample_keys = sorted(spectra_grp.keys(), key=lambda s: int(s))
+
+        for sk in sample_keys:
+            sample_id = int(sk)
+            if sample_id not in sample_compositions:
+                logger.debug("Vrabel sample %d has no composition; skipped", sample_id)
+                continue
+
+            arr = spectra_grp[sk]  # shape (40002, N_shots)
+            n_shots = arr.shape[1]
+            if max_spectra_per_sample is not None:
+                n_load = min(max_spectra_per_sample, n_shots)
+            else:
+                n_load = n_shots
+
+            # Load the per-shot intensities (40002, n_load) once and slice per shot.
+            shots = np.asarray(arr[:, :n_load], dtype=float)
+
+            comp = sample_compositions[sample_id]
+            cls = sample_class.get(sample_id, 0)
+
+            conditions = InstrumentalConditions(
+                laser_wavelength_nm=1064.0,
+                laser_energy_mj=0.0,
+                spectral_range_nm=spectral_range,
+                spectral_resolution_nm=0.02,
+                spectrometer_type="echelle",
+                detector_type="ICCD",
+                atmosphere="air",
+                notes=(
+                    "Vrabel et al. 2020 Sci Data benchmark; mixed soil/ore samples; "
+                    f"sample {sample_id} (class {cls})"
+                ),
+            )
+
+            for shot_idx in range(n_load):
+                metadata = SampleMetadata(
+                    sample_id=f"vrabel_sample_{sample_id:03d}",
+                    sample_type=SampleType.CRM,
+                    matrix_type=MatrixType.GEOLOGICAL,
+                    crm_name=f"vrabel2020_sample_{sample_id:03d}",
+                    crm_source="Vrabel 2020 Sci Data benchmark",
+                    preparation="pressed pellet",
+                    surface_condition="prepared",
+                    provenance=(
+                        f"Vrabel et al. 2020 Sci Data 7:175; sample {sample_id}, "
+                        f"shot {shot_idx + 1}/{n_load} (of {n_shots} available); "
+                        "composition: support_tables.xlsx MIXED_composition sheet"
+                    ),
+                )
+                spectra.append(
+                    BenchmarkSpectrum(
+                        spectrum_id=f"vrabel2020_s{sample_id:03d}_shot{shot_idx:03d}",
+                        wavelength_nm=wavelength_nm,
+                        intensity=shots[:, shot_idx],
+                        true_composition=comp,
+                        conditions=conditions,
+                        metadata=metadata,
+                        dataset_id="vrabel2020_soil_benchmark",
+                        group_id=f"vrabel_sample_{sample_id:03d}",
+                        specimen_id=f"vrabel_sample_{sample_id:03d}",
+                        instrument_id="vrabel2020_echelle_iccd",
+                        truth_type=TruthType.ASSAY,
+                        spectrum_kind="geostandard",
+                        annotations={
+                            "vrabel_sample_id": sample_id,
+                            "vrabel_class_id": cls,
+                            "shot_index": shot_idx,
+                            "n_shots_total": n_shots,
+                        },
+                    )
+                )
+
+    if not spectra:
+        return None
+
+    return BenchmarkDataset(
+        name="vrabel2020_soil_benchmark",
+        version="v1",
+        spectra=spectra,
+        elements=elements,
+        description=(
+            "Vrabel et al. 2020 *Scientific Data* peer-reviewed LIBS benchmark. "
+            "100 mixed soil/ore samples × per-sample shots × certified compositions "
+            "for Al, Ca, Cr, Cu, Fe, K, Mg, Na, Pb, Si. "
+            f"This load: {len(spectra)} spectra "
+            f"(cap = {max_spectra_per_sample} per sample)."
+        ),
+        citation=(
+            "Vrabel, J., et al. (2020). Benchmark classification dataset for "
+            "laser-induced breakdown spectroscopy. Scientific Data 7:175. "
+            "doi:10.1038/s41597-020-0396-8"
+        ),
+        contributors=["Vrabel et al."],
+    )
+
+
 def build_dataset_registry(
     data_dir: Optional[Path] = None,
 ) -> List[BenchmarkDataset]:
@@ -778,7 +985,7 @@ def build_dataset_registry(
     ...     print(ds.name, ds.n_spectra)
     """
     datasets: List[BenchmarkDataset] = []
-    for loader in (_load_bhvo2_usgs, _load_nist_srm_612):
+    for loader in (_load_bhvo2_usgs, _load_nist_srm_612, _load_vrabel2020_soils):
         ds = loader(data_dir)
         if ds is not None:
             datasets.append(ds)

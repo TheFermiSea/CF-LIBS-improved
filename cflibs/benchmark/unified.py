@@ -497,8 +497,13 @@ def load_manifest_synthetic_dataset(
 def load_default_datasets(
     data_dir: Path,
     synthetic_corpus_path: Optional[Path] = None,
+    vrabel_max_shots_per_sample: Optional[int] = 50,
 ) -> Dict[str, BenchmarkDataset]:
-    from cflibs.benchmark.loaders import _load_bhvo2_usgs, _load_nist_srm_612
+    from cflibs.benchmark.loaders import (
+        _load_bhvo2_usgs,
+        _load_nist_srm_612,
+        _load_vrabel2020_soils,
+    )
 
     datasets: Dict[str, BenchmarkDataset] = {"aalto_libs": load_aalto_id_dataset(data_dir)}
     datasets.update(load_assay_and_blind_datasets(data_dir))
@@ -510,6 +515,16 @@ def load_default_datasets(
         _ds = _crm_loader(data_dir)
         if _ds is not None:
             datasets[_ds.name] = _ds
+
+    # Vrabel 2020 Sci Data peer-reviewed LIBS benchmark — 100 mixed soil/ore
+    # samples × N shots/sample with certified compositions (Al, Ca, Cr, Cu, Fe,
+    # K, Mg, Na, Pb, Si).  Default cap is 50 shots/sample (~5,000 spectra,
+    # ~1.6 GB).  Pass vrabel_max_shots_per_sample=None for the full 50k.
+    _vrabel = _load_vrabel2020_soils(
+        data_dir, max_spectra_per_sample=vrabel_max_shots_per_sample
+    )
+    if _vrabel is not None:
+        datasets[_vrabel.name] = _vrabel
 
     if synthetic_corpus_path is not None and synthetic_corpus_path.exists():
         datasets["synthetic_id"] = load_manifest_synthetic_dataset(synthetic_corpus_path)
