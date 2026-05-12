@@ -53,7 +53,7 @@ from cflibs.core.constants import (
     M_PROTON,
     SAHA_CONST_CM3,
 )
-from cflibs.core.jax_runtime import jnp
+from cflibs.core.jax_runtime import HAS_JAX, jnp
 from cflibs.core.logging_config import get_logger
 from cflibs.radiation.profiles import BroadeningMode
 
@@ -518,4 +518,402 @@ def forward_model(
     return B_lambda * (-jnp.expm1(-kappa * path_length_m))
 
 
-__all__ = ["forward_model"]
+# ---------------------------------------------------------------------------
+# Chunked forward model (T1-5) — overlap-and-add over wavelength axis
+# ---------------------------------------------------------------------------
+
+
+def overlap_and_add(
+    partials,
+    *,
+    overlap: int,
+    output_length: int,
+):
+    """Recombine ``nstitch`` per-chunk spectra via overlap-and-add (OLA).
+
+    Mirrors :func:`exojax.signal.ola.overlap_and_add_matrix` (ADR-0001
+    §3, §4). Place each chunk at offset ``chunk_idx * div_length - overlap``
+    in an output buffer of length ``output_length + 2*overlap``, sum where
+    chunks overlap, then trim the wing padding.
+
+    Parameters
+    ----------
+    partials : array, shape (nstitch, div_length + 2·overlap)
+        Per-chunk spectra emitted by the scan body. The first ``overlap``
+        and last ``overlap`` samples of each chunk are the wing padding
+        that needs to be summed with the neighbouring chunk.
+    overlap : int, **static**
+        Per-side wing padding in samples; must match the value used by
+        :func:`_split_wavelength_grid`.
+    output_length : int, **static**
+        Length of the original (un-chunked) wavelength axis. Output is
+        trimmed to this length.
+
+    Returns
+    -------
+    spectrum : array, shape (output_length,)
+        Stitched spectrum with wing contributions summed.
+
+    Notes
+    -----
+    Implementation uses :func:`jax.lax.fori_loop` +
+    :func:`jax.lax.dynamic_update_slice` so the loop count is static
+    (matches the leading dim of ``partials``) and the kernel stays jit-
+    safe. The ``+ 2*overlap`` padding on the output buffer is sliced off
+    before return.
+    """
+    partials = jnp.asarray(partials)
+    nstitch = partials.shape[0]
+    chunk_length = partials.shape[1]
+    div_length = chunk_length - 2 * overlap
+
+    # Buffer must accommodate every chunk's full footprint, even when the
+    # last chunk's interior overshoots ``output_length`` (the pad-and-mask
+    # case in ``host._split_wavelength_grid`` when ``N_λ % nstitch != 0``).
+    # Total span = (nstitch-1)·div_length + chunk_length, which collapses
+    # to ``nstitch·div_length + 2·overlap``. We allocate that many samples
+    # and slice the leading ``overlap`` plus the trailing padding at the
+    # end.
+    buf_length = nstitch * div_length + 2 * overlap
+
+    if not HAS_JAX:  # pragma: no cover — fallback for non-JAX environments
+        buf = np.zeros(buf_length, dtype=np.asarray(partials).dtype)
+        partials_np = np.asarray(partials)
+        for c in range(nstitch):
+            start = c * div_length
+            buf[start : start + chunk_length] += partials_np[c]
+        return buf[overlap : overlap + output_length]
+
+    import jax  # noqa: PLC0415 — JAX is mandatory on this path
+
+    dtype = partials.dtype
+    init_buf = jnp.zeros(buf_length, dtype=dtype)
+
+    def _body(c, buf):
+        start = c * div_length
+        chunk = partials[c]
+        # Pull the existing slice, add the chunk, and write it back. The
+        # ``dynamic_slice`` / ``dynamic_update_slice`` pair is the
+        # canonical jit-safe way to do an in-place accumulate of a chunk
+        # into a buffer (lax.scatter-style ops do not preserve gradients
+        # cleanly).
+        existing = jax.lax.dynamic_slice(buf, (start,), (chunk_length,))
+        return jax.lax.dynamic_update_slice(buf, existing + chunk, (start,))
+
+    buf = jax.lax.fori_loop(0, nstitch, _body, init_buf)
+    return jax.lax.dynamic_slice(buf, (overlap,), (output_length,))
+
+
+def _resolve_checkpoint_policy():
+    """Return ``jax.checkpoint_policies.dots_with_no_batch_dims_saveable``.
+
+    Falls back to ``everything_saveable`` (slower; correct) when the
+    fine-grained policy is missing from the installed JAX (spec §10
+    risks). Returns ``None`` when JAX itself is unavailable so the
+    chunked path silently degrades to a plain Python loop.
+    """
+    if not HAS_JAX:  # pragma: no cover
+        return None
+    import jax  # noqa: PLC0415
+
+    policies = getattr(jax, "checkpoint_policies", None)
+    if policies is None:  # very old JAX without checkpoint_policies
+        return None
+    return (
+        getattr(policies, "dots_with_no_batch_dims_saveable", None)
+        # NOTE: fallback per spec §10 when the fine-grained policy is
+        # missing. ``everything_saveable`` is slower but always correct.
+        or getattr(policies, "everything_saveable", None)
+    )
+
+
+def _forward_model_per_chunk(
+    plasma_state,
+    atomic_snapshot,
+    instrument,
+    chunk_wavelength_grid,
+    sigma_grid,
+    line_mask,
+    *,
+    broadening_mode: BroadeningMode,
+    path_length_m: float,
+    apply_self_absorption: bool,
+    fold_instrument_sigma: bool,
+    apply_stark: bool,
+):
+    """Forward model on one wavelength chunk with a per-line activation mask.
+
+    Mirrors the body of :func:`forward_model` but accepts a ``(N_lines,)``
+    boolean mask that zeroes out lines whose centres lie outside the
+    chunk's wing-clearance window (built by :func:`host._split_wavelength_grid`).
+    Used as the inner scan body of :func:`forward_model_chunked`.
+
+    The mask is applied to the per-line emissivity before broadening, so
+    masked lines contribute zero to the chunk's spectrum but the
+    ``(N_lines,)`` shape stays homogeneous across chunks — a hard
+    requirement of :func:`jax.lax.scan`.
+
+    Parameters
+    ----------
+    line_mask : array of float, shape (N_lines,)
+        Cast to the working dtype (so it multiplies cleanly). 1.0 ⇒ line
+        contributes; 0.0 ⇒ masked out.
+
+    All other parameters match :func:`forward_model`. Returns a
+    ``(chunk_length,)`` spectrum array.
+    """
+    wl = jnp.asarray(chunk_wavelength_grid)
+
+    n_upper = _saha_two_stage_populations(plasma_state, atomic_snapshot)
+
+    line_wl_nm = jnp.asarray(atomic_snapshot.line_wavelengths_nm)
+    line_A_ki = jnp.asarray(atomic_snapshot.line_A_ki)
+    n_upper_m3 = n_upper * 1.0e6
+    lambda_m = line_wl_nm * 1.0e-9
+    epsilon_line = _HC_OVER_4PI / jnp.maximum(lambda_m, 1e-30) * line_A_ki * n_upper_m3
+
+    # Apply the per-chunk activation mask. ``line_mask`` is cast to the
+    # working dtype upstream so this is a single multiply.
+    mask = jnp.asarray(line_mask).astype(epsilon_line.dtype)
+    epsilon_line = epsilon_line * mask
+
+    T_eV = jnp.asarray(plasma_state.T_e_eV)
+    n_e = jnp.asarray(plasma_state.n_e)
+
+    if broadening_mode == BroadeningMode.LEGACY:
+        sigma_scalar = 0.01 * jnp.sqrt(jnp.maximum(T_eV, 1e-12) / 0.86)
+        sigma_per_line = jnp.full(line_wl_nm.shape, sigma_scalar, dtype=line_wl_nm.dtype)
+        emissivity = _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line, sigma_per_line)
+    elif broadening_mode == BroadeningMode.NIST_PARITY:
+        sigma_per_line = _per_line_instrument_sigma(atomic_snapshot, instrument)
+        emissivity = _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line, sigma_per_line)
+    elif broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
+        line_mass_amu = _species_mass_array(atomic_snapshot)[
+            np.asarray(atomic_snapshot.line_species_index)
+        ]
+        sigma_doppler = _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu)
+        if fold_instrument_sigma:
+            sigma_inst = _per_line_instrument_sigma(atomic_snapshot, instrument)
+            sigma_per_line = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
+        else:
+            sigma_per_line = sigma_doppler
+        if apply_stark:
+            gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
+            sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
+            emissivity = _voigt_sum_per_line(
+                wl, line_wl_nm, epsilon_line, sigma_per_line, gamma_per_line
+            )
+        else:
+            emissivity = _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line, sigma_per_line)
+    elif broadening_mode == BroadeningMode.LDM_GAUSSIAN:
+        from cflibs.radiation.ldm import ldm_broaden  # noqa: PLC0415
+
+        line_mass_amu = _species_mass_array(atomic_snapshot)[
+            np.asarray(atomic_snapshot.line_species_index)
+        ]
+        sigma_per_line = jnp.maximum(
+            _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu), 1e-12
+        )
+        emissivity = ldm_broaden(
+            line_wavelengths=line_wl_nm,
+            line_intensities=epsilon_line,
+            line_sigmas=sigma_per_line,
+            wavelength_grid=wl,
+            sigma_grid=jnp.asarray(sigma_grid),
+        )
+    else:
+        raise ValueError(f"Unsupported broadening_mode: {broadening_mode!r}")
+
+    if not apply_self_absorption:
+        return emissivity
+
+    wl_m = wl * 1.0e-9
+    T_K = T_eV * EV_TO_K
+    exponent = (H_PLANCK * C_LIGHT) / (wl_m * KB * T_K)
+    exponent = jnp.minimum(exponent, 700.0)
+    B_m3 = (2.0 * H_PLANCK * C_LIGHT**2 / (wl_m**5)) / (jnp.exp(exponent) - 1.0)
+    B_lambda = B_m3 * 1.0e-9
+    kappa = emissivity / (B_lambda + 1e-100)
+    return B_lambda * (-jnp.expm1(-kappa * path_length_m))
+
+
+def forward_model_chunked(
+    plasma_state: "SingleZoneLTEPlasma",
+    atomic_snapshot: "AtomicSnapshot",
+    instrument: "InstrumentModel",
+    wavelength_grid,
+    sigma_grid=None,
+    *,
+    nstitch: int = 1,
+    overlap: int = 0,
+    chunk_wavelength_grids=None,
+    line_masks=None,
+    broadening_mode: BroadeningMode = BroadeningMode.PHYSICAL_DOPPLER,
+    path_length_m: float = 0.01,
+    apply_self_absorption: bool = False,
+    fold_instrument_sigma: bool = True,
+    apply_stark: bool = False,
+    output_length: Optional[int] = None,
+):
+    """Chunked forward model over the wavelength axis (ADR-0001 T1-5).
+
+    Splits the wavelength grid into ``nstitch`` chunks, scans
+    :func:`_forward_model_per_chunk` over the chunks under
+    :func:`jax.checkpoint`, and recombines the partials via
+    :func:`overlap_and_add`. Cuts peak transient memory by a factor of
+    ``nstitch`` and cuts backward-pass activation memory roughly in half
+    (spec §8 AC#4).
+
+    When ``nstitch == 1`` the function dispatches directly to
+    :func:`forward_model` — bit-identical to the un-chunked path so
+    existing manifold checksums are preserved (spec §6, §10 rollback).
+
+    Parameters
+    ----------
+    plasma_state, atomic_snapshot, instrument, wavelength_grid, sigma_grid :
+        Same semantics as :func:`forward_model`.
+    nstitch : int, **static**, default 1
+        Number of wavelength chunks. ``1`` ⇒ direct dispatch to
+        :func:`forward_model`.
+    overlap : int, **static**, default 0
+        Per-side wing padding in samples. Spec §5 recommends
+        ``overlap = ceil(overlap_factor · max(σ_grid) / Δλ)`` with
+        ``overlap_factor = 4.0``. ``test_overlap_factor`` is the canary.
+    chunk_wavelength_grids : array, shape (nstitch, div_length + 2·overlap), optional
+        Pre-built padded chunk wavelength grids. When ``None`` and
+        ``nstitch > 1`` the caller must pass the metadata explicitly —
+        this kernel does not call :func:`host._split_wavelength_grid`
+        itself to keep the jit boundary clean.
+    line_masks : array of bool/float, shape (nstitch, N_lines), optional
+        Per-chunk line activation masks; ``True`` ⇒ line contributes.
+        Pair with ``chunk_wavelength_grids``.
+    broadening_mode : BroadeningMode, **static**
+        Static dispatch knob. :attr:`BroadeningMode.NIST_PARITY` rejects
+        ``nstitch > 1`` per spec §7 — lines are sparse, per-line Voigt is
+        already cheap, and the spec calls for the un-chunked path.
+    path_length_m : float
+        Plasma path length (m). Only consulted when
+        ``apply_self_absorption``.
+    apply_self_absorption : bool, default False
+        Self-absorption switch — same as :func:`forward_model`.
+    fold_instrument_sigma, apply_stark : bool
+        See :func:`forward_model`.
+    output_length : int, optional
+        Length of the original wavelength grid. Required when
+        ``nstitch > 1``; ignored otherwise. The chunked spectrum is
+        trimmed to this length after OLA recombination.
+
+    Returns
+    -------
+    intensity : array, shape (output_length,) or (N_wl,)
+        Stitched spectrum on the original wavelength grid.
+
+    Raises
+    ------
+    ValueError
+        - ``broadening_mode == NIST_PARITY`` with ``nstitch > 1`` (spec §7).
+        - ``nstitch > 1`` without ``chunk_wavelength_grids`` /
+          ``line_masks`` / ``output_length``.
+
+    Notes
+    -----
+    The scan body is wrapped in :func:`jax.checkpoint` with policy
+    ``dots_with_no_batch_dims_saveable`` (spec §3) — recomputes the
+    cheap per-line scalar work on the backward pass while saving the
+    expensive matrix dots. Falls back to ``everything_saveable`` on
+    older JAX builds (see :func:`_resolve_checkpoint_policy`).
+    """
+    if nstitch == 1:
+        # Zero-cost dispatch — caller pays nothing for the chunked path
+        # when they have not opted in. Bit-identical to ``forward_model``.
+        return forward_model(
+            plasma_state,
+            atomic_snapshot,
+            instrument,
+            wavelength_grid,
+            sigma_grid=sigma_grid,
+            broadening_mode=broadening_mode,
+            path_length_m=path_length_m,
+            apply_self_absorption=apply_self_absorption,
+            fold_instrument_sigma=fold_instrument_sigma,
+            apply_stark=apply_stark,
+        )
+
+    if broadening_mode == BroadeningMode.NIST_PARITY:
+        # Spec §7: lines too sparse for chunked OLA to help.
+        raise ValueError(
+            "BroadeningMode.NIST_PARITY does not support chunked scan; "
+            "lines are sparse and per-line Voigt is already cheap. Pass "
+            "nstitch=1 or switch to PHYSICAL_DOPPLER / LDM_GAUSSIAN."
+        )
+
+    if chunk_wavelength_grids is None or line_masks is None or output_length is None:
+        raise ValueError(
+            "forward_model_chunked with nstitch>1 requires "
+            "chunk_wavelength_grids, line_masks, and output_length. "
+            "Use cflibs.radiation.host.build_chunk_metadata to construct them."
+        )
+
+    if not HAS_JAX:  # pragma: no cover - fallback non-JAX path
+        chunks_np = np.asarray(chunk_wavelength_grids)
+        masks_np = np.asarray(line_masks)
+        partials_np = np.stack(
+            [
+                np.asarray(
+                    _forward_model_per_chunk(
+                        plasma_state,
+                        atomic_snapshot,
+                        instrument,
+                        chunks_np[c],
+                        sigma_grid,
+                        masks_np[c],
+                        broadening_mode=broadening_mode,
+                        path_length_m=path_length_m,
+                        apply_self_absorption=apply_self_absorption,
+                        fold_instrument_sigma=fold_instrument_sigma,
+                        apply_stark=apply_stark,
+                    )
+                )
+                for c in range(int(nstitch))
+            ]
+        )
+        return overlap_and_add(partials_np, overlap=overlap, output_length=output_length)
+
+    import jax  # noqa: PLC0415
+
+    chunks = jnp.asarray(chunk_wavelength_grids)
+    masks_dtype = chunks.dtype
+    masks = jnp.asarray(line_masks).astype(masks_dtype)
+
+    policy = _resolve_checkpoint_policy()
+
+    def _body_uncheckpointed(chunk_wl, chunk_mask):
+        return _forward_model_per_chunk(
+            plasma_state,
+            atomic_snapshot,
+            instrument,
+            chunk_wl,
+            sigma_grid,
+            chunk_mask,
+            broadening_mode=broadening_mode,
+            path_length_m=path_length_m,
+            apply_self_absorption=apply_self_absorption,
+            fold_instrument_sigma=fold_instrument_sigma,
+            apply_stark=apply_stark,
+        )
+
+    if policy is not None:
+        body = jax.checkpoint(_body_uncheckpointed, policy=policy)
+    else:  # pragma: no cover - very old JAX
+        body = _body_uncheckpointed
+
+    def _scan_step(carry, inputs):
+        chunk_wl, chunk_mask = inputs
+        partial = body(chunk_wl, chunk_mask)
+        return carry, partial
+
+    _, partials = jax.lax.scan(_scan_step, None, (chunks, masks))
+    return overlap_and_add(partials, overlap=overlap, output_length=output_length)
+
+
+__all__ = ["forward_model", "forward_model_chunked", "overlap_and_add"]
