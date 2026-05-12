@@ -44,6 +44,257 @@ except ImportError:
     except ImportError:
         HAS_RUST_CORE = False
 
+# JAX is an optional fast path for the dense numerical kernels in this module
+# (peak-tolerance matching, kdet shift-scan reductions, local-maxima
+# fallback peak finding). The default code paths remain pure NumPy / SciPy /
+# Rust so behavior is unchanged unless callers explicitly opt in via the
+# ``use_jax_kdet`` / ``use_jax_peak_fallback`` kwargs of
+# ``detect_line_observations``.
+#
+# Note: ``scipy.signal.find_peaks`` is deliberately NOT ported. Its
+# ``distance`` + ``prominence`` semantics produce variable-length output and
+# are non-local; reproducing them faithfully in JAX is brittle and the
+# scipy C implementation already runs in ~0.2 ms on a 4096-sample spectrum
+# (vs ~100 ms JAX JIT warmup). See
+# ``docs/jax-port/line-detection-consultation.md`` for the full audit and
+# reviewer recommendations (Codex + Gemini).
+try:
+    import jax
+    import jax.numpy as jnp
+
+    _HAS_JAX = True
+except ImportError:  # pragma: no cover - exercised only when jax missing
+    jax = None  # type: ignore[assignment]
+    jnp = None  # type: ignore[assignment]
+    _HAS_JAX = False
+
+
+if _HAS_JAX:
+
+    @jax.jit
+    def _jax_peaks_within_tolerance(
+        peaks: "jnp.ndarray",
+        transitions_sorted: "jnp.ndarray",
+        tolerance_nm: float,
+    ) -> "jnp.ndarray":
+        """JAX-vectorized analogue of :func:`_peaks_within_tolerance`.
+
+        Returns a boolean mask the same length as ``peaks`` indicating
+        whether each peak has *any* transition within ``tolerance_nm``.
+
+        Algorithm (identical to the NumPy path): for each peak, find its
+        ``searchsorted`` insertion index in ``transitions_sorted``, then
+        compare against the two adjacent transitions (``idx`` and
+        ``idx - 1``). The peak is "in tolerance" if the minimum of those
+        two |distance| values is <= ``tolerance_nm``.
+
+        Parameters
+        ----------
+        peaks : (N,) jnp.ndarray
+            Peak wavelengths (already shifted if applicable). May contain
+            arbitrary values — empty arrays must be handled by the caller.
+        transitions_sorted : (M,) jnp.ndarray
+            Transition wavelengths, **sorted ascending**. Must contain at
+            least one element; callers handle the M=0 case in Python.
+        tolerance_nm : float
+            Match tolerance in nm.
+
+        Returns
+        -------
+        (N,) jnp.ndarray of bool
+            ``True`` where ``min(|peak - left|, |peak - right|) <= tolerance``.
+        """
+        m_max = transitions_sorted.shape[0] - 1
+        idx = jnp.searchsorted(transitions_sorted, peaks)
+        idx_clipped = jnp.clip(idx, 0, m_max)
+        left_idx = jnp.clip(idx - 1, 0, m_max)
+        nearest = transitions_sorted[idx_clipped]
+        left_nearest = transitions_sorted[left_idx]
+        min_dist = jnp.minimum(jnp.abs(nearest - peaks), jnp.abs(left_nearest - peaks))
+        return min_dist <= tolerance_nm
+
+    @jax.jit
+    def _jax_kdet_candidate_counts(
+        peak_wavelengths: "jnp.ndarray",
+        transitions_sorted: "jnp.ndarray",
+        shift_grid: "jnp.ndarray",
+        tolerance_nm: float,
+    ) -> "jnp.ndarray":
+        """Count candidate peaks per shift for a single element.
+
+        For each shift in ``shift_grid``, computes the number of peaks
+        (after applying the shift) that fall within ``tolerance_nm`` of any
+        transition. Replaces the inner Python loop in
+        :func:`_kdet_filter_elements` for a single element.
+
+        Parameters
+        ----------
+        peak_wavelengths : (N,) jnp.ndarray
+            Observed peak wavelengths.
+        transitions_sorted : (M,) jnp.ndarray
+            Element's transition wavelengths, sorted ascending. The caller
+            handles the M=0 case in Python.
+        shift_grid : (S,) jnp.ndarray
+            Wavelength shifts to scan.
+        tolerance_nm : float
+            Match tolerance.
+
+        Returns
+        -------
+        (S,) jnp.ndarray of int32
+            Candidate count for each shift.
+        """
+
+        def _per_shift(shift):
+            shifted = peak_wavelengths + shift
+            mask = _jax_peaks_within_tolerance(shifted, transitions_sorted, tolerance_nm)
+            return jnp.sum(mask.astype(jnp.int32))
+
+        return jax.vmap(_per_shift)(shift_grid)
+
+    @jax.jit
+    def _jax_local_maxima_mask(
+        intensity: "jnp.ndarray",
+        normalized: "jnp.ndarray",
+        threshold: float,
+    ) -> "jnp.ndarray":
+        """Length-N boolean mask of strict local maxima above ``threshold``.
+
+        Matches the simple-fallback path of :func:`_find_peaks`:
+        ``intensity[i] > intensity[i-1]`` and ``intensity[i] >
+        intensity[i+1]`` and ``normalized[i] >= threshold``, for
+        ``i in [1, N-1)``. Endpoint samples (i=0 and i=N-1) are never
+        considered peaks.
+
+        Parameters
+        ----------
+        intensity : (N,) jnp.ndarray
+            Raw spectral intensity.
+        normalized : (N,) jnp.ndarray
+            ``intensity / intensity.max()``.
+        threshold : float
+            Minimum relative height in [0, 1].
+
+        Returns
+        -------
+        (N,) jnp.ndarray of bool
+            Local-maximum mask.
+        """
+        n = intensity.shape[0]
+        above = normalized >= threshold
+        left_lower = jnp.concatenate(
+            [jnp.zeros((1,), dtype=jnp.bool_), intensity[1:] > intensity[:-1]]
+        )
+        right_lower = jnp.concatenate(
+            [intensity[:-1] > intensity[1:], jnp.zeros((1,), dtype=jnp.bool_)]
+        )
+        # Force the endpoints to False — the NumPy fallback only checks
+        # i in [1, N-1).
+        interior = jnp.arange(n)
+        interior_mask = (interior > 0) & (interior < n - 1)
+        return above & left_lower & right_lower & interior_mask
+
+
+def _peaks_within_tolerance_jax(
+    peaks: np.ndarray,
+    transitions_sorted: np.ndarray,
+    tolerance_nm: float,
+) -> np.ndarray:
+    """JAX-backed wrapper around :func:`_jax_peaks_within_tolerance`.
+
+    Behaviorally identical to :func:`_peaks_within_tolerance` (same return
+    dtype and shape, same edge cases for empty inputs). Falls back to the
+    NumPy implementation if JAX is unavailable.
+
+    See Also
+    --------
+    _peaks_within_tolerance : the NumPy reference implementation.
+    """
+    if not _HAS_JAX:
+        return _peaks_within_tolerance(peaks, transitions_sorted, tolerance_nm)
+    if transitions_sorted.size == 0 or peaks.size == 0:
+        return np.zeros_like(peaks, dtype=bool)
+    peaks_j = jnp.asarray(peaks, dtype=jnp.float64)
+    trans_j = jnp.asarray(transitions_sorted, dtype=jnp.float64)
+    mask = _jax_peaks_within_tolerance(peaks_j, trans_j, float(tolerance_nm))
+    return np.asarray(mask, dtype=bool)
+
+
+def _kdet_candidate_counts_jax(
+    peak_wavelengths: np.ndarray,
+    transitions_sorted: np.ndarray,
+    shift_grid: np.ndarray,
+    tolerance_nm: float,
+) -> np.ndarray:
+    """JAX-backed candidate-counts-per-shift for one element.
+
+    Returns an array of length ``len(shift_grid)`` where each entry is the
+    number of peaks (after the corresponding shift) that fall within
+    ``tolerance_nm`` of any transition.
+
+    Falls back to the NumPy ``_peaks_within_tolerance`` loop when JAX is
+    unavailable. The empty-input edge cases (no transitions, no peaks, no
+    shifts) return an all-zeros vector of the appropriate length, matching
+    the semantics of the NumPy path's inner loop.
+    """
+    n_shifts = shift_grid.size
+    if not _HAS_JAX:
+        out = np.zeros(n_shifts, dtype=np.int64)
+        for i, shift in enumerate(shift_grid):
+            shifted = peak_wavelengths + float(shift)
+            mask = _peaks_within_tolerance(shifted, transitions_sorted, tolerance_nm)
+            out[i] = int(np.sum(mask))
+        return out
+    if transitions_sorted.size == 0 or peak_wavelengths.size == 0 or n_shifts == 0:
+        return np.zeros(n_shifts, dtype=np.int64)
+    peaks_j = jnp.asarray(peak_wavelengths, dtype=jnp.float64)
+    trans_j = jnp.asarray(transitions_sorted, dtype=jnp.float64)
+    shifts_j = jnp.asarray(shift_grid, dtype=jnp.float64)
+    counts = _jax_kdet_candidate_counts(peaks_j, trans_j, shifts_j, float(tolerance_nm))
+    return np.asarray(counts, dtype=np.int64)
+
+
+def _find_peaks_jax_fallback(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    min_peak_height: float,
+) -> List[Tuple[int, float]]:
+    """JAX-backed analogue of the simple local-maxima fallback in
+    :func:`_find_peaks`.
+
+    This is **only** used when SciPy is unavailable. The default
+    ``scipy.signal.find_peaks`` path is intentionally preserved — see
+    ``docs/jax-port/line-detection-consultation.md`` for the rationale
+    (variable-length output, non-local prominence semantics, sub-millisecond
+    C implementation).
+
+    Returns a Python list of ``(index, wavelength)`` tuples to match the
+    return contract of :func:`_find_peaks`.
+    """
+    if intensity.size == 0:
+        return []
+    max_intensity = float(np.max(intensity))
+    if max_intensity <= 0:
+        return []
+    normalized = intensity / max_intensity
+    threshold = max(min_peak_height, 0.0)
+    if not _HAS_JAX:
+        peaks: List[Tuple[int, float]] = []
+        for i in range(1, len(intensity) - 1):
+            if (
+                normalized[i] >= threshold
+                and intensity[i] > intensity[i - 1]
+                and intensity[i] > intensity[i + 1]
+            ):
+                peaks.append((i, float(wavelength[i])))
+        return peaks
+    intensity_j = jnp.asarray(intensity, dtype=jnp.float64)
+    normalized_j = jnp.asarray(normalized, dtype=jnp.float64)
+    mask = _jax_local_maxima_mask(intensity_j, normalized_j, float(threshold))
+    mask_np = np.asarray(mask, dtype=bool)
+    peak_indices = np.flatnonzero(mask_np)
+    return [(int(idx), float(wavelength[idx])) for idx in peak_indices]
+
 
 def _build_observation_from_fit(
     transition: Transition,
@@ -211,6 +462,8 @@ def detect_line_observations(
     kdet_rarity_power: float = 0.5,
     kdet_weight_clip: Tuple[float, float] = (0.25, 4.0),
     use_deconvolution: bool = False,
+    use_jax_kdet: bool = False,
+    use_jax_peak_fallback: bool = False,
 ) -> LineDetectionResult:
     """
     Detect spectral peaks and match them to known atomic transitions.
@@ -266,6 +519,19 @@ def detect_line_observations(
     use_deconvolution : bool
         If True, apply Voigt deconvolution to resolve overlapping peaks
         before building line observations (default: False).
+    use_jax_kdet : bool
+        If True, run the kdet shift-scan inner loop through the JAX
+        backend (:func:`_kdet_candidate_counts_jax`). Default is False so
+        existing benchmark results stay reproducible. Has no effect when
+        ``kdet_enabled=False`` or when the Rust core is available (Rust
+        path is always preferred).
+    use_jax_peak_fallback : bool
+        If True, run the local-maxima fallback peak-finder
+        (:func:`_find_peaks_jax_fallback`) instead of the Python fallback.
+        Only relevant when SciPy is unavailable — the default
+        ``scipy.signal.find_peaks`` path is intentionally preserved
+        regardless of this flag (see ``docs/jax-port/line-detection-
+        consultation.md``).
 
     Returns
     -------
@@ -319,7 +585,13 @@ def detect_line_observations(
             warnings=["no_transitions_found"],
         )
 
-    peaks = _find_peaks(wavelength, intensity, min_peak_height, peak_width_nm)
+    peaks = _find_peaks(
+        wavelength,
+        intensity,
+        min_peak_height,
+        peak_width_nm,
+        use_jax_fallback=use_jax_peak_fallback,
+    )
 
     wl_step = _estimate_wl_step(wavelength)
     half_width_px = max(int((peak_width_nm / max(wl_step, 1e-9)) / 2), 1)
@@ -357,6 +629,7 @@ def detect_line_observations(
             kdet_min_candidates=kdet_min_candidates,
             kdet_rarity_power=kdet_rarity_power,
             kdet_weight_clip=kdet_weight_clip,
+            use_jax=use_jax_kdet,
         )
         warnings.extend(kdet_warnings)
         if filtered_elements:
@@ -923,6 +1196,7 @@ def _kdet_filter_elements(
     kdet_min_candidates: int,
     kdet_rarity_power: float,
     kdet_weight_clip: Tuple[float, float],
+    use_jax: bool = False,
 ) -> Tuple[Dict[str, List[Transition]], List[str]]:
     warnings: List[str] = []
     if not peaks or not transitions_by_element:
@@ -935,6 +1209,9 @@ def _kdet_filter_elements(
 
     shift_grid = _build_shift_grid(shift_scan_nm, shift_step_nm, wl_step, wavelength_tolerance_nm)
 
+    # The Rust extension is always preferred when available (fastest path).
+    # JAX is the next tier when Rust is unavailable AND the caller opted in.
+    # The pure-NumPy loop is the unconditional fallback.
     if HAS_RUST_CORE:
         try:
             element_names = list(transitions_by_element.keys())
@@ -977,15 +1254,25 @@ def _kdet_filter_elements(
             continue
         transitions_wl = np.array([t.wavelength_nm for t in transitions], dtype=float)
         transitions_wl.sort()
-        best_candidates = 0
-        for shift_nm in shift_grid:
-            shifted_peaks = peak_wavelengths + shift_nm
-            candidate_mask = _peaks_within_tolerance(
-                shifted_peaks, transitions_wl, wavelength_tolerance_nm
+
+        if use_jax and _HAS_JAX:
+            # Single vmapped call across the entire shift grid replaces the
+            # Python loop below. Behaviorally identical: we take the max of
+            # the per-shift candidate counts.
+            counts = _kdet_candidate_counts_jax(
+                peak_wavelengths, transitions_wl, shift_grid, wavelength_tolerance_nm
             )
-            candidate_count = int(np.sum(candidate_mask))
-            if candidate_count > best_candidates:
-                best_candidates = candidate_count
+            best_candidates = int(counts.max()) if counts.size > 0 else 0
+        else:
+            best_candidates = 0
+            for shift_nm in shift_grid:
+                shifted_peaks = peak_wavelengths + shift_nm
+                candidate_mask = _peaks_within_tolerance(
+                    shifted_peaks, transitions_wl, wavelength_tolerance_nm
+                )
+                candidate_count = int(np.sum(candidate_mask))
+                if candidate_count > best_candidates:
+                    best_candidates = candidate_count
         kdet_fraction = best_candidates / total_peaks
         density = element_density.get(element, median_density)
         rarity_weight = (median_density / max(density, 1e-6)) ** kdet_rarity_power
@@ -1044,7 +1331,22 @@ def _find_peaks(
     intensity: np.ndarray,
     min_peak_height: float,
     peak_width_nm: float,
+    use_jax_fallback: bool = False,
 ) -> List[Tuple[int, float]]:
+    """Detect spectral peaks.
+
+    The default path uses ``scipy.signal.find_peaks`` (height + distance +
+    prominence). This is **intentionally not** ported to JAX — the C
+    implementation runs in ~0.2 ms on a 4096-sample spectrum and produces
+    variable-length output that is hostile to JAX's static-shape model.
+    See ``docs/jax-port/line-detection-consultation.md`` for the full
+    audit + Codex/Gemini reviewer recommendations.
+
+    When SciPy is unavailable, the simple local-maxima fallback runs. The
+    ``use_jax_fallback`` flag picks between the Python and JAX
+    implementations of that fallback (both behaviorally identical;
+    the JAX one is useful when the fallback is hot for some reason).
+    """
     max_intensity = float(np.max(intensity))
     if max_intensity <= 0:
         return []
@@ -1063,7 +1365,10 @@ def _find_peaks(
         )
         return [(int(idx), float(wavelength[idx])) for idx in peak_indices]
 
-    # Simple fallback: local maxima above threshold
+    # Fallback: local maxima above threshold. Two implementations available.
+    if use_jax_fallback and _HAS_JAX:
+        return _find_peaks_jax_fallback(wavelength, intensity, min_peak_height)
+
     peaks: List[Tuple[int, float]] = []
     for i in range(1, len(intensity) - 1):
         if (
