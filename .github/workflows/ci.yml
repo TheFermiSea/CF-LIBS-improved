@@ -2,13 +2,15 @@ name: CF-LIBS CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "dev", "feat/adr-0001-pattern-survey-impl" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev", "feat/adr-0001-pattern-survey-impl" ]
 
 jobs:
   build-test-lint:
     runs-on: ubuntu-latest
+    env:
+      JAX_PLATFORMS: cpu
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
@@ -31,10 +33,14 @@ jobs:
       run: |
         ruff check cflibs/ tests/
 
+    - name: Format Check with Black
+      run: |
+        black --check cflibs/
+
     - name: Type Check with MyPy
       run: |
         mypy cflibs/
 
     - name: Test with Pytest
       run: |
-        pytest tests/ -m "not requires_db and not requires_bayesian and not requires_rust and not requires_jax and not slow"
+        pytest tests/ -m "not requires_db and not requires_bayesian and not requires_rust and not slow"
