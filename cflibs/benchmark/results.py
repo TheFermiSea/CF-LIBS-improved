@@ -88,6 +88,10 @@ def _build_schema():  # type: ignore[no-untyped-def]
         pa.field("seed", pa.int64()),
         pa.field("iter_index", pa.int64()),
         pa.field("experiment_label", pa.string()),
+        # Sharding columns (CF-LIBS-improved-sxt0 / T2.2). NULL on
+        # unsharded runs; populated from --dataset-shard N/K.
+        pa.field("shard_n", pa.int32()),
+        pa.field("shard_k", pa.int32()),
         # Shared record fields
         pa.field("dataset_id", pa.string(), nullable=False),
         pa.field("spectrum_id", pa.string(), nullable=False),
@@ -448,6 +452,16 @@ def build_rows(
             else None
         ),
         "experiment_label": run_metadata.get("experiment_label"),
+        "shard_n": (
+            int(run_metadata["shard_n"])
+            if run_metadata.get("shard_n") is not None
+            else None
+        ),
+        "shard_k": (
+            int(run_metadata["shard_k"])
+            if run_metadata.get("shard_k") is not None
+            else None
+        ),
     }
 
     rows: List[Dict[str, Any]] = []

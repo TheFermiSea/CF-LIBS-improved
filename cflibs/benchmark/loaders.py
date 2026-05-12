@@ -749,6 +749,86 @@ def _load_nist_srm_612(data_dir: Optional[Path] = None) -> Optional[BenchmarkDat
     return _load_crm_dataset("nist_srm_612", data_dir)
 
 
+def apply_dataset_shard(
+    dataset: BenchmarkDataset,
+    shard_n: int,
+    shard_k: int,
+) -> BenchmarkDataset:
+    """Return a stride-sliced view of ``dataset`` for shard ``N/K``.
+
+    Splits the dataset's spectra deterministically across K shards using
+    a stride: shard 1/3 gets indices [0, 3, 6, ...], shard 2/3 gets
+    [1, 4, 7, ...], etc. The union of all K shards equals the original
+    spectra list with no overlap (disjoint cover).
+
+    Rationale (see ``docs/dataset-sharding-consultation.md``):
+
+    * Stride beats contiguous blocks for load balance when per-sample
+      shot counts are uneven — every shard sees a proportional sample
+      from each Vrabel CRM. Contiguous blocks can concentrate "heavy"
+      samples on one node.
+    * Per-spectrum compute dominates I/O downstream, so cache-locality
+      concerns favouring contiguous reads don't apply here.
+
+    Splits are dropped (set to empty) because they reference spectrum
+    IDs that may no longer exist after slicing; the unified runner
+    rebuilds splits via :func:`cflibs.benchmark.unified.build_outer_splits`
+    at run time, so this is safe.
+
+    Each retained spectrum is annotated with ``shard_n`` / ``shard_k``
+    in ``spectrum.annotations`` so downstream aggregators can attribute
+    each row back to its source shard.
+
+    Parameters
+    ----------
+    dataset : BenchmarkDataset
+        The fully-loaded dataset to shard.
+    shard_n : int
+        1-based shard index in ``[1, shard_k]``.
+    shard_k : int
+        Total number of shards in ``[1, 16]``.
+
+    Returns
+    -------
+    BenchmarkDataset
+        New dataset with ``spectra[shard_n-1::shard_k]`` retained.
+        The original is unchanged.
+    """
+    if shard_k <= 0:
+        raise ValueError(f"shard_k must be >= 1, got {shard_k}")
+    if not (1 <= shard_n <= shard_k):
+        raise ValueError(
+            f"shard_n={shard_n} out of range; must be 1 <= N <= K={shard_k}"
+        )
+    if shard_k == 1:
+        return dataset
+
+    sliced = list(dataset.spectra[shard_n - 1 :: shard_k])
+    for spec in sliced:
+        # spectrum.annotations is a dict-like; mutate in-place is fine
+        # because BenchmarkSpectrum is dataclass-frozen=False (see dataset.py).
+        ann = dict(getattr(spec, "annotations", {}) or {})
+        ann["shard_n"] = int(shard_n)
+        ann["shard_k"] = int(shard_k)
+        spec.annotations = ann
+
+    return BenchmarkDataset(
+        name=dataset.name,
+        version=dataset.version,
+        spectra=sliced,
+        elements=list(dataset.elements),
+        splits={},  # rebuilt by the runner; old IDs may be gone post-shard
+        description=(
+            f"{dataset.description} [shard {shard_n}/{shard_k}, "
+            f"{len(sliced)}/{len(dataset.spectra)} spectra]"
+        ),
+        citation=dataset.citation,
+        license=dataset.license,
+        created_date=dataset.created_date,
+        contributors=list(dataset.contributors),
+    )
+
+
 def _load_vrabel2020_soils(
     data_dir: Optional[Path] = None,
     max_spectra_per_sample: Optional[int] = 50,
