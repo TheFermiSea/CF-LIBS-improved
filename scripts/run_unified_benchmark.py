@@ -31,6 +31,26 @@ from typing import TYPE_CHECKING, Iterable, Sequence
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
+# JAX persistent compile cache (T1.2 — CF-LIBS-improved-b5xw).
+#
+# JIT compilation of the iterative/bayesian inversion kernels takes
+# 15-45 s per kernel on a cold cache; second-and-later invocations on
+# the same host should hit the in-process cache, but cross-process and
+# cross-host cold starts dominate parameter-sweep wall time. Pointing
+# the persistent cache at an NFS-shared dir lets vasp-01/02/03 (and any
+# CPU-only dev shell) share compiled kernels.
+#
+# Use env vars (not `jax.config.update`) so this works regardless of
+# import order — `update()` only takes effect when called before the
+# *first* JIT compile, which is fragile across script entry points.
+#
+# `JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0.5` widens cache coverage
+# below JAX's 1.0 s default; many of our small kernels (e.g. the per-
+# spectrum forward model jit) compile in 0.5-0.9 s and would otherwise
+# be excluded.
+os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", "/cluster/shared/jax-cache")
+os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0.5")
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))

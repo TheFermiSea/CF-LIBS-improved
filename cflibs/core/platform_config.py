@@ -79,6 +79,25 @@ def configure_jax(
     if system == "Darwin":
         os.environ["JAX_PLATFORMS"] = "cpu"
 
+    # Persistent compile cache (T1.2 — CF-LIBS-improved-b5xw).
+    #
+    # On Linux multi-node clusters (vasp-01/02/03), the default cache
+    # location is in-process only; cross-process/cross-host cold compiles
+    # dominate parameter-sweep wall time. Pointing the persistent cache
+    # at an NFS-shared path lets all nodes share compiled kernels.
+    #
+    # `setdefault` semantics: respects an existing env value (e.g. for
+    # unit tests that point at a tmp_path) and only stamps the cluster
+    # default on Linux to avoid creating /cluster/... noise on Darwin
+    # dev shells where the path doesn't exist.
+    if system == "Linux":
+        os.environ.setdefault(
+            "JAX_COMPILATION_CACHE_DIR", "/cluster/shared/jax-cache"
+        )
+        os.environ.setdefault(
+            "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0.5"
+        )
+
     try:
         import jax
 
