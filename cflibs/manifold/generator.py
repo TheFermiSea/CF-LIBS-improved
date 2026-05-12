@@ -29,30 +29,15 @@ except ImportError:
     HAS_ZARR = False
     zarr = None
 
-try:
-    import jax
-    import jax.numpy as jnp
-    from jax import jit, vmap
-
-    HAS_JAX = True
-except ImportError:
-    HAS_JAX = False
-    jax = None
-    jnp = None
-
-    # Define dummy decorators to allow class definition
-    def jit(func):
-        return func
-
-    def vmap(func, *args, **kwargs):
-        return func
-
-
+from cflibs.core.jax_runtime import HAS_JAX, jax, jit_if_available, jnp, vmap_if_available
 from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_J, EV_TO_K, H_PLANCK, M_PROTON
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
 from cflibs.plasma.partition import polynomial_partition_function_jax
+
+jit = jit_if_available
+vmap = vmap_if_available
 
 # Conditional imports for JAX physics functions
 if HAS_JAX:

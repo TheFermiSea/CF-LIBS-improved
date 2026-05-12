@@ -7,8 +7,13 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from cflibs.core.jax_runtime import AtomicSnapshot
 
 from cflibs.atomic.structures import Transition, EnergyLevel, SpeciesPhysics, PartitionFunction
 from cflibs.core.logging_config import get_logger
@@ -667,6 +672,189 @@ class AtomicDatabase(AtomicDataSource):
         with self._get_connection() as conn:
             df = pd.read_sql_query(query, conn)
             return list(df["element"].astype(str))
+
+    def snapshot(
+        self,
+        *,
+        elements: list[str],
+        wavelength_range: tuple[float, float],
+        min_relative_intensity: float = 0.0,
+        pad_to_n_elements: int | None = None,
+        include_levels: bool = False,
+    ) -> "AtomicSnapshot":
+        """Build a frozen :class:`AtomicSnapshot` for jit consumption.
+
+        Replaces ad-hoc dict-building done by ``SpectrumModel``,
+        ``batch_forward``, and Bayesian callers. Mirrors exojax's
+        ``MDBSnapshot`` construction (ADR-0001 §5.2 C-P10) and ports the
+        per-line array packing logic from
+        ``cflibs/manifold/batch_forward.py::pack_atomic_data``.
+
+        Parameters
+        ----------
+        elements : list[str]
+            Element symbols. Order defines the species axis.
+        wavelength_range : (float, float)
+            Lower/upper wavelength bounds in nm.
+        min_relative_intensity : float, optional
+            Minimum relative intensity threshold; default 0.0 keeps all
+            lines that have a non-NULL ``rel_int`` entry.
+        pad_to_n_elements : int, optional
+            If provided, pad the species axis up to this size with zero
+            rows. Used by callers that pre-allocate fixed-size arrays.
+        include_levels : bool, optional
+            When True, populate the optional ``level_g``, ``level_E_ev``,
+            ``level_mask`` arrays for direct-sum partition consumers.
+            Default False.
+
+        Returns
+        -------
+        AtomicSnapshot
+            JAX-pytree-registered snapshot ready to flow through jit'd
+            kernels without holding a live SQLite connection inside a trace.
+        """
+        from cflibs.core.jax_runtime import (
+            AtomicSnapshot,
+            HAS_JAX,
+            jax_default_real_dtype,
+        )
+
+        if HAS_JAX:
+            import jax.numpy as _xp
+
+            _real_dtype = jax_default_real_dtype()
+        else:  # pragma: no cover - fallback path mirrors numpy semantics
+            _xp = np
+            _real_dtype = np.float64
+
+        wl_min, wl_max = wavelength_range
+        if wl_min >= wl_max:
+            raise ValueError(
+                f"wavelength_range must be (low, high) with low < high; got {wavelength_range!r}"
+            )
+
+        species_keys: list[tuple[str, int]] = []
+        ip_list: list[float] = []
+        partition_rows: list[list[float]] = []
+        level_g_rows: list[list[float]] = []
+        level_E_rows: list[list[float]] = []
+
+        for element in elements:
+            for stage in (1, 2):
+                ip = self.get_ionization_potential(element, stage)
+                if ip is None:
+                    continue
+                species_keys.append((element, stage))
+                ip_list.append(float(ip))
+                pf = self.get_partition_coefficients(element, stage)
+                if pf is None:
+                    partition_rows.append([float(np.log(2.0)), 0.0, 0.0, 0.0, 0.0])
+                else:
+                    coeffs = list(pf.coefficients)
+                    coeffs += [0.0] * (5 - len(coeffs))
+                    partition_rows.append([float(c) for c in coeffs[:5]])
+                if include_levels:
+                    levels = self.get_energy_levels(element, stage)
+                    level_g_rows.append([float(lev.g) for lev in levels])
+                    level_E_rows.append([float(lev.energy_ev) for lev in levels])
+
+        if pad_to_n_elements is not None and pad_to_n_elements > len(species_keys):
+            pad = pad_to_n_elements - len(species_keys)
+            species_keys.extend([("", 0)] * pad)
+            ip_list.extend([0.0] * pad)
+            partition_rows.extend([[0.0] * 5 for _ in range(pad)])
+            if include_levels:
+                level_g_rows.extend([[] for _ in range(pad)])
+                level_E_rows.extend([[] for _ in range(pad)])
+
+        species_to_idx = {key: i for i, key in enumerate(species_keys)}
+        wls: list[float] = []
+        Akis: list[float] = []
+        Eks: list[float] = []
+        gks: list[float] = []
+        Eis: list[float] = []
+        gis: list[float] = []
+        sp_idx: list[int] = []
+        stark_ws: list[float] = []
+
+        for element in elements:
+            for transition in self.get_transitions(
+                element=element,
+                wavelength_min=wl_min,
+                wavelength_max=wl_max,
+                min_relative_intensity=(
+                    min_relative_intensity if min_relative_intensity > 0 else None
+                ),
+            ):
+                key = (transition.element, int(transition.ionization_stage))
+                if key not in species_to_idx:
+                    continue
+                wls.append(float(transition.wavelength_nm))
+                Akis.append(float(transition.A_ki))
+                Eks.append(float(transition.E_k_ev))
+                gks.append(float(transition.g_k))
+                Eis.append(float(transition.E_i_ev))
+                gis.append(float(transition.g_i))
+                sp_idx.append(species_to_idx[key])
+                stark_ws.append(
+                    float(transition.stark_w) if transition.stark_w is not None else 0.0
+                )
+
+        n_lines = len(wls)
+        line_wavelengths_nm = _xp.asarray(wls, dtype=_real_dtype)
+        line_A_ki = _xp.asarray(Akis, dtype=_real_dtype)
+        line_E_k_ev = _xp.asarray(Eks, dtype=_real_dtype)
+        line_g_k = _xp.asarray(gks, dtype=_real_dtype)
+        line_E_i_ev = _xp.asarray(Eis, dtype=_real_dtype)
+        line_g_i = _xp.asarray(gis, dtype=_real_dtype)
+        line_species_index = _xp.asarray(sp_idx, dtype=_xp.int32)
+        line_stark_w = _xp.asarray(stark_ws, dtype=_real_dtype)
+        line_natural_w = _xp.zeros(n_lines, dtype=_real_dtype)
+
+        if partition_rows:
+            partition_coeffs = _xp.asarray(partition_rows, dtype=_real_dtype)
+        else:
+            partition_coeffs = _xp.zeros((0, 5), dtype=_real_dtype)
+        ionization_potential_ev = _xp.asarray(ip_list, dtype=_real_dtype)
+
+        level_g_out: Any
+        level_E_ev_out: Any
+        level_mask_out: Any
+        if include_levels and level_g_rows:
+            n_max = max((len(row) for row in level_g_rows), default=0)
+            n_cols = max(n_max, 1)
+            level_g_padded = np.zeros((len(level_g_rows), n_cols), dtype=np.float64)
+            level_E_padded = np.zeros_like(level_g_padded)
+            level_mask = np.zeros_like(level_g_padded, dtype=bool)
+            for i, (gs, Es) in enumerate(zip(level_g_rows, level_E_rows)):
+                level_g_padded[i, : len(gs)] = gs
+                level_E_padded[i, : len(Es)] = Es
+                level_mask[i, : len(gs)] = True
+            level_g_out = _xp.asarray(level_g_padded)
+            level_E_ev_out = _xp.asarray(level_E_padded)
+            level_mask_out = _xp.asarray(level_mask)
+        else:
+            level_g_out = None
+            level_E_ev_out = None
+            level_mask_out = None
+
+        return AtomicSnapshot(
+            species=tuple(species_keys),
+            line_wavelengths_nm=line_wavelengths_nm,
+            line_A_ki=line_A_ki,
+            line_E_k_ev=line_E_k_ev,
+            line_g_k=line_g_k,
+            line_E_i_ev=line_E_i_ev,
+            line_g_i=line_g_i,
+            line_species_index=line_species_index,
+            line_stark_w=line_stark_w,
+            line_natural_w=line_natural_w,
+            partition_coeffs=partition_coeffs,
+            ionization_potential_ev=ionization_potential_ev,
+            level_g=level_g_out,
+            level_E_ev=level_E_ev_out,
+            level_mask=level_mask_out,
+        )
 
     def close(self):
         """Close database connection."""

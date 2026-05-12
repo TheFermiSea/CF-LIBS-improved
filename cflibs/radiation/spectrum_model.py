@@ -5,20 +5,7 @@ Forward spectrum model that ties together all components.
 import numpy as np
 from typing import Optional, Tuple
 
-try:
-    import jax
-    import jax.numpy as jnp
-    from jax import jit
-
-    HAS_JAX = True
-except ImportError:  # pragma: no cover - JAX is a runtime dep but stay defensive
-    HAS_JAX = False
-    jax = None  # type: ignore[assignment]
-    jnp = None  # type: ignore[assignment]
-
-    def jit(f):  # type: ignore[misc]
-        return f
-
+from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp
 from cflibs.plasma.state import SingleZoneLTEPlasma
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver, SahaBoltzmannSolverJax
 from cflibs.atomic.database import AtomicDatabase
@@ -31,6 +18,8 @@ from cflibs.radiation.profiles import (
 from cflibs.instrument.convolution import apply_instrument_function
 from cflibs.core.constants import H_PLANCK, C_LIGHT, KB, EV_TO_K
 from cflibs.core.logging_config import get_logger
+
+jit = jit_if_available  # local alias preserves existing @jit decorator sites
 
 logger = get_logger("radiation.spectrum_model")
 
