@@ -85,3 +85,13 @@ Single cell, 3 shards. Bootstrap CI on F1 + d_A.
 - ADR-0001 agent rebasing onto dev may produce merge conflicts in
   scripts/run_unified_benchmark.py. If detected, do NOT auto-resolve;
   flag for human review.
+
+## Critical findings during run-2 (post-relaunch with --vrabel-max-shots=5)
+
+**1. GPU is idle.** Telemetry from PR #145's sampler shows gpu_util ≈ 0% on all 3 vasp nodes during Exp 1 v2, despite JAX_PLATFORMS=cuda being set and JAX preallocating 24 GB of GPU memory. Diagnostic probe confirmed `jax.devices() == [CudaDevice(id=0)]` and `(a*2).sum()` computed correctly on cuda:0. Conclusion: the cf-libs identifier pipeline is CPU-bound — NNLS solvers (scipy.optimize), BoltzmannPlotFitter (numpy), peak detection (numpy), and CSV/JSON I/O dominate. JAX kernels are brief bursts on the GPU; nvidia-smi at 5s cadence rarely catches them. The 0% util is real but doesn't mean GPU is malfunctioning.
+
+**2. JIT-recompile pressure is the real bottleneck.** jax_cache_files = 7394 in 44 MB on vasp-01 mid-run. Each unique spectrum shape (varying n_lines) forces a new compile. This is exactly what ADR-0001's T1-5 (chunked lax.scan over wavelength grid) is designed to fix. We are paying the cost they are addressing in parallel.
+
+**3. Run-1 (vrabel-max-shots=50) was infeasible.** iter-000 ran 2+ hours per shard without completing. 30 iters × 5 cells × ~2 hr cold-JIT per cell ≫ 18 hr budget. Killed and relaunched with --vrabel-max-shots=5 (~167 spec/shard) and --n-iters=20.
+
+**4. Observability layer landed during the run.** PR #145 (`feat/observability-gpu-sampler`) gives cluster-wide telemetry. Surfaced finding #1 within 3 min of deployment — without this we'd have wasted 18 hours assuming GPU was being used.
