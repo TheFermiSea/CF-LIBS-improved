@@ -25,7 +25,7 @@ Example
 
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 import json
 
 from cflibs.benchmark.dataset import BenchmarkDataset, TruthType
@@ -546,3 +546,240 @@ def validate_benchmark_file(path: PathLike) -> Dict[str, bool]:
         logger.warning(f"Validation failed: {e}")
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Community CRM dataset loaders: BHVO-2 (USGS) and NIST SRM 612
+# ---------------------------------------------------------------------------
+#
+# These loaders scan a flat CSV directory for all *.csv files, wrap each file
+# as a BenchmarkSpectrum, and set true_composition from the certified-
+# composition table in reference_compositions.py.  The directory is populated
+# by the spectra-ingest pipeline; the loaders return None gracefully when the
+# directory is absent so the benchmark registry degrades without error before
+# ingest has run.
+#
+# File format: any CSV accepted by cflibs.io.spectrum.load_spectrum — i.e.
+# two columns named ``wavelength`` / ``wavelength_nm`` and ``intensity``.
+
+_REPO_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+
+
+def _load_crm_dataset(
+    dataset_id: str,
+    data_dir: Optional[Path] = None,
+) -> Optional[BenchmarkDataset]:
+    """
+    Generic loader for community CRM datasets stored as flat CSV collections.
+
+    Each ``*.csv`` file in *data_dir / dataset_id* is loaded as one
+    :class:`~cflibs.benchmark.dataset.BenchmarkSpectrum`; ``true_composition``
+    is drawn from
+    :func:`~cflibs.benchmark.reference_compositions.get_reference_composition`
+    so the certified table in that module is the single source of truth —
+    never hardcoded here.
+
+    Parameters
+    ----------
+    dataset_id : str
+        Dataset identifier, e.g. ``"bhvo2_usgs"`` or ``"nist_srm_612"``.
+        Must be a key in ``REFERENCE_COMPOSITIONS``.
+    data_dir : Path, optional
+        Root data directory.  Defaults to ``<repo>/data/``.
+
+    Returns
+    -------
+    BenchmarkDataset or None
+        Loaded dataset, or ``None`` if the directory is absent or empty.
+
+    Raises
+    ------
+    ValueError
+        If *dataset_id* is not registered in ``REFERENCE_COMPOSITIONS``.
+    """
+    from cflibs.benchmark.dataset import (
+        BenchmarkSpectrum,
+        InstrumentalConditions,
+        MatrixType,
+        SampleMetadata,
+        SampleType,
+    )
+    from cflibs.benchmark.reference_compositions import get_reference_composition
+    from cflibs.io.spectrum import load_spectrum
+
+    if data_dir is None:
+        data_dir = _REPO_DATA_DIR
+    spectra_dir = Path(data_dir) / dataset_id
+
+    if not spectra_dir.is_dir():
+        logger.debug("CRM dataset directory not found: %s (skipped)", spectra_dir)
+        return None
+
+    true_composition_mapping = get_reference_composition(dataset_id)
+    if true_composition_mapping is None:
+        raise ValueError(
+            f"No reference composition registered for dataset_id={dataset_id!r}. "
+            "Add it to cflibs/benchmark/reference_compositions.py first."
+        )
+    # Convert to a plain mutable dict so BenchmarkSpectrum's validator is happy.
+    true_composition: Dict[str, float] = dict(true_composition_mapping)
+
+    csv_paths = sorted(spectra_dir.glob("*.csv"))
+    if not csv_paths:
+        logger.debug("CRM dataset directory is empty: %s (skipped)", spectra_dir)
+        return None
+
+    spectra = []
+    for csv_path in csv_paths:
+        try:
+            wavelength, intensity = load_spectrum(str(csv_path))
+        except Exception as exc:  # pragma: no cover — bad files are warned, not fatal
+            logger.warning("Failed to load spectrum %s: %s", csv_path.name, exc)
+            continue
+
+        wavelength = np.asarray(wavelength, dtype=float)
+        intensity = np.asarray(intensity, dtype=float)
+
+        conditions = InstrumentalConditions(
+            laser_wavelength_nm=1064.0,
+            laser_energy_mj=0.0,
+            spectral_range_nm=(float(wavelength.min()), float(wavelength.max())),
+            spectral_resolution_nm=0.05,
+            spectrometer_type="user_supplied",
+            detector_type="unknown",
+            atmosphere="air",
+            notes=f"Loaded from {csv_path.name}",
+        )
+        metadata = SampleMetadata(
+            sample_id=csv_path.stem,
+            sample_type=SampleType.CRM,
+            matrix_type=MatrixType.GEOLOGICAL,
+            crm_name=dataset_id,
+            crm_source="community_crm",
+            preparation="unknown",
+            surface_condition="unknown",
+            provenance=(
+                f"Spectrum file: {csv_path.name}; "
+                "certified composition: cflibs/benchmark/reference_compositions.py"
+            ),
+        )
+        spectra.append(
+            BenchmarkSpectrum(
+                spectrum_id=f"{dataset_id}_{csv_path.stem}",
+                wavelength_nm=wavelength,
+                intensity=intensity,
+                true_composition=true_composition,
+                conditions=conditions,
+                metadata=metadata,
+                dataset_id=dataset_id,
+                group_id=dataset_id,
+                specimen_id=csv_path.stem,
+                instrument_id="user_supplied",
+                truth_type=TruthType.ASSAY,
+                spectrum_kind="geostandard",
+                annotations={
+                    "source_file": csv_path.name,
+                    "dataset_id": dataset_id,
+                },
+            )
+        )
+
+    if not spectra:
+        return None
+
+    elements = sorted(true_composition.keys())
+    return BenchmarkDataset(
+        name=dataset_id,
+        version="v1",
+        spectra=spectra,
+        elements=elements,
+        description=(
+            f"Community CF-LIBS reference material: {dataset_id}. "
+            "Certified compositions from reference_compositions.py."
+        ),
+        citation="See cflibs/benchmark/reference_compositions.py for citations.",
+        contributors=["CF-LIBS"],
+    )
+
+
+def _load_bhvo2_usgs(data_dir: Optional[Path] = None) -> Optional[BenchmarkDataset]:
+    """
+    Load USGS BHVO-2 Hawaiian basalt LIBS spectra from ``data/bhvo2_usgs/``.
+
+    Each ``*.csv`` file in the directory is treated as one acquisition
+    (shot-averaged or single-shot, depending on how the ingest pipeline wrote
+    the files).  ``true_composition`` is set to
+    ``REFERENCE_COMPOSITIONS["bhvo2_usgs"]`` — the Jochum 2005 GeoReM oxide
+    compilation converted to cation mass fractions.
+
+    Parameters
+    ----------
+    data_dir : Path, optional
+        Root data directory.  Defaults to ``<repo>/data/``.
+
+    Returns
+    -------
+    BenchmarkDataset or None
+        Returns ``None`` if ``data/bhvo2_usgs/`` is absent or empty (i.e.
+        before the spectra-ingest pipeline has run).
+    """
+    return _load_crm_dataset("bhvo2_usgs", data_dir)
+
+
+def _load_nist_srm_612(data_dir: Optional[Path] = None) -> Optional[BenchmarkDataset]:
+    """
+    Load NIST SRM 612 trace-element glass LIBS spectra from
+    ``data/nist_srm_612/``.
+
+    Each ``*.csv`` file in the directory is one acquisition.
+    ``true_composition`` is set to ``REFERENCE_COMPOSITIONS["nist_srm_612"]``
+    — the Pearce et al. 1997 major-element glass matrix composition (Si, Al,
+    Ca, Na cation mass fractions; trace dopants omitted as below-LOQ).
+
+    Parameters
+    ----------
+    data_dir : Path, optional
+        Root data directory.  Defaults to ``<repo>/data/``.
+
+    Returns
+    -------
+    BenchmarkDataset or None
+        Returns ``None`` if ``data/nist_srm_612/`` is absent or empty.
+    """
+    return _load_crm_dataset("nist_srm_612", data_dir)
+
+
+def build_dataset_registry(
+    data_dir: Optional[Path] = None,
+) -> List[BenchmarkDataset]:
+    """
+    Return a list of all available community CRM datasets.
+
+    Scans *data_dir* for ``bhvo2_usgs`` and ``nist_srm_612`` subdirectories
+    and returns a :class:`BenchmarkDataset` for each that is present and
+    non-empty.  Datasets whose directories are absent are silently omitted so
+    the registry degrades gracefully before the spectra-ingest pipeline has
+    run.
+
+    Parameters
+    ----------
+    data_dir : Path, optional
+        Root data directory.  Defaults to ``<repo>/data/``.
+
+    Returns
+    -------
+    list of BenchmarkDataset
+
+    Examples
+    --------
+    >>> from cflibs.benchmark.loaders import build_dataset_registry
+    >>> datasets = build_dataset_registry()
+    >>> for ds in datasets:
+    ...     print(ds.name, ds.n_spectra)
+    """
+    datasets: List[BenchmarkDataset] = []
+    for loader in (_load_bhvo2_usgs, _load_nist_srm_612):
+        ds = loader(data_dir)
+        if ds is not None:
+            datasets.append(ds)
+    return datasets

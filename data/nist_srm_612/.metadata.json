@@ -1,0 +1,26 @@
+{
+  "dataset_id": "nist_srm_612",
+  "status": "MISSING_SPECTRA",
+  "description": "NIST SRM 612 (trace-element doped glass) LIBS spectra. No publicly accessible experimental LIBS spectra were found after exhausting all ranked sources (PDS SuperCam/ChemCam, MIT DSpace, USGS GeoREM, NIST PML LIBS database, Zenodo, figshare). See README.md for gap analysis and follow-up options.",
+  "n_samples": 0,
+  "n_shots_per_sample": 0,
+  "wavelength_range_nm": null,
+  "instrument": null,
+  "true_composition_source": "cflibs.benchmark.reference_compositions.NIST_SRM_612_GLASS",
+  "gap_reported_in": "CF-LIBS-improved-9jvd",
+  "sources_searched": [
+    "NASA PDS Mars 2020 SuperCam calibration archive (pds-geosciences.wustl.edu) — SRM variants present: steel SRMs 688, 97a, 98a, 88b; SRM 612 absent",
+    "NASA PDS MSL ChemCam calibration archive — no SRM 612",
+    "MIT DSpace BHVO-2 thesis search — not found",
+    "USGS GeoREM (georem.mpch-mainz.gwdg.de) — composition DB only, no spectra",
+    "NIST PML LIBS database (physics.nist.gov/PhysRefData/ASD/LIBS) — atomic line positions only, not measured SRM spectra",
+    "Zenodo API search (q=BHVO LIBS, q=SRM 612 LIBS) — no matching datasets",
+    "Figshare/Google Scholar — only NIST SRM 610/612 compositional analysis (LA-ICP-MS, not LIBS)"
+  ],
+  "follow_up_options": [
+    "Request from IRAP SuperCam team (Roger Wiens / Sam Clegg) — they likely have SRM 612 calibration shots not yet deposited in PDS",
+    "Check LIBS-ENFL group at University of Malaga — known users of SRM 610/612 for calibration",
+    "Check ORDaR platform (ordar.obspm.fr) which hosts LIBS mineral databases from French labs",
+    "Synthesize spectra from NIST atomic line database + Boltzmann distribution (requires plasma temperature assumption) — must be flagged as synthetic, not real measurements"
+  ]
+}

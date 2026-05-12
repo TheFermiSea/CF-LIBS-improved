@@ -498,8 +498,19 @@ def load_default_datasets(
     data_dir: Path,
     synthetic_corpus_path: Optional[Path] = None,
 ) -> Dict[str, BenchmarkDataset]:
+    from cflibs.benchmark.loaders import _load_bhvo2_usgs, _load_nist_srm_612
+
     datasets: Dict[str, BenchmarkDataset] = {"aalto_libs": load_aalto_id_dataset(data_dir)}
     datasets.update(load_assay_and_blind_datasets(data_dir))
+
+    # Community CRM datasets: bhvo2_usgs, nist_srm_612.
+    # Returns None when data directories are absent — omit silently so the
+    # benchmark registry degrades gracefully before the ingest pipeline runs.
+    for _crm_loader in (_load_bhvo2_usgs, _load_nist_srm_612):
+        _ds = _crm_loader(data_dir)
+        if _ds is not None:
+            datasets[_ds.name] = _ds
+
     if synthetic_corpus_path is not None and synthetic_corpus_path.exists():
         datasets["synthetic_id"] = load_manifest_synthetic_dataset(synthetic_corpus_path)
     return datasets
