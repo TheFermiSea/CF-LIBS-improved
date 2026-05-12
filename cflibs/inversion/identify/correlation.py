@@ -25,6 +25,126 @@ from cflibs.core.logging_config import get_logger
 
 logger = get_logger("inversion.correlation_identifier")
 
+# JAX is an optional fast path for the (T, n_e) grid model-spectrum
+# correlation hot loop inside ``CorrelationIdentifier._identify_classic``.
+# The default path keeps SciPy so behavior is unchanged unless
+# ``use_jax_classic=True`` is passed to the constructor.
+try:
+    import jax
+    import jax.numpy as jnp
+
+    _HAS_JAX = True
+except ImportError:  # pragma: no cover - exercised only when jax missing
+    jax = None  # type: ignore[assignment]
+    jnp = None  # type: ignore[assignment]
+    _HAS_JAX = False
+
+
+if _HAS_JAX:
+
+    @jax.jit
+    def _jax_model_grid_correlations(
+        wavelength: "jnp.ndarray",        # (W,)
+        intensity: "jnp.ndarray",         # (W,)
+        line_wl: "jnp.ndarray",           # (L,)
+        line_A_g: "jnp.ndarray",          # (L,)  A_ki * g_k
+        line_E: "jnp.ndarray",            # (L,)  E_k in eV
+        line_U: "jnp.ndarray",            # (G, L) partition function per (T, line)
+        line_W_q: "jnp.ndarray",          # (G, L) Saha weight per (T, n_e, line)
+        line_sigma: "jnp.ndarray",        # (L,) Gaussian sigma in nm
+        T_eV_grid: "jnp.ndarray",         # (G,) T in eV, flat grid
+        exp_scale: "jnp.ndarray",         # () percentile-95 of intensity
+        peak_region_threshold: float,
+        peak_region_min_points: int,
+    ) -> "jnp.ndarray":
+        """Compute Pearson correlation of model spectrum vs. ``intensity``
+        for each ``(T, n_e)`` grid point.
+
+        Replicates ``CorrelationIdentifier._generate_model_spectrum`` +
+        the peak-region masked Pearson logic inside
+        ``_identify_classic`` in a single fused JAX kernel.
+
+        Inputs are shaped to flatten the ``T x n_e`` outer product into
+        a single ``G`` axis so the kernel runs in one vmap-free pass.
+        """
+        W = wavelength.shape[0]
+        L = line_wl.shape[0]
+        G = T_eV_grid.shape[0]
+
+        # Boltzmann factor per (G, L). exp(-E/T) on the flat grid.
+        boltz = jnp.exp(-line_E[None, :] / T_eV_grid[:, None])  # (G, L)
+        # Per-line emissivity, including Saha W_q and partition function.
+        # eps shape (G, L). U shape (G, L); W_q shape (G, L).
+        eps = line_W_q * line_A_g[None, :] * boltz / jnp.maximum(line_U, 1e-30)
+
+        # Gaussian profile per (L, W). sigma broadcast to (L, 1).
+        diff = (wavelength[None, :] - line_wl[:, None]) / line_sigma[:, None]
+        gauss = jnp.exp(-0.5 * diff * diff)  # (L, W)
+
+        # Sum over lines: model[g, w] = sum_l eps[g, l] * gauss[l, w].
+        model = eps @ gauss  # (G, W)
+
+        # Robust normalization: 95th percentile per row (matches the CPU
+        # path which divides by model_scale, then multiplies by
+        # exp_scale).
+        model_scale = jnp.percentile(model, 95.0, axis=-1)  # (G,)
+        # Guard div-by-zero: leave model unchanged if scale tiny.
+        safe = (model_scale > 1e-10) & (exp_scale > 1e-10)
+        scale = jnp.where(safe, exp_scale / jnp.where(safe, model_scale, 1.0), 1.0)
+        model = model * scale[:, None]  # (G, W)
+
+        # Peak-region mask: per-row normalize, threshold AND/OR fallback.
+        i_min = intensity.min()
+        i_max = intensity.max()
+        m_min = model.min(axis=-1, keepdims=True)        # (G, 1)
+        m_max = model.max(axis=-1, keepdims=True)        # (G, 1)
+        i_range = i_max - i_min
+        m_range = m_max - m_min                          # (G, 1)
+        sigma_th = peak_region_threshold
+
+        # exp_norm shape (W,), mod_norm shape (G, W).
+        exp_norm = jnp.where(
+            i_range > 1e-10, (intensity - i_min) / jnp.where(i_range > 1e-10, i_range, 1.0), 0.0
+        )
+        mod_norm = jnp.where(
+            m_range > 1e-10, (model - m_min) / jnp.where(m_range > 1e-10, m_range, 1.0), 0.0
+        )
+        and_mask = (exp_norm[None, :] >= sigma_th) & (mod_norm >= sigma_th)  # (G, W)
+        or_mask = (exp_norm[None, :] >= sigma_th) | (mod_norm >= sigma_th)
+
+        # If model row has no dynamic range, fall back to all-ones mask
+        # (CPU path's else branch).
+        no_dyn = jnp.broadcast_to(
+            (i_range <= 1e-10) | (m_range[:, 0] <= 1e-10), (G,)
+        )
+
+        # Per-row: pick AND mask unless it has fewer than min_points
+        # support, in which case pick OR (matches CPU).
+        and_count = and_mask.sum(axis=-1)  # (G,)
+        use_and = and_count >= peak_region_min_points
+        chosen = jnp.where(use_and[:, None], and_mask, or_mask)
+        # And the no_dyn-range rows fall back to all-ones.
+        all_ones = jnp.ones_like(chosen)
+        mask = jnp.where(no_dyn[:, None], all_ones, chosen)
+        m = mask.astype(jnp.float64)
+
+        # Masked Pearson per row.
+        x = jnp.broadcast_to(intensity[None, :], (G, W)).astype(jnp.float64)
+        y = model.astype(jnp.float64)
+        n = jnp.sum(m, axis=-1)
+        n_safe = jnp.maximum(n, 1.0)
+        mx = jnp.sum(m * x, axis=-1) / n_safe
+        my = jnp.sum(m * y, axis=-1) / n_safe
+        xc = x - mx[:, None]
+        yc = y - my[:, None]
+        cov = jnp.sum(m * xc * yc, axis=-1)
+        vx = jnp.sum(m * xc * xc, axis=-1)
+        vy = jnp.sum(m * yc * yc, axis=-1)
+        denom = jnp.sqrt(vx * vy)
+        corr = jnp.where(denom > 1e-20, cov / jnp.where(denom > 1e-20, denom, 1.0), 0.0)
+        valid = (vx > 1e-20) & (vy > 1e-20) & (n > 2)
+        return jnp.where(valid, corr, 0.0)
+
 
 class CorrelationIdentifier:
     """
@@ -132,7 +252,14 @@ class CorrelationIdentifier:
         relative_threshold_scale: float = 1.5,
         peak_region_threshold: float = 0.15,
         peak_region_min_points: int = 5,
+        use_jax_classic: bool = False,
     ):
+        self.use_jax_classic = bool(use_jax_classic)
+        if self.use_jax_classic and not _HAS_JAX:  # pragma: no cover
+            raise ImportError(
+                "use_jax_classic=True requires JAX. "
+                "Install with: pip install jax jaxlib"
+            )
         self.atomic_db = atomic_db
         self.resolving_power = resolving_power
         self.vector_index = vector_index
@@ -306,6 +433,24 @@ class CorrelationIdentifier:
 
             # Compute correlations for each (T, n_e) point
             # Paper (Labutin et al. 2013): correlate only in peak regions, not full spectrum
+            if self.use_jax_classic:
+                # JAX fast path: vectorize the whole (T, n_e) grid + line
+                # sum + peak-region masked Pearson in one fused kernel.
+                correlations = self._classic_correlations_jax(
+                    wavelength, intensity, element, transitions, T_grid, n_e_grid
+                )
+                # Match lines to experimental peaks (unchanged).
+                matched_lines, unmatched_lines = self._match_lines_to_peaks(
+                    element, transitions, wavelength, intensity, peaks
+                )
+                best_corr = float(np.max(correlations)) if len(correlations) else 0.0
+                score = float(np.clip(best_corr, 0.0, 1.0))
+                confidence = score
+                element_scores.append(
+                    (element, score, confidence, matched_lines, unmatched_lines)
+                )
+                continue
+
             correlations = []
             for T_K in T_grid:
                 T_eV = T_K * KB_EV
@@ -565,6 +710,110 @@ class CorrelationIdentifier:
             model_spectrum = model_spectrum * (exp_scale / model_scale)
 
         return model_spectrum
+
+    def _classic_correlations_jax(
+        self,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        element: str,
+        transitions: List[Transition],
+        T_grid: np.ndarray,
+        n_e_grid: np.ndarray,
+    ) -> np.ndarray:
+        """JAX-vectorized counterpart of the inner ``(T, n_e)`` loop.
+
+        Returns
+        -------
+        correlations : np.ndarray, shape (T_steps * n_e_steps,)
+            Pearson correlation per (T, n_e) grid point, mirroring the
+            CPU implementation's ordering (T outer, n_e inner).
+        """
+        if not _HAS_JAX:  # pragma: no cover
+            raise ImportError(
+                "JAX is required for _classic_correlations_jax. "
+                "Install with: pip install jax jaxlib"
+            )
+
+        L = len(transitions)
+        # Per-line data (numpy)
+        line_wl = np.fromiter((t.wavelength_nm for t in transitions), dtype=np.float64, count=L)
+        line_A_g = np.fromiter((t.A_ki * t.g_k for t in transitions), dtype=np.float64, count=L)
+        line_E = np.fromiter((t.E_k_ev for t in transitions), dtype=np.float64, count=L)
+        line_stage = np.fromiter(
+            (t.ionization_stage for t in transitions), dtype=np.int64, count=L
+        )
+
+        # Per-line sigma (matches the CPU per-transition logic).
+        if self.resolving_power:
+            line_sigma = (line_wl / self.resolving_power) / 2.355
+        else:
+            default_sigma = self.instrument_fwhm_nm / 2.355
+            line_sigma = np.full(L, default_sigma, dtype=np.float64)
+
+        # Build the flat (T, n_e) grid in T-outer, n_e-inner order so the
+        # output matches the CPU list order.
+        G = T_grid.shape[0] * n_e_grid.shape[0]
+        T_eV_grid = np.empty(G, dtype=np.float64)
+        n_e_grid_flat = np.empty(G, dtype=np.float64)
+        for ti, T_K in enumerate(T_grid):
+            for ni, n_e in enumerate(n_e_grid):
+                g_idx = ti * n_e_grid.shape[0] + ni
+                T_eV_grid[g_idx] = T_K * KB_EV
+                n_e_grid_flat[g_idx] = n_e
+
+        # Per-grid-point Saha balance + partition functions. We compute
+        # these in Python to keep parity with the CPU path (SahaBoltzmann-
+        # Solver isn't JAX-native). Caching avoids redundant work.
+        total_density = 1e15
+        line_U = np.ones((G, L), dtype=np.float64)
+        line_W_q = np.ones((G, L), dtype=np.float64)
+
+        # Cache partition-function evaluations per (stage, T) to avoid
+        # redundant Solver calls when multiple lines share a stage.
+        stages = np.unique(line_stage)
+        for g_idx in range(G):
+            T_eV = float(T_eV_grid[g_idx])
+            n_e = float(n_e_grid_flat[g_idx])
+            try:
+                stage_densities = self.saha_solver.solve_ionization_balance(
+                    element, T_eV, n_e, total_density
+                )
+            except Exception:
+                stage_densities = None
+            U_by_stage = {
+                int(stage): self.saha_solver.calculate_partition_function(
+                    element, int(stage), T_eV
+                )
+                for stage in stages
+            }
+            for l_idx in range(L):
+                stage = int(line_stage[l_idx])
+                line_U[g_idx, l_idx] = max(float(U_by_stage[stage]), 1e-30)
+                if stage_densities is not None:
+                    line_W_q[g_idx, l_idx] = (
+                        stage_densities.get(stage, 1.0) / max(total_density, 1e-30)
+                    )
+                else:
+                    line_W_q[g_idx, l_idx] = 1.0
+
+        exp_scale = float(np.percentile(intensity, 95.0))
+
+        # Run the fused JAX kernel.
+        corr = _jax_model_grid_correlations(
+            jnp.asarray(wavelength, dtype=jnp.float64),
+            jnp.asarray(intensity, dtype=jnp.float64),
+            jnp.asarray(line_wl, dtype=jnp.float64),
+            jnp.asarray(line_A_g, dtype=jnp.float64),
+            jnp.asarray(line_E, dtype=jnp.float64),
+            jnp.asarray(line_U, dtype=jnp.float64),
+            jnp.asarray(line_W_q, dtype=jnp.float64),
+            jnp.asarray(line_sigma, dtype=jnp.float64),
+            jnp.asarray(T_eV_grid, dtype=jnp.float64),
+            jnp.asarray(exp_scale, dtype=jnp.float64),
+            float(self.peak_region_threshold),
+            int(self.peak_region_min_points),
+        )
+        return np.asarray(corr)
 
     def _match_lines_to_peaks(
         self,
