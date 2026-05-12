@@ -672,7 +672,7 @@ def _load_crm_dataset(
                 conditions=conditions,
                 metadata=metadata,
                 dataset_id=dataset_id,
-                group_id=dataset_id,
+                group_id=csv_path.stem,
                 specimen_id=csv_path.stem,
                 instrument_id="user_supplied",
                 truth_type=TruthType.ASSAY,
