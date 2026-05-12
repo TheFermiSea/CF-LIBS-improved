@@ -13,7 +13,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 import csv
 import importlib.util
+import inspect
 import json
+import os
 import sys
 import math
 import re
@@ -22,6 +24,29 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+
+
+def _jax_identifier_flags_for(cls) -> Dict[str, bool]:
+    """
+    Return ``{flag: True}`` for every ``use_jax_*`` kwarg accepted by *cls*.
+
+    Gated on ``CFLIBS_USE_JAX_IDENTIFIER=1``.  When the env var is unset or
+    "0", returns an empty dict (preserves the as-shipped CPU-only behavior
+    of every identifier).  When set to "1", auto-detects each identifier's
+    ``use_jax_*`` constructor kwargs via ``inspect.signature`` and turns
+    them all on.
+
+    This is the toggle the unified benchmark CLI flips via
+    ``--jax-identifier``.  See PR #118, #119, #120, #121, #122 for the
+    identifier-side opt-in flags this targets.
+    """
+    if os.environ.get("CFLIBS_USE_JAX_IDENTIFIER", "0") != "1":
+        return {}
+    try:
+        sig = inspect.signature(cls.__init__)
+    except (TypeError, ValueError):
+        return {}
+    return {name: True for name in sig.parameters if name.startswith("use_jax_")}
 
 from cflibs.benchmark.dataset import (
     BenchmarkDataset,
@@ -906,6 +931,7 @@ def _build_alias_predictor(
                 detection_threshold=float(config["detection_threshold"]),
                 chance_window_scale=float(config["chance_window_scale"]),
                 max_lines_per_element=int(config["max_lines_per_element"]),
+                **_jax_identifier_flags_for(ALIASIdentifier),
             )
             result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
             result.parameters["candidate_elements"] = list(candidate_elements)
@@ -932,6 +958,7 @@ def _build_comb_predictor(
                 tooth_activation_threshold=float(config["tooth_activation_threshold"]),
                 relative_threshold_scale=float(config["relative_threshold_scale"]),
                 min_aki_gk=3000.0,
+                **_jax_identifier_flags_for(CombIdentifier),
             )
             result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
             result.parameters["candidate_elements"] = list(candidate_elements)
@@ -961,6 +988,7 @@ def _build_correlation_predictor(
                 T_steps=7,
                 n_e_range_cm3=(1e15, 5e17),
                 n_e_steps=4,
+                **_jax_identifier_flags_for(CorrelationIdentifier),
             )
             result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity, mode="classic")
             result.parameters["candidate_elements"] = list(candidate_elements)
@@ -984,6 +1012,7 @@ def _build_nnls_predictor(
             continuum_degree=int(config["continuum_degree"]),
             fallback_T_K=float(config["fallback_T_K"]),
             fallback_ne_cm3=1e17,
+            **_jax_identifier_flags_for(SpectralNNLSIdentifier),
         )
         result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
         result.parameters["basis_fwhm_nm"] = basis_fwhm
@@ -1074,6 +1103,7 @@ def _build_voigt_alias_predictor(
                 detection_threshold=float(config["detection_threshold"]),
                 chance_window_scale=0.4,
                 max_lines_per_element=30,
+                **_jax_identifier_flags_for(ALIASIdentifier),
             )
             result = alias.identify(
                 spectrum.wavelength_nm,
@@ -1100,6 +1130,7 @@ def _build_nnls_concentration_predictor(
             continuum_degree=int(config["continuum_degree"]),
             fallback_T_K=8000.0,
             fallback_ne_cm3=1e17,
+            **_jax_identifier_flags_for(SpectralNNLSIdentifier),
         )
         result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
         threshold = float(config["concentration_threshold"])

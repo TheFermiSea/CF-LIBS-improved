@@ -311,12 +311,26 @@ def _build_parser() -> argparse.ArgumentParser:
             "spectra ~1.6 GB). Pass 0 for the full 50,000 spectra (~16 GB)."
         ),
     )
+    parser.add_argument(
+        "--jax-identifier",
+        action="store_true",
+        help=(
+            "Turn on all use_jax_* opt-in flags across every identifier "
+            "(ALIAS, comb, correlation, spectral_nnls, line_detection). "
+            "Sets CFLIBS_USE_JAX_IDENTIFIER=1 in os.environ before workflow "
+            "execution; unified.py auto-detects each identifier's "
+            "use_jax_* kwargs via inspect.signature."
+        ),
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    if args.jax_identifier:
+        os.environ["CFLIBS_USE_JAX_IDENTIFIER"] = "1"
 
     from cflibs.benchmark import UnifiedBenchmarkRunner, load_default_datasets
     from cflibs.benchmark.dataset import TruthType
