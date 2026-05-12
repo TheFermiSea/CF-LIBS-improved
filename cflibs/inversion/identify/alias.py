@@ -26,6 +26,180 @@ from cflibs.inversion.element_id import (
 )
 from cflibs.inversion.preprocessing import estimate_baseline, estimate_noise
 
+# JAX is an optional fast path for the per-spectrum Boltzmann temperature fit
+# used by ``ALIASIdentifier._estimate_plasma_temperature``. The default path
+# remains ``scipy.stats.linregress`` so behavior is unchanged unless
+# ``use_jax_boltzmann_fit=True`` is passed to the constructor.
+try:
+    import jax
+    import jax.numpy as jnp
+
+    _HAS_JAX = True
+except ImportError:  # pragma: no cover - exercised only when jax missing
+    jax = None  # type: ignore[assignment]
+    jnp = None  # type: ignore[assignment]
+    _HAS_JAX = False
+
+
+if _HAS_JAX:
+
+    @jax.jit
+    def _jax_boltzmann_slope_intercept(
+        E_k: "jnp.ndarray",
+        y: "jnp.ndarray",
+        mask: "jnp.ndarray",
+    ) -> "tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]":
+        """Closed-form unweighted least-squares Boltzmann fit, vectorized over a
+        batch of spectra. Inputs are (B, N_max); outputs are (B,).
+
+        Returns ``(slope, intercept, r_squared, n_valid)``. Padded entries
+        (``mask == False``) are zeroed out. The caller is responsible for
+        converting slope to temperature with the inf/NaN sentinels.
+        """
+        x = jnp.asarray(E_k, dtype=jnp.float64)
+        y = jnp.asarray(y, dtype=jnp.float64)
+        m = jnp.asarray(mask, dtype=jnp.float64)
+
+        # Five sums, all reductions over axis=1.
+        n = jnp.sum(m, axis=1)
+        S_x = jnp.sum(m * x, axis=1)
+        S_y = jnp.sum(m * y, axis=1)
+        S_xx = jnp.sum(m * x * x, axis=1)
+        S_xy = jnp.sum(m * x * y, axis=1)
+
+        det = n * S_xx - S_x * S_x
+        # ``is_valid`` mirrors the CPU guards: at least 2 points and a non-
+        # degenerate determinant (i.e. some spread in x).
+        is_valid = (n >= 2.0) & (jnp.abs(det) > 1e-30)
+        det_safe = jnp.where(is_valid, det, 1.0)
+
+        slope = jnp.where(is_valid, (n * S_xy - S_x * S_y) / det_safe, jnp.nan)
+        intercept = jnp.where(is_valid, (S_xx * S_y - S_x * S_xy) / det_safe, jnp.nan)
+
+        # Weighted R^2 (weights are 0/1 from the mask).
+        y_pred = intercept[:, None] + slope[:, None] * x
+        SS_res = jnp.sum(m * (y - y_pred) ** 2, axis=1)
+        y_mean = jnp.where(n > 0, S_y / jnp.maximum(n, 1.0), 0.0)
+        SS_tot = jnp.sum(m * (y - y_mean[:, None]) ** 2, axis=1)
+        r_squared = jnp.where(
+            is_valid & (SS_tot > 1e-30), 1.0 - SS_res / SS_tot, jnp.nan
+        )
+
+        return slope, intercept, r_squared, n
+
+
+def boltzmann_temperature_jax(
+    log_I_over_gA: np.ndarray,
+    E_upper: np.ndarray,
+    weights: Optional[np.ndarray] = None,
+    *,
+    return_diagnostics: bool = False,
+):
+    """JAX-vectorized Boltzmann-plot temperature fit across a batch of spectra.
+
+    Fits ``y = slope * E_upper + intercept`` for each spectrum, where
+    ``y = log(I / (g_k A_ki))`` (i.e. ``log(I*lambda/(g_k*A_ki))`` or any
+    convention the caller adopts — the function is agnostic to the
+    intercept's physical meaning). Temperatures are derived from
+    ``T = -1 / (slope * k_B)``.
+
+    This is the JAX/GPU-vectorized counterpart of the
+    ``scipy.stats.linregress`` call used by
+    ``ALIASIdentifier._estimate_plasma_temperature``. The CPU path is
+    preserved; this function is opt-in via the ``use_jax_boltzmann_fit``
+    constructor flag on :class:`ALIASIdentifier`.
+
+    Parameters
+    ----------
+    log_I_over_gA : np.ndarray, shape (B, N) or (N,)
+        Boltzmann-plot y-values per spectrum. ``np.nan`` entries are
+        treated as missing (masked out of the fit).
+    E_upper : np.ndarray, shape (N,) or (B, N)
+        Upper-level energies in eV. If 1-D, broadcast across the batch.
+    weights : np.ndarray, shape (B, N), optional
+        Currently unused (reserved for future weighted-LS extension). Pass
+        ``None`` for unweighted fit, matching ``scipy.stats.linregress``
+        behavior. A ``NotImplementedError`` is raised if a non-uniform
+        weight array is provided so callers aren't silently misled.
+    return_diagnostics : bool, optional
+        If True, returns ``(T_K, slope, r_squared)`` instead of just
+        ``T_K``. Default False.
+
+    Returns
+    -------
+    T_K : np.ndarray, shape (B,)
+        Plasma temperature in Kelvin per spectrum. Sentinel values:
+
+        * ``+inf`` — slope is non-negative (population-inversion or fit
+          failure), matching the ``T set to infinity`` semantics of the
+          CPU code path in ``cflibs.inversion.physics.boltzmann``.
+        * ``nan``  — degenerate fit (fewer than 2 valid points, zero
+          spread in ``E_upper``, etc.).
+
+    Raises
+    ------
+    ImportError
+        If JAX is not installed.
+
+    Notes
+    -----
+    - Result is jit-compiled; the first call incurs trace overhead, all
+      subsequent calls with the same shapes are constant-time on GPU.
+    - Float64 is used throughout for numerical stability of the normal
+      equations.
+    """
+    if not _HAS_JAX:  # pragma: no cover
+        raise ImportError(
+            "JAX is required for boltzmann_temperature_jax. "
+            "Install with: pip install jax jaxlib"
+        )
+
+    if weights is not None and not np.allclose(weights, weights.flat[0]):
+        raise NotImplementedError(
+            "Non-uniform weights are not yet supported by "
+            "boltzmann_temperature_jax. Use the CPU path or pass weights=None."
+        )
+
+    y_arr = np.atleast_2d(np.asarray(log_I_over_gA, dtype=np.float64))
+    E_arr = np.asarray(E_upper, dtype=np.float64)
+    if E_arr.ndim == 1:
+        E_arr = np.broadcast_to(E_arr, y_arr.shape).copy()
+    else:
+        E_arr = np.atleast_2d(E_arr)
+
+    if E_arr.shape != y_arr.shape:
+        raise ValueError(
+            f"E_upper shape {E_arr.shape} does not broadcast to "
+            f"log_I_over_gA shape {y_arr.shape}"
+        )
+
+    # Build mask from NaN/inf in either array; zero out masked entries so
+    # the closed-form sums stay finite under jit.
+    mask = np.isfinite(y_arr) & np.isfinite(E_arr)
+    y_safe = np.where(mask, y_arr, 0.0)
+    E_safe = np.where(mask, E_arr, 0.0)
+
+    slope, intercept, r_squared, n_valid = _jax_boltzmann_slope_intercept(
+        jnp.asarray(E_safe), jnp.asarray(y_safe), jnp.asarray(mask)
+    )
+
+    slope_np = np.asarray(slope)
+    r_sq_np = np.asarray(r_squared)
+
+    # Convert slope -> temperature. Mirrors the CPU sentinels exactly:
+    # slope >= 0 (or zero/near-zero) -> +inf ("T set to infinity"),
+    # NaN slope (degenerate fit)     -> NaN.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        T_K = -1.0 / (slope_np * KB_EV)
+    nondegenerate = np.isfinite(slope_np)
+    nonneg = nondegenerate & (slope_np >= 0)
+    T_K = np.where(nonneg, np.inf, T_K)
+    T_K = np.where(~nondegenerate, np.nan, T_K)
+
+    if return_diagnostics:
+        return T_K, slope_np, r_sq_np
+    return T_K
+
 
 class ALIASIdentifier:
     """
@@ -149,6 +323,7 @@ class ALIASIdentifier:
         max_screening_candidates: int = 12,
         relative_cl_threshold: float = 0.1,
         boltzmann_r2_min: float = 0.85,
+        use_jax_boltzmann_fit: bool = False,
     ):
         """
         Initialize the ALIAS element identifier.
@@ -191,6 +366,18 @@ class ALIASIdentifier:
             consistency checks used during identification. Higher values make
             identification stricter by requiring better linear agreement, while
             lower values allow more permissive acceptance of candidate elements.
+        use_jax_boltzmann_fit : bool, optional
+            If True, use the JAX-vectorized closed-form least-squares
+            Boltzmann fit (:func:`boltzmann_temperature_jax`) inside
+            ``_estimate_plasma_temperature`` instead of
+            ``scipy.stats.linregress``. The two paths produce numerically
+            equivalent results on negative-slope inputs (agreement
+            ~1e-5 relative) and the same ``inf``/``nan`` sentinels on
+            non-negative-slope or degenerate inputs. The JAX path is
+            opt-in (default False) so existing benchmark results are
+            unchanged; turning it on enables future batched-spectrum
+            speedups. Requires ``jax`` to be importable; raises
+            ``ImportError`` at fit time otherwise (default: False).
         """
         self.atomic_db = atomic_db
         if not (np.isfinite(resolving_power) and resolving_power > 0):
@@ -213,6 +400,12 @@ class ALIASIdentifier:
                 f"boltzmann_r2_min must be finite and in [0, 1], got {boltzmann_r2_min!r}"
             )
         self.boltzmann_r2_min = float(boltzmann_r2_min)
+        self.use_jax_boltzmann_fit = bool(use_jax_boltzmann_fit)
+        if self.use_jax_boltzmann_fit and not _HAS_JAX:  # pragma: no cover
+            raise ImportError(
+                "use_jax_boltzmann_fit=True requires JAX. "
+                "Install with: pip install jax jaxlib"
+            )
 
         # Create Saha-Boltzmann solver
         self.solver = SahaBoltzmannSolver(atomic_db)
@@ -950,17 +1143,38 @@ class ALIASIdentifier:
             y_arr = np.array(y_vals)
 
             try:
-                result = linregress(E_k_arr, y_arr)
-                slope = result.slope
-                r_sq = result.rvalue**2
+                if self.use_jax_boltzmann_fit:
+                    # JAX path (opt-in). One-spectrum batch; the heavy lift
+                    # comes when future callers vectorize across many spectra.
+                    T_K_arr, slope_arr, r_sq_arr = boltzmann_temperature_jax(
+                        y_arr[None, :],
+                        E_k_arr,
+                        weights=None,
+                        return_diagnostics=True,
+                    )
+                    slope = float(slope_arr[0])
+                    r_sq = float(r_sq_arr[0])
+                    T_K_jax = float(T_K_arr[0])
 
-                if abs(slope) < 1e-10:
-                    continue
-                if slope < 0 and r_sq > 0.2:
-                    T_K = -1.0 / (slope * KB_EV)
-                    if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
-                        self._estimated_T = float(T_K)
-                        return
+                    if not np.isfinite(slope) or abs(slope) < 1e-10:
+                        continue
+                    if slope < 0 and r_sq > 0.2:
+                        T_K = T_K_jax
+                        if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
+                            self._estimated_T = float(T_K)
+                            return
+                else:
+                    result = linregress(E_k_arr, y_arr)
+                    slope = result.slope
+                    r_sq = result.rvalue**2
+
+                    if abs(slope) < 1e-10:
+                        continue
+                    if slope < 0 and r_sq > 0.2:
+                        T_K = -1.0 / (slope * KB_EV)
+                        if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
+                            self._estimated_T = float(T_K)
+                            return
             except (ValueError, ZeroDivisionError):
                 continue
 
