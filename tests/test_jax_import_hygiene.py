@@ -57,8 +57,6 @@ ALLOWED_TRY_IMPORT_JAX: frozenset[str] = frozenset(
 # of this list is itself a temporary scaffold; once empty, delete it.
 _T1_1_IN_PROGRESS: frozenset[str] = frozenset(
     {
-        "cflibs/instrument/convolution.py",
-        "cflibs/instrument/model.py",
         "cflibs/manifold/generator.py",
         "cflibs/manifold/loader.py",
     }

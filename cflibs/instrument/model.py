@@ -7,21 +7,10 @@ from typing import Callable, Optional
 import numpy as np
 from pathlib import Path
 
-try:
-    import jax
-    import jax.numpy as jnp
-    from jax import jit
-
-    HAS_JAX = True
-except ImportError:  # pragma: no cover - JAX is a runtime dep but stay defensive
-    HAS_JAX = False
-    jax = None  # type: ignore[assignment]
-    jnp = None  # type: ignore[assignment]
-
-    def jit(f):  # type: ignore[misc]
-        return f
-
+from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp  # noqa: F401
 from cflibs.core.logging_config import get_logger
+
+jit = jit_if_available
 
 logger = get_logger("instrument.model")
 
