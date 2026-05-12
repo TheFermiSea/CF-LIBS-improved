@@ -42,11 +42,25 @@ CLI
 ``run_unified_benchmark._build_parser().parse_args(shlex.split(...))``
 so every flag accepted by that CLI is accepted here.
 
-Out of scope for T1.1
----------------------
+Bandit allocation (T2.3, ``--bandit``)
+--------------------------------------
+With ``--cells <path-to-json>`` and ``--bandit <warmup_n>`` the sweep
+treats each cell as the arm of a multi-armed bandit.  After
+``warmup_n × n_cells`` round-robin warmup iters, the remaining
+iters are routed to the arm with the best Thompson-sampled posterior
+mean of d_A (composition Aitchison distance, lower-is-better).  See
+``cflibs/bandit/thompson_allocator.py`` and
+``docs/bandit-allocator-consultation.md`` for the design.
+
+When ``--bandit 0`` (the default) or ``--cells`` is unset, behavior is
+preserved byte-for-byte versus the T1.1 baseline.
+
+Out of scope for T1.1 / T2.3
+----------------------------
 - ``--parallel`` execution of iterations (XLA device contention risk).
 - Wiring ``--perturb`` through the sweep — orthogonal feature.
 - GPU determinism — covered by a separate epic.
+- Best-arm identification with PAC guarantees — out of scope for T2.3.
 """
 
 from __future__ import annotations
@@ -76,6 +90,84 @@ if str(ROOT) not in sys.path:
 # verbatim.  These are stable module-level symbols; importing them
 # avoids drift between the one-shot and sweep code paths.
 _RUB = importlib.import_module("scripts.run_unified_benchmark")
+
+
+def _load_cells(cells_path: Path | None, fallback_config_args: str) -> list[dict[str, str]]:
+    """Load cell descriptors or fall back to a single-cell sweep.
+
+    Returns a list of ``{"name": <str>, "config_args": <str>}`` dicts.
+    When ``cells_path`` is None, returns a single cell whose name is
+    ``"default"`` and whose ``config_args`` is ``fallback_config_args``
+    (i.e. preserves T1.1 behavior).
+    """
+    if cells_path is None:
+        return [{"name": "default", "config_args": fallback_config_args}]
+
+    with cells_path.open("r") as f:
+        payload = json.load(f)
+
+    cells: list[dict[str, str]] = []
+    if isinstance(payload, list):
+        for i, entry in enumerate(payload):
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    f"--cells entry {i} is not an object: {entry!r}"
+                )
+            name = str(entry.get("name", f"cell{i}"))
+            cfg = str(entry.get("config_args", ""))
+            cells.append({"name": name, "config_args": cfg})
+    elif isinstance(payload, dict):
+        for name, cfg in payload.items():
+            cells.append({"name": str(name), "config_args": str(cfg)})
+    else:
+        raise ValueError(
+            f"--cells must be a JSON array or object, got {type(payload).__name__}"
+        )
+    if not cells:
+        raise ValueError(f"--cells file {cells_path} is empty")
+    return cells
+
+
+def _extract_d_a(outputs: Mapping[str, Any], iter_dir: Path) -> float | None:
+    """Extract the iter's d_A (mean Aitchison composition distance).
+
+    Looks for the ``composition_summary.json`` produced by
+    ``UnifiedBenchmarkRunner.write_outputs``.  The summary is keyed by
+    ``id_workflow__composition_workflow`` strings; we average the
+    ``mean_aitchison`` field across all such pairs.  Returns ``None``
+    when no scored composition record exists.
+    """
+    summary_path = outputs.get("composition_summary_json")
+    if not summary_path:
+        summary_path = iter_dir / "composition_summary.json"
+    summary_path = Path(summary_path)
+    if not summary_path.exists():
+        return None
+    try:
+        with summary_path.open("r") as f:
+            summary = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(summary, dict):
+        return None
+    # Strip non-pair top-level keys we may have written (e.g. physical_consistency).
+    means: list[float] = []
+    import math as _math
+    for key, value in summary.items():
+        if key == "physical_consistency" or not isinstance(value, dict):
+            continue
+        m = value.get("mean_aitchison")
+        if m is None:
+            continue
+        try:
+            m_f = float(m)
+        except (TypeError, ValueError):
+            continue
+        if _math.isfinite(m_f):
+            means.append(m_f)
+    if not means:
+        return None
+    return float(sum(means) / len(means))
 
 
 def _reseed(seed: int) -> Any | None:
@@ -139,6 +231,44 @@ def _build_sweep_parser() -> argparse.ArgumentParser:
             "Top-level output directory. Per-iter outputs are written to "
             "<output-dir>/iter-<NNN>/. The manifest is "
             "<output-dir>/manifest.jsonl."
+        ),
+    )
+    parser.add_argument(
+        "--cells",
+        type=Path,
+        default=None,
+        help=(
+            "Optional path to a JSON file describing parameter-sweep cells. "
+            "The file may be either (a) a JSON array of objects "
+            "[{\"name\": <str>, \"config_args\": <str>}, ...] or (b) a "
+            "JSON object {<name>: <config_args>, ...}.  When absent, the "
+            "sweep runs a single cell using --config-args verbatim."
+        ),
+    )
+    parser.add_argument(
+        "--bandit",
+        type=int,
+        default=0,
+        metavar="WARMUP_N",
+        dest="bandit_warmup",
+        help=(
+            "Enable Thompson-sampling bandit allocation. WARMUP_N is the "
+            "number of round-robin warmup pulls per cell. After warmup, "
+            "remaining iters are routed to cells with the most promising "
+            "d_A (composition Aitchison distance) trajectories. "
+            "0 (default) preserves the existing equal-allocation behavior "
+            "byte-for-byte. Requires >= 1 cell, but is only meaningful "
+            "when used with --cells of length >= 2."
+        ),
+    )
+    parser.add_argument(
+        "--bandit-seed",
+        type=int,
+        default=None,
+        help=(
+            "Seed for the bandit allocator's internal RNG. If unset, "
+            "derived deterministically from --seed-base so a sweep with "
+            "the same --seed-base produces the same arm-pull schedule."
         ),
     )
     return parser
@@ -281,6 +411,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     base_args = base_parser.parse_args(shlex.split(sweep_args.config_args or ""))
 
     _validate_and_normalize_base_args(base_parser, base_args)
+    # Match run_unified_benchmark.main()'s basis-dir resolution so the
+    # runner doesn't crash on the default ``--basis-dir`` (None) path.
+    base_args.basis_dir = _RUB._resolve_basis_dir(base_args.basis_dir)
 
     sweep_args.output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = sweep_args.output_dir / "manifest.jsonl"
@@ -318,7 +451,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Unknown composition workflow(s): {', '.join(unknown_composition)}"
         )
 
-    _RUB._validate_basis_requirements(base_parser, id_workflows, base_args.basis_dir)
+    # When the caller didn't pass --cells, base_args drives the only
+    # cell, so run the basis-requirement check on the base id_workflows.
+    # When --cells is set the per-cell args may narrow id_workflows
+    # below the basis-required set, so defer validation to the cell
+    # parse below (each cell args.basis_dir is already resolved).
+    if sweep_args.cells is None:
+        _RUB._validate_basis_requirements(base_parser, id_workflows, base_args.basis_dir)
 
     _vrabel_cap = (
         None if base_args.vrabel_max_shots == 0 else base_args.vrabel_max_shots
@@ -357,17 +496,115 @@ def main(argv: Sequence[str] | None = None) -> int:
     pc_blocked_iters: list[int] = []
     iter_records: list[dict[str, Any]] = []
 
+    # Cells + bandit setup.  --bandit 0 (default) without --cells
+    # preserves byte-identical T1.1 behavior: a single "default" cell
+    # with no arm_id / posterior fields in manifest records.
+    cells = _load_cells(sweep_args.cells, sweep_args.config_args)
+    bandit_warmup = max(0, int(sweep_args.bandit_warmup))
+    bandit_enabled = bandit_warmup > 0
+    # Per-cell args + per-cell workflow lists.  When --cells is unset
+    # the single "default" cell reuses the already-validated base_args
+    # verbatim so the --bandit 0 path is byte-identical with T1.1.
+    per_cell_args: list[argparse.Namespace] = []
+    per_cell_id_workflows: list[list[str]] = []
+    per_cell_composition_workflows: list[list[str]] = []
+    for cell in cells:
+        if cells == [{"name": "default", "config_args": sweep_args.config_args}]:
+            per_cell_args.append(base_args)
+            per_cell_id_workflows.append(list(id_workflows))
+            per_cell_composition_workflows.append(list(composition_workflows))
+            continue
+        cell_argv = shlex.split(cell["config_args"] or "")
+        cell_ns = base_parser.parse_args(cell_argv)
+        # Mirror the global jax-identifier env propagation done at the
+        # top-level once per cell so cells that toggle --jax-identifier
+        # still get the env var set correctly.
+        if cell_ns.jax_identifier:
+            os.environ["CFLIBS_USE_JAX_IDENTIFIER"] = "1"
+        _RUB._validate_paths(base_parser, cell_ns)
+        cell_ns.basis_dir = _RUB._resolve_basis_dir(cell_ns.basis_dir)
+        cell_id_wf = _RUB._normalize_workflow_list(cell_ns.id_workflows) or list(
+            runner.id_registry.keys()
+        )
+        cell_comp_wf = _RUB._normalize_workflow_list(cell_ns.composition_workflows) or list(
+            runner.composition_registry.keys()
+        )
+        # Validate cell-narrowed workflows.
+        unknown = sorted(set(cell_id_wf) - set(runner.id_registry))
+        if unknown:
+            base_parser.error(
+                f"Cell '{cell['name']}': unknown identification workflow(s): "
+                f"{', '.join(unknown)}"
+            )
+        unknown = sorted(set(cell_comp_wf) - set(runner.composition_registry))
+        if unknown:
+            base_parser.error(
+                f"Cell '{cell['name']}': unknown composition workflow(s): "
+                f"{', '.join(unknown)}"
+            )
+        _RUB._validate_basis_requirements(
+            base_parser, cell_id_wf, cell_ns.basis_dir
+        )
+        per_cell_args.append(cell_ns)
+        per_cell_id_workflows.append(cell_id_wf)
+        per_cell_composition_workflows.append(cell_comp_wf)
+
+    allocator = None
+    warmup_schedule: list[int] = []
+    if bandit_enabled:
+        from cflibs.bandit import ThompsonAllocator
+        from cflibs.bandit.thompson_allocator import round_robin_warmup_schedule
+
+        bandit_seed = (
+            int(sweep_args.bandit_seed)
+            if sweep_args.bandit_seed is not None
+            else seed_base
+        )
+        allocator = ThompsonAllocator(
+            n_arms=len(cells),
+            lower_is_better=True,  # d_A: lower is better
+            random_state=bandit_seed,
+        )
+        warmup_schedule = round_robin_warmup_schedule(len(cells), bandit_warmup)
+        print(
+            f"[parameter_sweep] bandit enabled: n_arms={len(cells)} "
+            f"warmup_per_arm={bandit_warmup} "
+            f"warmup_total={len(warmup_schedule)} "
+            f"bandit_seed={bandit_seed}",
+            flush=True,
+        )
+
     # Manifest is line-buffered + flushed after every write so a
     # mid-sweep crash still leaves a readable JSONL trail.
     with manifest_path.open("a", buffering=1) as manifest_fp:
         for iter_idx in range(n_iters):
             seed = seed_base + iter_idx
+
+            # Pick which cell this iter pulls.  When the bandit is off,
+            # always pick cell 0 (so a single-cell sweep stays
+            # byte-identical with T1.1, and a multi-cell --cells run
+            # without --bandit walks cell 0 only — which is a degenerate
+            # but well-defined behavior callers can opt out of).
+            if not bandit_enabled:
+                arm_idx = 0
+            elif iter_idx < len(warmup_schedule):
+                arm_idx = warmup_schedule[iter_idx]
+            else:
+                assert allocator is not None
+                arm_idx = allocator.select_arm()
+
+            cell_info = cells[arm_idx]
+            cell_name = cell_info["name"]
+            cell_args = per_cell_args[arm_idx]
+            cell_id_wf = per_cell_id_workflows[arm_idx]
+            cell_comp_wf = per_cell_composition_workflows[arm_idx]
+
             iter_dir = base_output_dir / f"iter-{iter_idx:03d}"
             iter_dir.mkdir(parents=True, exist_ok=True)
 
             jax_key = _reseed(seed)
 
-            iter_args = _copy_namespace(base_args)
+            iter_args = _copy_namespace(cell_args)
             iter_args.output_dir = iter_dir
 
             t_iter_start = time.perf_counter()
@@ -378,14 +615,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 outputs = _run_one_iteration(
                     base_parser=base_parser,
                     runner=runner,
-                    id_workflows=id_workflows,
-                    composition_workflows=composition_workflows,
+                    id_workflows=cell_id_wf,
+                    composition_workflows=cell_comp_wf,
                     identification_datasets=identification_datasets,
                     composition_datasets=composition_datasets,
                     base_args=iter_args,
                     iter_output_dir=iter_dir,
-                    sections=base_args.sections,
-                    max_outer_folds=base_args.max_outer_folds,
+                    sections=cell_args.sections,
+                    max_outer_folds=cell_args.max_outer_folds,
                 )
                 if outputs.get("_pc_blocked"):
                     iter_status = "physical_consistency_blocked"
@@ -401,6 +638,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             iter_seconds = time.perf_counter() - t_iter_start
 
+            # Update the bandit with this iter's d_A so future
+            # select_arm() calls see the observation.
+            iter_d_a: float | None = None
+            if bandit_enabled and allocator is not None and iter_status != "error":
+                iter_d_a = _extract_d_a(outputs, iter_dir)
+                if iter_d_a is not None:
+                    allocator.update(arm_idx, iter_d_a)
+
             record: dict[str, Any] = {
                 "iter": iter_idx,
                 "seed": seed,
@@ -410,6 +655,26 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "config_args": sweep_args.config_args,
                 "jax_key_used": jax_key is not None,
             }
+            # Bandit-specific manifest fields are added only when the
+            # bandit is enabled so --bandit 0 produces byte-identical
+            # manifest lines with T1.1.
+            if bandit_enabled:
+                record["arm_id"] = arm_idx
+                record["cell_id"] = arm_idx
+                record["cell_name"] = cell_name
+                record["cell_config_args"] = cell_info["config_args"]
+                record["phase"] = (
+                    "warmup" if iter_idx < len(warmup_schedule) else "bandit"
+                )
+                record["d_a"] = iter_d_a
+                if allocator is not None:
+                    summary = allocator.posterior_summary(prob_best_samples=256)
+                    arm_summary = summary[arm_idx]
+                    record["posterior_mean"] = arm_summary["posterior_mean"]
+                    record["posterior_var"] = arm_summary["posterior_var"]
+                    record["prob_best"] = arm_summary["prob_best"]
+                    record["n_pulls"] = arm_summary["n_pulls"]
+                    record["arm_posteriors"] = summary
             if iter_error is not None:
                 record["error"] = iter_error
             if outputs:
@@ -425,9 +690,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 os.fsync(manifest_fp.fileno())
             iter_records.append(record)
 
+            extra = ""
+            if bandit_enabled:
+                phase = "warmup" if iter_idx < len(warmup_schedule) else "bandit"
+                extra = (
+                    f" arm={arm_idx} cell={cell_name} phase={phase} "
+                    f"d_a={iter_d_a if iter_d_a is not None else 'NA'}"
+                )
             print(
                 f"[parameter_sweep] iter {iter_idx:03d} seed={seed} "
-                f"status={iter_status} time={iter_seconds:.2f}s -> {iter_dir}",
+                f"status={iter_status} time={iter_seconds:.2f}s -> {iter_dir}"
+                f"{extra}",
                 flush=True,
             )
 
@@ -439,6 +712,48 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"manifest={manifest_path.resolve()}",
         flush=True,
     )
+
+    if bandit_enabled and allocator is not None:
+        final_summary = allocator.posterior_summary(prob_best_samples=512)
+        pulls = allocator.n_pulls()
+        print(
+            "[parameter_sweep] bandit final allocation:",
+            flush=True,
+        )
+        for cell, summary in zip(cells, final_summary):
+            pb = summary["prob_best"]
+            pb_s = f"{pb:.2%}" if pb is not None else "NA"
+            obs_mean = summary["observed_mean"]
+            obs_mean_s = (
+                f"{obs_mean:.4f}"
+                if obs_mean == obs_mean  # NaN check
+                else "NA"
+            )
+            print(
+                f"  cell={cell['name']:<24} pulls={summary['n_pulls']:>3} "
+                f"observed_mean_d_a={obs_mean_s} "
+                f"posterior_mean={summary['posterior_mean']:.4f} "
+                f"prob_best={pb_s}",
+                flush=True,
+            )
+        # Emit a machine-readable allocation summary next to the manifest.
+        alloc_summary_path = sweep_args.output_dir / "bandit_summary.json"
+        with alloc_summary_path.open("w") as f:
+            json.dump(
+                {
+                    "cells": cells,
+                    "pulls_per_cell": pulls,
+                    "posterior_summary": final_summary,
+                    "warmup_per_cell": bandit_warmup,
+                    "total_iters": n_iters,
+                },
+                f,
+                indent=2,
+            )
+        print(
+            f"[parameter_sweep] bandit summary: {alloc_summary_path}",
+            flush=True,
+        )
 
     # Exit code policy: 2 if ANY iteration was blocked by the
     # physical-consistency gate (matches run_unified_benchmark.py
