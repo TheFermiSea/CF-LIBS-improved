@@ -813,6 +813,213 @@ if HAS_JAX:
         return jnp.sum(profiles, axis=0)
 
     @jit
+    def apply_ldm_broadening_jax(
+        wavelength_grid: jnp.ndarray,
+        line_wavelengths: jnp.ndarray,
+        line_intensities: jnp.ndarray,
+        sigmas: jnp.ndarray,
+        n_bins: int = 32,
+    ) -> jnp.ndarray:
+        """
+        Apply LDM (Linear Dispersion Method) broadening using a 1-D log-sigma grid.
+
+        This implements the pattern from van den Bekerom & Pannier (2021) for
+        Gaussian-dominant broadening. Lines are projected onto a log-spaced
+        sigma grid and a wavelength grid, then convolved once per sigma bin.
+
+        Parameters
+        ----------
+        wavelength_grid : jnp.ndarray
+            Uniform wavelength grid in nm.
+        line_wavelengths : jnp.ndarray
+            Line center wavelengths in nm.
+        line_intensities : jnp.ndarray
+            Line intensities (integrated area).
+        sigmas : jnp.ndarray
+            Per-line Gaussian standard deviations in nm.
+        n_bins : int
+            Number of log-spaced sigma bins.
+
+        Returns
+        -------
+        jnp.ndarray
+            Broadened spectrum.
+        """
+        # 1. Define log-spaced sigma grid
+        min_s = jnp.maximum(jnp.min(sigmas), 1e-6)
+        max_s = jnp.maximum(jnp.max(sigmas), 1.1 * min_s)
+        sigma_grid = jnp.geomspace(min_s * 0.99, max_s * 1.01, n_bins)
+
+        # 2. Bin lines into wavelength grid
+        dw = wavelength_grid[1] - wavelength_grid[0]
+        w_min = wavelength_grid[0]
+        n_pixels = wavelength_grid.shape[0]
+
+        w_pos = (line_wavelengths - w_min) / dw
+        w_idx = jnp.floor(w_pos).astype(jnp.int32)
+        w_frac = w_pos - w_idx
+
+        # 3. Bin lines into sigma grid
+        log_min = jnp.log(sigma_grid[0])
+        log_max = jnp.log(sigma_grid[-1])
+        s_pos = (jnp.log(jnp.maximum(sigmas, 1e-7)) - log_min) / (log_max - log_min) * (n_bins - 1)
+        s_idx = jnp.floor(s_pos).astype(jnp.int32)
+        s_idx = jnp.clip(s_idx, 0, n_bins - 2)
+        s_frac = s_pos - s_idx
+
+        # 4. Distribute intensities into (n_bins, n_pixels) grid
+        grid = jnp.zeros((n_bins, n_pixels))
+
+        def scatter_add(g, s_i, w_i, val):
+            mask = (w_i >= 0) & (w_i < n_pixels)
+            return g.at[s_i, jnp.where(mask, w_i, 0)].add(jnp.where(mask, val, 0.0))
+
+        grid = scatter_add(grid, s_idx, w_idx, line_intensities * (1 - s_frac) * (1 - w_frac))
+        grid = scatter_add(grid, s_idx, w_idx + 1, line_intensities * (1 - s_frac) * w_frac)
+        grid = scatter_add(grid, s_idx + 1, w_idx, line_intensities * s_frac * (1 - w_frac))
+        grid = scatter_add(grid, s_idx + 1, w_idx + 1, line_intensities * s_frac * w_frac)
+
+        # 5. Convolve each sigma bin
+        max_sigma = sigma_grid[-1]
+        half_width = jnp.ceil(5.0 * max_sigma / dw).astype(jnp.int32)
+        half_width = jnp.maximum(half_width, 10)
+        offsets = jnp.arange(-half_width, half_width + 1) * dw
+
+        def get_kernel(s):
+            return jnp.exp(-0.5 * (offsets / s) ** 2) / (s * jnp.sqrt(2 * jnp.pi))
+
+        kernels = jax.vmap(get_kernel)(sigma_grid)
+
+        def convolve_bin(b_grid, kernel):
+            return jnp.convolve(b_grid, kernel, mode="same")
+
+        broadened_bins = jax.vmap(convolve_bin)(grid, kernels)
+
+        return jnp.sum(broadened_bins, axis=0)
+
+    @jit
+    def apply_ldm_broadening_voigt_jax(
+        wavelength_grid: jnp.ndarray,
+        line_wavelengths: jnp.ndarray,
+        line_intensities: jnp.ndarray,
+        sigmas: jnp.ndarray,
+        gammas: jnp.ndarray,
+        n_sigma_bins: int = 16,
+        n_gamma_bins: int = 16,
+    ) -> jnp.ndarray:
+        """
+        Apply LDM (Linear Dispersion Method) broadening using a 2-D (sigma, gamma) grid.
+
+        This implements the pattern from van den Bekerom & Pannier (2021) for
+        rapid spectral synthesis. Lines are projected onto a log-spaced
+        (sigma, gamma) grid and a wavelength grid, then convolved once per grid cell.
+
+        Parameters
+        ----------
+        wavelength_grid : jnp.ndarray
+            Uniform wavelength grid in nm.
+        line_wavelengths : jnp.ndarray
+            Line center wavelengths in nm.
+        line_intensities : jnp.ndarray
+            Line intensities (integrated area).
+        sigmas : jnp.ndarray
+            Per-line Gaussian standard deviations in nm.
+        gammas : jnp.ndarray
+            Per-line Lorentzian HWHMs in nm.
+        n_sigma_bins : int
+            Number of log-spaced sigma bins.
+        n_gamma_bins : int
+            Number of log-spaced gamma bins.
+
+        Returns
+        -------
+        jnp.ndarray
+            Broadened spectrum.
+        """
+        # 1. Define log-spaced grids
+        min_s = jnp.maximum(jnp.min(sigmas), 1e-6)
+        max_s = jnp.maximum(jnp.max(sigmas), 1.1 * min_s)
+        sigma_grid = jnp.geomspace(min_s * 0.99, max_s * 1.01, n_sigma_bins)
+
+        min_g = jnp.maximum(jnp.min(gammas), 1e-6)
+        max_g = jnp.maximum(jnp.max(gammas), 1.1 * min_g)
+        gamma_grid = jnp.geomspace(min_g * 0.99, max_g * 1.01, n_gamma_bins)
+
+        # 2. Bin lines into wavelength grid
+        dw = wavelength_grid[1] - wavelength_grid[0]
+        w_min = wavelength_grid[0]
+        n_pixels = wavelength_grid.shape[0]
+
+        w_pos = (line_wavelengths - w_min) / dw
+        w_idx = jnp.floor(w_pos).astype(jnp.int32)
+        w_frac = w_pos - w_idx
+
+        # 3. Bin lines into sigma and gamma grids
+        def get_pos(vals, grid, n):
+            log_min = jnp.log(grid[0])
+            log_max = jnp.log(grid[-1])
+            pos = (jnp.log(jnp.maximum(vals, 1e-7)) - log_min) / (log_max - log_min) * (n - 1)
+            idx = jnp.floor(pos).astype(jnp.int32)
+            idx = jnp.clip(idx, 0, n - 2)
+            frac = pos - idx
+            return idx, frac
+
+        s_idx, s_frac = get_pos(sigmas, sigma_grid, n_sigma_bins)
+        g_idx, g_frac = get_pos(gammas, gamma_grid, n_gamma_bins)
+
+        # 4. Distribute intensities into (n_sigma, n_gamma, n_pixels) grid
+        grid = jnp.zeros((n_sigma_bins, n_gamma_bins, n_pixels))
+
+        def scatter_add_3d(g, s_i, g_i, w_i, val):
+            mask = (w_i >= 0) & (w_i < n_pixels)
+            return g.at[s_i, g_i, jnp.where(mask, w_i, 0)].add(jnp.where(mask, val, 0.0))
+
+        # Trilinear distribution (8 points)
+        for ds in [0, 1]:
+            for dg in [0, 1]:
+                for dw_ in [0, 1]:
+                    weight = (
+                        (s_frac if ds == 1 else 1 - s_frac)
+                        * (g_frac if dg == 1 else 1 - g_frac)
+                        * (w_frac if dw_ == 1 else 1 - w_frac)
+                    )
+                    grid = scatter_add_3d(
+                        grid, s_idx + ds, g_idx + dg, w_idx + dw_, line_intensities * weight
+                    )
+
+        # 5. Convolve each (sigma, gamma) bin
+        max_sigma = sigma_grid[-1]
+        max_gamma = gamma_grid[-1]
+        # Voigt FWHM approx to determine kernel size
+        fwhm_v = 0.5346 * (2 * max_gamma) + jnp.sqrt(
+            0.2166 * (2 * max_gamma) ** 2 + (2.355 * max_sigma) ** 2
+        )
+        half_width = jnp.ceil(4.0 * fwhm_v / dw).astype(jnp.int32)
+        half_width = jnp.maximum(half_width, 10)
+        offsets = jnp.arange(-half_width, half_width + 1) * dw
+
+        # Flatten sigma and gamma grids for vmap
+        sg_grid = jnp.stack(jnp.meshgrid(sigma_grid, gamma_grid, indexing="ij"), axis=-1).reshape(
+            -1, 2
+        )
+
+        def get_voigt_kernel(sg):
+            s, g = sg[0], sg[1]
+            return _voigt_profile_kernel_jax(offsets, s, g)
+
+        kernels = jax.vmap(get_voigt_kernel)(sg_grid)
+
+        # Flatten grid for vmap
+        flat_grid = grid.reshape(-1, n_pixels)
+
+        def convolve_bin(b_grid, kernel):
+            return jnp.convolve(b_grid, kernel, mode="same")
+
+        broadened_bins = jax.vmap(convolve_bin)(flat_grid, kernels)
+
+        return jnp.sum(broadened_bins, axis=0)
+
+    @jit
     def voigt_spectrum_jax(
         wl_grid: jnp.ndarray,
         line_centers: jnp.ndarray,
@@ -897,6 +1104,12 @@ else:
         _raise_jax_missing()
 
     def apply_voigt_broadening_jax(*args, **kwargs):
+        _raise_jax_missing()
+
+    def apply_ldm_broadening_jax(*args, **kwargs):
+        _raise_jax_missing()
+
+    def apply_ldm_broadening_voigt_jax(*args, **kwargs):
         _raise_jax_missing()
 
     def voigt_spectrum_jax(*args, **kwargs):

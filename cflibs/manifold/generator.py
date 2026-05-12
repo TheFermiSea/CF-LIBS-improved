@@ -56,7 +56,7 @@ from cflibs.plasma.partition import polynomial_partition_function_jax
 
 # Conditional imports for JAX physics functions
 if HAS_JAX:
-    pass  # JAX physics helpers available in cflibs.radiation if needed
+    from cflibs.radiation.profiles import apply_ldm_broadening_voigt_jax
 
 logger = get_logger("manifold.generator")
 
@@ -564,72 +564,12 @@ class ManifoldGenerator:
         factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -l_stark_alpha)
         gamma_stark = w_ref * factor_ne * factor_T
 
-        # --- Voigt Profile Rendering (Humlicek W4 approximation) ---
-        # For each wavelength point, compute Voigt profile contribution from all lines
-        # z = (x + i*gamma) / (sigma * sqrt(2))
-        # V(x) = Re(w(z)) / (sigma * sqrt(2*pi))
-
-        diff = wl_grid[:, None] - l_wl[None, :]  # (n_wl, n_lines)
-
-        # Compute Voigt profile using Humlicek W4 approximation
-        z = (diff + 1j * gamma_stark) / (sigma_total * jnp.sqrt(2.0))
-
-        # Humlicek W4 Faddeeva approximation (no complex erfc needed)
-        x_h = jnp.real(z)
-        y_h = jnp.abs(jnp.imag(z))
-        s = jnp.abs(x_h) + y_h
-        t = y_h - 1j * x_h
-
-        # Region 1: s >= 15 (asymptotic)
-        w_r1 = t * 0.5641896 / (0.5 + t * t)
-
-        # Region 2: 5.5 <= s < 15
-        u = t * t
-        w_r2 = t * (1.410474 + u * 0.5641896) / (0.75 + u * (3.0 + u))
-
-        # Region 3: s < 5.5 and y >= 0.195 * |x| - 0.176
-        w_r3 = (16.4955 + t * (20.20933 + t * (11.96482 + t * (3.778987 + t * 0.5642236)))) / (
-            16.4955 + t * (38.82363 + t * (39.27121 + t * (21.69274 + t * (6.699398 + t))))
+        # --- LDM/DIT Broadening Grid (van den Bekerom & Pannier 2021) ---
+        # Project lines onto a log-spaced (sigma, gamma) grid and convolve once per cell.
+        # This provides >100x speedup for large line lists.
+        intensity = apply_ldm_broadening_voigt_jax(
+            wl_grid, l_wl, epsilon, sigma_total, gamma_stark, n_sigma_bins=16, n_gamma_bins=16
         )
-
-        # Region 4: s < 5.5 and y < 0.195 * |x| - 0.176
-        w_r4 = jnp.exp(u) - t * (
-            36183.31
-            - u
-            * (
-                3321.9905
-                - u * (1540.787 - u * (219.0313 - u * (35.76683 - u * (1.320522 - u * 0.56419))))
-            )
-        ) / (
-            32066.6
-            - u
-            * (
-                24322.84
-                - u
-                * (9022.228 - u * (2186.181 - u * (364.2191 - u * (61.57037 - u * (1.841439 - u)))))
-            )
-        )
-
-        # Select region based on conditions
-        w_z = jnp.where(
-            s >= 15.0,
-            w_r1,
-            jnp.where(
-                s >= 5.5,
-                w_r2,
-                jnp.where(
-                    y_h >= 0.195 * jnp.abs(x_h) - 0.176,
-                    w_r3,
-                    w_r4,
-                ),
-            ),
-        )
-
-        profile = jnp.real(w_z) / (sigma_total * jnp.sqrt(2.0 * jnp.pi))
-
-        # Sum contributions weighted by emissivity
-
-        intensity = jnp.sum(epsilon * profile, axis=1)
 
         return intensity
 
