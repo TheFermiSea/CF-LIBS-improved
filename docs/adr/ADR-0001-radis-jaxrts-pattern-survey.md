@@ -1,9 +1,9 @@
 # ADR-0001 — Pattern survey from Radis, jaxrts, Exojax, and atmospheric RT codes for CF-LIBS-improved
 
-- **Status:** Proposed (survey-first; no implementation commitments)
+- **Status:** Proposed → Tightening complete (2026-05-12); implementation specs at [`specs/T1-1`](./specs/T1-1-host-kernel-split.md) through [`specs/T1-6`](./specs/T1-6-bayesian-decomposition.md); worktree runbook at [`ADR-0001-RUNBOOK.md`](./ADR-0001-RUNBOOK.md); integration branch `feat/adr-0001-pattern-survey-impl` on origin
 - **Date:** 2026-05-12
-- **Authors:** CF-LIBS Architecture working group (Brian Squires + Opus 4.7 research team A–D)
-- **Tracking bead:** CF-LIBS-improved-j7vb
+- **Authors:** CF-LIBS Architecture working group (Brian Squires + Opus 4.7 research team A–D, tightening team A–E)
+- **Tracking bead:** CF-LIBS-improved-j7vb (closed); Tier-1 beads: 5oar, swgm, 14p6, e5o8, ke4z, 0mor
 - **Scope:** Comprehensive, ranked catalogue of patterns observed in four comparable physics-only spectroscopy / radiative-transfer codes, with explicit applicability mapping to CF-LIBS-improved files. **No implementation decisions are taken in this ADR** — it is the evidence base for subsequent ADRs that will commit to specific changes.
 - **Out of scope:** Anything that violates the physics-only constraint (see CLAUDE.md and bead `cf-libs-hard-project-constraint-the-final-algorithm`). All patterns surveyed are JAX-only or numpy/cython/Rust — none involve `flax`, `equinox`, `jax.nn`, or trained models.
 
@@ -52,10 +52,10 @@ Both recommendations are pure architecture and contain no physics changes; they 
 
 | Package | Role | Key files | LOC | JAX? | Pain points |
 |---|---|---|---|---|---|
-| `cflibs/plasma/` | Plasma state, Saha-Boltzmann solver, partition fns | `state.py` (430), `saha_boltzmann.py` (837), `partition.py` (~1000), `anderson_solver.py` | 2 870 | yes (5/6 files) | `SahaBoltzmannSolver` and `SingleZoneLTEPlasma` each have a `*Jax` subclass tail-appended in the same file — adds size, blocks isolated JIT reuse |
+| `cflibs/plasma/` | Plasma state, Saha-Boltzmann solver, partition fns | `state.py` (430), `saha_boltzmann.py` (837), `partition.py` (654), `anderson_solver.py` | 2 870 | yes (4/6 files — `state.py`, `saha_boltzmann.py`, `partition.py`, `anderson_solver.py`) | `SahaBoltzmannSolver` and `SingleZoneLTEPlasma` each have a `*Jax` subclass tail-appended in the same file — adds size, blocks isolated JIT reuse |
 | `cflibs/radiation/` | Forward model orchestrator, emissivity, profiles, Stark | `spectrum_model.py` (564), `profiles.py` (903), `emissivity.py`, `stark.py`, `batch.py` | 2 211 | yes (4/6) | One `DEPRECATED` voigt impl in `profiles.py:616`; `spectrum_model.py` has parallel `SpectrumModel` + `SpectrumModelJax` in one file |
 | `cflibs/atomic/` | SQLite atomic DB + structures | `database.py`, `database_generator.py`, `reference_data.py` (1093), `structures.py` | 2 069 | no | `reference_data.py` is the largest; lookup via cache decorators + pool |
-| `cflibs/inversion/` | Full inversion pipeline (6 sub-packages + 31 shims) | see § 3.4 | 31 058 | yes (10+ files) | 31 backward-compat shim files at flat path; oversized files (`alias.py`=2999, `iterative.py`=1326, `bayesian.py`=3264) |
+| `cflibs/inversion/` | Full inversion pipeline (6 sub-packages + 33 shims) | see § 3.4 | 31 058 | yes (10+ files) | 33 backward-compat shim files at flat path (35 flat-path files; 33 pure forwarders + 2 carry-over modules); oversized files (`alias.py`=2999, `iterative.py`=1326, `bayesian.py`=3264) |
 | `cflibs/manifold/` | Pre-computed spectral manifold (JAX) | `generator.py` (866), `batch_forward.py` (511), `loader.py`, `basis_index.py`, `vector_index.py` | 3 119 | yes (4/8) | `batch_forward.py` duplicates the forward model pipeline (Saha→Boltz→emissivity→broaden) the radiation package already owns |
 | `cflibs/instrument/` | Instrument response, convolution | `model.py`, `convolution.py`, `echelle.py` | 829 | yes | `InstrumentModel` + `InstrumentModelJax` in one file again |
 | `cflibs/core/` | Constants, ABCs, config, jax_runtime, cache, pool | 11 files | 1 582 | one (`jax_runtime.py`) | Healthy; only piece that survives untouched in any rearrangement |
@@ -73,7 +73,7 @@ Both recommendations are pure architecture and contain no physics changes; they 
 
 ### 3.2 JAX surface area today
 
-31 Python files import JAX. Every file repeats the same fallback boilerplate (`try: import jax ... except ImportError: HAS_JAX = False; def jit(f): return f`) — there is **no shared adapter module**, though `cflibs/core/jax_runtime.py` detects the backend.
+33 Python files import JAX (audited 2026-05-12). 28 of them repeat the same fallback boilerplate (`try: import jax ... except ImportError: HAS_JAX = False; def jit(f): return f`) — there is **no shared adapter module**, though `cflibs/core/jax_runtime.py` detects the backend.
 
 Key consumers (full table in agent transcript):
 
@@ -151,7 +151,7 @@ Single 862-LOC file `cflibs/validation/round_trip.py`:
 3. **`IterativeCFLIBSSolver.solve()` (200-line method)** — `iterative.py:417`. Mixes impure DB calls with pure linear algebra. Pure inner kernel could be lifted into a single jit-able step function inside a `lax.while_loop`.
 4. **Closure dispatch via string switch** — `iterative.py:527+` → `closure.py:303` `ClosureEquation`. Protocol/strategy split (like the `SolverStrategy` in `core/abc.py:55`) would let new closures land without touching the loop.
 5. **`apply_instrument_function`** — `convolution.py:60,109`. Direct convolution, no FFT path. Hot at every forward call.
-6. **Rust hot path** — `cflibs/inversion/identify/line_detection.py:34` (`from cflibs._core import scan_comb_shifts`). Only comb scanning is Rust-dispatched today; `native/cflibs-core/src/partition.rs` exists but isn't called from Python.
+6. **Rust hot path** — `cflibs/inversion/identify/line_detection.py:33-42` imports both `scan_comb_shifts` and `kdet_filter_elements` from `cflibs._core` (PyO3). Comb scanning and k-det filtering are both Rust-dispatched today; `native/cflibs-core/src/partition.rs` exists but isn't called from Python.
 7. **`BayesianForwardModel` monolith** — `bayesian.py:1071` (3 264-line file). Splitting `priors / forward / sampler` mirrors Exojax/jaxrts patterns.
 8. **`alias.py` monolith** — 2 999 LOC. Mixing of solver, attribution, template build, and `ALIASIdentifier` class (L582).
 9. **Atomic DB hot path** — `database.py:326,483,540,579`. Mixed cached/uncached methods; no prepared statements; `get_levels_for_species` called per-element per-iteration without caching.
@@ -159,7 +159,7 @@ Single 862-LOC file `cflibs/validation/round_trip.py`:
 
 ### 3.8 Technical debt visible from a survey-level read
 
-- **31 backward-compat shim files** at `cflibs/inversion/*.py` flat path. Healthy for back-compat; no scheduled removal.
+- **33 backward-compat shim files** at `cflibs/inversion/*.py` flat path (35 flat-path files total; 33 are pure forwarders, 2 are carry-over modules). Healthy for back-compat; no scheduled removal.
 - **Deprecated `cflibs/benchmarks/__init__.py`** — emits `DeprecationWarning`. Ripe for removal.
 - **One explicit `DEPRECATED` Voigt impl** at `cflibs/radiation/profiles.py:616` ("gradient stability issues at high optical depth"); working alternative exists in same file.
 - **`LEGACY` broadening mode** at `spectrum_model.py:247-250` (hardcoded `0.01*sqrt(T_eV/0.86)`) — retirement candidate once per-line modes are validated.
@@ -541,14 +541,17 @@ Full agent outputs preserved in:
 
 ## 11. Follow-on tracking
 
-Each Tier-1 and Tier-2 candidate should be filed as a separate bead before this ADR is closed, blocked on this one (`bd dep add <new> CF-LIBS-improved-j7vb`). Candidate beads:
+All Tier-1 beads filed and tightened on 2026-05-12 with per-bead implementation specs in `docs/adr/specs/`. Integration workflow specified in [`ADR-0001-RUNBOOK.md`](./ADR-0001-RUNBOOK.md).
 
-- T1-1 (host/kernel split + shared JAX decorator)
-- T1-2 (forward-model unification)
-- T1-3 (`lax.while_loop` in iterative solver)
-- T1-4 (LDM/DIT broadening for manifold)
-- T1-5 (chunked `lax.scan` + `checkpoint` over ν-grid)
-- T1-6 (retrieval driver decomposition)
-- T2-1 through T2-8 (per § 8.2)
+| Bead ID | Title | Wave | Hard deps | Spec |
+|---|---|---|---|---|
+| `5oar` | T1-1 host/kernel split + shared JAX decorator | 1 | — | [T1-1](./specs/T1-1-host-kernel-split.md) |
+| `14p6` | T1-3 `lax.while_loop` in iterative solver | 1 (parallel with T1-1) | soft on T1-1 only | [T1-3](./specs/T1-3-lax-while-iterative.md) |
+| `swgm` | T1-2 forward-model unification | 2 | T1-1 | [T1-2](./specs/T1-2-forward-model-unification.md) |
+| `e5o8` | T1-4 LDM/DIT broadening | 2 | T1-1 | [T1-4](./specs/T1-4-ldm-broadening.md) |
+| `ke4z` | T1-5 chunked `lax.scan` + checkpoint | 3 | T1-1, T1-4 | [T1-5](./specs/T1-5-chunked-scan-checkpoint.md) |
+| `0mor` | T1-6 retrieval-driver decomposition + forward-models registry | 3 | T1-1, T1-2 | [T1-6](./specs/T1-6-bayesian-decomposition.md) |
 
-Tier-3 polish items fold into existing or future cleanup beads. Tier-4 (`lax.custom_root` implicit-diff) deserves a research bead with a literature-review precursor.
+T1-3 sits in wave 1 (not wave 2 as the original ranking suggested) because Stream A's T1-1 spec explicitly carves `cflibs/inversion/solve/` out of T1-1 scope — T1-3 owns its local host/kernel split of `iterative.py` and can run concurrently with T1-1.
+
+Tier-2 candidates (T2-1 through T2-8) remain unfiled — to be planned in a separate cycle after Tier-1 lands on `dev`. Tier-3 polish items fold into routine cleanup beads. Tier-4 (`lax.custom_root` implicit-diff) deserves a research bead with a literature-review precursor.
