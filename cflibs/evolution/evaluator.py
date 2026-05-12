@@ -200,3 +200,33 @@ def assert_physics_only(source: str) -> None:
     violations = scan_source(source)
     if violations:
         raise BlocklistViolationError(violations)
+
+
+def assert_benchmark_relevance(diff: str, exercised_files: set[str]) -> None:
+    """Reject changes that do not touch any file exercised by the benchmark.
+
+    This prevents opening PRs for changes that have zero effect on the
+    fitness signal (e.g. editing a specialized identifier that is never
+    called for the current benchmark dataset).
+
+    Args:
+        diff: The unified git diff of the candidate change.
+        exercised_files: The set of file paths (relative to repo root) that
+            were actually executed during the benchmark run.
+    """
+    import re
+
+    # Extract touched files from a unified diff (e.g. '--- a/path/to/file')
+    touched = set()
+    for line in diff.splitlines():
+        if line.startswith("--- a/"):
+            touched.add(line[6:])
+        elif line.startswith("+++ b/"):
+            touched.add(line[6:])
+
+    if not touched.intersection(exercised_files):
+        raise RuntimeError(
+            f"Candidate diff touches {touched}, but none of these files are "
+            f"exercised by the current benchmark ({exercised_files}). "
+            "The change will have zero effect on the fitness signal."
+        )
