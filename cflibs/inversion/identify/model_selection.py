@@ -8,7 +8,7 @@ improves (decreases) BIC, then validates survivors via Boltzmann linearity.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy.optimize import nnls
@@ -16,6 +16,11 @@ from scipy.stats import linregress
 
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.identify.spectral_nnls import (
+    _HAS_JAX,
+    nnls_jax,
+    nnls_jax_batch,
+)
 
 logger = get_logger("inversion.model_selection")
 
@@ -64,6 +69,8 @@ def _solve_nnls_subset(
     basis_matrix: np.ndarray,
     element_mask: np.ndarray,
     n_elements: int,
+    use_jax_nnls: bool = False,
+    jax_nnls_max_iter: int = 300,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Solve NNLS for a subset of elements (plus all continuum columns).
 
@@ -78,6 +85,13 @@ def _solve_nnls_subset(
         Boolean mask of length *n_elements* selecting active elements.
     n_elements : int
         Number of element rows at the start of *basis_matrix*.
+    use_jax_nnls : bool, optional
+        If True, solve via :func:`nnls_jax` (FISTA on the Gram form)
+        instead of ``scipy.optimize.nnls`` (Lawson--Hanson). The two
+        agree on residual norm to rtol ~1e-5 but can pick different
+        minimizers on rank-deficient problems. Default False.
+    jax_nnls_max_iter : int, optional
+        FISTA iteration count when ``use_jax_nnls=True``. Default 300.
 
     Returns
     -------
@@ -94,7 +108,10 @@ def _solve_nnls_subset(
     if active_basis.shape[0] == 0:
         return np.array([]), np.zeros_like(observed)
 
-    coeffs, _ = nnls(active_basis.T, observed)
+    if use_jax_nnls:
+        coeffs, _ = nnls_jax(active_basis.T, observed, max_iter=jax_nnls_max_iter)
+    else:
+        coeffs, _ = nnls(active_basis.T, observed)
     predicted = active_basis.T @ coeffs
     return coeffs, predicted
 
@@ -105,6 +122,9 @@ def bic_prune_elements(
     element_list: List[str],
     element_coefficients: np.ndarray,
     noise_variance: float,
+    use_jax_nnls: bool = False,
+    jax_nnls_max_iter: int = 300,
+    jax_batch_trials: bool = False,
 ) -> ModelSelectionResult:
     """Backward elimination of elements using BIC.
 
@@ -131,11 +151,34 @@ def bic_prune_elements(
         NNLS coefficients for all components (n_components,).
     noise_variance : float
         Estimated noise variance of the observed spectrum.
+    use_jax_nnls : bool, optional
+        Route inner NNLS solves through :func:`nnls_jax` (FISTA, GPU-
+        batchable) instead of ``scipy.optimize.nnls`` (Lawson--Hanson,
+        CPU). Residual norms agree to ~1e-5 rtol; coefficient agreement
+        is rtol ~1e-4 in the well-conditioned case. Default False.
+    jax_nnls_max_iter : int, optional
+        FISTA iteration count. Default 300.
+    jax_batch_trials : bool, optional
+        Only meaningful when ``use_jax_nnls=True``. If True, compute
+        every leave-one-out *trial* in a single :func:`nnls_jax_batch`
+        call (vmapped), then walk through them sequentially according to
+        the BIC acceptance/rejection logic. This is exact when each
+        accepted removal happens to match the upfront sequential plan;
+        otherwise it falls back to per-trial solves whenever the
+        active mask diverges from the pre-batched assumption. Default
+        False (per-trial path). Useful for small batch GPU runs where
+        the launch overhead per individual NNLS solve dominates the
+        FISTA cost.
 
     Returns
     -------
     ModelSelectionResult
     """
+    if use_jax_nnls and not _HAS_JAX:  # pragma: no cover
+        raise ImportError(
+            "use_jax_nnls=True requires JAX. "
+            "Install with: pip install jax jaxlib"
+        )
     n_elements = len(element_list)
     n_continuum = basis_matrix.shape[0] - n_elements
 
@@ -155,7 +198,14 @@ def bic_prune_elements(
 
     # Step 2: compute initial BIC with all active elements
     k_initial = int(np.sum(active_mask)) + n_continuum
-    _, predicted_initial = _solve_nnls_subset(observed, basis_matrix, active_mask, n_elements)
+    _, predicted_initial = _solve_nnls_subset(
+        observed,
+        basis_matrix,
+        active_mask,
+        n_elements,
+        use_jax_nnls=use_jax_nnls,
+        jax_nnls_max_iter=jax_nnls_max_iter,
+    )
     bic_current = _compute_bic(observed, predicted_initial, k_initial)
     bic_initial = bic_current
 
@@ -169,7 +219,40 @@ def bic_prune_elements(
     active_indices = np.where(active_mask)[0]
     sorted_indices = active_indices[np.argsort(el_coeffs[active_indices])]
 
+    # Step 3b (optional): pre-compute every leave-one-out trial in one
+    # vmapped call. We assume the "all removals succeed" plan and then
+    # validate sequentially below. If a trial is rejected (BIC
+    # increased), subsequent pre-batched trials are stale w.r.t. the
+    # *current* active_mask, so we transparently fall back to the
+    # per-trial path for the remainder of the loop.
+    prebatch_predictions: Optional[Dict[int, np.ndarray]] = None
+    if use_jax_nnls and jax_batch_trials and len(sorted_indices) > 0:
+        # Build the sequence of full-component masks corresponding to
+        # "cumulatively remove sorted_indices[:k]" for k=1..len. Pad
+        # row-mask space to the full n_components (= n_elements +
+        # n_continuum) so we can call nnls_jax_batch on basis_matrix
+        # directly.
+        cum_masks = np.tile(active_mask, (len(sorted_indices), 1)).astype(np.float64)
+        for k, idx in enumerate(sorted_indices):
+            cum_masks[k:, idx] = 0.0  # remove this element from all subsequent trials
+        full_masks = np.concatenate(
+            [cum_masks, np.ones((len(sorted_indices), n_continuum), dtype=np.float64)],
+            axis=1,
+        )
+        _coeffs_batch, _ = nnls_jax_batch(
+            basis_matrix,
+            observed,
+            full_masks,
+            max_iter=jax_nnls_max_iter,
+        )
+        # predicted_b = sum_j coeffs[b, j] * basis_matrix[j, :]
+        prebatch_predictions = {
+            int(sorted_indices[k]): _coeffs_batch[k] @ basis_matrix
+            for k in range(len(sorted_indices))
+        }
+
     removed = []
+    prebatch_valid = True  # becomes False after first rejected removal
 
     # Step 4: backward elimination
     for idx in sorted_indices:
@@ -182,7 +265,18 @@ def bic_prune_elements(
         trial_mask[idx] = False
 
         k_trial = int(np.sum(trial_mask)) + n_continuum
-        _, predicted_trial = _solve_nnls_subset(observed, basis_matrix, trial_mask, n_elements)
+
+        if prebatch_predictions is not None and prebatch_valid:
+            predicted_trial = prebatch_predictions[int(idx)]
+        else:
+            _, predicted_trial = _solve_nnls_subset(
+                observed,
+                basis_matrix,
+                trial_mask,
+                n_elements,
+                use_jax_nnls=use_jax_nnls,
+                jax_nnls_max_iter=jax_nnls_max_iter,
+            )
         bic_trial = _compute_bic(observed, predicted_trial, k_trial)
 
         if bic_trial < bic_current:
@@ -206,10 +300,23 @@ def bic_prune_elements(
                 bic_current,
                 bic_trial,
             )
+            # Pre-batched trials past this point are stale (they assumed
+            # this removal succeeded). Invalidate so the *next* loop
+            # iteration --- if reached via a future revision --- falls
+            # back to per-trial solves. We also break, so this is mostly
+            # a safety net.
+            prebatch_valid = False
             break
 
     # Step 5: final NNLS solve with surviving elements
-    final_coeffs, _ = _solve_nnls_subset(observed, basis_matrix, active_mask, n_elements)
+    final_coeffs, _ = _solve_nnls_subset(
+        observed,
+        basis_matrix,
+        active_mask,
+        n_elements,
+        use_jax_nnls=use_jax_nnls,
+        jax_nnls_max_iter=jax_nnls_max_iter,
+    )
 
     # Build concentrations dict (element coefficients only, normalized)
     n_active_elements = int(np.sum(active_mask))
