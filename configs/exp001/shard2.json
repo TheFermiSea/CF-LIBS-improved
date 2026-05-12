@@ -1,7 +1,7 @@
 [
-  {"name": "alias_jax", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows alias --composition-workflows iterative_jax --jax-identifier --vrabel-max-shots 50 --dataset-shard 2/3"},
-  {"name": "comb_jax", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows comb --composition-workflows iterative_jax --jax-identifier --vrabel-max-shots 50 --dataset-shard 2/3"},
-  {"name": "correlation_jax", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows correlation --composition-workflows iterative_jax --jax-identifier --vrabel-max-shots 50 --dataset-shard 2/3"},
-  {"name": "spectral_nnls", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows spectral_nnls --composition-workflows iterative_jax --basis-dir /cluster/shared/cf-libs-bench/basis_libraries --vrabel-max-shots 50 --dataset-shard 2/3"},
-  {"name": "hybrid_union", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows hybrid_union --composition-workflows iterative_jax --basis-dir /cluster/shared/cf-libs-bench/basis_libraries --jax-identifier --vrabel-max-shots 50 --dataset-shard 2/3"}
+  {"name": "alias_jax", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows alias --composition-workflows iterative_jax --jax-identifier --vrabel-max-shots 5 --dataset-shard 2/3"},
+  {"name": "comb_jax", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows comb --composition-workflows iterative_jax --jax-identifier --vrabel-max-shots 5 --dataset-shard 2/3"},
+  {"name": "correlation_jax", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows correlation --composition-workflows iterative_jax --jax-identifier --vrabel-max-shots 5 --dataset-shard 2/3"},
+  {"name": "spectral_nnls", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows spectral_nnls --composition-workflows iterative_jax --basis-dir /cluster/shared/cf-libs-bench/basis_libraries --vrabel-max-shots 5 --dataset-shard 2/3"},
+  {"name": "hybrid_union", "config_args": "--quick --max-outer-folds 1 --sections all --id-workflows hybrid_union --composition-workflows iterative_jax --basis-dir /cluster/shared/cf-libs-bench/basis_libraries --jax-identifier --vrabel-max-shots 5 --dataset-shard 2/3"}
 ]
