@@ -174,6 +174,27 @@ def is_element_detected(
     return True
 
 
+# Trace-tier elements requiring convergent evidence (2-of-3 quorum)
+# Per CF-LIBS notebook §convergent-evidence
+TRACE_ELEMENTS = {
+    "Li", "Be", "B", "Sc", "V", "Cr", "Mn", "Co", "Ni", "Cu", "Zn",
+    "Ga", "Ge", "As", "Se", "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Ag",
+    "Cd", "Sn", "Sb", "Te", "Cs", "Ba", "La", "Ce", "Pr", "Nd", "Sm",
+    "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta",
+    "W", "Re", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Th", "U"
+}
+
+
+def get_default_algorithm(element: str) -> str:
+    """
+    Return default identification algorithm for an element.
+    Trace elements default to 'hybrid' (2-of-3 quorum).
+    """
+    if element in TRACE_ELEMENTS:
+        return "hybrid"
+    return "alias"
+
+
 def to_line_observations(result: ElementIdentificationResult) -> List[LineObservation]:
     """
     Convert ElementIdentificationResult to LineObservation list for Boltzmann/solver pipeline.

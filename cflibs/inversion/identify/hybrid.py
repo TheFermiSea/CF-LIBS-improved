@@ -1,24 +1,23 @@
 """
-Two-stage hybrid element identifier: NNLS screening + ALIAS confirmation.
+Hybrid element identifier with convergent multi-method validation.
 
-Inspired by ChemCam/SuperCam's two-stage pipeline: full-spectrum
-decomposition narrows the candidate set, then peak-matching confirms
-line-level evidence.  Combines complementary strengths:
+Implements a quorum-based identification strategy requiring agreement
+between multiple independent algorithms: ALIAS (peak matching), 
+COMB (harmonic line-set matching), and Correlation (template matching).
 
-- NNLS: handles blending, physically constrained, low false-positive rate
-- ALIAS: validates individual line positions, resolves ambiguities
+An element is considered 'identified' if it passes a specified quorum
+(default: 2 out of 3). This significantly reduces false positives
+for trace elements where single-method evidence is prone to accidental
+matches in complex spectra.
 
-Stage 1 (NNLS): Decompose spectrum into element basis spectra with lenient
-    threshold → candidate elements.
-Stage 2 (ALIAS): Run peak-matching restricted to NNLS candidates → line
-    confirmation.
-
-An element is detected if it passes BOTH stages.
+Modes:
+- intersection: 2-of-3 quorum (default)
+- union: 1-of-3 (any method matches)
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Set
+from typing import TYPE_CHECKING, Dict, List, Set, Any
 
 import numpy as np
 
@@ -30,75 +29,50 @@ from cflibs.inversion.element_id import (
 
 if TYPE_CHECKING:
     from cflibs.atomic.database import AtomicDatabase
-    from cflibs.manifold.basis_library import BasisLibrary
 
 logger = get_logger("inversion.hybrid_identifier")
 
 
 class HybridIdentifier:
     """
-    Two-stage element identifier: NNLS screening + ALIAS confirmation.
+    Multi-method hybrid identifier: ALIAS + COMB + Correlation.
 
     Parameters
     ----------
     atomic_db : AtomicDatabase
-        Atomic database for ALIAS line lookup.
-    basis_library : BasisLibrary
-        Pre-computed basis library for NNLS decomposition.
+        Atomic database for line lookups.
     elements : list of str
         Elements to search for.
     resolving_power : float
-        Resolving power of the spectrometer (for ALIAS).
-    nnls_detection_snr : float
-        NNLS SNR threshold for Stage 1 screening (lenient, default 1.5).
-    nnls_continuum_degree : int
-        Polynomial continuum degree for NNLS (default 3).
-    alias_detection_threshold : float
-        ALIAS detection threshold for Stage 2 confirmation (default 0.05).
-    alias_intensity_factor : float
-        ALIAS intensity threshold factor (default 3.0).
-    alias_chance_window_scale : float
-        ALIAS chance window scale (default 0.4).
-    alias_max_lines : int
-        ALIAS max lines per element (default 30).
-    fallback_T_K : float
-        Fallback temperature for NNLS if no index (default 8000).
-    fallback_ne_cm3 : float
-        Fallback electron density (default 1e17).
-    require_both : bool
-        If True (default), element must pass BOTH stages.
-        If False, element passes if it passes EITHER stage (union mode).
+        Resolving power of the spectrometer (default 1000.0).
+    quorum : int
+        Number of methods required for detection (default 2).
+        Use 1 for 'union' mode, 2 for 'intersection/quorum' mode.
+    alias_params : dict, optional
+        Parameters for ALIASIdentifier.
+    comb_params : dict, optional
+        Parameters for CombIdentifier.
+    corr_params : dict, optional
+        Parameters for CorrelationIdentifier.
     """
 
     def __init__(
         self,
         atomic_db: AtomicDatabase,
-        basis_library: BasisLibrary,
         elements: List[str],
         resolving_power: float = 1000.0,
-        nnls_detection_snr: float = 1.5,
-        nnls_continuum_degree: int = 3,
-        alias_detection_threshold: float = 0.05,
-        alias_intensity_factor: float = 3.0,
-        alias_chance_window_scale: float = 0.4,
-        alias_max_lines: int = 30,
-        fallback_T_K: float = 8000.0,
-        fallback_ne_cm3: float = 1e17,
-        require_both: bool = True,
+        quorum: int = 2,
+        alias_params: Dict[str, Any] = None,
+        comb_params: Dict[str, Any] = None,
+        corr_params: Dict[str, Any] = None,
     ):
         self.atomic_db = atomic_db
-        self.basis_library = basis_library
         self.elements = elements
         self.resolving_power = resolving_power
-        self.nnls_detection_snr = nnls_detection_snr
-        self.nnls_continuum_degree = nnls_continuum_degree
-        self.alias_detection_threshold = alias_detection_threshold
-        self.alias_intensity_factor = alias_intensity_factor
-        self.alias_chance_window_scale = alias_chance_window_scale
-        self.alias_max_lines = alias_max_lines
-        self.fallback_T_K = fallback_T_K
-        self.fallback_ne_cm3 = fallback_ne_cm3
-        self.require_both = require_both
+        self.quorum = quorum
+        self.alias_params = alias_params or {}
+        self.comb_params = comb_params or {}
+        self.corr_params = corr_params or {}
 
     def identify(
         self,
@@ -106,104 +80,96 @@ class HybridIdentifier:
         intensity: np.ndarray,
     ) -> ElementIdentificationResult:
         """
-        Run two-stage identification.
+        Run multi-method identification and apply quorum logic.
 
         Returns
         -------
         ElementIdentificationResult
-            Elements detected by both (or either) stage, with metadata
-            recording per-stage decisions.
+            Elements detected by quorum of stages.
         """
         from cflibs.inversion.alias_identifier import ALIASIdentifier
-        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+        from cflibs.inversion.comb_identifier import CombIdentifier
+        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
 
-        # ---- Stage 1: NNLS screening ----
-        nnls_id = SpectralNNLSIdentifier(
-            basis_library=self.basis_library,
-            detection_snr=self.nnls_detection_snr,
-            continuum_degree=self.nnls_continuum_degree,
-            fallback_T_K=self.fallback_T_K,
-            fallback_ne_cm3=self.fallback_ne_cm3,
-        )
-        nnls_result = nnls_id.identify(wavelength, intensity)
-        nnls_detected: Set[str] = {e.element for e in nnls_result.detected_elements}
-
-        # Build a map of NNLS scores for metadata
-        nnls_scores: Dict[str, float] = {}
-        nnls_snrs: Dict[str, float] = {}
-        for e in nnls_result.all_elements:
-            nnls_scores[e.element] = e.score
-            nnls_snrs[e.element] = e.metadata.get("nnls_snr", 0.0)
-
-        # ---- Stage 2: ALIAS confirmation ----
-        # Restrict ALIAS to NNLS candidates when require_both=True
-        alias_elements = (
-            [e for e in self.elements if e in nnls_detected] if self.require_both else self.elements
-        )
-        if not alias_elements:
-            alias_elements = self.elements
-
+        # 1. Run ALIAS
         alias_id = ALIASIdentifier(
             atomic_db=self.atomic_db,
-            elements=alias_elements,
+            elements=self.elements,
             resolving_power=self.resolving_power,
-            intensity_threshold_factor=self.alias_intensity_factor,
-            detection_threshold=self.alias_detection_threshold,
-            chance_window_scale=self.alias_chance_window_scale,
-            max_lines_per_element=self.alias_max_lines,
+            **self.alias_params,
         )
-        alias_result = alias_id.identify(wavelength, intensity)
-        alias_detected: Set[str] = {e.element for e in alias_result.detected_elements}
+        alias_res = alias_id.identify(wavelength, intensity)
+        alias_detected = {e.element for e in alias_res.detected_elements}
 
-        # Build ALIAS score map
-        alias_scores: Dict[str, float] = {}
-        alias_elements_map: Dict[str, ElementIdentification] = {}
-        for e in alias_result.all_elements:
-            alias_scores[e.element] = e.score
-            alias_elements_map[e.element] = e
+        # 2. Run COMB
+        comb_id = CombIdentifier(
+            atomic_db=self.atomic_db,
+            elements=self.elements,
+            resolving_power=self.resolving_power,
+            **self.comb_params,
+        )
+        comb_res = comb_id.identify(wavelength, intensity)
+        comb_detected = {e.element for e in comb_res.detected_elements}
 
-        # ---- Combine stages ----
-        if self.require_both:
-            final_detected = nnls_detected & alias_detected
-        else:
-            final_detected = nnls_detected | alias_detected
+        # 3. Run Correlation
+        corr_id = CorrelationIdentifier(
+            atomic_db=self.atomic_db,
+            elements=self.elements,
+            resolving_power=self.resolving_power,
+            **self.corr_params,
+        )
+        corr_res = corr_id.identify(wavelength, intensity)
+        corr_detected = {e.element for e in corr_res.detected_elements}
+
+        all_results = {
+            "alias": alias_res,
+            "comb": comb_res,
+            "correlation": corr_res,
+        }
 
         all_element_ids: List[ElementIdentification] = []
         for element in self.elements:
-            detected = element in final_detected
-            in_nnls = element in nnls_detected
-            in_alias = element in alias_detected
+            votes = [
+                element in alias_detected,
+                element in comb_detected,
+                element in corr_detected,
+            ]
+            n_votes = sum(votes)
+            detected = n_votes >= self.quorum
 
-            alias_eid = alias_elements_map.get(element)
-            matched_lines = alias_eid.matched_lines if alias_eid else []
-            unmatched_lines = alias_eid.unmatched_lines if alias_eid else []
-            n_matched = alias_eid.n_matched_lines if alias_eid else 0
-            n_total = alias_eid.n_total_lines if alias_eid else 0
+            # Get scores from all methods
+            scores = [
+                next((e.score for e in res.all_elements if e.element == element), 0.0)
+                for res in all_results.values()
+            ]
+            # Combined score is the mean of active scores (or max if none)
+            active_scores = [s for s, v in zip(scores, votes) if v]
+            combined_score = float(np.mean(active_scores)) if active_scores else float(np.max(scores))
 
-            s_nnls = nnls_scores.get(element, 0.0)
-            s_alias = alias_scores.get(element, 0.0)
-            combined_score = float(np.sqrt(max(s_nnls, 0) * max(s_alias, 0)))
-
+            # Metadata and line info from ALIAS as primary reference
+            alias_eid = next((e for e in alias_res.all_elements if e.element == element), None)
+            
             eid = ElementIdentification(
                 element=element,
                 detected=detected,
                 score=combined_score,
-                confidence=combined_score,
-                n_matched_lines=n_matched,
-                n_total_lines=n_total,
-                matched_lines=matched_lines,
-                unmatched_lines=unmatched_lines,
+                confidence=combined_score * (n_votes / 3.0),
+                n_matched_lines=alias_eid.n_matched_lines if alias_eid else 0,
+                n_total_lines=alias_eid.n_total_lines if alias_eid else 0,
+                matched_lines=alias_eid.matched_lines if alias_eid else [],
+                unmatched_lines=alias_eid.unmatched_lines if alias_eid else [],
                 metadata={
-                    "nnls_detected": in_nnls,
-                    "alias_detected": in_alias,
-                    "nnls_score": s_nnls,
-                    "alias_score": s_alias,
-                    "nnls_snr": nnls_snrs.get(element, 0.0),
-                    "stage": (
-                        "both"
-                        if in_nnls and in_alias
-                        else "nnls_only" if in_nnls else "alias_only" if in_alias else "neither"
-                    ),
+                    "n_votes": n_votes,
+                    "methods": {
+                        "alias": votes[0],
+                        "comb": votes[1],
+                        "correlation": votes[2],
+                    },
+                    "scores": {
+                        "alias": scores[0],
+                        "comb": scores[1],
+                        "correlation": scores[2],
+                    }
                 },
             )
             all_element_ids.append(eid)
@@ -215,17 +181,14 @@ class HybridIdentifier:
             detected_elements=detected_elements,
             rejected_elements=rejected_elements,
             all_elements=all_element_ids,
-            experimental_peaks=alias_result.experimental_peaks,
-            n_peaks=alias_result.n_peaks,
-            n_matched_peaks=alias_result.n_matched_peaks,
-            n_unmatched_peaks=alias_result.n_unmatched_peaks,
-            algorithm="hybrid_nnls_alias",
+            experimental_peaks=alias_res.experimental_peaks,
+            n_peaks=alias_res.n_peaks,
+            n_matched_peaks=alias_res.n_matched_peaks,
+            n_unmatched_peaks=alias_res.n_unmatched_peaks,
+            algorithm="hybrid_quorum",
             parameters={
-                "nnls_detection_snr": self.nnls_detection_snr,
-                "alias_detection_threshold": self.alias_detection_threshold,
-                "require_both": float(self.require_both),
-                "n_nnls_candidates": len(nnls_detected),
-                "n_alias_confirmed": len(alias_detected),
-                "n_final_detected": len(final_detected),
+                "quorum": self.quorum,
+                "n_elements": len(self.elements),
+                "n_detected": len(detected_elements),
             },
         )
