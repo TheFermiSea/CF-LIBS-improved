@@ -302,6 +302,15 @@ def _build_parser() -> argparse.ArgumentParser:
             "battery.  Useful for smoke runs."
         ),
     )
+    parser.add_argument(
+        "--vrabel-max-shots",
+        type=int,
+        default=50,
+        help=(
+            "Cap on shots loaded per Vrabel 2020 sample (default 50 = 5,000 "
+            "spectra ~1.6 GB). Pass 0 for the full 50,000 spectra (~16 GB)."
+        ),
+    )
     return parser
 
 
@@ -334,7 +343,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _validate_basis_requirements(parser, id_workflows, args.basis_dir)
 
-    datasets = load_default_datasets(args.data_dir, synthetic_corpus_path=args.synthetic_corpus)
+    _vrabel_cap = None if args.vrabel_max_shots == 0 else args.vrabel_max_shots
+    datasets = load_default_datasets(
+        args.data_dir,
+        synthetic_corpus_path=args.synthetic_corpus,
+        vrabel_max_shots_per_sample=_vrabel_cap,
+    )
     identification_datasets = _select_datasets(
         datasets,
         truth_types=(TruthType.ASSAY, TruthType.FORMULA_PROXY, TruthType.SYNTHETIC, TruthType.BLIND),
