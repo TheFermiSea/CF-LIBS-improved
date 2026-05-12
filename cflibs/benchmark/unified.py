@@ -3057,7 +3057,28 @@ class UnifiedBenchmarkRunner:
         id_selections: Sequence[Dict[str, Any]],
         composition_records: Sequence[CompositionEvaluationRecord],
         composition_selections: Sequence[Dict[str, Any]],
+        output_format: Optional[str] = None,
+        run_metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Path]:
+        """Write benchmark artifacts.
+
+        Parameters
+        ----------
+        output_format
+            One of ``"parquet"`` (default), ``"json"``, or ``"both"``.
+            ``parquet`` skips the legacy per-record JSON dumps and writes
+            a single ``results.parquet`` instead — see
+            ``docs/results-parquet-schema.md``. ``json`` keeps the
+            legacy behaviour; ``both`` writes both. When ``None`` the
+            ``CFLIBS_OUTPUT_FORMAT`` env var is consulted, then the
+            default ``parquet`` is used. Falls back to ``json``
+            automatically if pyarrow isn't importable.
+        run_metadata
+            Optional dict forwarded into the parquet rows under the
+            run-metadata columns (``cell``, ``identifier``,
+            ``platform``, ``seed``, ``iter_index``,
+            ``experiment_label``). Ignored when only JSON is written.
+        """
         output_dir.mkdir(parents=True, exist_ok=True)
         figures_dir = output_dir / "figures"
         figures_dir.mkdir(parents=True, exist_ok=True)
@@ -3065,13 +3086,33 @@ class UnifiedBenchmarkRunner:
         id_summary = summarize_id_records(id_records)
         composition_summary = summarize_composition_records(composition_records)
 
-        outputs = {
-            "id_records_json": output_dir / "id_records.json",
-            "id_records_csv": output_dir / "id_records.csv",
+        if output_format is None:
+            output_format = os.environ.get("CFLIBS_OUTPUT_FORMAT", "parquet")
+        output_format = output_format.lower()
+        if output_format not in {"parquet", "json", "both"}:
+            raise ValueError(
+                f"output_format must be one of 'parquet', 'json', 'both'; got {output_format!r}"
+            )
+
+        # Lazy-import results module so older test envs without pyarrow
+        # can still drive the JSON path.
+        from cflibs.benchmark import results as results_module
+
+        if output_format in {"parquet", "both"} and not results_module.parquet_available():
+            # Fall back to JSON if pyarrow isn't importable — better to
+            # write *something* than to crash mid-run.
+            print(
+                "[unified] pyarrow not available; falling back to "
+                "output_format='json' (legacy)."
+            )
+            output_format = "json"
+
+        write_parquet = output_format in {"parquet", "both"}
+        write_json = output_format in {"json", "both"}
+
+        outputs: Dict[str, Path] = {
             "id_summary_json": output_dir / "id_summary.json",
             "id_selections_json": output_dir / "id_config_selections.json",
-            "composition_records_json": output_dir / "composition_records.json",
-            "composition_records_csv": output_dir / "composition_records.csv",
             "composition_summary_json": output_dir / "composition_summary.json",
             "composition_selections_json": output_dir / "composition_config_selections.json",
             "overall_ranking_csv": output_dir / "overall_ranking.csv",
@@ -3085,12 +3126,35 @@ class UnifiedBenchmarkRunner:
             "precision_vs_rp_png": figures_dir / "precision_vs_rp.png",
         }
 
-        _write_json(outputs["id_records_json"], _records_to_rows(id_records))
-        _write_csv(outputs["id_records_csv"], _records_to_rows(id_records))
+        if write_json:
+            outputs.update(
+                {
+                    "id_records_json": output_dir / "id_records.json",
+                    "id_records_csv": output_dir / "id_records.csv",
+                    "composition_records_json": output_dir / "composition_records.json",
+                    "composition_records_csv": output_dir / "composition_records.csv",
+                }
+            )
+            _write_json(outputs["id_records_json"], _records_to_rows(id_records))
+            _write_csv(outputs["id_records_csv"], _records_to_rows(id_records))
+            _write_json(
+                outputs["composition_records_json"], _records_to_rows(composition_records)
+            )
+            _write_csv(
+                outputs["composition_records_csv"], _records_to_rows(composition_records)
+            )
+
+        if write_parquet:
+            outputs["results_parquet"] = output_dir / "results.parquet"
+            results_module.write_parquet(
+                output_path=outputs["results_parquet"],
+                id_records=id_records,
+                composition_records=composition_records,
+                run_metadata=run_metadata,
+            )
+
         _write_json(outputs["id_summary_json"], id_summary)
         _write_json(outputs["id_selections_json"], list(id_selections))
-        _write_json(outputs["composition_records_json"], _records_to_rows(composition_records))
-        _write_csv(outputs["composition_records_csv"], _records_to_rows(composition_records))
         _write_json(outputs["composition_summary_json"], composition_summary)
         _write_json(outputs["composition_selections_json"], list(composition_selections))
 

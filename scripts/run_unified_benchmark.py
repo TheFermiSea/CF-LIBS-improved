@@ -328,6 +328,53 @@ def _build_parser() -> argparse.ArgumentParser:
             "use_jax_* kwargs via inspect.signature."
         ),
     )
+    parser.add_argument(
+        "--output-format",
+        choices=("parquet", "json", "both"),
+        default=None,
+        help=(
+            "Result-payload format (CF-LIBS-improved-1d5t / T3.1). "
+            "'parquet' (default) writes a single results.parquet — see "
+            "docs/results-parquet-schema.md. 'json' keeps the legacy "
+            "id_records.json + composition_records.json bundle. 'both' "
+            "writes both during the transition. Falls back to JSON "
+            "automatically if pyarrow isn't available. Env override: "
+            "CFLIBS_OUTPUT_FORMAT."
+        ),
+    )
+    parser.add_argument(
+        "--experiment-label",
+        type=str,
+        default=None,
+        help=(
+            "Free-form experiment label written into results.parquet as "
+            "the 'experiment_label' column (e.g. 'loop-2026-05-12')."
+        ),
+    )
+    parser.add_argument(
+        "--cell",
+        type=str,
+        default=None,
+        help="Cell identifier (e.g. 'C1') written into results.parquet.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="RNG seed written into results.parquet for downstream joins.",
+    )
+    parser.add_argument(
+        "--iter-index",
+        type=int,
+        default=None,
+        help="Loop iteration index written into results.parquet.",
+    )
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=None,
+        help="Platform tag (e.g. 'jax-cpu') written into results.parquet.",
+    )
     return parser
 
 
@@ -402,12 +449,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.max_outer_folds,
         )
 
+    run_metadata = {
+        "cell": args.cell,
+        "identifier": (
+            id_workflows[0] if id_workflows else None
+        ),
+        "platform": args.platform
+        or ("jax-cpu" if args.jax_identifier else None),
+        "seed": args.seed,
+        "iter_index": args.iter_index,
+        "experiment_label": args.experiment_label
+        or args.output_dir.name,
+    }
     outputs = runner.write_outputs(
         output_dir=args.output_dir,
         id_records=id_records,
         id_selections=id_selections,
         composition_records=composition_records,
         composition_selections=composition_selections,
+        output_format=args.output_format,
+        run_metadata=run_metadata,
     )
 
     print(f"Unified benchmark completed. Outputs written to {args.output_dir.resolve()}")
