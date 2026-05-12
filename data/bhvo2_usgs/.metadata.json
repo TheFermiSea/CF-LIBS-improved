@@ -1,0 +1,88 @@
+{
+  "dataset_id": "bhvo2_usgs",
+  "description": "BHVO-2 (USGS Hawaiian basalt) LIBS spectra from three independent publicly-accessible sources: NASA MSL ChemCam pre-flight calibration, CSA Planetary LIBS open dataset, and NASA Mars 2020 SuperCam pre-flight calibration.",
+  "n_samples": 12,
+  "n_shots_per_sample_min": 15,
+  "n_shots_per_sample_note": "15 shots (SuperCam 1545mm), 30 shots (SuperCam 4250mm), 200 shots (CSA 200avg), 1000 shots (CSA 1000avg), ~30 shots (ChemCam per Clegg 2017 protocol). Each CSV is a mean-averaged spectrum over all shots at one raster location.",
+  "wavelength_range_nm_by_source": {
+    "chemcam": [240.8, 905.6],
+    "csa": [198.1, 970.1],
+    "supercam_1545mm": [243.8, 852.8],
+    "supercam_4250mm": [243.8, 852.8]
+  },
+  "wavelength_range_nm": [198.1, 970.1],
+  "sources": [
+    {
+      "label": "chemcam",
+      "n_spectra": 4,
+      "files": [
+        "chemcam_bhvo2_loc1_spectrum.csv",
+        "chemcam_bhvo2_loc2_spectrum.csv",
+        "chemcam_bhvo2_loc3_spectrum.csv",
+        "chemcam_bhvo2_loc4_spectrum.csv"
+      ],
+      "instrument": "ChemCam LIBS (MSL Curiosity rover, pre-flight); Nd:YAG 1064 nm pulsed laser, ~10 mJ/pulse, 3 m standoff, 7 Torr CO2 atmosphere (cleanroom sim), echelle spectrometer 240-905 nm",
+      "intensity_units": "photon/shot/mm2/sr/nm (calibrated radiance per Clegg 2017)",
+      "acquisition_date": "2013-08-06",
+      "source_url": "https://pds-geosciences.wustl.edu/missions/msl/chemcam.htm",
+      "pds_file": "data/chemcam_calib/msl_ccam_libs_calib.csv (columns BHVO2, BHVO2.1, BHVO2.2, BHVO2.3)",
+      "license": "NASA open data (no copyright)"
+    },
+    {
+      "label": "csa",
+      "n_spectra": 2,
+      "files": [
+        "csa_bhvo2_1000pulse_spectrum.csv",
+        "csa_bhvo2_200pulse_spectrum.csv"
+      ],
+      "instrument": "CSA LIBS instrument; Nd:YAG 1064 nm; ambient air atmosphere; spectrometer range 198-970 nm",
+      "intensity_units": "ADU (arbitrary, dark-subtracted; positive region is calibrated signal)",
+      "acquisition_date": "2017",
+      "source_url": "https://donnees-data.asc-csa.gc.ca/dataset/137bdc17-2f46-4d70-98e7-acc46f602e9f",
+      "dataset_uuid": "137bdc17-2f46-4d70-98e7-acc46f602e9f",
+      "license": "Government of Canada Open Government Licence v2.0",
+      "citation": "Canadian Space Agency (2017). LIBS dataset for materials for Planetary Exploration. Government of Canada Open Data. UUID: 137bdc17-2f46-4d70-98e7-acc46f602e9f"
+    },
+    {
+      "label": "supercam_1545mm",
+      "n_spectra": 3,
+      "files": [
+        "supercam_1545mm_loc1_spectrum.csv",
+        "supercam_1545mm_loc2_spectrum.csv",
+        "supercam_1545mm_loc3_spectrum.csv"
+      ],
+      "instrument": "SuperCam LIBS (Mars 2020 Perseverance rover, pre-flight FM calibration); Nd:YAG 532 nm, ~10 mJ/pulse, 1545 mm standoff, ambient lab atmosphere; 7933-pixel echelle LIBS detector 244-853 nm; 15 shots averaged per location",
+      "intensity_units": "detector digital numbers (DN), dark-subtracted, not radiometrically calibrated",
+      "acquisition_date": "2019-04-14",
+      "source_url": "https://pds-geosciences.wustl.edu/m2020/urn-nasa-pds-mars2020_supercam/calibration_supercam/1545mm/LBHVO20401/",
+      "fits_filenames": [
+        "sfc_2019_0414122716_01_lbhvo20401___________lcd0_fmeqm_01l01.fits",
+        "sfc_2019_0414122818_01_lbhvo20401___________lcd0_fmeqm_01l01.fits",
+        "sfc_2019_0414122915_01_lbhvo20401___________lcd0_fmeqm_01l01.fits"
+      ],
+      "license": "NASA open data (no copyright)"
+    },
+    {
+      "label": "supercam_4250mm",
+      "n_spectra": 3,
+      "files": [
+        "supercam_4250mm_loc1_spectrum.csv",
+        "supercam_4250mm_loc2_spectrum.csv",
+        "supercam_4250mm_loc3_spectrum.csv"
+      ],
+      "instrument": "SuperCam LIBS (Mars 2020 Perseverance rover, pre-flight FM calibration); Nd:YAG 532 nm, ~10 mJ/pulse, 4250 mm standoff, ambient lab atmosphere; 7933-pixel echelle LIBS detector 244-853 nm; 30 shots averaged per location",
+      "intensity_units": "detector digital numbers (DN), dark-subtracted, not radiometrically calibrated",
+      "acquisition_date": "2019-04-14",
+      "source_url": "https://pds-geosciences.wustl.edu/m2020/urn-nasa-pds-mars2020_supercam/calibration_supercam/4250mm/LBHVO20401/",
+      "fits_filenames": [
+        "sfc_2019_0414210931_01_lbhvo20401___________lcd0_fmeqm_01l01.fits",
+        "sfc_2019_0414211035_01_lbhvo20401___________lcd0_fmeqm_01l01.fits",
+        "sfc_2019_0414211140_01_lbhvo20401___________lcd0_fmeqm_01l01.fits"
+      ],
+      "license": "NASA open data (no copyright)"
+    }
+  ],
+  "true_composition_source": "cflibs.benchmark.reference_compositions.BHVO2_BASALT_USGS",
+  "certified_composition_reference": "Jochum et al. 2005 GeoReM; USGS Reference Materials Program (https://crustal.usgs.gov/geochemical_reference_standards/)",
+  "ingest_pr": "CF-LIBS-improved-9jvd"
+}
