@@ -256,6 +256,40 @@ def test_atomic_snapshot_pad_to_n_elements(atomic_db):
 
 
 @pytest.mark.requires_jax
+def test_singlezone_lte_plasma_is_a_jax_pytree():
+    """AC #10 — ``jax.vmap`` over a 16-element ``SingleZoneLTEPlasma``
+    batch traces without ``TypeError: Argument has no leaves``.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    from cflibs.core.jax_runtime import _ensure_pytrees_registered
+    from cflibs.plasma.state import SingleZoneLTEPlasma
+
+    _ensure_pytrees_registered()
+    plasma = SingleZoneLTEPlasma(T_e=10000.0, n_e=1e17, species={"Fe": 1e15, "H": 1e16})
+    batch = jax.tree_util.tree_map(lambda x: jnp.stack([x] * 16), plasma)
+    result = jax.vmap(lambda p: p.T_e)(batch)
+    assert result.shape == (16,)
+    np.testing.assert_allclose(np.asarray(result), 10000.0)
+
+
+@pytest.mark.requires_jax
+def test_instrument_model_is_a_jax_pytree():
+    import jax
+
+    from cflibs.core.jax_runtime import _ensure_pytrees_registered
+    from cflibs.instrument.model import InstrumentModel
+
+    _ensure_pytrees_registered()
+    instr = InstrumentModel(resolution_fwhm_nm=0.05, resolving_power=2000.0)
+    leaves, treedef = jax.tree_util.tree_flatten(instr)
+    rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
+    assert float(rebuilt.resolution_fwhm_nm) == pytest.approx(0.05)
+    assert float(rebuilt.resolving_power) == pytest.approx(2000.0)
+
+
+@pytest.mark.requires_jax
 def test_atomic_snapshot_is_a_jax_pytree():
     import jax
 

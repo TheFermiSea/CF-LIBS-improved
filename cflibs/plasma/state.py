@@ -503,3 +503,10 @@ class SingleZoneLTEPlasmaJax(SingleZoneLTEPlasma):
             T_g=plasma.T_g,
             pressure=plasma.pressure,
         )
+
+
+# Wire JAX pytree registration so consumers can `jax.vmap(forward, in_axes=(0, ...))`
+# over a batched SingleZoneLTEPlasma without explicit setup. Idempotent.
+from cflibs.core.jax_runtime import _ensure_pytrees_registered as _register_pytrees  # noqa: E402
+
+_register_pytrees()

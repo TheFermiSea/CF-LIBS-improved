@@ -229,9 +229,7 @@ def _vmap_decorator(
                 continue
             arr = _np.asarray(arg)
             if arr.ndim == 0:
-                raise ValueError(
-                    "vmap_if_available fallback requires array-like batched arguments"
-                )
+                raise ValueError("vmap_if_available fallback requires array-like batched arguments")
             n_batch = arr.shape[axis]
             break
         if n_batch is None:
@@ -495,13 +493,24 @@ def _register_cflibs_pytrees() -> None:
 
     def _plasma_flatten(plasma: "SingleZoneLTEPlasma"):
         elements = tuple(plasma.species.keys())
-        densities = jnp.asarray([float(plasma.species[e]) for e in elements], dtype=jnp.float64)
-        # Leaves: (T_e_K, n_e_cm3, density-vector)
-        children = (
-            jnp.asarray(float(plasma.T_e), dtype=jnp.float64),
-            jnp.asarray(float(plasma.n_e), dtype=jnp.float64),
-            densities,
+        dtype = jax_default_real_dtype()
+        # Emit one leaf per species so tree_map(stack, plasma) cleanly batches
+        # the species dict instead of collapsing it into a 2-D array.
+        density_leaves = tuple(
+            v if hasattr(v, "shape") else jnp.asarray(float(v), dtype=dtype)
+            for v in (plasma.species[e] for e in elements)
         )
+        T_e = (
+            plasma.T_e
+            if hasattr(plasma.T_e, "shape")
+            else jnp.asarray(float(plasma.T_e), dtype=dtype)
+        )
+        n_e = (
+            plasma.n_e
+            if hasattr(plasma.n_e, "shape")
+            else jnp.asarray(float(plasma.n_e), dtype=dtype)
+        )
+        children = (T_e, n_e, *density_leaves)
         aux = (
             elements,
             float(plasma.T_g) if plasma.T_g is not None else None,
@@ -510,30 +519,40 @@ def _register_cflibs_pytrees() -> None:
         return children, aux
 
     def _plasma_unflatten(aux: tuple, children: tuple) -> "SingleZoneLTEPlasma":
-        T_e, n_e, densities = children
         elements, T_g, pressure = aux
-        species = {
-            element: float(density)
-            for element, density in zip(elements, _np.asarray(densities).tolist())
-        }
-        return SingleZoneLTEPlasma(
-            T_e=float(T_e),
-            n_e=float(n_e),
-            species=species,
-            T_g=T_g,
-            pressure=pressure,
-        )
+        T_e = children[0]
+        n_e = children[1]
+        density_leaves = children[2:]
+        # Bypass __init__ — it logs an f-string format on T_e which fails on
+        # batched/traced arrays. Reconstruct via object.__new__ + field set.
+        instance = object.__new__(SingleZoneLTEPlasma)
+        species = dict(zip(elements, density_leaves))
+        instance.T_e = T_e
+        instance.n_e = n_e
+        instance.species = species
+        instance.T_g = T_g
+        instance.pressure = pressure
+        return instance
 
     def _instrument_flatten(instrument: "InstrumentModel"):
-        fwhm = jnp.asarray(float(instrument.resolution_fwhm_nm), dtype=jnp.float64)
+        dtype = jax_default_real_dtype()
+        fwhm = (
+            instrument.resolution_fwhm_nm
+            if hasattr(instrument.resolution_fwhm_nm, "shape")
+            else jnp.asarray(float(instrument.resolution_fwhm_nm), dtype=dtype)
+        )
         if instrument.response_curve is not None:
-            response = jnp.asarray(instrument.response_curve, dtype=jnp.float64)
+            response = jnp.asarray(instrument.response_curve, dtype=dtype)
         else:
-            response = jnp.zeros((0, 2), dtype=jnp.float64)
+            response = jnp.zeros((0, 2), dtype=dtype)
         if instrument.resolving_power is not None:
-            R = jnp.asarray(float(instrument.resolving_power), dtype=jnp.float64)
+            R = (
+                instrument.resolving_power
+                if hasattr(instrument.resolving_power, "shape")
+                else jnp.asarray(float(instrument.resolving_power), dtype=dtype)
+            )
         else:
-            R = jnp.asarray(0.0, dtype=jnp.float64)
+            R = jnp.asarray(0.0, dtype=dtype)
         children = (fwhm, response, R)
         aux = (
             instrument.wavelength_calibration,
@@ -545,12 +564,12 @@ def _register_cflibs_pytrees() -> None:
     def _instrument_unflatten(aux: tuple, children: tuple) -> "InstrumentModel":
         fwhm, response, R = children
         calibration, has_response, has_R = aux
-        return InstrumentModel(
-            resolution_fwhm_nm=float(fwhm),
-            response_curve=_np.asarray(response) if has_response else None,
-            wavelength_calibration=calibration,
-            resolving_power=float(R) if has_R else None,
-        )
+        instance = object.__new__(InstrumentModel)
+        instance.resolution_fwhm_nm = fwhm
+        instance.response_curve = response if has_response else None
+        instance.wavelength_calibration = calibration
+        instance.resolving_power = R if has_R else None
+        return instance
 
     jax.tree_util.register_pytree_node(SingleZoneLTEPlasma, _plasma_flatten, _plasma_unflatten)
     jax.tree_util.register_pytree_node(InstrumentModel, _instrument_flatten, _instrument_unflatten)
@@ -562,14 +581,19 @@ def _register_cflibs_pytrees() -> None:
 def _ensure_pytrees_registered() -> None:
     """Public entry point — call from ``cflibs/__init__.py`` or test setup
     to wire :class:`SingleZoneLTEPlasma` and :class:`InstrumentModel` as
-    pytrees. Idempotent.
+    pytrees. Idempotent and re-entrant (the registration logic imports
+    from ``cflibs.plasma.state`` and ``cflibs.instrument.model``, both of
+    which call back into this function on module load).
     """
     if not HAS_JAX:
         return
     if getattr(_ensure_pytrees_registered, "_done", False):
         return
-    _register_cflibs_pytrees()
+    # Mark done BEFORE registering so the recursive import path
+    # cflibs.plasma.state -> cflibs.core.jax_runtime -> cflibs.plasma.state
+    # short-circuits instead of double-registering.
     _ensure_pytrees_registered._done = True  # type: ignore[attr-defined]
+    _register_cflibs_pytrees()
 
 
 __all__ = [
