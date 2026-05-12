@@ -215,8 +215,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default=Path("data"),
-        help="Directory containing the real benchmark datasets.",
+        default=Path(os.environ.get("CFLIBS_DATA_DIR", "data")),
+        help=(
+            "Directory containing the real benchmark datasets. "
+            "Defaults to the CFLIBS_DATA_DIR env var if set, otherwise "
+            "the repo-relative 'data/' directory. The cluster-canonical "
+            "path is /cluster/shared/cf-libs-bench/data (NFS-mounted on "
+            "all vasp nodes); see docs/nfs-shared-data.md."
+        ),
     )
     parser.add_argument(
         "--basis-dir",
