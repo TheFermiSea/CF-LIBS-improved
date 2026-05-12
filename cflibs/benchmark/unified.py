@@ -1527,6 +1527,8 @@ def _fit_bayesian_pipeline(
 
         # Renormalize so the closure residual stays small even if MCMC
         # didn't perfectly hit the simplex constraint.
+        # Ensure all values are positive for Aitchison distance calculation.
+        concentrations = {el: max(1e-9, v) for el, v in concentrations.items()}
         total = sum(concentrations.values())
         if total > 0:
             concentrations = {el: v / total for el, v in concentrations.items()}
@@ -1558,6 +1560,7 @@ def _fit_bayesian_pipeline(
 
         payload: Dict[str, Any] = {
             "concentrations": concentrations,
+            "predicted_composition": concentrations,
             "aitchison": aitchison,
             "posterior_samples": posterior_samples,
             "divergent_count": divergent_count,

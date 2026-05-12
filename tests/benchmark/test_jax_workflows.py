@@ -252,6 +252,11 @@ def test_bayesian_predictor_runs_end_to_end(synthetic_spectrum, context):
     assert prediction["aitchison"] is not None
     assert 0.0 <= prediction["aitchison"] <= 20.0
 
+    # Ensure predicted_composition is also populated for the record builder.
+    assert "predicted_composition" in prediction
+    assert isinstance(prediction["predicted_composition"], dict)
+    assert set(prediction["predicted_composition"].keys()) == {"Fe", "Ca"}
+
     # The harness picks up posterior_samples and computes diagnostics.
     assert "posterior_samples" in prediction
     samples = prediction["posterior_samples"]
@@ -312,6 +317,7 @@ def _make_bayesian_record(spectrum: BenchmarkSpectrum):
     posterior = rng.normal(loc=truth_arr, scale=0.02, size=(2, 200, len(elements)))
     prediction: Dict[str, object] = {
         "concentrations": dict(spectrum.true_composition),
+        "predicted_composition": dict(spectrum.true_composition),
         "aitchison": 0.0,
         "posterior_samples": {"concentrations": posterior},
         "divergent_count": 0,
