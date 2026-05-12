@@ -17,28 +17,20 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
-try:
-    import jax
-    import jax.numpy as jnp
-    from jax import jit
-
-    HAS_JAX = True
-except ImportError:
-    HAS_JAX = False
-    jnp = None
-
-    def jit(f):
-        return f
-
-
 from cflibs.core.constants import C_LIGHT, EV_TO_J, M_PROTON
 from cflibs.core.jax_runtime import (
+    HAS_JAX,
+    jax,
     jax_active_backend,
     jax_backend_supports_complex,
     jax_default_complex_dtype,
     jax_default_real_dtype,
+    jit_if_available,
+    jnp,
 )
 from cflibs.core.logging_config import get_logger
+
+jit = jit_if_available
 
 logger = get_logger("radiation.profiles")
 

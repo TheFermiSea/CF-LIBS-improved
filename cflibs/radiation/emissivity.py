@@ -129,12 +129,12 @@ def calculate_spectrum_emissivity(
                 "falling back to NumPy per-line broadening"
             )
         else:
-            try:
-                import jax.numpy as jnp
-            except ImportError as exc:
+            from cflibs.core.jax_runtime import HAS_JAX, jnp
+
+            if not HAS_JAX:
                 raise ImportError(
                     "JAX is not installed. Install with: pip install jax jaxlib"
-                ) from exc
+                )
             from cflibs.radiation.profiles import apply_gaussian_broadening_jax
 
             spectrum = apply_gaussian_broadening_jax(

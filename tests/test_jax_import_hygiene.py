@@ -64,10 +64,6 @@ _T1_1_IN_PROGRESS: frozenset[str] = frozenset(
         "cflibs/plasma/partition.py",
         "cflibs/plasma/saha_boltzmann.py",
         "cflibs/plasma/state.py",
-        "cflibs/radiation/emissivity.py",
-        "cflibs/radiation/profiles.py",
-        "cflibs/radiation/spectrum_model.py",
-        "cflibs/radiation/stark.py",
     }
 )
 
