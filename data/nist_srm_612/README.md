@@ -4,6 +4,24 @@
 > This directory is a placeholder documenting a gap in publicly available data.
 > See the gap analysis below and the beads issue CF-LIBS-improved-9jvd.
 
+## PROJECT DIRECTIVE (2026-05-12)
+
+Per direct project-owner instruction: **synthesized spectra alone are not an
+acceptable dataset.** The CF-LIBS benchmark requires validated, downloadable
+LIBS spectra from a published source. Synthesis is acceptable only as a
+*supplement* to real measured data, with a clear `spectrum_kind: "synthetic"`
+flag, and it cannot be the basis of any accuracy claim.
+
+The loader at `cflibs/benchmark/loaders.py:_load_nist_srm_612` therefore
+returns `None` (graceful no-op) when this directory contains no spectra.
+The certified composition (`cflibs/benchmark/reference_compositions.py`,
+merged via PR #115) is retained for future use the moment real spectra
+become available.
+
+Until then, `nist_srm_612` is **not a usable benchmark dataset** — the BHVO-2
+dataset (sibling directory `data/bhvo2_usgs/`, 12 real spectra from 4
+validated public sources) is the shipped deliverable from this work.
+
 ## What is NIST SRM 612?
 
 NIST SRM 612 is a borosilicate glass doped with ~38 ppm of 61 trace elements in a
