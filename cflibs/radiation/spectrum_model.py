@@ -24,6 +24,30 @@ jit = jit_if_available  # local alias preserves existing @jit decorator sites
 logger = get_logger("radiation.spectrum_model")
 
 
+def _emissivity_line_table(transitions: list, populations: dict) -> Tuple[np.ndarray, np.ndarray]:
+    """Build (line_wavelengths_nm, line_emissivities) arrays for LDM dispatch.
+
+    Mirrors the population-lookup + ``ε = (hc / 4πλ) · A_ki · n_k`` loop in
+    :func:`cflibs.radiation.emissivity.calculate_spectrum_emissivity` but
+    returns the per-line catalog instead of immediately broadening — the
+    LDM kernel needs the raw line list. Transitions without an entry in
+    ``populations`` are skipped (same convention as the legacy path).
+    """
+    wls: list[float] = []
+    emis: list[float] = []
+    for trans in transitions:
+        key = (trans.element, trans.ionization_stage, round(trans.E_k_ev, 8))
+        if key not in populations:
+            continue
+        n_k = populations[key]
+        wl_m = trans.wavelength_nm * 1e-9
+        n_k_m3 = n_k * 1e6
+        epsilon = (H_PLANCK * C_LIGHT / (4 * np.pi * wl_m)) * trans.A_ki * n_k_m3
+        wls.append(trans.wavelength_nm)
+        emis.append(epsilon)
+    return np.asarray(wls, dtype=np.float64), np.asarray(emis, dtype=np.float64)
+
+
 def planck_radiance(wavelength_nm: np.ndarray, T_eV: float) -> np.ndarray:
     """
     Calculate spectral radiance of a blackbody in W m^-2 nm^-1 sr^-1.
@@ -181,7 +205,10 @@ class SpectrumModel:
 
             if self.broadening_mode == BroadeningMode.NIST_PARITY:
                 sig = self.instrument.sigma_at_wavelength(trans.wavelength_nm)
-            elif self.broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
+            elif self.broadening_mode in (
+                BroadeningMode.PHYSICAL_DOPPLER,
+                BroadeningMode.LDM_GAUSSIAN,
+            ):
                 mass = self._get_element_mass(trans.element)
                 fwhm = doppler_width(trans.wavelength_nm, self.plasma.T_e_eV, mass)
                 sig = fwhm / 2.355
@@ -241,9 +268,27 @@ class SpectrumModel:
             # Per-line sigma array
             sigma_nm = self._compute_sigma_per_line(all_transitions, populations)
 
-        emissivity = calculate_spectrum_emissivity(
-            all_transitions, populations, self.wavelength, sigma_nm, use_jax=self.use_jax
-        )
+        if self.broadening_mode == BroadeningMode.LDM_GAUSSIAN:
+            # LDM/DIT path (ADR-0001 T1-4): scatter lines onto a log-σ
+            # ledger and FFT-convolve once per σ-layer. Yields the same
+            # spectrum as PHYSICAL_DOPPLER within rtol=1e-4 but scales as
+            # O(N_σ · N_λ · log N_λ) instead of O(N_lines · N_λ).
+            from cflibs.radiation.ldm import broaden_lines_ldm
+
+            line_wls, line_emis = _emissivity_line_table(all_transitions, populations)
+            if line_wls.size == 0:
+                emissivity = np.zeros_like(self.wavelength)
+            else:
+                emissivity = broaden_lines_ldm(
+                    line_wavelengths=line_wls,
+                    line_intensities=line_emis,
+                    line_sigmas=np.asarray(sigma_nm, dtype=np.float64),
+                    wavelength_grid=self.wavelength,
+                )
+        else:
+            emissivity = calculate_spectrum_emissivity(
+                all_transitions, populations, self.wavelength, sigma_nm, use_jax=self.use_jax
+            )
 
         # 4. Convert to intensity
         # Use uniform-slab radiative transfer equation to account for self-absorption:
@@ -365,7 +410,9 @@ if HAS_JAX:
         return B * (-jnp.expm1(-kappa * path_length_m))
 
     @jit
-    def _gaussian_kernel_jax(sigma_nm: jnp.ndarray, delta_wl: jnp.ndarray, kernel_size: int) -> jnp.ndarray:
+    def _gaussian_kernel_jax(
+        sigma_nm: jnp.ndarray, delta_wl: jnp.ndarray, kernel_size: int
+    ) -> jnp.ndarray:
         """Gaussian convolution kernel — same shape and normalisation as the NumPy version."""
         n_sigma = 5.0
         kernel_wl = jnp.linspace(-n_sigma * sigma_nm, n_sigma * sigma_nm, kernel_size)
@@ -424,9 +471,7 @@ class SpectrumModelJax(SpectrumModel):
         broadening_mode: BroadeningMode = BroadeningMode.LEGACY,
     ):
         if not HAS_JAX:  # pragma: no cover - defensive
-            raise ImportError(
-                "SpectrumModelJax requires JAX. Install with `pip install jax`."
-            )
+            raise ImportError("SpectrumModelJax requires JAX. Install with `pip install jax`.")
         # Initialise the parent so all attributes (wavelength grid,
         # validation, fallback masses, ...) are inherited verbatim.
         super().__init__(
