@@ -50,6 +50,14 @@ bayesian = [
 ]
 # Uncertainty propagation for classical inversion
 uncertainty = ["uncertainties>=3.2.0"]
+# Parquet result schema (T3.1 / CF-LIBS-improved-1d5t) — writer uses
+# pyarrow, tests + downstream analysis use duckdb. Optional because the
+# unified runner falls back to the legacy JSON path if pyarrow isn't
+# importable; new installs should still pull `cflibs[parquet]`.
+parquet = [
+    "pyarrow>=15.0.0",
+    "duckdb>=0.10.0",
+]
 # Interactive Jupyter widgets for visualization
 widgets = [
     "ipywidgets>=8.0.0",
@@ -68,6 +76,8 @@ ci = [
     "arviz>=0.17.0",
     "uncertainties>=3.2.0",
     "dynesty>=2.1.0",
+    "pyarrow>=15.0.0",
+    "duckdb>=0.10.0",
 ]
 # Development dependencies
 dev = [
