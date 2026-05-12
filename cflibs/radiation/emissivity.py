@@ -132,9 +132,7 @@ def calculate_spectrum_emissivity(
             from cflibs.core.jax_runtime import HAS_JAX, jnp
 
             if not HAS_JAX:
-                raise ImportError(
-                    "JAX is not installed. Install with: pip install jax jaxlib"
-                )
+                raise ImportError("JAX is not installed. Install with: pip install jax jaxlib")
             from cflibs.radiation.profiles import apply_gaussian_broadening_jax
 
             spectrum = apply_gaussian_broadening_jax(
