@@ -13,7 +13,9 @@ logger = get_logger("radiation.emissivity")
 
 
 def calculate_line_emissivity(
-    transition: Transition, upper_level_population_cm3: float, wavelength_nm: float = None
+    transition: Transition,
+    upper_level_population_cm3: float,
+    wavelength_nm: float = None,
 ) -> float:
     """
     Calculate spectral emissivity for a transition.
@@ -50,7 +52,9 @@ def calculate_line_emissivity(
     # Emissivity: ε = (hc / 4πλ) * A_ki * n_k
     # Units: (J·s * m/s) / (m) * (1/s) * (1/m^3) = J/(s·m^3) = W/m^3
     # For spectral emissivity, we need per nm, so we'll handle that in the profile
-    epsilon = (H_PLANCK * C_LIGHT / (4 * np.pi * wavelength_m)) * transition.A_ki * n_k_m3
+    epsilon = (
+        (H_PLANCK * C_LIGHT / (4 * np.pi * wavelength_m)) * transition.A_ki * n_k_m3
+    )
 
     return epsilon
 
@@ -118,7 +122,9 @@ def calculate_spectrum_emissivity(
     if not is_per_line:
         sigma_scalar = float(sigma_nm)
         if not np.isfinite(sigma_scalar) or sigma_scalar <= 0:
-            raise ValueError(f"scalar sigma_nm must be finite and positive; got {sigma_scalar!r}")
+            raise ValueError(
+                f"scalar sigma_nm must be finite and positive; got {sigma_scalar!r}"
+            )
 
     if use_jax:
         if is_per_line:
