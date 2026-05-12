@@ -93,6 +93,38 @@ def _resolve_basis_dir(cli_value: Path | None) -> Path:
     return Path("output/basis_libraries")
 
 
+def _parse_dataset_shard(value: str) -> tuple[int, int]:
+    """Parse ``N/K`` into ``(N, K)`` with validation.
+
+    Accepts strings like ``"1/3"``, ``"2/3"``, etc. The default ``"1/1"``
+    means no sharding. Validates ``1 <= N <= K <= 16``; the upper bound
+    is a sanity guard — we have 3 cluster nodes today, and >16 shards on
+    a 50k-spectrum dataset would yield <3,200 spectra/shard (the regime
+    where sharding stops paying back the per-shard JAX cold-start).
+    """
+    if "/" not in value:
+        raise ValueError(
+            f"--dataset-shard must be 'N/K', got {value!r}"
+        )
+    n_str, k_str = value.split("/", 1)
+    try:
+        shard_n = int(n_str.strip())
+        shard_k = int(k_str.strip())
+    except ValueError as exc:
+        raise ValueError(
+            f"--dataset-shard N/K must be integers, got {value!r}"
+        ) from exc
+    if shard_k < 1 or shard_k > 16:
+        raise ValueError(
+            f"--dataset-shard K must be in [1, 16], got K={shard_k}"
+        )
+    if shard_n < 1 or shard_n > shard_k:
+        raise ValueError(
+            f"--dataset-shard requires 1 <= N <= K; got N={shard_n}, K={shard_k}"
+        )
+    return shard_n, shard_k
+
+
 def _normalize_workflow_list(values: Sequence[str] | None) -> list[str]:
     if not values:
         return []
@@ -371,6 +403,20 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--dataset-shard",
+        type=str,
+        default="1/1",
+        help=(
+            "Split the Vrabel dataset across multiple cluster nodes via "
+            "N/K (e.g., 1/3, 2/3, 3/3 = ~16.7k spectra each). Stride-based "
+            "partition: shard 1/3 gets indices [0,3,6,...]; shard 2/3 gets "
+            "[1,4,7,...]. The union is a disjoint cover of the full corpus. "
+            "Applied AFTER --vrabel-max-shots, so --vrabel-max-shots 0 "
+            "--dataset-shard 1/3 = full 50k / 3. Default 1/1 = no shard. "
+            "See docs/dataset-sharding.md for the bootstrap-CI math."
+        ),
+    )
+    parser.add_argument(
         "--jax-identifier",
         action="store_true",
         help=(
@@ -469,10 +515,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     _validate_basis_requirements(parser, id_workflows, args.basis_dir)
 
     _vrabel_cap = None if args.vrabel_max_shots == 0 else args.vrabel_max_shots
+    try:
+        shard_tuple = _parse_dataset_shard(args.dataset_shard)
+    except ValueError as exc:
+        parser.error(str(exc))
+    _shard_for_loader = shard_tuple if shard_tuple != (1, 1) else None
     datasets = load_default_datasets(
         args.data_dir,
         synthetic_corpus_path=args.synthetic_corpus,
         vrabel_max_shots_per_sample=_vrabel_cap,
+        dataset_shard=_shard_for_loader,
     )
     identification_datasets = _select_datasets(
         datasets,
@@ -518,6 +570,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "iter_index": args.iter_index,
         "experiment_label": args.experiment_label
         or args.output_dir.name,
+        "shard_n": shard_tuple[0],
+        "shard_k": shard_tuple[1],
     }
     outputs = runner.write_outputs(
         output_dir=args.output_dir,

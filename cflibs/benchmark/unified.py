@@ -523,11 +523,33 @@ def load_default_datasets(
     data_dir: Path,
     synthetic_corpus_path: Optional[Path] = None,
     vrabel_max_shots_per_sample: Optional[int] = 50,
+    dataset_shard: Optional[tuple[int, int]] = None,
 ) -> Dict[str, BenchmarkDataset]:
+    """Load the default benchmark datasets, optionally split by shard.
+
+    Parameters
+    ----------
+    data_dir : Path
+        Root data directory.
+    synthetic_corpus_path : Path, optional
+        Manifest path for an optional synthetic corpus.
+    vrabel_max_shots_per_sample : int, optional
+        Cap shots loaded per Vrabel sample. ``None`` loads all shots
+        (~50k spectra). Sharding is applied *after* this cap so that
+        ``vrabel_max_shots_per_sample=None`` + ``dataset_shard=(1, 3)``
+        means full corpus / 3 (not capped / 3).
+    dataset_shard : tuple[int, int], optional
+        ``(N, K)`` to retain only the N-th shard of K. Applied to the
+        Vrabel dataset only — smaller community datasets (BHVO-2,
+        NIST SRM 612) are not sharded because they're <100 spectra
+        and sharding would yield too few samples per node to be useful.
+        See ``docs/dataset-sharding.md`` for the math.
+    """
     from cflibs.benchmark.loaders import (
         _load_bhvo2_usgs,
         _load_nist_srm_612,
         _load_vrabel2020_soils,
+        apply_dataset_shard,
     )
 
     datasets: Dict[str, BenchmarkDataset] = {"aalto_libs": load_aalto_id_dataset(data_dir)}
@@ -536,6 +558,8 @@ def load_default_datasets(
     # Community CRM datasets: bhvo2_usgs, nist_srm_612.
     # Returns None when data directories are absent — omit silently so the
     # benchmark registry degrades gracefully before the ingest pipeline runs.
+    # NOTE: these are NOT sharded — both are <100 spectra and sharding them
+    # would give each node <5 samples (statistically uninformative).
     for _crm_loader in (_load_bhvo2_usgs, _load_nist_srm_612):
         _ds = _crm_loader(data_dir)
         if _ds is not None:
@@ -549,6 +573,9 @@ def load_default_datasets(
         data_dir, max_spectra_per_sample=vrabel_max_shots_per_sample
     )
     if _vrabel is not None:
+        if dataset_shard is not None:
+            shard_n, shard_k = dataset_shard
+            _vrabel = apply_dataset_shard(_vrabel, shard_n, shard_k)
         datasets[_vrabel.name] = _vrabel
 
     if synthetic_corpus_path is not None and synthetic_corpus_path.exists():

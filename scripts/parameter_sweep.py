@@ -323,10 +323,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     _vrabel_cap = (
         None if base_args.vrabel_max_shots == 0 else base_args.vrabel_max_shots
     )
+    # Pass-through --dataset-shard from --config-args. The base parser
+    # has already validated the string format; here we just convert to
+    # the tuple the loader expects (or None for the unsharded default).
+    try:
+        _shard_tuple = _RUB._parse_dataset_shard(base_args.dataset_shard)
+    except ValueError as exc:
+        base_parser.error(str(exc))
+    _shard_for_loader = _shard_tuple if _shard_tuple != (1, 1) else None
     datasets = load_default_datasets(
         base_args.data_dir,
         synthetic_corpus_path=base_args.synthetic_corpus,
         vrabel_max_shots_per_sample=_vrabel_cap,
+        dataset_shard=_shard_for_loader,
     )
     identification_datasets, composition_datasets = _select_dataset_partitions(
         base_parser, datasets, TruthType
