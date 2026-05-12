@@ -560,6 +560,86 @@ class AtomicDataArrays:
     f_osc: Any = None  # Oscillator strength (for absorption cross-section)
 
 
+# ---------------------------------------------------------------------------
+# T1-2 (ADR-0001) bridge: AtomicDataArrays.from_snapshot adapter
+#
+# T1-2 unifies the forward model behind ``cflibs.radiation.kernels.forward_model``
+# which consumes an :class:`~cflibs.core.jax_runtime.AtomicSnapshot`. The
+# ``BayesianForwardModel`` is held back until T1-6 because:
+#   1. Its existing schema (``AtomicDataArrays``) carries extra fields not
+#      present in the canonical snapshot (``stark_alpha``, ``mass_amu``,
+#      ``ei_ev``, ``f_osc``, three-stage partition coeffs).
+#   2. Its partition functions use constant log-U placeholders rather than
+#      the polynomial fits the snapshot exposes; switching the source would
+#      shift the absolute intensities outside the rtol=1e-5 parity target.
+#   3. The MCMC log-likelihood is gradient-coupled to the partition model;
+#      changing it requires a sampler regression test that is T1-6 scope.
+#
+# Until then, this adapter lets future code convert a snapshot into the
+# legacy carrier shape so that callers that already build a snapshot can
+# still construct a ``BayesianForwardModel`` without re-querying the DB.
+# T1-6 will lift the snapshot consumption end-to-end.
+# ---------------------------------------------------------------------------
+
+
+def _atomic_data_arrays_from_snapshot(snapshot, elements):  # noqa: D401 - bridge helper
+    """Build a minimal :class:`AtomicDataArrays` from an :class:`AtomicSnapshot`.
+
+    Only the per-line fields used by the kernel-equivalent forward path are
+    populated; ``stark_alpha`` defaults to 0, ``f_osc`` and ``ei_ev`` to None.
+    """
+    import numpy as _np
+
+    n_lines = len(_np.asarray(snapshot.line_wavelengths_nm))
+    # Map snapshot species (element, stage) -> element row index in user
+    # ``elements`` ordering, and stage 1/2 -> ion_stage 0/1.
+    element_to_idx = {el: i for i, el in enumerate(elements)}
+    line_element_idx = _np.zeros(n_lines, dtype=_np.int32)
+    line_ion_stage = _np.zeros(n_lines, dtype=_np.int32)
+    line_mass_amu = _np.zeros(n_lines, dtype=_np.float64)
+    line_ip_ev = _np.zeros(n_lines, dtype=_np.float64)
+    sp_idx = _np.asarray(snapshot.line_species_index)
+    ip_arr = _np.asarray(snapshot.ionization_potential_ev)
+    for li in range(n_lines):
+        el, stage = snapshot.species[int(sp_idx[li])]
+        line_element_idx[li] = element_to_idx.get(el, 0)
+        line_ion_stage[li] = max(int(stage) - 1, 0)
+        line_mass_amu[li] = STANDARD_MASSES.get(el, 50.0)
+        line_ip_ev[li] = float(ip_arr[int(sp_idx[li])])
+
+    return AtomicDataArrays(
+        wavelength_nm=(
+            jnp.asarray(snapshot.line_wavelengths_nm)
+            if HAS_JAX
+            else _np.asarray(snapshot.line_wavelengths_nm)
+        ),
+        aki=jnp.asarray(snapshot.line_A_ki) if HAS_JAX else _np.asarray(snapshot.line_A_ki),
+        ek_ev=(jnp.asarray(snapshot.line_E_k_ev) if HAS_JAX else _np.asarray(snapshot.line_E_k_ev)),
+        gk=jnp.asarray(snapshot.line_g_k) if HAS_JAX else _np.asarray(snapshot.line_g_k),
+        ip_ev=jnp.asarray(line_ip_ev) if HAS_JAX else line_ip_ev,
+        ion_stage=jnp.asarray(line_ion_stage) if HAS_JAX else line_ion_stage,
+        element_idx=jnp.asarray(line_element_idx) if HAS_JAX else line_element_idx,
+        stark_w=(
+            jnp.asarray(snapshot.line_stark_w) if HAS_JAX else _np.asarray(snapshot.line_stark_w)
+        ),
+        stark_alpha=jnp.zeros(n_lines) if HAS_JAX else _np.zeros(n_lines),
+        mass_amu=jnp.asarray(line_mass_amu) if HAS_JAX else line_mass_amu,
+        partition_coeffs=(
+            jnp.asarray(snapshot.partition_coeffs)
+            if HAS_JAX
+            else _np.asarray(snapshot.partition_coeffs)
+        ),
+        ionization_potentials=(
+            jnp.asarray(snapshot.ionization_potential_ev)
+            if HAS_JAX
+            else _np.asarray(snapshot.ionization_potential_ev)
+        ),
+        elements=list(elements),
+        ei_ev=(jnp.asarray(snapshot.line_E_i_ev) if HAS_JAX else _np.asarray(snapshot.line_E_i_ev)),
+        f_osc=None,
+    )
+
+
 @dataclass
 class NoiseParameters:
     """

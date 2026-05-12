@@ -484,6 +484,96 @@ if HAS_JAX:
         vmap(single_spectrum_forward_ldm, in_axes=(0, 0, 0, None, None, None))
     )
 
+    # ------------------------------------------------------------------
+    # T1-2 (ADR-0001) unified-kernel adapters: route through
+    # ``cflibs.radiation.kernels.forward_model``.
+    #
+    # ``batch_forward_model`` and ``single_spectrum_forward`` above stay as
+    # legacy ``BatchAtomicData``-based entry points; many production and
+    # benchmark callers consume them. T1-2 adds the snapshot-based variants
+    # so new code can opt into the unified path. T1-5/T1-6 will retire the
+    # legacy pair once the migration is done.
+    # ------------------------------------------------------------------
+
+    def forward_from_snapshot(
+        plasma_state,
+        atomic_snapshot,
+        instrument,
+        wavelength_grid,
+        sigma_grid=None,
+        *,
+        broadening_mode=None,
+        path_length_m: float = 0.01,
+        apply_self_absorption: bool = False,
+        apply_stark: bool = True,
+        fold_instrument_sigma: bool = True,
+    ) -> jnp.ndarray:
+        """Single-spectrum forward using the unified T1-2 kernel.
+
+        Snapshot-based replacement for :func:`single_spectrum_forward`. Wraps
+        :func:`cflibs.radiation.kernels.forward_model` with manifold-friendly
+        defaults (thin plasma; Voigt + Stark; instrument sigma folded into
+        per-line Gaussian width).
+        """
+        from cflibs.radiation.kernels import forward_model
+        from cflibs.radiation.profiles import BroadeningMode
+
+        if broadening_mode is None:
+            broadening_mode = BroadeningMode.PHYSICAL_DOPPLER
+        return forward_model(
+            plasma_state,
+            atomic_snapshot,
+            instrument,
+            wavelength_grid,
+            sigma_grid=sigma_grid,
+            broadening_mode=broadening_mode,
+            path_length_m=path_length_m,
+            apply_self_absorption=apply_self_absorption,
+            apply_stark=apply_stark,
+            fold_instrument_sigma=fold_instrument_sigma,
+        )
+
+    def batch_forward_from_snapshot(
+        plasma_states_batch,
+        atomic_snapshot,
+        instrument,
+        wavelength_grid,
+        sigma_grid=None,
+        *,
+        broadening_mode=None,
+        path_length_m: float = 0.01,
+        apply_self_absorption: bool = False,
+        apply_stark: bool = True,
+        fold_instrument_sigma: bool = True,
+    ) -> jnp.ndarray:
+        """Batched (``vmap``-ed) forward using the unified T1-2 kernel.
+
+        ``plasma_states_batch`` is a pytree with a leading batch axis on the
+        traced leaves (``T_e``, ``n_e``, and one density per element); the
+        snapshot and instrument are shared across the batch (broadcast).
+        ``broadening_mode`` and the bool flags are closed over (static) by
+        the lambda so JAX does not try to trace them.
+        """
+        from cflibs.radiation.profiles import BroadeningMode as _BM
+
+        bm = broadening_mode if broadening_mode is not None else _BM.PHYSICAL_DOPPLER
+
+        def _single(plasma):
+            return forward_from_snapshot(
+                plasma,
+                atomic_snapshot,
+                instrument,
+                wavelength_grid,
+                sigma_grid,
+                broadening_mode=bm,
+                path_length_m=path_length_m,
+                apply_self_absorption=apply_self_absorption,
+                apply_stark=apply_stark,
+                fold_instrument_sigma=fold_instrument_sigma,
+            )
+
+        return vmap(_single)(plasma_states_batch)
+
 else:
     # NumPy fallback for CPU-only machines without JAX
     def single_spectrum_forward(

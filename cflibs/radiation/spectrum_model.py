@@ -10,7 +10,6 @@ from cflibs.plasma.state import SingleZoneLTEPlasma
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver, SahaBoltzmannSolverJax
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.instrument.model import InstrumentModel
-from cflibs.radiation.emissivity import calculate_spectrum_emissivity
 from cflibs.radiation.profiles import (
     BroadeningMode,
     doppler_width,
@@ -229,94 +228,110 @@ class SpectrumModel:
             Wavelength grid in nm
         intensity : array
             Spectral intensity in W m^-2 nm^-1 sr^-1
+
+        Notes
+        -----
+        Thin wrapper over the unified :func:`cflibs.radiation.kernels.forward_model`
+        kernel (ADR-0001 T1-2). Saha-Boltzmann populations are still computed
+        by the detailed-levels :class:`SahaBoltzmannSolver` so that this code
+        path remains numerically identical (rtol<1e-12, atol<1e-7) to its
+        pre-T1-2 output. The legacy populations dict is converted to a
+        per-line ``n_upper`` array and injected into the kernel via the
+        ``_precomputed_n_upper_per_line`` parameter; the kernel then handles
+        the per-line broadening + optional radiative-transfer step.
+
+        Downstream scipy instrument convolution is retained for LEGACY /
+        PHYSICAL_DOPPLER / LDM_GAUSSIAN modes (NIST_PARITY folds instrument
+        broadening into the per-line sigma).
         """
+        from cflibs.radiation.kernels import forward_model
+
         # Validate plasma
         self.plasma.validate()
 
-        # 1. Solve Saha-Boltzmann for level populations
+        # 1. Solve Saha-Boltzmann for level populations (detailed-levels path).
         logger.debug("Solving Saha-Boltzmann equations...")
         populations = self.solver.solve_plasma(self.plasma)
 
-        # 2. Get transitions for all species
-        logger.debug("Loading transitions...")
-        all_transitions = []
-        for element in self.plasma.species.keys():
-            # NIST_PARITY mode includes weak lines; other modes use a
-            # conservative filter to keep runtime and memory in check.
-            if self.broadening_mode == BroadeningMode.NIST_PARITY:
-                min_ri = 0.01
-            else:
-                min_ri = 10.0
-            transitions = self.atomic_db.get_transitions(
-                element,
-                wavelength_min=self.lambda_min,
-                wavelength_max=self.lambda_max,
-                min_relative_intensity=min_ri,
-            )
-            all_transitions.extend(transitions)
+        # 2. Build the AtomicSnapshot with the same min_relative_intensity
+        #    filter the legacy path applied per element.
+        min_ri = 0.01 if self.broadening_mode == BroadeningMode.NIST_PARITY else 10.0
+        snapshot = self.atomic_db.snapshot(
+            elements=list(self.plasma.species.keys()),
+            wavelength_range=(self.lambda_min, self.lambda_max),
+            min_relative_intensity=min_ri,
+        )
+        n_lines = int(np.asarray(snapshot.line_wavelengths_nm).shape[0])
+        logger.debug(f"Snapshot has {n_lines} transitions")
 
-        logger.debug(f"Found {len(all_transitions)} transitions")
+        # 3. Convert dict-based populations -> per-line n_upper array so the
+        #    kernel can consume them without re-running Saha-Boltzmann.
+        n_upper_per_line = np.zeros(n_lines, dtype=np.float64)
+        if n_lines:
+            line_E_k = np.asarray(snapshot.line_E_k_ev)
+            line_sp_idx = np.asarray(snapshot.line_species_index)
+            for li in range(n_lines):
+                el, stage = snapshot.species[int(line_sp_idx[li])]
+                key = (el, stage, round(float(line_E_k[li]), 8))
+                n_upper_per_line[li] = populations.get(key, 0.0)
 
-        # 3. Calculate line emissivity with mode-dependent broadening
-        logger.debug(f"Calculating line emissivity (mode={self.broadening_mode.value})...")
+        # 4. Optional LDM sigma_grid (only for LDM_GAUSSIAN dispatch).
+        sigma_grid = None
+        if self.broadening_mode == BroadeningMode.LDM_GAUSSIAN and n_lines:
+            from cflibs.radiation.ldm import build_sigma_grid
 
-        if self.broadening_mode == BroadeningMode.LEGACY:
-            # Original behavior: single scalar sigma
+            line_mass_amu = np.array(
+                [self._get_element_mass(el) for el, _stage in snapshot.species],
+                dtype=np.float64,
+            )[np.asarray(snapshot.line_species_index)]
             T_eV = self.plasma.T_e_eV
-            sigma_nm = 0.01 * np.sqrt(T_eV / 0.86)
-        else:
-            # Per-line sigma array
-            sigma_nm = self._compute_sigma_per_line(all_transitions, populations)
-
-        if self.broadening_mode == BroadeningMode.LDM_GAUSSIAN:
-            # LDM/DIT path (ADR-0001 T1-4): scatter lines onto a log-σ
-            # ledger and FFT-convolve once per σ-layer. Yields the same
-            # spectrum as PHYSICAL_DOPPLER within rtol=1e-4 but scales as
-            # O(N_σ · N_λ · log N_λ) instead of O(N_lines · N_λ).
-            from cflibs.radiation.ldm import broaden_lines_ldm
-
-            line_wls, line_emis = _emissivity_line_table(all_transitions, populations)
-            if line_wls.size == 0:
-                emissivity = np.zeros_like(self.wavelength)
-            else:
-                emissivity = broaden_lines_ldm(
-                    line_wavelengths=line_wls,
-                    line_intensities=line_emis,
-                    line_sigmas=np.asarray(sigma_nm, dtype=np.float64),
-                    wavelength_grid=self.wavelength,
-                )
-        else:
-            emissivity = calculate_spectrum_emissivity(
-                all_transitions, populations, self.wavelength, sigma_nm, use_jax=self.use_jax
+            wl_nm = np.asarray(snapshot.line_wavelengths_nm)
+            sigma_D = wl_nm * np.sqrt(
+                (T_eV * 1.602176634e-19) / (line_mass_amu * 1.67262192369e-27 * (2.99792458e8) ** 2)
             )
+            sigma_D = np.maximum(sigma_D, 1e-6)
+            sigma_grid = build_sigma_grid(sigma_D)
 
-        # 4. Convert to intensity
-        # Use uniform-slab radiative transfer equation to account for self-absorption:
-        # I(lambda) = B(lambda, T) * (1 - exp(-kappa(lambda) * L))
-        # From Kirchhoff's law (LTE): epsilon = kappa * B
-        # Therefore kappa = epsilon / B
+        # 5. Run the unified kernel. The four broadening modes map to:
+        #      LEGACY            -> scalar Gaussian sigma; downstream conv.
+        #      NIST_PARITY       -> per-line instrument sigma; no downstream.
+        #      PHYSICAL_DOPPLER  -> per-line Doppler sigma; no Stark; no fold;
+        #                          downstream conv.
+        #      LDM_GAUSSIAN      -> LDM/DIT Gaussian path; downstream conv.
+        wl_jnp = jnp.asarray(self.wavelength, dtype=jnp.float64) if HAS_JAX else self.wavelength
+        if n_lines:
+            intensity = forward_model(
+                self.plasma,
+                snapshot,
+                self.instrument,
+                wl_jnp,
+                sigma_grid=sigma_grid,
+                broadening_mode=self.broadening_mode,
+                path_length_m=self.path_length_m,
+                apply_self_absorption=True,
+                fold_instrument_sigma=(self.broadening_mode == BroadeningMode.NIST_PARITY),
+                apply_stark=False,
+                _precomputed_n_upper_per_line=n_upper_per_line,
+            )
+            intensity = np.asarray(intensity)
+        else:
+            # No transitions in band: emit zeros, then optionally Planck-RT-
+            # squelch through the same RT step. Path matches legacy behaviour.
+            intensity = np.zeros_like(self.wavelength)
+            if self.path_length_m > 0:
+                B_lambda = planck_radiance(self.wavelength, self.plasma.T_e_eV)
+                intensity = B_lambda * 0.0
 
-        # Calculate Planck blackbody radiance
-        B_lambda = planck_radiance(self.wavelength, self.plasma.T_e_eV)
-
-        # Calculate absorption coefficient (kappa)
-        # Add small epsilon to B_lambda to prevent division by zero
-        kappa = emissivity / (B_lambda + 1e-100)
-
-        # Radiative transfer equation using expm1 for numerical stability at low kappa
-        intensity = B_lambda * (-np.expm1(-kappa * self.path_length_m))
-
-        # 5. Apply instrument response
+        # 6. Apply instrument response curve (host-side multiplication; not
+        #    part of the kernel because it is data-driven).
         if self.instrument.response_curve is not None:
             logger.debug("Applying instrument response...")
             intensity = self.instrument.apply_response(self.wavelength, intensity)
 
-        # 6. Apply instrument function (convolution)
-        # NIST_PARITY: broadening is fully captured in per-line profiles, skip convolution
-        # LEGACY and PHYSICAL_DOPPLER: apply downstream instrument convolution
+        # 7. Apply downstream instrument convolution for the modes that need
+        #    it (NIST_PARITY folds instrument broadening into per-line sigma,
+        #    so it skips this step).
         if self.broadening_mode != BroadeningMode.NIST_PARITY:
-            # Determine convolution sigma: use resolving power at midpoint if available,
-            # otherwise fall back to the fixed resolution_sigma_nm.
             if self.instrument.is_resolving_power_mode:
                 mid_wl = 0.5 * (self.lambda_min + self.lambda_max)
                 sigma_conv = self.instrument.sigma_at_wavelength(mid_wl)
