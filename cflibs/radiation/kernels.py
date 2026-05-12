@@ -854,30 +854,16 @@ def forward_model_chunked(
             "Use cflibs.radiation.host.build_chunk_metadata to construct them."
         )
 
-    if not HAS_JAX:  # pragma: no cover - fallback non-JAX path
-        chunks_np = np.asarray(chunk_wavelength_grids)
-        masks_np = np.asarray(line_masks)
-        partials_np = np.stack(
-            [
-                np.asarray(
-                    _forward_model_per_chunk(
-                        plasma_state,
-                        atomic_snapshot,
-                        instrument,
-                        chunks_np[c],
-                        sigma_grid,
-                        masks_np[c],
-                        broadening_mode=broadening_mode,
-                        path_length_m=path_length_m,
-                        apply_self_absorption=apply_self_absorption,
-                        fold_instrument_sigma=fold_instrument_sigma,
-                        apply_stark=apply_stark,
-                    )
-                )
-                for c in range(int(nstitch))
-            ]
+    if not HAS_JAX:
+        # forward_model_chunked is JAX-only by design: _forward_model_per_chunk
+        # uses jnp ops throughout, which would explode against the numpy
+        # fallback in cflibs.core.jax_runtime.jnp. The un-chunked forward_model
+        # is similarly JAX-only; nstitch=1 dispatch above is the supported
+        # no-JAX path.
+        raise RuntimeError(
+            "forward_model_chunked requires JAX; nstitch=1 dispatches to "
+            "forward_model which is also JAX-required."
         )
-        return overlap_and_add(partials_np, overlap=overlap, output_length=output_length)
 
     import jax  # noqa: PLC0415
 

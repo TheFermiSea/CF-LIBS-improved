@@ -23,6 +23,7 @@ driver; T1-5 follows the same naming convention here.
 
 from __future__ import annotations
 
+import functools
 import math
 from typing import TYPE_CHECKING
 
@@ -42,11 +43,11 @@ __all__ = [
 ]
 
 
-# Fallback budget when neither psutil nor jax device memory stats are
-# reachable. 4 GiB is the spec-prescribed conservative default (§5).
+# Conservative fallback when neither psutil nor jax device-stats are reachable.
 _FALLBACK_AVAILABLE_BYTES = 4 * 1024**3
 
 
+@functools.lru_cache(maxsize=1)
 def available_device_bytes() -> int:
     """Return a conservative estimate of available memory (bytes).
 
@@ -54,45 +55,38 @@ def available_device_bytes() -> int:
 
     1. ``jax.devices()[0].memory_stats()['bytes_limit']`` minus
        ``bytes_in_use`` — works on CUDA / TPU. Skipped on CPU and Metal
-       because the JAX CPU/Metal backends do not implement
-       ``memory_stats``.
-    2. ``psutil.virtual_memory().available`` × 0.25 — CPU host-RAM
-       fallback (spec §5).
-    3. Hard fallback to 4 GiB (spec §5, "fall back to 4 GiB if missing").
-
-    All paths are wrapped in broad ``except Exception`` because the JAX
-    backends evolve quickly and any device-stat query can throw on a
-    development shell where CUDA is missing entirely.
+       because their backends do not implement ``memory_stats`` meaningfully.
+    2. ``psutil.virtual_memory().available`` × 0.25 — CPU host-RAM fallback.
+    3. Hard fallback to 4 GiB when no source is reachable.
     """
-    try:  # 1. JAX device memory (CUDA/TPU).
-        import jax  # noqa: PLC0415 — local import keeps non-JAX users happy.
+    try:
+        import jax
 
         devices = jax.devices()
         if devices:
             device = devices[0]
-            platform = getattr(device, "platform", "")
-            # CPU backend reports memory_stats but the numbers are not
-            # meaningful for our chunking heuristic; skip and fall through
-            # to psutil. Metal backend's stats API throws.
-            if platform not in ("cpu", "METAL", "metal"):
+            platform = getattr(device, "platform", "").lower()
+            if platform not in ("cpu", "metal"):
                 stats_fn = getattr(device, "memory_stats", None)
                 if callable(stats_fn):
                     stats = stats_fn() or {}
                     bytes_limit = stats.get("bytes_limit")
                     bytes_in_use = stats.get("bytes_in_use", 0)
                     if bytes_limit:
-                        return max(int(bytes_limit) - int(bytes_in_use), _FALLBACK_AVAILABLE_BYTES)
-    except Exception:  # noqa: BLE001 — fall through to next tier
+                        # Report actual free bytes; do NOT floor at the
+                        # 4 GiB fallback — a CUDA card with 2 GiB free
+                        # genuinely has 2 GiB free, not 4 GiB.
+                        return max(int(bytes_limit) - int(bytes_in_use), 0)
+    except Exception:  # noqa: BLE001
         pass
 
-    try:  # 2. CPU host-RAM via psutil (dev extras).
-        import psutil  # noqa: PLC0415
+    try:
+        import psutil
 
         return int(0.25 * psutil.virtual_memory().available)
     except Exception:  # noqa: BLE001
         pass
 
-    # 3. Conservative fallback.
     return _FALLBACK_AVAILABLE_BYTES
 
 
@@ -217,18 +211,10 @@ def _split_wavelength_grid(
     line_wl = np.asarray(line_wavelengths_nm, dtype=np.float64).reshape(-1)
     n_lines = line_wl.shape[0]
 
-    chunks = np.empty((nstitch, chunk_length), dtype=wl.dtype)
-    line_masks = np.zeros((nstitch, n_lines), dtype=bool)
-
-    # Assign every line to exactly one chunk so that overlap-and-add does
-    # not double-count it at chunk boundaries (spec §3 "every line in every
-    # chunk within `overlap·dlam`" is a necessary-but-not-sufficient
-    # condition — assigning the line to exactly one chunk lets its wings
-    # spill into the neighbour's overlap region, and OLA sums them
-    # naturally). We assign by interior bin index: ``bin_c = floor(j_line /
-    # div_length)`` with clamp to ``[0, nstitch-1]`` so out-of-range lines
-    # snap to the closest chunk.
-
+    # Assign every line to exactly one chunk so overlap-and-add does not
+    # double-count it. Lines whose wings spill into the neighbour's overlap
+    # region are recombined naturally by OLA. Assigned by interior bin
+    # index ``floor(j_line / div_length)``, clamped to ``[0, nstitch-1]``.
     if n_lines:
         # Index of the nearest wavelength sample on the parent grid.
         j_line = np.clip(
@@ -240,27 +226,18 @@ def _split_wavelength_grid(
     else:
         owner_chunk = np.zeros(0, dtype=np.int64)
 
-    for c in range(nstitch):
-        i_start = c * div_length
-        # Build the padded chunk: ``overlap`` samples below ``i_start``,
-        # then the inner samples, then ``overlap`` samples above.
-        chunk = np.empty(chunk_length, dtype=wl.dtype)
-        for j in range(chunk_length):
-            src = i_start - overlap + j
-            if 0 <= src < n_lambda:
-                chunk[j] = wl[src]
-            elif src < 0:
-                # Below grid: extrapolate uniformly with Δλ.
-                chunk[j] = wl[0] + src * dlam
-            else:
-                # Above grid: extrapolate uniformly with Δλ. This keeps
-                # the chunk's effective Δλ identical to the parent grid,
-                # which is what ``ldm_broaden`` needs for FFT alignment.
-                chunk[j] = wl[n_lambda - 1] + (src - (n_lambda - 1)) * dlam
-        chunks[c] = chunk
+    # Uniform-grid extrapolation: wl[k] = wl[0] + k·Δλ holds for ALL integer
+    # k including k < 0 and k ≥ N_λ. So the entire padded grid collapses to
+    # a single affine expression — no branching needed.
+    c_idx = np.arange(nstitch, dtype=np.int64)[:, None]
+    j_idx = np.arange(chunk_length, dtype=np.int64)[None, :]
+    src = c_idx * div_length - overlap + j_idx  # (nstitch, chunk_length)
+    chunks = (wl[0] + src.astype(wl.dtype) * dlam).astype(wl.dtype)
 
-        if n_lines:
-            line_masks[c] = owner_chunk == c
+    if n_lines:
+        line_masks = owner_chunk[None, :] == c_idx  # (nstitch, n_lines)
+    else:
+        line_masks = np.zeros((nstitch, 0), dtype=bool)
 
     return chunks, line_masks, div_length, n_lambda
 
