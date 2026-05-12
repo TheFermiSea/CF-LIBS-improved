@@ -2,6 +2,7 @@
 Iterative solver for Classic CF-LIBS.
 """
 
+import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 import numpy as np
@@ -13,6 +14,18 @@ from cflibs.inversion.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.closure import ClosureEquation
 from cflibs.plasma.partition import PartitionFunctionEvaluator
 from cflibs.core.logging_config import get_logger
+
+
+def _jax_boltzmann_composition_enabled() -> bool:
+    """Opt-in env-var toggle for routing the inner Boltzmann sigma-clip
+    WLS step through the JAX kernel in composition workflows.
+
+    Default (unset or "0") preserves byte-for-byte the CPU behavior. Set
+    ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION=1`` to enable. See
+    ``docs/jax-port/iterative-boltzmann-consultation.md`` for design
+    rationale.
+    """
+    return os.environ.get("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", "0") == "1"
 
 # Optional JAX imports — IterativeCFLIBSSolverJax raises ImportError at
 # instantiation time if JAX is missing, so the rest of the module is unaffected.
@@ -135,7 +148,10 @@ class IterativeCFLIBSSolver:
         self.apply_ipd = apply_ipd
         self.aki_uncertainty_weighting = aki_uncertainty_weighting
         self.two_region = two_region
-        self.boltzmann_fitter = BoltzmannPlotFitter(outlier_sigma=2.5)
+        self.boltzmann_fitter = BoltzmannPlotFitter(
+            outlier_sigma=2.5,
+            use_jax=_jax_boltzmann_composition_enabled(),
+        )
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
         """Return fit-space uncertainty with optional A_ki contribution."""

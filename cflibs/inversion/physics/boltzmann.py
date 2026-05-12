@@ -66,6 +66,7 @@ class BoltzmannPlotFitter:
         ransac_residual_threshold: float | None = None,
         ransac_max_trials: int = 100,
         huber_epsilon: float = 1.2,
+        use_jax: bool = False,
     ):
         """
         Initialize fitter.
@@ -90,6 +91,19 @@ class BoltzmannPlotFitter:
             Huber loss transition point. Points with standardized residuals
             below this use squared loss; above use linear loss. Default: 1.2
             (stricter than the legacy 1.35 setting).
+        use_jax : bool
+            When True and ``method == FitMethod.SIGMA_CLIP``, route the
+            inner weighted-least-squares step through the JAX kernel
+            :func:`cflibs.inversion.physics.boltzmann_jax.batched_boltzmann_fit`
+            instead of :func:`numpy.polyfit`. Default ``False`` preserves
+            byte-for-byte the existing CPU behavior. RANSAC and Huber
+            methods always use the CPU path (those are non-bottleneck
+            paths in the composition workflows). See
+            ``docs/jax-port/iterative-boltzmann-consultation.md`` for
+            rationale. Opt-in only; the call sites in
+            ``cflibs/inversion/solve/iterative.py`` and
+            ``cflibs/inversion/runtime/streaming.py`` flip this from the
+            ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION=1`` env var.
         """
         self.outlier_sigma = outlier_sigma
         self.max_iterations = max_iterations
@@ -98,6 +112,7 @@ class BoltzmannPlotFitter:
         self.ransac_residual_threshold = ransac_residual_threshold
         self.ransac_max_trials = ransac_max_trials
         self.huber_epsilon = huber_epsilon
+        self.use_jax = use_jax
 
     def fit(
         self,
@@ -172,7 +187,9 @@ class BoltzmannPlotFitter:
             result = self._fit_ransac(x_all, y_all, y_err_all, valid_mask)
         elif self.method == FitMethod.HUBER:
             result = self._fit_huber(x_all, y_all, y_err_all, valid_mask)
-        else:  # SIGMA_CLIP (default)
+        elif self.use_jax:  # SIGMA_CLIP + JAX kernel for inner WLS step
+            result = self._fit_sigma_clip_jax(x_all, y_all, y_err_all, valid_mask)
+        else:  # SIGMA_CLIP (default, CPU)
             result = self._fit_sigma_clip(x_all, y_all, y_err_all, valid_mask)
 
         # When multiplet_groups was provided, the fit operated on the aggregated
@@ -380,6 +397,187 @@ class BoltzmannPlotFitter:
             mask[outlier_global_indices] = False
 
             logger.debug(f"Iteration {iteration}: Rejected {len(outlier_global_indices)} outliers")
+
+        return self._create_result(
+            slope,
+            slope_err,
+            intercept,
+            intercept_err,
+            r_squared,
+            mask,
+            indices,
+            "sigma_clip",
+            n_iterations,
+            covariance_matrix,
+        )
+
+    def _fit_sigma_clip_jax(
+        self,
+        x_all: np.ndarray,
+        y_all: np.ndarray,
+        y_err_all: np.ndarray,
+        valid_mask: np.ndarray,
+    ) -> BoltzmannFitResult:
+        """JAX-accelerated iterative sigma-clip WLS fit.
+
+        Algorithmically equivalent to :meth:`_fit_sigma_clip` — same
+        weighted-LS normal equations (algebraically), same iterative
+        residual-sigma outlier rejection, same fit_method label
+        ``"sigma_clip"``. Only the inner per-iteration solve is delegated
+        to :func:`cflibs.inversion.physics.boltzmann_jax.batched_boltzmann_fit`
+        (a single-element "batch" of one), which avoids the ~10
+        ``scipy.stats.linregress`` / ``np.polyfit`` round-trips that
+        dominate Vrabel-50k wall time.
+
+        Numerical agreement vs CPU path: ``rtol ~1e-8`` on slope /
+        intercept / temperature on well-conditioned synthetic inputs;
+        ``inlier_mask`` matches exactly when no residual sits within
+        machine-epsilon of the rejection boundary. See
+        ``tests/inversion/physics/test_boltzmann_jax_composition.py``.
+        """
+        # Local import — keeps JAX optional for the CPU-only path.
+        from cflibs.inversion.physics.boltzmann_jax import (
+            HAS_JAX,
+            batched_boltzmann_fit,
+        )
+
+        if not HAS_JAX:
+            logger.warning(
+                "use_jax=True but JAX is not installed; falling back to CPU sigma_clip."
+            )
+            return self._fit_sigma_clip(x_all, y_all, y_err_all, valid_mask)
+
+        import jax.numpy as jnp
+
+        indices = np.arange(len(x_all))
+        mask = valid_mask.copy()
+
+        slope = 0.0
+        intercept = 0.0
+        slope_err = 0.0
+        intercept_err = 0.0
+        r_squared = 0.0
+        n_iterations = 0
+        covariance_matrix: np.ndarray | None = None
+
+        for iteration in range(self.max_iterations):
+            n_iterations = iteration + 1
+            x = x_all[mask]
+            y = y_all[mask]
+            y_err = y_err_all[mask]
+
+            if len(x) < 2:
+                logger.warning("Too few points remaining after rejection")
+                break
+
+            weights = self._compute_weights(y_err)
+
+            # POLYFIT WEIGHTING CONVENTION: ``numpy.polyfit(x, y, deg, w=W)``
+            # interprets ``W`` as ``1/sigma`` (it multiplies residuals by
+            # ``W`` and minimizes ``sum((W*r)^2) = sum(W^2 * r^2)``). The
+            # CPU sigma-clip path passes ``W = 1/y_err^2`` directly, so
+            # the *effective* weight in the minimization is ``W^2 =
+            # 1/y_err^4``. To match the CPU path byte-for-byte we square
+            # ``weights`` before passing to the closed-form 5-sum kernel
+            # (which minimizes ``sum(w * r^2)``).
+            # See docs/jax-port/iterative-boltzmann-consultation.md.
+            kernel_weights = weights * weights
+
+            # Closed-form WLS via JAX kernel. Pack as a (1, N) batch-of-one.
+            # NOTE: the kernel applies its own ``mask`` over weights, but we
+            # already filtered to inliers above so the mask is all-True here.
+            x_jax = jnp.asarray(x[None, :], dtype=jnp.float64)
+            y_jax = jnp.asarray(y[None, :], dtype=jnp.float64)
+            w_jax = jnp.asarray(kernel_weights[None, :], dtype=jnp.float64)
+            m_jax = jnp.ones_like(x_jax, dtype=bool)
+
+            kernel_result = batched_boltzmann_fit(x_jax, y_jax, w_jax, m_jax)
+
+            m = float(kernel_result.slope[0])
+            c = float(kernel_result.intercept[0])
+
+            # NaN/inf from a degenerate solve (det≈0) -> mirror polyfit's
+            # LinAlgError failure path on the CPU side.
+            if not (np.isfinite(m) and np.isfinite(c)):
+                logger.error("Linear regression failed (JAX kernel returned non-finite)")
+                return self._empty_result()
+
+            if len(x) > 2:
+                # numpy.polyfit(..., cov=True) scales its returned cov by
+                # chi^2/dof (the ``scale_cov=True`` default in older
+                # polyfit). We mirror that here using the **same**
+                # effective-weight convention as polyfit: kernel_weights
+                # = weights**2. The JAX kernel returns the *unscaled*
+                # formal cov (sigma_slope=sqrt(S_w/det)); we rescale by
+                # chi^2/dof so r_jax.slope_uncertainty matches
+                # r_cpu.slope_uncertainty byte-for-byte. See
+                # docs/jax-port/iterative-boltzmann-consultation.md.
+                w_masked = kernel_weights
+                S_w = float(np.sum(w_masked))
+                S_wx = float(np.sum(w_masked * x))
+                S_wxx = float(np.sum(w_masked * x * x))
+                det = S_w * S_wxx - S_wx * S_wx
+                if abs(det) > 1e-30:
+                    # Chi-squared per degree of freedom from the current
+                    # in-mask fit.
+                    y_pred_now = m * x + c
+                    resid_now = y - y_pred_now
+                    chi2 = float(np.sum(w_masked * resid_now * resid_now))
+                    dof = len(x) - 2
+                    chi2_dof = chi2 / dof if dof > 0 else 1.0
+
+                    var_slope = (S_w / det) * chi2_dof
+                    var_intercept = (S_wxx / det) * chi2_dof
+                    cov_si = (-S_wx / det) * chi2_dof
+                    slope_err = float(np.sqrt(max(var_slope, 0.0)))
+                    intercept_err = float(np.sqrt(max(var_intercept, 0.0)))
+                    covariance_matrix = np.array(
+                        [[var_slope, cov_si], [cov_si, var_intercept]]
+                    )
+                else:
+                    slope_err = float(kernel_result.sigma_slope[0])
+                    intercept_err = float(kernel_result.sigma_intercept[0])
+                    covariance_matrix = None
+            else:
+                slope_err = np.inf
+                intercept_err = np.inf
+                covariance_matrix = None
+
+            slope = m
+            intercept = c
+
+            # R² — recompute on the host so we use the **same**
+            # effective-weights convention as the CPU path
+            # (``self._compute_r_squared`` consumes the polyfit-flavor
+            # ``weights`` directly, not the squared ``kernel_weights``).
+            # The kernel's own ``R_squared`` field is computed against
+            # ``kernel_weights`` and would therefore disagree.
+            y_pred = m * x + c
+            r_squared = self._compute_r_squared(y, y_pred, weights)
+
+            # Outlier rejection — identical predicate to CPU path
+            # (computed in numpy, not JAX, so behavior is bit-exact with
+            # the CPU sigma_clip when residuals are well-separated).
+            y_pred = m * x + c
+            residuals = y - y_pred
+            std_res = float(np.std(residuals))
+            if std_res == 0:
+                break
+
+            bad_indices = np.abs(residuals) > self.outlier_sigma * std_res
+
+            if not np.any(bad_indices):
+                break
+
+            current_indices = indices[mask]
+            outlier_global_indices = current_indices[bad_indices]
+            mask[outlier_global_indices] = False
+
+            logger.debug(
+                "Iteration %d (JAX): Rejected %d outliers",
+                iteration,
+                len(outlier_global_indices),
+            )
 
         return self._create_result(
             slope,

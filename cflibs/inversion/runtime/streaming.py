@@ -54,6 +54,7 @@ Example
 >>> analyzer.stop()
 """
 
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -76,6 +77,18 @@ from cflibs.core.logging_config import get_logger
 from cflibs.inversion.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.solver import CFLIBSResult, IterativeCFLIBSSolver
 from cflibs.inversion.line_selection import LineSelector
+
+
+def _jax_boltzmann_composition_enabled() -> bool:
+    """Opt-in env-var toggle for routing the inner Boltzmann sigma-clip
+    WLS step through the JAX kernel in composition workflows.
+
+    Default (unset or "0") preserves byte-for-byte the CPU behavior. Set
+    ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION=1`` to enable. See
+    ``docs/jax-port/iterative-boltzmann-consultation.md`` for design
+    rationale.
+    """
+    return os.environ.get("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", "0") == "1"
 
 logger = get_logger("inversion.streaming")
 
@@ -589,7 +602,10 @@ class FastAnalyzer(BaseStreamingAnalyzer):
         self.atomic_db = atomic_db
         self.elements = elements
         self.config = config or StreamingConfig(mode=AnalysisMode.FAST)
-        self._boltzmann_fitter = BoltzmannPlotFitter(outlier_sigma=3.0)
+        self._boltzmann_fitter = BoltzmannPlotFitter(
+            outlier_sigma=3.0,
+            use_jax=_jax_boltzmann_composition_enabled(),
+        )
         self._line_selector = LineSelector(min_snr=5.0, min_lines_per_element=2)
 
         # Cache for partition functions
