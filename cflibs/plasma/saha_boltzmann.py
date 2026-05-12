@@ -7,26 +7,15 @@ from typing import Dict, Optional, Protocol, Tuple
 
 import numpy as np
 
-try:
-    import jax
-    import jax.numpy as jnp
-    from jax import jit
-
-    HAS_JAX = True
-except ImportError:  # pragma: no cover - JAX is a runtime dep but stay defensive
-    HAS_JAX = False
-    jax = None  # type: ignore[assignment]
-    jnp = None  # type: ignore[assignment]
-
-    def jit(f):  # type: ignore[misc]
-        return f
-
 from cflibs.core.constants import C_LIGHT, E_CHARGE, EV_TO_K, J_TO_EV, KB, SAHA_CONST_CM3
+from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp
 from cflibs.plasma.state import SingleZoneLTEPlasma
 from cflibs.core.abc import SolverStrategy, AtomicDataSource
 from cflibs.core.cache import cached_partition_function
 from cflibs.core.logging_config import get_logger
 from cflibs.plasma.partition import PartitionFunctionEvaluator
+
+jit = jit_if_available
 
 
 class IPDModel(Protocol):

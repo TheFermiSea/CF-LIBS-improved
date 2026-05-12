@@ -208,57 +208,73 @@ def jit_if_available(*jit_args: Any, **jit_kwargs: Any) -> Any:
     return _decorator
 
 
-def vmap_if_available(
+def _vmap_decorator(
+    func: F,
     in_axes: Any = 0,
     out_axes: Any = 0,
     axis_name: Any = None,
-) -> Callable[[F], F]:
-    """Decorator that applies ``jax.vmap`` when JAX is importable, else
-    returns a NumPy-loop emulation (``numpy.stack`` along ``out_axes``).
+) -> F:
+    if HAS_JAX:
+        return jax.vmap(func, in_axes=in_axes, out_axes=out_axes, axis_name=axis_name)  # type: ignore[return-value]
 
-    Correctness-only fallback; performance parity not promised. Only
-    ``in_axes=0`` (or a flat tuple thereof) is supported by the fallback.
-    """
+    @functools.wraps(func)
+    def _wrapper(*args: Any, **kwargs: Any) -> Any:
+        if isinstance(in_axes, tuple):
+            axes = in_axes
+        else:
+            axes = tuple(in_axes if i < len(args) else None for i in range(len(args)))
+        n_batch: int | None = None
+        for arg, axis in zip(args, axes):
+            if axis is None:
+                continue
+            arr = _np.asarray(arg)
+            if arr.ndim == 0:
+                raise ValueError(
+                    "vmap_if_available fallback requires array-like batched arguments"
+                )
+            n_batch = arr.shape[axis]
+            break
+        if n_batch is None:
+            return func(*args, **kwargs)
 
-    def _decorator(func: F) -> F:
-        if HAS_JAX:
-            return jax.vmap(func, in_axes=in_axes, out_axes=out_axes, axis_name=axis_name)  # type: ignore[return-value]
-
-        @functools.wraps(func)
-        def _wrapper(*args: Any, **kwargs: Any) -> Any:
-            if isinstance(in_axes, tuple):
-                axes = in_axes
-            else:
-                axes = tuple(in_axes if i < len(args) else None for i in range(len(args)))
-            # Determine batch dimension size from first array-like that is batched.
-            n_batch: int | None = None
+        outputs = []
+        for i in range(n_batch):
+            sliced = []
             for arg, axis in zip(args, axes):
                 if axis is None:
-                    continue
-                arr = _np.asarray(arg)
-                if arr.ndim == 0:
-                    raise ValueError(
-                        "vmap_if_available fallback requires array-like batched arguments"
-                    )
-                n_batch = arr.shape[axis]
-                break
-            if n_batch is None:
-                return func(*args, **kwargs)
+                    sliced.append(arg)
+                else:
+                    sliced.append(_np.take(_np.asarray(arg), i, axis=axis))
+            outputs.append(func(*sliced, **kwargs))
+        if isinstance(outputs[0], tuple):
+            return tuple(_np.stack(parts, axis=out_axes) for parts in zip(*outputs))
+        return _np.stack(outputs, axis=out_axes)
 
-            outputs = []
-            for i in range(n_batch):
-                sliced = []
-                for arg, axis in zip(args, axes):
-                    if axis is None:
-                        sliced.append(arg)
-                    else:
-                        sliced.append(_np.take(_np.asarray(arg), i, axis=axis))
-                outputs.append(func(*sliced, **kwargs))
-            if isinstance(outputs[0], tuple):
-                return tuple(_np.stack(parts, axis=out_axes) for parts in zip(*outputs))
-            return _np.stack(outputs, axis=out_axes)
+    return _wrapper  # type: ignore[return-value]
 
-        return _wrapper  # type: ignore[return-value]
+
+def vmap_if_available(*vmap_args: Any, **vmap_kwargs: Any) -> Any:
+    """``jax.vmap``-compatible wrapper.
+
+    Supports the two ``jax.vmap`` invocation styles:
+
+    >>> vmap_if_available(f)                      # direct call form
+    >>> vmap_if_available(f, in_axes=(0, None))   # direct call with kwargs
+
+    And the decorator-factory style used elsewhere in cflibs:
+
+    >>> @vmap_if_available(in_axes=0)
+    ... def batched_fn(x): ...
+
+    When JAX is missing the fallback is a NumPy-loop emulation (``numpy.stack``
+    along ``out_axes``). Correctness-only fallback; performance parity not
+    promised. Only ``in_axes=0`` (or a flat tuple thereof) is supported.
+    """
+    if _looks_like_decorator_invocation(vmap_args):
+        return _vmap_decorator(vmap_args[0], **vmap_kwargs)
+
+    def _decorator(func: F) -> F:
+        return _vmap_decorator(func, *vmap_args, **vmap_kwargs)
 
     return _decorator
 

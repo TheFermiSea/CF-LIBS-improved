@@ -8,15 +8,8 @@ import math
 from dataclasses import dataclass
 from typing import Mapping
 
-try:
-    import jax.numpy as jnp
-
-    HAS_JAX = True
-except ImportError:  # pragma: no cover - JAX is a runtime dep but stay defensive
-    HAS_JAX = False
-    jnp = None  # type: ignore[assignment]
-
 from cflibs.core.constants import KB_EV
+from cflibs.core.jax_runtime import HAS_JAX, jnp  # noqa: F401  -- re-exported for callers
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("plasma.state")

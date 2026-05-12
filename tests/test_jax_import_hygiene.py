@@ -61,9 +61,6 @@ _T1_1_IN_PROGRESS: frozenset[str] = frozenset(
         "cflibs/instrument/model.py",
         "cflibs/manifold/generator.py",
         "cflibs/manifold/loader.py",
-        "cflibs/plasma/partition.py",
-        "cflibs/plasma/saha_boltzmann.py",
-        "cflibs/plasma/state.py",
     }
 )
 
