@@ -66,6 +66,32 @@ BASIS_REQUIRED_ID_WORKFLOWS = {
     "spectral_nnls",
 }
 
+CANONICAL_NFS_BASIS_DIR = Path("/cluster/shared/cf-libs-bench/basis_libraries")
+
+
+def _resolve_basis_dir(cli_value: Path | None) -> Path:
+    """Resolve --basis-dir / $CFLIBS_BASIS_DIR / canonical NFS / repo default.
+
+    Priority (highest first):
+      1. Explicit ``--basis-dir`` on the CLI
+      2. ``CFLIBS_BASIS_DIR`` environment variable
+      3. ``/cluster/shared/cf-libs-bench/basis_libraries`` if its NFS parent
+         is mounted
+      4. ``output/basis_libraries`` (legacy in-repo default)
+
+    The return path is **not** required to exist; existence is checked by
+    :func:`_validate_basis_requirements` when a basis-driven workflow is
+    selected.
+    """
+    if cli_value is not None:
+        return cli_value.expanduser()
+    env = os.environ.get("CFLIBS_BASIS_DIR")
+    if env:
+        return Path(env).expanduser()
+    if CANONICAL_NFS_BASIS_DIR.parent.exists():
+        return CANONICAL_NFS_BASIS_DIR
+    return Path("output/basis_libraries")
+
 
 def _normalize_workflow_list(values: Sequence[str] | None) -> list[str]:
     if not values:
@@ -247,8 +273,15 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--basis-dir",
         type=Path,
-        default=Path("output/basis_libraries"),
-        help="Directory containing basis_fwhm_*.h5 files for basis-driven workflows.",
+        default=None,
+        help=(
+            "Directory containing basis_fwhm_*nm.h5 files for basis-driven "
+            "workflows (spectral_nnls, hybrid_intersect, hybrid_union, "
+            "nnls_concentration_threshold). Resolution order: this flag, "
+            "then $CFLIBS_BASIS_DIR, then "
+            "/cluster/shared/cf-libs-bench/basis_libraries (when NFS is "
+            "mounted), then output/basis_libraries."
+        ),
     )
     parser.add_argument(
         "--synthetic-corpus",
@@ -404,6 +437,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.jax_identifier:
         os.environ["CFLIBS_USE_JAX_IDENTIFIER"] = "1"
+
+    # Resolve basis-library directory (CLI -> $CFLIBS_BASIS_DIR -> NFS share
+    # -> in-repo default) and rebind so downstream code can rely on a single
+    # canonical path.
+    args.basis_dir = _resolve_basis_dir(args.basis_dir)
 
     from cflibs.benchmark import UnifiedBenchmarkRunner, load_default_datasets
     from cflibs.benchmark.dataset import TruthType
