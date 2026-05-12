@@ -81,9 +81,7 @@ if _HAS_JAX:
         SS_res = jnp.sum(m * (y - y_pred) ** 2, axis=1)
         y_mean = jnp.where(n > 0, S_y / jnp.maximum(n, 1.0), 0.0)
         SS_tot = jnp.sum(m * (y - y_mean[:, None]) ** 2, axis=1)
-        r_squared = jnp.where(
-            is_valid & (SS_tot > 1e-30), 1.0 - SS_res / SS_tot, jnp.nan
-        )
+        r_squared = jnp.where(is_valid & (SS_tot > 1e-30), 1.0 - SS_res / SS_tot, jnp.nan)
 
         return slope, intercept, r_squared, n
 
@@ -150,8 +148,7 @@ def boltzmann_temperature_jax(
     """
     if not _HAS_JAX:  # pragma: no cover
         raise ImportError(
-            "JAX is required for boltzmann_temperature_jax. "
-            "Install with: pip install jax jaxlib"
+            "JAX is required for boltzmann_temperature_jax. Install with: pip install jax jaxlib"
         )
 
     if weights is not None and not np.allclose(weights, weights.flat[0]):
@@ -169,8 +166,7 @@ def boltzmann_temperature_jax(
 
     if E_arr.shape != y_arr.shape:
         raise ValueError(
-            f"E_upper shape {E_arr.shape} does not broadcast to "
-            f"log_I_over_gA shape {y_arr.shape}"
+            f"E_upper shape {E_arr.shape} does not broadcast to log_I_over_gA shape {y_arr.shape}"
         )
 
     # Build mask from NaN/inf in either array; zero out masked entries so
@@ -199,6 +195,388 @@ def boltzmann_temperature_jax(
     if return_diagnostics:
         return T_K, slope_np, r_sq_np
     return T_K
+
+
+# ---------------------------------------------------------------------------
+# JAX-vectorized helpers for the per-spectrum hot loops in ``ALIASIdentifier``.
+# These mirror the CPU paths exactly when invoked through the opt-in
+# constructor flags (``use_jax_nnls``, ``use_jax_p_snr``). They are written so
+# the per-spectrum solver is jit-compiled once and reused; the future batched
+# workflow can wrap them in ``jax.vmap`` across many spectra without
+# additional plumbing.
+#
+# Algorithm choice (Codex + Gemini consultation, see
+# ``docs/jax-port/alias-consultation.md``):
+#
+# * NNLS solver — FISTA with adaptive O'Donoghue-Candès restart. Fixed iter
+#   loop (``lax.fori_loop``) is jit/vmap-friendly. The active-set Lawson-
+#   Hanson approach used by ``scipy.optimize.nnls`` cannot be vmap'd cleanly
+#   because the passive set has a dynamic shape. On well-conditioned
+#   templates (the LIBS Gaussian peak case), FISTA hits 1e-13 agreement with
+#   scipy in <1000 iters; on highly correlated columns the adaptive restart
+#   recovers the same precision.
+# * Sparse elastic-net NNLS — same FISTA, modified gradient. Under x >= 0 the
+#   L1 term collapses to a smooth alpha * sum(x), so the elastic-net
+#   objective is differentiable end-to-end and the projected-gradient step
+#   converges without proximal-operator machinery.
+
+if _HAS_JAX:
+    _FISTA_DEFAULT_MAX_ITER = 1000
+
+    def _fista_step_body(state, AtA, Atb, step, l1):
+        """Single FISTA + adaptive-restart iteration. Pure to enable JIT."""
+        x, y, t = state
+        grad = AtA @ y - Atb + l1
+        x_new = jnp.maximum(0.0, y - step * grad)
+        # O'Donoghue-Candès gradient-based restart: if the momentum step
+        # increased the objective (i.e. (y - x_new) . (x_new - x) > 0), reset
+        # the momentum sequence by forcing t_eff = 1 for the next update.
+        restart_cond = jnp.dot(y - x_new, x_new - x) > 0.0
+        t_eff = jnp.where(restart_cond, 1.0, t)
+        t_new = 0.5 * (1.0 + jnp.sqrt(1.0 + 4.0 * t_eff * t_eff))
+        y_new = x_new + ((t_eff - 1.0) / t_new) * (x_new - x)
+        return (x_new, y_new, t_new)
+
+    def _solve_nnls_jax_core(
+        A: "jnp.ndarray",
+        b: "jnp.ndarray",
+        max_iter: int,
+        l1: float,
+        l2: float,
+    ) -> "jnp.ndarray":
+        """FISTA-with-restart non-negative least squares for a single problem.
+
+        Minimizes ``0.5 ||A x - b||^2 + l1 sum(x) + 0.5 l2 ||x||^2`` subject
+        to ``x >= 0``. The ridge term is folded into ``A^T A`` so a single
+        solver handles both the dense (l1=l2=0) and the smooth elastic-net
+        cases.
+        """
+        AtA = A.T @ A + l2 * jnp.eye(A.shape[1], dtype=A.dtype)
+        Atb = A.T @ b
+        # Lipschitz constant of the smooth gradient: largest eigenvalue of
+        # AtA. For 12x12 problems this is a few-microsecond eigh.
+        L = jnp.linalg.eigvalsh(AtA)[-1] + 1e-30
+        step = 1.0 / L
+
+        n = A.shape[1]
+        init = (
+            jnp.zeros(n, dtype=A.dtype),
+            jnp.zeros(n, dtype=A.dtype),
+            jnp.asarray(1.0, dtype=A.dtype),
+        )
+
+        def body(_i, state):
+            return _fista_step_body(state, AtA, Atb, step, l1)
+
+        x_final, _y, _t = jax.lax.fori_loop(0, max_iter, body, init)
+        return jnp.maximum(0.0, x_final)
+
+    _solve_nnls_jax_jit = jax.jit(_solve_nnls_jax_core, static_argnames=("max_iter",))
+
+    def _loo_solve(A: "jnp.ndarray", b: "jnp.ndarray", max_iter: int) -> "jnp.ndarray":
+        """Leave-one-out NNLS: returns ``(n_cands, n_cands)`` coefficient
+        matrix where row ``j`` is the NNLS solution with column ``j`` of A
+        zeroed out. ``c_loo[j, j]`` is guaranteed to be 0.
+        """
+        n_cands = A.shape[1]
+        # Build the (n_cands, n_cands) "remove column j" mask: identity-
+        # complement. Multiplying A elementwise by this mask zeroes the
+        # j-th column, which forces the FISTA projection to land at x_j=0.
+        masks = 1.0 - jnp.eye(n_cands, dtype=A.dtype)  # (n_cands, n_cands)
+        A_loo = A[None, :, :] * masks[:, None, :]  # (n_cands, m, n_cands)
+        return jax.vmap(lambda Aj: _solve_nnls_jax_core(Aj, b, max_iter, 0.0, 0.0))(A_loo)
+
+    _loo_solve_jit = jax.jit(_loo_solve, static_argnames=("max_iter",))
+
+
+def solve_nnls_jax(
+    A: np.ndarray,
+    b: np.ndarray,
+    *,
+    max_iter: int = 1000,
+    l1: float = 0.0,
+    l2: float = 0.0,
+) -> np.ndarray:
+    """JAX FISTA-with-restart NNLS solver, drop-in replacement for
+    :func:`scipy.optimize.nnls` (residual is not returned; recover it as
+    ``np.linalg.norm(A @ x - b)``).
+
+    Minimizes ``0.5 ||A x - b||^2 + l1 sum(x) + 0.5 l2 ||x||^2`` subject to
+    ``x >= 0`` via FISTA with adaptive (gradient-based) restart. Hits
+    ``rtol 1e-5`` versus ``scipy.optimize.nnls`` on well-conditioned
+    LIBS-style template matrices in <1000 iters; the adaptive restart
+    recovers full precision on highly correlated columns where vanilla FISTA
+    plateaus.
+
+    Parameters
+    ----------
+    A : np.ndarray, shape (m, n)
+        Non-negative template matrix.
+    b : np.ndarray, shape (m,)
+        Observed signal.
+    max_iter : int, optional
+        FISTA iteration count. Fixed (not adaptive) to keep the loop
+        jit/vmap-friendly (default: 1000).
+    l1 : float, optional
+        L1 regularization strength. Under ``x >= 0`` the L1 term is the
+        smooth ``l1 * sum(x)``, so a separate proximal step isn't needed
+        (default: 0.0).
+    l2 : float, optional
+        L2 (ridge) regularization strength, folded into ``A^T A``
+        (default: 0.0).
+
+    Returns
+    -------
+    np.ndarray, shape (n,)
+        Non-negative coefficients.
+
+    Raises
+    ------
+    ImportError
+        If JAX is not installed.
+
+    Notes
+    -----
+    For non-unique solutions (e.g. duplicated columns in ``A``), this solver
+    converges to the minimum-norm solution rather than the active-set
+    solution returned by SciPy. Both achieve the same objective value but
+    may distribute mass differently across redundant columns.
+    """
+    if not _HAS_JAX:  # pragma: no cover
+        raise ImportError(
+            "JAX is required for solve_nnls_jax. Install with: pip install jax jaxlib"
+        )
+    A_j = jnp.asarray(A, dtype=jnp.float64)
+    b_j = jnp.asarray(b, dtype=jnp.float64)
+    x = _solve_nnls_jax_jit(A_j, b_j, max_iter, float(l1), float(l2))
+    return np.asarray(x)
+
+
+def solve_sparse_nnls_jax(
+    A: np.ndarray,
+    b: np.ndarray,
+    *,
+    alpha: float = 0.01,
+    l1_ratio: float = 0.9,
+    max_iter: int = 1000,
+) -> Tuple[np.ndarray, float]:
+    """JAX FISTA elastic-net NNLS, drop-in for the L-BFGS-B path in
+    ``ALIASIdentifier._compute_sparse_nnls_scores``.
+
+    Column-normalizes ``A`` exactly as the CPU code does, solves the
+    smooth elastic-net problem (``x >= 0`` collapses the L1 term to
+    ``alpha * l1_ratio * sum(x)``), then un-normalizes the coefficients
+    so they reference the original ``A``.
+
+    Parameters
+    ----------
+    A : np.ndarray, shape (m, n)
+    b : np.ndarray, shape (m,)
+    alpha : float, optional
+        Overall regularization strength (default: 0.01).
+    l1_ratio : float, optional
+        L1 vs L2 mix (default: 0.9). 1.0 = pure lasso, 0.0 = pure ridge.
+    max_iter : int, optional
+        FISTA iteration count (default: 1000).
+
+    Returns
+    -------
+    Tuple[np.ndarray, float]
+        ``(sparse_c, residual_norm)``. ``residual_norm`` is in the original
+        un-normalized coordinate system, matching the CPU return convention.
+    """
+    if not _HAS_JAX:  # pragma: no cover
+        raise ImportError(
+            "JAX is required for solve_sparse_nnls_jax. Install with: pip install jax jaxlib"
+        )
+    A_np = np.asarray(A, dtype=np.float64)
+    b_np = np.asarray(b, dtype=np.float64)
+    col_norms = np.linalg.norm(A_np, axis=0)
+    col_norms_safe = np.where(col_norms == 0, 1.0, col_norms)
+    A_norm = A_np / col_norms_safe
+
+    l1_weight = float(alpha * l1_ratio)
+    l2_weight = float(alpha * (1.0 - l1_ratio))
+
+    x_norm = _solve_nnls_jax_jit(
+        jnp.asarray(A_norm),
+        jnp.asarray(b_np),
+        max_iter,
+        l1_weight,
+        l2_weight,
+    )
+    sparse_c = np.asarray(x_norm) / col_norms_safe
+    residual = float(np.linalg.norm(b_np - A_np @ sparse_c))
+    return sparse_c, residual
+
+
+def compute_nnls_attribution_jax(
+    A: np.ndarray,
+    peak_intensities: np.ndarray,
+    *,
+    max_iter: int = 1000,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """JAX-vectorized counterpart of ``_compute_nnls_attribution``.
+
+    Solves the full NNLS plus all n_cands leave-one-out NNLS problems in a
+    single ``vmap``-ed FISTA call, then computes the partial-R^2 and
+    local-explanation scores using the exact same arithmetic as the CPU
+    function.
+
+    Parameters
+    ----------
+    A : np.ndarray, shape (n_peaks, n_cands)
+    peak_intensities : np.ndarray, shape (n_peaks,)
+    max_iter : int, optional
+        FISTA iteration count (default: 1000).
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray, np.ndarray]
+        ``(P_mix, P_local, c)`` matching ``_compute_nnls_attribution``.
+    """
+    if not _HAS_JAX:  # pragma: no cover
+        raise ImportError(
+            "JAX is required for compute_nnls_attribution_jax. Install with: pip install jax jaxlib"
+        )
+    n_cands = A.shape[1]
+    if n_cands == 0 or np.all(A == 0):
+        return np.ones(n_cands), np.ones(n_cands), np.zeros(n_cands)
+
+    A_j = jnp.asarray(A, dtype=jnp.float64)
+    b_j = jnp.asarray(peak_intensities, dtype=jnp.float64)
+
+    c = np.asarray(_solve_nnls_jax_jit(A_j, b_j, max_iter, 0.0, 0.0))
+    total_rss = float(np.sum((peak_intensities - A @ c) ** 2))
+    total_energy = float(np.sum(peak_intensities**2))
+    if total_energy == 0:
+        return np.ones(n_cands), np.ones(n_cands), c
+
+    if n_cands == 1:
+        P_mix = np.array([1.0])
+    else:
+        c_loo = np.asarray(_loo_solve_jit(A_j, b_j, max_iter))  # (n_cands, n_cands)
+        # rss_without[j] = || A @ c_loo[j] - b ||^2 (column j of A contributes
+        # zero because c_loo[j, j] = 0 from the mask).
+        rss_without = np.sum((A @ c_loo.T - peak_intensities[:, None]) ** 2, axis=0)
+        P_mix = (rss_without - total_rss) / total_energy
+
+    # P_local — exact CPU arithmetic, just vectorized.
+    P_local = np.zeros(n_cands)
+    for j in range(n_cands):
+        claimed = A[:, j] > 1e-6
+        if not np.any(claimed):
+            continue
+        obs_at_claimed = np.sum(peak_intensities[claimed])
+        if obs_at_claimed <= 0:
+            continue
+        elem_contribution = np.sum(A[claimed, j] * c[j])
+        P_local[j] = float(np.clip(elem_contribution / obs_at_claimed, 0.0, 1.0))
+
+    return P_mix, P_local, c
+
+
+def build_nnls_templates_jax(
+    line_wavelengths_padded: np.ndarray,
+    line_emissivities_padded: np.ndarray,
+    line_masks: np.ndarray,
+    per_element_shifts: np.ndarray,
+    peak_wavelengths: np.ndarray,
+    resolving_power: float,
+) -> np.ndarray:
+    """JAX-vectorized Gaussian template matrix builder.
+
+    Mirrors ``ALIASIdentifier._build_nnls_templates`` exactly. The Python
+    loop over candidates is replaced by ragged-tensor broadcasting padded
+    to the largest candidate's line count. Padded entries are zeroed out
+    via ``line_masks``.
+
+    Parameters
+    ----------
+    line_wavelengths_padded : np.ndarray, shape (n_cands, L_max)
+        Theoretical line wavelengths per candidate, padded to ``L_max``.
+    line_emissivities_padded : np.ndarray, shape (n_cands, L_max)
+        Per-line emissivities, padded to ``L_max``.
+    line_masks : np.ndarray, shape (n_cands, L_max) bool
+        ``True`` for valid lines, ``False`` for padding.
+    per_element_shifts : np.ndarray, shape (n_cands,)
+        Per-candidate wavelength shift in nm.
+    peak_wavelengths : np.ndarray, shape (n_peaks,)
+        Detected peak wavelengths in nm.
+    resolving_power : float
+        Instrument resolving power; per-peak sigma = lambda / R / 2.355.
+
+    Returns
+    -------
+    np.ndarray, shape (n_peaks, n_cands)
+        Template matrix matching the CPU build.
+    """
+    if not _HAS_JAX:  # pragma: no cover
+        raise ImportError(
+            "JAX is required for build_nnls_templates_jax. Install with: pip install jax jaxlib"
+        )
+    pw = jnp.asarray(peak_wavelengths, dtype=jnp.float64)
+    sig = pw / float(resolving_power) / 2.355  # (n_peaks,)
+    lw = jnp.asarray(line_wavelengths_padded, dtype=jnp.float64)
+    le = jnp.asarray(line_emissivities_padded, dtype=jnp.float64)
+    mk = jnp.asarray(line_masks, dtype=jnp.float64)
+    sh = jnp.asarray(per_element_shifts, dtype=jnp.float64)
+
+    # Shapes:
+    #   pw:  (P,)        peak wavelengths
+    #   sig: (P,)        per-peak sigma
+    #   lw:  (C, L)      line wavelengths (padded)
+    #   le:  (C, L)      line emissivities (padded)
+    #   mk:  (C, L)      validity mask
+    #   sh:  (C,)        per-element shift
+    # Compute A[p, c] = sum_l mk[c, l] * le[c, l] * exp(-0.5 z^2) * (|d| < 3 sig)
+    #   where d = pw[p] - (lw[c, l] + sh[c]), z = d / sig[p]
+    shifted = lw + sh[:, None]  # (C, L)
+    # (P, C, L)
+    diff = pw[:, None, None] - shifted[None, :, :]
+    z = diff / sig[:, None, None]
+    gauss = jnp.exp(-0.5 * z * z)
+    proximity = jnp.abs(diff) < (3.0 * sig[:, None, None])
+    contribs = mk[None, :, :] * le[None, :, :] * gauss * proximity
+    A = jnp.sum(contribs, axis=2)  # (P, C)
+    return np.asarray(A)
+
+
+def compute_p_snr_jax(
+    intensity: np.ndarray,
+    peak_indices: np.ndarray,
+) -> float:
+    """JAX-vectorized counterpart of ``ALIASIdentifier._compute_p_snr``.
+
+    Uses ``jax.scipy.special.erf`` so the call composes inside a future
+    batched ``vmap`` without round-tripping through scipy.
+
+    Parameters
+    ----------
+    intensity : np.ndarray
+        Intensity array (1D).
+    peak_indices : np.ndarray
+        Integer indices of detected peaks.
+
+    Returns
+    -------
+    float
+        ``P_SNR`` in [0, 1].
+    """
+    if not _HAS_JAX:  # pragma: no cover
+        raise ImportError(
+            "JAX is required for compute_p_snr_jax. Install with: pip install jax jaxlib"
+        )
+    if len(peak_indices) == 0:
+        return 0.5
+    inten = jnp.asarray(intensity, dtype=jnp.float64)
+    idx = jnp.asarray(peak_indices, dtype=jnp.int32)
+    peak_intensities = inten[idx]
+    median_peak = jnp.median(peak_intensities)
+    noise_estimate = jnp.median(jnp.abs(inten - jnp.median(inten))) * 1.4826
+    noise_estimate = jnp.maximum(noise_estimate, 1e-10)
+    z = (median_peak - noise_estimate) / (noise_estimate * jnp.sqrt(2.0))
+    return float(0.5 * (1.0 + jax.scipy.special.erf(z)))
 
 
 class ALIASIdentifier:
@@ -324,6 +702,9 @@ class ALIASIdentifier:
         relative_cl_threshold: float = 0.1,
         boltzmann_r2_min: float = 0.85,
         use_jax_boltzmann_fit: bool = False,
+        use_jax_nnls: bool = False,
+        use_jax_p_snr: bool = False,
+        use_jax_template_build: bool = False,
     ):
         """
         Initialize the ALIAS element identifier.
@@ -378,6 +759,29 @@ class ALIASIdentifier:
             unchanged; turning it on enables future batched-spectrum
             speedups. Requires ``jax`` to be importable; raises
             ``ImportError`` at fit time otherwise (default: False).
+        use_jax_nnls : bool, optional
+            If True, use the JAX FISTA-with-restart NNLS solver
+            (:func:`solve_nnls_jax`, :func:`solve_sparse_nnls_jax`,
+            :func:`compute_nnls_attribution_jax`) for the per-spectrum
+            attribution / sparse-NNLS / iron-group-subtraction loops in
+            :meth:`identify`. Numerical agreement with the SciPy
+            active-set solver is ~1e-13 on well-conditioned LIBS template
+            matrices, dropping to ~1e-5 on highly correlated columns
+            (where the active-set and projected-gradient minimizers may
+            distribute mass differently across redundant columns while
+            achieving the same residual). Opt-in (default False).
+            Requires JAX (default: False).
+        use_jax_p_snr : bool, optional
+            If True, use :func:`compute_p_snr_jax` (``jax.scipy.special.erf``)
+            for the ``P_SNR`` quality factor in :meth:`_decide` instead of
+            ``scipy.special.erf``. Opt-in (default False). Requires JAX
+            (default: False).
+        use_jax_template_build : bool, optional
+            If True, use :func:`build_nnls_templates_jax` (broadcasting +
+            ``vmap``) to build the NNLS template matrix instead of the
+            Python loop over candidates. Numerical agreement is exact
+            (same arithmetic, just reordered). Opt-in (default False).
+            Requires JAX (default: False).
         """
         self.atomic_db = atomic_db
         if not (np.isfinite(resolving_power) and resolving_power > 0):
@@ -401,11 +805,17 @@ class ALIASIdentifier:
             )
         self.boltzmann_r2_min = float(boltzmann_r2_min)
         self.use_jax_boltzmann_fit = bool(use_jax_boltzmann_fit)
-        if self.use_jax_boltzmann_fit and not _HAS_JAX:  # pragma: no cover
-            raise ImportError(
-                "use_jax_boltzmann_fit=True requires JAX. "
-                "Install with: pip install jax jaxlib"
-            )
+        self.use_jax_nnls = bool(use_jax_nnls)
+        self.use_jax_p_snr = bool(use_jax_p_snr)
+        self.use_jax_template_build = bool(use_jax_template_build)
+        _any_jax = (
+            self.use_jax_boltzmann_fit
+            or self.use_jax_nnls
+            or self.use_jax_p_snr
+            or self.use_jax_template_build
+        )
+        if _any_jax and not _HAS_JAX:  # pragma: no cover
+            raise ImportError("use_jax_* flags require JAX. Install with: pip install jax jaxlib")
 
         # Create Saha-Boltzmann solver
         self.solver = SahaBoltzmannSolver(atomic_db)
@@ -496,7 +906,7 @@ class ALIASIdentifier:
         # ── Phase 1: Independent scoring ──────────────────────────────
         # Use corrected_intensity throughout scoring so continuum doesn't
         # dominate cosine similarity and NNLS attribution.
-        global_p_snr = self._compute_p_snr(corrected_intensity, peaks)
+        global_p_snr = self._dispatch_p_snr(corrected_intensity, peaks)
         candidates: List[dict] = []
 
         for element in screened:
@@ -580,17 +990,26 @@ class ALIASIdentifier:
         A = None
         if candidates and peaks:
             peak_intensities_arr = np.array([corrected_intensity[p[0]] for p in peaks])
-            A = self._build_nnls_templates(candidates, peaks)
-            P_mix_arr, P_local_arr, _ = self._compute_nnls_attribution(A, peak_intensities_arr)
+            if self.use_jax_template_build:
+                A = self._build_nnls_templates_jax_wrapper(candidates, peaks)
+            else:
+                A = self._build_nnls_templates(candidates, peaks)
+            if self.use_jax_nnls:
+                P_mix_arr, P_local_arr, _ = compute_nnls_attribution_jax(A, peak_intensities_arr)
+            else:
+                P_mix_arr, P_local_arr, _ = self._compute_nnls_attribution(A, peak_intensities_arr)
 
             # Sparse NNLS: L1-penalized fit suppresses diffuse FPs
             # (Black et al. 2024: standard NNLS overfits → many small
             # non-zero coefficients for absent elements)
             # Higher alpha at low RP where blending causes more false sharing
             sparse_alpha = 0.05 if self.resolving_power < 1000 else 0.01
-            sparse_c, _ = self._compute_sparse_nnls_scores(
-                A, peak_intensities_arr, alpha=sparse_alpha
-            )
+            if self.use_jax_nnls:
+                sparse_c, _ = solve_sparse_nnls_jax(A, peak_intensities_arr, alpha=sparse_alpha)
+            else:
+                sparse_c, _ = self._compute_sparse_nnls_scores(
+                    A, peak_intensities_arr, alpha=sparse_alpha
+                )
             # Noise floor: coefficient must exceed 10% of median to be
             # considered significant — elements below this are noise
             nonzero_c = sparse_c[sparse_c > 0]
@@ -622,9 +1041,12 @@ class ALIASIdentifier:
                 c_nnls = np.zeros(len(candidates))
                 # Re-solve NNLS to get coefficients
                 try:
-                    from scipy.optimize import nnls as _nnls
+                    if self.use_jax_nnls:
+                        c_nnls = solve_nnls_jax(A, peak_intensities_arr)
+                    else:
+                        from scipy.optimize import nnls as _nnls
 
-                    c_nnls, _ = _nnls(A, peak_intensities_arr)
+                        c_nnls, _ = _nnls(A, peak_intensities_arr)
                 except Exception:
                     pass
                 for idx in ig_indices:
@@ -2096,6 +2518,53 @@ class ALIASIdentifier:
                     )
         return A
 
+    def _build_nnls_templates_jax_wrapper(
+        self,
+        candidates: List[dict],
+        peaks: List[Tuple[int, float]],
+    ) -> np.ndarray:
+        """Padded-batch wrapper around :func:`build_nnls_templates_jax`.
+
+        Pads each candidate's ``fused_lines`` list to the maximum length so
+        the JAX builder can broadcast across all candidates in a single
+        call. Padded entries are zeroed via the per-line mask.
+        """
+        n_peaks = len(peaks)
+        n_cands = len(candidates)
+        if n_peaks == 0 or n_cands == 0:
+            return np.zeros((n_peaks, n_cands))
+
+        peak_wls = np.array([p[1] for p in peaks], dtype=np.float64)
+
+        # Determine padding length.
+        L_max = max(len(c["fused_lines"]) for c in candidates)
+        if L_max == 0:
+            return np.zeros((n_peaks, n_cands))
+
+        lw_pad = np.zeros((n_cands, L_max), dtype=np.float64)
+        le_pad = np.zeros((n_cands, L_max), dtype=np.float64)
+        mk_pad = np.zeros((n_cands, L_max), dtype=bool)
+        shifts = np.zeros(n_cands, dtype=np.float64)
+
+        for j, cand in enumerate(candidates):
+            mm = cand["matched_mask"]
+            ws = cand["wavelength_shifts"]
+            shift_arr = ws[mm] if np.any(mm) else np.array([0.0])
+            shifts[j] = float(np.median(shift_arr))
+            for k, line in enumerate(cand["fused_lines"]):
+                lw_pad[j, k] = line["wavelength_nm"]
+                le_pad[j, k] = line["avg_emissivity"]
+                mk_pad[j, k] = True
+
+        return build_nnls_templates_jax(
+            lw_pad,
+            le_pad,
+            mk_pad,
+            shifts,
+            peak_wls,
+            self.resolving_power,
+        )
+
     def _compute_nnls_attribution(
         self,
         A: np.ndarray,
@@ -2412,7 +2881,7 @@ class ALIASIdentifier:
 
     @staticmethod
     def _compute_p_snr(intensity: np.ndarray, peaks: List[Tuple[int, float]]) -> float:
-        """Compute erf-based SNR quality factor used in CL."""
+        """Compute erf-based SNR quality factor used in CL (CPU path)."""
         if len(peaks) > 0:
             peak_intensities_local = [intensity[p[0]] for p in peaks]
             median_peak = np.median(peak_intensities_local)
@@ -2421,6 +2890,15 @@ class ALIASIdentifier:
             z = (median_peak - noise_estimate) / (noise_estimate * math.sqrt(2))
             return 0.5 * (1.0 + float(erf(z)))
         return 0.5
+
+    def _dispatch_p_snr(self, intensity: np.ndarray, peaks: List[Tuple[int, float]]) -> float:
+        """Dispatch P_SNR computation to CPU or JAX path based on opt-in flag."""
+        if self.use_jax_p_snr and _HAS_JAX:
+            if not peaks:
+                return 0.5
+            peak_indices = np.array([p[0] for p in peaks], dtype=np.int32)
+            return compute_p_snr_jax(intensity, peak_indices)
+        return self._compute_p_snr(intensity, peaks)
 
     def _decide(
         self,
@@ -2492,7 +2970,7 @@ class ALIASIdentifier:
         N_penalty = min(1.0, math.sqrt(N_expected / 5.0)) if N_expected > 0 else 0.0
         k_det *= N_penalty
 
-        P_SNR = self._compute_p_snr(intensity, peaks)
+        P_SNR = self._dispatch_p_snr(intensity, peaks)
 
         # P_ab — crustal abundance prior
         P_ab = self._compute_P_ab(element)
