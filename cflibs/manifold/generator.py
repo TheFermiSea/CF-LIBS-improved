@@ -221,7 +221,8 @@ class ManifoldGenerator:
             self.config.wavelength_range[1],
         ] + self.config.elements
 
-        df = pd.read_sql_query(query, self.atomic_db.conn, params=params)
+        with self.atomic_db._get_connection() as conn:
+            df = pd.read_sql_query(query, conn, params=params)
 
         if df.empty:
             raise ValueError(
@@ -286,44 +287,46 @@ class ManifoldGenerator:
 
         # Load Physics Data (IPs and Coeffs)
         try:
-            cursor = self.atomic_db.conn.cursor()
+            with self.atomic_db._get_connection() as conn:
+                cursor = conn.cursor()
 
-            # Load IPs
-            ip_query = f"""
-                SELECT element, sp_num, ip_ev
-                FROM species_physics
-                WHERE element IN ({placeholders})
-            """
-            cursor.execute(ip_query, self.config.elements)
-            for row in cursor.fetchall():
-                el, sp_num, ip_ev = row
-                if el in el_map and ip_ev is not None:
-                    el_idx = el_map[el]
-                    stage_idx = sp_num - 1
-                    if 0 <= stage_idx < max_stages:
-                        ips[el_idx, stage_idx] = ip_ev
-
-            # Load Partition Coeffs
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='partition_functions'"
-            )
-            if cursor.fetchone():
-                pf_query = f"""
-                    SELECT element, sp_num, a0, a1, a2, a3, a4
-                    FROM partition_functions
+                # Load IPs
+                ip_query = f"""
+                    SELECT element, sp_num, ip_ev
+                    FROM species_physics
                     WHERE element IN ({placeholders})
                 """
-                cursor.execute(pf_query, self.config.elements)
-                count = 0
+                cursor.execute(ip_query, self.config.elements)
                 for row in cursor.fetchall():
-                    el, sp_num, a0, a1, a2, a3, a4 = row
-                    if el in el_map:
+                    el, sp_num, ip_ev = row
+                    if el in el_map and ip_ev is not None:
                         el_idx = el_map[el]
                         stage_idx = sp_num - 1
                         if 0 <= stage_idx < max_stages:
-                            coeffs[el_idx, stage_idx] = [a0, a1, a2, a3, a4]
-                            count += 1
-                logger.info(f"Loaded partition coefficients for {count} species")
+                            ips[el_idx, stage_idx] = ip_ev
+
+                # Load Partition Coeffs
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name='partition_functions'"
+                )
+                if cursor.fetchone():
+                    pf_query = f"""
+                        SELECT element, sp_num, a0, a1, a2, a3, a4
+                        FROM partition_functions
+                        WHERE element IN ({placeholders})
+                    """
+                    cursor.execute(pf_query, self.config.elements)
+                    count = 0
+                    for row in cursor.fetchall():
+                        el, sp_num, a0, a1, a2, a3, a4 = row
+                        if el in el_map:
+                            el_idx = el_map[el]
+                            stage_idx = sp_num - 1
+                            if 0 <= stage_idx < max_stages:
+                                coeffs[el_idx, stage_idx] = [a0, a1, a2, a3, a4]
+                                count += 1
+                    logger.info(f"Loaded partition coefficients for {count} species")
 
         except Exception as e:
             logger.warning(f"Failed to load physics data: {e}")
@@ -701,7 +704,7 @@ class ManifoldGenerator:
         )
 
     @staticmethod
-    @jit
+    @jit_if_available(static_argnames=("time_steps",))
     def _time_integrated_spectrum(
         wl_grid: jnp.ndarray,
         params: jnp.ndarray,

@@ -96,24 +96,32 @@ class ManifoldConfig:
 
         manifold_config = config["manifold"]
 
+        # YAML 1.1 (PyYAML default) parses unsigned-exponent scientific
+        # notation like ``1e16`` as a STRING, not a float — only ``1.0e+16``
+        # and ``1e+16`` parse as floats. Coerce numeric ranges so user configs
+        # work either way.
+        def _float_pair(raw, default):
+            seq = raw if raw is not None else default
+            return tuple(float(x) for x in seq)
+
         return cls(
             db_path=manifold_config.get("db_path", "libs_production.db"),
             output_path=manifold_config.get("output_path", "spectral_manifold.h5"),
             elements=manifold_config.get("elements", ["Ti", "Al", "V", "Fe"]),
-            wavelength_range=tuple(manifold_config.get("wavelength_range", [250.0, 550.0])),
-            temperature_range=tuple(manifold_config.get("temperature_range", [0.5, 2.0])),
+            wavelength_range=_float_pair(manifold_config.get("wavelength_range"), [250.0, 550.0]),
+            temperature_range=_float_pair(manifold_config.get("temperature_range"), [0.5, 2.0]),
             temperature_steps=manifold_config.get("temperature_steps", 50),
-            density_range=tuple(manifold_config.get("density_range", [1e16, 1e19])),
+            density_range=_float_pair(manifold_config.get("density_range"), [1e16, 1e19]),
             density_steps=manifold_config.get("density_steps", 20),
             concentration_steps=manifold_config.get("concentration_steps", 20),
             pixels=manifold_config.get("pixels", 4096),
-            gate_delay_s=manifold_config.get("gate_delay_s", 300e-9),
-            gate_width_s=manifold_config.get("gate_width_s", 5e-6),
+            gate_delay_s=float(manifold_config.get("gate_delay_s", 300e-9)),
+            gate_width_s=float(manifold_config.get("gate_width_s", 5e-6)),
             time_steps=manifold_config.get("time_steps", 20),
             batch_size=manifold_config.get("batch_size", 1000),
             use_voigt_profile=manifold_config.get("use_voigt_profile", True),
             use_stark_broadening=manifold_config.get("use_stark_broadening", True),
-            instrument_fwhm_nm=manifold_config.get("instrument_fwhm_nm", 0.05),
+            instrument_fwhm_nm=float(manifold_config.get("instrument_fwhm_nm", 0.05)),
             physics_version=manifold_config.get("physics_version", 2),
         )
 
