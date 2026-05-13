@@ -15,6 +15,7 @@ from cflibs.inversion.element_id import (
     IdentifiedLine,
     ElementIdentification,
     ElementIdentificationResult,
+    get_wavelength_tolerance,
 )
 from cflibs.inversion.preprocessing import detect_peaks_auto
 from cflibs.atomic.database import AtomicDatabase
@@ -860,11 +861,33 @@ class CorrelationIdentifier:
         peak_intensities = np.array([intensity[p[0]] for p in peaks])
 
         # Build candidate matches: (distance, peak_idx, trans_idx)
+        #
+        # Stark-aware per-line tolerance — only WIDENS the config default,
+        # never tightens. Picking `max(config, helper)` is deliberate:
+        # naive replacement with the helper value would tighten tolerance
+        # for short-lambda lines (e.g. 200 nm at R=10000 → 0.02 nm, vs
+        # the 0.1 default), tanking correlation's already-low recall
+        # (baseline 0.10). Stark-broadened lines (omega_stark > 0) get
+        # genuinely wider windows; non-Stark lines stay at the config
+        # default. PR #133 added the helper, PR #151 wired it into alias,
+        # PR #153 into comb. See CF-LIBS-improved-orej.
         candidates = []
         for t_idx, trans in enumerate(transitions):
             distances = np.abs(peak_wavelengths - trans.wavelength_nm)
+            if self.resolving_power:
+                tol = max(
+                    self.wavelength_tolerance_nm,
+                    get_wavelength_tolerance(
+                        trans.wavelength_nm,
+                        transition=trans,
+                        resolving_power=self.resolving_power,
+                        fallback=self.wavelength_tolerance_nm,
+                    ),
+                )
+            else:
+                tol = self.wavelength_tolerance_nm
             for p_idx in range(len(peak_wavelengths)):
-                if distances[p_idx] <= self.wavelength_tolerance_nm:
+                if distances[p_idx] <= tol:
                     candidates.append((distances[p_idx], p_idx, t_idx))
 
         # Greedy one-to-one: sort by distance, assign first-come
