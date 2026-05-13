@@ -2066,8 +2066,29 @@ class ALIASIdentifier:
         # Use auto-calibrated shift and effective R
         global_shift = self._global_wl_shift
         eff_R = self._effective_R or self.resolving_power
-        mean_wl = np.mean([line["wavelength_nm"] for line in fused_lines])
-        delta_lambda = mean_wl / eff_R
+
+        # Per-line Stark-aware tolerance (CF-LIBS-improved-u980, wiring PR #133's
+        # helper into the line-matching hot path). Each line gets its own
+        # tolerance scaled by its specific wavelength: tol_i = lambda_i / eff_R.
+        # The Stark-broadening term omega_stark stays 0 here because line dicts
+        # don't carry Transition objects at this layer — but the per-wavelength
+        # scaling alone is more physically correct than the previous
+        # mean_wl/eff_R global tolerance.
+        line_wavelengths = np.array([line["wavelength_nm"] for line in fused_lines])
+        tol_per_line = np.array(
+            [
+                get_wavelength_tolerance(
+                    wl,
+                    transition=None,
+                    resolving_power=eff_R,
+                    fallback=wl / max(eff_R, 1e-6),
+                )
+                for wl in line_wavelengths
+            ]
+        )
+        # Mean tolerance kept for the per-element-shift calibration loop below,
+        # which uses a single threshold across the top-10 lines.
+        delta_lambda = float(np.mean(tol_per_line)) if len(tol_per_line) > 0 else 0.0
 
         # Additionally refine per-element shift from top 10 lines
         sorted_by_emissivity = sorted(fused_lines, key=lambda x: x["avg_emissivity"], reverse=True)
@@ -2093,12 +2114,12 @@ class ALIASIdentifier:
         wavelength_shifts = np.zeros(n)
         matched_peak_idx = np.full(n, -1, dtype=int)
 
-        # Pass 1: tight tolerance
+        # Pass 1: tight tolerance, per-line
         for i, line in enumerate(fused_lines):
             wl_th = line["wavelength_nm"] + element_shift
 
             distances = np.abs(peak_wavelengths - wl_th)
-            within_window = distances <= delta_lambda
+            within_window = distances <= tol_per_line[i]
 
             if np.any(within_window):
                 matched_mask[i] = True
@@ -2106,11 +2127,10 @@ class ALIASIdentifier:
                 matched_peak_idx[i] = closest_idx
                 wavelength_shifts[i] = peak_wavelengths[closest_idx] - line["wavelength_nm"]
 
-        # Pass 2: for unmatched strong lines, try wider tolerance (2x)
+        # Pass 2: for unmatched strong lines, try wider tolerance (2x per-line)
         # "strong" = above median emissivity of all lines
         emissivities = np.array([line["avg_emissivity"] for line in fused_lines])
         emiss_median = np.median(emissivities) if len(emissivities) > 0 else 0.0
-        wide_tol = 2.0 * delta_lambda
 
         for i, line in enumerate(fused_lines):
             if matched_mask[i]:
@@ -2120,7 +2140,7 @@ class ALIASIdentifier:
 
             wl_th = line["wavelength_nm"] + element_shift
             distances = np.abs(peak_wavelengths - wl_th)
-            within_wide = distances <= wide_tol
+            within_wide = distances <= 2.0 * tol_per_line[i]
 
             if np.any(within_wide):
                 matched_mask[i] = True
