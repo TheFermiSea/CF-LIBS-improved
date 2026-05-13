@@ -573,6 +573,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"bandit_seed={bandit_seed}",
             flush=True,
         )
+    elif len(cells) > 1:
+        print(
+            f"[parameter_sweep] round-robin mode: n_arms={len(cells)} "
+            f"n_iters={n_iters} -> each cell gets ~{n_iters // len(cells)} iter(s)",
+            flush=True,
+        )
+    else:
+        print(
+            f"[parameter_sweep] single-cell mode: {n_iters} iters of cell 0",
+            flush=True,
+        )
 
     # Manifest is line-buffered + flushed after every write so a
     # mid-sweep crash still leaves a readable JSONL trail.
@@ -580,13 +591,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         for iter_idx in range(n_iters):
             seed = seed_base + iter_idx
 
-            # Pick which cell this iter pulls.  When the bandit is off,
-            # always pick cell 0 (so a single-cell sweep stays
-            # byte-identical with T1.1, and a multi-cell --cells run
-            # without --bandit walks cell 0 only — which is a degenerate
-            # but well-defined behavior callers can opt out of).
+            # Pick which cell this iter pulls.
+            # * Single-cell sweep (len(cells) == 1) always picks cell 0 —
+            #   byte-identical to T1.1's pre-cells behavior.
+            # * Multi-cell sweep with --bandit 0 round-robins through cells
+            #   (CF-LIBS-improved-yfbg). The previous "always cell 0"
+            #   behavior was catastrophic: a 25-iter / 5-cell --bandit 0
+            #   sweep silently ran 25 iters of cell 0 only.
+            # * Multi-cell sweep with --bandit N>0 uses warmup_schedule
+            #   for the first N*len(cells) iters then the Thompson
+            #   allocator.
             if not bandit_enabled:
-                arm_idx = 0
+                if len(cells) == 1:
+                    arm_idx = 0
+                else:
+                    arm_idx = iter_idx % len(cells)
             elif iter_idx < len(warmup_schedule):
                 arm_idx = warmup_schedule[iter_idx]
             else:
@@ -656,8 +675,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "jax_key_used": jax_key is not None,
             }
             # Bandit-specific manifest fields are added only when the
-            # bandit is enabled so --bandit 0 produces byte-identical
-            # manifest lines with T1.1.
+            # bandit is enabled so single-cell --bandit 0 produces
+            # byte-identical manifest lines with T1.1.
+            #
+            # For multi-cell --bandit 0 round-robin mode
+            # (CF-LIBS-improved-yfbg), we still need cell_name + cell_id
+            # so downstream tooling can tell which cell each iter ran.
             if bandit_enabled:
                 record["arm_id"] = arm_idx
                 record["cell_id"] = arm_idx
@@ -675,6 +698,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     record["prob_best"] = arm_summary["prob_best"]
                     record["n_pulls"] = arm_summary["n_pulls"]
                     record["arm_posteriors"] = summary
+            elif len(cells) > 1:
+                record["cell_id"] = arm_idx
+                record["cell_name"] = cell_name
+                record["cell_config_args"] = cell_info["config_args"]
+                record["phase"] = "round_robin"
             if iter_error is not None:
                 record["error"] = iter_error
             if outputs:
