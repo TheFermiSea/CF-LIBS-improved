@@ -6,7 +6,8 @@ Bridge function to_line_observations() converts results for downstream Boltzmann
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Any
+import math
+from typing import List, Dict, Tuple, Any, Optional
 from cflibs.atomic.structures import Transition
 from cflibs.inversion.boltzmann import LineObservation
 
@@ -129,6 +130,53 @@ class ElementIdentificationResult:
     algorithm: str
     parameters: Dict[str, Any] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
+
+
+def get_wavelength_tolerance(
+    wavelength_nm: float,
+    transition: Optional[Transition],
+    resolving_power: float,
+    fallback: float = 0.05,
+) -> float:
+    """
+    Calculate Stark-aware wavelength tolerance per protocol.yaml §identification.wavelength_tolerance.
+
+    Formula: sqrt(fwhm_inst**2 + omega_stark**2)
+    where fwhm_inst = wavelength_nm / resolving_power.
+
+    Parameters
+    ----------
+    wavelength_nm : float
+        Theoretical (database) wavelength in nm.
+    transition : Transition, optional
+        Transition object which may contain stark_width_nm (omega_stark).
+    resolving_power : float
+        Instrumental resolving power (R = lambda/delta_lambda).
+    fallback : float, optional
+        Fixed tolerance used when Stark width is unavailable (default: 0.05 nm).
+
+    Returns
+    -------
+    float
+        Calculated tolerance in nm.
+    """
+    # fwhm_inst = lambda / R
+    fwhm_inst = wavelength_nm / max(resolving_power, 1e-6)
+
+    # omega_stark (Stark broadening width) from transition metadata
+    omega_stark = 0.0
+    if transition is not None:
+        # Check for stark_width_nm attribute if available in the database
+        omega_stark = getattr(transition, "stark_width_nm", 0.0)
+        if omega_stark is None:
+            omega_stark = 0.0
+
+    # Apply formula if Stark width is available and positive
+    if omega_stark > 0:
+        return math.sqrt(fwhm_inst**2 + omega_stark**2)
+
+    # Fallback to fixed 0.05 nm per protocol
+    return fallback
 
 
 def is_element_detected(
