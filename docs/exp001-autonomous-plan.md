@@ -106,7 +106,7 @@ Methodology: 1 identifier × `--vrabel-max-shots 1 --dataset-shard 1/3` × `--se
 | correlation | 3m25 | 0.177 | 0.538 | 0.106 | 0.55 | Balanced. Fastest. |
 | alias | 8m25 | 0.141 | **1.000** | 0.076 | **0.000** | Precision king. Never wrong. |
 | comb | 5m59 | 0.028 | 0.200 | 0.015 | 0.36 | Near-mute. |
-| hybrid_union | (pending) | | | | | Expected: alias∪nnls personality. |
+| **hybrid_union** | **5m10** | **0.715** | 0.690 | 0.742 | 2.00 | F1 WINNER. Union of alias+nnls. |
 
 ### Decision
 
