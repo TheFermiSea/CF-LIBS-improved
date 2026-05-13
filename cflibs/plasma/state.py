@@ -8,15 +8,8 @@ import math
 from dataclasses import dataclass
 from typing import Mapping
 
-try:
-    import jax.numpy as jnp
-
-    HAS_JAX = True
-except ImportError:  # pragma: no cover - JAX is a runtime dep but stay defensive
-    HAS_JAX = False
-    jnp = None  # type: ignore[assignment]
-
 from cflibs.core.constants import KB_EV
+from cflibs.core.jax_runtime import HAS_JAX, jnp  # noqa: F401  -- re-exported for callers
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("plasma.state")
@@ -510,3 +503,10 @@ class SingleZoneLTEPlasmaJax(SingleZoneLTEPlasma):
             T_g=plasma.T_g,
             pressure=plasma.pressure,
         )
+
+
+# Wire JAX pytree registration so consumers can `jax.vmap(forward, in_axes=(0, ...))`
+# over a batched SingleZoneLTEPlasma without explicit setup. Idempotent.
+from cflibs.core.jax_runtime import _ensure_pytrees_registered as _register_pytrees  # noqa: E402
+
+_register_pytrees()

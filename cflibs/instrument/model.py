@@ -2,26 +2,15 @@
 Instrument model for spectrometer response.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Optional
 import numpy as np
 from pathlib import Path
 
-try:
-    import jax
-    import jax.numpy as jnp
-    from jax import jit
-
-    HAS_JAX = True
-except ImportError:  # pragma: no cover - JAX is a runtime dep but stay defensive
-    HAS_JAX = False
-    jax = None  # type: ignore[assignment]
-    jnp = None  # type: ignore[assignment]
-
-    def jit(f):  # type: ignore[misc]
-        return f
-
+from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp  # noqa: F401
 from cflibs.core.logging_config import get_logger
+
+jit = jit_if_available
 
 logger = get_logger("instrument.model")
 
@@ -260,9 +249,7 @@ class InstrumentModelJax(InstrumentModel):
 
     def __post_init__(self) -> None:
         if not HAS_JAX:  # pragma: no cover - defensive
-            raise ImportError(
-                "InstrumentModelJax requires JAX. Install with `pip install jax`."
-            )
+            raise ImportError("InstrumentModelJax requires JAX. Install with `pip install jax`.")
         # Pre-stage the response curve as jnp arrays so we don't pay the
         # H2D cost on every call.
         if self.response_curve is not None:
@@ -328,3 +315,10 @@ class InstrumentModelJax(InstrumentModel):
             wavelength_calibration=instrument.wavelength_calibration,
             resolving_power=instrument.resolving_power,
         )
+
+
+# Wire JAX pytree registration so consumers can vmap over batched
+# InstrumentModel instances. Idempotent.
+from cflibs.core.jax_runtime import _ensure_pytrees_registered as _register_pytrees  # noqa: E402
+
+_register_pytrees()

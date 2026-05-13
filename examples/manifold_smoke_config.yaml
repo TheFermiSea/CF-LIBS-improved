@@ -1,0 +1,29 @@
+# Minimal smoke-test config for the §6 gate (ADR-0001).
+# Generates a tiny manifold end-to-end (~30s on CPU) so the round-trip
+# gate can actually verify generation + load. Production sweeps use
+# manifold_config_example.yaml.
+
+manifold:
+  db_path: ASD_da/libs_production.db
+  output_path: /tmp/manifold_smoke.h5
+
+  elements:
+    - Fe
+    - Al
+
+  wavelength_range: [300.0, 400.0]
+  temperature_range: [1.0, 1.5]
+  temperature_steps: 3
+
+  density_range: [1.0e+16, 1.0e+17]
+  density_steps: 3
+
+  concentration_steps: 3
+
+  pixels: 256
+
+  gate_delay_s: 3.0e-7
+  gate_width_s: 5.0e-6
+  time_steps: 4
+
+  batch_size: 32

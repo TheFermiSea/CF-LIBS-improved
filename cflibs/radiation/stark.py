@@ -6,18 +6,9 @@ from typing import Optional
 import numpy as np
 from cflibs.core.logging_config import get_logger
 from cflibs.core.constants import EV_TO_K
+from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp
 
-try:
-    import jax.numpy as jnp
-    from jax import jit
-
-    HAS_JAX = True
-except ImportError:
-    HAS_JAX = False
-    jnp = None
-
-    def jit(f):
-        return f
+jit = jit_if_available
 
 
 logger = get_logger("radiation.stark")

@@ -41,15 +41,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from cflibs.core.constants import KB_EV
+from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp, vmap_if_available
 
-try:
-    import jax.numpy as jnp
-    from jax import jit, vmap
-
-    HAS_JAX = True
-except ImportError:
-    HAS_JAX = False
-    jnp = None
+jit = jit_if_available
+vmap = vmap_if_available
 
 
 # ---------------------------------------------------------------------------

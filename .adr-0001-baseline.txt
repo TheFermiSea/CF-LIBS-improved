@@ -1,0 +1,106 @@
+ADR-0001 baseline — captured 2026-05-12 by CF-LIBS-improved-47hr
+Anchor: origin/dev at 2f06dd95b0bced47b4243317afe6d20ca11ef223
+  Subject: feat(bench): scripts/parameter_sweep.py for in-process seed iteration (T1.1) (#129)
+  Commit timestamp: 2026-05-12 09:36:29 -0500 (merged PR #129 into dev)
+Capture host: ai-proxy
+JAX backend (forced): cpu (JAX_PLATFORMS=cpu)
+Python: 3.11.2
+Capture window (UTC): 2026-05-12T18:40Z .. 2026-05-12T19:37Z
+
+[1] Coverage (pytest --cov, marker "not slow and not requires_db")
+    TOTAL: 68%  (21981 statements, 7007 missed)
+    See .adr-0001-baseline-cov.txt for the full report.
+
+[2] pytest summary (full test session)
+    Passed:   1829
+    Failed:     21
+    Skipped:    90
+    Deselected: 248  (markers "slow" or "requires_db")
+    Errors:      0
+    Wall-clock: 856.84 s (14m 17s)
+    Notable failure clusters:
+      - tests/test_platform_config.py::TestConfigureJax (multiple)
+      - tests/test_usgs_integration.py::test_usgs_spectrum_loading
+      - tests/test_real_data_validation.py (steel_245nm, FeNi_380nm fixtures missing)
+
+[3] mypy
+    Errors: 0
+    (Report: "Success: no issues found in 178 source files"; one note about
+     untyped-function bodies in cflibs/benchmark/dataset.py:651.)
+
+[4] ruff
+    Warnings: 43 errors (22 auto-fixable, 5 hidden via --unsafe-fixes)
+    (Hits in cflibs/ and tests/; details in /tmp .baseline-tmp/ruff.txt
+     during capture, not preserved here as integration branch already
+     mirrors origin/feat/adr-0001-pattern-survey-impl.)
+
+[5] Synthetic benchmark (scripts/benchmark_synthetic_identifiers.py)
+    Status: PARTIAL — full corpus (288 spectra) runs >40 min wall-clock at
+            ~19 s/spectrum on this host (CPU JAX, no parallelism). Tried
+            32-spectra subset (timeout 10 min): EXIT=124 (timed out).
+            Successful 8-spectra subset captured instead. See
+            .adr-0001-baseline-bench.json for full payload.
+    Algorithms (8 spectra, candidate elements: Al Co Cr Cu Fe Mg Mn Ni Si Ti V):
+      ALIAS:       precision 0.000  recall 0.000  F1 0.000  accuracy 0.818
+                   peak_match_rate 0.426  mean_n_peaks 44.75
+      Comb:        precision 0.333  recall 0.375  F1 0.353  accuracy 0.750
+                   peak_match_rate 0.657  mean_n_peaks 7.875
+      Correlation: precision 0.333  recall 0.375  F1 0.353  accuracy 0.750
+                   peak_match_rate 0.534  mean_n_peaks 7.875
+    NOTE: The bead description requests Aitchison distance / ILR error / top-K
+    recall, but this benchmark script's `aggregate_metrics` output uses
+    element-presence precision/recall/F1/accuracy. Aitchison/ILR are
+    composition-fitting metrics from cflibs/benchmark/composition_metrics.py
+    which require a separate runner that does not exist on dev tip.
+    Recommend follow-up bead to wire `composition_metrics` into the synthetic
+    benchmark runner before T1 wave-0 closes.
+
+[6] Real-data validation (scripts/validate_real_data.py --no-plots)
+    steel_245nm: SKIPPED  ("File not found, skipping: data/steel_245nm.nc")
+    FeNi_380nm:  SKIPPED  ("File not found, skipping: data/FeNi_380nm.nc")
+    Overall: 0 expected, 0 detected, 0.00% across ALIAS/Comb/Correlation
+    Status: MISSING (real-data .nc fixtures not present in worktree;
+            present datasets are data/aalto_libs, data/bhvo2_usgs,
+            data/nist_srm_612, data/nist_steel — none match the
+            DATASETS list hardcoded in scripts/validate_real_data.py).
+
+[7] Manifold round-trip (cflibs generate-manifold examples/manifold_config_example.yaml)
+    Wall-clock: 0.95 s (failed before generation started)
+    Output file size: N/A (no spectral_manifold.h5 produced)
+    Status: FAIL — `ValueError: Unknown format code 'e' for object of type 'str'`
+            at cflibs/cli/main.py:639 in manifold_cmd:
+              print(f"  Density: {config.density_range[0]:.2e} - {config.density_range[1]:.2e} cm^-3")
+            config.density_range elements are strings (parsed from YAML
+            "1e16"/"1e19" without numeric coercion). This is a baseline
+            regression on origin/dev itself — the manifold CLI is broken
+            independent of any ADR-0001 work. Recommend fix bead before
+            wave-2 e5o8 (LDM broadening) lands.
+
+------------------------------------------------------------
+Reproduction recipe:
+  git worktree add /tmp/baseline-dev 2f06dd95b0bced47b4243317afe6d20ca11ef223
+  cd /tmp/baseline-dev
+  ln -s ../path/to/.venv .venv
+  source .venv/bin/activate
+  # Coverage
+  JAX_PLATFORMS=cpu pytest tests/ -m "not slow and not requires_db" \
+      --cov=cflibs --cov-report=term-missing -q
+  # Lint/type
+  mypy cflibs/
+  ruff check cflibs/ tests/
+  # Synthetic bench (subset due to runtime)
+  python scripts/build_synthetic_id_corpus.py \
+      --db-path ASD_da/libs_production.db --output-dir output/synthetic_corpus
+  python scripts/benchmark_synthetic_identifiers.py \
+      --dataset-path output/synthetic_corpus/ak3_1_3_corpus_v1/corpus.json \
+      --db-path ASD_da/libs_production.db --max-spectra 8 \
+      --output-dir output/synthetic_benchmark/baseline_small
+  # Real-data + manifold (will both fail/skip on dev tip)
+  python scripts/validate_real_data.py --datasets steel_245nm FeNi_380nm --no-plots
+  ln -sf ASD_da/libs_production.db libs_production.db
+  cflibs generate-manifold examples/manifold_config_example.yaml --progress
+
+Files in this commit:
+  .adr-0001-baseline.txt        — this summary
+  .adr-0001-baseline-cov.txt    — pytest --cov-report=term-missing verbatim
+  .adr-0001-baseline-bench.json — synthetic benchmark summary.json (8-spectra subset)
