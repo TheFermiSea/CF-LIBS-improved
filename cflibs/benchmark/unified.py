@@ -1321,6 +1321,14 @@ def _fit_iterative_jax_pipeline(
     end-to-end on CPU-only hosts.
     """
     use_jax = bool(HAS_JAX and HAS_JAX_ITERATIVE_SOLVER)
+    if use_jax:
+        import jax
+
+        # Ensure 64-bit precision for Boltzmann fits; matches PR #269
+        jax.config.update("jax_enable_x64", True)
+        if os.environ.get("JAX_PLATFORMS") == "cuda":
+            jax.config.update("jax_platform_name", "gpu")
+
     if not use_jax:
         logger.warning(
             "iterative_jax: falling back to numpy iterative pipeline "
@@ -1423,6 +1431,26 @@ def _fit_bayesian_pipeline(
     at predictor build time so the benchmark report shows an explicit
     failure for that workflow rather than silently regressing.
     """
+    if HAS_JAX:
+        import jax
+
+        # Ensure 64-bit precision for NumPyro stability; matches PR #269
+        jax.config.update("jax_enable_x64", True)
+        if os.environ.get("JAX_PLATFORMS") == "cuda":
+            jax.config.update("jax_platform_name", "gpu")
+
+    if HAS_NUMPYRO:
+        import numpyro
+
+        try:
+            # Explicitly pin to GPU if requested; avoids CPU-bound NUTS on heavy tier
+            if os.environ.get("JAX_PLATFORMS") == "cuda":
+                numpyro.set_platform("gpu")
+            # Ensure host device count matches chain count for parallel sampling
+            numpyro.set_host_device_count(max(1, int(config.get("num_chains", 1))))
+        except Exception as e:
+            logger.debug("bayesian: failed to set NumPyro platform: %s", e)
+
     if not HAS_JAX or not HAS_NUMPYRO:
         missing = []
         if not HAS_JAX:
@@ -1441,6 +1469,10 @@ def _fit_bayesian_pipeline(
     seed = int(config.get("seed", 0))
     target_accept_prob = float(config.get("target_accept_prob", 0.8))
     pixels = int(config.get("pixels", 1024))
+
+    # Cache samplers to avoid redundant JIT compilation.
+    # Keyed by (tuple(elements), pixels, wl_min, wl_max).
+    sampler_cache: Dict[Tuple[Any, ...], Any] = {}
 
     def predictor(
         spectrum: BenchmarkSpectrum,
@@ -1472,41 +1504,70 @@ def _fit_bayesian_pipeline(
         wl_min = float(wl.min())
         wl_max = float(wl.max())
 
-        # Use the spectrum's own wavelength grid so the forward model
-        # evaluates at the same pixels as the observed intensity.
-        forward_model = BayesianForwardModel(
-            db_path=str(_context.db_path),
-            elements=elements,
-            wavelength_range=(wl_min, wl_max),
-            wavelength_grid=wl if wl.size <= pixels else None,
-            pixels=pixels,
-            resolving_power=float(spectrum.rp_estimate)
-            if spectrum.rp_estimate is not None and spectrum.rp_estimate > 0
-            else None,
-        )
+        # Amortize JIT by using a fixed-size grid (pixels) and caching the sampler.
+        # JIT triggers whenever the model structure or input shapes change.
+        elements_key = tuple(sorted(elements))
+        # Round wl boundaries to avoid cache misses on tiny float drift
+        cache_key = (elements_key, pixels, round(wl_min, 3), round(wl_max, 3))
 
-        # If we had to resample, interp the observed intensity onto the
-        # forward-model grid so shapes line up.
-        if forward_model.wavelength.shape[0] != intensity.shape[0]:
-            grid = np.asarray(forward_model.wavelength)
-            obs = np.interp(grid, wl, intensity)
+        if cache_key in sampler_cache:
+            forward_model, sampler = sampler_cache[cache_key]
         else:
-            obs = intensity
+            # Use fixed pixel count to keep JIT signatures stable across spectra.
+            # We interpolate the observed intensity onto this grid below.
+            forward_model = BayesianForwardModel(
+                db_path=str(_context.db_path),
+                elements=elements,
+                wavelength_range=(wl_min, wl_max),
+                wavelength_grid=None,  # Force uniform grid of 'pixels' size
+                pixels=pixels,
+                resolving_power=float(spectrum.rp_estimate)
+                if spectrum.rp_estimate is not None and spectrum.rp_estimate > 0
+                else None,
+            )
+            sampler = MCMCSampler(
+                forward_model,
+                prior_config=PriorConfig(),
+                noise_params=NoiseParameters(),
+            )
+            sampler_cache[cache_key] = (forward_model, sampler)
 
-        sampler = MCMCSampler(
-            forward_model,
-            prior_config=PriorConfig(),
-            noise_params=NoiseParameters(),
-        )
-        result = sampler.run(
-            obs,
-            num_warmup=num_warmup,
-            num_samples=num_samples,
-            num_chains=num_chains,
-            seed=seed,
-            target_accept_prob=target_accept_prob,
-            progress_bar=False,
-        )
+        # Interp the observed intensity onto the fixed forward-model grid.
+        grid = np.asarray(forward_model.wavelength)
+        obs = np.interp(grid, wl, intensity)
+
+        # Ensure GPU context if available. JAX_PLATFORMS=cuda should handle this,
+        # but explicit pinning prevents sporadic CPU-only fallback observed on vasp-03.
+        try:
+            import jax
+
+            gpu_device = (
+                jax.devices("gpu")[0] if os.environ.get("JAX_PLATFORMS") == "cuda" else None
+            )
+        except (ImportError, RuntimeError, IndexError):
+            gpu_device = None
+
+        if gpu_device:
+            with jax.default_device(gpu_device):
+                result = sampler.run(
+                    obs,
+                    num_warmup=num_warmup,
+                    num_samples=num_samples,
+                    num_chains=num_chains,
+                    seed=seed,
+                    target_accept_prob=target_accept_prob,
+                    progress_bar=False,
+                )
+        else:
+            result = sampler.run(
+                obs,
+                num_warmup=num_warmup,
+                num_samples=num_samples,
+                num_chains=num_chains,
+                seed=seed,
+                target_accept_prob=target_accept_prob,
+                progress_bar=False,
+            )
 
         # Posterior mean concentrations -> point-estimate composition.
         # We compute this from the raw samples to ensure we have the mean
