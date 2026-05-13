@@ -632,11 +632,18 @@ def manifold_cmd(args):
     print("\nGenerating spectral manifold:")
     print(f"  Output: {config.output_path}")
     print(f"  Elements: {config.elements}")
-    print(f"  Wavelength: {config.wavelength_range[0]:.1f} - {config.wavelength_range[1]:.1f} nm")
     print(
-        f"  Temperature: {config.temperature_range[0]:.2f} - {config.temperature_range[1]:.2f} eV"
+        f"  Wavelength: {float(config.wavelength_range[0]):.1f} - "
+        f"{float(config.wavelength_range[1]):.1f} nm"
     )
-    print(f"  Density: {config.density_range[0]:.2e} - {config.density_range[1]:.2e} cm^-3")
+    print(
+        f"  Temperature: {float(config.temperature_range[0]):.2f} - "
+        f"{float(config.temperature_range[1]):.2f} eV"
+    )
+    print(
+        f"  Density: {float(config.density_range[0]):.2e} - "
+        f"{float(config.density_range[1]):.2e} cm^-3"
+    )
     print("\nThis may take a long time depending on grid size...\n")
 
     try:
