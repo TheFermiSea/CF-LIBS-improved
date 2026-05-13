@@ -240,6 +240,68 @@ def test_bandit_zero_produces_no_arm_fields_in_manifest(
 
 
 # ---------------------------------------------------------------------------
+# --bandit 0 + multi-cell round-robin regression (CF-LIBS-improved-yfbg)
+# ---------------------------------------------------------------------------
+
+
+def test_bandit_zero_with_multi_cell_round_robins(
+    parameter_sweep, mocked_sweep, tmp_path
+):
+    """--bandit 0 with --cells of len > 1 must round-robin (not stuck on cell 0).
+
+    Regression for CF-LIBS-improved-yfbg: prior behavior silently ran all
+    iters on cell 0 only, burning hours of compute when the user expected
+    equal allocation across cells.
+    """
+    cells_json = tmp_path / "cells.json"
+    cells_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "alpha",
+                    "config_args": "--id-workflows alias --composition-workflows iterative_jax",
+                },
+                {
+                    "name": "beta",
+                    "config_args": "--id-workflows alias --composition-workflows iterative",
+                },
+            ]
+        )
+    )
+    out = tmp_path / "sweep"
+    rc = parameter_sweep.main(
+        [
+            "--n-iters",
+            "6",
+            "--seed-base",
+            "1",
+            "--output-dir",
+            str(out),
+            "--cells",
+            str(cells_json),
+        ]
+    )
+    assert rc == 0
+    manifest_lines = (out / "manifest.jsonl").read_text().splitlines()
+    assert len(manifest_lines) == 6
+    cell_sequence = [json.loads(line).get("cell_name") for line in manifest_lines]
+    # Expect strict round-robin: alpha, beta, alpha, beta, alpha, beta.
+    assert cell_sequence == [
+        "alpha",
+        "beta",
+        "alpha",
+        "beta",
+        "alpha",
+        "beta",
+    ], f"Expected round-robin sequence, got: {cell_sequence}"
+    # Every cell should have been pulled exactly 6/2 = 3 times.
+    from collections import Counter
+
+    counts = Counter(cell_sequence)
+    assert all(v == 3 for v in counts.values()), counts
+
+
+# ---------------------------------------------------------------------------
 # --bandit > 0 wiring
 # ---------------------------------------------------------------------------
 
