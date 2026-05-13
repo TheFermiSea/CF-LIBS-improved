@@ -95,3 +95,19 @@ Single cell, 3 shards. Bootstrap CI on F1 + d_A.
 **3. Run-1 (vrabel-max-shots=50) was infeasible.** iter-000 ran 2+ hours per shard without completing. 30 iters × 5 cells × ~2 hr cold-JIT per cell ≫ 18 hr budget. Killed and relaunched with --vrabel-max-shots=5 (~167 spec/shard) and --n-iters=20.
 
 **4. Observability layer landed during the run.** PR #145 (`feat/observability-gpu-sampler`) gives cluster-wide telemetry. Surfaced finding #1 within 3 min of deployment — without this we'd have wasted 18 hours assuming GPU was being used.
+
+## Smoke leaderboard (after run 1-4 failed, run-5 design)
+
+Methodology: 1 identifier × `--vrabel-max-shots 1 --dataset-shard 1/3` × `--sections id` only = 11 scored spectra (post-LOOCV filter). All on cluster GPU/JAX. 15-min timeout.
+
+| Identifier | Wall | n=11, F1 | Precision | Recall | FP/spec | Notes |
+|---|---|---|---|---|---|---|
+| **spectral_nnls** | 5m22 | **0.442** | 0.371 | 0.545 | 5.55 | F1 winner. Chatty (high FP). |
+| correlation | 3m25 | 0.177 | 0.538 | 0.106 | 0.55 | Balanced. Fastest. |
+| alias | 8m25 | 0.141 | **1.000** | 0.076 | **0.000** | Precision king. Never wrong. |
+| comb | 5m59 | 0.028 | 0.200 | 0.015 | 0.36 | Near-mute. |
+| hybrid_union | (pending) | | | | | Expected: alias∪nnls personality. |
+
+### Decision
+
+Run-5 Exp 1: 5 cells (if hybrid_union completes), equal allocation, n=5 iters per cell × 3 shards in parallel. Expected wall ~3 hours per shard. Skip composition entirely (BoltzmannPlotFitter cost dominated previous runs). Composition shootout deferred to Exp 2 on winner only.
