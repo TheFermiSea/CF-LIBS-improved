@@ -14,15 +14,15 @@ def test_mn_fp_rejection():
     
     mn_trans = Transition(
         element="Mn", ionization_stage=1, wavelength_nm=403.0,
-        A_ki=1e8, g_k=6, E_k_ev=3.0, E_i_ev=0.0
+        A_ki=1e8, g_k=6, g_i=4, E_k_ev=3.0, E_i_ev=0.0
     )
     fe_trans1 = Transition(
         element="Fe", ionization_stage=1, wavelength_nm=404.0,
-        A_ki=1e8, g_k=6, E_k_ev=3.0, E_i_ev=0.0
+        A_ki=1e8, g_k=6, g_i=4, E_k_ev=3.0, E_i_ev=0.0
     )
     fe_trans2 = Transition(
         element="Fe", ionization_stage=1, wavelength_nm=405.0,
-        A_ki=1e8, g_k=6, E_k_ev=3.0, E_i_ev=0.0
+        A_ki=1e8, g_k=6, g_i=4, E_k_ev=3.0, E_i_ev=0.0
     )
     
     def get_transitions(element, **kwargs):
@@ -71,11 +71,11 @@ def test_na_k_fp_rejection():
     
     na_trans = Transition(
         element="Na", ionization_stage=1, wavelength_nm=589.0,
-        A_ki=1e8, g_k=6, E_k_ev=3.0, E_i_ev=0.0
+        A_ki=1e8, g_k=6, g_i=2, E_k_ev=3.0, E_i_ev=0.0
     )
     k_trans = Transition(
         element="K", ionization_stage=1, wavelength_nm=766.0,
-        A_ki=1e8, g_k=6, E_k_ev=3.0, E_i_ev=0.0
+        A_ki=1e8, g_k=6, g_i=2, E_k_ev=3.0, E_i_ev=0.0
     )
     
     def get_transitions(element, **kwargs):
