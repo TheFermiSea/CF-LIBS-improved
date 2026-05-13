@@ -1,0 +1,48 @@
+{
+  "_managed_by": "operator",
+  "_do_not_edit_via_swarm": "This file is the F1 regression-gate baseline. Operator-only updates. SELF_CRITICAL-protected at the .swarm/ prefix in beefcake-swarm's pre-commit gate.",
+  "schema_version": 1,
+  "captured_date": "2026-05-13",
+  "source_dataset": ".asta/exp001-raw-snapshot/all_records_fixed.csv",
+  "outer_split_id": "outer_1",
+  "n_spectra_per_identifier": 33,
+  "tolerance_macro_f1_absolute": 0.02,
+  "tolerance_precision_absolute": 0.05,
+  "identifiers": {
+    "hybrid_union": {
+      "macro_f1": 0.6880,
+      "macro_f1_stdev": 0.2252,
+      "macro_precision": 0.7501,
+      "macro_recall": 0.7009,
+      "fp_per_spectrum": 1.3030
+    },
+    "spectral_nnls": {
+      "macro_f1": 0.4437,
+      "macro_f1_stdev": 0.1668,
+      "macro_precision": 0.4197,
+      "macro_recall": 0.5667,
+      "fp_per_spectrum": 5.6667
+    },
+    "alias": {
+      "macro_f1": 0.1851,
+      "macro_f1_stdev": 0.2846,
+      "macro_precision": 0.5152,
+      "macro_recall": 0.1443,
+      "fp_per_spectrum": 0.0000
+    },
+    "correlation": {
+      "macro_f1": 0.1734,
+      "macro_f1_stdev": 0.1297,
+      "macro_precision": 0.7121,
+      "macro_recall": 0.1011,
+      "fp_per_spectrum": 0.3333
+    },
+    "comb": {
+      "macro_f1": 0.0303,
+      "macro_f1_stdev": 0.0973,
+      "macro_precision": 0.0182,
+      "macro_recall": 0.0909,
+      "fp_per_spectrum": 0.3636
+    }
+  }
+}
