@@ -41,7 +41,6 @@ from cflibs.inversion.element_id import (
     ElementIdentificationResult,
 )
 
-
 _DEFAULT_NAMES: Tuple[str, str, str] = ("alias", "comb", "correlation")
 
 
@@ -145,8 +144,7 @@ class HybridConsensusIdentifier:
         """
         if len(results) != len(self.identifiers):
             raise ValueError(
-                f"combine() expected {len(self.identifiers)} results, "
-                f"got {len(results)}"
+                f"combine() expected {len(self.identifiers)} results, " f"got {len(results)}"
             )
         return self._aggregate(results)
 
@@ -207,13 +205,9 @@ class HybridConsensusIdentifier:
 
             # Mean score across *voting* identifiers; 0 when none voted yes.
             voting_scores = [
-                per_score[i].get(element, 0.0)
-                for i, voted in enumerate(votes_by.values())
-                if voted
+                per_score[i].get(element, 0.0) for i, voted in enumerate(votes_by.values()) if voted
             ]
-            score = (
-                float(np.mean(voting_scores)) if voting_scores else 0.0
-            )
+            score = float(np.mean(voting_scores)) if voting_scores else 0.0
 
             # Matched lines = union across voting identifiers; falls back to
             # the first identifier's entry when nothing voted yes (so the
@@ -267,8 +261,7 @@ class HybridConsensusIdentifier:
                 "vote_count": vote_count,
                 "min_agreeing": self.min_agreeing,
                 "scores_by": {
-                    name: per_score[i].get(element, 0.0)
-                    for i, name in enumerate(self.names)
+                    name: per_score[i].get(element, 0.0) for i, name in enumerate(self.names)
                 },
             }
 
@@ -341,8 +334,7 @@ def consensus_detected_elements(
 
     if min_agreeing > n_results:
         raise ValueError(
-            f"min_agreeing={min_agreeing} cannot exceed the number of "
-            f"results ({n_results})"
+            f"min_agreeing={min_agreeing} cannot exceed the number of " f"results ({n_results})"
         )
 
     return {element for element, count in counts.items() if count >= min_agreeing}

@@ -49,6 +49,7 @@ References
 - Képeš, E., Vrábel, J., Střítežská, S. et al. (2020), Sci Data 7, 53.
 - EMSLIBS contest (Vrábel et al. 2020, Spectrochim. Acta B 169, 105872).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -64,12 +65,22 @@ logger = get_logger("pds.vrabel2020")
 
 # ─── Dataset constants (from the paper + readInH5.py canonical loader) ────
 ELEMENTS: tuple[str, ...] = (
-    "Al", "Ca", "Cr", "Cu", "Fe", "K", "Mg", "Na", "Pb", "Si", "Ti",
+    "Al",
+    "Ca",
+    "Cr",
+    "Cu",
+    "Fe",
+    "K",
+    "Mg",
+    "Na",
+    "Pb",
+    "Si",
+    "Ti",
 )
 N_CLASSES = 12
 N_TRAIN_SAMPLES = 100
-SHOTS_PER_TRAIN_SAMPLE = 500          # full training capacity per sample
-N_TRAIN_SPECTRA_FULL = N_TRAIN_SAMPLES * SHOTS_PER_TRAIN_SAMPLE   # 50,000
+SHOTS_PER_TRAIN_SAMPLE = 500  # full training capacity per sample
+N_TRAIN_SPECTRA_FULL = N_TRAIN_SAMPLES * SHOTS_PER_TRAIN_SAMPLE  # 50,000
 N_TEST_SPECTRA = 20_000
 N_CHANNELS = 40_002
 
@@ -91,6 +102,7 @@ class VrabelTrainSplit:
     class_ids : np.ndarray
         Shape ``(n_spectra,)`` int32. Values 1..12.
     """
+
     spectra: np.ndarray
     wavelengths: np.ndarray
     sample_ids: np.ndarray
@@ -100,6 +112,7 @@ class VrabelTrainSplit:
 @dataclass(frozen=True)
 class VrabelTestSplit:
     """Loaded test split (no class labels — see ``load_test_labels``)."""
+
     spectra: np.ndarray
     wavelengths: np.ndarray
 
@@ -112,6 +125,7 @@ class VrabelSampleComposition:
     means "below quantification limit" in the support table — which is
     NOT the same as "absent" but is the convention the paper uses.
     """
+
     sample_id: int
     class_id: int
     composition: dict[str, float]
@@ -125,8 +139,7 @@ def _open_h5(path: Path):
         import h5py
     except ImportError as e:
         raise ImportError(
-            "h5py is required to load Vrábel2020 HDF5 files. "
-            "Install with: uv pip install h5py"
+            "h5py is required to load Vrábel2020 HDF5 files. " "Install with: uv pip install h5py"
         ) from e
     return h5py.File(path, "r")
 
@@ -137,10 +150,7 @@ def load_wavelengths(h5_path: Path) -> np.ndarray:
         # Wavelengths/1 has shape (1, N_CHANNELS); squeeze to (N_CHANNELS,)
         wl = f["Wavelengths"]["1"][()].squeeze()
     if wl.shape != (N_CHANNELS,):
-        raise ValueError(
-            f"unexpected wavelength shape {wl.shape}, "
-            f"expected ({N_CHANNELS},)"
-        )
+        raise ValueError(f"unexpected wavelength shape {wl.shape}, " f"expected ({N_CHANNELS},)")
     return wl
 
 
@@ -166,8 +176,7 @@ def load_train(
     """
     if not 1 <= shots_per_sample <= SHOTS_PER_TRAIN_SAMPLE:
         raise ValueError(
-            f"shots_per_sample must be in [1, {SHOTS_PER_TRAIN_SAMPLE}], "
-            f"got {shots_per_sample}"
+            f"shots_per_sample must be in [1, {SHOTS_PER_TRAIN_SAMPLE}], " f"got {shots_per_sample}"
         )
 
     with _open_h5(h5_path) as f:
@@ -205,13 +214,12 @@ def load_train(
 
         cursor = 0
         for i, key in enumerate(sample_keys):
-            data = f["Spectra"][key][()]    # (N_CHANNELS, 500)
+            data = f["Spectra"][key][()]  # (N_CHANNELS, 500)
             if data.shape[0] != N_CHANNELS:
                 raise ValueError(
-                    f"Spectra/{key} has {data.shape[0]} channels, "
-                    f"expected {N_CHANNELS}"
+                    f"Spectra/{key} has {data.shape[0]} channels, " f"expected {N_CHANNELS}"
                 )
-            block = data[:, :shots_per_sample].T    # (shots_per_sample, N_CHANNELS)
+            block = data[:, :shots_per_sample].T  # (shots_per_sample, N_CHANNELS)
             spectra[cursor : cursor + shots_per_sample] = block
 
             sid = int(key)
@@ -251,11 +259,10 @@ def load_test(h5_path: Path) -> VrabelTestSplit:
         chunk_keys = sorted(f["UNKNOWN"].keys(), key=int)
         chunks = []
         for k in chunk_keys:
-            data = f["UNKNOWN"][k][()]      # (N_CHANNELS, 10000)
+            data = f["UNKNOWN"][k][()]  # (N_CHANNELS, 10000)
             if data.shape[0] != N_CHANNELS:
                 raise ValueError(
-                    f"UNKNOWN/{k} has {data.shape[0]} channels, "
-                    f"expected {N_CHANNELS}"
+                    f"UNKNOWN/{k} has {data.shape[0]} channels, " f"expected {N_CHANNELS}"
                 )
             chunks.append(data.T)
         spectra = np.concatenate(chunks, axis=0)
@@ -284,7 +291,7 @@ def load_test_iter(
         chunk_keys = sorted(f["UNKNOWN"].keys(), key=int)
         global_idx = 0
         for k in chunk_keys:
-            data = f["UNKNOWN"][k][()].T    # (n, N_CHANNELS)
+            data = f["UNKNOWN"][k][()].T  # (n, N_CHANNELS)
             for start in range(0, data.shape[0], chunk_size):
                 stop = min(start + chunk_size, data.shape[0])
                 yield global_idx + start, data[start:stop]
@@ -295,9 +302,7 @@ def load_test_labels(csv_path: Path) -> np.ndarray:
     """Load the 20,000-element class label vector for the test split."""
     labels = np.loadtxt(csv_path, dtype=np.int32)
     if labels.ndim != 1:
-        raise ValueError(
-            f"test_labels.csv must be a 1D vector, got shape {labels.shape}"
-        )
+        raise ValueError(f"test_labels.csv must be a 1D vector, got shape {labels.shape}")
     if labels.size != N_TEST_SPECTRA:
         logger.warning(
             "test_labels.csv has %d rows, expected %d",
@@ -307,8 +312,7 @@ def load_test_labels(csv_path: Path) -> np.ndarray:
     bad = (labels < 1) | (labels > N_CLASSES)
     if bad.any():
         raise ValueError(
-            f"test_labels.csv contains class IDs outside [1, {N_CLASSES}]: "
-            f"{labels[bad][:5]}..."
+            f"test_labels.csv contains class IDs outside [1, {N_CLASSES}]: " f"{labels[bad][:5]}..."
         )
     return labels
 
@@ -338,13 +342,10 @@ def load_compositions(
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     if "MIXED_composition" not in wb.sheetnames:
         raise ValueError(
-            f"{xlsx_path}: sheet 'MIXED_composition' not found "
-            f"(have {wb.sheetnames})"
+            f"{xlsx_path}: sheet 'MIXED_composition' not found " f"(have {wb.sheetnames})"
         )
     if "MIXED_uncertainty" not in wb.sheetnames:
-        raise ValueError(
-            f"{xlsx_path}: sheet 'MIXED_uncertainty' not found"
-        )
+        raise ValueError(f"{xlsx_path}: sheet 'MIXED_uncertainty' not found")
 
     comp_rows = list(wb["MIXED_composition"].iter_rows(values_only=True))
     unc_rows = list(wb["MIXED_uncertainty"].iter_rows(values_only=True))
@@ -354,8 +355,7 @@ def load_compositions(
     unc_header = list(unc_rows[0])
     if comp_header != unc_header:
         raise ValueError(
-            "MIXED_composition and MIXED_uncertainty headers differ — "
-            "schema assumption broken"
+            "MIXED_composition and MIXED_uncertainty headers differ — " "schema assumption broken"
         )
 
     # Map element names to column indices, tolerating header drift.
@@ -375,16 +375,10 @@ def load_compositions(
             sample_id = int(c_row[0])
             class_id = int(c_row[1])
         except (TypeError, ValueError):
-            logger.warning(
-                "skipping malformed support_tables row: %s", c_row[:3]
-            )
+            logger.warning("skipping malformed support_tables row: %s", c_row[:3])
             continue
-        composition = {
-            elt: float(c_row[i] or 0.0) for elt, i in elt_idx.items()
-        }
-        uncertainty = {
-            elt: float(u_row[i] or 0.0) for elt, i in elt_idx.items()
-        }
+        composition = {elt: float(c_row[i] or 0.0) for elt, i in elt_idx.items()}
+        uncertainty = {elt: float(u_row[i] or 0.0) for elt, i in elt_idx.items()}
         samples[sample_id] = VrabelSampleComposition(
             sample_id=sample_id,
             class_id=class_id,

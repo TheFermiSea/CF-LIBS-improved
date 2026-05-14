@@ -90,6 +90,7 @@ def _jax_boltzmann_composition_enabled() -> bool:
     """
     return os.environ.get("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", "0") == "1"
 
+
 logger = get_logger("inversion.streaming")
 
 

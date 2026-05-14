@@ -354,11 +354,7 @@ def _extract_inputs(record: Any) -> Dict[str, Any]:
     if not isinstance(composition, Mapping):
         composition = None
 
-    spectrum_id = str(
-        _record_field(record, "spectrum_id")
-        or _record_field(record, "label")
-        or ""
-    )
+    spectrum_id = str(_record_field(record, "spectrum_id") or _record_field(record, "label") or "")
     return {
         "t_neutral": t_neutral,
         "t_ion": t_ion,
@@ -459,7 +455,11 @@ def aggregate_physical_consistency(
         #    ``record.annotations['raw_concentrations']`` (or expose
         #    a ``predicted_composition`` that has not been re-closed).
         if isinstance(rec, Mapping):
-            raw_comp = rec.get("annotations", {}).get("raw_concentrations") if rec.get("annotations") else None
+            raw_comp = (
+                rec.get("annotations", {}).get("raw_concentrations")
+                if rec.get("annotations")
+                else None
+            )
         else:
             ann = getattr(rec, "annotations", None) or {}
             raw_comp = ann.get("raw_concentrations") if isinstance(ann, Mapping) else None
@@ -490,12 +490,12 @@ def report_to_summary_lines(report: PhysicalConsistencyReport) -> List[str]:
     status = "BLOCK" if report.blocked else ("ALARM" if report.alarm else "PASS")
     lines.append(f"Physical-consistency gate: {status}")
     lines.append(f"  n_spectra={report.n_spectra}")
-    lines.append(f"  n_tripped={report.n_tripped} of 4 checks (tripped: "
-                 f"{report.tripped_checks or 'none'})")
+    lines.append(
+        f"  n_tripped={report.n_tripped} of 4 checks (tripped: "
+        f"{report.tripped_checks or 'none'})"
+    )
     if report.catastrophic_t_count:
-        lines.append(
-            f"  CATASTROPHIC T on {report.catastrophic_t_count} spectrum/spectra"
-        )
+        lines.append(f"  CATASTROPHIC T on {report.catastrophic_t_count} spectrum/spectra")
     for c in report.all_checks:
         lines.append(
             f"  - {c.name}: pass={c.n_passed}/{c.n_evaluated} "

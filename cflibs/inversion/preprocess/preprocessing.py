@@ -609,9 +609,7 @@ def detect_peaks_auto(
     elif baseline_method == BaselineMethod.ALS:
         baseline = estimate_baseline_als(wavelength, intensity)
     elif baseline_method == BaselineMethod.PERCENTILE:
-        baseline = estimate_baseline_percentile(
-            wavelength, intensity, window_nm=baseline_window_nm
-        )
+        baseline = estimate_baseline_percentile(wavelength, intensity, window_nm=baseline_window_nm)
     elif baseline_method == BaselineMethod.MEDIAN:
         baseline = estimate_baseline(wavelength, intensity, window_nm=baseline_window_nm)
     else:

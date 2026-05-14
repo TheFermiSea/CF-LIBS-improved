@@ -45,16 +45,16 @@ if _HAS_JAX:
 
     @jax.jit
     def _jax_model_grid_correlations(
-        wavelength: "jnp.ndarray",        # (W,)
-        intensity: "jnp.ndarray",         # (W,)
-        line_wl: "jnp.ndarray",           # (L,)
-        line_A_g: "jnp.ndarray",          # (L,)  A_ki * g_k
-        line_E: "jnp.ndarray",            # (L,)  E_k in eV
-        line_U: "jnp.ndarray",            # (G, L) partition function per (T, line)
-        line_W_q: "jnp.ndarray",          # (G, L) Saha weight per (T, n_e, line)
-        line_sigma: "jnp.ndarray",        # (L,) Gaussian sigma in nm
-        T_eV_grid: "jnp.ndarray",         # (G,) T in eV, flat grid
-        exp_scale: "jnp.ndarray",         # () percentile-95 of intensity
+        wavelength: "jnp.ndarray",  # (W,)
+        intensity: "jnp.ndarray",  # (W,)
+        line_wl: "jnp.ndarray",  # (L,)
+        line_A_g: "jnp.ndarray",  # (L,)  A_ki * g_k
+        line_E: "jnp.ndarray",  # (L,)  E_k in eV
+        line_U: "jnp.ndarray",  # (G, L) partition function per (T, line)
+        line_W_q: "jnp.ndarray",  # (G, L) Saha weight per (T, n_e, line)
+        line_sigma: "jnp.ndarray",  # (L,) Gaussian sigma in nm
+        T_eV_grid: "jnp.ndarray",  # (G,) T in eV, flat grid
+        exp_scale: "jnp.ndarray",  # () percentile-95 of intensity
         peak_region_threshold: float,
         peak_region_min_points: int,
     ) -> "jnp.ndarray":
@@ -97,10 +97,10 @@ if _HAS_JAX:
         # Peak-region mask: per-row normalize, threshold AND/OR fallback.
         i_min = intensity.min()
         i_max = intensity.max()
-        m_min = model.min(axis=-1, keepdims=True)        # (G, 1)
-        m_max = model.max(axis=-1, keepdims=True)        # (G, 1)
+        m_min = model.min(axis=-1, keepdims=True)  # (G, 1)
+        m_max = model.max(axis=-1, keepdims=True)  # (G, 1)
         i_range = i_max - i_min
-        m_range = m_max - m_min                          # (G, 1)
+        m_range = m_max - m_min  # (G, 1)
         sigma_th = peak_region_threshold
 
         # exp_norm shape (W,), mod_norm shape (G, W).
@@ -115,9 +115,7 @@ if _HAS_JAX:
 
         # If model row has no dynamic range, fall back to all-ones mask
         # (CPU path's else branch).
-        no_dyn = jnp.broadcast_to(
-            (i_range <= 1e-10) | (m_range[:, 0] <= 1e-10), (G,)
-        )
+        no_dyn = jnp.broadcast_to((i_range <= 1e-10) | (m_range[:, 0] <= 1e-10), (G,))
 
         # Per-row: pick AND mask unless it has fewer than min_points
         # support, in which case pick OR (matches CPU).
@@ -258,8 +256,7 @@ class CorrelationIdentifier:
         self.use_jax_classic = bool(use_jax_classic)
         if self.use_jax_classic and not _HAS_JAX:  # pragma: no cover
             raise ImportError(
-                "use_jax_classic=True requires JAX. "
-                "Install with: pip install jax jaxlib"
+                "use_jax_classic=True requires JAX. " "Install with: pip install jax jaxlib"
             )
         self.atomic_db = atomic_db
         self.resolving_power = resolving_power
@@ -447,9 +444,7 @@ class CorrelationIdentifier:
                 best_corr = float(np.max(correlations)) if len(correlations) else 0.0
                 score = float(np.clip(best_corr, 0.0, 1.0))
                 confidence = score
-                element_scores.append(
-                    (element, score, confidence, matched_lines, unmatched_lines)
-                )
+                element_scores.append((element, score, confidence, matched_lines, unmatched_lines))
                 continue
 
             correlations = []
@@ -740,9 +735,7 @@ class CorrelationIdentifier:
         line_wl = np.fromiter((t.wavelength_nm for t in transitions), dtype=np.float64, count=L)
         line_A_g = np.fromiter((t.A_ki * t.g_k for t in transitions), dtype=np.float64, count=L)
         line_E = np.fromiter((t.E_k_ev for t in transitions), dtype=np.float64, count=L)
-        line_stage = np.fromiter(
-            (t.ionization_stage for t in transitions), dtype=np.int64, count=L
-        )
+        line_stage = np.fromiter((t.ionization_stage for t in transitions), dtype=np.int64, count=L)
 
         # Per-line sigma (matches the CPU per-transition logic).
         if self.resolving_power:
@@ -782,17 +775,15 @@ class CorrelationIdentifier:
             except Exception:
                 stage_densities = None
             U_by_stage = {
-                int(stage): self.saha_solver.calculate_partition_function(
-                    element, int(stage), T_eV
-                )
+                int(stage): self.saha_solver.calculate_partition_function(element, int(stage), T_eV)
                 for stage in stages
             }
             for l_idx in range(L):
                 stage = int(line_stage[l_idx])
                 line_U[g_idx, l_idx] = max(float(U_by_stage[stage]), 1e-30)
                 if stage_densities is not None:
-                    line_W_q[g_idx, l_idx] = (
-                        stage_densities.get(stage, 1.0) / max(total_density, 1e-30)
+                    line_W_q[g_idx, l_idx] = stage_densities.get(stage, 1.0) / max(
+                        total_density, 1e-30
                     )
                 else:
                     line_W_q[g_idx, l_idx] = 1.0

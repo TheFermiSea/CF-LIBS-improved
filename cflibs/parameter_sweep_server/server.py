@@ -91,16 +91,18 @@ class ServerConfig:
         return cls(
             host=host or os.environ.get("SWEEP_HOST", "127.0.0.1"),
             port=int(port if port is not None else os.environ.get("SWEEP_PORT", "8501")),
-            db_path=db_path
-            or _opt_path("SWEEP_DB_PATH")
-            or Path("ASD_da/libs_production.db"),
+            db_path=db_path or _opt_path("SWEEP_DB_PATH") or Path("ASD_da/libs_production.db"),
             data_dir=data_dir or _opt_path("SWEEP_DATA_DIR") or Path("data"),
-            basis_dir=basis_dir
-            if basis_dir is not None
-            else (_opt_path("SWEEP_BASIS_DIR") or Path("output/basis_libraries")),
-            synthetic_corpus=synthetic_corpus
-            if synthetic_corpus is not None
-            else _opt_path("SWEEP_SYNTHETIC_CORPUS"),
+            basis_dir=(
+                basis_dir
+                if basis_dir is not None
+                else (_opt_path("SWEEP_BASIS_DIR") or Path("output/basis_libraries"))
+            ),
+            synthetic_corpus=(
+                synthetic_corpus
+                if synthetic_corpus is not None
+                else _opt_path("SWEEP_SYNTHETIC_CORPUS")
+            ),
             quick=quick if quick is not None else bool(int(os.environ.get("SWEEP_QUICK", "0"))),
             queue_max=int(os.environ.get("SWEEP_QUEUE_MAX", "4")),
             drain_sec=float(os.environ.get("SWEEP_DRAIN_SEC", "60")),
@@ -156,18 +158,12 @@ class SweepServerState:
             self.cfg.jax_cache_dir.mkdir(parents=True, exist_ok=True)
             # JAX auto-persists when this env var is set — no manual
             # flush required on shutdown (Opus refinement #8).
-            os.environ.setdefault(
-                "JAX_COMPILATION_CACHE_DIR", str(self.cfg.jax_cache_dir)
-            )
+            os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", str(self.cfg.jax_cache_dir))
 
         if not self.cfg.db_path.exists():
-            raise FileNotFoundError(
-                f"Atomic database not found: {self.cfg.db_path}"
-            )
+            raise FileNotFoundError(f"Atomic database not found: {self.cfg.db_path}")
         if not self.cfg.data_dir.exists():
-            raise FileNotFoundError(
-                f"Data directory not found: {self.cfg.data_dir}"
-            )
+            raise FileNotFoundError(f"Data directory not found: {self.cfg.data_dir}")
 
         from cflibs.benchmark import UnifiedBenchmarkRunner, load_default_datasets
 
@@ -194,7 +190,9 @@ class SweepServerState:
         t1 = time.monotonic()
         self.runner = UnifiedBenchmarkRunner(
             db_path=self.cfg.db_path,
-            basis_dir=self.cfg.basis_dir if self.cfg.basis_dir and self.cfg.basis_dir.exists() else None,
+            basis_dir=(
+                self.cfg.basis_dir if self.cfg.basis_dir and self.cfg.basis_dir.exists() else None
+            ),
             quick=self.cfg.quick,
         )
         log.info(
@@ -577,9 +575,7 @@ class SweepServer:
         request_id = ""
         try:
             try:
-                payload = await proto.read_framed_json(
-                    reader, max_bytes=self.cfg.max_request_bytes
-                )
+                payload = await proto.read_framed_json(reader, max_bytes=self.cfg.max_request_bytes)
             except proto.FrameError as exc:
                 log.warning("framing error from %s: %s", peer, exc)
                 return  # close without response — framing is unrecoverable
@@ -594,9 +590,7 @@ class SweepServer:
                     status=proto.STATUS_SHUTTING_DOWN,
                     server=self.state.server_info,
                 )
-                await proto.write_framed_json(
-                    writer, env, max_bytes=self.cfg.max_response_bytes
-                )
+                await proto.write_framed_json(writer, env, max_bytes=self.cfg.max_response_bytes)
                 return
 
             job = _Job(
@@ -618,9 +612,7 @@ class SweepServer:
                     retryable=True,
                     server=self.state.server_info,
                 )
-                await proto.write_framed_json(
-                    writer, env, max_bytes=self.cfg.max_response_bytes
-                )
+                await proto.write_framed_json(writer, env, max_bytes=self.cfg.max_response_bytes)
                 return
 
             # Watch for client disconnect while the worker runs.
@@ -637,9 +629,7 @@ class SweepServer:
                     pass
 
             try:
-                await proto.write_framed_bytes(
-                    writer, body, max_bytes=self.cfg.max_response_bytes
-                )
+                await proto.write_framed_bytes(writer, body, max_bytes=self.cfg.max_response_bytes)
             except proto.FrameError as exc:
                 # Response too large — fall back to a structured error.
                 env = proto.make_error_envelope(
@@ -673,9 +663,7 @@ class SweepServer:
                 pass
 
 
-async def _wait_for_disconnect(
-    reader: asyncio.StreamReader, cancel: asyncio.Event
-) -> None:
+async def _wait_for_disconnect(reader: asyncio.StreamReader, cancel: asyncio.Event) -> None:
     """Reads from ``reader`` until EOF, then flips ``cancel``.
 
     The server protocol is request/response — the client never sends
@@ -730,9 +718,7 @@ async def serve(
 
         for signame in ("SIGTERM", "SIGINT"):
             try:
-                loop.add_signal_handler(
-                    getattr(signal, signame), _on_signal, signame
-                )
+                loop.add_signal_handler(getattr(signal, signame), _on_signal, signame)
             except (NotImplementedError, RuntimeError):
                 # Windows / non-main thread — fall back silently.
                 pass

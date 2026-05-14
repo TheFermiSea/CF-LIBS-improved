@@ -118,12 +118,24 @@ def aggregate_confusion(csv_paths: Iterable[Path]) -> dict[str, pd.DataFrame]:
     df = _load_csvs(paths)
 
     per_element_cols = [
-        "workflow", "dataset", "element", "support",
-        "tp", "fp", "fn", "precision", "recall", "f1", "n_spectra",
+        "workflow",
+        "dataset",
+        "element",
+        "support",
+        "tp",
+        "fp",
+        "fn",
+        "precision",
+        "recall",
+        "f1",
+        "n_spectra",
     ]
     overpred_cols = [
-        "workflow", "dataset", "n_spectra",
-        "overpred_rate", "top_overpredicted_elements",
+        "workflow",
+        "dataset",
+        "n_spectra",
+        "overpred_rate",
+        "top_overpredicted_elements",
     ]
 
     if df.empty:
@@ -138,7 +150,9 @@ def aggregate_confusion(csv_paths: Iterable[Path]) -> dict[str, pd.DataFrame]:
             df[col] = ""
         df[col] = df[col].astype("string").fillna("")
 
-    df["_predicted"] = df.get("predicted_elements", pd.Series([None] * len(df))).map(_parse_list_cell)
+    df["_predicted"] = df.get("predicted_elements", pd.Series([None] * len(df))).map(
+        _parse_list_cell
+    )
     df["_true"] = df.get("true_elements", pd.Series([None] * len(df))).map(_parse_list_cell)
 
     # Per (workflow, dataset) spectrum count + tracking of overprediction.
@@ -174,12 +188,21 @@ def aggregate_confusion(csv_paths: Iterable[Path]) -> dict[str, pd.DataFrame]:
             fn_c = fn.get(el, 0)
             precision = _safe_div(tp_c, tp_c + fp_c)
             recall = _safe_div(tp_c, tp_c + fn_c)
-            records.append({
-                "workflow": wf, "dataset": ds, "element": el,
-                "support": tp_c + fn_c, "tp": tp_c, "fp": fp_c, "fn": fn_c,
-                "precision": precision, "recall": recall, "f1": _f1(precision, recall),
-                "n_spectra": n_spectra,
-            })
+            records.append(
+                {
+                    "workflow": wf,
+                    "dataset": ds,
+                    "element": el,
+                    "support": tp_c + fn_c,
+                    "tp": tp_c,
+                    "fp": fp_c,
+                    "fn": fn_c,
+                    "precision": precision,
+                    "recall": recall,
+                    "f1": _f1(precision, recall),
+                    "n_spectra": n_spectra,
+                }
+            )
 
         # Overprediction rollup for this (workflow, dataset).
         overpred_rate = _safe_div(n_overpred_spectra, n_spectra)
@@ -187,13 +210,18 @@ def aggregate_confusion(csv_paths: Iterable[Path]) -> dict[str, pd.DataFrame]:
         cell_fps = [(el, c) for el, c in fp.items() if c > 0]
         cell_fps.sort(key=lambda x: x[1], reverse=True)
         top3 = cell_fps[:3]
-        top_str = ", ".join(
-            f"{el} ({(c / n_spectra) * 100:.1f}%)" for el, c in top3
-        ) if top3 else ""
-        overpred_rows.append({
-            "workflow": wf, "dataset": ds, "n_spectra": n_spectra,
-            "overpred_rate": overpred_rate, "top_overpredicted_elements": top_str,
-        })
+        top_str = (
+            ", ".join(f"{el} ({(c / n_spectra) * 100:.1f}%)" for el, c in top3) if top3 else ""
+        )
+        overpred_rows.append(
+            {
+                "workflow": wf,
+                "dataset": ds,
+                "n_spectra": n_spectra,
+                "overpred_rate": overpred_rate,
+                "top_overpredicted_elements": top_str,
+            }
+        )
 
     per_element = pd.DataFrame(records, columns=per_element_cols)
     if not per_element.empty:
@@ -213,9 +241,7 @@ def aggregate_confusion(csv_paths: Iterable[Path]) -> dict[str, pd.DataFrame]:
     else:
         total_fp_by_el = per_element.groupby("element")["fp"].sum().sort_values(ascending=False)
         top_elements = list(total_fp_by_el.head(10).index)
-        pivot = (
-            per_element.groupby(["element", "workflow"])["fp"].sum().unstack(fill_value=0)
-        )
+        pivot = per_element.groupby(["element", "workflow"])["fp"].sum().unstack(fill_value=0)
         cross = pivot.loc[top_elements].copy().reset_index()
         # Suffix workflow columns with _fp for clarity, preserve column ordering.
         rename_map = {c: f"{c}_fp" for c in cross.columns if c != "element"}

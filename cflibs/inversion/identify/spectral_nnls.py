@@ -163,9 +163,7 @@ def nnls_jax(
         If JAX is not installed.
     """
     if not _HAS_JAX:  # pragma: no cover
-        raise ImportError(
-            "JAX is required for nnls_jax. Install with: pip install jax jaxlib"
-        )
+        raise ImportError("JAX is required for nnls_jax. Install with: pip install jax jaxlib")
 
     A_arr = np.asarray(A, dtype=np.float64)
     b_arr = np.asarray(b, dtype=np.float64)
@@ -174,9 +172,7 @@ def nnls_jax(
     if b_arr.ndim != 1:
         raise ValueError(f"b must be 1-D, got shape {b_arr.shape}")
     if A_arr.shape[0] != b_arr.shape[0]:
-        raise ValueError(
-            f"A.shape[0]={A_arr.shape[0]} does not match b.shape[0]={b_arr.shape[0]}"
-        )
+        raise ValueError(f"A.shape[0]={A_arr.shape[0]} does not match b.shape[0]={b_arr.shape[0]}")
 
     # Form Gram system in float64.
     G_np = A_arr.T @ A_arr
@@ -247,13 +243,10 @@ def nnls_jax_batch(
     if A_arr.ndim != 2:
         raise ValueError(f"A must be 2-D, got shape {A_arr.shape}")
     if b_arr.ndim != 1 or b_arr.shape[0] != A_arr.shape[1]:
-        raise ValueError(
-            f"b shape {b_arr.shape} incompatible with A shape {A_arr.shape}"
-        )
+        raise ValueError(f"b shape {b_arr.shape} incompatible with A shape {A_arr.shape}")
     if masks_arr.ndim != 2 or masks_arr.shape[1] != A_arr.shape[0]:
         raise ValueError(
-            f"row_masks shape {masks_arr.shape} incompatible with "
-            f"A.shape[0]={A_arr.shape[0]}"
+            f"row_masks shape {masks_arr.shape} incompatible with " f"A.shape[0]={A_arr.shape[0]}"
         )
 
     # Build per-batch Gram systems via einsum. A is (n_comp, n_pix);
@@ -345,8 +338,7 @@ class SpectralNNLSIdentifier:
         self.jax_nnls_max_iter = int(jax_nnls_max_iter)
         if self.use_jax_nnls and not _HAS_JAX:  # pragma: no cover
             raise ImportError(
-                "use_jax_nnls=True requires JAX. "
-                "Install with: pip install jax jaxlib"
+                "use_jax_nnls=True requires JAX. " "Install with: pip install jax jaxlib"
             )
 
         # Warn if basis library includes ionization stages > II

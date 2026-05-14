@@ -79,9 +79,7 @@ class SweepClient:
         body = json.dumps(config, separators=(",", ":")).encode("utf-8")
         frame = _LENGTH_STRUCT.pack(len(body)) + body
 
-        sock = socket.create_connection(
-            (self.host, self.port), timeout=self.connect_timeout
-        )
+        sock = socket.create_connection((self.host, self.port), timeout=self.connect_timeout)
         try:
             sock.settimeout(self.read_timeout)
             sock.sendall(frame)
@@ -102,9 +100,7 @@ def _recv_exact(sock: socket.socket, n: int) -> bytes:
     while len(buf) < n:
         chunk = sock.recv(n - len(buf))
         if not chunk:
-            raise SweepClientError(
-                f"server closed after {len(buf)} of {n} bytes"
-            )
+            raise SweepClientError(f"server closed after {len(buf)} of {n} bytes")
         buf.extend(chunk)
     return bytes(buf)
 

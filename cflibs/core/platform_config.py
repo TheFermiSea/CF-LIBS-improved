@@ -91,12 +91,8 @@ def configure_jax(
     # default on Linux to avoid creating /cluster/... noise on Darwin
     # dev shells where the path doesn't exist.
     if system == "Linux":
-        os.environ.setdefault(
-            "JAX_COMPILATION_CACHE_DIR", "/cluster/shared/jax-cache"
-        )
-        os.environ.setdefault(
-            "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0.5"
-        )
+        os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", "/cluster/shared/jax-cache")
+        os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0.5")
 
     try:
         import jax

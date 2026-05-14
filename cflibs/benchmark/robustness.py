@@ -167,10 +167,7 @@ def _leverage_scores(
         If ``metric`` is not recognised.
     """
     if metric != "intensity":
-        raise ValueError(
-            f"Unknown leverage_metric={metric!r}. "
-            "Supported: 'intensity'."
-        )
+        raise ValueError(f"Unknown leverage_metric={metric!r}. " "Supported: 'intensity'.")
     peaks = _detect_peak_indices(intensity)
     if peaks.size == 0:
         return peaks, np.empty(0, dtype=intensity.dtype)
@@ -224,20 +221,12 @@ def _peak_window(
 
     # Walk left while above threshold.
     lo = peak_index
-    while (
-        lo > 0
-        and (peak_index - lo) < max_half_width
-        and intensity[lo - 1] >= threshold
-    ):
+    while lo > 0 and (peak_index - lo) < max_half_width and intensity[lo - 1] >= threshold:
         lo -= 1
 
     # Walk right while above threshold.
     hi = peak_index + 1
-    while (
-        hi < n
-        and (hi - peak_index - 1) < max_half_width
-        and intensity[hi] >= threshold
-    ):
+    while hi < n and (hi - peak_index - 1) < max_half_width and intensity[hi] >= threshold:
         hi += 1
     return lo, hi
 
@@ -482,9 +471,7 @@ class PerturbationReport:
         for row in self.results:
             if row.error is not None:
                 continue
-            by_pert.setdefault(row.perturbation, []).append(
-                (row.delta_d_a, row.threshold)
-            )
+            by_pert.setdefault(row.perturbation, []).append((row.delta_d_a, row.threshold))
 
         summaries: Dict[str, PerturbationSummary] = {}
         for name, rows in by_pert.items():
@@ -582,9 +569,7 @@ def default_perturbations(
         return line_dropout_perturbation(s, top_n=3, leverage_metric="intensity")
 
     def _outlier_injection(s: BenchmarkSpectrum) -> BenchmarkSpectrum:
-        return outlier_injection_perturbation(
-            s, fraction=0.05, sigma_multiplier=5.0, rng=rng
-        )
+        return outlier_injection_perturbation(s, fraction=0.05, sigma_multiplier=5.0, rng=rng)
 
     return {
         "line_dropout_top3": {
@@ -734,9 +719,7 @@ def run_perturbation_battery(
                 d_a_perturbed = aitchison_distance(base_pred, pert_pred)
                 delta = d_a_perturbed
 
-            passes = (
-                bool(delta < threshold) if threshold is not None else None
-            )
+            passes = bool(delta < threshold) if threshold is not None else None
 
             report.results.append(
                 PerturbationResult(
