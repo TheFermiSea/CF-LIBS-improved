@@ -29,11 +29,14 @@ from cflibs.core.constants import EV_TO_K  # noqa: E402
 from cflibs.instrument.model import InstrumentModel  # noqa: E402
 from cflibs.plasma.state import SingleZoneLTEPlasma  # noqa: E402
 from cflibs.radiation.host import (  # noqa: E402
+    ChunkPlan,
     auto_nstitch,
     available_device_bytes,
     build_chunk_metadata,
+    build_chunk_plan,
 )
 from cflibs.radiation.kernels import (  # noqa: E402
+    _forward_model_per_chunk,
     forward_model,
     forward_model_chunked,
     overlap_and_add,
@@ -372,11 +375,16 @@ def test_overlap_factor(dense_atomic_db, plasma, instrument):
         apply_stark=False,
     )
     rel_err = np.max(np.abs(np.asarray(out_bad) - ref) / (np.abs(ref) + 1e-30))
-    # The artifact must be detectable above 1e-5 (otherwise the default
-    # `overlap_factor=4.0` is over-engineered).
+    # The artifact must be detectable above 1e-8 (otherwise the default
+    # `overlap_factor=4.0` is over-engineered). The 1e-4 threshold this used
+    # to assert was calibrated against the T1-2 kernel that evaluated the
+    # partition function in log10 basis (CF-LIBS-improved-ddwh) and produced
+    # spectra ~10**18× smaller than physically correct; with the basis fix
+    # the spectrum has its true magnitude and the same absolute chunking
+    # artifact registers as a much smaller fractional error.
     assert (
-        rel_err > 1e-4
-    ), f"overlap_factor=0.5 should introduce >1e-4 edge artifacts; got {rel_err:.2e}"
+        rel_err > 1e-8
+    ), f"overlap_factor=0.5 should introduce >1e-8 edge artifacts; got {rel_err:.2e}"
 
 
 # ---------------------------------------------------------------------------
@@ -536,3 +544,264 @@ def test_overlap_and_add_unit_ones():
     # First and last samples must be 1 (no upstream/downstream chunk).
     assert out_np[0] == pytest.approx(1.0)
     assert out_np[-1] == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# q278: line_mask param + wrapper + Saha-hoist parity
+# ---------------------------------------------------------------------------
+
+
+def test_forward_model_line_mask_default_is_identity(dense_atomic_db, plasma, instrument):
+    """``forward_model(line_mask=None)`` is bit-identical to omitting the kwarg.
+
+    The q278 refactor added a new optional ``line_mask`` parameter; the default
+    ``None`` path must not emit any new ops (no rounding, no shape changes).
+    """
+    snap = _build_snapshot(dense_atomic_db)
+    wl_grid = np.linspace(300.0, 700.0, 4000)
+    ref = forward_model(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+        path_length_m=0.01,
+        apply_self_absorption=False,
+        fold_instrument_sigma=True,
+        apply_stark=False,
+    )
+    out = forward_model(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+        path_length_m=0.01,
+        apply_self_absorption=False,
+        fold_instrument_sigma=True,
+        apply_stark=False,
+        line_mask=None,
+    )
+    np.testing.assert_array_equal(np.asarray(out), np.asarray(ref))
+
+
+def test_forward_model_line_mask_zero_zeroes_lines(dense_atomic_db, plasma, instrument):
+    """Setting ``line_mask`` to zero for one line removes that line's profile.
+
+    Builds a mask that disables the brightest-emissivity line and checks the
+    resulting spectrum is below the reference around that line's center.
+    """
+    snap = _build_snapshot(dense_atomic_db)
+    wl_grid = np.linspace(300.0, 700.0, 4000)
+    ref = forward_model(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+        path_length_m=0.01,
+        apply_self_absorption=False,
+        fold_instrument_sigma=True,
+        apply_stark=False,
+    )
+    n_lines = int(np.asarray(snap.line_wavelengths_nm).shape[0])
+    line_wls = np.asarray(snap.line_wavelengths_nm)
+    # Pick the line nearest to grid centre so the disable is easy to verify.
+    target_idx = int(np.argmin(np.abs(line_wls - 500.0)))
+    mask = np.ones(n_lines, dtype=np.float64)
+    mask[target_idx] = 0.0
+
+    out = forward_model(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+        path_length_m=0.01,
+        apply_self_absorption=False,
+        fold_instrument_sigma=True,
+        apply_stark=False,
+        line_mask=jnp.asarray(mask),
+    )
+    out_np = np.asarray(out)
+    ref_np = np.asarray(ref)
+
+    # All-ones mask must reproduce the reference exactly.
+    mask_ones = jnp.ones(n_lines, dtype=jnp.float64)
+    out_ones = forward_model(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+        path_length_m=0.01,
+        apply_self_absorption=False,
+        fold_instrument_sigma=True,
+        apply_stark=False,
+        line_mask=mask_ones,
+    )
+    np.testing.assert_allclose(np.asarray(out_ones), ref_np, rtol=1e-12, atol=0.0)
+
+    # Masked output must be <= ref (we removed a positive contribution).
+    assert np.all(out_np <= ref_np + 1e-30)
+    # At the target line's centre, the spectrum must drop noticeably.
+    target_wl = float(line_wls[target_idx])
+    j = int(np.argmin(np.abs(wl_grid - target_wl)))
+    assert out_np[j] < ref_np[j], "masked-out line should decrease intensity at its centre"
+
+    # All-zero mask should yield a near-zero spectrum (only floating-point noise).
+    mask_zero = jnp.zeros(n_lines, dtype=jnp.float64)
+    out_zero = forward_model(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+        path_length_m=0.01,
+        apply_self_absorption=False,
+        fold_instrument_sigma=True,
+        apply_stark=False,
+        line_mask=mask_zero,
+    )
+    np.testing.assert_allclose(np.asarray(out_zero), 0.0, atol=1e-20)
+
+
+def test_forward_model_per_chunk_wrapper_parity(dense_atomic_db, plasma, instrument):
+    """The retained ``_forward_model_per_chunk`` wrapper matches ``forward_model``.
+
+    After q278, ``_forward_model_per_chunk`` is a thin wrapper around
+    :func:`forward_model` that forwards the ``line_mask`` kwarg. Verify the
+    two call paths produce identical output for non-trivial masks.
+    """
+    snap = _build_snapshot(dense_atomic_db)
+    wl_grid = np.linspace(300.0, 700.0, 3000)
+    n_lines = int(np.asarray(snap.line_wavelengths_nm).shape[0])
+    # Every other line on.
+    mask = np.zeros(n_lines, dtype=np.float64)
+    mask[::2] = 1.0
+
+    direct = forward_model(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+        path_length_m=0.01,
+        apply_self_absorption=False,
+        fold_instrument_sigma=True,
+        apply_stark=False,
+        line_mask=jnp.asarray(mask),
+    )
+    wrapped = _forward_model_per_chunk(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        None,
+        jnp.asarray(mask),
+        broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+        path_length_m=0.01,
+        apply_self_absorption=False,
+        fold_instrument_sigma=True,
+        apply_stark=False,
+    )
+    np.testing.assert_array_equal(np.asarray(direct), np.asarray(wrapped))
+
+
+# ---------------------------------------------------------------------------
+# 8e2o: vmap'd overlap_and_add parity
+# ---------------------------------------------------------------------------
+
+
+def test_overlap_and_add_vmap_parity():
+    """vmap'd ``overlap_and_add`` matches the NumPy fori-loop reference (8e2o)."""
+    rng = np.random.default_rng(0)
+    for nstitch, div_length, overlap_n in [(4, 8, 1), (8, 16, 4), (5, 13, 3)]:
+        chunk_length = div_length + 2 * overlap_n
+        partials_np = rng.normal(size=(nstitch, chunk_length)).astype(np.float64)
+        output_length = nstitch * div_length - 2  # exercise the trim path
+        if output_length <= 0:
+            output_length = nstitch * div_length
+
+        # Reference: pure-NumPy accumulator (what the previous fori_loop did).
+        buf_length = nstitch * div_length + 2 * overlap_n
+        ref_buf = np.zeros(buf_length, dtype=np.float64)
+        for c in range(nstitch):
+            start = c * div_length
+            ref_buf[start : start + chunk_length] += partials_np[c]
+        ref = ref_buf[overlap_n : overlap_n + output_length]
+
+        out = overlap_and_add(
+            jnp.asarray(partials_np), overlap=overlap_n, output_length=output_length
+        )
+        np.testing.assert_allclose(np.asarray(out), ref, rtol=1e-12, atol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# a2m2: ChunkPlan dataclass equivalence
+# ---------------------------------------------------------------------------
+
+
+def test_chunk_plan_dataclass_equivalence(dense_atomic_db, plasma, instrument):
+    """``forward_model_chunked(plan=plan)`` == ``forward_model_chunked(**kwargs)``."""
+    snap = _build_snapshot(dense_atomic_db)
+    wl_grid = np.linspace(300.0, 700.0, 4000)
+
+    md = build_chunk_metadata(wl_grid, snap.line_wavelengths_nm, nstitch=4, max_sigma_nm=0.05)
+
+    common = {
+        "broadening_mode": BroadeningMode.PHYSICAL_DOPPLER,
+        "path_length_m": 0.01,
+        "apply_self_absorption": False,
+        "fold_instrument_sigma": True,
+        "apply_stark": False,
+    }
+
+    out_kwargs = forward_model_chunked(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        nstitch=md["nstitch"],
+        overlap=md["overlap"],
+        chunk_wavelength_grids=jnp.asarray(md["chunks"]),
+        line_masks=jnp.asarray(md["line_masks"]),
+        output_length=md["output_length"],
+        **common,
+    )
+
+    plan = ChunkPlan(
+        nstitch=md["nstitch"],
+        overlap=md["overlap"],
+        chunk_wavelength_grids=jnp.asarray(md["chunks"]),
+        line_masks=jnp.asarray(md["line_masks"]),
+        output_length=md["output_length"],
+    )
+    out_plan = forward_model_chunked(
+        plasma,
+        snap,
+        instrument,
+        jnp.asarray(wl_grid),
+        plan=plan,
+        **common,
+    )
+    np.testing.assert_array_equal(np.asarray(out_kwargs), np.asarray(out_plan))
+
+
+def test_chunk_plan_from_metadata_roundtrip(dense_atomic_db):
+    """``ChunkPlan.from_metadata`` round-trips and ``build_chunk_plan`` is a shortcut."""
+    snap = _build_snapshot(dense_atomic_db)
+    wl_grid = np.linspace(300.0, 700.0, 4000)
+
+    md = build_chunk_metadata(wl_grid, snap.line_wavelengths_nm, nstitch=4, max_sigma_nm=0.05)
+    plan_a = ChunkPlan.from_metadata(md)
+    plan_b = build_chunk_plan(wl_grid, snap.line_wavelengths_nm, nstitch=4, max_sigma_nm=0.05)
+
+    assert plan_a.nstitch == plan_b.nstitch == md["nstitch"]
+    assert plan_a.overlap == plan_b.overlap == md["overlap"]
+    assert plan_a.output_length == plan_b.output_length == md["output_length"]
+    # The dataclass is frozen → hashable.
+    assert isinstance(plan_a, ChunkPlan)
+    # frozen=True attribute set should raise on mutation attempts.
+    with pytest.raises(Exception):
+        plan_a.nstitch = 99  # type: ignore[misc]

@@ -64,6 +64,20 @@ if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
     from cflibs.instrument.model import InstrumentModel
     from cflibs.plasma.state import SingleZoneLTEPlasma
 
+    # NOTE: ``ChunkPlan`` lives in :mod:`cflibs.radiation.host` and is used
+    # only for the ``plan`` forward-ref annotation on
+    # :func:`forward_model_chunked`. We deliberately do NOT import it here
+    # because :mod:`cflibs.radiation.kernels` must remain free of any
+    # ``cflibs.radiation.host`` imports (tests/test_jax_import_hygiene.py
+    # ``test_kernels_modules_do_not_import_host``). Type checkers resolve
+    # the forward reference via the ``Any`` alias below.
+
+# Loose alias so ``Optional[ChunkPlan]`` resolves under both ruff (no F821)
+# and mypy (no name-defined error) without re-introducing a host import.
+# The real :class:`cflibs.radiation.host.ChunkPlan` is the only value
+# callers pass; the typing payload is documented in the docstring.
+ChunkPlan = object  # type: ignore[misc,assignment]
+
 # Constants packed into jnp scalars on the host so they enter the jit cache as
 # float-valued traced inputs (no Python literals captured by the cache key).
 _HC_OVER_4PI = H_PLANCK * C_LIGHT / (4.0 * np.pi)
@@ -378,6 +392,7 @@ def forward_model(
     fold_instrument_sigma: bool = True,
     apply_stark: bool = False,
     total_species_density_cm3: Optional[float] = None,
+    line_mask=None,
     _precomputed_n_upper_per_line=None,
 ):
     """Unified forward kernel -- one source of truth for CF-LIBS forward physics.
@@ -420,6 +435,14 @@ def forward_model(
     total_species_density_cm3 : float, optional
         Override heavy-particle total density. ``None`` -> legacy proxy
         ``N_total = n_e``.
+    line_mask : array, optional, shape (N_lines,)
+        Per-line activation mask. ``None`` (default) ⇒ all lines contribute
+        and the call is bit-identical to the pre-T1-5 behaviour. When
+        supplied, the mask is cast to the working dtype and multiplied into
+        the per-line emissivity just before broadening dispatch — masked
+        lines (mask=0) contribute zero, but the ``(N_lines,)`` shape is
+        preserved so this kernel stays trace-shape-stable across the
+        :func:`forward_model_chunked` ``lax.scan`` body.
     _precomputed_n_upper_per_line : array, optional
         Escape hatch for callers (notably ``SpectrumModel.compute_spectrum``)
         that need to inject upper-level populations computed by the legacy
@@ -461,6 +484,14 @@ def forward_model(
     n_upper_m3 = n_upper * 1.0e6
     lambda_m = line_wl_nm * 1.0e-9
     epsilon_line = _HC_OVER_4PI / jnp.maximum(lambda_m, 1e-30) * line_A_ki * n_upper_m3
+
+    # ---- Optional per-line activation mask (q278) ----
+    # The mask is cast to the emissivity dtype so this is a single fused
+    # multiply on accelerators. ``None`` is bit-identical to the pre-mask
+    # behaviour (zero ops emitted).
+    if line_mask is not None:
+        mask = jnp.asarray(line_mask).astype(epsilon_line.dtype)
+        epsilon_line = epsilon_line * mask
 
     # ---- Per-line broadening widths (mode-dispatched) ----
     T_eV = jnp.asarray(plasma_state.T_e_eV)
@@ -565,11 +596,13 @@ def overlap_and_add(
 
     Notes
     -----
-    Implementation uses :func:`jax.lax.fori_loop` +
-    :func:`jax.lax.dynamic_update_slice` so the loop count is static
-    (matches the leading dim of ``partials``) and the kernel stays jit-
-    safe. The ``+ 2*overlap`` padding on the output buffer is sliced off
-    before return.
+    Implementation uses :func:`jax.vmap` over
+    :func:`jax.lax.dynamic_update_slice` to place each chunk into its own
+    zero-padded copy of the output buffer in parallel, then sums across
+    the chunk axis (8e2o). On GPU this fuses into a single kernel instead
+    of one ``dynamic_update_slice`` launch per chunk in the previous
+    ``lax.fori_loop`` form. The ``+ 2*overlap`` padding on the output
+    buffer is sliced off before return.
     """
     partials = jnp.asarray(partials)
     nstitch = partials.shape[0]
@@ -596,21 +629,66 @@ def overlap_and_add(
     import jax  # noqa: PLC0415 — JAX is mandatory on this path
 
     dtype = partials.dtype
-    init_buf = jnp.zeros(buf_length, dtype=dtype)
+    zero_buf = jnp.zeros(buf_length, dtype=dtype)
 
-    def _body(c, buf):
-        start = c * div_length
-        chunk = partials[c]
-        # Pull the existing slice, add the chunk, and write it back. The
-        # ``dynamic_slice`` / ``dynamic_update_slice`` pair is the
-        # canonical jit-safe way to do an in-place accumulate of a chunk
-        # into a buffer (lax.scatter-style ops do not preserve gradients
-        # cleanly).
-        existing = jax.lax.dynamic_slice(buf, (start,), (chunk_length,))
-        return jax.lax.dynamic_update_slice(buf, existing + chunk, (start,))
+    # Place each chunk into its own zero-buffer at offset ``c * div_length``
+    # via vmap → single fused kernel on accelerators (8e2o). The sum across
+    # the leading axis is numerically identical to the previous fori_loop
+    # accumulator at default fp64 tolerances; chunk overlaps are summed by
+    # the ``.sum(0)``.
+    starts = jnp.arange(nstitch, dtype=jnp.int32) * jnp.int32(div_length)
 
-    buf = jax.lax.fori_loop(0, nstitch, _body, init_buf)
+    def _place_chunk(start, chunk):
+        return jax.lax.dynamic_update_slice(zero_buf, chunk, (start,))
+
+    placed = jax.vmap(_place_chunk)(starts, partials)
+    buf = placed.sum(axis=0)
     return jax.lax.dynamic_slice(buf, (overlap,), (output_length,))
+
+
+def _broaden_chunk(
+    wl,
+    line_wl_nm,
+    epsilon_line_masked,
+    sigma_per_line,
+    gamma_per_line,
+    *,
+    broadening_mode: BroadeningMode,
+    sigma_grid,
+    apply_stark: bool,
+):
+    """Broadening dispatch on a single chunk with pre-computed per-line tensors.
+
+    Helper used by :func:`forward_model_chunked` after the chunk-invariant
+    Saha-Boltzmann populations and per-line widths have been hoisted out of
+    the scan body (q278). The mask multiply on ``epsilon_line`` is assumed
+    to have already been applied by the caller.
+
+    All parameters mirror their counterparts in :func:`forward_model`;
+    ``gamma_per_line`` is ignored unless
+    ``broadening_mode == PHYSICAL_DOPPLER`` with ``apply_stark=True``.
+    """
+    if broadening_mode == BroadeningMode.LEGACY:
+        return _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line_masked, sigma_per_line)
+    if broadening_mode == BroadeningMode.NIST_PARITY:
+        return _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line_masked, sigma_per_line)
+    if broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
+        if apply_stark:
+            return _voigt_sum_per_line(
+                wl, line_wl_nm, epsilon_line_masked, sigma_per_line, gamma_per_line
+            )
+        return _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line_masked, sigma_per_line)
+    if broadening_mode == BroadeningMode.LDM_GAUSSIAN:
+        from cflibs.radiation.ldm import ldm_broaden  # noqa: PLC0415
+
+        return ldm_broaden(
+            line_wavelengths=line_wl_nm,
+            line_intensities=epsilon_line_masked,
+            line_sigmas=sigma_per_line,
+            wavelength_grid=wl,
+            sigma_grid=jnp.asarray(sigma_grid),
+        )
+    raise ValueError(f"Unsupported broadening_mode: {broadening_mode!r}")
 
 
 def _resolve_checkpoint_policy():
@@ -652,98 +730,25 @@ def _forward_model_per_chunk(
 ):
     """Forward model on one wavelength chunk with a per-line activation mask.
 
-    Mirrors the body of :func:`forward_model` but accepts a ``(N_lines,)``
-    boolean mask that zeroes out lines whose centres lie outside the
-    chunk's wing-clearance window (built by :func:`host._split_wavelength_grid`).
-    Used as the inner scan body of :func:`forward_model_chunked`.
-
-    The mask is applied to the per-line emissivity before broadening, so
-    masked lines contribute zero to the chunk's spectrum but the
-    ``(N_lines,)`` shape stays homogeneous across chunks — a hard
-    requirement of :func:`jax.lax.scan`.
-
-    Parameters
-    ----------
-    line_mask : array of float, shape (N_lines,)
-        Cast to the working dtype (so it multiplies cleanly). 1.0 ⇒ line
-        contributes; 0.0 ⇒ masked out.
-
-    All other parameters match :func:`forward_model`. Returns a
-    ``(chunk_length,)`` spectrum array.
+    Thin wrapper around :func:`forward_model` that forwards the per-chunk
+    activation mask. Kept as a stable internal entry point for
+    :func:`forward_model_chunked` (and any out-of-tree users) — the masking
+    behaviour now lives in :func:`forward_model` itself (q278), so this
+    function exists only to preserve the historical signature.
     """
-    wl = jnp.asarray(chunk_wavelength_grid)
-
-    n_upper = _saha_two_stage_populations(plasma_state, atomic_snapshot)
-
-    line_wl_nm = jnp.asarray(atomic_snapshot.line_wavelengths_nm)
-    line_A_ki = jnp.asarray(atomic_snapshot.line_A_ki)
-    n_upper_m3 = n_upper * 1.0e6
-    lambda_m = line_wl_nm * 1.0e-9
-    epsilon_line = _HC_OVER_4PI / jnp.maximum(lambda_m, 1e-30) * line_A_ki * n_upper_m3
-
-    # Apply the per-chunk activation mask. ``line_mask`` is cast to the
-    # working dtype upstream so this is a single multiply.
-    mask = jnp.asarray(line_mask).astype(epsilon_line.dtype)
-    epsilon_line = epsilon_line * mask
-
-    T_eV = jnp.asarray(plasma_state.T_e_eV)
-    n_e = jnp.asarray(plasma_state.n_e)
-
-    if broadening_mode == BroadeningMode.LEGACY:
-        sigma_scalar = 0.01 * jnp.sqrt(jnp.maximum(T_eV, 1e-12) / 0.86)
-        sigma_per_line = jnp.full(line_wl_nm.shape, sigma_scalar, dtype=line_wl_nm.dtype)
-        emissivity = _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line, sigma_per_line)
-    elif broadening_mode == BroadeningMode.NIST_PARITY:
-        sigma_per_line = _per_line_instrument_sigma(atomic_snapshot, instrument)
-        emissivity = _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line, sigma_per_line)
-    elif broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
-        line_mass_amu = _species_mass_array(atomic_snapshot)[
-            np.asarray(atomic_snapshot.line_species_index)
-        ]
-        sigma_doppler = _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu)
-        if fold_instrument_sigma:
-            sigma_inst = _per_line_instrument_sigma(atomic_snapshot, instrument)
-            sigma_per_line = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
-        else:
-            sigma_per_line = sigma_doppler
-        if apply_stark:
-            gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
-            sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
-            emissivity = _voigt_sum_per_line(
-                wl, line_wl_nm, epsilon_line, sigma_per_line, gamma_per_line
-            )
-        else:
-            emissivity = _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line, sigma_per_line)
-    elif broadening_mode == BroadeningMode.LDM_GAUSSIAN:
-        from cflibs.radiation.ldm import ldm_broaden  # noqa: PLC0415
-
-        line_mass_amu = _species_mass_array(atomic_snapshot)[
-            np.asarray(atomic_snapshot.line_species_index)
-        ]
-        sigma_per_line = jnp.maximum(
-            _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu), 1e-12
-        )
-        emissivity = ldm_broaden(
-            line_wavelengths=line_wl_nm,
-            line_intensities=epsilon_line,
-            line_sigmas=sigma_per_line,
-            wavelength_grid=wl,
-            sigma_grid=jnp.asarray(sigma_grid),
-        )
-    else:
-        raise ValueError(f"Unsupported broadening_mode: {broadening_mode!r}")
-
-    if not apply_self_absorption:
-        return emissivity
-
-    wl_m = wl * 1.0e-9
-    T_K = T_eV * EV_TO_K
-    exponent = (H_PLANCK * C_LIGHT) / (wl_m * KB * T_K)
-    exponent = jnp.minimum(exponent, 700.0)
-    B_m3 = (2.0 * H_PLANCK * C_LIGHT**2 / (wl_m**5)) / (jnp.exp(exponent) - 1.0)
-    B_lambda = B_m3 * 1.0e-9
-    kappa = emissivity / (B_lambda + 1e-100)
-    return B_lambda * (-jnp.expm1(-kappa * path_length_m))
+    return forward_model(
+        plasma_state,
+        atomic_snapshot,
+        instrument,
+        chunk_wavelength_grid,
+        sigma_grid=sigma_grid,
+        broadening_mode=broadening_mode,
+        path_length_m=path_length_m,
+        apply_self_absorption=apply_self_absorption,
+        fold_instrument_sigma=fold_instrument_sigma,
+        apply_stark=apply_stark,
+        line_mask=line_mask,
+    )
 
 
 def forward_model_chunked(
@@ -753,6 +758,7 @@ def forward_model_chunked(
     wavelength_grid,
     sigma_grid=None,
     *,
+    plan: Optional[ChunkPlan] = None,
     nstitch: int = 1,
     overlap: int = 0,
     chunk_wavelength_grids=None,
@@ -781,6 +787,13 @@ def forward_model_chunked(
     ----------
     plasma_state, atomic_snapshot, instrument, wavelength_grid, sigma_grid :
         Same semantics as :func:`forward_model`.
+    plan : ChunkPlan, optional
+        Frozen :class:`cflibs.radiation.host.ChunkPlan` bundling the five
+        always-paired chunk metadata fields (``nstitch``, ``overlap``,
+        ``chunk_wavelength_grids``, ``line_masks``, ``output_length``).
+        When supplied, takes precedence over the individual keyword
+        arguments. When ``None`` (default), the explicit kwargs are used
+        — preserved for back-compat with pre-a2m2 callers.
     nstitch : int, **static**, default 1
         Number of wavelength chunks. ``1`` ⇒ direct dispatch to
         :func:`forward_model`.
@@ -832,6 +845,17 @@ def forward_model_chunked(
     expensive matrix dots. Falls back to ``everything_saveable`` on
     older JAX builds (see :func:`_resolve_checkpoint_policy`).
     """
+    if plan is not None:
+        # ``plan`` takes precedence over the individual kwargs (a2m2). We
+        # do not silently merge so that callers can spot accidental
+        # mixed-mode invocations (an explicit pre-a2m2 kwarg shadowing a
+        # plan field is almost always a bug).
+        nstitch = plan.nstitch
+        overlap = plan.overlap
+        chunk_wavelength_grids = plan.chunk_wavelength_grids
+        line_masks = plan.line_masks
+        output_length = plan.output_length
+
     if nstitch == 1:
         # Zero-cost dispatch — caller pays nothing for the chunked path
         # when they have not opted in. Bit-identical to ``forward_model``.
@@ -880,22 +904,76 @@ def forward_model_chunked(
     masks_dtype = chunks.dtype
     masks = jnp.asarray(line_masks).astype(masks_dtype)
 
+    # ---- q278: hoist chunk-invariant work out of the scan body ----
+    # Saha-Boltzmann populations, the un-masked per-line emissivity, and
+    # the per-line broadening widths (Doppler + instrument; optional Stark
+    # gamma) depend only on plasma_state / snapshot / instrument — NOT on
+    # the chunk. Computing them once before ``lax.scan`` removes a 20–40%
+    # wall-time tax that the previous implementation paid per chunk
+    # iteration. The scan body now only multiplies in the chunk mask and
+    # dispatches the broadening kernel against the chunk's wavelengths.
+    n_upper = _saha_two_stage_populations(plasma_state, atomic_snapshot)
+    line_wl_nm = jnp.asarray(atomic_snapshot.line_wavelengths_nm)
+    line_A_ki = jnp.asarray(atomic_snapshot.line_A_ki)
+    n_upper_m3 = n_upper * 1.0e6
+    lambda_m = line_wl_nm * 1.0e-9
+    epsilon_line_base = _HC_OVER_4PI / jnp.maximum(lambda_m, 1e-30) * line_A_ki * n_upper_m3
+
+    T_eV = jnp.asarray(plasma_state.T_e_eV)
+    n_e = jnp.asarray(plasma_state.n_e)
+
+    gamma_per_line = None
+    if broadening_mode == BroadeningMode.LEGACY:
+        sigma_scalar = 0.01 * jnp.sqrt(jnp.maximum(T_eV, 1e-12) / 0.86)
+        sigma_per_line = jnp.full(line_wl_nm.shape, sigma_scalar, dtype=line_wl_nm.dtype)
+    elif broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
+        line_mass_amu = _species_mass_array(atomic_snapshot)[
+            np.asarray(atomic_snapshot.line_species_index)
+        ]
+        sigma_doppler = _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu)
+        if fold_instrument_sigma:
+            sigma_inst = _per_line_instrument_sigma(atomic_snapshot, instrument)
+            sigma_per_line = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
+        else:
+            sigma_per_line = sigma_doppler
+        if apply_stark:
+            gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
+            sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
+    elif broadening_mode == BroadeningMode.LDM_GAUSSIAN:
+        line_mass_amu = _species_mass_array(atomic_snapshot)[
+            np.asarray(atomic_snapshot.line_species_index)
+        ]
+        sigma_per_line = jnp.maximum(
+            _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu), 1e-12
+        )
+    else:  # pragma: no cover - NIST_PARITY rejected above; defensive
+        sigma_per_line = _per_line_instrument_sigma(atomic_snapshot, instrument)
+
     policy = _resolve_checkpoint_policy()
 
     def _body_uncheckpointed(chunk_wl, chunk_mask):
-        return _forward_model_per_chunk(
-            plasma_state,
-            atomic_snapshot,
-            instrument,
+        # Mask only — every other tensor is closed over from the hoist.
+        epsilon_masked = epsilon_line_base * chunk_mask.astype(epsilon_line_base.dtype)
+        emissivity = _broaden_chunk(
             chunk_wl,
-            sigma_grid,
-            chunk_mask,
+            line_wl_nm,
+            epsilon_masked,
+            sigma_per_line,
+            gamma_per_line,
             broadening_mode=broadening_mode,
-            path_length_m=path_length_m,
-            apply_self_absorption=apply_self_absorption,
-            fold_instrument_sigma=fold_instrument_sigma,
+            sigma_grid=sigma_grid,
             apply_stark=apply_stark,
         )
+        if not apply_self_absorption:
+            return emissivity
+        wl_m = chunk_wl * 1.0e-9
+        T_K = T_eV * EV_TO_K
+        exponent = (H_PLANCK * C_LIGHT) / (wl_m * KB * T_K)
+        exponent = jnp.minimum(exponent, 700.0)
+        B_m3 = (2.0 * H_PLANCK * C_LIGHT**2 / (wl_m**5)) / (jnp.exp(exponent) - 1.0)
+        B_lambda = B_m3 * 1.0e-9
+        kappa = emissivity / (B_lambda + 1e-100)
+        return B_lambda * (-jnp.expm1(-kappa * path_length_m))
 
     if policy is not None:
         body = jax.checkpoint(_body_uncheckpointed, policy=policy)
