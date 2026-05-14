@@ -911,6 +911,123 @@ def _build_alias_high_recall_predictor(
     return predictor
 
 
+# ---------------------------------------------------------------------------
+# Alias-fix sweep harness (Phase C of jaunty-weaving-mist).
+#
+# Enumerates the 2^3 = 8 combinations of the three opt-in fix flags landed in
+# PRs #175 (ftp1 — adaptive_t r²-gate), #177 (762f — robust temperature
+# estimator), and #176 (dj6y — per-ion-stage relative_cl_threshold). Each cell
+# constructs an ``ALIASIdentifier`` with the cell-specific fix-flag kwargs,
+# while pinning the strict threshold kwargs to their precision-king defaults
+# (3.0 / 0.02 / 0.4 / 30) so the ONLY difference across cells is the 3 fix
+# flags. Designed for the alias-fix sweep at
+# ``scripts/sweep_alias_fixes.py``; expected wall-time on the cluster is
+# 8 cells × 5 seeds × ~10 min/run ≈ 7 h serial, ≈ 2.5 h with 3-way parallelism.
+# ---------------------------------------------------------------------------
+
+# (cell_name, fix-flag kwargs) — order matches the plan's configuration table.
+_ALIAS_SWEEP_CELLS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
+    ("baseline", {}),
+    ("ftp1", {"r2_gate_mode": "adaptive_t"}),
+    ("762f", {"temperature_estimator_mode": "robust"}),
+    ("dj6y", {"relative_cl_per_ion_stage": True}),
+    ("ftp1+762f", {"r2_gate_mode": "adaptive_t", "temperature_estimator_mode": "robust"}),
+    ("ftp1+dj6y", {"r2_gate_mode": "adaptive_t", "relative_cl_per_ion_stage": True}),
+    ("762f+dj6y", {"temperature_estimator_mode": "robust", "relative_cl_per_ion_stage": True}),
+    (
+        "all_three",
+        {
+            "r2_gate_mode": "adaptive_t",
+            "temperature_estimator_mode": "robust",
+            "relative_cl_per_ion_stage": True,
+        },
+    ),
+)
+
+
+# Strict threshold defaults shared by every sweep cell. Pinned explicitly here
+# (rather than read from ``_class_default_config``) so a future change to
+# ``ALIASIdentifier.__init__`` defaults can't silently flip the sweep's
+# baseline. These ARE the precision-king defaults guarded by
+# ``test_strict_alias_still_registered_unchanged`` for the strict alias
+# workflow.
+_ALIAS_SWEEP_BASE_KWARGS: Dict[str, Any] = {
+    "intensity_threshold_factor": 3.0,
+    "detection_threshold": 0.02,
+    "chance_window_scale": 0.4,
+    "max_lines_per_element": 30,
+}
+
+
+def _alias_sweep_workflow_configs(quick: bool) -> List[Dict[str, Any]]:  # noqa: ARG001 - signature parity
+    """Single-element config grid shared by every ``alias_sweep_*`` workflow.
+
+    All 8 cells use the SAME threshold kwargs (pinned at strict defaults via
+    the predictor factory below) — the only thing that varies is the fix-flag
+    kwargs baked into the per-cell predictor closure. So every cell has
+    exactly one config; cross-cell variation lives in the predictor, not the
+    grid. The ``quick`` parameter is accepted for signature parity with the
+    other ``_<wf>_workflow_configs`` helpers but is intentionally unused.
+    """
+    return [{}]
+
+
+def _build_alias_sweep_predictor_factory(
+    cell_kwargs: Dict[str, Any],
+    cell_name: str,
+) -> Callable[
+    ["UnifiedBenchmarkContext", List[str], Dict[str, Any]],
+    Callable[[BenchmarkSpectrum], ElementIdentificationResult],
+]:
+    """Return a ``build_predictor`` callable for one sweep cell.
+
+    The returned callable matches the signature expected by
+    ``IDWorkflowSpec.build_predictor``. ``cell_kwargs`` is the per-cell
+    fix-flag kwarg dict (one of ``_ALIAS_SWEEP_CELLS`` values); ``cell_name``
+    is recorded in ``result.parameters['alias_sweep_cell']`` for downstream
+    audit-ability.
+    """
+
+    def build_predictor(
+        context: UnifiedBenchmarkContext,
+        candidate_elements: List[str],
+        config: Dict[str, Any],  # noqa: ARG001 - empty grid, see configs helper
+    ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
+        def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
+            from cflibs.atomic.database import AtomicDatabase
+            from cflibs.inversion.alias_identifier import ALIASIdentifier
+
+            with AtomicDatabase(str(context.db_path)) as db:
+                identifier = ALIASIdentifier(
+                    atomic_db=db,
+                    elements=candidate_elements,
+                    resolving_power=_estimate_rp_for_spectrum(spectrum),
+                    intensity_threshold_factor=float(
+                        _ALIAS_SWEEP_BASE_KWARGS["intensity_threshold_factor"]
+                    ),
+                    detection_threshold=float(
+                        _ALIAS_SWEEP_BASE_KWARGS["detection_threshold"]
+                    ),
+                    chance_window_scale=float(
+                        _ALIAS_SWEEP_BASE_KWARGS["chance_window_scale"]
+                    ),
+                    max_lines_per_element=int(
+                        _ALIAS_SWEEP_BASE_KWARGS["max_lines_per_element"]
+                    ),
+                    **cell_kwargs,
+                    **_jax_identifier_flags_for(ALIASIdentifier),
+                )
+                result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
+                result.parameters["candidate_elements"] = list(candidate_elements)
+                result.parameters["alias_sweep_cell"] = cell_name
+                result.parameters["alias_sweep_fix_kwargs"] = dict(cell_kwargs)
+                return result
+
+        return predictor
+
+    return build_predictor
+
+
 def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     from cflibs.inversion.comb_identifier import CombIdentifier
 
@@ -1270,6 +1387,20 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
             _build_alias_high_recall_predictor,
             _config_name,
         ),
+        # 8-cell alias-fix sweep harness (Phase C, jaunty-weaving-mist):
+        # enumerates 2^3 combinations of ftp1/762f/dj6y fix flags. Each cell
+        # shares the strict threshold defaults (pinned in
+        # ``_ALIAS_SWEEP_BASE_KWARGS``); the per-cell predictor closure
+        # differs only in the fix-flag kwargs.
+        **{
+            f"alias_sweep_{cell_name}": IDWorkflowSpec(
+                f"alias_sweep_{cell_name}",
+                _alias_sweep_workflow_configs(quick),
+                _build_alias_sweep_predictor_factory(cell_kwargs, cell_name),
+                _config_name,
+            )
+            for cell_name, cell_kwargs in _ALIAS_SWEEP_CELLS
+        },
         "comb": IDWorkflowSpec(
             "comb", _comb_workflow_configs(quick), _build_comb_predictor, _config_name
         ),
