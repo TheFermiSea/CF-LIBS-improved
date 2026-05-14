@@ -23,6 +23,10 @@ from cflibs.atomic.structures import Transition
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.identify._coverage import (
+    CoverageTracker,
+    merge_coverage_into_parameters,
+)
 
 logger = get_logger("inversion.correlation_identifier")
 
@@ -287,6 +291,7 @@ class CorrelationIdentifier:
         wavelength: np.ndarray,
         intensity: np.ndarray,
         mode: str = "auto",
+        spectrum_id: Optional[str] = None,
     ) -> ElementIdentificationResult:
         """
         Identify elements from experimental spectrum.
@@ -300,6 +305,12 @@ class CorrelationIdentifier:
         mode : str
             Identification mode: "auto", "classic", or "vector"
             (default: "auto" uses vector if available, otherwise classic)
+        spectrum_id : str, optional
+            Caller-supplied identifier for this spectrum.  Threaded
+            through to detection-coverage log records (L2/L3/L4) so
+            downstream parsing can correlate per-element coverage data
+            with the source spectrum.  Identifier behaviour is
+            unchanged when this is left ``None``.
 
         Returns
         -------
@@ -322,20 +333,31 @@ class CorrelationIdentifier:
 
         logger.info(f"Running correlation identifier in {mode} mode")
 
+        # Detection-coverage tracker -- additive telemetry only.
+        coverage = CoverageTracker(
+            spectrum_id=spectrum_id if spectrum_id is not None else "<unset>",
+            identifier_name="correlation",
+        )
+
         # Detect experimental peaks using canonical baseline-subtracted pipeline
         experimental_peaks, _, _ = detect_peaks_auto(
             wavelength,
             intensity,
             resolving_power=self.resolving_power,
         )
+        coverage.set_n_peaks(len(experimental_peaks))
 
         logger.info(f"Detected {len(experimental_peaks)} experimental peaks")
 
         # Run identification
         if mode == "classic":
-            element_scores = self._identify_classic(wavelength, intensity, experimental_peaks)
+            element_scores = self._identify_classic(
+                wavelength, intensity, experimental_peaks, coverage=coverage
+            )
         elif mode == "vector":
-            element_scores = self._identify_vector(wavelength, intensity, experimental_peaks)
+            element_scores = self._identify_vector(
+                wavelength, intensity, experimental_peaks, coverage=coverage
+            )
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -353,9 +375,12 @@ class CorrelationIdentifier:
         rejected_elements = []
 
         for element, score, confidence, matched_lines, unmatched_lines in element_scores:
+            detected_flag = (
+                confidence >= self.min_confidence and confidence >= relative_threshold
+            )
             elem_id = ElementIdentification(
                 element=element,
-                detected=confidence >= self.min_confidence and confidence >= relative_threshold,
+                detected=detected_flag,
                 score=score,
                 confidence=confidence,
                 n_matched_lines=len(matched_lines),
@@ -363,6 +388,16 @@ class CorrelationIdentifier:
                 matched_lines=matched_lines,
                 unmatched_lines=unmatched_lines,
                 metadata={"correlation": score, "relative_threshold": relative_threshold},
+            )
+
+            # L4 -- per-element fingerprint pass.  Correlation's
+            # "fingerprint" is the confidence vs. min_confidence /
+            # relative_threshold gate.
+            coverage.record_fingerprint(
+                element,
+                passed=bool(detected_flag),
+                score=float(confidence),
+                floor=float(max(self.min_confidence, relative_threshold)),
             )
 
             if elem_id.detected:
@@ -379,6 +414,17 @@ class CorrelationIdentifier:
         n_matched_peaks = len(matched_peak_wavelengths)
         n_unmatched_peaks = len(experimental_peaks) - n_matched_peaks
 
+        # Detection-coverage finalisation -- additive telemetry only.
+        coverage.emit_summary()
+
+        base_parameters = {
+            "mode": mode,
+            "wavelength_tolerance_nm": self.wavelength_tolerance_nm,
+            "min_confidence": self.min_confidence,
+            "peak_region_threshold": self.peak_region_threshold,
+            "peak_region_min_points": float(self.peak_region_min_points),
+        }
+
         return ElementIdentificationResult(
             detected_elements=detected_elements,
             rejected_elements=rejected_elements,
@@ -388,13 +434,9 @@ class CorrelationIdentifier:
             n_matched_peaks=n_matched_peaks,
             n_unmatched_peaks=n_unmatched_peaks,
             algorithm="correlation",
-            parameters={
-                "mode": mode,
-                "wavelength_tolerance_nm": self.wavelength_tolerance_nm,
-                "min_confidence": self.min_confidence,
-                "peak_region_threshold": self.peak_region_threshold,
-                "peak_region_min_points": float(self.peak_region_min_points),
-            },
+            parameters=merge_coverage_into_parameters(
+                base_parameters, coverage.build_payload()
+            ),
         )
 
     def _identify_classic(
@@ -402,9 +444,18 @@ class CorrelationIdentifier:
         wavelength: np.ndarray,
         intensity: np.ndarray,
         peaks: List[Tuple],
+        coverage: Optional[CoverageTracker] = None,
     ) -> List[Tuple[str, float, float, List[IdentifiedLine], List[Transition]]]:
         """
         Classic mode: grid search over (T, n_e) with Pearson correlation.
+
+        Parameters
+        ----------
+        coverage
+            Optional detection-coverage tracker.  When provided, the
+            method records L2 (per-element line count in window) and
+            L3 (per-element peak matches) without altering matching
+            behaviour.
 
         Returns
         -------
@@ -424,9 +475,15 @@ class CorrelationIdentifier:
         )
         for element in elements_to_search:
             transitions = self._get_transitions_for_element(element, wl_min, wl_max)
+            # L2 -- per-element line presence in DB (after correlation's
+            # min_line_strength + max_lines_per_element selection).
+            if coverage is not None:
+                coverage.record_db_lines(element, len(transitions))
             if not transitions:
                 logger.debug(f"No transitions for {element} in wavelength range")
                 element_scores.append((element, 0.0, 0.0, [], []))
+                if coverage is not None:
+                    coverage.record_peak_matches(element, 0)
                 continue
 
             # Compute correlations for each (T, n_e) point
@@ -441,6 +498,9 @@ class CorrelationIdentifier:
                 matched_lines, unmatched_lines = self._match_lines_to_peaks(
                     element, transitions, wavelength, intensity, peaks
                 )
+                # L3 -- per-element peak match.
+                if coverage is not None:
+                    coverage.record_peak_matches(element, len(matched_lines))
                 best_corr = float(np.max(correlations)) if len(correlations) else 0.0
                 score = float(np.clip(best_corr, 0.0, 1.0))
                 confidence = score
@@ -493,6 +553,9 @@ class CorrelationIdentifier:
             matched_lines, unmatched_lines = self._match_lines_to_peaks(
                 element, transitions, wavelength, intensity, peaks
             )
+            # L3 -- per-element peak match.
+            if coverage is not None:
+                coverage.record_peak_matches(element, len(matched_lines))
 
             element_scores.append((element, score, confidence, matched_lines, unmatched_lines))
 
@@ -503,9 +566,18 @@ class CorrelationIdentifier:
         wavelength: np.ndarray,
         intensity: np.ndarray,
         peaks: List[Tuple],
+        coverage: Optional[CoverageTracker] = None,
     ) -> List[Tuple[str, float, float, List[IdentifiedLine], List[Transition]]]:
         """
         Vector mode: ANN search via FAISS with multi-model consensus.
+
+        Parameters
+        ----------
+        coverage
+            Optional detection-coverage tracker.  When provided, the
+            method records L2 (per-element line count in window) and
+            L3 (per-element peak matches) without altering matching
+            behaviour.
 
         Returns
         -------
@@ -573,6 +645,9 @@ class CorrelationIdentifier:
                 best_similarity = 1.0 / (1.0 + max(candidate_best_distance[element], 0.0))
             confidence = np.clip(0.4 * score + 0.4 * count_weight + 0.2 * best_similarity, 0.0, 1.0)
             transitions = self._get_transitions_for_element(element, wl_min, wl_max)
+            # L2 -- per-element line presence in DB (vector path).
+            if coverage is not None:
+                coverage.record_db_lines(element, len(transitions))
             matched_lines, unmatched_lines = self._match_lines_to_peaks(
                 element, transitions, wavelength, intensity, peaks
             )
@@ -580,6 +655,10 @@ class CorrelationIdentifier:
             if score <= 0.0:
                 matched_lines = []
                 unmatched_lines = transitions
+
+            # L3 -- per-element peak match (after the score==0 reset).
+            if coverage is not None:
+                coverage.record_peak_matches(element, len(matched_lines))
 
             element_scores.append((element, score, confidence, matched_lines, unmatched_lines))
 

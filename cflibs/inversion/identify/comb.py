@@ -6,7 +6,7 @@ using the comb template matching method." This method uses triangular templates
 to correlate with spectral peaks, treating atomic spectral lines as teeth in a comb.
 """
 
-from typing import List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Tuple
 import math
 import numpy as np
 from scipy.ndimage import median_filter
@@ -24,6 +24,11 @@ from cflibs.inversion.element_id import (
 )
 from cflibs.inversion.preprocessing import detect_peaks_auto
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.identify._coverage import (
+    CoverageTracker,
+    count_lines_in_range,
+    merge_coverage_into_parameters,
+)
 
 logger = get_logger(__name__)
 
@@ -347,7 +352,10 @@ class CombIdentifier:
         return self.tooth_activation_threshold
 
     def identify(
-        self, wavelength: np.ndarray, intensity: np.ndarray
+        self,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        spectrum_id: Optional[str] = None,
     ) -> ElementIdentificationResult:
         """
         Identify elements in a spectrum using comb template correlation.
@@ -358,15 +366,28 @@ class CombIdentifier:
             Wavelength array in nm
         intensity : np.ndarray
             Intensity array (arbitrary units)
+        spectrum_id : str, optional
+            Caller-supplied identifier for this spectrum.  Threaded
+            through to detection-coverage log records (L2/L3/L4) so
+            downstream parsing can correlate per-element coverage data
+            with the source spectrum.  Identifier behaviour is
+            unchanged when this is left ``None``.
 
         Returns
         -------
         ElementIdentificationResult
             Complete identification results with algorithm="comb"
         """
+        # Detection-coverage tracker -- additive telemetry only.
+        coverage = CoverageTracker(
+            spectrum_id=spectrum_id if spectrum_id is not None else "<unset>",
+            identifier_name="comb",
+        )
+
         # Guard against empty arrays
         if len(wavelength) == 0 or len(intensity) == 0:
             logger.warning("Empty wavelength or intensity array")
+            coverage.emit_summary()
             return ElementIdentificationResult(
                 detected_elements=[],
                 rejected_elements=[],
@@ -376,7 +397,7 @@ class CombIdentifier:
                 n_matched_peaks=0,
                 n_unmatched_peaks=0,
                 algorithm="comb",
-                parameters={},
+                parameters=merge_coverage_into_parameters({}, coverage.build_payload()),
             )
 
         # Validate input arrays
@@ -399,7 +420,12 @@ class CombIdentifier:
 
         # Step 3, 4, 5: Spectral matching and relative thresholding
         element_identifications = self._match_spectra(
-            wavelength, intensity, baseline, threshold, elements_to_search
+            wavelength,
+            intensity,
+            baseline,
+            threshold,
+            elements_to_search,
+            coverage=coverage,
         )
 
         # Step 6: Split into detected and rejected
@@ -411,6 +437,27 @@ class CombIdentifier:
             wavelength, intensity, detected_elements
         )
 
+        # Detection-coverage finalisation.  L1 peak count is recorded
+        # here because comb computes its experimental peaks at the end
+        # of identify(); the L2/L3/L4 telemetry was accumulated in
+        # ``_match_spectra``.
+        coverage.set_n_peaks(len(experimental_peaks))
+        coverage.emit_summary()
+
+        base_parameters: Dict[str, Any] = {
+            "baseline_window_nm": self.baseline_window_nm,
+            "threshold_percentile": self.threshold_percentile,
+            "min_correlation": self.min_correlation,
+            "min_active_teeth": float(self.min_active_teeth),
+            "max_shift_pts": float(self.max_shift_pts),
+            "min_width_pts": float(self.min_width_pts),
+            "max_width_factor": self.max_width_factor,
+            "relative_threshold_scale": self.relative_threshold_scale,
+            "fingerprint_top_k": float(self.fingerprint_top_k),
+            "strict_tier2": bool(self.strict_tier2),
+            "tier2_tooth_activation_threshold": float(self.tier2_tooth_activation_threshold),
+        }
+
         result = ElementIdentificationResult(
             detected_elements=detected_elements,
             rejected_elements=rejected_elements,
@@ -420,19 +467,9 @@ class CombIdentifier:
             n_matched_peaks=n_matched_peaks,
             n_unmatched_peaks=len(experimental_peaks) - n_matched_peaks,
             algorithm="comb",
-            parameters={
-                "baseline_window_nm": self.baseline_window_nm,
-                "threshold_percentile": self.threshold_percentile,
-                "min_correlation": self.min_correlation,
-                "min_active_teeth": float(self.min_active_teeth),
-                "max_shift_pts": float(self.max_shift_pts),
-                "min_width_pts": float(self.min_width_pts),
-                "max_width_factor": self.max_width_factor,
-                "relative_threshold_scale": self.relative_threshold_scale,
-                "fingerprint_top_k": float(self.fingerprint_top_k),
-                "strict_tier2": bool(self.strict_tier2),
-                "tier2_tooth_activation_threshold": float(self.tier2_tooth_activation_threshold),
-            },
+            parameters=merge_coverage_into_parameters(
+                base_parameters, coverage.build_payload()
+            ),
         )
 
         logger.info(
@@ -460,17 +497,43 @@ class CombIdentifier:
         baseline: np.ndarray,
         threshold: float,
         elements_to_search: List[str],
+        coverage: Optional[CoverageTracker] = None,
     ) -> List[ElementIdentification]:
-        """Match spectral lines for given elements."""
+        """Match spectral lines for given elements.
+
+        Parameters
+        ----------
+        coverage
+            Optional detection-coverage tracker.  When provided, the
+            method records L2 (per-element line count in window), L3
+            (per-element peak matches), and L4 (per-element
+            fingerprint pass) telemetry without altering matching
+            behaviour.
+        """
         element_teeth: Dict[str, List[dict]] = {}
         element_identifications = []
+        wl_min = float(wavelength[0])
+        wl_max = float(wavelength[-1])
 
         for element in elements_to_search:
             # Get transitions for this element in wavelength range
-            transitions = self._get_element_lines(element, wavelength[0], wavelength[-1])
+            transitions = self._get_element_lines(element, wl_min, wl_max)
+
+            # L2 -- per-element line presence in DB (after the
+            # min_aki_gk + max_lines_per_element selection that comb
+            # actually uses).  Recording the post-filter count makes
+            # the telemetry match what the matcher sees.
+            if coverage is not None:
+                coverage.record_db_lines(element, len(transitions))
 
             if not transitions:
                 logger.debug(f"No transitions found for {element}")
+                # L3 -- explicitly record zero matches; record_peak_matches
+                # will *not* flag this element because L2 already
+                # surfaced it as elements_with_zero_db_lines_in_range.
+                if coverage is not None:
+                    coverage.record_peak_matches(element, 0)
+                    coverage.record_fingerprint(element, passed=False, score=0.0)
                 continue
 
             # Correlate each transition (tooth)
@@ -530,6 +593,21 @@ class CombIdentifier:
                 self.min_correlation,
                 self.min_active_teeth,
             )
+
+            # L3 / L4 detection-coverage telemetry.  ``len(matched_lines)``
+            # is the per-element peak-match count (L3) and ``detected``
+            # is the comb fingerprint-floor decision (L4) -- before the
+            # subsequent relative-threshold downgrade, which acts as a
+            # second-level gate against the median score and is a
+            # separate concern from per-element fingerprint coverage.
+            if coverage is not None:
+                coverage.record_peak_matches(element, len(matched_lines))
+                coverage.record_fingerprint(
+                    element,
+                    passed=bool(detected),
+                    score=float(fingerprint),
+                    floor=float(self.min_correlation),
+                )
             element_id = ElementIdentification(
                 element=element,
                 detected=detected,

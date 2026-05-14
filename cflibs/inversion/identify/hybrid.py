@@ -27,6 +27,10 @@ from cflibs.inversion.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
 )
+from cflibs.inversion.identify._coverage import (
+    CoverageTracker,
+    merge_coverage_into_parameters,
+)
 
 # Re-export the opt-in majority-vote combiner so callers can use either
 # ``cflibs.inversion.hybrid_identifier`` or ``cflibs.inversion.identify.hybrid``
@@ -114,9 +118,18 @@ class HybridIdentifier:
         self,
         wavelength: np.ndarray,
         intensity: np.ndarray,
+        spectrum_id: "str | None" = None,
     ) -> ElementIdentificationResult:
         """
         Run two-stage identification.
+
+        Parameters
+        ----------
+        spectrum_id : str, optional
+            Caller-supplied identifier for this spectrum.  Forwarded
+            to the wrapped ALIAS identifier so its per-element L2/L3/L4
+            coverage records are correlated with this spectrum.  Hybrid
+            itself emits an additional summary record at the end.
 
         Returns
         -------
@@ -126,6 +139,16 @@ class HybridIdentifier:
         """
         from cflibs.inversion.alias_identifier import ALIASIdentifier
         from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+
+        # Detection-coverage tracker -- additive telemetry only.  Hybrid
+        # delegates per-element scoring to ALIAS, which records its own
+        # L2/L3/L4 telemetry under identifier="alias"; this tracker
+        # surfaces the *hybrid* combined decision under
+        # identifier="hybrid_nnls_alias".
+        coverage = CoverageTracker(
+            spectrum_id=spectrum_id if spectrum_id is not None else "<unset>",
+            identifier_name="hybrid_nnls_alias",
+        )
 
         # ---- Stage 1: NNLS screening ----
         nnls_id = SpectralNNLSIdentifier(
@@ -162,7 +185,7 @@ class HybridIdentifier:
             chance_window_scale=self.alias_chance_window_scale,
             max_lines_per_element=self.alias_max_lines,
         )
-        alias_result = alias_id.identify(wavelength, intensity)
+        alias_result = alias_id.identify(wavelength, intensity, spectrum_id=spectrum_id)
         alias_detected: Set[str] = {e.element for e in alias_result.detected_elements}
 
         # Build ALIAS score map
@@ -178,11 +201,38 @@ class HybridIdentifier:
         else:
             final_detected = nnls_detected | alias_detected
 
+        # Reach into ALIAS's coverage payload (now stored on
+        # ``alias_result.parameters``) to mirror the L2/L3 per-element
+        # counters at the hybrid layer.  This is purely additive
+        # telemetry -- hybrid uses ALIAS's identification output
+        # unchanged.
+        alias_params = alias_result.parameters or {}
+        alias_zero_db = set(alias_params.get("elements_with_zero_db_lines_in_range", []) or [])
+        alias_zero_matches = set(
+            alias_params.get("elements_with_zero_peak_matches", []) or []
+        )
+
         all_element_ids: List[ElementIdentification] = []
         for element in self.elements:
             detected = element in final_detected
             in_nnls = element in nnls_detected
             in_alias = element in alias_detected
+
+            # L2/L3 mirroring from ALIAS's coverage payload.
+            if element in alias_zero_db:
+                coverage.record_db_lines(element, 0)
+            if element in alias_zero_matches:
+                # No record_db_lines call here -- ALIAS will have
+                # already classified L2 above when applicable.
+                coverage.record_peak_matches(element, 0)
+            # L4 -- the hybrid combined decision (both / either stage).
+            coverage.record_fingerprint(
+                element,
+                passed=bool(detected),
+                score=0.0
+                if not (in_nnls or in_alias)
+                else float(nnls_scores.get(element, 0.0) + alias_scores.get(element, 0.0)),
+            )
 
             alias_eid = alias_elements_map.get(element)
             matched_lines = alias_eid.matched_lines if alias_eid else []
@@ -221,6 +271,20 @@ class HybridIdentifier:
         detected_elements = [e for e in all_element_ids if e.detected]
         rejected_elements = [e for e in all_element_ids if not e.detected]
 
+        # Detection-coverage finalisation: peak count from ALIAS (the
+        # peaks reported on the result are ALIAS's), then emit summary.
+        coverage.set_n_peaks(alias_result.n_peaks)
+        coverage.emit_summary()
+
+        base_parameters = {
+            "nnls_detection_snr": self.nnls_detection_snr,
+            "alias_detection_threshold": self.alias_detection_threshold,
+            "require_both": float(self.require_both),
+            "n_nnls_candidates": len(nnls_detected),
+            "n_alias_confirmed": len(alias_detected),
+            "n_final_detected": len(final_detected),
+        }
+
         return ElementIdentificationResult(
             detected_elements=detected_elements,
             rejected_elements=rejected_elements,
@@ -230,12 +294,7 @@ class HybridIdentifier:
             n_matched_peaks=alias_result.n_matched_peaks,
             n_unmatched_peaks=alias_result.n_unmatched_peaks,
             algorithm="hybrid_nnls_alias",
-            parameters={
-                "nnls_detection_snr": self.nnls_detection_snr,
-                "alias_detection_threshold": self.alias_detection_threshold,
-                "require_both": float(self.require_both),
-                "n_nnls_candidates": len(nnls_detected),
-                "n_alias_confirmed": len(alias_detected),
-                "n_final_detected": len(final_detected),
-            },
+            parameters=merge_coverage_into_parameters(
+                base_parameters, coverage.build_payload()
+            ),
         )
