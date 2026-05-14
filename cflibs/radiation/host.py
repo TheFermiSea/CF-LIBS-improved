@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import functools
 import math
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -37,10 +38,75 @@ if TYPE_CHECKING:  # pragma: no cover - import-only
     from cflibs.core.jax_runtime import JaxMemoryPolicy
 
 __all__ = [
+    "ChunkPlan",
     "auto_nstitch",
     "available_device_bytes",
     "build_chunk_metadata",
+    "build_chunk_plan",
 ]
+
+
+@dataclass(frozen=True)
+class ChunkPlan:
+    """Frozen plan describing the chunked-forward kernel inputs (a2m2).
+
+    Collapses the five always-paired keyword arguments of
+    :func:`cflibs.radiation.kernels.forward_model_chunked` (``nstitch``,
+    ``overlap``, ``chunk_wavelength_grids``, ``line_masks``,
+    ``output_length``) into a single value-typed payload. Mirrors the
+    :class:`cflibs.core.jax_runtime.JaxMemoryPolicy` pattern: ``frozen=True``
+    so the plan is hashable / safe to keep alive across compilations, and
+    every field is a primitive int or numpy/JAX array.
+
+    Fields
+    ------
+    nstitch : int
+        Number of wavelength chunks.
+    overlap : int
+        Per-side wing padding in samples.
+    chunk_wavelength_grids : array, shape (nstitch, div_length + 2·overlap)
+        Padded per-chunk wavelength grids (numpy or jax array).
+    line_masks : array, shape (nstitch, N_lines)
+        Per-chunk line activation masks.
+    output_length : int
+        Original wavelength-grid length to trim to after overlap-and-add.
+
+    Notes
+    -----
+    The dataclass is intentionally NOT registered as a jax pytree: callers
+    pass the underlying arrays into the kernel which already accepts
+    ``Array``-typed inputs, and the integer fields are static. Pytree
+    registration would force a tree-flatten on every jit invocation
+    without a corresponding speedup.
+    """
+
+    nstitch: int
+    overlap: int
+    chunk_wavelength_grids: Any
+    line_masks: Any
+    output_length: int
+
+    @classmethod
+    def from_metadata(cls, metadata: dict) -> "ChunkPlan":
+        """Construct a :class:`ChunkPlan` from the legacy
+        :func:`build_chunk_metadata` dict.
+
+        Convenience helper for callers transitioning from the dict-based
+        API to the typed plan. The legacy dict uses ``chunks`` as the key
+        for the wavelength grids; we accept both ``chunks`` and
+        ``chunk_wavelength_grids`` for compatibility.
+        """
+        if "chunk_wavelength_grids" in metadata:
+            grids = metadata["chunk_wavelength_grids"]
+        else:
+            grids = metadata["chunks"]
+        return cls(
+            nstitch=int(metadata["nstitch"]),
+            overlap=int(metadata["overlap"]),
+            chunk_wavelength_grids=grids,
+            line_masks=metadata["line_masks"],
+            output_length=int(metadata["output_length"]),
+        )
 
 
 # Conservative fallback when neither psutil nor jax device-stats are reachable.
@@ -329,3 +395,33 @@ def build_chunk_metadata(
         "div_length": div_length,
         "output_length": output_length,
     }
+
+
+def build_chunk_plan(
+    wavelength_grid: np.ndarray,
+    line_wavelengths_nm: np.ndarray,
+    *,
+    nstitch: int | None = None,
+    overlap_factor: float = 4.0,
+    max_sigma_nm: float | None = None,
+    memory_policy: "JaxMemoryPolicy | None" = None,
+    available_bytes: int | None = None,
+) -> ChunkPlan:
+    """Same as :func:`build_chunk_metadata` but returns a :class:`ChunkPlan`.
+
+    Convenience for the typed-API path (a2m2). Internally delegates to
+    :func:`build_chunk_metadata` and wraps the returned dict via
+    :meth:`ChunkPlan.from_metadata`. The dict form is retained for
+    back-compat with existing callers; new callers should prefer this
+    typed helper.
+    """
+    metadata = build_chunk_metadata(
+        wavelength_grid,
+        line_wavelengths_nm,
+        nstitch=nstitch,
+        overlap_factor=overlap_factor,
+        max_sigma_nm=max_sigma_nm,
+        memory_policy=memory_policy,
+        available_bytes=available_bytes,
+    )
+    return ChunkPlan.from_metadata(metadata)
