@@ -27,6 +27,14 @@ from cflibs.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# Tier-2 false-positive-prone elements per
+# validation/protocol.yaml §tier2_alarms.fp_rate_track_elements.
+# These resonance lines sit at low SNR and in crowded spectral
+# neighborhoods; comb over-detects them at the global activation
+# threshold. The per-tooth correlation gate is widened (never tightened
+# relative to baseline) for these elements when ``strict_tier2`` is on.
+TIER2_FP_ELEMENTS = frozenset({"Mn", "Na", "K"})
+
 # JAX is an optional fast path for the per-tooth template correlation hot
 # loop inside ``CombIdentifier._correlate_tooth``. The default path keeps
 # ``scipy.stats.pearsonr`` so behavior is unchanged unless
@@ -293,6 +301,8 @@ class CombIdentifier:
         min_aki_gk: float = 5e3,
         fingerprint_top_k: int = 10,
         use_jax_correlate: bool = False,
+        strict_tier2: bool = True,
+        tier2_tooth_activation_threshold: float = 0.7,
     ):
         if fingerprint_top_k <= 0:
             raise ValueError("fingerprint_top_k must be positive")
@@ -322,6 +332,33 @@ class CombIdentifier:
         self.reference_temperature = reference_temperature
         self.min_aki_gk = min_aki_gk
         self.fingerprint_top_k = fingerprint_top_k
+        # Tier-2 FP-reduction knobs — scoped to Mn/Na/K only. The activation
+        # threshold below is applied via ``max(global, tier2)`` so the gate
+        # can never be looser than the global ``tooth_activation_threshold``
+        # (widen-only, mirroring PR #154's correlation-wiring shape).
+        self.strict_tier2 = bool(strict_tier2)
+        self.tier2_tooth_activation_threshold = float(tier2_tooth_activation_threshold)
+
+    def _tier2_effective_activation_threshold(self, element: Optional[str]) -> float:
+        """Return the effective per-tooth activation threshold for ``element``.
+
+        For non-Tier-2 elements (everything outside Mn/Na/K), or when the
+        ``strict_tier2`` knob is off, returns the global
+        ``self.tooth_activation_threshold`` — i.e. byte-identical to
+        pre-PR behavior. For Mn/Na/K with ``strict_tier2=True``, returns
+        ``max(global, tier2_threshold)`` so the gate is never weaker than
+        the baseline.
+        """
+        if (
+            self.strict_tier2
+            and element is not None
+            and element in TIER2_FP_ELEMENTS
+        ):
+            return max(
+                self.tooth_activation_threshold,
+                self.tier2_tooth_activation_threshold,
+            )
+        return self.tooth_activation_threshold
 
     def identify(
         self, wavelength: np.ndarray, intensity: np.ndarray
@@ -407,6 +444,10 @@ class CombIdentifier:
                 "max_width_factor": self.max_width_factor,
                 "relative_threshold_scale": self.relative_threshold_scale,
                 "fingerprint_top_k": float(self.fingerprint_top_k),
+                "strict_tier2": bool(self.strict_tier2),
+                "tier2_tooth_activation_threshold": float(
+                    self.tier2_tooth_activation_threshold
+                ),
             },
         )
 
@@ -750,11 +791,21 @@ class CombIdentifier:
         max_width_pts = int((resolution_nm * self.max_width_factor) / dwl)
         max_width_pts = max(self.min_width_pts, max_width_pts)
 
+        # Tier-2 FP reduction: Mn/Na/K teeth must clear a stricter per-tooth
+        # correlation floor (widen-only). Non-Tier-2 elements (Fe, Ti, Si, ...)
+        # see the global threshold and behave byte-identically to the
+        # pre-PR path. See validation/protocol.yaml §tier2_alarms.
+        element_symbol = transition.element if transition is not None else None
+        effective_activation_threshold = self._tier2_effective_activation_threshold(
+            element_symbol
+        )
+
         # JAX fast path: vectorize the entire (shift, width) candidate grid.
         if self.use_jax_correlate:
             return self._correlate_tooth_jax_impl(
                 intensity, baseline, center_idx, center_nm,
                 max_width_pts, threshold,
+                activation_threshold=effective_activation_threshold,
             )
 
         best_correlation = -1.0
@@ -810,8 +861,13 @@ class CombIdentifier:
         peak_amplitude = np.max(segment) if len(segment) > 0 else 0.0
 
         # Tooth is active only if BOTH correlation meets per-tooth threshold AND signal is present
-        # Paper (Gajarska et al. 2024): per-tooth activation uses separate threshold (0.5)
-        active = best_correlation >= self.tooth_activation_threshold and peak_amplitude > threshold
+        # Paper (Gajarska et al. 2024): per-tooth activation uses separate threshold (0.5).
+        # For Mn/Na/K (Tier-2 FP-prone) the threshold is widened — see
+        # ``_tier2_effective_activation_threshold``.
+        active = (
+            best_correlation >= effective_activation_threshold
+            and peak_amplitude > threshold
+        )
 
         return {
             "center_nm": center_nm,
@@ -837,13 +893,21 @@ class CombIdentifier:
         center_nm: float,
         max_width_pts: int,
         threshold: float,
+        activation_threshold: Optional[float] = None,
     ) -> dict:
         """JAX-vectorized counterpart to ``_correlate_tooth``.
 
         Searches the same ``(shift, width)`` grid in a single batched
         Pearson computation. Returns the same dict shape as the CPU
         path, with identical winner-selection semantics.
+
+        ``activation_threshold`` overrides the per-tooth activation gate
+        (used by the Tier-2 FP-reduction path to widen the gate for
+        Mn/Na/K). Defaults to ``self.tooth_activation_threshold`` so
+        existing callers without the kwarg are byte-identical.
         """
+        if activation_threshold is None:
+            activation_threshold = self.tooth_activation_threshold
         # Build the width sweep (odd values only). Mirrors
         # `range(min_width_pts, max_width_pts+1, 2)`. If
         # `min_width_pts` is even (the user passed an even value), the
@@ -919,7 +983,7 @@ class CombIdentifier:
         peak_amplitude = float(seg_amp[best_w_idx, best_s_idx])
 
         active = (
-            best_correlation >= self.tooth_activation_threshold
+            best_correlation >= activation_threshold
             and peak_amplitude > threshold
         )
 
