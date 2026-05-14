@@ -1,0 +1,15 @@
+# Files that, when changed, trigger the F1-regression gate in .swarm/verify.sh.
+# One path (or grep ERE pattern, prefixed by `^`) per line. Blank lines and
+# `#`-comment lines ignored. Update this list when adding a new identifier
+# or moving identifier-relevant code.
+#
+# Operator-owned. SELF_CRITICAL-protected via the .swarm/ prefix in beefcake-
+# swarm's pre-commit gate — the swarm itself cannot bypass the gate by
+# editing the list.
+
+^cflibs/inversion/identify/
+^cflibs/inversion/preprocess/
+^cflibs/inversion/common/element_id\.py$
+^cflibs/inversion/[a-z_]+_identifier\.py$
+^cflibs/inversion/hybrid\.py$
+^cflibs/benchmark/unified\.py$

@@ -214,7 +214,6 @@ def assert_benchmark_relevance(diff: str, exercised_files: set[str]) -> None:
         exercised_files: The set of file paths (relative to repo root) that
             were actually executed during the benchmark run.
     """
-    import re
 
     # Extract touched files from a unified diff (e.g. '--- a/path/to/file')
     touched = set()

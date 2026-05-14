@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -73,7 +72,6 @@ def mocked_sweep(parameter_sweep, monkeypatch, tmp_path):
     The stubs also record per-iter seed observations so the test can
     assert reseeding actually happened with the expected values.
     """
-    import numpy as np
 
     seeds_observed: list[int] = []
 

@@ -40,7 +40,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Iterable,
     List,
     Mapping,
     Optional,
