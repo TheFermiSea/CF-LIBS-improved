@@ -805,6 +805,18 @@ def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
         ("detection_threshold", "intensity_threshold_factor",
          "chance_window_scale", "max_lines_per_element"),
     )
+    # PR #159 changed ALIASIdentifier's threshold-kwarg defaults from
+    # explicit `float = 3.0` / `0.02` to `Optional[float] = None` so the
+    # constructor's high_recall=False/True preset resolves them. That
+    # made `_class_default_config` read `None` for both knobs here,
+    # which would let a future change to high_recall's default silently
+    # flip the strict alias workflow into recall mode. Pin the strict
+    # values explicitly so the benchmark contract is robust to future
+    # constructor-signature drift.
+    if arch_defaults.get("intensity_threshold_factor") is None:
+        arch_defaults["intensity_threshold_factor"] = 3.0
+    if arch_defaults.get("detection_threshold") is None:
+        arch_defaults["detection_threshold"] = 0.02
     if quick:
         return [
             arch_defaults,
@@ -834,6 +846,68 @@ def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
                     }
                 )
     return configs
+
+
+def _alias_high_recall_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
+    """Configs for the ``alias_high_recall`` workflow.
+
+    Mirrors ``_alias_workflow_configs`` but deliberately leaves
+    ``intensity_threshold_factor`` and ``detection_threshold`` UNSET so
+    PR #159's ``ALIASIdentifier(high_recall=True)`` preset resolves them
+    to its built-in recall values (2.0 / 0.01 — 33% / 50% looser than
+    the strict 3.0 / 0.02 defaults). Per CF-LIBS-improved-knyz this is
+    the wiring that surfaces more candidates on aa1100_substrate, where
+    the strict default rejects 9 of 12 records at the identification
+    stage and they fall out of composition entirely.
+
+    Other knobs (chance_window_scale, max_lines_per_element) are still
+    sweepable so the workflow can be tuned independently of the strict
+    alias workflow.
+    """
+    if quick:
+        return [
+            {"chance_window_scale": 0.4, "max_lines_per_element": 30},
+            {"chance_window_scale": 0.3, "max_lines_per_element": 30},
+        ]
+    return [
+        {"chance_window_scale": cws, "max_lines_per_element": 30}
+        for cws in (0.3, 0.4)
+    ]
+
+
+def _build_alias_high_recall_predictor(
+    context: UnifiedBenchmarkContext,
+    candidate_elements: List[str],
+    config: Dict[str, Any],
+) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
+    """Predictor for ``alias_high_recall``.
+
+    Constructs ``ALIASIdentifier(high_recall=True)`` WITHOUT explicit
+    threshold kwargs so PR #159's recall preset resolves them. Otherwise
+    byte-identical to ``_build_alias_predictor``. Records the active
+    mode in ``result.parameters['alias_mode']`` for downstream
+    audit-ability.
+    """
+    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
+        from cflibs.atomic.database import AtomicDatabase
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+
+        with AtomicDatabase(str(context.db_path)) as db:
+            identifier = ALIASIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=_estimate_rp_for_spectrum(spectrum),
+                high_recall=True,
+                chance_window_scale=float(config["chance_window_scale"]),
+                max_lines_per_element=int(config["max_lines_per_element"]),
+                **_jax_identifier_flags_for(ALIASIdentifier),
+            )
+            result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
+            result.parameters["candidate_elements"] = list(candidate_elements)
+            result.parameters["alias_mode"] = "high_recall"
+            return result
+
+    return predictor
 
 
 def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
@@ -1187,6 +1261,12 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
     return {
         "alias": IDWorkflowSpec(
             "alias", _alias_workflow_configs(quick), _build_alias_predictor, _config_name
+        ),
+        "alias_high_recall": IDWorkflowSpec(
+            "alias_high_recall",
+            _alias_high_recall_workflow_configs(quick),
+            _build_alias_high_recall_predictor,
+            _config_name,
         ),
         "comb": IDWorkflowSpec(
             "comb", _comb_workflow_configs(quick), _build_comb_predictor, _config_name
