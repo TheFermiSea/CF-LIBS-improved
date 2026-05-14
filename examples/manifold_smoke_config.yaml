@@ -27,3 +27,11 @@ manifold:
   time_steps: 4
 
   batch_size: 32
+
+  # Broadening kernel (ADR-0001 T1-4 / bead 8n4i). Default is
+  # ``physical_doppler`` (per-line Voigt with Stark). Uncomment the line
+  # below to opt in to the Line Distribution Method (van den Bekerom &
+  # Pannier 2021), which is ~19× faster at N_lines=1500 but currently
+  # Gaussian-only (no Stark broadening). Treat as experimental pending
+  # real-data validation.
+  # broadening_mode: ldm_gaussian
