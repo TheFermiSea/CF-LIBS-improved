@@ -735,6 +735,8 @@ class ALIASIdentifier:
         relative_cl_threshold_neutral: Optional[float] = None,
         relative_cl_threshold_ionized: Optional[float] = None,
         boltzmann_r2_min: float = 0.85,
+        r2_gate_mode: str = "fixed",
+        r2_gate_t_quality_threshold: float = 5500.0,
         high_recall: bool = False,
         use_jax_boltzmann_fit: bool = False,
         use_jax_nnls: bool = False,
@@ -743,6 +745,7 @@ class ALIASIdentifier:
         self_absorption_aware: bool = True,
         self_absorption_damping: float = 0.3,
         self_absorption_e_i_cutoff_ev: float = 0.1,
+        temperature_estimator_mode: str = "legacy",
     ):
         """
         Initialize the ALIAS element identifier.
@@ -826,6 +829,35 @@ class ALIASIdentifier:
             consistency checks used during identification. Higher values make
             identification stricter by requiring better linear agreement, while
             lower values allow more permissive acceptance of candidate elements.
+        r2_gate_mode : str, optional
+            How the ``boltzmann_r2_min`` gate is applied to candidates with
+            ``N_matched >= 3``. One of:
+
+            - ``"fixed"`` (default, byte-identical to historical behavior):
+              candidates are rejected when ``boltz_r2 < self.boltzmann_r2_min``
+              (the static 0.85 default). Preserves the precision-king
+              baseline (precision=1.000, FP/spec=0 on n=33 cross-shard).
+            - ``"adaptive_t"``: temperature-aware relaxation. For cold
+              plasma (``self._estimated_T < r2_gate_t_quality_threshold``),
+              the gate floor is relaxed to ``0.3`` so otherwise-valid
+              candidates whose Boltzmann fit is degraded by short
+              effective E_k spans (a known cold-T pathology surfaced by
+              the Vrabel diagnosis, PR #172) still clear. For warm plasma
+              (``T >= threshold``) the gate keeps the strict
+              ``boltzmann_r2_min`` floor.
+            - ``"disabled"``: bypass the R^2 gate entirely. Intended as a
+              control-cell measurement for sweep analysis; NOT a sensible
+              production default — disables one of the strongest false-
+              positive suppressors.
+
+            (default: ``"fixed"``)
+        r2_gate_t_quality_threshold : float, optional
+            Temperature in kelvin below which ``r2_gate_mode="adaptive_t"``
+            switches to the relaxed R^2 floor. Must be finite and > 0.
+            Ignored when ``r2_gate_mode != "adaptive_t"``. The default of
+            ``5500.0`` K was chosen from the Vrabel-style cold-plasma
+            regime identified in PR #172's universal-miss diagnosis.
+            (default: 5500.0)
         use_jax_boltzmann_fit : bool, optional
             If True, use the JAX-vectorized closed-form least-squares
             Boltzmann fit (:func:`boltzmann_temperature_jax`) inside
@@ -894,6 +926,34 @@ class ALIASIdentifier:
             untouched. The historical default of 0.1 eV catches genuine
             ground-state and metastable transitions while leaving truly
             excited transitions alone (default: 0.1).
+        temperature_estimator_mode : str, optional
+            Which Pass-1 Boltzmann-slope strategy
+            ``_estimate_plasma_temperature`` uses. One of:
+
+            - ``"legacy"`` (default, byte-identical): the historical
+              3-pass algorithm — unweighted ``np.polyfit``/``linregress``
+              over the matched lines, returns the first element whose
+              ``slope<0`` and ``r_sq>0.2``.
+            - ``"robust"``: per-line intensity-weighted regression
+              (``sigma_y ≈ sigma_I/I`` with a shot-noise proxy
+              ``sigma_I ≈ max(noise, sqrt(I))``) — deprioritizes the
+              noisy high-``E_k`` lines that bias the unweighted slope
+              cold (see ``docs/research/vrabel-universal-miss-root-
+              cause-2026-05-14.md``). After Pass-1 collects all
+              candidate T_K values, the median across elements is
+              accepted if 3+ elements fall within a 2000 K window;
+              otherwise the legacy Pass-2/3 line-ratio fallback runs.
+              Emits an INFO log line summarizing per-element T_K and
+              the selected value.
+            - ``"weighted"``: simpler heuristic — drop the bottom
+              quartile of matched lines by SNR before the unweighted
+              slope fit. No cross-element consistency check.
+
+            Must be one of the strings above. The default ``"legacy"``
+            preserves byte-stable behavior for all existing benchmarks;
+            ``"robust"`` and ``"weighted"`` are opt-in for the Vrabel
+            universal-miss root cause investigation
+            (default: ``"legacy"``).
         """
         self.atomic_db = atomic_db
         if not (np.isfinite(resolving_power) and resolving_power > 0):
@@ -967,6 +1027,29 @@ class ALIASIdentifier:
                 f"boltzmann_r2_min must be finite and in [0, 1], got {boltzmann_r2_min!r}"
             )
         self.boltzmann_r2_min = float(boltzmann_r2_min)
+        # Adaptive R^2 gate (CF-LIBS-improved-ftp1).
+        # Default mode "fixed" preserves the historical static-0.85 gate
+        # byte-identically, which keeps the alias precision-king
+        # invariant (precision=1.000, FP/spec=0 on n=33 cross-shard).
+        # See the docstring for the rationale on adaptive_t / disabled.
+        _R2_GATE_MODES = ("fixed", "adaptive_t", "disabled")
+        if r2_gate_mode not in _R2_GATE_MODES:
+            raise ValueError(
+                f"r2_gate_mode must be one of {_R2_GATE_MODES}, got {r2_gate_mode!r}"
+            )
+        self.r2_gate_mode = r2_gate_mode
+        if not (
+            np.isfinite(r2_gate_t_quality_threshold)
+            and r2_gate_t_quality_threshold > 0
+        ):
+            raise ValueError(
+                f"r2_gate_t_quality_threshold must be finite and > 0, "
+                f"got {r2_gate_t_quality_threshold!r}"
+            )
+        self.r2_gate_t_quality_threshold = float(r2_gate_t_quality_threshold)
+        # Cold-plasma R^2 floor when adaptive_t mode fires. Internal
+        # constant — surfaces in the gate logic in identify() below.
+        self._r2_gate_cold_floor = 0.3
         self.use_jax_boltzmann_fit = bool(use_jax_boltzmann_fit)
         self.use_jax_nnls = bool(use_jax_nnls)
         self.use_jax_p_snr = bool(use_jax_p_snr)
@@ -995,6 +1078,15 @@ class ALIASIdentifier:
         # damping behavior is auditable from the post-run log line.
         self._sa_n_damped_lines: int = 0
         self._sa_damped_elements: Set[str] = set()
+        # Temperature-estimator strategy (CF-LIBS-improved-762f).
+        # See the docstring for full rationale.
+        _valid_modes = ("legacy", "robust", "weighted")
+        if temperature_estimator_mode not in _valid_modes:
+            raise ValueError(
+                f"temperature_estimator_mode must be one of {_valid_modes}, "
+                f"got {temperature_estimator_mode!r}"
+            )
+        self.temperature_estimator_mode = str(temperature_estimator_mode)
         _any_jax = (
             self.use_jax_boltzmann_fit
             or self.use_jax_nnls
@@ -1568,7 +1660,7 @@ class ALIASIdentifier:
             min_required_matches = 3
             if N_matched < min_required_matches:
                 detected = False
-            if N_matched >= 3 and boltz_r2 < self.boltzmann_r2_min:
+            if self._r2_gate_rejects(boltz_r2, N_matched):
                 detected = False
 
             # L4 -- per-element fingerprint pass.  alias's effective
@@ -1883,6 +1975,14 @@ class ALIASIdentifier:
         transition metal with enough matched lines, then a line-ratio method,
         and finally ``self.reference_temperature`` if all methods fail.
 
+        The Pass-1 slope-fit strategy is governed by
+        ``self.temperature_estimator_mode`` ("legacy" | "robust" | "weighted").
+        See the constructor docstring for full rationale; the short story is
+        that "legacy" is byte-identical with the historical behavior and
+        "robust"/"weighted" are opt-in for the Vrabel-universal-miss root
+        cause (the unweighted slope fit is dragged cold by noisy high-E_k
+        weak lines).
+
         Always sets ``self._estimated_T`` (K) to a finite value.
         """
         if len(peaks) < 3:
@@ -1896,87 +1996,185 @@ class ALIASIdentifier:
         probe_elements = ["Fe", "Ti", "Cr", "Ca", "Mn", "Ni", "V", "Cu", "Mg", "Si", "Al"]
         delta_lambda = 0.5 * (wl_min + wl_max) / max(self._effective_R or self.resolving_power, 500)
 
-        for probe_el in probe_elements:
-            try:
-                transitions = self.atomic_db.get_transitions(
-                    probe_el, 1, wavelength_min=wl_min, wavelength_max=wl_max
+        # ------------------------------------------------------------------
+        # Robust mode (opt-in, CF-LIBS-improved-762f): collect candidate T_K
+        # from EVERY element using weighted regression, then accept the
+        # cross-element median if 3+ elements fall within a 2000 K window.
+        # See ``_estimate_T_robust`` below for the per-element fit.
+        # ------------------------------------------------------------------
+        if self.temperature_estimator_mode == "robust":
+            robust_candidates: List[Tuple[str, float, float, int]] = []
+            for probe_el in probe_elements:
+                cand = self._estimate_T_single_element_robust(
+                    probe_el,
+                    peak_wls,
+                    peak_intensities,
+                    wl_min,
+                    wl_max,
+                    delta_lambda,
                 )
-                if not transitions:
-                    continue
-            except (KeyError, ValueError, AttributeError):
-                continue
+                if cand is not None:
+                    T_K, r_sq, n_lines = cand
+                    robust_candidates.append((probe_el, T_K, r_sq, n_lines))
 
-            # Filter to lines with known A_ki and g_k
-            good_trans = [t for t in transitions if t.A_ki > 0 and t.g_k > 0 and t.E_k_ev > 0]
-            if len(good_trans) < 4:
-                continue
-
-            # Sort by expected strength and take top 15
-            kT_ref = KB_EV * self.reference_temperature
-            good_trans.sort(
-                key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref),
-                reverse=True,
-            )
-            good_trans = good_trans[:15]
-
-            # Match to peaks
-            E_k_vals = []
-            y_vals = []
-            shift = self._global_wl_shift
-
-            for t in good_trans:
-                wl_shifted = t.wavelength_nm + shift
-                dists = np.abs(peak_wls - wl_shifted)
-                best_idx = int(np.argmin(dists))
-                if dists[best_idx] <= delta_lambda:
-                    I_obs = peak_intensities[best_idx]
-                    if I_obs > 0 and t.A_ki > 0 and t.g_k > 0:
-                        y = math.log(I_obs * t.wavelength_nm / (t.g_k * t.A_ki))
-                        E_k_vals.append(t.E_k_ev)
-                        y_vals.append(y)
-
-            if len(E_k_vals) < 4:
-                continue
-
-            # Fit Boltzmann slope: y = -1/(kT) * E_k + const
-            E_k_arr = np.array(E_k_vals)
-            y_arr = np.array(y_vals)
-
-            try:
-                if self.use_jax_boltzmann_fit:
-                    # JAX path (opt-in). One-spectrum batch; the heavy lift
-                    # comes when future callers vectorize across many spectra.
-                    T_K_arr, slope_arr, r_sq_arr = boltzmann_temperature_jax(
-                        y_arr[None, :],
-                        E_k_arr,
-                        weights=None,
-                        return_diagnostics=True,
+            if robust_candidates:
+                T_values = np.array([c[1] for c in robust_candidates])
+                # Cross-element consistency: 3+ elements within a 2000 K window
+                # around the median?
+                T_median = float(np.median(T_values))
+                within_window = np.sum(np.abs(T_values - T_median) <= 2000.0)
+                # INFO log so operators can audit the consensus.
+                logger.info(
+                    "alias._estimate_plasma_temperature robust mode: "
+                    "n_elements=%d, per_element=%s, median_T_K=%.0f, "
+                    "n_within_2000K=%d, selected_T_K=%s",
+                    len(robust_candidates),
+                    [(el, round(T, 0), round(r2, 3), n)
+                     for el, T, r2, n in robust_candidates],
+                    T_median,
+                    int(within_window),
+                    f"{T_median:.0f}" if within_window >= 3
+                    else "fall-through-to-pass2",
+                )
+                if (
+                    within_window >= 3
+                    and self._T_ESTIMATE_MIN_K < T_median < self._T_ESTIMATE_MAX_K
+                ):
+                    self._estimated_T = T_median
+                    return
+                # Single-element or scatter > 2000 K: still take the best
+                # individual fit (highest r_sq, then largest n_lines) if
+                # any single element looks credible.
+                # Otherwise fall through to Pass 2.
+                robust_candidates.sort(
+                    key=lambda c: (c[2], c[3]), reverse=True
+                )
+                best_el, best_T, best_r2, best_n = robust_candidates[0]
+                if (
+                    best_r2 > 0.5
+                    and best_n >= 4
+                    and self._T_ESTIMATE_MIN_K < best_T < self._T_ESTIMATE_MAX_K
+                ):
+                    logger.info(
+                        "alias._estimate_plasma_temperature robust mode: "
+                        "no cross-element consensus, accepting best "
+                        "single-element fit element=%s T_K=%.0f r_sq=%.3f "
+                        "n_lines=%d",
+                        best_el, best_T, best_r2, best_n,
                     )
-                    slope = float(slope_arr[0])
-                    r_sq = float(r_sq_arr[0])
-                    T_K_jax = float(T_K_arr[0])
+                    self._estimated_T = float(best_T)
+                    return
+            # else: fall through to Pass 2 below.
 
-                    if not np.isfinite(slope) or abs(slope) < 1e-10:
+        else:
+            # Legacy + weighted modes share the per-element early-return loop.
+            # The only difference: "weighted" drops the bottom quartile by SNR
+            # before fitting; "legacy" uses the unweighted slope on all lines.
+            for probe_el in probe_elements:
+                try:
+                    transitions = self.atomic_db.get_transitions(
+                        probe_el, 1, wavelength_min=wl_min, wavelength_max=wl_max
+                    )
+                    if not transitions:
                         continue
-                    if slope < 0 and r_sq > 0.2:
-                        T_K = T_K_jax
-                        if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
-                            self._estimated_T = float(T_K)
-                            return
-                else:
-                    result = linregress(E_k_arr, y_arr)
-                    slope = result.slope
-                    r_sq = result.rvalue**2
+                except (KeyError, ValueError, AttributeError):
+                    continue
 
-                    if abs(slope) < 1e-10:
-                        continue
-                    if slope < 0 and r_sq > 0.2:
-                        T_K = -1.0 / (slope * KB_EV)
-                        if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
-                            self._estimated_T = float(T_K)
-                            return
-            except (ValueError, ZeroDivisionError):
-                continue
+                # Filter to lines with known A_ki and g_k
+                good_trans = [t for t in transitions if t.A_ki > 0 and t.g_k > 0 and t.E_k_ev > 0]
+                if len(good_trans) < 4:
+                    continue
+
+                # Sort by expected strength and take top 15
+                kT_ref = KB_EV * self.reference_temperature
+                good_trans.sort(
+                    key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref),
+                    reverse=True,
+                )
+                good_trans = good_trans[:15]
+
+                # Match to peaks
+                E_k_vals = []
+                y_vals = []
+                I_vals = []  # tracked for weighted-mode SNR pruning
+                shift = self._global_wl_shift
+
+                for t in good_trans:
+                    wl_shifted = t.wavelength_nm + shift
+                    dists = np.abs(peak_wls - wl_shifted)
+                    best_idx = int(np.argmin(dists))
+                    if dists[best_idx] <= delta_lambda:
+                        I_obs = peak_intensities[best_idx]
+                        if I_obs > 0 and t.A_ki > 0 and t.g_k > 0:
+                            y = math.log(I_obs * t.wavelength_nm / (t.g_k * t.A_ki))
+                            E_k_vals.append(t.E_k_ev)
+                            y_vals.append(y)
+                            I_vals.append(float(I_obs))
+
+                if len(E_k_vals) < 4:
+                    continue
+
+                # Weighted mode (opt-in): drop the bottom quartile by intensity
+                # (SNR proxy) to deprioritize the noisy weak high-E_k lines.
+                if self.temperature_estimator_mode == "weighted":
+                    I_arr_local = np.array(I_vals)
+                    if I_arr_local.size >= 4:
+                        snr_cutoff = float(np.quantile(I_arr_local, 0.25))
+                        keep_mask = I_arr_local > snr_cutoff
+                        # Keep at least 4 lines so the fit remains tractable.
+                        if int(np.sum(keep_mask)) >= 4:
+                            E_k_vals = [
+                                e for e, k in zip(E_k_vals, keep_mask) if k
+                            ]
+                            y_vals = [
+                                y for y, k in zip(y_vals, keep_mask) if k
+                            ]
+                            I_vals = [
+                                i for i, k in zip(I_vals, keep_mask) if k
+                            ]
+
+                if len(E_k_vals) < 4:
+                    continue
+
+                # Fit Boltzmann slope: y = -1/(kT) * E_k + const
+                E_k_arr = np.array(E_k_vals)
+                y_arr = np.array(y_vals)
+
+                try:
+                    if self.use_jax_boltzmann_fit:
+                        # JAX path (opt-in). One-spectrum batch; the heavy lift
+                        # comes when future callers vectorize across many spectra.
+                        T_K_arr, slope_arr, r_sq_arr = boltzmann_temperature_jax(
+                            y_arr[None, :],
+                            E_k_arr,
+                            weights=None,
+                            return_diagnostics=True,
+                        )
+                        slope = float(slope_arr[0])
+                        r_sq = float(r_sq_arr[0])
+                        T_K_jax = float(T_K_arr[0])
+
+                        if not np.isfinite(slope) or abs(slope) < 1e-10:
+                            continue
+                        if slope < 0 and r_sq > 0.2:
+                            T_K = T_K_jax
+                            if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
+                                self._estimated_T = float(T_K)
+                                return
+                    else:
+                        result = linregress(E_k_arr, y_arr)
+                        slope = result.slope
+                        r_sq = result.rvalue**2
+
+                        if abs(slope) < 1e-10:
+                            continue
+                        if slope < 0 and r_sq > 0.2:
+                            T_K = -1.0 / (slope * KB_EV)
+                            if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
+                                self._estimated_T = float(T_K)
+                                return
+                except (ValueError, ZeroDivisionError):
+                    continue
 
         # Pass 2: Line-ratio fallback — estimate T from best 2-line pair
         shift = self._global_wl_shift
@@ -2036,6 +2234,139 @@ class ALIASIdentifier:
 
         # Final fallback: use reference temperature instead of None
         self._estimated_T = self.reference_temperature
+
+    def _estimate_T_single_element_robust(
+        self,
+        probe_el: str,
+        peak_wls: np.ndarray,
+        peak_intensities: np.ndarray,
+        wl_min: float,
+        wl_max: float,
+        delta_lambda: float,
+    ) -> Optional[Tuple[float, float, int]]:
+        """
+        Intensity-weighted Boltzmann-slope T_K for one element (robust mode).
+
+        Mechanism — addresses the Vrabel universal-miss diagnosis
+        (``docs/research/vrabel-universal-miss-root-cause-2026-05-14.md``):
+        in the legacy unweighted ``np.polyfit`` / ``linregress`` slope fit,
+        a handful of weak high-``E_k`` lines (intensity ~ noise) dominate
+        the slope and pull the recovered T_K cold (~4000 K) when the true
+        T_K is ~10000 K. By weighting each Boltzmann-plot point by
+        ``1 / sigma_y^2`` with ``sigma_y ≈ sigma_I / I`` and a shot-noise
+        proxy ``sigma_I ≈ max(noise, sqrt(I))``, the noisy high-``E_k``
+        points are deprioritized and the fit follows the strong
+        low-``E_k`` lines that actually constrain T.
+
+        Returns ``(T_K, r_sq, n_lines)`` if a valid weighted fit was
+        produced, or ``None`` otherwise (insufficient lines, degenerate
+        E_k spread, slope >= 0, unphysical T_K, etc.). Does not mutate
+        ``self``.
+        """
+        try:
+            transitions = self.atomic_db.get_transitions(
+                probe_el, 1, wavelength_min=wl_min, wavelength_max=wl_max
+            )
+            if not transitions:
+                return None
+        except (KeyError, ValueError, AttributeError):
+            return None
+
+        good_trans = [
+            t for t in transitions if t.A_ki > 0 and t.g_k > 0 and t.E_k_ev > 0
+        ]
+        if len(good_trans) < 4:
+            return None
+
+        kT_ref = KB_EV * self.reference_temperature
+        good_trans.sort(
+            key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref),
+            reverse=True,
+        )
+        good_trans = good_trans[:15]
+
+        E_k_vals: List[float] = []
+        y_vals: List[float] = []
+        sigma_y_vals: List[float] = []
+        shift = self._global_wl_shift
+
+        # Per-spectrum noise proxy: median |corrected intensity| of the
+        # bottom half of matched peaks is a robust low-end estimate.
+        # We do not have access to the noise estimate from _detect_peaks
+        # here, so use a per-line fallback ``max(1e-12, sqrt(I))``.
+        for t in good_trans:
+            wl_shifted = t.wavelength_nm + shift
+            dists = np.abs(peak_wls - wl_shifted)
+            best_idx = int(np.argmin(dists))
+            if dists[best_idx] > delta_lambda:
+                continue
+            I_obs = float(peak_intensities[best_idx])
+            if I_obs <= 0 or t.A_ki <= 0 or t.g_k <= 0:
+                continue
+            y = math.log(I_obs * t.wavelength_nm / (t.g_k * t.A_ki))
+            # Shot-noise proxy: sigma_I ~ max(small_floor, sqrt(I)).
+            # In log-space y = log(I·λ/(g_k·A_ki)), so d(y)/d(I) = 1/I
+            # and sigma_y ≈ sigma_I / I.
+            sigma_I = max(math.sqrt(max(I_obs, 0.0)), 1e-12)
+            sigma_y = sigma_I / I_obs
+            E_k_vals.append(t.E_k_ev)
+            y_vals.append(y)
+            sigma_y_vals.append(max(sigma_y, 1e-12))
+
+        if len(E_k_vals) < 4:
+            return None
+
+        E_k_arr = np.array(E_k_vals)
+        y_arr = np.array(y_vals)
+        sigma_arr = np.array(sigma_y_vals)
+        weights = 1.0 / np.square(sigma_arr)
+        # Need E_k spread for the regression to be meaningful.
+        if float(np.ptp(E_k_arr)) < 0.5:
+            return None
+
+        # Closed-form weighted linear least squares for y = a + b·x:
+        #   b = (sum w x y · sum w − sum w x · sum w y) / (sum w x^2 · sum w − (sum w x)^2)
+        # r^2 computed against the weighted mean of y.
+        try:
+            W = float(np.sum(weights))
+            if W <= 0:
+                return None
+            Sx = float(np.sum(weights * E_k_arr))
+            Sy = float(np.sum(weights * y_arr))
+            Sxx = float(np.sum(weights * E_k_arr * E_k_arr))
+            Sxy = float(np.sum(weights * E_k_arr * y_arr))
+            denom = Sxx * W - Sx * Sx
+            if abs(denom) < 1e-30:
+                return None
+            slope = (Sxy * W - Sx * Sy) / denom
+            intercept = (Sy - slope * Sx) / W
+            # Weighted r^2 against the weighted mean.
+            y_mean_w = Sy / W
+            y_pred = slope * E_k_arr + intercept
+            SS_res = float(np.sum(weights * np.square(y_arr - y_pred)))
+            SS_tot = float(np.sum(weights * np.square(y_arr - y_mean_w)))
+            if SS_tot <= 0:
+                return None
+            r_sq = 1.0 - SS_res / SS_tot
+        except (ValueError, ZeroDivisionError, FloatingPointError):
+            return None
+
+        if not np.isfinite(slope) or abs(slope) < 1e-10:
+            return None
+        if slope >= 0:
+            return None
+        T_K = -1.0 / (slope * KB_EV)
+        if not (self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K):
+            return None
+        # Note: polarity audit of the legacy ``r_sq > 0.2`` gate
+        # (alias.py: search "slope < 0 and r_sq > 0.2") found the polarity
+        # is CORRECT — high r^2 ⇒ accept (good fit), not invert it. So we
+        # apply the same r_sq threshold here as a sanity floor, but in
+        # robust mode the cross-element median check is the primary
+        # selection criterion, not a per-element r_sq gate.
+        if r_sq < 0.2:
+            return None
+        return float(T_K), float(r_sq), int(len(E_k_vals))
 
     def _fast_screening(
         self,
@@ -2121,6 +2452,57 @@ class ALIASIdentifier:
                 passed.append(element)
 
         return passed
+
+    def _r2_gate_rejects(self, boltz_r2: float, N_matched: int) -> bool:
+        """Apply the configurable Boltzmann R^2 gate to a candidate.
+
+        Returns ``True`` if the candidate should be rejected by the gate,
+        ``False`` if it passes. The gate is only meaningful when at least
+        three matched lines exist (so a regression is well-defined); for
+        ``N_matched < 3`` the rejection of that candidate is handled
+        upstream and this method always returns ``False``.
+
+        Mode behavior (CF-LIBS-improved-ftp1):
+        - ``"fixed"`` (default): byte-identical to the historical static
+          gate — ``boltz_r2 < self.boltzmann_r2_min`` triggers rejection.
+        - ``"adaptive_t"``: if ``self._estimated_T`` is below
+          ``self.r2_gate_t_quality_threshold``, fall back to the cold-T
+          floor (``self._r2_gate_cold_floor``, currently 0.3). Otherwise
+          apply the strict fixed gate. This addresses the Vrabel-style
+          cold-plasma pathology (PR #172 diagnosis) where short effective
+          E_k spans degrade R^2 even when the line set is real.
+        - ``"disabled"``: gate never rejects. Intended only for the
+          control-cell sweep — NOT a real production setting.
+
+        Parameters
+        ----------
+        boltz_r2 : float
+            Coefficient of determination reported by
+            ``_boltzmann_consistency_check`` for the candidate.
+        N_matched : int
+            Number of matched lines on the candidate. The gate is
+            no-op'd when this is below 3.
+
+        Returns
+        -------
+        bool
+            ``True`` if the gate rejects the candidate.
+        """
+        if N_matched < 3:
+            return False
+        if self.r2_gate_mode == "disabled":
+            return False
+        if self.r2_gate_mode == "adaptive_t":
+            est_T = getattr(self, "_estimated_T", None)
+            if (
+                est_T is not None
+                and np.isfinite(est_T)
+                and est_T < self.r2_gate_t_quality_threshold
+            ):
+                return boltz_r2 < self._r2_gate_cold_floor
+            return boltz_r2 < self.boltzmann_r2_min
+        # "fixed" mode — default, byte-identical to historical behavior.
+        return boltz_r2 < self.boltzmann_r2_min
 
     def _boltzmann_consistency_check(
         self,
