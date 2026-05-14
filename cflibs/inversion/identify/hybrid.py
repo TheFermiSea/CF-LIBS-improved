@@ -28,6 +28,16 @@ from cflibs.inversion.element_id import (
     ElementIdentificationResult,
 )
 
+# Re-export the opt-in majority-vote combiner so callers can use either
+# ``cflibs.inversion.hybrid_identifier`` or ``cflibs.inversion.identify.hybrid``
+# without learning a third module path. The existing HybridIdentifier
+# (NNLS+ALIAS two-stage) is unchanged; HybridConsensusIdentifier is a
+# *separate* class with majority-vote semantics across alias/comb/correlation.
+from cflibs.inversion.identify.hybrid_consensus import (  # noqa: E402,F401
+    HybridConsensusIdentifier,
+    consensus_detected_elements,
+)
+
 if TYPE_CHECKING:
     from cflibs.atomic.database import AtomicDatabase
     from cflibs.manifold.basis_library import BasisLibrary
