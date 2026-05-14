@@ -731,6 +731,9 @@ class ALIASIdentifier:
         reference_temperature: float = 10000.0,
         max_screening_candidates: int = 12,
         relative_cl_threshold: float = 0.1,
+        relative_cl_per_ion_stage: bool = False,
+        relative_cl_threshold_neutral: Optional[float] = None,
+        relative_cl_threshold_ionized: Optional[float] = None,
         boltzmann_r2_min: float = 0.85,
         high_recall: bool = False,
         use_jax_boltzmann_fit: bool = False,
@@ -796,6 +799,28 @@ class ALIASIdentifier:
             Maximum number of candidate elements retained after screening.
         relative_cl_threshold : float, optional
             Minimum relative confidence level required for an element to be kept.
+        relative_cl_per_ion_stage : bool, optional
+            Opt-in switch for the per-ion-stage relative-CL gate
+            (CF-LIBS-improved-dj6y).  When ``False`` (default) the historical
+            global gate runs: every element's CL is compared to
+            ``max_CL * relative_cl_threshold`` over the full element list.
+            When ``True``, elements are split into neutrals (dominant
+            matched ion stage = 1) and ionized (dominant matched ion stage
+            >= 2), and each subset is gated against its own subset-max so
+            that a high-CL dominant neutral cannot kill lower-CL ionized
+            species (the Vrabel s019 Mg failure mode). The default preserves
+            the precision-king baseline; flip explicitly to opt in.
+            (default: False)
+        relative_cl_threshold_neutral : Optional[float], optional
+            Neutral-subset threshold used when
+            ``relative_cl_per_ion_stage=True``. Must be in ``[0.0, 1.0]``.
+            Falls back to ``relative_cl_threshold`` when ``None``.
+            (default: None)
+        relative_cl_threshold_ionized : Optional[float], optional
+            Ionized-subset threshold used when
+            ``relative_cl_per_ion_stage=True``. Must be in ``[0.0, 1.0]``.
+            Falls back to ``relative_cl_threshold`` when ``None``.
+            (default: None)
         boltzmann_r2_min : float, optional
             Minimum acceptable coefficient of determination (R^2) for Boltzmann-plot
             consistency checks used during identification. Higher values make
@@ -910,6 +935,33 @@ class ALIASIdentifier:
         self.reference_temperature = reference_temperature
         self.max_screening_candidates = max_screening_candidates
         self.relative_cl_threshold = relative_cl_threshold
+        # Per-ion-stage relative-CL gate knobs (CF-LIBS-improved-dj6y).
+        # Defaults preserve the historical global gate behavior. When the
+        # opt-in flag is on, neutrals and ionized species are gated against
+        # separate subset-maxima so a high-CL neutral (e.g. Al I) cannot
+        # eliminate a lower-CL ion (e.g. Mg II) via the global threshold.
+        self.relative_cl_per_ion_stage = bool(relative_cl_per_ion_stage)
+        for _kw_name, _kw_val in (
+            ("relative_cl_threshold_neutral", relative_cl_threshold_neutral),
+            ("relative_cl_threshold_ionized", relative_cl_threshold_ionized),
+        ):
+            if _kw_val is None:
+                continue
+            if not (np.isfinite(_kw_val) and 0.0 <= _kw_val <= 1.0):
+                raise ValueError(
+                    f"{_kw_name} must be finite and in [0.0, 1.0], "
+                    f"got {_kw_val!r}"
+                )
+        self.relative_cl_threshold_neutral = (
+            float(relative_cl_threshold_neutral)
+            if relative_cl_threshold_neutral is not None
+            else None
+        )
+        self.relative_cl_threshold_ionized = (
+            float(relative_cl_threshold_ionized)
+            if relative_cl_threshold_ionized is not None
+            else None
+        )
         if not (np.isfinite(boltzmann_r2_min) and 0.0 <= boltzmann_r2_min <= 1.0):
             raise ValueError(
                 f"boltzmann_r2_min must be finite and in [0, 1], got {boltzmann_r2_min!r}"
@@ -969,6 +1021,92 @@ class ALIASIdentifier:
         # Estimated plasma temperature (set by _estimate_plasma_temperature)
         self._estimated_T: Optional[float] = None
 
+    def _apply_relative_cl_gate(self, all_element_ids: list) -> None:
+        """Mutate ``e.detected`` in place per the relative-CL gate.
+
+        Two modes:
+
+        * Global (default, ``relative_cl_per_ion_stage=False``): one
+          ``max_CL`` is taken over all elements and every element is gated
+          against ``max_CL * relative_cl_threshold``. This is the
+          precision-king baseline; it is also the failure mode diagnosed
+          on Vrabel s019 (PR #172) where a high-CL Al I dominates and
+          silently kills Mg II at CL ~ 0.026.
+        * Per-ion-stage (CF-LIBS-improved-dj6y, opt-in via
+          ``relative_cl_per_ion_stage=True``): each element's "dominant"
+          ion stage is the ionization stage of its highest-intensity
+          matched line. Elements split into neutrals (dominant stage = 1)
+          and ionized (dominant stage >= 2). Each subset is gated against
+          its own subset-max with its own threshold
+          (``relative_cl_threshold_neutral`` /
+          ``relative_cl_threshold_ionized``, both falling back to
+          ``relative_cl_threshold``). A subset with zero members simply
+          skips its branch — no crash, no cross-subset contamination.
+          Elements with zero matched lines have no ion-stage to arbitrate
+          on; they fall back to the global gate so the opt-in does not
+          silently exempt them from suppression.
+        """
+        if not all_element_ids or self.relative_cl_threshold <= 0:
+            return
+
+        if not self.relative_cl_per_ion_stage:
+            max_CL = max(e.confidence for e in all_element_ids)
+            relative_threshold = max_CL * self.relative_cl_threshold
+            for e in all_element_ids:
+                if e.confidence < relative_threshold:
+                    e.detected = False
+            return
+
+        neutral_threshold = (
+            self.relative_cl_threshold_neutral
+            if self.relative_cl_threshold_neutral is not None
+            else self.relative_cl_threshold
+        )
+        ionized_threshold = (
+            self.relative_cl_threshold_ionized
+            if self.relative_cl_threshold_ionized is not None
+            else self.relative_cl_threshold
+        )
+
+        def _dominant_ion_stage(elem_id) -> Optional[int]:
+            if not elem_id.matched_lines:
+                return None
+            dominant = max(
+                elem_id.matched_lines, key=lambda ln: ln.intensity_exp
+            )
+            return int(dominant.ionization_stage)
+
+        neutrals = []
+        ionized = []
+        unclassified = []
+        for e in all_element_ids:
+            stage = _dominant_ion_stage(e)
+            if stage is None:
+                unclassified.append(e)
+            elif stage <= 1:
+                neutrals.append(e)
+            else:
+                ionized.append(e)
+
+        if neutrals:
+            max_CL_neutral = max(e.confidence for e in neutrals)
+            relative_threshold_n = max_CL_neutral * neutral_threshold
+            for e in neutrals:
+                if e.confidence < relative_threshold_n:
+                    e.detected = False
+        if ionized:
+            max_CL_ionized = max(e.confidence for e in ionized)
+            relative_threshold_i = max_CL_ionized * ionized_threshold
+            for e in ionized:
+                if e.confidence < relative_threshold_i:
+                    e.detected = False
+        if unclassified:
+            max_CL_all = max(e.confidence for e in all_element_ids)
+            relative_threshold_u = max_CL_all * self.relative_cl_threshold
+            for e in unclassified:
+                if e.confidence < relative_threshold_u:
+                    e.detected = False
+
     def identify(
         self,
         wavelength: np.ndarray,
@@ -1006,18 +1144,16 @@ class ALIASIdentifier:
         ElementIdentificationResult
             Complete identification result with detected/rejected elements
         """
-<<<<<<< HEAD
         # Reset per-dispatch self-absorption damping counters so the
         # summary log line below reflects ONLY this identify() call.
         self._sa_n_damped_lines = 0
         self._sa_damped_elements = set()
-=======
+
         # Detection-coverage tracker -- additive telemetry only.
         coverage = CoverageTracker(
             spectrum_id=spectrum_id if spectrum_id is not None else "<unset>",
             identifier_name="alias",
         )
->>>>>>> origin/dev
 
         # Step 0: Baseline correction — ALL scoring uses corrected intensities
         # so that cosine similarity, NNLS, and P_SNR measure peak heights above
@@ -1514,12 +1650,7 @@ class ALIASIdentifier:
         # Apply relative threshold: element CL must be >= max_CL * relative_cl_threshold
         # This prevents spurious detections when one element dominates.
         # Set self.relative_cl_threshold = 0 to disable.
-        if all_element_ids and self.relative_cl_threshold > 0:
-            max_CL = max(e.confidence for e in all_element_ids)
-            relative_threshold = max_CL * self.relative_cl_threshold
-            for e in all_element_ids:
-                if e.confidence < relative_threshold:
-                    e.detected = False
+        self._apply_relative_cl_gate(all_element_ids)
 
         # Split into detected/rejected
         detected_elements = [e for e in all_element_ids if e.detected]
@@ -1534,7 +1665,6 @@ class ALIASIdentifier:
                 )
                 matched_peak_indices.add(int(peak_idx))
 
-<<<<<<< HEAD
         # Structured log line for the self-absorption damping path. Operators
         # debugging "why is Si missed in soil spectra" need to see this even
         # at INFO level — addresses the user's transparency complaint that
@@ -1572,7 +1702,7 @@ class ALIASIdentifier:
                 len(peaks),
                 len(detected_elements),
             )
-=======
+
         # Detection-coverage finalisation: record peak count + emit
         # summary log line.  Additive telemetry only.
         coverage.set_n_peaks(len(peaks))
@@ -1590,7 +1720,6 @@ class ALIASIdentifier:
             "intensity_threshold_factor": self.intensity_threshold_factor,
             "detection_threshold": self.detection_threshold,
         }
->>>>>>> origin/dev
 
         return ElementIdentificationResult(
             detected_elements=detected_elements,
