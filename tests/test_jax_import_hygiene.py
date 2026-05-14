@@ -48,6 +48,15 @@ ALLOWED_TRY_IMPORT_JAX: frozenset[str] = frozenset(
         "cflibs/inversion/solve/coarse_to_fine.py",
         "cflibs/inversion/preprocess/deconvolution.py",
         "cflibs/inversion/common/pca.py",
+        # T1-6 bayesian.py decomposition wave-3 — priors package gates JAX
+        # and NumPyro via optional ``try: import``; the JIT entry points
+        # already live in cflibs.core.jax_runtime so the inline gate is
+        # capability detection, not a kernel.
+        "cflibs/inversion/solve/bayesian/priors.py",
+        # T1-2 / T1-5 radiation perf cluster: host.py is the public-facing
+        # host module that may have an ``HAS_JAX`` capability check; the
+        # @jit kernels live in cflibs.radiation.kernels.
+        "cflibs/radiation/host.py",
     }
 )
 

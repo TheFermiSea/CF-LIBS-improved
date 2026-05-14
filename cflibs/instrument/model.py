@@ -7,10 +7,8 @@ from typing import Callable, Optional
 import numpy as np
 from pathlib import Path
 
-from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp  # noqa: F401
+from cflibs.core.jax_runtime import HAS_JAX, jnp  # noqa: F401
 from cflibs.core.logging_config import get_logger
-
-jit = jit_if_available
 
 logger = get_logger("instrument.model")
 
@@ -186,51 +184,13 @@ class InstrumentModel:
 # JAX-accelerated instrument model
 # ---------------------------------------------------------------------------
 
-
-if HAS_JAX:
-
-    @jit
-    def _sigma_at_wavelength_jax(
-        wavelength_nm: jnp.ndarray,
-        resolving_power: jnp.ndarray,
-        resolution_sigma_nm: jnp.ndarray,
-        use_resolving_power: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Per-wavelength Gaussian sigma — branchless for JIT compatibility.
-
-        ``use_resolving_power`` is a 0/1 mask (jnp scalar) so the function
-        can be jit-compiled regardless of which mode is active.
-        """
-        sigma_R = wavelength_nm / jnp.maximum(resolving_power, 1e-30) / 2.355
-        return jnp.where(use_resolving_power > 0.5, sigma_R, resolution_sigma_nm)
-
-    @jit
-    def _apply_response_jax(
-        wavelength: jnp.ndarray,
-        intensity: jnp.ndarray,
-        wl_resp: jnp.ndarray,
-        resp: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Linear interpolation of the (normalized) response curve onto ``wavelength``.
-
-        Uses ``jnp.interp`` (which becomes a fused linear-interp kernel
-        under XLA) to avoid the SciPy interp1d dependency in JAX land.
-        """
-        resp_norm = resp / jnp.maximum(jnp.max(resp), 1e-30)
-        # jnp.interp clamps out-of-range to the boundary — match SciPy's
-        # ``fill_value=0.0`` behavior by zeroing those points explicitly.
-        in_range = (wavelength >= wl_resp[0]) & (wavelength <= wl_resp[-1])
-        interpolated = jnp.interp(wavelength, wl_resp, resp_norm)
-        response = jnp.where(in_range, interpolated, 0.0)
-        return intensity * response
-
-else:  # pragma: no cover - JAX should be installed in this repo
-
-    def _sigma_at_wavelength_jax(*args, **kwargs):  # type: ignore[misc]
-        raise ImportError("JAX is not installed; install jax + jaxlib")
-
-    def _apply_response_jax(*args, **kwargs):  # type: ignore[misc]
-        raise ImportError("JAX is not installed; install jax + jaxlib")
+# JIT-compiled inner kernels live in cflibs.instrument.kernels (ADR-0001
+# T1-1 host/kernel split). Re-exported here for back-compat with callers
+# that imported the private names directly from ``cflibs.instrument.model``.
+from cflibs.instrument.kernels import (  # noqa: E402
+    _apply_response_jax,
+    _sigma_at_wavelength_jax,
+)
 
 
 @dataclass
