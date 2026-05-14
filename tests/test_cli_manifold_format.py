@@ -19,12 +19,13 @@ def test_manifold_cmd_format_strings():
     mock_config.density_range = ["1e16", "1e18"]
 
     with patch("cflibs.manifold.config.ManifoldConfig.from_file", return_value=mock_config), \
-         patch("cflibs.manifold.generator.ManifoldGenerator") as mock_gen_cls, \
+         patch("cflibs.manifold.generator.ManifoldGenerator"), \
          patch("builtins.print") as mock_print:
         
         # We don't want to actually run the generation in this test
-        mock_gen = mock_gen_cls.return_value
-        
+        # (mock_gen_cls.return_value is constructed implicitly by the
+        # MagicMock auto-spec — no need to bind it to a local.)
+
         # This should not raise ValueError: Unknown format code 'e'
         manifold_cmd(args)
         

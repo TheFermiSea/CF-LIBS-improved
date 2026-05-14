@@ -69,7 +69,7 @@ if _HAS_JAX:
         a single ``G`` axis so the kernel runs in one vmap-free pass.
         """
         W = wavelength.shape[0]
-        L = line_wl.shape[0]
+        L = line_wl.shape[0]  # noqa: F841 -- shape doc alongside W and G for readers
         G = T_eV_grid.shape[0]
 
         # Boltzmann factor per (G, L). exp(-E/T) on the flat grid.

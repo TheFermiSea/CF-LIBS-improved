@@ -102,7 +102,7 @@ def test_mcwhirter_floor_pass_high_density():
 
 def test_mcwhirter_floor_fail_low_density():
     # The exact aalto-PR-58 motivating case: floor ≈ 4.84e17, n_e = 1.65e17.
-    floor = 1.6e12 * math.sqrt(20000.0) * (3.0**3)  # ≈ 6.10e15 actually
+    # (Reference math kept as comments: 1.6e12 * sqrt(20000) * 3**3 ≈ 6.10e15.)
     # Reproduce the spec's failing case more precisely. For T=10000, dE=4eV:
     # floor = 1.6e12 * sqrt(10000) * 64 = 1.024e16 — below n_e = 1.65e17 — would PASS.
     # Use a hot plasma + large gap to exceed n_e.
