@@ -166,9 +166,7 @@ class ThompsonAllocator:
         alpha_n = self.prior_alpha + 0.5 * n
         delta = arm.mean - self.prior_mu
         beta_n = (
-            self.prior_beta
-            + 0.5 * arm.m2
-            + 0.5 * self.prior_kappa * n * delta * delta / kappa_n
+            self.prior_beta + 0.5 * arm.m2 + 0.5 * self.prior_kappa * n * delta * delta / kappa_n
         )
         beta_n = max(beta_n, _BETA_FLOOR)
         return mu_n, kappa_n, alpha_n, beta_n
@@ -208,14 +206,10 @@ class ThompsonAllocator:
         running sum-of-squared-deviations (= ``S`` in the NIG update).
         """
         if not 0 <= arm_idx < self.n_arms:
-            raise IndexError(
-                f"arm_idx={arm_idx} out of range for n_arms={self.n_arms}"
-            )
+            raise IndexError(f"arm_idx={arm_idx} out of range for n_arms={self.n_arms}")
         value_f = float(value)
         if not np.isfinite(value_f):
-            raise ValueError(
-                f"update value must be finite, got {value_f} for arm {arm_idx}"
-            )
+            raise ValueError(f"update value must be finite, got {value_f} for arm {arm_idx}")
         arm = self._arms[arm_idx]
         arm.n += 1
         delta = value_f - arm.mean
@@ -301,17 +295,13 @@ class ThompsonAllocator:
         if arm_idx is None:
             return [arm.n for arm in self._arms]
         if not 0 <= arm_idx < self.n_arms:
-            raise IndexError(
-                f"arm_idx={arm_idx} out of range for n_arms={self.n_arms}"
-            )
+            raise IndexError(f"arm_idx={arm_idx} out of range for n_arms={self.n_arms}")
         return self._arms[arm_idx].n
 
     def history(self, arm_idx: int) -> List[float]:
         """Return the full observation history for an arm."""
         if not 0 <= arm_idx < self.n_arms:
-            raise IndexError(
-                f"arm_idx={arm_idx} out of range for n_arms={self.n_arms}"
-            )
+            raise IndexError(f"arm_idx={arm_idx} out of range for n_arms={self.n_arms}")
         return list(self._arms[arm_idx].history)
 
 

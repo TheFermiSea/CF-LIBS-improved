@@ -442,9 +442,7 @@ class BoltzmannPlotFitter:
         )
 
         if not HAS_JAX:
-            logger.warning(
-                "use_jax=True but JAX is not installed; falling back to CPU sigma_clip."
-            )
+            logger.warning("use_jax=True but JAX is not installed; falling back to CPU sigma_clip.")
             return self._fit_sigma_clip(x_all, y_all, y_err_all, valid_mask)
 
         import jax.numpy as jnp
@@ -531,9 +529,7 @@ class BoltzmannPlotFitter:
                     cov_si = (-S_wx / det) * chi2_dof
                     slope_err = float(np.sqrt(max(var_slope, 0.0)))
                     intercept_err = float(np.sqrt(max(var_intercept, 0.0)))
-                    covariance_matrix = np.array(
-                        [[var_slope, cov_si], [cov_si, var_intercept]]
-                    )
+                    covariance_matrix = np.array([[var_slope, cov_si], [cov_si, var_intercept]])
                 else:
                     slope_err = float(kernel_result.sigma_slope[0])
                     intercept_err = float(kernel_result.sigma_intercept[0])

@@ -700,9 +700,7 @@ class SahaBoltzmannSolverJax(SolverStrategy):
         if has_II:
             ip_III = self.atomic_db.get_ionization_potential(element, 3)
             eff_ip_III = max(ip_III - delta_chi, 0.0) if ip_III is not None else None
-            U_III = self.calculate_partition_function(
-                element, 3, T_e_eV, max_energy_ev=eff_ip_III
-            )
+            U_III = self.calculate_partition_function(element, 3, T_e_eV, max_energy_ev=eff_ip_III)
 
         if U_I <= 0.0 or U_II <= 0.0:
             logger.warning(
@@ -813,9 +811,7 @@ class SahaBoltzmannSolverJax(SolverStrategy):
         n_e_cm3 = plasma.n_e
         all_populations: Dict[Tuple[str, int, float], float] = {}
         for element, total_density in plasma.species.items():
-            stage_densities = self.solve_ionization_balance(
-                element, T_e_eV, n_e_cm3, total_density
-            )
+            stage_densities = self.solve_ionization_balance(element, T_e_eV, n_e_cm3, total_density)
             for stage, stage_density in stage_densities.items():
                 if stage_density > 0:
                     populations = self.solve_level_population(

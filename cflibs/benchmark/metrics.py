@@ -258,10 +258,12 @@ class EvaluationResult:
                         f"n_elems={n_elem:2d}, n_spectra={n_spec:3d})"
                     )
 
-        lines.extend([
-            "",
-            "Per-element results:",
-        ])
+        lines.extend(
+            [
+                "",
+                "Per-element results:",
+            ]
+        )
 
         for elem in self.elements:
             lines.append(f"  {self.element_metrics[elem].summary()}")
@@ -421,9 +423,7 @@ class BenchmarkMetrics:
             for t, p in zip(true_arr, pred_arr):
                 stratum_records.append({"element": elem, "true": float(t), "predicted": float(p)})
 
-        loq_lookup = {
-            elem: float(metrics_obj.loq) for elem, metrics_obj in element_metrics.items()
-        }
+        loq_lookup = {elem: float(metrics_obj.loq) for elem, metrics_obj in element_metrics.items()}
         per_stratum_summary = stratify_per_element_errors(
             stratum_records,
             thresholds=self.strata_thresholds,

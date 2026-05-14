@@ -169,9 +169,7 @@ def _polynomial_partition_function_jax(T_K, coeffs):
     inlined to avoid extra import overhead inside the jit.
     """
     ln_T = jnp.log(jnp.maximum(T_K, 1.0))
-    ln_T_powers = jnp.stack(
-        [jnp.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1
-    )
+    ln_T_powers = jnp.stack([jnp.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1)
     ln_U = jnp.sum(coeffs * ln_T_powers, axis=-1)
     return jnp.exp(ln_U)
 

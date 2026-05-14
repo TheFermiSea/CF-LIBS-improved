@@ -58,12 +58,8 @@ def _build_schema():  # type: ignore[no-untyped-def]
     kv_str_float = pa.struct(
         [pa.field("element", pa.string()), pa.field("mass_fraction", pa.float64())]
     )
-    kv_str_value = pa.struct(
-        [pa.field("element", pa.string()), pa.field("value", pa.float64())]
-    )
-    kv_pair_value = pa.struct(
-        [pa.field("pair", pa.string()), pa.field("value", pa.float64())]
-    )
+    kv_str_value = pa.struct([pa.field("element", pa.string()), pa.field("value", pa.float64())])
+    kv_pair_value = pa.struct([pa.field("pair", pa.string()), pa.field("value", pa.float64())])
     posterior_struct = pa.struct(
         [
             pa.field("rhat_max", pa.float64()),
@@ -177,7 +173,9 @@ def _composition_dict_to_kv(
             # undefined" from "missing key". pyarrow handles NaN inside
             # float64 fields fine; just don't normalise it away.
             pass
-        rows.append({key_name: str(raw_key), "value" if key_name != "element" else "mass_fraction": value})
+        rows.append(
+            {key_name: str(raw_key), "value" if key_name != "element" else "mass_fraction": value}
+        )
     return rows
 
 
@@ -189,9 +187,7 @@ def _composition_to_struct_list(
     return [
         {
             "element": str(element),
-            "mass_fraction": (
-                float(value) if value is not None else None
-            ),
+            "mass_fraction": (float(value) if value is not None else None),
         }
         for element, value in composition.items()
     ]
@@ -273,9 +269,7 @@ def _posterior_from_annotations(
 
     return {
         "rhat_max": _scalar(posterior.get("rhat_max", posterior.get("rhat"))),
-        "ess_bulk_min": _scalar_min(
-            posterior.get("ess_bulk_min", posterior.get("ess_bulk"))
-        ),
+        "ess_bulk_min": _scalar_min(posterior.get("ess_bulk_min", posterior.get("ess_bulk"))),
         "k_hat_max": _scalar(posterior.get("k_hat_max", posterior.get("k_hat"))),
         "divergent_count": _scalar_int(
             posterior.get("divergent_count", posterior.get("divergent"))
@@ -306,9 +300,9 @@ def _id_record_to_row(record: Any, index: int) -> Dict[str, Any]:
         "elapsed_seconds": data.get("elapsed_seconds"),
         "scored": data.get("scored"),
         "failure_reason": data.get("failure_reason"),
-        "annotations_json": json.dumps(annotations, sort_keys=True, default=str)
-        if annotations
-        else None,
+        "annotations_json": (
+            json.dumps(annotations, sort_keys=True, default=str) if annotations else None
+        ),
         # ID-specific
         "id_workflow_name": data.get("workflow_name"),
         "id_config_name": data.get("config_name"),
@@ -370,9 +364,9 @@ def _composition_record_to_row(record: Any, index: int) -> Dict[str, Any]:
         "elapsed_seconds": data.get("elapsed_seconds"),
         "scored": data.get("scored"),
         "failure_reason": data.get("failure_reason"),
-        "annotations_json": json.dumps(annotations, sort_keys=True, default=str)
-        if annotations
-        else None,
+        "annotations_json": (
+            json.dumps(annotations, sort_keys=True, default=str) if annotations else None
+        ),
         # ID-only fields → NULL
         "id_workflow_name": None,
         "id_config_name": None,
@@ -396,9 +390,7 @@ def _composition_record_to_row(record: Any, index: int) -> Dict[str, Any]:
         "composition_config_name": data.get("composition_config_name"),
         "candidate_elements": list(data.get("candidate_elements") or []),
         "true_composition": _composition_to_struct_list(data.get("true_composition")),
-        "predicted_composition": _composition_to_struct_list(
-            data.get("predicted_composition")
-        ),
+        "predicted_composition": _composition_to_struct_list(data.get("predicted_composition")),
         "aitchison": aitchison,
         "d_a": aitchison,  # alias for query ergonomics
         "rmse": data.get("rmse"),
@@ -443,24 +435,16 @@ def build_rows(
         "cell": run_metadata.get("cell"),
         "identifier": run_metadata.get("identifier"),
         "platform": run_metadata.get("platform"),
-        "seed": (
-            int(run_metadata["seed"]) if run_metadata.get("seed") is not None else None
-        ),
+        "seed": (int(run_metadata["seed"]) if run_metadata.get("seed") is not None else None),
         "iter_index": (
-            int(run_metadata["iter_index"])
-            if run_metadata.get("iter_index") is not None
-            else None
+            int(run_metadata["iter_index"]) if run_metadata.get("iter_index") is not None else None
         ),
         "experiment_label": run_metadata.get("experiment_label"),
         "shard_n": (
-            int(run_metadata["shard_n"])
-            if run_metadata.get("shard_n") is not None
-            else None
+            int(run_metadata["shard_n"]) if run_metadata.get("shard_n") is not None else None
         ),
         "shard_k": (
-            int(run_metadata["shard_k"])
-            if run_metadata.get("shard_k") is not None
-            else None
+            int(run_metadata["shard_k"]) if run_metadata.get("shard_k") is not None else None
         ),
     }
 

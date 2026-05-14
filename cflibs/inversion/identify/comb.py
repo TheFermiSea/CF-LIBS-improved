@@ -132,8 +132,7 @@ def _correlate_tooth_jax(
     """
     if not _HAS_JAX:  # pragma: no cover
         raise ImportError(
-            "JAX is required for _correlate_tooth_jax. "
-            "Install with: pip install jax jaxlib"
+            "JAX is required for _correlate_tooth_jax. " "Install with: pip install jax jaxlib"
         )
 
     n_spec = intensity.shape[0]
@@ -147,11 +146,7 @@ def _correlate_tooth_jax(
     # Index grid: shape (W, S, max_width)
     # idx = center_idx + shift + offset, clipped to [0, n-1] for the
     # gather; out-of-bounds positions are masked out below.
-    idx = (
-        center_idx
-        + shifts[None, :, None]
-        + offsets[None, None, :]
-    )  # (1, S, max_width)
+    idx = center_idx + shifts[None, :, None] + offsets[None, None, :]  # (1, S, max_width)
     idx = np.broadcast_to(idx, (W, S, max_width))
     in_bounds = (idx >= 0) & (idx < n_spec)
     idx_clipped = np.clip(idx, 0, n_spec - 1)
@@ -167,9 +162,7 @@ def _correlate_tooth_jax(
 
     # Gather residual and broadcast templates to (W, S, max_width).
     residual = (intensity - baseline)[idx_clipped]  # (W, S, max_width)
-    template_b = np.broadcast_to(
-        templates[:, None, :], (W, S, max_width)
-    )  # zero in padding
+    template_b = np.broadcast_to(templates[:, None, :], (W, S, max_width))  # zero in padding
 
     # Number of valid points per candidate
     n_valid = valid_mask.sum(axis=-1)
@@ -191,9 +184,7 @@ def _correlate_tooth_jax(
     y_flat = template_b.reshape(W * S, max_width)
     m_flat = valid_mask.reshape(W * S, max_width)
     corr_flat = np.asarray(
-        _jax_masked_pearson_batched(
-            jnp.asarray(x_flat), jnp.asarray(y_flat), jnp.asarray(m_flat)
-        )
+        _jax_masked_pearson_batched(jnp.asarray(x_flat), jnp.asarray(y_flat), jnp.asarray(m_flat))
     )
     corr_grid = corr_flat.reshape(W, S)
 
@@ -309,8 +300,7 @@ class CombIdentifier:
         self.use_jax_correlate = bool(use_jax_correlate)
         if self.use_jax_correlate and not _HAS_JAX:  # pragma: no cover
             raise ImportError(
-                "use_jax_correlate=True requires JAX. "
-                "Install with: pip install jax jaxlib"
+                "use_jax_correlate=True requires JAX. " "Install with: pip install jax jaxlib"
             )
         # Cache built templates by width so we don't rebuild per call.
         self._template_cache: Dict[int, np.ndarray] = {}
@@ -349,11 +339,7 @@ class CombIdentifier:
         ``max(global, tier2_threshold)`` so the gate is never weaker than
         the baseline.
         """
-        if (
-            self.strict_tier2
-            and element is not None
-            and element in TIER2_FP_ELEMENTS
-        ):
+        if self.strict_tier2 and element is not None and element in TIER2_FP_ELEMENTS:
             return max(
                 self.tooth_activation_threshold,
                 self.tier2_tooth_activation_threshold,
@@ -445,9 +431,7 @@ class CombIdentifier:
                 "relative_threshold_scale": self.relative_threshold_scale,
                 "fingerprint_top_k": float(self.fingerprint_top_k),
                 "strict_tier2": bool(self.strict_tier2),
-                "tier2_tooth_activation_threshold": float(
-                    self.tier2_tooth_activation_threshold
-                ),
+                "tier2_tooth_activation_threshold": float(self.tier2_tooth_activation_threshold),
             },
         )
 
@@ -496,7 +480,11 @@ class CombIdentifier:
 
             for trans in transitions:
                 tooth_result = self._correlate_tooth(
-                    wavelength, intensity, baseline, trans.wavelength_nm, threshold,
+                    wavelength,
+                    intensity,
+                    baseline,
+                    trans.wavelength_nm,
+                    threshold,
                     transition=trans,
                 )
                 tooth_result["transition"] = trans
@@ -796,15 +784,17 @@ class CombIdentifier:
         # see the global threshold and behave byte-identically to the
         # pre-PR path. See validation/protocol.yaml §tier2_alarms.
         element_symbol = transition.element if transition is not None else None
-        effective_activation_threshold = self._tier2_effective_activation_threshold(
-            element_symbol
-        )
+        effective_activation_threshold = self._tier2_effective_activation_threshold(element_symbol)
 
         # JAX fast path: vectorize the entire (shift, width) candidate grid.
         if self.use_jax_correlate:
             return self._correlate_tooth_jax_impl(
-                intensity, baseline, center_idx, center_nm,
-                max_width_pts, threshold,
+                intensity,
+                baseline,
+                center_idx,
+                center_nm,
+                max_width_pts,
+                threshold,
                 activation_threshold=effective_activation_threshold,
             )
 
@@ -864,10 +854,7 @@ class CombIdentifier:
         # Paper (Gajarska et al. 2024): per-tooth activation uses separate threshold (0.5).
         # For Mn/Na/K (Tier-2 FP-prone) the threshold is widened — see
         # ``_tier2_effective_activation_threshold``.
-        active = (
-            best_correlation >= effective_activation_threshold
-            and peak_amplitude > threshold
-        )
+        active = best_correlation >= effective_activation_threshold and peak_amplitude > threshold
 
         return {
             "center_nm": center_nm,
@@ -924,9 +911,7 @@ class CombIdentifier:
             }
 
         widths_np = np.asarray(widths_list, dtype=np.int64)
-        shifts_np = np.arange(
-            -self.max_shift_pts, self.max_shift_pts + 1, dtype=np.int64
-        )
+        shifts_np = np.arange(-self.max_shift_pts, self.max_shift_pts + 1, dtype=np.int64)
 
         # Build padded templates: cache lookups keep this cheap across
         # repeat calls with the same width set.
@@ -947,9 +932,13 @@ class CombIdentifier:
             template_mask[i, start : start + len(t)] = 1.0
 
         corr_grid, seg_amp, candidate_ok = _correlate_tooth_jax(
-            intensity, baseline, center_idx,
-            widths_np, shifts_np,
-            templates, template_mask,
+            intensity,
+            baseline,
+            center_idx,
+            widths_np,
+            shifts_np,
+            templates,
+            template_mask,
         )
 
         # Argmax over the (W, S) grid.
@@ -982,10 +971,7 @@ class CombIdentifier:
         # Use the precomputed per-candidate peak amplitude.
         peak_amplitude = float(seg_amp[best_w_idx, best_s_idx])
 
-        active = (
-            best_correlation >= activation_threshold
-            and peak_amplitude > threshold
-        )
+        active = best_correlation >= activation_threshold and peak_amplitude > threshold
 
         return {
             "center_nm": center_nm,

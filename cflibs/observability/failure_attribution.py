@@ -203,9 +203,7 @@ def attribute_failures(csv_paths: Iterable[Path]) -> dict:
 
     # n_spectra denominator per (workflow, dataset). Rows themselves are
     # the spectrum-eval unit in id_records.csv.
-    denom = (
-        df.groupby(["workflow_name", "dataset_id"]).size().rename("n_spectra").reset_index()
-    )
+    denom = df.groupby(["workflow_name", "dataset_id"]).size().rename("n_spectra").reset_index()
 
     # Long-form: one row per (csv-row, mode).
     exploded = df[["workflow_name", "dataset_id", "spectrum_id", "_modes"]].explode("_modes")

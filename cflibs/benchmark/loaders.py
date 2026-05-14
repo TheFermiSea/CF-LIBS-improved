@@ -797,9 +797,7 @@ def apply_dataset_shard(
     if shard_k <= 0:
         raise ValueError(f"shard_k must be >= 1, got {shard_k}")
     if not (1 <= shard_n <= shard_k):
-        raise ValueError(
-            f"shard_n={shard_n} out of range; must be 1 <= N <= K={shard_k}"
-        )
+        raise ValueError(f"shard_n={shard_n} out of range; must be 1 <= N <= K={shard_k}")
     if shard_k == 1:
         return dataset
 

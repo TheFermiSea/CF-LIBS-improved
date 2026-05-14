@@ -48,6 +48,7 @@ def _jax_identifier_flags_for(cls) -> Dict[str, bool]:
         return {}
     return {name: True for name in sig.parameters if name.startswith("use_jax_")}
 
+
 # These imports sit AFTER the `_jax_param_keys` helper above to keep that
 # helper trivial-to-call without paying the cost (or risking the circular
 # import) of pulling in the full benchmark.dataset / composition_metrics
@@ -574,9 +575,7 @@ def load_default_datasets(
     # samples × N shots/sample with certified compositions (Al, Ca, Cr, Cu, Fe,
     # K, Mg, Na, Pb, Si).  Default cap is 50 shots/sample (~5,000 spectra,
     # ~1.6 GB).  Pass vrabel_max_shots_per_sample=None for the full 50k.
-    _vrabel = _load_vrabel2020_soils(
-        data_dir, max_spectra_per_sample=vrabel_max_shots_per_sample
-    )
+    _vrabel = _load_vrabel2020_soils(data_dir, max_spectra_per_sample=vrabel_max_shots_per_sample)
     if _vrabel is not None:
         if dataset_shard is not None:
             shard_n, shard_k = dataset_shard
@@ -772,9 +771,7 @@ class UnifiedBenchmarkContext:
         return self._basis_cache[cache_key], selected_fwhm, abs(selected_fwhm - target_fwhm)
 
 
-def _class_default_config(
-    cls: Any, keys: Sequence[str]
-) -> Dict[str, Any]:
+def _class_default_config(cls: Any, keys: Sequence[str]) -> Dict[str, Any]:
     """Pull keyword defaults from ``cls.__init__`` signature.
 
     Used by the workflow-config grids so that architect-modified class
@@ -785,6 +782,7 @@ def _class_default_config(
     predictions because the explicit grid bypassed them.
     """
     import inspect
+
     try:
         sig = inspect.signature(cls.__init__)
     except (TypeError, ValueError):
@@ -800,10 +798,15 @@ def _class_default_config(
 
 def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     from cflibs.inversion.alias_identifier import ALIASIdentifier
+
     arch_defaults = _class_default_config(
         ALIASIdentifier,
-        ("detection_threshold", "intensity_threshold_factor",
-         "chance_window_scale", "max_lines_per_element"),
+        (
+            "detection_threshold",
+            "intensity_threshold_factor",
+            "chance_window_scale",
+            "max_lines_per_element",
+        ),
     )
     # PR #159 changed ALIASIdentifier's threshold-kwarg defaults from
     # explicit `float = 3.0` / `0.02` to `Optional[float] = None` so the
@@ -869,10 +872,7 @@ def _alias_high_recall_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
             {"chance_window_scale": 0.4, "max_lines_per_element": 30},
             {"chance_window_scale": 0.3, "max_lines_per_element": 30},
         ]
-    return [
-        {"chance_window_scale": cws, "max_lines_per_element": 30}
-        for cws in (0.3, 0.4)
-    ]
+    return [{"chance_window_scale": cws, "max_lines_per_element": 30} for cws in (0.3, 0.4)]
 
 
 def _build_alias_high_recall_predictor(
@@ -888,6 +888,7 @@ def _build_alias_high_recall_predictor(
     mode in ``result.parameters['alias_mode']`` for downstream
     audit-ability.
     """
+
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
         from cflibs.atomic.database import AtomicDatabase
         from cflibs.inversion.alias_identifier import ALIASIdentifier
@@ -912,10 +913,10 @@ def _build_alias_high_recall_predictor(
 
 def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     from cflibs.inversion.comb_identifier import CombIdentifier
+
     arch_defaults = _class_default_config(
         CombIdentifier,
-        ("min_correlation", "tooth_activation_threshold",
-         "relative_threshold_scale"),
+        ("min_correlation", "tooth_activation_threshold", "relative_threshold_scale"),
     )
     if quick:
         return [
@@ -942,6 +943,7 @@ def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
 
 def _correlation_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+
     arch_defaults = _class_default_config(
         CorrelationIdentifier,
         ("min_confidence", "relative_threshold_scale", "min_line_strength"),
@@ -1446,9 +1448,7 @@ def _fit_iterative_jax_pipeline(
                 )
                 observations = detection.observations if detection is not None else []
                 if not observations:
-                    raise RuntimeError(
-                        "iterative_jax: no matched line observations for spectrum"
-                    )
+                    raise RuntimeError("iterative_jax: no matched line observations for spectrum")
                 # IterativeCFLIBSSolverJax shares the same call surface as the
                 # numpy IterativeCFLIBSSolver — we instantiate, then solve.
                 solver = IterativeCFLIBSSolverJax(atomic_db=db)
@@ -1571,9 +1571,7 @@ def _fit_bayesian_pipeline(
             )
         elements = list(candidate_elements)
         if not elements:
-            raise ValueError(
-                "No candidate elements available for bayesian composition workflow"
-            )
+            raise ValueError("No candidate elements available for bayesian composition workflow")
 
         from cflibs.inversion.solve.bayesian import (
             BayesianForwardModel,
@@ -1606,9 +1604,11 @@ def _fit_bayesian_pipeline(
                 wavelength_range=(wl_min, wl_max),
                 wavelength_grid=None,  # Force uniform grid of 'pixels' size
                 pixels=pixels,
-                resolving_power=float(spectrum.rp_estimate)
-                if spectrum.rp_estimate is not None and spectrum.rp_estimate > 0
-                else None,
+                resolving_power=(
+                    float(spectrum.rp_estimate)
+                    if spectrum.rp_estimate is not None and spectrum.rp_estimate > 0
+                    else None
+                ),
             )
             sampler = MCMCSampler(
                 forward_model,
@@ -1662,13 +1662,10 @@ def _fit_bayesian_pipeline(
             conc_samples = np.asarray(samples["concentrations"])
             # Handle both (samples, elements) and (chains, samples, elements)
             mean_concs = np.mean(conc_samples, axis=tuple(range(conc_samples.ndim - 1)))
-            concentrations = {
-                element: float(mean_concs[i]) for i, element in enumerate(elements)
-            }
+            concentrations = {element: float(mean_concs[i]) for i, element in enumerate(elements)}
         else:
             concentrations = {
-                element: float(result.concentrations_mean.get(element, 0.0))
-                for element in elements
+                element: float(result.concentrations_mean.get(element, 0.0)) for element in elements
             }
 
         # Renormalize so the closure residual stays small even if MCMC
@@ -3278,8 +3275,7 @@ class UnifiedBenchmarkRunner:
             # Fall back to JSON if pyarrow isn't importable — better to
             # write *something* than to crash mid-run.
             print(
-                "[unified] pyarrow not available; falling back to "
-                "output_format='json' (legacy)."
+                "[unified] pyarrow not available; falling back to " "output_format='json' (legacy)."
             )
             output_format = "json"
 
@@ -3313,12 +3309,8 @@ class UnifiedBenchmarkRunner:
             )
             _write_json(outputs["id_records_json"], _records_to_rows(id_records))
             _write_csv(outputs["id_records_csv"], _records_to_rows(id_records))
-            _write_json(
-                outputs["composition_records_json"], _records_to_rows(composition_records)
-            )
-            _write_csv(
-                outputs["composition_records_csv"], _records_to_rows(composition_records)
-            )
+            _write_json(outputs["composition_records_json"], _records_to_rows(composition_records))
+            _write_csv(outputs["composition_records_csv"], _records_to_rows(composition_records))
 
         if write_parquet:
             outputs["results_parquet"] = output_dir / "results.parquet"

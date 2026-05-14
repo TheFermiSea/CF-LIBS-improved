@@ -66,8 +66,8 @@ from typing import Any, Dict
 
 PROTOCOL_VERSION = 1
 
-MAX_REQUEST_BYTES_DEFAULT = 8 * 1024 * 1024     # 8 MiB
-MAX_RESPONSE_BYTES_DEFAULT = 64 * 1024 * 1024   # 64 MiB
+MAX_REQUEST_BYTES_DEFAULT = 8 * 1024 * 1024  # 8 MiB
+MAX_RESPONSE_BYTES_DEFAULT = 64 * 1024 * 1024  # 64 MiB
 
 _LENGTH_STRUCT = struct.Struct(">Q")  # big-endian uint64
 LENGTH_PREFIX_BYTES = _LENGTH_STRUCT.size  # 8
@@ -124,16 +124,12 @@ async def read_framed_json(
     if length == 0:
         raise FrameError("frame length is zero")
     if length > max_bytes:
-        raise FrameError(
-            f"frame length {length} exceeds max_bytes={max_bytes}"
-        )
+        raise FrameError(f"frame length {length} exceeds max_bytes={max_bytes}")
 
     try:
         body = await reader.readexactly(length)
     except asyncio.IncompleteReadError as exc:
-        raise FrameError(
-            f"short body: got {len(exc.partial)} of {length}"
-        ) from exc
+        raise FrameError(f"short body: got {len(exc.partial)} of {length}") from exc
 
     try:
         return json.loads(body)
@@ -156,9 +152,7 @@ async def write_framed_json(
     """
     body = json.dumps(obj, separators=(",", ":")).encode("utf-8")
     if len(body) > max_bytes:
-        raise FrameError(
-            f"response body {len(body)} bytes exceeds max_bytes={max_bytes}"
-        )
+        raise FrameError(f"response body {len(body)} bytes exceeds max_bytes={max_bytes}")
     writer.write(encode_frame(body))
     await writer.drain()
 
@@ -176,9 +170,7 @@ async def write_framed_bytes(
     (Opus refinement: keep encoding off the event loop).
     """
     if len(body) > max_bytes:
-        raise FrameError(
-            f"response body {len(body)} bytes exceeds max_bytes={max_bytes}"
-        )
+        raise FrameError(f"response body {len(body)} bytes exceeds max_bytes={max_bytes}")
     writer.write(encode_frame(body))
     await writer.drain()
 

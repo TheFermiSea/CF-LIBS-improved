@@ -175,10 +175,7 @@ def bic_prune_elements(
     ModelSelectionResult
     """
     if use_jax_nnls and not _HAS_JAX:  # pragma: no cover
-        raise ImportError(
-            "use_jax_nnls=True requires JAX. "
-            "Install with: pip install jax jaxlib"
-        )
+        raise ImportError("use_jax_nnls=True requires JAX. " "Install with: pip install jax jaxlib")
     n_elements = len(element_list)
     n_continuum = basis_matrix.shape[0] - n_elements
 
