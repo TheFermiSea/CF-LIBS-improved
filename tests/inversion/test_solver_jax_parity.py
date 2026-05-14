@@ -30,7 +30,7 @@ jax.config.update("jax_enable_x64", True)
 
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.structures import PartitionFunction
-from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3, STP_PRESSURE, KB
+from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3
 from cflibs.inversion.solver import (
     IterativeCFLIBSSolver,
     IterativeCFLIBSSolverJax,
