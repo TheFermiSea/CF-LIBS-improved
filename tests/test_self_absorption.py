@@ -1842,3 +1842,477 @@ class TestDoubletRatioCorrection:
         assert abs(results[0].agreement_with_cdsb_sigma) < 2.0
         # No disagreement warning
         assert not any("disagreement" in rec.message.lower() for rec in caplog.records)
+
+
+# ==============================================================================
+# Si Self-Absorption Audit Tests (CF-LIBS-improved-self-abs-audit)
+#
+# Reproduces the failure mode that motivated the audit: Si I resonance
+# lines at 251.6 nm / 288.2 nm at high concentration (60-70% by mass, as in
+# the vrabel2020 soil benchmark where SiO2 dominates) become optically thick
+# and silently disappear from the spectrum. These tests assert that the
+# corrector DOES something visible (escape_factor < 1, tau > threshold,
+# structured log output) under those plasma conditions.
+# ==============================================================================
+
+
+class TestSiHighConcentrationSelfAbsorption:
+    """Regression tests for Si I resonance lines at 60-70% mass fraction.
+
+    Motivated by the n=33 autodiscovery finding (2026-05-13) that 49/53
+    universal misses across all 5 identifiers were on
+    ``vrabel2020_soil_benchmark`` — and that Si was the most-missed
+    element (15/53). Hypothesis: Si I resonance lines at 251.6 / 288.2 nm
+    are optically thick at SiO2 = 60%+ and the identifiers silently fail
+    because the lines are absent from the spectrum.
+    """
+
+    @pytest.fixture
+    def si_resonance_lines(self):
+        """Build LineObservation objects for the two Si I resonance lines.
+
+        Si I 251.611 nm and 288.158 nm are the canonical resonance
+        transitions (E_lower = 0.0 eV, ground state). Atomic data from
+        NIST ASD.
+        """
+        return [
+            LineObservation(
+                wavelength_nm=251.611,
+                intensity=1.0e4,
+                intensity_uncertainty=1.0e2,
+                element="Si",
+                ionization_stage=1,
+                E_k_ev=4.9296,  # 3p4s
+                g_k=3,
+                A_ki=1.21e8,
+            ),
+            LineObservation(
+                wavelength_nm=288.158,
+                intensity=1.0e4,
+                intensity_uncertainty=1.0e2,
+                element="Si",
+                ionization_stage=1,
+                E_k_ev=5.0824,  # 3p4s'
+                g_k=3,
+                A_ki=2.17e8,
+            ),
+        ]
+
+    def test_escape_factor_below_unity_for_si_resonance_lines(
+        self, si_resonance_lines
+    ):
+        """Escape factor f(tau) must be < 1 for optically-thick Si lines.
+
+        Asserts the physics primitive ``_escape_factor`` does the right
+        thing across the LIBS-relevant tau range. This is a unit test
+        of the core formula because the integration-level test
+        (``test_si_correction_pipeline_runs_and_logs``) showed that the
+        existing ``_estimate_optical_depth`` uses ``SCALE_FACTOR = 1e-25``
+        which under-estimates tau by ~12 orders of magnitude — a separate
+        latent bug filed for follow-up. The escape-factor primitive
+        itself is correct.
+        """
+        from cflibs.inversion.physics.self_absorption import _escape_factor
+
+        # Optically thin: f -> 1
+        assert _escape_factor(1e-6) == pytest.approx(1.0, abs=1e-5)
+        # Moderate: f(1) = 1 - 1/e ~ 0.632
+        assert _escape_factor(1.0) == pytest.approx((1 - np.exp(-1.0)) / 1.0, rel=1e-6)
+        # Thick: f(3) ~ 0.317, must be substantially < 1
+        f3 = _escape_factor(3.0)
+        assert f3 < 0.5, f"f(tau=3) must be substantially < 1, got {f3}"
+        # Very thick (Si resonance in 60% SiO2 regime): f -> 1/tau
+        assert _escape_factor(10.0) == pytest.approx(0.1, rel=0.01)
+
+        # Sanity: the Si I 251.611 nm line is correctly identified as a
+        # resonance line (E_i = 0.0 eV) at the input level.
+        assert si_resonance_lines[0].element == "Si"
+        assert si_resonance_lines[0].wavelength_nm == 251.611
+
+    def test_si_correction_pipeline_runs_and_logs(
+        self, si_resonance_lines, caplog
+    ):
+        """End-to-end ``correct()`` call must run and emit structured logs.
+
+        Whether the correction *actually triggers* depends on the
+        ``_estimate_optical_depth`` SCALE_FACTOR (which is currently off
+        by orders of magnitude — see follow-up bd). What MUST happen
+        regardless is: (a) the corrector returns a result for every
+        observation, (b) a summary log line is emitted at INFO, (c) the
+        max_optical_depth value is in the result. Transparency, not
+        magnitude, is what this test gates.
+        """
+        import logging
+
+        corrector = SelfAbsorptionCorrector(
+            optical_depth_threshold=0.01,
+            mask_threshold=10.0,
+            plasma_length_cm=0.1,
+        )
+        with caplog.at_level(logging.INFO, logger="cflibs.inversion.self_absorption"):
+            result = corrector.correct(
+                observations=si_resonance_lines,
+                temperature_K=10000.0,
+                concentrations={"Si": 0.60},
+                total_number_density_cm3=1.0e17,
+                partition_funcs={"Si": 9.0},
+                lower_level_energies={251.611: 0.0, 288.158: 0.0},
+            )
+
+        # Every observation has a recorded correction (no silent drops).
+        assert 251.611 in result.corrections
+        assert 288.158 in result.corrections
+        # max_optical_depth is populated (even if tiny under current scale).
+        assert result.max_optical_depth >= 0.0
+        # Summary log must fire — that is the audit's load-bearing assertion.
+        summary_records = [
+            r for r in caplog.records if "self_absorption.correct summary" in r.message
+        ]
+        assert len(summary_records) == 1
+        assert "max_tau=" in summary_records[0].message
+
+    def test_correct_logs_structured_summary_for_si(
+        self, si_resonance_lines, caplog
+    ):
+        """SelfAbsorptionCorrector.correct() emits one INFO-level summary line.
+
+        Addresses the user's transparency complaint: previously the
+        correction ran silently and operators had no way to tell whether
+        Si lines had been touched. Now every call emits an INFO log line
+        with element-level counts and max tau.
+        """
+        import logging
+
+        corrector = SelfAbsorptionCorrector(
+            optical_depth_threshold=0.01,
+            mask_threshold=10.0,
+            plasma_length_cm=0.1,
+        )
+        with caplog.at_level(logging.INFO, logger="cflibs.inversion.self_absorption"):
+            corrector.correct(
+                observations=si_resonance_lines,
+                temperature_K=10000.0,
+                concentrations={"Si": 0.60},
+                total_number_density_cm3=1.0e17,
+                partition_funcs={"Si": 9.0},
+                lower_level_energies={251.611: 0.0, 288.158: 0.0},
+            )
+
+        # Exactly one summary line, containing the diagnostic keywords.
+        summary_records = [
+            r for r in caplog.records if "self_absorption.correct summary" in r.message
+        ]
+        assert len(summary_records) == 1, (
+            f"Expected exactly one summary log; got {len(summary_records)}: "
+            f"{[r.message for r in caplog.records]}"
+        )
+        msg = summary_records[0].message
+        assert "n_lines=2" in msg
+        assert "max_tau=" in msg
+        assert "T=10000" in msg
+
+    def test_correct_warns_on_zero_temperature(self, si_resonance_lines, caplog):
+        """T=0 must emit a WARNING — silently returning tau=0 is the bug class."""
+        import logging
+
+        corrector = SelfAbsorptionCorrector()
+        with caplog.at_level(logging.WARNING, logger="cflibs.inversion.self_absorption"):
+            corrector.correct(
+                observations=si_resonance_lines,
+                temperature_K=0.0,  # pathological
+                concentrations={"Si": 0.60},
+                total_number_density_cm3=1.0e17,
+                partition_funcs={"Si": 9.0},
+            )
+        assert any(
+            "non-positive temperature" in r.message for r in caplog.records
+        ), (
+            "T=0 must trigger a WARNING so the silent zero-tau path is "
+            f"visible; got: {[r.message for r in caplog.records]}"
+        )
+
+    def test_correct_logs_missing_concentration_elements(
+        self, si_resonance_lines, caplog
+    ):
+        """Element absent from concentrations dict logs at INFO — never silent."""
+        import logging
+
+        corrector = SelfAbsorptionCorrector()
+        with caplog.at_level(logging.INFO, logger="cflibs.inversion.self_absorption"):
+            corrector.correct(
+                observations=si_resonance_lines,
+                temperature_K=10000.0,
+                concentrations={"Fe": 0.10},  # Si MISSING
+                total_number_density_cm3=1.0e17,
+                partition_funcs={"Si": 9.0},
+            )
+        assert any(
+            "no concentration entry" in r.message and "Si" in r.message
+            for r in caplog.records
+        ), (
+            "Missing concentration entry must be logged so silent skips are "
+            f"diagnosable; got: {[r.message for r in caplog.records]}"
+        )
+
+
+class TestALIASSelfAbsorptionLogging:
+    """Tests that ALIAS identifier exposes self-absorption damping state.
+
+    Replaces the previously-silent ``SA_DAMPING = 0.3`` hardcoded constant
+    with an opt-in flag + structured logging. Default behavior is
+    preserved (damping is ON with the historical 0.3 factor) so the F1
+    regression gate is not perturbed; only the visibility changes.
+    """
+
+    def test_identifier_has_self_absorption_knobs(self, atomic_db):
+        """Constructor exposes the new self-absorption knobs with safe defaults."""
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+
+        identifier = ALIASIdentifier(atomic_db)
+        assert identifier.self_absorption_aware is True
+        assert identifier.self_absorption_damping == 0.3
+        assert identifier.self_absorption_e_i_cutoff_ev == 0.1
+        assert identifier._sa_n_damped_lines == 0
+        assert identifier._sa_damped_elements == set()
+
+    def test_identifier_rejects_invalid_damping(self, atomic_db):
+        """Damping factor must be in (0, 1]; out-of-range values raise."""
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+
+        with pytest.raises(ValueError, match="damping"):
+            ALIASIdentifier(atomic_db, self_absorption_damping=0.0)
+        with pytest.raises(ValueError, match="damping"):
+            ALIASIdentifier(atomic_db, self_absorption_damping=1.5)
+        with pytest.raises(ValueError, match="damping"):
+            ALIASIdentifier(atomic_db, self_absorption_damping=-0.1)
+
+    def test_identifier_rejects_invalid_e_i_cutoff(self, atomic_db):
+        """E_i cutoff must be finite and >= 0."""
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+
+        with pytest.raises(ValueError, match="e_i_cutoff"):
+            ALIASIdentifier(atomic_db, self_absorption_e_i_cutoff_ev=-0.5)
+
+    def test_identifier_disabled_mode_logs_explicitly(
+        self, atomic_db, caplog
+    ):
+        """When self_absorption_aware=False, identify() logs that fact at INFO.
+
+        Operators reading benchmark logs need to be able to tell at a
+        glance whether the run used SA damping or not.
+        """
+        import logging
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+
+        identifier = ALIASIdentifier(atomic_db, self_absorption_aware=False)
+        wavelength = np.linspace(200.0, 800.0, 6000)
+        # Pure noise spectrum: identify() should complete and log without
+        # actually detecting anything.
+        intensity = np.random.RandomState(42).normal(10.0, 1.0, size=6000)
+
+        with caplog.at_level(logging.INFO, logger="cflibs.inversion.identify.alias"):
+            identifier.identify(wavelength, intensity)
+
+        assert any(
+            "self-absorption damping DISABLED" in r.message
+            for r in caplog.records
+        ), (
+            "self_absorption_aware=False must emit an INFO log so disabled "
+            f"mode is auditable; got: {[r.message for r in caplog.records]}"
+        )
+
+
+# ==============================================================================
+# Optical-depth prefactor regression (CF-LIBS-improved-k2h7)
+#
+# Pins the physically-correct line-center optical depth to a LIBS-realistic
+# magnitude after replacing the historical ``SCALE_FACTOR = 1e-25`` with the
+# classical-radius prefactor + Doppler-width normalization (Hutchinson
+# eq. 5.13). Pre-fix this would have returned tau ~ 1e-15 for every line,
+# so the corrector's ``optical_depth_threshold = 0.1`` gate never fired
+# and SA correction was a silent no-op. Post-fix tau lands in the (0.1, 10)
+# optically-thick regime where the Pace-doublet and CDSB algorithms are
+# meant to live.
+# ==============================================================================
+
+
+class TestOpticalDepthPrefactor:
+    """Regression tests for the post-CF-LIBS-improved-k2h7 prefactor."""
+
+    def test_optical_depth_realistic_libs_magnitude(self):
+        """Si I 251.611 nm at LIBS-realistic conditions yields τ ~ a few.
+
+        Parameters are chosen to land τ in the optically-thick regime
+        (0.1 ≲ τ ≲ 10) where SA correction is meaningful: above the
+        default ``optical_depth_threshold = 0.1`` so the corrector fires,
+        and below the default ``mask_threshold = 3.0`` so the line gets
+        corrected rather than dropped.
+
+        Note on density: the task spec proposed ``N_total = 1e17`` cm⁻³
+        but the full-physics derivation gives τ ~ 350 for that value
+        (Si at 60 % mass fraction is *very* optically thick in dense
+        plasma — Si lines self-reverse, which is well known in soil-
+        matrix LIBS). To pin the corrector in the τ ~ few regime where
+        it has interesting work to do (correct rather than mask), we
+        use ``N_total = 1e15`` cm⁻³ — typical of late-time / decayed
+        LIBS plasmas. The τ ~ N_total scaling is verified by
+        :py:meth:`test_optical_depth_scales_linearly_with_density`.
+
+        Pre-fix this test would have asserted τ ≈ 1e-15 (off by ~14
+        orders of magnitude); the silent failure motivated the audit.
+        """
+        from cflibs.inversion.physics.self_absorption import SelfAbsorptionCorrector
+
+        corrector = SelfAbsorptionCorrector(plasma_length_cm=0.1)
+        line = LineObservation(
+            wavelength_nm=251.611,
+            intensity=1.0e4,
+            intensity_uncertainty=1.0e2,
+            element="Si",
+            ionization_stage=1,
+            E_k_ev=4.9296,
+            g_k=3,
+            A_ki=2.0e8,
+        )
+
+        tau = corrector._estimate_optical_depth(
+            obs=line,
+            temperature_K=10000.0,
+            concentrations={"Si": 0.60},
+            total_n_cm3=1.0e15,
+            partition_funcs={"Si": 9.0},
+            E_i_ev=0.0,
+        )
+
+        assert 0.1 < tau < 10.0, (
+            f"Si I 251.611 nm at LIBS conditions (T=10000K, 60% Si by "
+            f"mass, N_tot=1e15 cm^-3, L=0.1 cm) should give "
+            f"0.1 < tau < 10; got tau={tau:.4g}. If this fires, the "
+            f"prefactor (pi*e^2/(m_e*c) / sqrt(pi)*Δν_D) is wrong by "
+            f"the implied magnitude."
+        )
+
+    def test_optical_depth_scales_linearly_with_density(self):
+        """τ ∝ N_total — the prefactor is density-independent.
+
+        Tau is the line-of-sight integral σ · n_lower · L; with σ and L
+        fixed it must scale linearly with the lower-state population
+        and therefore with N_total at fixed mass fraction and U(T).
+        This rules out a regression where the prefactor accidentally
+        picks up a Saha-type N² dependence.
+        """
+        from cflibs.inversion.physics.self_absorption import SelfAbsorptionCorrector
+
+        corrector = SelfAbsorptionCorrector(plasma_length_cm=0.1)
+        line = LineObservation(
+            wavelength_nm=251.611,
+            intensity=1.0e4,
+            intensity_uncertainty=1.0e2,
+            element="Si",
+            ionization_stage=1,
+            E_k_ev=4.9296,
+            g_k=3,
+            A_ki=2.0e8,
+        )
+
+        tau_lo = corrector._estimate_optical_depth(
+            obs=line,
+            temperature_K=10000.0,
+            concentrations={"Si": 0.60},
+            total_n_cm3=1.0e14,
+            partition_funcs={"Si": 9.0},
+            E_i_ev=0.0,
+        )
+        tau_hi = corrector._estimate_optical_depth(
+            obs=line,
+            temperature_K=10000.0,
+            concentrations={"Si": 0.60},
+            total_n_cm3=1.0e16,
+            partition_funcs={"Si": 9.0},
+            E_i_ev=0.0,
+        )
+        # tau scales linearly with N_total → ratio == density ratio.
+        assert tau_hi / tau_lo == pytest.approx(100.0, rel=1e-3), (
+            f"tau should scale linearly with N_total; got "
+            f"tau(1e16)/tau(1e14) = {tau_hi / tau_lo:.4g} (expected 100)."
+        )
+
+    def test_optical_depth_doppler_temperature_scaling(self):
+        """τ ∝ 1/√T (Doppler width grows as √T).
+
+        For a fixed line and column density, increasing T broadens the
+        Doppler profile, which dilutes the line-center cross section
+        (φ(ν₀) ∝ 1/Δν_D ∝ 1/√T). All else equal, τ must shrink.
+        """
+        from cflibs.inversion.physics.self_absorption import SelfAbsorptionCorrector
+
+        corrector = SelfAbsorptionCorrector(plasma_length_cm=0.1)
+        line = LineObservation(
+            wavelength_nm=251.611,
+            intensity=1.0e4,
+            intensity_uncertainty=1.0e2,
+            element="Si",
+            ionization_stage=1,
+            E_k_ev=4.9296,
+            g_k=3,
+            A_ki=2.0e8,
+        )
+
+        tau_cool = corrector._estimate_optical_depth(
+            obs=line,
+            temperature_K=5000.0,
+            concentrations={"Si": 0.60},
+            total_n_cm3=1.0e15,
+            partition_funcs={"Si": 9.0},
+            E_i_ev=0.0,
+        )
+        tau_hot = corrector._estimate_optical_depth(
+            obs=line,
+            temperature_K=20000.0,
+            concentrations={"Si": 0.60},
+            total_n_cm3=1.0e15,
+            partition_funcs={"Si": 9.0},
+            E_i_ev=0.0,
+        )
+        # 4x hotter -> 2x broader Doppler width -> 2x smaller tau.
+        ratio = tau_cool / tau_hot
+        assert ratio == pytest.approx(2.0, rel=0.05), (
+            f"Doppler scaling violated: tau(5000)/tau(20000) = "
+            f"{ratio:.4g} (expected 2.0 = sqrt(4))"
+        )
+
+    def test_optical_depth_unknown_element_uses_default_mass(self):
+        """Element absent from the atomic-mass table still returns a finite τ.
+
+        The Doppler width depends on atomic mass. For elements not in
+        ``_ATOMIC_MASS_AMU`` (e.g., synthetic "Xx" used in unit tests)
+        we fall back to a Si-like ~28 amu default. Verify the path
+        does not blow up and the value is in the same regime as Si.
+        """
+        from cflibs.inversion.physics.self_absorption import SelfAbsorptionCorrector
+
+        corrector = SelfAbsorptionCorrector(plasma_length_cm=0.1)
+        line = LineObservation(
+            wavelength_nm=251.611,
+            intensity=1.0e4,
+            intensity_uncertainty=1.0e2,
+            element="Xx",  # synthetic element not in the mass table
+            ionization_stage=1,
+            E_k_ev=4.9296,
+            g_k=3,
+            A_ki=2.0e8,
+        )
+
+        tau = corrector._estimate_optical_depth(
+            obs=line,
+            temperature_K=10000.0,
+            concentrations={"Xx": 0.60},
+            total_n_cm3=1.0e15,
+            partition_funcs={"Xx": 9.0},
+            E_i_ev=0.0,
+        )
+        assert np.isfinite(tau)
+        assert tau > 0.0
+        # With the Si-like fallback mass, tau should be within 2x of the
+        # Si result above (Doppler width depends only weakly on mass).
+        assert 0.1 < tau < 10.0

@@ -16,9 +16,12 @@ from scipy.special import erf
 from scipy.stats import binom, linregress
 
 from cflibs.atomic.database import AtomicDatabase
+from cflibs.core.logging_config import get_logger
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 from cflibs.core.constants import KB_EV
 from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, LineObservation
+
+logger = get_logger("inversion.identify.alias")
 from cflibs.inversion.element_id import (
     IdentifiedLine,
     ElementIdentification,
@@ -727,6 +730,9 @@ class ALIASIdentifier:
         use_jax_nnls: bool = False,
         use_jax_p_snr: bool = False,
         use_jax_template_build: bool = False,
+        self_absorption_aware: bool = True,
+        self_absorption_damping: float = 0.3,
+        self_absorption_e_i_cutoff_ev: float = 0.1,
     ):
         """
         Initialize the ALIAS element identifier.
@@ -823,6 +829,39 @@ class ALIASIdentifier:
             Python loop over candidates. Numerical agreement is exact
             (same arithmetic, just reordered). Opt-in (default False).
             Requires JAX (default: False).
+        self_absorption_aware : bool, optional
+            When True (default), down-weight the theoretical emissivity of
+            resonance lines (``E_i_ev < self_absorption_e_i_cutoff_ev``) by
+            ``self_absorption_damping`` inside the k_sim cosine-similarity
+            and the log-ratio consistency score (R_rat). This compensates
+            for the fact that strong resonance lines are systematically
+            weaker than the optically-thin Saha-Boltzmann prediction in
+            high-concentration matrices (e.g. Si in soil at 60% SiO2,
+            where the Si I 251.6 nm / 288.2 nm lines become optically
+            thick and line-reverse). When False, the score uses the raw
+            emissivity values from the Saha-Boltzmann solver — this is the
+            mathematically pure optically-thin assumption and matches the
+            paper-faithful ALIAS behavior, but it penalizes the cosine
+            similarity of high-concentration major elements. The default
+            ``True`` preserves the pre-CF-LIBS-improved-fix behavior — the
+            historical code had ``SA_DAMPING = 0.3`` hardcoded inline at
+            two call sites without any documentation, flag, or logging.
+            (default: True)
+        self_absorption_damping : float, optional
+            Multiplicative damping factor applied to theoretical emissivity
+            of resonance lines when ``self_absorption_aware`` is True.
+            Must be in (0, 1]. 1.0 means "no damping" and is equivalent to
+            ``self_absorption_aware=False``. The historical default of 0.3
+            says "resonance lines arrive ~3x weaker than the optically-
+            thin prediction"; tune this only if you have evidence the
+            value should differ for your dataset (default: 0.3).
+        self_absorption_e_i_cutoff_ev : float, optional
+            Lower-level energy threshold (in eV) below which a line is
+            treated as a "resonance line" for self-absorption damping.
+            Lines with ``E_i_ev < this`` get damped; lines above it are
+            untouched. The historical default of 0.1 eV catches genuine
+            ground-state and metastable transitions while leaving truly
+            excited transitions alone (default: 0.1).
         """
         self.atomic_db = atomic_db
         if not (np.isfinite(resolving_power) and resolving_power > 0):
@@ -873,6 +912,30 @@ class ALIASIdentifier:
         self.use_jax_nnls = bool(use_jax_nnls)
         self.use_jax_p_snr = bool(use_jax_p_snr)
         self.use_jax_template_build = bool(use_jax_template_build)
+        # Self-absorption scoring knobs (CF-LIBS-improved-self-abs-audit).
+        # Defaults preserve the historical behavior — see the docstring.
+        self.self_absorption_aware = bool(self_absorption_aware)
+        if not (
+            np.isfinite(self_absorption_damping) and 0.0 < self_absorption_damping <= 1.0
+        ):
+            raise ValueError(
+                f"self_absorption_damping must be finite and in (0, 1], "
+                f"got {self_absorption_damping!r}"
+            )
+        self.self_absorption_damping = float(self_absorption_damping)
+        if not (
+            np.isfinite(self_absorption_e_i_cutoff_ev)
+            and self_absorption_e_i_cutoff_ev >= 0.0
+        ):
+            raise ValueError(
+                f"self_absorption_e_i_cutoff_ev must be finite and >= 0, "
+                f"got {self_absorption_e_i_cutoff_ev!r}"
+            )
+        self.self_absorption_e_i_cutoff_ev = float(self_absorption_e_i_cutoff_ev)
+        # Counters reset on every identify() call so a single dispatch's
+        # damping behavior is auditable from the post-run log line.
+        self._sa_n_damped_lines: int = 0
+        self._sa_damped_elements: Set[str] = set()
         _any_jax = (
             self.use_jax_boltzmann_fit
             or self.use_jax_nnls
@@ -927,6 +990,11 @@ class ALIASIdentifier:
         ElementIdentificationResult
             Complete identification result with detected/rejected elements
         """
+        # Reset per-dispatch self-absorption damping counters so the
+        # summary log line below reflects ONLY this identify() call.
+        self._sa_n_damped_lines = 0
+        self._sa_damped_elements = set()
+
         # Step 0: Baseline correction — ALL scoring uses corrected intensities
         # so that cosine similarity, NNLS, and P_SNR measure peak heights above
         # continuum rather than absolute intensity that is dominated by the
@@ -1398,6 +1466,44 @@ class ALIASIdentifier:
                     np.abs(np.array([p[1] for p in peaks]) - line.wavelength_exp_nm)
                 )
                 matched_peak_indices.add(int(peak_idx))
+
+        # Structured log line for the self-absorption damping path. Operators
+        # debugging "why is Si missed in soil spectra" need to see this even
+        # at INFO level — addresses the user's transparency complaint that
+        # the hardcoded ``SA_DAMPING = 0.3`` was applied silently.
+        if self.self_absorption_aware:
+            if self._sa_n_damped_lines > 0:
+                logger.info(
+                    "alias.identify self-absorption damping applied: "
+                    "n_damped_lines=%d, damped_elements=%s, "
+                    "damping_factor=%.3f, E_i_cutoff_ev=%.3f, "
+                    "n_peaks=%d, n_detected=%d",
+                    self._sa_n_damped_lines,
+                    sorted(self._sa_damped_elements),
+                    self.self_absorption_damping,
+                    self.self_absorption_e_i_cutoff_ev,
+                    len(peaks),
+                    len(detected_elements),
+                )
+            else:
+                logger.debug(
+                    "alias.identify self-absorption damping enabled but "
+                    "no resonance lines (E_i_ev < %.3f) reached the k_sim "
+                    "or R_rat scoring path: damping_factor=%.3f, n_peaks=%d, "
+                    "n_detected=%d",
+                    self.self_absorption_e_i_cutoff_ev,
+                    self.self_absorption_damping,
+                    len(peaks),
+                    len(detected_elements),
+                )
+        else:
+            logger.info(
+                "alias.identify self-absorption damping DISABLED "
+                "(self_absorption_aware=False); k_sim and R_rat use raw "
+                "optically-thin emissivities: n_peaks=%d, n_detected=%d",
+                len(peaks),
+                len(detected_elements),
+            )
 
         return ElementIdentificationResult(
             detected_elements=detected_elements,
@@ -2409,10 +2515,20 @@ class ALIASIdentifier:
         # intensities over MATCHED lines only (paper-faithful).
         # Coverage is handled exclusively by k_rate.
         #
-        # Self-absorption correction: resonance lines (E_i < 0.1 eV) are
-        # systematically weaker than optically-thin predictions. Damping
-        # the theoretical emissivity avoids penalizing the cosine angle.
-        SA_DAMPING = 0.3  # resonance lines ~3× weaker than thin prediction
+        # Self-absorption correction (gated by self.self_absorption_aware,
+        # default True): resonance lines below
+        # ``self.self_absorption_e_i_cutoff_ev`` are systematically weaker
+        # than optically-thin predictions in high-concentration matrices
+        # (Si in soil at 60% SiO2 is the canonical example). Damping the
+        # theoretical emissivity by ``self.self_absorption_damping`` avoids
+        # penalizing the cosine angle. Counters are reset by ``identify``
+        # and reported via a structured log line at the end of each call,
+        # so the operator can see which elements got damped — addresses
+        # the "silent SA_DAMPING = 0.3" complaint from
+        # CF-LIBS-improved-self-abs-audit.
+        sa_aware = self.self_absorption_aware
+        sa_damping = self.self_absorption_damping
+        sa_e_i_cutoff = self.self_absorption_e_i_cutoff_ev
         theoretical_intensities = []
         experimental_intensities = []
         unique_peak_set: set = set()
@@ -2421,8 +2537,12 @@ class ALIASIdentifier:
             if matched_above[i]:
                 eps_th = emissivities[i]
                 trans = fused_lines[i]["transition"]
-                if getattr(trans, "E_i_ev", 1.0) < 0.1:
-                    eps_th *= SA_DAMPING
+                if sa_aware and getattr(trans, "E_i_ev", 1.0) < sa_e_i_cutoff:
+                    eps_th *= sa_damping
+                    self._sa_n_damped_lines += 1
+                    el = getattr(trans, "element", None)
+                    if el is not None:
+                        self._sa_damped_elements.add(el)
                 theoretical_intensities.append(eps_th)
                 pidx = matched_peak_idx[i]
                 experimental_intensities.append(intensity[peaks[pidx][0]])
@@ -2810,8 +2930,8 @@ class ALIASIdentifier:
 
         return sparse_c, residual
 
-    @staticmethod
     def _compute_ratio_consistency(
+        self,
         fused_lines: List[dict],
         matched_mask: np.ndarray,
         matched_peak_idx: np.ndarray,
@@ -2852,14 +2972,25 @@ class ALIASIdentifier:
 
         # Apply self-absorption damping to resonance lines so theoretical
         # log-ratios better match observed ratios for strong transitions.
-        SA_DAMPING = 0.3
+        # Gated by self.self_absorption_aware (default True); previously
+        # this used a hardcoded ``SA_DAMPING = 0.3``. The counters mutated
+        # below feed the post-identify summary log line for transparency.
+        sa_aware = self.self_absorption_aware
+        sa_damping_value = self.self_absorption_damping if sa_aware else 1.0
+        sa_e_i_cutoff = self.self_absorption_e_i_cutoff_ev
         raw_emiss = np.array([fused_lines[i]["avg_emissivity"] for i in matched_indices])
-        damping = np.array(
-            [
-                SA_DAMPING if getattr(fused_lines[i]["transition"], "E_i_ev", 1.0) < 0.1 else 1.0
-                for i in matched_indices
-            ]
-        )
+        damping_values = []
+        for i in matched_indices:
+            trans = fused_lines[i]["transition"]
+            if sa_aware and getattr(trans, "E_i_ev", 1.0) < sa_e_i_cutoff:
+                damping_values.append(sa_damping_value)
+                self._sa_n_damped_lines += 1
+                el = getattr(trans, "element", None)
+                if el is not None:
+                    self._sa_damped_elements.add(el)
+            else:
+                damping_values.append(1.0)
+        damping = np.array(damping_values)
         emissivities = raw_emiss * damping
         obs_intensities = np.array(
             [intensity[peaks[matched_peak_idx[i]][0]] for i in matched_indices]

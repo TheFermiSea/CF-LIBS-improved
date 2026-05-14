@@ -67,11 +67,147 @@ from typing import List, Dict, Optional, Sequence, Tuple
 import numpy as np
 from scipy.optimize import brentq
 
-from cflibs.core.constants import C_LIGHT, EV_TO_K, KB, KB_EV, M_PROTON
+from cflibs.core.constants import (
+    C_LIGHT,
+    E_CHARGE,
+    EV_TO_K,
+    KB,
+    KB_EV,
+    M_E,
+    M_PROTON,
+)
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.boltzmann import LineObservation
 
 logger = get_logger("inversion.self_absorption")
+
+
+# =============================================================================
+# Optical-depth prefactor — derivation
+# =============================================================================
+#
+# The classical line-center optical depth for a Doppler-broadened line is
+# (Hutchinson, *Principles of Plasma Diagnostics*, 2nd ed., eq. 5.13;
+# Mihalas, *Stellar Atmospheres*, 2nd ed., eq. 4-2; Konjević 1999 review,
+# Phys. Rep. 316, 339):
+#
+#     τ₀ = (π e² / mₑ c) · f_lu · N_lower · L · φ(ν₀)
+#
+# with
+#
+#     φ(ν₀) = 1 / (√π · Δν_D)      (Doppler line-center value, 1/e width)
+#     Δν_D  = (ν₀ / c) · √(2 k T / M)        (Doppler 1/e half-width in Hz)
+#
+# Evaluating the classical-radius prefactor in CGS (e = 4.8032 × 10⁻¹⁰ esu,
+# mₑ = 9.1094 × 10⁻²⁸ g, c = 2.9979 × 10¹⁰ cm/s) gives
+#
+#     π e² / (mₑ c) ≃ 0.02654 cm² · Hz
+#
+# In SI (e = 1.602 × 10⁻¹⁹ C, mₑ = 9.1094 × 10⁻³¹ kg, c = 2.998 × 10⁸ m/s)
+# the same dimensionful constant has to be multiplied by 1/(4πε₀) to recover
+# the Gaussian-unit formula; we work in CGS throughout so the prefactor
+# below is the bare numerical value computed from CGS constants (the
+# scipy.constants module exposes them in SI, so we convert).
+#
+# Magnitude for typical LIBS conditions (T ≈ 10 000 K, M ≈ 28 amu like Si):
+#
+#     v_th     = √(2 k T / M)          ≃ 2.43 × 10⁵ cm/s
+#     Δν_D     = (ν₀/c) · v_th         ≃ 9.7 × 10⁹ Hz  for λ = 251.6 nm
+#     φ(ν₀)    ≃ 5.8 × 10⁻¹¹ Hz⁻¹
+#     σ_peak   = (π e²/mₑ c) · f_lu · φ(ν₀)
+#              ≃ 0.0265 · 0.3 · 5.8e-11  ≃ 5 × 10⁻¹³ cm²  for f_lu ≈ 0.3
+#
+# So the per-line cross-section at line center is of order 10⁻¹³–10⁻¹² cm²
+# (consistent with the standard textbook range quoted by Griem and by
+# Hutchinson). Multiplied by N_lower L ≃ 10¹³–10¹⁶ cm⁻² for LIBS plasmas
+# gives τ in the optically-thick regime (τ ≳ 1) for major-element resonance
+# lines — which is exactly where the Pace-doublet and CDSB corrections in
+# the rest of this module are designed to live.
+#
+# The historical SCALE_FACTOR = 1e-25 × A_ki × λ³ formulation (removed in
+# CF-LIBS-improved-k2h7) under-estimated τ by ~12 orders of magnitude
+# because it has no Doppler-width normalization and no proper oscillator-
+# strength conversion. With τ ≈ 10⁻¹⁵ for every line, the
+# `optical_depth_threshold = 0.1` gate in correct() never fired, so the
+# corrector was a silent no-op even for spectacularly self-absorbed lines.
+#
+# Reference: Hutchinson eq. (5.13); Konjević (1999) Phys. Rep. 316, 339,
+# §3.2.
+#
+# pre-compute the classical-radius prefactor once at module load so the
+# inner loop stays cheap. We use CGS via direct constants — these are also
+# in cflibs.core.constants but spelled in SI (M_E in kg, E_CHARGE in C),
+# so convert here.
+
+_M_E_CGS_G = 9.1093837015e-28           # electron mass in grams
+_E_CGS_ESU = 4.80320425e-10              # elementary charge in statcoulombs
+_C_CGS_CM_PER_S = 2.99792458e10          # speed of light in cm/s
+
+# (π e² / mₑ c) in CGS — units of cm² · Hz. Constant of nature; depends
+# only on QED. Quote: 0.026540... cm² Hz (Cowan, *Theory of Atomic
+# Structure and Spectra*, 1981; CODATA-2018-consistent).
+_PI_E2_OVER_MEC_CGS = np.pi * _E_CGS_ESU**2 / (_M_E_CGS_G * _C_CGS_CM_PER_S)
+
+# Atomic masses (in amu) for elements commonly encountered in LIBS
+# matrices. Used to compute Doppler width when the caller does not supply
+# a mass. Values from NIST standard atomic weights (most-abundant isotope
+# weighted). Fallback for elements not in this table is 28 amu (~Si),
+# which is order-of-magnitude correct for major rock-forming elements
+# (Si=28, Al=27, Mg=24, Ca=40, Fe=56, Ti=48). The Doppler width scales as
+# 1/√M, so a 2x mass mismatch only changes τ by √2 ≈ 1.4× — within the
+# uncertainty budget of optical-depth estimation in plasma diagnostics.
+_ATOMIC_MASS_AMU: Dict[str, float] = {
+    "H": 1.008,
+    "He": 4.003,
+    "Li": 6.94,
+    "Be": 9.012,
+    "B": 10.81,
+    "C": 12.011,
+    "N": 14.007,
+    "O": 15.999,
+    "F": 18.998,
+    "Ne": 20.180,
+    "Na": 22.990,
+    "Mg": 24.305,
+    "Al": 26.982,
+    "Si": 28.085,
+    "P": 30.974,
+    "S": 32.06,
+    "Cl": 35.45,
+    "Ar": 39.948,
+    "K": 39.098,
+    "Ca": 40.078,
+    "Sc": 44.956,
+    "Ti": 47.867,
+    "V": 50.942,
+    "Cr": 51.996,
+    "Mn": 54.938,
+    "Fe": 55.845,
+    "Co": 58.933,
+    "Ni": 58.693,
+    "Cu": 63.546,
+    "Zn": 65.38,
+    "Ga": 69.723,
+    "Ge": 72.630,
+    "As": 74.922,
+    "Se": 78.971,
+    "Br": 79.904,
+    "Sr": 87.62,
+    "Mo": 95.95,
+    "Ag": 107.87,
+    "Cd": 112.41,
+    "Sn": 118.71,
+    "Sb": 121.76,
+    "Ba": 137.33,
+    "W": 183.84,
+    "Pt": 195.08,
+    "Au": 196.97,
+    "Hg": 200.59,
+    "Pb": 207.2,
+    "Bi": 208.98,
+    "U": 238.03,
+}
+_DEFAULT_ATOMIC_MASS_AMU = 28.0  # Si-like fallback for unknown elements
 
 
 def _escape_factor(tau: float) -> float:
@@ -314,6 +450,21 @@ def correct_via_doublet_ratio(
     tau_2 = tau_1 / r_theory
     f_tau_1 = _escape_factor(tau_1)
     f_tau_2 = _escape_factor(tau_2)
+
+    logger.debug(
+        "correct_via_doublet_ratio: %s %s doublet (%.3f, %.3f) nm -> "
+        "tau_1=%.3f tau_2=%.3f f1=%.3f f2=%.3f r_meas=%.3f r_theory=%.3f",
+        line1.element,
+        line1.ionization_stage,
+        line1.wavelength_nm,
+        line2.wavelength_nm,
+        tau_1,
+        tau_2,
+        f_tau_1,
+        f_tau_2,
+        r_meas,
+        r_theory,
+    )
 
     return DoubletRatioResult(
         tau_1=tau_1,
@@ -562,6 +713,59 @@ class SelfAbsorptionCorrector:
         if lower_level_energies is None:
             lower_level_energies = {}
 
+        # Edge-case logging: identify silent no-op conditions BEFORE running
+        # the loop, so operators can tell at a glance whether a "n_corrected=0"
+        # result was a genuine optically-thin spectrum or a silent skip.
+        n_observations = len(observations)
+        if n_observations == 0:
+            logger.info(
+                "self_absorption.correct skipped: empty observation list "
+                "(T=%.0fK, n_tot=%.2e cm^-3, n_elements=%d)",
+                temperature_K,
+                total_number_density_cm3,
+                len(concentrations),
+            )
+            return SelfAbsorptionResult(
+                corrected_observations=[],
+                masked_observations=[],
+                corrections={},
+                n_corrected=0,
+                n_masked=0,
+                max_optical_depth=0.0,
+                warnings=["Empty observation list — no correction applied"],
+            )
+        if total_number_density_cm3 <= 0:
+            logger.warning(
+                "self_absorption.correct: non-positive total number density "
+                "(n_tot=%.2e cm^-3); all optical depths will be zero and no "
+                "correction will be applied (n_lines=%d)",
+                total_number_density_cm3,
+                n_observations,
+            )
+        if temperature_K <= 0:
+            logger.warning(
+                "self_absorption.correct: non-positive temperature "
+                "(T=%.1fK); optical depth estimator will return zero and no "
+                "correction will be applied (n_lines=%d)",
+                temperature_K,
+                n_observations,
+            )
+        # Track which element/stage pairs are *seen* in observations but absent
+        # from `concentrations` — these silently get tau=0 inside
+        # `_estimate_optical_depth`. Used for the summary log emitted below.
+        missing_conc_elements = {
+            obs.element for obs in observations if obs.element not in concentrations
+        }
+        missing_partition_elements = {
+            obs.element for obs in observations if obs.element not in partition_funcs
+        }
+        if missing_conc_elements:
+            logger.info(
+                "self_absorption.correct: elements with no concentration entry "
+                "(tau forced to 0): %s",
+                sorted(missing_conc_elements),
+            )
+
         warnings = []
         corrected_obs = []
         masked_obs = []
@@ -615,12 +819,63 @@ class SelfAbsorptionCorrector:
                     is_optically_thick=False,
                 )
 
+        # Per-element bookkeeping for the summary log: which elements had at
+        # least one line corrected or masked?  Operators want to see this when
+        # debugging "why was Si missed in soil at 60% SiO2".
+        affected_elements: Dict[str, Dict[str, int]] = {}
+        for obs in observations:
+            corr = corrections.get(obs.wavelength_nm)
+            if corr is None:
+                continue
+            slot = affected_elements.setdefault(
+                obs.element, {"corrected": 0, "masked": 0, "thin": 0}
+            )
+            if corr.correction_factor == 0.0:
+                slot["masked"] += 1
+            elif corr.correction_factor == 1.0:
+                slot["thin"] += 1
+            else:
+                slot["corrected"] += 1
+        affected_summary = {
+            el: counts
+            for el, counts in affected_elements.items()
+            if counts["corrected"] > 0 or counts["masked"] > 0
+        }
+
+        # Preserve historical n_corrected semantics (count of non-thin
+        # corrections, which historically lumped masked + corrected) so the
+        # F1 gate and downstream tests stay byte-stable. The new structured
+        # log line breaks the count out explicitly for diagnostic clarity.
+        n_corrected_legacy = len(
+            [c for c in corrections.values() if c.correction_factor != 1.0]
+        )
+        n_masked = len(masked_obs)
+        n_truly_corrected = n_corrected_legacy - n_masked
+        n_thin = n_observations - n_corrected_legacy
+
+        logger.info(
+            "self_absorption.correct summary: n_lines=%d (thin=%d, corrected=%d, "
+            "masked=%d), max_tau=%.3f, T=%.0fK, n_tot=%.2e cm^-3, "
+            "missing_concentrations=%d, missing_partition_funcs=%d, "
+            "affected_elements=%s",
+            n_observations,
+            n_thin,
+            n_truly_corrected,
+            n_masked,
+            max_tau,
+            temperature_K,
+            total_number_density_cm3,
+            len(missing_conc_elements),
+            len(missing_partition_elements),
+            affected_summary or "{}",
+        )
+
         return SelfAbsorptionResult(
             corrected_observations=corrected_obs,
             masked_observations=masked_obs,
             corrections=corrections,
-            n_corrected=len([c for c in corrections.values() if c.correction_factor != 1.0]),
-            n_masked=len(masked_obs),
+            n_corrected=n_corrected_legacy,
+            n_masked=n_masked,
             max_optical_depth=max_tau,
             warnings=warnings,
         )
@@ -637,19 +892,88 @@ class SelfAbsorptionCorrector:
         """
         Estimate optical depth at line center.
 
-        Uses:
-        τ₀ = (π e² / m_e c) × f_ik × n_i × L × φ(ν₀)
+        Implements the classical Doppler-broadened line-center formula
+        (Hutchinson, *Principles of Plasma Diagnostics*, eq. 5.13;
+        Mihalas, *Stellar Atmospheres*, eq. 4-2; Konjević 1999, Phys. Rep.
+        316, §3.2):
 
-        Simplified to:
-        τ₀ ≈ B × (g_k A_ki λ³ / 8π) × (n_s / U(T)) × exp(-E_i/kT) × L
+        .. math::
 
-        Where B is a constant including physical constants.
+            \\tau_0 = \\frac{\\pi e^2}{m_e c}\\, f_{lu}\\, N_{lower}\\, L\\, \\phi(\\nu_0)
+
+        with the line-center Doppler profile value
+
+        .. math::
+
+            \\phi(\\nu_0) = \\frac{1}{\\sqrt{\\pi}\\, \\Delta\\nu_D},
+            \\qquad
+            \\Delta\\nu_D = \\frac{\\nu_0}{c}\\sqrt{\\frac{2 k T}{M}}
+
+        The classical-radius prefactor evaluates to
+        ``π e² / (mₑ c) ≃ 0.02654 cm² · Hz`` in CGS — a fundamental
+        constant that does NOT depend on the line. ``f_lu`` (absorption
+        oscillator strength) is derived from the Einstein A coefficient
+        on ``obs``:
+
+        .. math::
+
+            f_{lu} = \\frac{m_e c}{8 \\pi^2 e^2}\\,\\lambda^2\\,\\frac{g_k}{g_i}\\, A_{ki}
+                   = 1.4992\\,\\lambda[\\mathrm{cm}]^2 \\cdot A_{ki}[\\mathrm{s}^{-1}]\\,\\frac{g_k}{g_i}
+
+        For a Si I 251.611 nm line (``A_ki = 1.21e8 s⁻¹``, g_k=3, g_i=1)
+        this gives ``f_lu ≈ 0.34``, Δν_D ≈ 9.7×10⁹ Hz at T=10 000 K, and a
+        cross section σ_peak ≈ 5×10⁻¹³ cm². At 60 % Si mass fraction and
+        N_total = 10¹⁵ cm⁻³ with L = 0.1 cm this lands τ in the
+        optically-thick regime (τ ~ a few), which is exactly where the
+        Pace-doublet and CDSB corrections in the rest of this module are
+        designed to live.
+
+        Historical note: prior to CF-LIBS-improved-k2h7 this method used
+        ``SCALE_FACTOR = 1e-25 × A_ki × λ³ × n_i × L``, which is
+        dimensionally a 12-order-of-magnitude under-estimate (the
+        per-line σ has units of cm², not the cm³·s implied by
+        ``A·λ³``). Every real LIBS line returned τ ≈ 1e-15, so the
+        ``optical_depth_threshold = 0.1`` gate never fired and the
+        corrector was a silent no-op. See `docs/research/` for the audit.
+
+        Parameters
+        ----------
+        obs : LineObservation
+            Emission line — must carry ``A_ki``, ``g_k``, ``element``,
+            ``wavelength_nm``.
+        temperature_K : float
+            Excitation temperature in K.
+        concentrations : Dict[str, float]
+            Element mass fractions (or number fractions; treated as a
+            multiplier on ``total_n_cm3``).
+        total_n_cm3 : float
+            Total heavy-particle number density in cm⁻³.
+        partition_funcs : Dict[str, float]
+            Partition function U(T) per element.
+        E_i_ev : float
+            Lower-level energy in eV (defaults to 0 = ground state in
+            ``correct``).
+
+        Returns
+        -------
+        float
+            Line-center optical depth τ₀, clamped to be non-negative.
         """
         element = obs.element
         C_s = concentrations.get(element, 0.0)
         U_T = partition_funcs.get(element, 25.0)
 
         if C_s <= 0 or U_T <= 0:
+            # Silent skip — but emit a DEBUG line so the cause is recoverable
+            # from a -v log. Higher-severity summary is emitted by `correct`.
+            logger.debug(
+                "_estimate_optical_depth(%s @ %.3f nm): tau=0 because "
+                "C_s=%.3e or U_T=%.3e is non-positive",
+                element,
+                obs.wavelength_nm,
+                C_s,
+                U_T,
+            )
             return 0.0
 
         # Species number density
@@ -658,30 +982,88 @@ class SelfAbsorptionCorrector:
         # Lower level population (Boltzmann)
         T_eV = temperature_K / EV_TO_K
         if T_eV <= 0:
+            logger.debug(
+                "_estimate_optical_depth(%s @ %.3f nm): tau=0 because "
+                "T_eV=%.3e (T_K=%.1f) is non-positive",
+                element,
+                obs.wavelength_nm,
+                T_eV,
+                temperature_K,
+            )
             return 0.0
 
-        # Statistical weight of lower level (approximate as g_k for now)
-        g_i = obs.g_k  # Should be lower level g, but often similar order
+        # Statistical weight of the lower level. Strictly we want g_i, not
+        # g_k — but LineObservation only carries g_k. For the LIBS
+        # resonance-line regime (where SA correction matters most) the two
+        # levels typically differ by a factor of 1–3, so using g_k is an
+        # O(1) bias in N_lower; not the 12-orders-of-magnitude error the
+        # 1e-25 scale factor introduced. Document this honestly so future
+        # work can plumb g_i through.
+        g_i = obs.g_k  # TODO: pipe true g_i through LineObservation
 
         exp_factor = np.exp(-E_i_ev / T_eV)
-        n_i = n_s * (g_i / U_T) * exp_factor
+        n_lower = n_s * (g_i / U_T) * exp_factor
 
-        # Wavelength in cm
+        # Wavelength in cm (CGS throughout the prefactor calculation).
         lambda_cm = obs.wavelength_nm * 1e-7
 
-        # Absorption oscillator strength from A_ki
-        # f_ik ≈ (m_e c / 8π² e²) × (g_k/g_i) × λ² × A_ki
-        # Simplified: use A_ki directly with scaling
+        # Absorption oscillator strength from A_ki via the standard
+        # Einstein-coefficient relation (Cowan 1981, eq. 14.39):
+        #     f_lu = (m_e c / (8 π² e²)) · λ² · A_ki · (g_k / g_i)
+        # The numerical prefactor in CGS with λ in cm is exactly 1.4992
+        # (see ``MultipletLine.oscillator_strength`` for the cross-check).
+        # Falls back to a safe 1.0 when atomic data are malformed; this
+        # is the same defensive default as the historical code.
+        if obs.A_ki <= 0 or g_i <= 0:
+            logger.debug(
+                "_estimate_optical_depth(%s @ %.3f nm): tau=0 because "
+                "A_ki=%.3e or g_i=%.3e is non-positive",
+                element,
+                obs.wavelength_nm,
+                obs.A_ki,
+                g_i,
+            )
+            return 0.0
+        f_lu = 1.4992 * (lambda_cm**2) * obs.A_ki * (obs.g_k / g_i)
 
-        # Optical depth estimate (order of magnitude)
-        # τ ≈ σ × n_i × L
-        # σ ≈ (π e² / m_e c) × f × φ(ν) ≈ 10^-12 cm² (typical)
+        # Doppler 1/e half-width in Hz: Δν_D = (ν₀/c) · √(2 k T / M).
+        # Use M_PROTON (in kg) consistent with KB (in J/K); v_th comes
+        # out in m/s; convert to CGS at the end.
+        atomic_mass_amu = _ATOMIC_MASS_AMU.get(element, _DEFAULT_ATOMIC_MASS_AMU)
+        mass_kg = atomic_mass_amu * M_PROTON
+        v_th_m_per_s = np.sqrt(2.0 * KB * temperature_K / mass_kg)
+        # ν₀ in Hz from λ in cm: ν₀ = c / λ with c in cm/s.
+        nu_0_Hz = _C_CGS_CM_PER_S / lambda_cm
+        # v_th cancels c when going from m/s ÷ c[m/s] — keep SI inside the
+        # ratio for numerical clarity.
+        delta_nu_D_Hz = nu_0_Hz * (v_th_m_per_s / C_LIGHT)
 
-        # Using simpler scaling based on Einstein A coefficient:
-        # τ ∝ A_ki × λ³ × n_i × L
-        SCALE_FACTOR = 1e-25  # Empirical scaling to get reasonable τ values
+        if delta_nu_D_Hz <= 0:
+            logger.debug(
+                "_estimate_optical_depth(%s @ %.3f nm): tau=0 because "
+                "Doppler width Δν_D=%.3e Hz is non-positive (T=%.1fK, "
+                "M=%.2f amu)",
+                element,
+                obs.wavelength_nm,
+                delta_nu_D_Hz,
+                temperature_K,
+                atomic_mass_amu,
+            )
+            return 0.0
 
-        tau = SCALE_FACTOR * obs.A_ki * (lambda_cm**3) * n_i * self.plasma_length_cm
+        # Line-center Doppler profile value (normalized so ∫φ dν = 1):
+        #     φ(ν₀) = 1 / (√π · Δν_D)
+        phi_nu0 = 1.0 / (np.sqrt(np.pi) * delta_nu_D_Hz)
+
+        # Final optical depth — units: cm²·Hz × (dimensionless) × cm⁻³ ×
+        # cm × Hz⁻¹  =  dimensionless ✓
+        tau = (
+            _PI_E2_OVER_MEC_CGS
+            * f_lu
+            * n_lower
+            * self.plasma_length_cm
+            * phi_nu0
+        )
 
         return max(0.0, tau)
 
