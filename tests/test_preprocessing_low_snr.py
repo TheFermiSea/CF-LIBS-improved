@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from cflibs.inversion.preprocess.preprocessing import detect_peaks_auto, BaselineMethod
 
 def test_detect_peaks_low_snr_sensitivity():

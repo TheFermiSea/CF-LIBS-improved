@@ -20,7 +20,6 @@ from cflibs.pds.vrabel2020 import (
     N_CHANNELS,
     N_CLASSES,
     N_TEST_SPECTRA,
-    N_TRAIN_SAMPLES,
     SHOTS_PER_TRAIN_SAMPLE,
     VrabelSampleComposition,
     VrabelTestSplit,

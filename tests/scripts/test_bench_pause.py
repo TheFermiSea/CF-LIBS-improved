@@ -17,7 +17,6 @@ companion PR in `beefcake-swarm` ships an equivalent unit test there.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
