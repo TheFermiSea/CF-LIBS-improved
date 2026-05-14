@@ -173,7 +173,6 @@ def mocked_sweep(parameter_sweep, monkeypatch, tmp_path):
     original = parameter_sweep._run_one_iteration
 
     def _wrapped(*args, **kwargs):
-        base_args = kwargs.get("base_args")
         # Derive the cell name from the unique composition_workflows
         # we set on each cell's argparse Namespace.  This is the only
         # piece of per-cell state propagated into _run_one_iteration.

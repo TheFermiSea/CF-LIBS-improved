@@ -15,7 +15,9 @@ import pytest
 h5py = pytest.importorskip("h5py")
 openpyxl = pytest.importorskip("openpyxl")
 
-from cflibs.pds.vrabel2020 import (
+# Import placed after both importorskip calls so module collection
+# short-circuits cleanly when either optional dep is missing.
+from cflibs.pds.vrabel2020 import (  # noqa: E402
     ELEMENTS,
     N_CHANNELS,
     N_CLASSES,
