@@ -79,6 +79,7 @@ conductor/setup_state.json
 .beads/.beads-credential-key
 .beadhub
 .beadhub-cache/
+.beadhub*.bak*
 .mcp.json
 
 # Git worktrees
