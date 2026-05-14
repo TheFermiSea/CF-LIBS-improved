@@ -615,9 +615,29 @@ class ALIASIdentifier:
     n_e_steps : int, optional
         Number of electron density grid points (default: 3)
     intensity_threshold_factor : float, optional
-        Peak detection threshold = factor × noise_estimate (default: 4.0)
+        Peak detection threshold = factor × noise_estimate. If ``None`` (the
+        default), resolved from ``high_recall``: ``2.0`` when
+        ``high_recall=True`` and ``3.0`` otherwise (strict mode, the
+        precision-king baseline). Passing an explicit float overrides
+        ``high_recall`` for this knob.
     detection_threshold : float, optional
-        Minimum confidence level for element detection (default: 0.02)
+        Minimum confidence level for element detection. If ``None`` (the
+        default), resolved from ``high_recall``: ``0.01`` when
+        ``high_recall=True`` and ``0.02`` otherwise (strict mode, the
+        precision-king baseline). Passing an explicit float overrides
+        ``high_recall`` for this knob.
+    high_recall : bool, optional
+        Opt-in preset that loosens the two peak/identification thresholds
+        for higher recall at the cost of precision. When ``True`` (and the
+        caller has not pinned the corresponding knob explicitly) it lowers
+        ``intensity_threshold_factor`` from ``3.0`` to ``2.0`` and
+        ``detection_threshold`` from ``0.02`` to ``0.01``. The default
+        (``False``) preserves the strict precision-king behavior captured
+        in the F1 leaderboard baseline at
+        ``.swarm/identifier-f1-baseline.json`` (precision=1.000, FP/spec=0
+        on n=33 cross-shard). See the PR for the closed PR #134 that
+        silently flipped these defaults — this knob is the opt-in
+        replacement (default: False).
     chance_window_scale : float, optional
         Scale factor for chance-coincidence windows used in fill-factor estimation.
         The chance half-window is `chance_window_scale * (lambda / R)`.
@@ -693,8 +713,8 @@ class ALIASIdentifier:
         n_e_range_cm3: Tuple[float, float] = (1e16, 5e17),
         T_steps: int = 7,
         n_e_steps: int = 3,
-        intensity_threshold_factor: float = 3.0,
-        detection_threshold: float = 0.02,
+        intensity_threshold_factor: Optional[float] = None,
+        detection_threshold: Optional[float] = None,
         chance_window_scale: float = 0.4,
         elements: Optional[List[str]] = None,
         max_lines_per_element: int = 20,
@@ -702,6 +722,7 @@ class ALIASIdentifier:
         max_screening_candidates: int = 12,
         relative_cl_threshold: float = 0.1,
         boltzmann_r2_min: float = 0.85,
+        high_recall: bool = False,
         use_jax_boltzmann_fit: bool = False,
         use_jax_nnls: bool = False,
         use_jax_p_snr: bool = False,
@@ -725,10 +746,29 @@ class ALIASIdentifier:
             Number of temperature grid points to evaluate.
         n_e_steps : int, optional
             Number of electron density grid points to evaluate.
-        intensity_threshold_factor : float, optional
+        intensity_threshold_factor : Optional[float], optional
             Multiplier applied to the estimated noise level when detecting peaks.
-        detection_threshold : float, optional
+            If ``None`` (default), the value is resolved from ``high_recall``:
+            ``2.0`` when ``high_recall=True``, ``3.0`` otherwise (strict default
+            that preserves the precision-king baseline). Pass an explicit float
+            to override ``high_recall`` for this knob.
+        detection_threshold : Optional[float], optional
             Minimum normalized line strength considered during identification.
+            If ``None`` (default), the value is resolved from ``high_recall``:
+            ``0.01`` when ``high_recall=True``, ``0.02`` otherwise (strict
+            default that preserves the precision-king baseline). Pass an
+            explicit float to override ``high_recall`` for this knob.
+        high_recall : bool, optional
+            Opt-in preset that loosens the two peak/identification thresholds
+            for higher recall at the cost of precision. When ``True``, the
+            unspecified threshold knobs become
+            ``intensity_threshold_factor=2.0`` and ``detection_threshold=0.01``
+            (compare to the strict ``3.0`` / ``0.02`` defaults). The default
+            (``False``) preserves the strict precision-king behavior measured
+            on the n=33 cross-shard F1 leaderboard (precision=1.000,
+            FP/spec=0). This is the opt-in replacement for the closed PR #134
+            silent-default-change; see that PR's discussion for context.
+            (default: False)
         chance_window_scale : float, optional
             Scale factor controlling the wavelength window used in chance-match
             calculations.
@@ -792,8 +832,32 @@ class ALIASIdentifier:
         self.n_e_range_cm3 = n_e_range_cm3
         self.T_steps = T_steps
         self.n_e_steps = n_e_steps
-        self.intensity_threshold_factor = intensity_threshold_factor
-        self.detection_threshold = detection_threshold
+        # Resolve threshold defaults from `high_recall` preset.
+        # Strict mode (default): preserves the precision-king baseline
+        #   precision=1.000, FP/spec=0 on n=33 cross-shard
+        #   (see .swarm/identifier-f1-baseline.json).
+        # Recall mode (opt-in): lowers both thresholds to trade precision
+        #   for recall. This is the opt-in replacement for the closed
+        #   PR #134, which silently flipped these defaults.
+        # Explicit user-supplied values always win, so callers can pin
+        # either knob independently of the preset.
+        self.high_recall = bool(high_recall)
+        _STRICT_INTENSITY_FACTOR = 3.0
+        _STRICT_DETECTION_THRESHOLD = 0.02
+        _RECALL_INTENSITY_FACTOR = 2.0
+        _RECALL_DETECTION_THRESHOLD = 0.01
+        if intensity_threshold_factor is None:
+            self.intensity_threshold_factor = (
+                _RECALL_INTENSITY_FACTOR if self.high_recall else _STRICT_INTENSITY_FACTOR
+            )
+        else:
+            self.intensity_threshold_factor = intensity_threshold_factor
+        if detection_threshold is None:
+            self.detection_threshold = (
+                _RECALL_DETECTION_THRESHOLD if self.high_recall else _STRICT_DETECTION_THRESHOLD
+            )
+        else:
+            self.detection_threshold = detection_threshold
         self.chance_window_scale = chance_window_scale
         self.elements = elements
         self.max_lines_per_element = max_lines_per_element
