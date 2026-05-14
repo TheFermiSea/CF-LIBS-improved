@@ -911,6 +911,84 @@ def _build_alias_high_recall_predictor(
     return predictor
 
 
+def _alias_v2_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
+    """Configs for the ``alias_v2`` workflow — Phase D promotion of the
+    ftp1+dj6y sweep winner per docs/research/findings/2026-05-14-v2-
+    empirical-07-alias-fix-sweep.md.
+
+    Like ``_alias_high_recall_workflow_configs``, this omits
+    threshold kwargs so the constructor's strict defaults
+    (intensity_threshold_factor=3.0, detection_threshold=0.02) apply.
+    The two fix flags (r2_gate_mode='adaptive_t' + relative_cl_per_ion_stage)
+    are baked into the predictor, NOT the config dict, so they cannot
+    be tuned out by parameter-sweep callers.
+
+    Empirical baseline on shard 1/3 + vrabel-max-shots 1 (per the v2
+    sweep): macro_f1=0.3092, macro_precision=0.4318, macro_recall=0.2700,
+    fp_per_spectrum=0.4545. That's +0.198 macro_f1 lift vs the strict
+    alias's 0.1111 on the same corpus shape.
+    """
+    if quick:
+        return [
+            {"chance_window_scale": 0.4, "max_lines_per_element": 30},
+            {"chance_window_scale": 0.3, "max_lines_per_element": 30},
+        ]
+    return [
+        {"chance_window_scale": cws, "max_lines_per_element": 30}
+        for cws in (0.3, 0.4)
+    ]
+
+
+def _build_alias_v2_predictor(
+    context: UnifiedBenchmarkContext,
+    candidate_elements: List[str],
+    config: Dict[str, Any],
+) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
+    """Predictor for ``alias_v2`` — Phase D promotion of the ftp1+dj6y
+    sweep winner.
+
+    Bakes in the two Phase B fix flags whose combination won the
+    Phase C sweep:
+      r2_gate_mode='adaptive_t' (PR #175, fix γ ftp1)
+      r2_gate_t_quality_threshold=5500.0  (PR #175 default)
+      relative_cl_per_ion_stage=True (PR #176, fix ε dj6y)
+
+    NOT baked in:
+      temperature_estimator_mode='legacy' (NOT 'robust' — PR #177 fix δ
+      762f cancels ftp1's gain because it warms T above the 5500K
+      relaxation threshold, eliminating the adaptive_t branch. See the
+      empirical 07 v2 sweep report for the mutual-exclusion analysis.)
+
+    Strict thresholds (intensity_threshold_factor=3.0, detection_threshold=0.02)
+    are preserved by NOT passing them through the constructor — same
+    pattern as alias_high_recall. ``alias_v2`` is additive: the existing
+    ``alias`` workflow is unchanged so the precision=1.000 baseline at
+    .swarm/identifier-f1-baseline.json continues to hold.
+    """
+
+    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
+        from cflibs.atomic.database import AtomicDatabase
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+
+        with AtomicDatabase(str(context.db_path)) as db:
+            identifier = ALIASIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=_estimate_rp_for_spectrum(spectrum),
+                r2_gate_mode="adaptive_t",
+                relative_cl_per_ion_stage=True,
+                chance_window_scale=float(config["chance_window_scale"]),
+                max_lines_per_element=int(config["max_lines_per_element"]),
+                **_jax_identifier_flags_for(ALIASIdentifier),
+            )
+            result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
+            result.parameters["candidate_elements"] = list(candidate_elements)
+            result.parameters["alias_mode"] = "v2_ftp1_plus_dj6y"
+            return result
+
+    return predictor
+
+
 # ---------------------------------------------------------------------------
 # Alias-fix sweep harness (Phase C of jaunty-weaving-mist).
 #
@@ -1380,6 +1458,12 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
     return {
         "alias": IDWorkflowSpec(
             "alias", _alias_workflow_configs(quick), _build_alias_predictor, _config_name
+        ),
+        "alias_v2": IDWorkflowSpec(
+            "alias_v2",
+            _alias_v2_workflow_configs(quick),
+            _build_alias_v2_predictor,
+            _config_name,
         ),
         "alias_high_recall": IDWorkflowSpec(
             "alias_high_recall",
