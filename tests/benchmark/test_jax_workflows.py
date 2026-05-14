@@ -45,7 +45,6 @@ from cflibs.benchmark.unified import (
     _coerce_composition_prediction,
     _fit_bayesian_pipeline,
     _fit_iterative_jax_pipeline,
-    _fit_iterative_pipeline,
     build_composition_workflow_registry,
 )
 

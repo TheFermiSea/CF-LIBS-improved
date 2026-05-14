@@ -1,5 +1,4 @@
 import math
-import pytest
 from dataclasses import dataclass
 from cflibs.inversion.common.element_id import get_wavelength_tolerance
 

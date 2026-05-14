@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 # McWhirter constant: n_e >= 1.6e12 * sqrt(T_K) * (delta_E_eV)**3
 # (cm^-3 for delta_E in eV, T in K). Mirror of MCWHIRTER_CONST in

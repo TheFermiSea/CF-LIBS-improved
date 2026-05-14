@@ -1,6 +1,4 @@
-import pytest
 from unittest.mock import MagicMock, patch
-from pathlib import Path
 from cflibs.cli.main import manifold_cmd
 
 def test_manifold_cmd_format_strings():
