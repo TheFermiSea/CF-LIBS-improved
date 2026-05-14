@@ -20,6 +20,7 @@ from cflibs.inversion.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
     is_element_detected,
+    get_wavelength_tolerance,
 )
 from cflibs.inversion.preprocessing import detect_peaks_auto
 from cflibs.core.logging_config import get_logger
@@ -454,7 +455,8 @@ class CombIdentifier:
 
             for trans in transitions:
                 tooth_result = self._correlate_tooth(
-                    wavelength, intensity, baseline, trans.wavelength_nm, threshold
+                    wavelength, intensity, baseline, trans.wavelength_nm, threshold,
+                    transition=trans,
                 )
                 tooth_result["transition"] = trans
                 teeth.append(tooth_result)
@@ -699,6 +701,7 @@ class CombIdentifier:
         baseline: np.ndarray,
         center_nm: float,
         threshold: float,
+        transition: Optional[Transition] = None,
     ) -> dict:
         """
         Correlate triangular template with spectral data at a given wavelength.
@@ -729,9 +732,19 @@ class CombIdentifier:
 
         # Estimate resolution element from wavelength spacing
         dwl = np.median(np.diff(wavelength))
-        # Derive resolution from resolving power if available, else fallback
+        # Stark-aware tolerance — sqrt(fwhm_inst**2 + omega_stark**2) when a
+        # transition with stark_width_nm metadata is supplied; otherwise the
+        # helper falls back to lambda/R (no Stark). PR #151 wired the same
+        # helper into alias._match_lines (per-line tolerance instead of a
+        # global mean_wl/eff_R); this is the comb-side counterpart for the
+        # triangular-template width. See CF-LIBS-improved-5ozw.
         if self.resolving_power:
-            resolution_nm = center_nm / self.resolving_power
+            resolution_nm = get_wavelength_tolerance(
+                center_nm,
+                transition=transition,
+                resolving_power=self.resolving_power,
+                fallback=center_nm / self.resolving_power,
+            )
         else:
             resolution_nm = 0.1
         max_width_pts = int((resolution_nm * self.max_width_factor) / dwl)
