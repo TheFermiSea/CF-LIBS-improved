@@ -561,7 +561,19 @@ def _assert_summaries_match(
     if isinstance(baseline, dict):
         assert isinstance(candidate, dict), f"{path}: type mismatch dict vs {type(candidate)}"
         # Ignore wall-clock-style keys that legitimately differ run-to-run.
-        ignore_keys = {"wall_time_seconds", "elapsed_seconds", "timestamp"}
+        # `latency_*` are aggregates (np.mean / np.percentile over
+        # elapsed_seconds) that inherit the per-record timing noise — the
+        # raw `elapsed_seconds` was already in the ignore set; the bug was
+        # that the aggregates derived from it were not (CF-LIBS-improved-5w9f).
+        ignore_keys = {
+            "wall_time_seconds",
+            "elapsed_seconds",
+            "timestamp",
+            "latency_mean_s",
+            "latency_p95_s",
+            "latency_p99_s",
+            "latency_max_s",
+        }
         keys_b = set(baseline) - ignore_keys
         keys_c = set(candidate) - ignore_keys
         assert keys_b == keys_c, f"{path}: key set differs {keys_b ^ keys_c}"
