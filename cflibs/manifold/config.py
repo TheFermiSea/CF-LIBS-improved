@@ -2,13 +2,38 @@
 Configuration for manifold generation.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Tuple
 from pathlib import Path
 
 from cflibs.core.logging_config import get_logger
+from cflibs.radiation.profiles import BroadeningMode
 
 logger = get_logger("manifold.config")
+
+
+def _coerce_broadening_mode(raw) -> BroadeningMode:
+    """Coerce a YAML-loaded broadening_mode value into a ``BroadeningMode``.
+
+    Accepts:
+      * ``BroadeningMode`` instances (returned as-is)
+      * Case-insensitive strings matching enum values: ``"ldm_gaussian"``,
+        ``"physical_doppler"``, ``"legacy"``, ``"nist_parity"``.
+
+    Raises ``ValueError`` with the list of valid values otherwise.
+    """
+    if isinstance(raw, BroadeningMode):
+        return raw
+    if isinstance(raw, str):
+        normalized = raw.strip().lower()
+        try:
+            return BroadeningMode(normalized)
+        except ValueError as exc:
+            valid = ", ".join(repr(m.value) for m in BroadeningMode)
+            raise ValueError(f"Invalid broadening_mode {raw!r}; expected one of {valid}") from exc
+    raise ValueError(
+        f"broadening_mode must be a string or BroadeningMode; got {type(raw).__name__}"
+    )
 
 
 @dataclass
@@ -72,6 +97,15 @@ class ManifoldConfig:
     instrument_fwhm_nm: float = 0.05
     physics_version: int = 2
 
+    # Broadening kernel dispatch (ADR-0001 T1-4 / bead 8n4i).
+    # Default preserves the current per-line Voigt path; users can opt in to
+    # ``BroadeningMode.LDM_GAUSSIAN`` for the O(N_σ · N_λ log N_λ) Line
+    # Distribution Method (van den Bekerom & Pannier 2021) which is ~19×
+    # faster at N_lines=1500 but currently 1-D Gaussian-only (no Stark).
+    broadening_mode: BroadeningMode = field(
+        default=BroadeningMode.PHYSICAL_DOPPLER,
+    )
+
     @classmethod
     def from_file(cls, config_path: Path) -> "ManifoldConfig":
         """
@@ -104,6 +138,12 @@ class ManifoldConfig:
             seq = raw if raw is not None else default
             return tuple(float(x) for x in seq)
 
+        broadening_mode_raw = manifold_config.get("broadening_mode")
+        if broadening_mode_raw is None:
+            broadening_mode = BroadeningMode.PHYSICAL_DOPPLER
+        else:
+            broadening_mode = _coerce_broadening_mode(broadening_mode_raw)
+
         return cls(
             db_path=manifold_config.get("db_path", "libs_production.db"),
             output_path=manifold_config.get("output_path", "spectral_manifold.h5"),
@@ -123,6 +163,7 @@ class ManifoldConfig:
             use_stark_broadening=manifold_config.get("use_stark_broadening", True),
             instrument_fwhm_nm=float(manifold_config.get("instrument_fwhm_nm", 0.05)),
             physics_version=manifold_config.get("physics_version", 2),
+            broadening_mode=broadening_mode,
         )
 
     def validate(self) -> bool:

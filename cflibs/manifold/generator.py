@@ -35,6 +35,8 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
 from cflibs.plasma.partition import polynomial_partition_function_jax
+from cflibs.radiation.ldm import DEFAULT_N_SIGMA, build_sigma_grid
+from cflibs.radiation.profiles import BroadeningMode
 
 jit = jit_if_available
 vmap = vmap_if_available
@@ -347,6 +349,59 @@ class ManifoldGenerator:
             lines_stark_w,
             lines_stark_alpha,
             lines_mass_amu,
+        )
+
+    def _build_ldm_sigma_grid(self) -> np.ndarray:
+        """Build the LDM σ-layer grid that brackets the manifold sweep.
+
+        The Line Distribution Method projects each line onto a fixed log-σ
+        grid; lines whose σ falls outside the grid are clipped to the
+        boundary layers. We pick the extreme σ values the manifold can ever
+        produce — coldest plasma + heaviest line (smallest σ_doppler) and
+        hottest plasma + lightest line (largest σ_doppler) — then convolve
+        with the instrument floor and let :func:`build_sigma_grid` apply its
+        standard ``[0.5×, 2×]`` bracket factors on top.
+
+        Returns
+        -------
+        ndarray, shape (DEFAULT_N_SIGMA,)
+            Log-spaced σ grid in nm.
+        """
+        (
+            l_wl,
+            *_,
+            l_mass_amu,
+        ) = self.atomic_data
+
+        lines_wl_np = np.asarray(l_wl, dtype=np.float64)
+        lines_mass_np = np.asarray(l_mass_amu, dtype=np.float64)
+
+        if lines_wl_np.size == 0:
+            raise ValueError("Cannot build LDM sigma grid: atomic line catalog is empty.")
+
+        T_lo, T_hi = self.config.temperature_range
+        # Doppler σ scales as λ * sqrt(2 k T / m c^2); evaluate at the
+        # extremes of the (λ, m, T) Cartesian product to bracket the sweep.
+        wl_lo, wl_hi = lines_wl_np.min(), lines_wl_np.max()
+        m_lo, m_hi = lines_mass_np.min(), lines_mass_np.max()
+
+        def _doppler_sigma_nm(wl_nm: float, mass_amu: float, T_eV: float) -> float:
+            mass_kg = mass_amu * M_PROTON
+            return float(wl_nm * np.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2)))
+
+        sigma_dop_min = _doppler_sigma_nm(wl_lo, m_hi, T_lo)
+        sigma_dop_max = _doppler_sigma_nm(wl_hi, m_lo, T_hi)
+
+        # Instrument floor adds in quadrature (FWHM 0.05 nm, fixed in the
+        # JAX kernel). Match the floor used in ``_compute_spectrum_snapshot``.
+        sigma_inst = 0.05 / 2.355
+        sigma_min_total = float(np.sqrt(sigma_dop_min**2 + sigma_inst**2))
+        sigma_max_total = float(np.sqrt(sigma_dop_max**2 + sigma_inst**2))
+
+        # Pass the two endpoints; build_sigma_grid applies bracket factors.
+        return build_sigma_grid(
+            np.array([sigma_min_total, sigma_max_total], dtype=np.float64),
+            n_sigma=DEFAULT_N_SIGMA,
         )
 
     @staticmethod
@@ -705,6 +760,51 @@ class ManifoldGenerator:
 
     @staticmethod
     @jit_if_available(static_argnames=("time_steps",))
+    def _time_integrated_spectrum_ldm(
+        wl_grid: jnp.ndarray,
+        params: jnp.ndarray,
+        atomic_data: Tuple,
+        sigma_grid: jnp.ndarray,
+        gate_width_s: float,
+        time_steps: int,
+    ) -> jnp.ndarray:
+        """Time-integrated spectrum via the LDM Gaussian broadening path.
+
+        Mirrors :meth:`_time_integrated_spectrum` but dispatches each cooling
+        snapshot through :meth:`_compute_spectrum_snapshot_ldm`, which uses
+        the Line Distribution Method (van den Bekerom & Pannier 2021) instead
+        of per-line Voigt broadcasting. The ``sigma_grid`` is closed-over
+        (built once at manifold init) so it stays jit-static.
+        """
+        T_max = params[0]
+        ne_max = params[1]
+        concs = params[2:]
+
+        times = jnp.linspace(0, gate_width_s, time_steps)
+        dt = times[1] - times[0]
+
+        t0 = 1e-6
+        T_trail = T_max * (1 + times / t0) ** (-0.5)
+        ne_trail = ne_max * (1 + times / t0) ** (-1.0)
+
+        def step_fn(carry, inputs):
+            T, ne = inputs
+            intensity = jnp.where(
+                T > 0.4,
+                ManifoldGenerator._compute_spectrum_snapshot_ldm(
+                    wl_grid, T, ne, concs, atomic_data, sigma_grid
+                ),
+                jnp.zeros_like(wl_grid),
+            )
+            return carry + intensity * dt, None
+
+        spectrum_accum = jnp.zeros_like(wl_grid)
+        spectrum_accum, _ = jax.lax.scan(step_fn, spectrum_accum, (T_trail, ne_trail))
+
+        return spectrum_accum
+
+    @staticmethod
+    @jit_if_available(static_argnames=("time_steps",))
     def _time_integrated_spectrum(
         wl_grid: jnp.ndarray,
         params: jnp.ndarray,
@@ -830,15 +930,50 @@ class ManifoldGenerator:
         # Move atomic data to device
         atomic_data = tuple(jax.device_put(x) for x in self.atomic_data)
 
-        # Vectorized function
-        @jit
-        def batch_spectrum(batch_params):
-            return vmap(
-                lambda p: ManifoldGenerator._time_integrated_spectrum(
-                    wl_grid, p, atomic_data, self.config.gate_width_s, self.config.time_steps
-                ),
-                in_axes=0,
-            )(batch_params)
+        # Broadening dispatch (ADR-0001 T1-4 / bead 8n4i):
+        # The LDM path needs a pre-built log-σ grid that brackets the full
+        # range of per-line widths the manifold sweep can produce. We bound
+        # σ_total from below (cold plasma, heaviest line) and above (hot
+        # plasma, lightest line) and pass build_sigma_grid those two
+        # endpoints; LDM clips out-of-grid lines to the boundary layers.
+        broadening_mode = getattr(self.config, "broadening_mode", BroadeningMode.PHYSICAL_DOPPLER)
+
+        if broadening_mode is BroadeningMode.LDM_GAUSSIAN:
+            sigma_grid_arr = self._build_ldm_sigma_grid()
+            sigma_grid_device = jax.device_put(sigma_grid_arr)
+            logger.info(
+                "Manifold broadening: LDM_GAUSSIAN "
+                f"(N_sigma={sigma_grid_arr.shape[0]}, "
+                f"sigma=[{sigma_grid_arr.min():.4g}, {sigma_grid_arr.max():.4g}] nm)"
+            )
+
+            @jit
+            def batch_spectrum(batch_params):
+                return vmap(
+                    lambda p: ManifoldGenerator._time_integrated_spectrum_ldm(
+                        wl_grid,
+                        p,
+                        atomic_data,
+                        sigma_grid_device,
+                        self.config.gate_width_s,
+                        self.config.time_steps,
+                    ),
+                    in_axes=0,
+                )(batch_params)
+
+        else:
+            logger.info(
+                f"Manifold broadening: {broadening_mode.value} " "(per-line Voigt with Stark)"
+            )
+
+            @jit
+            def batch_spectrum(batch_params):
+                return vmap(
+                    lambda p: ManifoldGenerator._time_integrated_spectrum(
+                        wl_grid, p, atomic_data, self.config.gate_width_s, self.config.time_steps
+                    ),
+                    in_axes=0,
+                )(batch_params)
 
         output_path = Path(self.config.output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
