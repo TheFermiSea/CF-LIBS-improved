@@ -69,16 +69,26 @@ class BaselineMethod(Enum):
         continuum.
     ALS : str
         Asymmetric Least Squares smoothing.  Best for spectra with broad
-        continuum features.
+        continuum features and for low-SNR spectra where the median filter
+        tends to clip weak peaks into the baseline.
     PERCENTILE : str
         Rolling percentile filter baseline.  Best for spectra with many
         emission peaks and sparse continuum.
+    AUTO : str
+        Opt-in adaptive selector that estimates the spectrum SNR with a
+        cheap first-pass median baseline and then dispatches to ALS for
+        low-SNR spectra (default threshold: SNR <= 8) or to MEDIAN
+        otherwise.  Use this when you want PR-#114-style sensitivity for
+        trace-element recall *without* changing the meaning of the other
+        explicit methods.  Never selected implicitly; the caller must ask
+        for ``BaselineMethod.AUTO`` by name.
     """
 
     MEDIAN = "median"
     SNIP = "snip"
     ALS = "als"
     PERCENTILE = "percentile"
+    AUTO = "auto"
 
 
 def estimate_baseline_snip(
@@ -349,6 +359,60 @@ def estimate_noise(intensity: np.ndarray, baseline: np.ndarray) -> float:
     return noise
 
 
+def _select_auto_baseline_method(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    window_nm: float,
+    snr_threshold: float = 8.0,
+) -> BaselineMethod:
+    """Pick MEDIAN or ALS based on a cheap first-pass SNR estimate.
+
+    Used exclusively by ``BaselineMethod.AUTO`` in :func:`detect_peaks_auto`.
+    Performs a single median-baseline pass, estimates noise via sigma-clipped
+    MAD on the residuals, then computes a robust signal-to-noise ratio as
+    ``percentile(residual, 99) / noise``.  Low-SNR spectra (ratio at or
+    below ``snr_threshold``) are routed to ALS, which preserves weak peaks
+    that the median filter clips.  High-SNR spectra stay on MEDIAN, which
+    is fast and well-behaved on sharp lines over slow continuum.
+
+    This is intentionally a *concrete* selector, not a silent rewrite of
+    any other method -- it is only consulted when the caller explicitly
+    asks for ``BaselineMethod.AUTO``.
+
+    Parameters
+    ----------
+    wavelength : np.ndarray
+        Wavelength array in nm.
+    intensity : np.ndarray
+        Intensity array.
+    window_nm : float
+        Median-filter window for the probing baseline (in nm).
+    snr_threshold : float
+        SNR boundary (default 8.0).  Spectra with estimated SNR strictly
+        greater than this stay on MEDIAN; everything else moves to ALS.
+
+    Returns
+    -------
+    BaselineMethod
+        Either :attr:`BaselineMethod.MEDIAN` or :attr:`BaselineMethod.ALS`.
+        Never returns :attr:`BaselineMethod.AUTO` (avoids recursion).
+    """
+    probe_baseline = estimate_baseline(wavelength, intensity, window_nm=window_nm)
+    probe_noise = estimate_noise(intensity, probe_baseline)
+    if not np.isfinite(probe_noise) or probe_noise <= 0:
+        return BaselineMethod.MEDIAN
+    residual = intensity - probe_baseline
+    if residual.size == 0:
+        return BaselineMethod.MEDIAN
+    signal = float(np.nanpercentile(np.abs(residual), 99))
+    if not np.isfinite(signal):
+        return BaselineMethod.MEDIAN
+    snr = signal / probe_noise
+    if snr <= snr_threshold:
+        return BaselineMethod.ALS
+    return BaselineMethod.MEDIAN
+
+
 def detect_peaks(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -513,7 +577,9 @@ def detect_peaks_auto(
         Baseline estimation method (default ``BaselineMethod.MEDIAN``).
         ``SNIP`` uses Statistics-sensitive Non-linear Iterative Peak-clipping;
         ``ALS`` uses Asymmetric Least Squares smoothing;
-        ``PERCENTILE`` uses a rolling percentile filter.
+        ``PERCENTILE`` uses a rolling percentile filter;
+        ``AUTO`` runs a cheap SNR probe and dispatches to either MEDIAN
+        (high-SNR) or ALS (low-SNR) -- opt-in, never selected implicitly.
     min_intensity_floor : float
         Absolute minimum intensity threshold (default 0.0).
 
@@ -528,6 +594,15 @@ def detect_peaks_auto(
     """
     if wavelength.size < 2:
         return [], intensity.copy(), 0.0
+
+    # AUTO: resolve to a concrete method *before* dispatch.  This keeps the
+    # branch below explicit and prevents AUTO from silently shadowing the
+    # behaviour of an explicit MEDIAN/SNIP/PERCENTILE/ALS request (the bug
+    # that closed PR #114).
+    if baseline_method == BaselineMethod.AUTO:
+        baseline_method = _select_auto_baseline_method(
+            wavelength, intensity, window_nm=baseline_window_nm
+        )
 
     if baseline_method == BaselineMethod.SNIP:
         baseline = estimate_baseline_snip(wavelength, intensity)
