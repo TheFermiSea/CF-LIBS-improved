@@ -81,3 +81,58 @@ def test_boltzmann_consistency_uses_canonical_line_observation():
 
     assert np.isfinite(factor)
     assert np.isfinite(r_squared)
+
+
+# ---------------------------------------------------------------------------
+# Opt-in high-recall mode (CF-LIBS-improved-1h0w)
+# ---------------------------------------------------------------------------
+# These tests guard the precision-king baseline:
+#   precision=1.000, FP/spec=0 on n=33 cross-shard
+#   (see .swarm/identifier-f1-baseline.json on dev).
+# The closed PR #134 silently flipped intensity_threshold_factor 3.0->2.0 and
+# detection_threshold 0.02->0.01, which dropped precision to 0.8333 and
+# raised FP/spec to 0.0909 on shard 1/3 smoke. The opt-in `high_recall` flag
+# is the contract-respecting replacement: strict is the default, recall is
+# explicit.
+
+
+def test_alias_default_is_strict():
+    """Default construction MUST preserve the precision-king strict baseline.
+
+    Guards against silent default changes (the failure mode of PR #134).
+    If this test ever needs to be updated, the change is a contract break
+    and must be reviewed as such.
+    """
+    identifier = ALIASIdentifier(_DummyAtomicDB())
+    assert identifier.intensity_threshold_factor == 3.0
+    assert identifier.detection_threshold == 0.02
+    assert identifier.high_recall is False
+
+
+def test_alias_high_recall_lowers_thresholds():
+    """Opt-in ``high_recall=True`` MUST lower both thresholds.
+
+    Recall mode trades precision for recall. Values match what PR #134
+    proposed (intensity_threshold_factor=2.0, detection_threshold=0.01)
+    but are now reached only via the explicit flag.
+    """
+    identifier = ALIASIdentifier(_DummyAtomicDB(), high_recall=True)
+    assert identifier.intensity_threshold_factor == 2.0
+    assert identifier.detection_threshold == 0.01
+    assert identifier.high_recall is True
+
+
+def test_alias_explicit_threshold_overrides_high_recall():
+    """Explicit threshold values must override the high_recall preset.
+
+    Lets callers pin one knob while inheriting the preset for the other.
+    """
+    identifier = ALIASIdentifier(
+        _DummyAtomicDB(),
+        high_recall=True,
+        intensity_threshold_factor=4.2,
+    )
+    # Explicit value wins for the pinned knob.
+    assert identifier.intensity_threshold_factor == 4.2
+    # The other knob still follows the recall preset.
+    assert identifier.detection_threshold == 0.01
