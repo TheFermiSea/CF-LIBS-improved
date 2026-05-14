@@ -8,14 +8,12 @@ from typing import Dict, Optional, Protocol, Tuple
 import numpy as np
 
 from cflibs.core.constants import C_LIGHT, E_CHARGE, EV_TO_K, J_TO_EV, KB, SAHA_CONST_CM3
-from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp
+from cflibs.core.jax_runtime import HAS_JAX, jnp
 from cflibs.plasma.state import SingleZoneLTEPlasma
 from cflibs.core.abc import SolverStrategy, AtomicDataSource
 from cflibs.core.cache import cached_partition_function
 from cflibs.core.logging_config import get_logger
 from cflibs.plasma.partition import PartitionFunctionEvaluator
-
-jit = jit_if_available
 
 
 class IPDModel(Protocol):
@@ -492,90 +490,14 @@ def _ipd_eV(n_e_cm3: float, T_K: float) -> float:
     return float(_IPD_PREFACTOR_EV_CM_K * np.sqrt(n_e_cm3 / T_K))
 
 
-if HAS_JAX:
-
-    @jit
-    def _partition_sum_jax(
-        T_e_eV: jnp.ndarray,
-        g_arr: jnp.ndarray,
-        E_arr: jnp.ndarray,
-        max_energy_ev: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """U(T) = Σ gᵢ exp(-Eᵢ / T_eV) over levels with Eᵢ < max_energy_ev.
-
-        All inputs are jnp arrays / scalars to keep the kernel jit-friendly
-        with a fixed computation graph. The mask is applied by zeroing out
-        contributions above ``max_energy_ev`` rather than boolean indexing.
-        """
-        kT = jnp.maximum(T_e_eV, 1e-12)
-        boltzmann = g_arr * jnp.exp(-E_arr / kT)
-        contrib = jnp.where(E_arr < max_energy_ev, boltzmann, 0.0)
-        return jnp.maximum(jnp.sum(contrib), 1.0)
-
-    @jit
-    def _saha_balance_kernel(
-        T_e_eV: jnp.ndarray,
-        n_e_cm3: jnp.ndarray,
-        eff_ip_I: jnp.ndarray,
-        eff_ip_II: jnp.ndarray,
-        U_I: jnp.ndarray,
-        U_II: jnp.ndarray,
-        U_III: jnp.ndarray,
-        has_II: jnp.ndarray,
-        total_density_cm3: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Solve the 3-stage Saha balance, returning (n_I, n_II, n_III).
-
-        Mirrors the closed-form expression in ``solve_ionization_balance``:
-
-            S1 = (SAHA / n_e) * T^1.5 * (U_II/U_I) * exp(-IP_I / T_eV)
-            S2 = (SAHA / n_e) * T^1.5 * (U_III/U_II) * exp(-IP_II / T_eV)
-            n_I = n_total / (1 + S1 + S1*S2)
-            n_II = S1 * n_I
-            n_III = S2 * n_II
-        """
-        T15 = T_e_eV**1.5
-        prefactor = SAHA_CONST_CM3 / jnp.maximum(n_e_cm3, 1e-30) * T15
-
-        S1 = prefactor * (U_II / jnp.maximum(U_I, 1e-30)) * jnp.exp(-eff_ip_I / T_e_eV)
-        S2_raw = prefactor * (U_III / jnp.maximum(U_II, 1e-30)) * jnp.exp(-eff_ip_II / T_e_eV)
-        # Only include S2 when stage II ionization potential is known.
-        S2 = jnp.where(has_II > 0.5, S2_raw, 0.0)
-
-        denom = 1.0 + S1 + S1 * S2
-        n_I = total_density_cm3 / denom
-        n_II = S1 * n_I
-        n_III = S2 * n_II
-        return jnp.stack([n_I, n_II, n_III])
-
-    @jit
-    def _boltzmann_populations_kernel(
-        T_e_eV: jnp.ndarray,
-        stage_density_cm3: jnp.ndarray,
-        g_arr: jnp.ndarray,
-        E_arr: jnp.ndarray,
-        max_energy_ev: jnp.ndarray,
-        U: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """nᵢ = n_stage * (gᵢ / U) * exp(-Eᵢ / T_eV) for Eᵢ ≤ max_energy_ev.
-
-        Returns an array shaped like ``g_arr``; entries above the IPD cutoff
-        are zeroed so callers can mask them out in NumPy land.
-        """
-        boltzmann = jnp.exp(-E_arr / jnp.maximum(T_e_eV, 1e-12))
-        pop = stage_density_cm3 * (g_arr / jnp.maximum(U, 1e-30)) * boltzmann
-        return jnp.where(E_arr <= max_energy_ev, pop, 0.0)
-
-else:  # pragma: no cover - JAX should be installed in this repo
-
-    def _partition_sum_jax(*args, **kwargs):  # type: ignore[misc]
-        raise ImportError("JAX is not installed; install jax + jaxlib")
-
-    def _saha_balance_kernel(*args, **kwargs):  # type: ignore[misc]
-        raise ImportError("JAX is not installed; install jax + jaxlib")
-
-    def _boltzmann_populations_kernel(*args, **kwargs):  # type: ignore[misc]
-        raise ImportError("JAX is not installed; install jax + jaxlib")
+# JIT-compiled inner kernels live in cflibs.plasma.kernels (ADR-0001 T1-1
+# host/kernel split). Re-exported here for back-compat with callers that
+# imported the private names directly from ``cflibs.plasma.saha_boltzmann``.
+from cflibs.plasma.kernels import (  # noqa: E402
+    _boltzmann_populations_kernel,
+    _partition_sum_jax,
+    _saha_balance_kernel,
+)
 
 
 class SahaBoltzmannSolverJax(SolverStrategy):
