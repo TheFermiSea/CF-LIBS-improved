@@ -17,16 +17,19 @@ helpers) live in the sibling :mod:`atomic` module.
 
 Notes
 -----
-The unified forward kernel at :func:`cflibs.radiation.kernels.forward_model`
-(T1-2) consumes :class:`cflibs.core.jax_runtime.AtomicSnapshot`, whose
-partition-function representation differs from the legacy
-:class:`AtomicDataArrays` direct-sum path. To preserve rtol=1e-5 parity with
-pre-T1-6 ``BayesianForwardModel`` output under existing tests, we keep the
-legacy partition path in :meth:`BayesianForwardModel._compute_spectrum` and
-expose :meth:`AtomicDataArrays.from_snapshot` (in :mod:`atomic`) so callers
-that already hold a snapshot can convert it into the legacy carrier. A
-follow-up bead will migrate the sampler-facing path to the kernel once
-parity testing across a wider grid is in place.
+After ADR-0001 T1-6, :meth:`BayesianForwardModel._compute_spectrum` calls
+the unified forward kernel at :func:`cflibs.radiation.kernels.forward_model`
+directly. The kernel consumes an :class:`cflibs.core.jax_runtime.AtomicSnapshot`
+built from :meth:`cflibs.atomic.AtomicDatabase.snapshot`, eliminating the
+:func:`_atomic_data_arrays_from_snapshot` adapter from the sampler path.
+The legacy :class:`AtomicDataArrays` carrier (and :func:`load_atomic_data`)
+remains on the module for back-compat exports and for two-zone callers that
+still consume it. Convention change: the snapshot path uses Irwin (base-10
+log) polynomial partition coefficients matching the canonical database
+schema, whereas the pre-migration ``_compute_spectrum`` interpreted the
+same coefficients as natural-log Irwin -- absolute spectrum scale therefore
+differs from pre-T1-6 output. Downstream MCMC / dynesty consumers normalise
+by likelihood so the migration is transparent to them.
 """
 
 from __future__ import annotations
@@ -34,6 +37,8 @@ from __future__ import annotations
 from typing import Any, List, Optional, Tuple
 
 import numpy as np
+
+from cflibs.core.constants import EV_TO_K
 
 from .atomic import (
     AtomicDataArrays,
@@ -153,6 +158,28 @@ class BayesianForwardModel:
 
         self.atomic_data = load_atomic_data(db_path, elements, wavelength_range)
 
+        # Build snapshot + instrument once for the unified forward kernel
+        # (ADR-0001 T1-6). The snapshot's jit-friendly arrays flow through
+        # :func:`cflibs.radiation.kernels.forward_model` on every call to
+        # :meth:`_compute_spectrum`.
+        from cflibs.atomic import AtomicDatabase  # noqa: PLC0415
+        from cflibs.instrument.model import InstrumentModel  # noqa: PLC0415
+
+        atomic_db = AtomicDatabase(db_path)
+        self.snapshot = atomic_db.snapshot(
+            elements=list(elements),
+            wavelength_range=wavelength_range,
+        )
+        if self.resolving_power is not None:
+            self.instrument = InstrumentModel(
+                resolution_fwhm_nm=0.0,
+                resolving_power=float(self.resolving_power),
+            )
+        else:
+            self.instrument = InstrumentModel(
+                resolution_fwhm_nm=float(self.instrument_fwhm_nm),
+            )
+
         # Pre-compute Chebyshev Vandermonde matrix for polynomial baseline.
         wl_np = np.asarray(self.wavelength)
         self._wl_norm = 2.0 * (wl_np - wl_np[0]) / max(wl_np[-1] - wl_np[0], 1e-6) - 1.0
@@ -222,67 +249,51 @@ class BayesianForwardModel:
         concentrations: Any,
         total_species_density_cm3: Optional[float] = None,
     ):
-        """Compute spectrum with full physics (legacy partition path)."""
-        data = self.atomic_data
+        """Compute spectrum via the unified forward kernel (ADR-0001 T1-6).
+
+        Routes to :func:`cflibs.radiation.kernels.forward_model` with
+        ``BroadeningMode.PHYSICAL_DOPPLER`` plus per-line Stark Voigt and
+        instrument-sigma folding -- the same physics knobs the legacy
+        direct-summation path used. The legacy
+        :func:`_atomic_data_arrays_from_snapshot` adapter is no longer
+        invoked from this code path.
+        """
+        from cflibs.plasma.state import SingleZoneLTEPlasma  # noqa: PLC0415
+        from cflibs.radiation.kernels import forward_model  # noqa: PLC0415
+        from cflibs.radiation.profiles import BroadeningMode  # noqa: PLC0415
+
         T_eV = _as_jax_real(T_eV)
         n_e = _as_jax_real(n_e)
         concentrations = _as_jax_real(concentrations)
-        T_K = T_eV * _JAX_EV_TO_K
         total_species_density = _resolve_total_species_density_cm3(n_e, total_species_density_cm3)
 
-        U0 = self._partition_function(T_K, data.partition_coeffs[:, 0])
-        U1 = self._partition_function(T_K, data.partition_coeffs[:, 1])
-        IP_I = data.ionization_potentials[:, 0]
+        # Build a SingleZoneLTEPlasma whose pytree leaves carry the traced
+        # MCMC inputs. Bypass ``__init__`` -- it logs an f-string formatted
+        # against T_e, which fails on JAX tracers.
+        plasma_state = object.__new__(SingleZoneLTEPlasma)
+        plasma_state.T_e = T_eV * EV_TO_K
+        plasma_state.n_e = n_e
+        plasma_state.species = {
+            el: concentrations[i] * total_species_density for i, el in enumerate(self.elements)
+        }
+        plasma_state.T_g = None
+        plasma_state.pressure = None
 
-        saha_factor = (_JAX_SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
-        ratio_ion_neutral = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
-        frac_neutral = 1.0 / (1.0 + ratio_ion_neutral)
-        frac_ion = ratio_ion_neutral / (1.0 + ratio_ion_neutral)
-
-        el_idx = data.element_idx
-        ion_stage = data.ion_stage
-        pop_fraction = jnp.where(ion_stage == 0, frac_neutral[el_idx], frac_ion[el_idx])
-        U_val = jnp.where(ion_stage == 0, U0[el_idx], U1[el_idx])
-
-        element_conc = concentrations[el_idx]
-        N_species_total = element_conc * total_species_density
-        N_species = N_species_total * pop_fraction
-
-        n_upper = N_species * (data.gk / U_val) * jnp.exp(-data.ek_ev / T_eV)
-
-        epsilon = (
-            (_JAX_H_PLANCK * _JAX_C_LIGHT / (4 * jnp.pi * data.wavelength_nm * _as_jax_real(1e-9)))
-            * data.aki
-            * n_upper
+        intensity = forward_model(
+            plasma_state,
+            self.snapshot,
+            self.instrument,
+            self.wavelength,
+            broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+            path_length_m=0.0,
+            apply_self_absorption=False,
+            fold_instrument_sigma=True,
+            apply_stark=True,
+            total_species_density_cm3=total_species_density,
         )
-
-        mass_kg = data.mass_amu * _JAX_M_PROTON
-        sigma_doppler = data.wavelength_nm * jnp.sqrt(
-            _as_jax_real(2.0) * T_eV * _JAX_EV_TO_J / (mass_kg * _JAX_C_LIGHT**2)
-        )
-
-        sigma_inst = _compute_instrument_sigma(
-            data.wavelength_nm, self.instrument_fwhm_nm, self.resolving_power
-        )
-        sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
-
-        REF_NE = 1.0e16
-        REF_T_EV = 0.86173
-        binding_energy = jnp.maximum(data.ip_ev - data.ek_ev, 0.1)
-        n_eff = (ion_stage + 1) * jnp.sqrt(13.605 / binding_energy)
-        w_est = 2.0e-5 * (data.wavelength_nm / 500.0) ** 2 * (n_eff**4)
-        w_est = jnp.clip(w_est, 0.0001, 0.5)
-        w_ref = jnp.where(jnp.isnan(data.stark_w), w_est, data.stark_w)
-        factor_ne = n_e / REF_NE
-        factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -data.stark_alpha)
-        gamma_stark = w_ref * factor_ne * factor_T
-
-        diff = self.wavelength[:, None] - data.wavelength_nm[None, :]
-        profile = _voigt_profile_kernel_jax(diff, sigma_total[None, :], gamma_stark[None, :])
-
-        intensity = jnp.sum(epsilon * profile, axis=1)
-        intensity = jnp.clip(intensity, 0.0, 1e12)
-        return intensity
+        # Preserve the legacy non-negativity / overflow guard so downstream
+        # likelihoods see clipped intensities.
+        return jnp.clip(intensity, 0.0, 1e12)
 
 
 # ---------------------------------------------------------------------------

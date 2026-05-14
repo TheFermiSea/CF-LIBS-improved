@@ -82,7 +82,23 @@ def bayesian_db():
             a2 REAL,
             a3 REAL,
             a4 REAL,
+            t_min REAL,
+            t_max REAL,
+            source TEXT,
             PRIMARY KEY (element, sp_num)
+        )
+    """)
+
+    # AtomicDatabase migration (invoked from BayesianForwardModel.__init__
+    # after ADR-0001 T1-6) requires an energy_levels table -- auto-populated
+    # from ``lines`` when empty.
+    conn.execute("""
+        CREATE TABLE energy_levels (
+            id INTEGER PRIMARY KEY,
+            element TEXT,
+            sp_num INTEGER,
+            g_level INTEGER,
+            energy_ev REAL
         )
     """)
 
