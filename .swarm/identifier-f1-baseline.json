@@ -47,6 +47,15 @@
       "macro_precision": 0.0182,
       "macro_recall": 0.0909,
       "fp_per_spectrum": 0.3636
+    },
+    "alias_v2": {
+      "_note": "Phase D promotion of ftp1+dj6y per docs/research/findings/2026-05-14-v2-empirical-07-alias-fix-sweep.md. Numbers below captured on the v2 sweep corpus (dataset-shard 1/3 + vrabel-max-shots 1), NOT the original n=33 baseline shape — these are NOT directly comparable to the alias row above. The strict `alias` baseline is unchanged.",
+      "_captured_from": "alias-fix-sweep-v2 run on vasp-01, 2026-05-14",
+      "macro_f1": 0.3092,
+      "macro_f1_stdev": 0.0000,
+      "macro_precision": 0.4318,
+      "macro_recall": 0.2700,
+      "fp_per_spectrum": 0.4545
     }
   }
 }
