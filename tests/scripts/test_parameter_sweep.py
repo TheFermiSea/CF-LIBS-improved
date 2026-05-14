@@ -182,7 +182,6 @@ def test_help_smoke(parameter_sweep):
 
 
 def test_n_iters_must_be_positive(parameter_sweep, tmp_path, capsys):
-    rc = None
     with pytest.raises(SystemExit) as exc_info:
         parameter_sweep.main(
             [

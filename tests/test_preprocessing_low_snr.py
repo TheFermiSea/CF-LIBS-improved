@@ -25,7 +25,6 @@ def test_detect_peaks_low_snr_sensitivity():
     
     # Peak
     peak_pos = 500.0
-    peak_idx = np.argmin(np.abs(wavelength - peak_pos))
     intensity_peak = 2.0
     # Lorentzian peak
     peak = intensity_peak / (1 + ((wavelength - peak_pos) / 0.1)**2)
@@ -224,7 +223,6 @@ def test_auto_method_runs_end_to_end_via_detect_peaks_auto():
     intensity = 5.0 + rng.normal(0.0, 1.0, wavelength.size)
     # Inject one moderately strong peak so the result is non-trivial.
     peak_pos = 500.0
-    peak_idx = int(np.argmin(np.abs(wavelength - peak_pos)))
     intensity += 30.0 / (1.0 + ((wavelength - peak_pos) / 0.1) ** 2)
 
     peaks, baseline, noise = detect_peaks_auto(

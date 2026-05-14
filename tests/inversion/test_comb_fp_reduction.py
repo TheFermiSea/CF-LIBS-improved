@@ -39,7 +39,6 @@ def test_mn_fp_rejection():
     intensity = np.zeros_like(wavelength)
     
     def add_peak(wl, amp):
-        idx = np.argmin(np.abs(wavelength - wl))
         # Use a wider window for the peak to ensure it's detected by the comb
         mask = np.abs(wavelength - wl) < 0.1
         intensity[mask] += amp * np.exp(-0.5 * ((wavelength[mask] - wl)/0.02)**2)
@@ -78,8 +77,10 @@ def test_na_k_fp_rejection():
     )
     
     def get_transitions(element, **kwargs):
-        if element == "Na": return [na_trans]
-        if element == "K": return [k_trans]
+        if element == "Na":
+            return [na_trans]
+        if element == "K":
+            return [k_trans]
         return []
         
     mock_db.get_transitions.side_effect = get_transitions
