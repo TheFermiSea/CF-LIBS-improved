@@ -732,6 +732,8 @@ class ALIASIdentifier:
         max_screening_candidates: int = 12,
         relative_cl_threshold: float = 0.1,
         boltzmann_r2_min: float = 0.85,
+        r2_gate_mode: str = "fixed",
+        r2_gate_t_quality_threshold: float = 5500.0,
         high_recall: bool = False,
         use_jax_boltzmann_fit: bool = False,
         use_jax_nnls: bool = False,
@@ -801,6 +803,35 @@ class ALIASIdentifier:
             consistency checks used during identification. Higher values make
             identification stricter by requiring better linear agreement, while
             lower values allow more permissive acceptance of candidate elements.
+        r2_gate_mode : str, optional
+            How the ``boltzmann_r2_min`` gate is applied to candidates with
+            ``N_matched >= 3``. One of:
+
+            - ``"fixed"`` (default, byte-identical to historical behavior):
+              candidates are rejected when ``boltz_r2 < self.boltzmann_r2_min``
+              (the static 0.85 default). Preserves the precision-king
+              baseline (precision=1.000, FP/spec=0 on n=33 cross-shard).
+            - ``"adaptive_t"``: temperature-aware relaxation. For cold
+              plasma (``self._estimated_T < r2_gate_t_quality_threshold``),
+              the gate floor is relaxed to ``0.3`` so otherwise-valid
+              candidates whose Boltzmann fit is degraded by short
+              effective E_k spans (a known cold-T pathology surfaced by
+              the Vrabel diagnosis, PR #172) still clear. For warm plasma
+              (``T >= threshold``) the gate keeps the strict
+              ``boltzmann_r2_min`` floor.
+            - ``"disabled"``: bypass the R^2 gate entirely. Intended as a
+              control-cell measurement for sweep analysis; NOT a sensible
+              production default — disables one of the strongest false-
+              positive suppressors.
+
+            (default: ``"fixed"``)
+        r2_gate_t_quality_threshold : float, optional
+            Temperature in kelvin below which ``r2_gate_mode="adaptive_t"``
+            switches to the relaxed R^2 floor. Must be finite and > 0.
+            Ignored when ``r2_gate_mode != "adaptive_t"``. The default of
+            ``5500.0`` K was chosen from the Vrabel-style cold-plasma
+            regime identified in PR #172's universal-miss diagnosis.
+            (default: 5500.0)
         use_jax_boltzmann_fit : bool, optional
             If True, use the JAX-vectorized closed-form least-squares
             Boltzmann fit (:func:`boltzmann_temperature_jax`) inside
@@ -915,6 +946,29 @@ class ALIASIdentifier:
                 f"boltzmann_r2_min must be finite and in [0, 1], got {boltzmann_r2_min!r}"
             )
         self.boltzmann_r2_min = float(boltzmann_r2_min)
+        # Adaptive R^2 gate (CF-LIBS-improved-ftp1).
+        # Default mode "fixed" preserves the historical static-0.85 gate
+        # byte-identically, which keeps the alias precision-king
+        # invariant (precision=1.000, FP/spec=0 on n=33 cross-shard).
+        # See the docstring for the rationale on adaptive_t / disabled.
+        _R2_GATE_MODES = ("fixed", "adaptive_t", "disabled")
+        if r2_gate_mode not in _R2_GATE_MODES:
+            raise ValueError(
+                f"r2_gate_mode must be one of {_R2_GATE_MODES}, got {r2_gate_mode!r}"
+            )
+        self.r2_gate_mode = r2_gate_mode
+        if not (
+            np.isfinite(r2_gate_t_quality_threshold)
+            and r2_gate_t_quality_threshold > 0
+        ):
+            raise ValueError(
+                f"r2_gate_t_quality_threshold must be finite and > 0, "
+                f"got {r2_gate_t_quality_threshold!r}"
+            )
+        self.r2_gate_t_quality_threshold = float(r2_gate_t_quality_threshold)
+        # Cold-plasma R^2 floor when adaptive_t mode fires. Internal
+        # constant — surfaces in the gate logic in identify() below.
+        self._r2_gate_cold_floor = 0.3
         self.use_jax_boltzmann_fit = bool(use_jax_boltzmann_fit)
         self.use_jax_nnls = bool(use_jax_nnls)
         self.use_jax_p_snr = bool(use_jax_p_snr)
@@ -1006,18 +1060,15 @@ class ALIASIdentifier:
         ElementIdentificationResult
             Complete identification result with detected/rejected elements
         """
-<<<<<<< HEAD
         # Reset per-dispatch self-absorption damping counters so the
         # summary log line below reflects ONLY this identify() call.
         self._sa_n_damped_lines = 0
         self._sa_damped_elements = set()
-=======
         # Detection-coverage tracker -- additive telemetry only.
         coverage = CoverageTracker(
             spectrum_id=spectrum_id if spectrum_id is not None else "<unset>",
             identifier_name="alias",
         )
->>>>>>> origin/dev
 
         # Step 0: Baseline correction — ALL scoring uses corrected intensities
         # so that cosine similarity, NNLS, and P_SNR measure peak heights above
@@ -1432,7 +1483,7 @@ class ALIASIdentifier:
             min_required_matches = 3
             if N_matched < min_required_matches:
                 detected = False
-            if N_matched >= 3 and boltz_r2 < self.boltzmann_r2_min:
+            if self._r2_gate_rejects(boltz_r2, N_matched):
                 detected = False
 
             # L4 -- per-element fingerprint pass.  alias's effective
@@ -1534,7 +1585,6 @@ class ALIASIdentifier:
                 )
                 matched_peak_indices.add(int(peak_idx))
 
-<<<<<<< HEAD
         # Structured log line for the self-absorption damping path. Operators
         # debugging "why is Si missed in soil spectra" need to see this even
         # at INFO level — addresses the user's transparency complaint that
@@ -1572,7 +1622,7 @@ class ALIASIdentifier:
                 len(peaks),
                 len(detected_elements),
             )
-=======
+
         # Detection-coverage finalisation: record peak count + emit
         # summary log line.  Additive telemetry only.
         coverage.set_n_peaks(len(peaks))
@@ -1590,7 +1640,6 @@ class ALIASIdentifier:
             "intensity_threshold_factor": self.intensity_threshold_factor,
             "detection_threshold": self.detection_threshold,
         }
->>>>>>> origin/dev
 
         return ElementIdentificationResult(
             detected_elements=detected_elements,
@@ -1992,6 +2041,57 @@ class ALIASIdentifier:
                 passed.append(element)
 
         return passed
+
+    def _r2_gate_rejects(self, boltz_r2: float, N_matched: int) -> bool:
+        """Apply the configurable Boltzmann R^2 gate to a candidate.
+
+        Returns ``True`` if the candidate should be rejected by the gate,
+        ``False`` if it passes. The gate is only meaningful when at least
+        three matched lines exist (so a regression is well-defined); for
+        ``N_matched < 3`` the rejection of that candidate is handled
+        upstream and this method always returns ``False``.
+
+        Mode behavior (CF-LIBS-improved-ftp1):
+        - ``"fixed"`` (default): byte-identical to the historical static
+          gate — ``boltz_r2 < self.boltzmann_r2_min`` triggers rejection.
+        - ``"adaptive_t"``: if ``self._estimated_T`` is below
+          ``self.r2_gate_t_quality_threshold``, fall back to the cold-T
+          floor (``self._r2_gate_cold_floor``, currently 0.3). Otherwise
+          apply the strict fixed gate. This addresses the Vrabel-style
+          cold-plasma pathology (PR #172 diagnosis) where short effective
+          E_k spans degrade R^2 even when the line set is real.
+        - ``"disabled"``: gate never rejects. Intended only for the
+          control-cell sweep — NOT a real production setting.
+
+        Parameters
+        ----------
+        boltz_r2 : float
+            Coefficient of determination reported by
+            ``_boltzmann_consistency_check`` for the candidate.
+        N_matched : int
+            Number of matched lines on the candidate. The gate is
+            no-op'd when this is below 3.
+
+        Returns
+        -------
+        bool
+            ``True`` if the gate rejects the candidate.
+        """
+        if N_matched < 3:
+            return False
+        if self.r2_gate_mode == "disabled":
+            return False
+        if self.r2_gate_mode == "adaptive_t":
+            est_T = getattr(self, "_estimated_T", None)
+            if (
+                est_T is not None
+                and np.isfinite(est_T)
+                and est_T < self.r2_gate_t_quality_threshold
+            ):
+                return boltz_r2 < self._r2_gate_cold_floor
+            return boltz_r2 < self.boltzmann_r2_min
+        # "fixed" mode — default, byte-identical to historical behavior.
+        return boltz_r2 < self.boltzmann_r2_min
 
     def _boltzmann_consistency_check(
         self,

@@ -136,3 +136,153 @@ def test_alias_explicit_threshold_overrides_high_recall():
     assert identifier.intensity_threshold_factor == 4.2
     # The other knob still follows the recall preset.
     assert identifier.detection_threshold == 0.01
+
+
+# ---------------------------------------------------------------------------
+# Opt-in adaptive Boltzmann R^2 gate (CF-LIBS-improved-ftp1)
+# ---------------------------------------------------------------------------
+# These tests exercise the three-mode gate via the ``_r2_gate_rejects``
+# helper that ``identify`` calls on every candidate with N_matched >= 3.
+# The helper isolates the gate decision from the rest of the pipeline so
+# the byte-identical "fixed" default and the cold-T relaxation are
+# independently verifiable without building a full synthetic spectrum.
+# The diagnosis behind ``adaptive_t`` is PR #172 (Vrabel universal-miss
+# root cause): cold plasma (T < ~5500 K) yields short effective E_k
+# spans on real-but-real-element line sets, which depresses R^2 below
+# the static 0.85 floor even though the identification is physically
+# correct. The "fixed" default preserves the precision=1.000 / FP=0
+# baseline on n=33 cross-shard.
+
+
+def test_r2_gate_fixed_mode_byte_identical():
+    """Default ``r2_gate_mode="fixed"`` MUST be byte-identical to the
+    historical static-0.85 gate.
+
+    Guards the precision-king baseline (precision=1.000, FP/spec=0 on
+    n=33 cross-shard): default construction and explicit ``"fixed"``
+    must produce the same rejection decision on the same inputs.
+    """
+    default_id = ALIASIdentifier(_DummyAtomicDB())
+    explicit_id = ALIASIdentifier(_DummyAtomicDB(), r2_gate_mode="fixed")
+
+    # Mode attribute exposed for downstream inspection.
+    assert default_id.r2_gate_mode == "fixed"
+    assert explicit_id.r2_gate_mode == "fixed"
+
+    # Below the 0.85 floor: both reject.
+    for boltz_r2 in (0.0, 0.3, 0.5, 0.84):
+        assert default_id._r2_gate_rejects(boltz_r2, N_matched=5) is True
+        assert explicit_id._r2_gate_rejects(boltz_r2, N_matched=5) is True
+
+    # At/above the floor: both accept.
+    for boltz_r2 in (0.85, 0.9, 1.0):
+        assert default_id._r2_gate_rejects(boltz_r2, N_matched=5) is False
+        assert explicit_id._r2_gate_rejects(boltz_r2, N_matched=5) is False
+
+    # N_matched < 3 short-circuits in both modes (the upstream
+    # "min 3 matches" gate handles that case; this gate is a no-op).
+    assert default_id._r2_gate_rejects(0.0, N_matched=2) is False
+    assert explicit_id._r2_gate_rejects(0.0, N_matched=2) is False
+
+
+def test_r2_gate_adaptive_t_admits_cold_plasma_with_moderate_r2():
+    """Vrabel-style cold plasma: T < threshold AND r2 in [0.3, 0.85).
+
+    Under ``r2_gate_mode="adaptive_t"`` the cold-T relaxation activates
+    and a moderate R^2 (0.4) clears the gate. Under the default
+    ``"fixed"`` mode the same R^2 is rejected. The element is
+    constructed with N_matched=5 and ``boltz_r2 = 0.4`` per the plan.
+    """
+    fixed_id = ALIASIdentifier(_DummyAtomicDB())
+    adaptive_id = ALIASIdentifier(
+        _DummyAtomicDB(),
+        r2_gate_mode="adaptive_t",
+        r2_gate_t_quality_threshold=5500.0,
+    )
+
+    # Vrabel-style cold plasma: monkey-patch the runtime temperature
+    # estimate the way identify() would have set it via
+    # _estimate_plasma_temperature.
+    fixed_id._estimated_T = 4000.0
+    adaptive_id._estimated_T = 4000.0
+
+    # Fixed mode: r2=0.4 < boltzmann_r2_min=0.85 → reject.
+    assert fixed_id._r2_gate_rejects(0.4, N_matched=5) is True
+    # Adaptive_t mode: cold plasma + r2 above the 0.3 cold floor → admit.
+    assert adaptive_id._r2_gate_rejects(0.4, N_matched=5) is False
+
+
+def test_r2_gate_adaptive_t_rejects_warm_plasma_with_low_r2():
+    """BHVO-2-style warm plasma: adaptive_t MUST NOT loosen the gate.
+
+    For T >= threshold the cold-plasma relaxation does not fire and
+    both modes apply the strict 0.85 floor. Guards against the gate
+    silently degrading warm-plasma precision.
+    """
+    fixed_id = ALIASIdentifier(_DummyAtomicDB())
+    adaptive_id = ALIASIdentifier(
+        _DummyAtomicDB(),
+        r2_gate_mode="adaptive_t",
+        r2_gate_t_quality_threshold=5500.0,
+    )
+
+    # Warm plasma — above the cold-T threshold.
+    fixed_id._estimated_T = 7000.0
+    adaptive_id._estimated_T = 7000.0
+
+    # Both modes reject r2=0.4 < 0.85.
+    assert fixed_id._r2_gate_rejects(0.4, N_matched=5) is True
+    assert adaptive_id._r2_gate_rejects(0.4, N_matched=5) is True
+
+    # Edge case: exactly at the threshold — cold-T branch does not fire
+    # (the predicate is strict ``T < threshold``), so the strict gate
+    # still applies and r2=0.4 is rejected.
+    adaptive_id._estimated_T = 5500.0
+    assert adaptive_id._r2_gate_rejects(0.4, N_matched=5) is True
+
+
+def test_r2_gate_disabled_admits_everything():
+    """``r2_gate_mode="disabled"`` MUST bypass the gate entirely.
+
+    Control-cell measurement for the sweep — disabling the gate should
+    let any boltz_r2 through, including pathological zeros, regardless
+    of plasma temperature.
+    """
+    identifier = ALIASIdentifier(_DummyAtomicDB(), r2_gate_mode="disabled")
+
+    # No matter the temperature, the gate never rejects.
+    for est_T in (4000.0, 7000.0, 12000.0):
+        identifier._estimated_T = est_T
+        for boltz_r2 in (0.0, 0.4, 0.5, 0.84, 0.85, 1.0):
+            assert identifier._r2_gate_rejects(boltz_r2, N_matched=5) is False
+
+    # And with _estimated_T unset (None) the disabled gate still passes.
+    identifier._estimated_T = None
+    assert identifier._r2_gate_rejects(0.0, N_matched=5) is False
+
+
+def test_r2_gate_validation():
+    """Constructor MUST validate ``r2_gate_mode`` and ``r2_gate_t_quality_threshold``.
+
+    Invalid mode strings and non-positive thresholds raise ValueError
+    before any state is committed to the instance.
+    """
+    # Invalid mode name.
+    with pytest.raises(ValueError, match="r2_gate_mode"):
+        ALIASIdentifier(_DummyAtomicDB(), r2_gate_mode="bogus")
+
+    # Non-positive threshold rejects.
+    with pytest.raises(ValueError, match="r2_gate_t_quality_threshold"):
+        ALIASIdentifier(_DummyAtomicDB(), r2_gate_t_quality_threshold=-1.0)
+    with pytest.raises(ValueError, match="r2_gate_t_quality_threshold"):
+        ALIASIdentifier(_DummyAtomicDB(), r2_gate_t_quality_threshold=0.0)
+
+    # Non-finite threshold rejects.
+    with pytest.raises(ValueError, match="r2_gate_t_quality_threshold"):
+        ALIASIdentifier(_DummyAtomicDB(), r2_gate_t_quality_threshold=math.inf)
+    with pytest.raises(ValueError, match="r2_gate_t_quality_threshold"):
+        ALIASIdentifier(_DummyAtomicDB(), r2_gate_t_quality_threshold=math.nan)
+
+    # All three valid modes construct without error.
+    for mode in ("fixed", "adaptive_t", "disabled"):
+        ALIASIdentifier(_DummyAtomicDB(), r2_gate_mode=mode)
