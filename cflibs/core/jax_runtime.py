@@ -414,6 +414,14 @@ class AtomicSnapshot:
         Stark width parameter; 0.0 when missing.
     line_natural_w : ndarray, shape (N_lines,)
         Natural broadening width; 0.0 when missing.
+    line_stark_alpha : optional ndarray, shape (N_lines,)
+        Stark width temperature-power-law exponent. Used by
+        :func:`cflibs.radiation.kernels._per_line_stark_gamma` to apply
+        ``factor_T = (T_eV / 0.86173) ** (-alpha)`` when Stark is enabled.
+        ``None`` on synthetic snapshots without atomic-data coverage —
+        callers that pass such a snapshot to ``forward_model`` with
+        ``apply_stark=True`` get the legacy temperature-independent
+        formula. Populated by :meth:`AtomicDatabase.snapshot`.
     partition_coeffs : ndarray, shape (N_species, N_poly_order)
         Polynomial coefficients for ``log U(T)``.
     ionization_potential_ev : ndarray, shape (N_species,)
@@ -442,6 +450,7 @@ class AtomicSnapshot:
     level_g: Any = None
     level_E_ev: Any = None
     level_mask: Any = None
+    line_stark_alpha: Any = None
 
 
 # Register AtomicSnapshot as a pytree so it can flow through jit/vmap.
@@ -461,6 +470,7 @@ if HAS_JAX:
         "level_g",
         "level_E_ev",
         "level_mask",
+        "line_stark_alpha",
     )
 
     def _snapshot_flatten(snap: AtomicSnapshot):

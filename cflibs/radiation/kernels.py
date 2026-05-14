@@ -337,13 +337,32 @@ def _per_line_instrument_sigma(snapshot, instrument):
 def _per_line_stark_gamma(snapshot, n_e, T_eV):
     """Per-line Lorentzian Stark HWHM (nm).
 
-    Reference scaling: gamma_S(n_e) = stark_w * (n_e / 1e16).
-    Temperature dependence is omitted at the kernel level (the existing
-    manifold path matches this convention; BayesianForwardModel adds a power-
-    law factor that we keep there at the wrapper level if needed).
+    Reference scaling::
+
+        gamma_S(n_e, T) = stark_w * (n_e / 1e16) * (T_eV / 0.86173) ** (-alpha)
+
+    The temperature-power-law factor (``(T/T_ref)^(-alpha)``) is applied when
+    ``snapshot.line_stark_alpha`` is populated (e.g. via
+    :meth:`AtomicDatabase.snapshot`); ``T_ref = 0.86173 eV`` = 10000 K matches
+    Griem & NIST tabulation conventions. When ``line_stark_alpha`` is ``None``
+    (synthetic snapshots built outside the canonical DB path), the factor
+    degrades to 1.0 — i.e. the legacy temperature-independent kernel
+    behaviour. ``alpha = 0`` rows (DB-default for lines without coverage) also
+    give ``factor_T = 1`` automatically.
+
+    Bug history (CF-LIBS-improved-vjbh): the original T1-2 kernel omitted
+    the temperature factor entirely, which silently dropped the
+    BayesianForwardModel's Stark T-dependence after the T1-6 migration.
     """
     stark_w = jnp.asarray(snapshot.line_stark_w)
-    return stark_w * (n_e / 1.0e16)
+    gamma = stark_w * (n_e / 1.0e16)
+    alpha = getattr(snapshot, "line_stark_alpha", None)
+    if alpha is None:
+        return gamma
+    alpha_arr = jnp.asarray(alpha)
+    REF_T_EV = 0.86173  # 10000 K — Griem / NIST reference temperature.
+    factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -alpha_arr)
+    return gamma * factor_T
 
 
 # ---------------------------------------------------------------------------
