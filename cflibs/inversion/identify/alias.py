@@ -26,6 +26,13 @@ from cflibs.inversion.element_id import (
     get_wavelength_tolerance,
 )
 from cflibs.inversion.preprocessing import estimate_baseline, estimate_noise
+from cflibs.inversion.identify._coverage import (
+    CoverageTracker,
+    merge_coverage_into_parameters,
+)
+from cflibs.core.logging_config import get_logger as _get_alias_logger
+
+_alias_logger = _get_alias_logger("inversion.identify.alias")
 
 # JAX is an optional fast path for the per-spectrum Boltzmann temperature fit
 # used by ``ALIASIdentifier._estimate_plasma_temperature``. The default path
@@ -900,7 +907,10 @@ class ALIASIdentifier:
         self._estimated_T: Optional[float] = None
 
     def identify(
-        self, wavelength: np.ndarray, intensity: np.ndarray
+        self,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        spectrum_id: Optional[str] = None,
     ) -> ElementIdentificationResult:
         """
         Identify elements in experimental spectrum with cross-element peak
@@ -921,12 +931,24 @@ class ALIASIdentifier:
             Wavelength array in nm
         intensity : np.ndarray
             Intensity array (arbitrary units)
+        spectrum_id : str, optional
+            Caller-supplied identifier for this spectrum.  Threaded
+            through to detection-coverage log records (L2/L3/L4) so
+            downstream parsing can correlate per-element coverage data
+            with the source spectrum.  Identifier behaviour is
+            unchanged when this is left ``None``.
 
         Returns
         -------
         ElementIdentificationResult
             Complete identification result with detected/rejected elements
         """
+        # Detection-coverage tracker -- additive telemetry only.
+        coverage = CoverageTracker(
+            spectrum_id=spectrum_id if spectrum_id is not None else "<unset>",
+            identifier_name="alias",
+        )
+
         # Step 0: Baseline correction — ALL scoring uses corrected intensities
         # so that cosine similarity, NNLS, and P_SNR measure peak heights above
         # continuum rather than absolute intensity that is dominated by the
@@ -968,6 +990,23 @@ class ALIASIdentifier:
         else:
             screened = self._fast_screening(search_elements, peaks, wl_min, wl_max)
 
+        # Record fast-screened-out elements as zero-match / fingerprint
+        # failures so the coverage payload surfaces every candidate the
+        # caller asked about, not just those that survived screening.
+        # We deliberately do *not* record an L2 zero here: fast-screening
+        # rejects on "no strong-line match", not on "DB has zero lines
+        # in window", and conflating the two would mis-classify the
+        # failure layer.  Recording an L3 zero (with no L2 row) leaves
+        # ``elements_with_zero_peak_matches`` populated -- which is the
+        # smoking gun the task is after -- without falsifying the L2
+        # column.  Telemetry is additive; identifier behaviour is
+        # unchanged.
+        screened_set = set(screened)
+        for element in search_elements:
+            if element not in screened_set:
+                coverage.record_peak_matches(element, 0)
+                coverage.record_fingerprint(element, passed=False, score=0.0)
+
         # ── Phase 1: Independent scoring ──────────────────────────────
         # Use corrected_intensity throughout scoring so continuum doesn't
         # dominate cosine similarity and NNLS attribution.
@@ -978,16 +1017,31 @@ class ALIASIdentifier:
             element_lines = self._compute_element_emissivities(
                 element, wl_min, wl_max, T_estimated=self._estimated_T
             )
+            # L2 -- per-element line presence in DB (post-alias filter).
+            # alias selects observable lines (A_ki*g_k >= 1e4) and caps
+            # to ``max_lines_per_element`` strongest, so we record the
+            # count the matcher will actually see.
+            coverage.record_db_lines(element, len(element_lines))
             if not element_lines:
+                # L3/L4 are unreachable when there is nothing to match;
+                # record the zero-state so the summary surfaces it.
+                coverage.record_peak_matches(element, 0)
+                coverage.record_fingerprint(element, passed=False, score=0.0)
                 continue
 
             fused_lines = self._fuse_lines(element_lines, wavelength)
             if not fused_lines:
+                coverage.record_peak_matches(element, 0)
+                coverage.record_fingerprint(element, passed=False, score=0.0)
                 continue
 
             matched_mask, wavelength_shifts, matched_peak_idx = self._match_lines(
                 fused_lines, peaks
             )
+            # L3 -- per-element peak match.  ``matched_mask`` is the
+            # bool array of fused lines that paired with any detected
+            # peak inside tolerance.
+            coverage.record_peak_matches(element, int(np.sum(matched_mask)))
 
             if np.any(matched_mask):
                 emissivity_threshold = self._determine_emissivity_threshold(
@@ -1311,6 +1365,17 @@ class ALIASIdentifier:
             if N_matched >= 3 and boltz_r2 < self.boltzmann_r2_min:
                 detected = False
 
+            # L4 -- per-element fingerprint pass.  alias's effective
+            # "fingerprint" is the post-gate CL compared to
+            # ``adaptive_dt`` (plus the hard gates above).  Record the
+            # final boolean and the score+floor for transparency.
+            coverage.record_fingerprint(
+                element,
+                passed=bool(detected),
+                score=float(CL),
+                floor=float(adaptive_dt),
+            )
+
             # Create IdentifiedLine objects for matched lines
             # Reuse peak indices from matching to avoid re-selection outside window
             matched_lines = []
@@ -1399,6 +1464,24 @@ class ALIASIdentifier:
                 )
                 matched_peak_indices.add(int(peak_idx))
 
+        # Detection-coverage finalisation: record peak count + emit
+        # summary log line.  Additive telemetry only.
+        coverage.set_n_peaks(len(peaks))
+        coverage.emit_summary()
+
+        base_parameters = {
+            "resolving_power": self.resolving_power,
+            "effective_R": self._effective_R,
+            "global_wl_shift_nm": self._global_wl_shift,
+            "estimated_T_K": self._estimated_T,
+            "T_min_K": self.T_range_K[0],
+            "T_max_K": self.T_range_K[1],
+            "n_e_min_cm3": self.n_e_range_cm3[0],
+            "n_e_max_cm3": self.n_e_range_cm3[1],
+            "intensity_threshold_factor": self.intensity_threshold_factor,
+            "detection_threshold": self.detection_threshold,
+        }
+
         return ElementIdentificationResult(
             detected_elements=detected_elements,
             rejected_elements=rejected_elements,
@@ -1408,18 +1491,9 @@ class ALIASIdentifier:
             n_matched_peaks=len(matched_peak_indices),
             n_unmatched_peaks=len(peaks) - len(matched_peak_indices),
             algorithm="alias",
-            parameters={
-                "resolving_power": self.resolving_power,
-                "effective_R": self._effective_R,
-                "global_wl_shift_nm": self._global_wl_shift,
-                "estimated_T_K": self._estimated_T,
-                "T_min_K": self.T_range_K[0],
-                "T_max_K": self.T_range_K[1],
-                "n_e_min_cm3": self.n_e_range_cm3[0],
-                "n_e_max_cm3": self.n_e_range_cm3[1],
-                "intensity_threshold_factor": self.intensity_threshold_factor,
-                "detection_threshold": self.detection_threshold,
-            },
+            parameters=merge_coverage_into_parameters(
+                base_parameters, coverage.build_payload()
+            ),
         )
 
     def _detect_peaks(

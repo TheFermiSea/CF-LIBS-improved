@@ -19,6 +19,7 @@ from scipy.ndimage import median_filter, percentile_filter
 from typing import List, Optional, Tuple
 
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.identify._coverage import log_peak_detection
 
 logger = get_logger("inversion.preprocessing")
 
@@ -629,6 +630,16 @@ def detect_peaks_auto(
         use_second_derivative=use_second_derivative,
         min_intensity_floor=min_intensity_floor,
     )
+
+    # L1 detection-coverage logging.  Additive only -- identifier
+    # behaviour is unchanged.  See ``cflibs.inversion.identify._coverage``
+    # for the four-layer transparency contract.
+    log_peak_detection(
+        peaks,
+        noise=noise,
+        baseline_method=baseline_method,
+    )
+
     return peaks, baseline, noise
 
 
