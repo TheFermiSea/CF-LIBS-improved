@@ -1524,6 +1524,12 @@ def test_ratio_consistency(atomic_db):
     from cflibs.atomic.structures import Transition
     from cflibs.inversion.alias_identifier import ALIASIdentifier
 
+    # CF-LIBS-improved-self-abs-audit: _compute_ratio_consistency was
+    # promoted from @staticmethod to instance method so it can read the
+    # self_absorption_aware / damping config. Construct an identifier to
+    # supply ``self`` — the test fixture is shared via the atomic_db arg.
+    _id = ALIASIdentifier(atomic_db)
+
     # Consistent ratios: emissivities [1000, 500, 250], observed [800, 400, 200]
     # log-ratios should be perfectly correlated
     fused = [
@@ -1552,7 +1558,7 @@ def test_ratio_consistency(atomic_db):
     matched = np.array([True, True, True])
     pidx = np.array([0, 1, 2])
 
-    R_rat_good = ALIASIdentifier._compute_ratio_consistency(
+    R_rat_good = _id._compute_ratio_consistency(
         fused,
         matched,
         pidx,
@@ -1568,7 +1574,7 @@ def test_ratio_consistency(atomic_db):
     intensity2[200] = 800.0  # strongest where medium predicted
     intensity2[300] = 400.0
 
-    R_rat_bad = ALIASIdentifier._compute_ratio_consistency(
+    R_rat_bad = _id._compute_ratio_consistency(
         fused,
         matched,
         pidx,
