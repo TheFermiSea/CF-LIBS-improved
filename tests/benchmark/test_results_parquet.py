@@ -30,8 +30,6 @@ pq = pytest.importorskip("pyarrow.parquet")
 duckdb = pytest.importorskip("duckdb")
 
 from cflibs.benchmark.results import (  # noqa: E402  (after importorskip)
-    KIND_COMPOSITION,
-    KIND_IDENTIFICATION,
     SCHEMA_VERSION,
     build_rows,
     read_parquet,

@@ -399,6 +399,181 @@ if HAS_JAX:
     # Batch via vmap per DERV-05 Eq. (01-03.2)
     batch_forward_model = jit(vmap(single_spectrum_forward, in_axes=(0, 0, 0, None, None)))
 
+    # -------------------------------------------------------------------
+    # LDM (Line Distribution Method) variant for the Gaussian-dominant
+    # regime — ADR-0001 T1-4. Drop-in replacement for ``voigt_spectrum_jax``
+    # that scales as ``O(N_σ · N_λ · log N_λ)`` instead of
+    # ``O(N_lines · N_λ)``. The σ-grid is passed as a static side-input so
+    # ``vmap`` over plasma parameters reuses the same layout across grid
+    # points. Stark broadening is NOT modelled on this path (1-D LDM is
+    # Gaussian-only).
+    # -------------------------------------------------------------------
+
+    def single_spectrum_forward_ldm(
+        T_eV: jnp.ndarray,
+        n_e: jnp.ndarray,
+        concentrations: jnp.ndarray,
+        wl_grid: jnp.ndarray,
+        atomic_data: BatchAtomicData,
+        sigma_grid: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """LDM-Gaussian counterpart to :func:`single_spectrum_forward`.
+
+        Shares all four upstream stages (Saha + Boltzmann + emissivity)
+        with :func:`single_spectrum_forward` but uses
+        :func:`cflibs.radiation.ldm.ldm_broaden` for Stage 4 instead of
+        the broadcasting Voigt path. Stark broadening is not applied;
+        callers needing the Lorentzian wings must stay on the Voigt path.
+        """
+        from cflibs.radiation.ldm import ldm_broaden
+
+        T_eV = jnp.asarray(T_eV, dtype=jnp.float64)
+        n_e = jnp.asarray(n_e, dtype=jnp.float64)
+
+        n_elem = atomic_data.n_elements
+        n_stages = atomic_data.n_stages
+        ip = jnp.asarray(atomic_data.ionization_potentials, dtype=jnp.float64)
+        pf_coeffs = jnp.asarray(atomic_data.partition_coeffs, dtype=jnp.float64)
+
+        # Saha ionization fractions per element (replicated from the Voigt path)
+        def _elem_fractions(elem_idx):
+            return _saha_ionization_fractions(
+                T_eV, n_e, ip[elem_idx], pf_coeffs[elem_idx], n_stages
+            )
+
+        all_fractions = vmap(_elem_fractions)(jnp.arange(n_elem))
+
+        line_wl = jnp.asarray(atomic_data.line_wavelengths, dtype=jnp.float64)
+        line_Aki = jnp.asarray(atomic_data.line_A_ki, dtype=jnp.float64)
+        line_gk = jnp.asarray(atomic_data.line_g_k, dtype=jnp.float64)
+        line_Ek = jnp.asarray(atomic_data.line_E_k, dtype=jnp.float64)
+        line_elem = jnp.asarray(atomic_data.line_element_idx, dtype=jnp.int32)
+        line_stage = jnp.asarray(atomic_data.line_ion_stage, dtype=jnp.int32)
+        line_mass = jnp.asarray(atomic_data.line_mass_amu, dtype=jnp.float64)
+
+        T_K = T_eV * _EV_TO_K
+
+        pf_flat = pf_coeffs.reshape(-1, 5)
+        U_flat = polynomial_partition_function_jax(T_K, pf_flat)
+        U_all = U_flat.reshape(n_elem, n_stages)
+
+        C_line = concentrations[line_elem]
+        f_line = all_fractions[line_elem, line_stage]
+        U_line = jnp.maximum(U_all[line_elem, line_stage], 1e-30)
+
+        boltz = line_gk / U_line * jnp.exp(-line_Ek / jnp.maximum(T_eV, 1e-10))
+        n_k = C_line * n_e * f_line * boltz
+
+        lambda_m = line_wl * 1e-9
+        emissivities = _HC_OVER_4PI / jnp.maximum(lambda_m, 1e-30) * line_Aki * n_k * 1e6
+
+        # Stage 4: LDM Gaussian broadening (Doppler width only)
+        mass_kg = line_mass * _M_PROTON
+        sigma_D = line_wl * jnp.sqrt(T_eV * _EV_TO_J / (mass_kg * _C_LIGHT**2))
+        sigma_D = jnp.maximum(sigma_D, 1e-6)
+
+        return ldm_broaden(
+            line_wavelengths=line_wl,
+            line_intensities=emissivities,
+            line_sigmas=sigma_D,
+            wavelength_grid=wl_grid,
+            sigma_grid=sigma_grid,
+        )
+
+    batch_forward_model_ldm = jit(
+        vmap(single_spectrum_forward_ldm, in_axes=(0, 0, 0, None, None, None))
+    )
+
+    # ------------------------------------------------------------------
+    # T1-2 (ADR-0001) unified-kernel adapters: route through
+    # ``cflibs.radiation.kernels.forward_model``.
+    #
+    # ``batch_forward_model`` and ``single_spectrum_forward`` above stay as
+    # legacy ``BatchAtomicData``-based entry points; many production and
+    # benchmark callers consume them. T1-2 adds the snapshot-based variants
+    # so new code can opt into the unified path. T1-5/T1-6 will retire the
+    # legacy pair once the migration is done.
+    # ------------------------------------------------------------------
+
+    def forward_from_snapshot(
+        plasma_state,
+        atomic_snapshot,
+        instrument,
+        wavelength_grid,
+        sigma_grid=None,
+        *,
+        broadening_mode=None,
+        path_length_m: float = 0.01,
+        apply_self_absorption: bool = False,
+        apply_stark: bool = True,
+        fold_instrument_sigma: bool = True,
+    ) -> jnp.ndarray:
+        """Single-spectrum forward using the unified T1-2 kernel.
+
+        Snapshot-based replacement for :func:`single_spectrum_forward`. Wraps
+        :func:`cflibs.radiation.kernels.forward_model` with manifold-friendly
+        defaults (thin plasma; Voigt + Stark; instrument sigma folded into
+        per-line Gaussian width).
+        """
+        from cflibs.radiation.kernels import forward_model
+        from cflibs.radiation.profiles import BroadeningMode
+
+        if broadening_mode is None:
+            broadening_mode = BroadeningMode.PHYSICAL_DOPPLER
+        return forward_model(
+            plasma_state,
+            atomic_snapshot,
+            instrument,
+            wavelength_grid,
+            sigma_grid=sigma_grid,
+            broadening_mode=broadening_mode,
+            path_length_m=path_length_m,
+            apply_self_absorption=apply_self_absorption,
+            apply_stark=apply_stark,
+            fold_instrument_sigma=fold_instrument_sigma,
+        )
+
+    def batch_forward_from_snapshot(
+        plasma_states_batch,
+        atomic_snapshot,
+        instrument,
+        wavelength_grid,
+        sigma_grid=None,
+        *,
+        broadening_mode=None,
+        path_length_m: float = 0.01,
+        apply_self_absorption: bool = False,
+        apply_stark: bool = True,
+        fold_instrument_sigma: bool = True,
+    ) -> jnp.ndarray:
+        """Batched (``vmap``-ed) forward using the unified T1-2 kernel.
+
+        ``plasma_states_batch`` is a pytree with a leading batch axis on the
+        traced leaves (``T_e``, ``n_e``, and one density per element); the
+        snapshot and instrument are shared across the batch (broadcast).
+        ``broadening_mode`` and the bool flags are closed over (static) by
+        the lambda so JAX does not try to trace them.
+        """
+        from cflibs.radiation.profiles import BroadeningMode as _BM
+
+        bm = broadening_mode if broadening_mode is not None else _BM.PHYSICAL_DOPPLER
+
+        def _single(plasma):
+            return forward_from_snapshot(
+                plasma,
+                atomic_snapshot,
+                instrument,
+                wavelength_grid,
+                sigma_grid,
+                broadening_mode=bm,
+                path_length_m=path_length_m,
+                apply_self_absorption=apply_self_absorption,
+                apply_stark=apply_stark,
+                fold_instrument_sigma=fold_instrument_sigma,
+            )
+
+        return vmap(_single)(plasma_states_batch)
+
 else:
     # NumPy fallback for CPU-only machines without JAX
     def single_spectrum_forward(

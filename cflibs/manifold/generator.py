@@ -29,30 +29,15 @@ except ImportError:
     HAS_ZARR = False
     zarr = None
 
-try:
-    import jax
-    import jax.numpy as jnp
-    from jax import jit, vmap
-
-    HAS_JAX = True
-except ImportError:
-    HAS_JAX = False
-    jax = None
-    jnp = None
-
-    # Define dummy decorators to allow class definition
-    def jit(func):
-        return func
-
-    def vmap(func, *args, **kwargs):
-        return func
-
-
+from cflibs.core.jax_runtime import HAS_JAX, jax, jit_if_available, jnp, vmap_if_available
 from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_J, EV_TO_K, H_PLANCK, M_PROTON
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
 from cflibs.plasma.partition import polynomial_partition_function_jax
+
+jit = jit_if_available
+vmap = vmap_if_available
 
 # Conditional imports for JAX physics functions
 if HAS_JAX:
@@ -236,7 +221,8 @@ class ManifoldGenerator:
             self.config.wavelength_range[1],
         ] + self.config.elements
 
-        df = pd.read_sql_query(query, self.atomic_db.conn, params=params)
+        with self.atomic_db._get_connection() as conn:
+            df = pd.read_sql_query(query, conn, params=params)
 
         if df.empty:
             raise ValueError(
@@ -301,44 +287,46 @@ class ManifoldGenerator:
 
         # Load Physics Data (IPs and Coeffs)
         try:
-            cursor = self.atomic_db.conn.cursor()
+            with self.atomic_db._get_connection() as conn:
+                cursor = conn.cursor()
 
-            # Load IPs
-            ip_query = f"""
-                SELECT element, sp_num, ip_ev
-                FROM species_physics
-                WHERE element IN ({placeholders})
-            """
-            cursor.execute(ip_query, self.config.elements)
-            for row in cursor.fetchall():
-                el, sp_num, ip_ev = row
-                if el in el_map and ip_ev is not None:
-                    el_idx = el_map[el]
-                    stage_idx = sp_num - 1
-                    if 0 <= stage_idx < max_stages:
-                        ips[el_idx, stage_idx] = ip_ev
-
-            # Load Partition Coeffs
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='partition_functions'"
-            )
-            if cursor.fetchone():
-                pf_query = f"""
-                    SELECT element, sp_num, a0, a1, a2, a3, a4
-                    FROM partition_functions
+                # Load IPs
+                ip_query = f"""
+                    SELECT element, sp_num, ip_ev
+                    FROM species_physics
                     WHERE element IN ({placeholders})
                 """
-                cursor.execute(pf_query, self.config.elements)
-                count = 0
+                cursor.execute(ip_query, self.config.elements)
                 for row in cursor.fetchall():
-                    el, sp_num, a0, a1, a2, a3, a4 = row
-                    if el in el_map:
+                    el, sp_num, ip_ev = row
+                    if el in el_map and ip_ev is not None:
                         el_idx = el_map[el]
                         stage_idx = sp_num - 1
                         if 0 <= stage_idx < max_stages:
-                            coeffs[el_idx, stage_idx] = [a0, a1, a2, a3, a4]
-                            count += 1
-                logger.info(f"Loaded partition coefficients for {count} species")
+                            ips[el_idx, stage_idx] = ip_ev
+
+                # Load Partition Coeffs
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name='partition_functions'"
+                )
+                if cursor.fetchone():
+                    pf_query = f"""
+                        SELECT element, sp_num, a0, a1, a2, a3, a4
+                        FROM partition_functions
+                        WHERE element IN ({placeholders})
+                    """
+                    cursor.execute(pf_query, self.config.elements)
+                    count = 0
+                    for row in cursor.fetchall():
+                        el, sp_num, a0, a1, a2, a3, a4 = row
+                        if el in el_map:
+                            el_idx = el_map[el]
+                            stage_idx = sp_num - 1
+                            if 0 <= stage_idx < max_stages:
+                                coeffs[el_idx, stage_idx] = [a0, a1, a2, a3, a4]
+                                count += 1
+                    logger.info(f"Loaded partition coefficients for {count} species")
 
         except Exception as e:
             logger.warning(f"Failed to load physics data: {e}")
@@ -634,7 +622,89 @@ class ManifoldGenerator:
         return intensity
 
     @staticmethod
-    @jit
+    def _compute_spectrum_snapshot_ldm(
+        wl_grid: jnp.ndarray,
+        T_eV: float,
+        n_e: float,
+        concentrations: jnp.ndarray,
+        atomic_data: Tuple,
+        sigma_grid: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Compute a single-snapshot spectrum via the LDM Gaussian path.
+
+        This is the manifold-sweep specialisation of
+        :func:`cflibs.radiation.ldm.ldm_broaden`. The σ-grid layout is
+        passed as a closed-over array (built once at manifold-init in
+        :meth:`generate_manifold`) so it stays jit-static across all
+        grid points — only the per-line intensities recompute per (T, n_e,
+        concentration) sample. Stark broadening is currently NOT modelled
+        on this path (LDM 1-D is Gaussian-only; the 2-D Voigt extension is
+        scope for a follow-up bead).
+
+        See spec ``docs/adr/specs/T1-4-ldm-broadening.md`` §7.
+
+        Parameters
+        ----------
+        wl_grid : array
+            Uniform wavelength grid in nm.
+        T_eV, n_e : float
+            Plasma temperature / electron density.
+        concentrations : array
+            Element concentrations.
+        atomic_data : Tuple
+            Atomic data from :meth:`_load_atomic_data`.
+        sigma_grid : array
+            Pre-built log-σ grid; constructed via
+            :func:`cflibs.radiation.ldm.build_sigma_grid` at manifold init.
+
+        Returns
+        -------
+        array
+            Spectral intensity on ``wl_grid`` in arbitrary CF-LIBS units.
+        """
+        from cflibs.radiation.ldm import ldm_broaden
+
+        (
+            l_wl,
+            l_aki,
+            _l_ek,
+            _l_gk,
+            _l_ip,
+            _l_z,
+            _l_el_idx,
+            _partition_coeffs,
+            _ionization_potentials,
+            _l_stark_w,
+            _l_stark_alpha,
+            l_mass_amu,
+        ) = atomic_data
+
+        n_upper = ManifoldGenerator._saha_eggert_solver(
+            T_eV,
+            n_e,
+            concentrations,
+            atomic_data,
+        )
+
+        # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
+        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
+
+        # Doppler sigma + instrument floor (FWHM 0.05 nm; matches legacy path)
+        mass_kg = l_mass_amu * M_PROTON
+        sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
+        sigma_inst = 0.05 / 2.355
+        sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
+
+        return ldm_broaden(
+            line_wavelengths=l_wl,
+            line_intensities=epsilon,
+            line_sigmas=sigma_total,
+            wavelength_grid=wl_grid,
+            sigma_grid=sigma_grid,
+        )
+
+    @staticmethod
+    @jit_if_available(static_argnames=("time_steps",))
     def _time_integrated_spectrum(
         wl_grid: jnp.ndarray,
         params: jnp.ndarray,

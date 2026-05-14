@@ -3,7 +3,7 @@
 
 manifold:
   # Database and output
-  db_path: libs_production.db
+  db_path: ASD_da/libs_production.db
   output_path: spectral_manifold.h5
   
   # Elements to include

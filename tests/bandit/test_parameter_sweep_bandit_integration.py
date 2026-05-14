@@ -93,7 +93,7 @@ def mocked_sweep(parameter_sweep, monkeypatch, tmp_path):
                 "default": 0.10,
             }.get(cell, 0.15)
             summary = {
-                f"alias__iterative_jax": {
+                "alias__iterative_jax": {
                     "mean_aitchison": d_a,
                     "n_spectra": 3,
                 }
