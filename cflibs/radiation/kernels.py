@@ -153,16 +153,27 @@ def _species_mass_array(snapshot: "AtomicSnapshot") -> np.ndarray:
 
 
 def _polynomial_partition_function_jax(T_K, coeffs):
-    """log U = sum_n a_n (log10 T_K)^n. Returns U on the active dtype.
+    """ln U = sum_n a_n (ln T_K)^n. Returns U on the active dtype.
 
-    ``coeffs`` has shape ``(N_species, 5)``; row index matches ``snapshot.species``.
-    Mirrors :func:`cflibs.plasma.partition.polynomial_partition_function_jax`
-    but inlined to avoid extra import overhead inside the jit.
+    The Irwin (1981) partition-function coefficients shipped in the
+    canonical atomic DB (see ``scripts/populate_partition_functions.py``)
+    are NATURAL-log basis: ``ln U = sum a_n (ln T)^n``. The previous
+    version of this helper used log10 + ``power(10, ...)`` which
+    produced an ~18-orders-of-magnitude error (Fe I @ 10000 K: true
+    U=33.84 vs bad U=1.95e+20). See CF-LIBS-improved-ddwh.
+
+    ``coeffs`` has shape ``(N_species, 5)``; row index matches
+    ``snapshot.species``. Mirrors
+    :func:`cflibs.plasma.partition.polynomial_partition_function_jax`
+    (the canonical implementation, which also uses ``jnp.log``) but
+    inlined to avoid extra import overhead inside the jit.
     """
-    log_T = jnp.log10(jnp.maximum(T_K, 1.0))
-    log_T_powers = jnp.stack([jnp.ones_like(log_T), log_T, log_T**2, log_T**3, log_T**4], axis=-1)
-    log_U = jnp.sum(coeffs * log_T_powers, axis=-1)
-    return jnp.power(10.0, log_U)
+    ln_T = jnp.log(jnp.maximum(T_K, 1.0))
+    ln_T_powers = jnp.stack(
+        [jnp.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1
+    )
+    ln_U = jnp.sum(coeffs * ln_T_powers, axis=-1)
+    return jnp.exp(ln_U)
 
 
 def _saha_two_stage_populations(plasma_state, snapshot):
