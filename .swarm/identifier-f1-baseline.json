@@ -1,12 +1,16 @@
 {
   "_managed_by": "operator",
   "_do_not_edit_via_swarm": "This file is the F1 regression-gate baseline. Operator-only updates. SELF_CRITICAL-protected at the .swarm/ prefix in beefcake-swarm's pre-commit gate.",
-  "schema_version": 1,
+  "schema_version": 2,
   "captured_date": "2026-05-13",
   "source_dataset": ".asta/exp001-raw-snapshot/all_records_fixed.csv",
   "outer_split_id": "outer_1",
   "n_spectra_per_identifier": 33,
+  "_gate_semantics": "Schema v2 (2026-05-14): multi-metric gate. A PR fails the regression gate if ANY of {macro_f1, macro_precision, macro_recall} drops by more than tolerance_*_absolute OR fp_per_spectrum rises by more than tolerance_fp_per_spectrum_absolute, on ANY identifier. Schema v1 only checked macro_f1.",
   "tolerance_macro_f1_absolute": 0.02,
+  "tolerance_macro_precision_absolute": 0.02,
+  "tolerance_macro_recall_absolute": 0.02,
+  "tolerance_fp_per_spectrum_absolute": 0.02,
   "tolerance_precision_absolute": 0.05,
   "identifiers": {
     "hybrid_union": {

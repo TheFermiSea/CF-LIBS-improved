@@ -138,8 +138,16 @@ if [[ ! -f "$SUMMARY" ]]; then
 fi
 
 # Compare against baseline with a small Python snippet. Returns exit 0
-# on pass, exit 1 on F1 regression. stdout is the comparison table for
-# the verifier log.
+# on pass, exit 1 on regression. stdout is the comparison table for the
+# verifier log.
+#
+# Schema v2 (2026-05-14, overnight-loop): MULTI-METRIC gate.
+#   - macro_f1, macro_precision, macro_recall: regression = drop > tol
+#   - fp_per_spectrum: regression = rise > tol (reverse polarity)
+#   - any identifier MISSING from id_summary.json = regression
+# The gate is conservative: ANY identifier × ANY metric beyond tolerance
+# fails the PR. Improvements (drops in fp_per_spectrum, rises in the
+# other three) are logged but never cause a failure.
 python - "$BASELINE_FILE" "$SUMMARY" <<'PY' || exit 1
 import json, sys
 
@@ -150,38 +158,69 @@ with open(observed_path) as f:
     observed = json.load(f)
 
 tol_f1 = baseline.get("tolerance_macro_f1_absolute", 0.02)
+tol_p = baseline.get("tolerance_macro_precision_absolute", 0.02)
+tol_r = baseline.get("tolerance_macro_recall_absolute", 0.02)
+tol_fp = baseline.get("tolerance_fp_per_spectrum_absolute", 0.02)
 expected = baseline.get("identifiers", {})
 overall = (observed.get("overall") or {})
 
-print(f"\n  IDENTIFIER         BASELINE   OBSERVED     DELTA   STATUS")
-print(f"  " + "-" * 60)
+print(f"\n  IDENTIFIER         METRIC   BASELINE   OBSERVED     DELTA   STATUS")
+print(f"  " + "-" * 68)
 
 any_fail = False
 any_run = False
+any_improvement = False
+
+# (metric_key, polarity, tolerance, label)
+# polarity = +1 means higher-is-better (regression on drop), -1 means
+# lower-is-better (regression on rise).
+metrics = [
+    ("macro_f1",         +1, tol_f1, "F1   "),
+    ("macro_precision",  +1, tol_p,  "P    "),
+    ("macro_recall",     +1, tol_r,  "R    "),
+    ("fp_per_spectrum",  -1, tol_fp, "FP/sp"),
+]
+
 for ident, ref in sorted(expected.items()):
     obs_block = overall.get(ident)
     if obs_block is None:
-        print(f"  {ident:18s} {ref['macro_f1']:.4f}        n/a       —    MISSING")
-        # MISSING = identifier wasn't exercised by the smoke. That's
-        # ALSO a regression: the smoke must cover every identifier in
-        # the baseline; if a refactor dropped one, the gate must fail.
+        print(f"  {ident:18s} {'MISSING':>5s}     {ref['macro_f1']:.4f}        n/a       —    REGRESSION")
         any_fail = True
         continue
     any_run = True
-    obs_f1 = float(obs_block.get("macro_f1", 0.0))
-    delta = obs_f1 - ref["macro_f1"]
-    status = "PASS" if delta >= -tol_f1 else "FAIL"
-    if status == "FAIL":
-        any_fail = True
-    print(f"  {ident:18s} {ref['macro_f1']:.4f}    {obs_f1:.4f}   {delta:+.4f}   {status}")
+    for key, polarity, tol, label in metrics:
+        base_v = float(ref.get(key, 0.0))
+        obs_v = float(obs_block.get(key, 0.0))
+        delta = obs_v - base_v
+        # regression: drop > tol on +polarity, rise > tol on -polarity
+        if polarity > 0:
+            is_regression = delta < -tol
+            is_improvement = delta > tol
+        else:
+            is_regression = delta > tol
+            is_improvement = delta < -tol
+        if is_regression:
+            status = "REGRESSION"
+            any_fail = True
+        elif is_improvement:
+            status = "IMPROVEMENT"
+            any_improvement = True
+        else:
+            status = "ok"
+        print(f"  {ident:18s} {label}    {base_v:.4f}    {obs_v:.4f}   {delta:+.4f}   {status}")
 
 print()
 if not any_run:
     print("  INFRA: no identifier ran in the smoke; check id-workflows arg")
     sys.exit(2)
 if any_fail:
-    print(f"  REGRESSION: at least one identifier dropped > {tol_f1:.3f} or went MISSING")
+    print(f"  REGRESSION: at least one metric beyond tolerance "
+          f"(F1/P/R > {tol_f1:.3f}; FP/sp > {tol_fp:.3f}) or identifier MISSING")
     sys.exit(1)
-print(f"  ALL identifiers within tolerance ({tol_f1:.3f}). F1 gate PASS")
+if any_improvement:
+    print(f"  PASS — at least one metric IMPROVED beyond tolerance. "
+          "Consider updating .swarm/identifier-f1-baseline.json after smoke confirmation.")
+else:
+    print(f"  PASS — all metrics within tolerance, no regressions.")
 sys.exit(0)
 PY
