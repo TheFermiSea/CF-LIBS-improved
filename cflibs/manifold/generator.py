@@ -936,7 +936,7 @@ class ManifoldGenerator:
         # σ_total from below (cold plasma, heaviest line) and above (hot
         # plasma, lightest line) and pass build_sigma_grid those two
         # endpoints; LDM clips out-of-grid lines to the boundary layers.
-        broadening_mode = getattr(self.config, "broadening_mode", BroadeningMode.PHYSICAL_DOPPLER)
+        broadening_mode = self.config.broadening_mode
 
         if broadening_mode is BroadeningMode.LDM_GAUSSIAN:
             sigma_grid_arr = self._build_ldm_sigma_grid()
@@ -962,9 +962,7 @@ class ManifoldGenerator:
                 )(batch_params)
 
         else:
-            logger.info(
-                f"Manifold broadening: {broadening_mode.value} " "(per-line Voigt with Stark)"
-            )
+            logger.info(f"Manifold broadening: {broadening_mode.value} (per-line Voigt with Stark)")
 
             @jit
             def batch_spectrum(batch_params):
