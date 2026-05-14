@@ -776,6 +776,7 @@ class AtomicDatabase(AtomicDataSource):
         gis: list[float] = []
         sp_idx: list[int] = []
         stark_ws: list[float] = []
+        stark_alphas: list[float] = []
 
         for element in elements:
             for transition in self.get_transitions(
@@ -799,6 +800,11 @@ class AtomicDatabase(AtomicDataSource):
                 stark_ws.append(
                     float(transition.stark_w) if transition.stark_w is not None else 0.0
                 )
+                # 0.0 default means factor_T = (T/T_ref)^0 = 1.0 — the legacy
+                # T-independent behaviour for lines without alpha coverage.
+                stark_alphas.append(
+                    float(transition.stark_alpha) if transition.stark_alpha is not None else 0.0
+                )
 
         n_lines = len(wls)
         line_wavelengths_nm = _xp.asarray(wls, dtype=_real_dtype)
@@ -809,6 +815,7 @@ class AtomicDatabase(AtomicDataSource):
         line_g_i = _xp.asarray(gis, dtype=_real_dtype)
         line_species_index = _xp.asarray(sp_idx, dtype=_xp.int32)
         line_stark_w = _xp.asarray(stark_ws, dtype=_real_dtype)
+        line_stark_alpha = _xp.asarray(stark_alphas, dtype=_real_dtype)
         line_natural_w = _xp.zeros(n_lines, dtype=_real_dtype)
 
         if partition_rows:
@@ -849,6 +856,7 @@ class AtomicDatabase(AtomicDataSource):
             line_species_index=line_species_index,
             line_stark_w=line_stark_w,
             line_natural_w=line_natural_w,
+            line_stark_alpha=line_stark_alpha,
             partition_coeffs=partition_coeffs,
             ionization_potential_ev=ionization_potential_ev,
             level_g=level_g_out,

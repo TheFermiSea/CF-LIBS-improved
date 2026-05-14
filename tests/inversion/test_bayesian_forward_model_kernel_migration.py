@@ -239,6 +239,124 @@ def test_compute_spectrum_is_finite_and_nonnegative(bayesian_db):
     assert arr.max() > 0.0
 
 
+# ---------------------------------------------------------------------------
+# CF-LIBS-improved-vjbh — Stark T-power-law factor regression guard
+# ---------------------------------------------------------------------------
+
+
+def test_stark_gamma_applies_temperature_power_law(bayesian_db):
+    """``_per_line_stark_gamma`` must apply ``factor_T = (T/T_ref)^(-alpha)``.
+
+    Pre-fix (CF-LIBS-improved-vjbh): the kernel helper returned
+    ``stark_w * (n_e / 1e16)`` unconditionally, dropping the temperature
+    dependence that the legacy ``BayesianForwardModel._compute_spectrum``
+    had applied. Snapshots built via ``AtomicDatabase.snapshot`` now carry
+    ``line_stark_alpha`` and the kernel applies the canonical Griem
+    ``(T_eV / 0.86173 eV)^(-alpha)`` factor.
+
+    Test fixture ``bayesian_db`` populates ``stark_alpha = 0.5`` for the
+    Fe I and Cu I lines and ``0.6`` for Fe II, so we get a per-line check
+    of the factor across two different alpha values.
+    """
+    from cflibs.atomic import AtomicDatabase
+    from cflibs.radiation.kernels import _per_line_stark_gamma
+
+    snapshot = AtomicDatabase(bayesian_db).snapshot(
+        elements=["Fe", "Cu"], wavelength_range=(200.0, 600.0)
+    )
+    # Confirm AtomicDatabase populated line_stark_alpha (precondition).
+    assert (
+        snapshot.line_stark_alpha is not None
+    ), "AtomicSnapshot.line_stark_alpha must be populated by AtomicDatabase.snapshot"
+    alpha = np.asarray(snapshot.line_stark_alpha)
+    stark_w = np.asarray(snapshot.line_stark_w)
+    assert alpha.shape == stark_w.shape
+    # Fixture has Fe I (0.5), Fe II (0.6), Cu I (0.5) — all alpha > 0.
+    assert np.all(alpha > 0.0), f"Test fixture alphas must be non-zero: {alpha}"
+
+    n_e = 1.0e17
+    REF_T_EV = 0.86173
+
+    # Evaluate at two temperatures bracketing the canonical 0.86 eV reference.
+    T_cold = 0.5
+    T_hot = 2.0
+    gamma_cold = np.asarray(_per_line_stark_gamma(snapshot, n_e, T_cold))
+    gamma_hot = np.asarray(_per_line_stark_gamma(snapshot, n_e, T_hot))
+
+    # Direct formula reference: gamma_S = stark_w * (n_e / 1e16) * (T/T_ref)^(-alpha)
+    base = stark_w * (n_e / 1.0e16)
+    expected_cold = base * np.power(T_cold / REF_T_EV, -alpha)
+    expected_hot = base * np.power(T_hot / REF_T_EV, -alpha)
+
+    np.testing.assert_allclose(gamma_cold, expected_cold, rtol=1e-6, atol=0.0)
+    np.testing.assert_allclose(gamma_hot, expected_hot, rtol=1e-6, atol=0.0)
+
+    # Cross-check: gamma_cold / gamma_hot must equal (T_hot/T_cold)^alpha line-by-line.
+    # (Equivalent to the legacy formula but expressed as a ratio so REF_T_EV cancels.)
+    ratio = gamma_cold / np.maximum(gamma_hot, 1e-30)
+    expected_ratio = np.power(T_hot / T_cold, alpha)
+    np.testing.assert_allclose(ratio, expected_ratio, rtol=1e-6, atol=0.0)
+
+
+def test_stark_gamma_t_clamped_at_low_temperature(bayesian_db):
+    """``_per_line_stark_gamma`` must clamp ``T_eV`` to ``>= 0.1`` to match
+    legacy behaviour (avoids ``(T/T_ref)^(-alpha)`` blowing up to infinity
+    at ``T -> 0`` while the rest of the forward model still emits zero
+    population from Boltzmann/Saha).
+    """
+    from cflibs.atomic import AtomicDatabase
+    from cflibs.radiation.kernels import _per_line_stark_gamma
+
+    snapshot = AtomicDatabase(bayesian_db).snapshot(
+        elements=["Fe", "Cu"], wavelength_range=(200.0, 600.0)
+    )
+    n_e = 1.0e17
+
+    gamma_below_clamp = np.asarray(_per_line_stark_gamma(snapshot, n_e, 0.05))
+    gamma_at_clamp = np.asarray(_per_line_stark_gamma(snapshot, n_e, 0.1))
+    # T=0.05 and T=0.1 both clamp to T=0.1 -> identical gamma.
+    np.testing.assert_allclose(gamma_below_clamp, gamma_at_clamp, rtol=1e-12, atol=0.0)
+    # And neither blows up.
+    assert np.all(np.isfinite(gamma_below_clamp))
+
+
+def test_stark_gamma_back_compat_when_alpha_absent():
+    """Snapshots built outside ``AtomicDatabase.snapshot`` (synthetic test
+    fixtures, hand-built stubs) may not supply ``line_stark_alpha``. The
+    kernel must degrade gracefully to the temperature-independent formula
+    in that case so existing callers that build synthetic snapshots keep
+    working.
+    """
+    from cflibs.core.jax_runtime import AtomicSnapshot
+    from cflibs.radiation.kernels import _per_line_stark_gamma
+
+    n_lines = 4
+    snap = AtomicSnapshot(
+        species=(("Fe", 1),),
+        line_wavelengths_nm=jnp.array([400.0, 410.0, 420.0, 430.0]),
+        line_A_ki=jnp.zeros(n_lines),
+        line_E_k_ev=jnp.zeros(n_lines),
+        line_g_k=jnp.ones(n_lines),
+        line_E_i_ev=jnp.zeros(n_lines),
+        line_g_i=jnp.ones(n_lines),
+        line_species_index=jnp.zeros(n_lines, dtype=jnp.int32),
+        line_stark_w=jnp.array([0.02, 0.03, 0.04, 0.05]),
+        line_natural_w=jnp.zeros(n_lines),
+        partition_coeffs=jnp.zeros((1, 5)),
+        ionization_potential_ev=jnp.array([7.87]),
+        # line_stark_alpha intentionally omitted (defaults to None).
+    )
+    assert snap.line_stark_alpha is None
+    n_e = 1.0e17
+    gamma_T05 = np.asarray(_per_line_stark_gamma(snap, n_e, 0.5))
+    gamma_T20 = np.asarray(_per_line_stark_gamma(snap, n_e, 2.0))
+    # T should not matter when alpha is unknown — both temperatures give
+    # the same gamma = stark_w * (n_e / 1e16).
+    np.testing.assert_allclose(gamma_T05, gamma_T20, rtol=1e-12, atol=0.0)
+    expected = np.asarray(snap.line_stark_w) * (n_e / 1.0e16)
+    np.testing.assert_allclose(gamma_T05, expected, rtol=1e-12, atol=0.0)
+
+
 def test_forward_py_body_does_not_call_adapter():
     """``forward.py`` body must no longer reference the adapter (regression).
 
