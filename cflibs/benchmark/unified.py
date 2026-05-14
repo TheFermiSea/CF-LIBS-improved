@@ -48,7 +48,12 @@ def _jax_identifier_flags_for(cls) -> Dict[str, bool]:
         return {}
     return {name: True for name in sig.parameters if name.startswith("use_jax_")}
 
-from cflibs.benchmark.dataset import (
+# These imports sit AFTER the `_jax_param_keys` helper above to keep that
+# helper trivial-to-call without paying the cost (or risking the circular
+# import) of pulling in the full benchmark.dataset / composition_metrics
+# graph. Each import carries a per-line E402 suppression because ruff's
+# module-level-imports rule doesn't understand the intentional placement.
+from cflibs.benchmark.dataset import (  # noqa: E402
     BenchmarkDataset,
     BenchmarkSpectrum,
     DataSplit,
@@ -58,8 +63,8 @@ from cflibs.benchmark.dataset import (
     SampleType,
     TruthType,
 )
-from cflibs.benchmark.loaders import load_benchmark
-from cflibs.benchmark.composition_metrics import (
+from cflibs.benchmark.loaders import load_benchmark  # noqa: E402
+from cflibs.benchmark.composition_metrics import (  # noqa: E402
     aitchison_distance,
     load_subcompositional_pairs,
     per_element_error,
@@ -67,7 +72,7 @@ from cflibs.benchmark.composition_metrics import (
     stratify_per_element_errors,
     subcompositional_ratio_errors,
 )
-from cflibs.core.logging_config import get_logger
+from cflibs.core.logging_config import get_logger  # noqa: E402
 
 if TYPE_CHECKING:
     from cflibs.inversion.element_id import ElementIdentificationResult

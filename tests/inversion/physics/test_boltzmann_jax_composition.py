@@ -31,11 +31,13 @@ import pytest
 
 jax = pytest.importorskip("jax")  # noqa: F401  -- skip whole module if absent
 
-from cflibs.atomic.database import AtomicDatabase
-from cflibs.atomic.structures import PartitionFunction
-from cflibs.core.constants import KB_EV
-from cflibs.inversion.boltzmann import BoltzmannPlotFitter, LineObservation
-from cflibs.inversion.solver import IterativeCFLIBSSolver
+# Imports placed after the importorskip above so the module short-circuits
+# cleanly when jax is missing rather than raising during collection.
+from cflibs.atomic.database import AtomicDatabase  # noqa: E402
+from cflibs.atomic.structures import PartitionFunction  # noqa: E402
+from cflibs.core.constants import KB_EV  # noqa: E402
+from cflibs.inversion.boltzmann import BoltzmannPlotFitter, LineObservation  # noqa: E402
+from cflibs.inversion.solver import IterativeCFLIBSSolver  # noqa: E402
 
 pytestmark = [pytest.mark.requires_jax, pytest.mark.unit]
 

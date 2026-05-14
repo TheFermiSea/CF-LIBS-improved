@@ -28,10 +28,13 @@ os.environ.setdefault("JAX_PLATFORMS", "cpu")
 jax = pytest.importorskip("jax")
 jax.config.update("jax_enable_x64", True)
 
-from cflibs.atomic.database import AtomicDatabase
-from cflibs.atomic.structures import PartitionFunction
-from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3
-from cflibs.inversion.solver import (
+# Imports placed after the importorskip + jax.config.update above so the
+# module short-circuits cleanly when jax is missing and configures x64 once
+# before any solver module pulls in jax.numpy.
+from cflibs.atomic.database import AtomicDatabase  # noqa: E402
+from cflibs.atomic.structures import PartitionFunction  # noqa: E402
+from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3  # noqa: E402
+from cflibs.inversion.solver import (  # noqa: E402
     IterativeCFLIBSSolver,
     IterativeCFLIBSSolverJax,
     LineObservation,
