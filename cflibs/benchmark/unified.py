@@ -933,10 +933,7 @@ def _alias_v2_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
             {"chance_window_scale": 0.4, "max_lines_per_element": 30},
             {"chance_window_scale": 0.3, "max_lines_per_element": 30},
         ]
-    return [
-        {"chance_window_scale": cws, "max_lines_per_element": 30}
-        for cws in (0.3, 0.4)
-    ]
+    return [{"chance_window_scale": cws, "max_lines_per_element": 30} for cws in (0.3, 0.4)]
 
 
 def _build_alias_v2_predictor(
@@ -1037,7 +1034,9 @@ _ALIAS_SWEEP_BASE_KWARGS: Dict[str, Any] = {
 }
 
 
-def _alias_sweep_workflow_configs(quick: bool) -> List[Dict[str, Any]]:  # noqa: ARG001 - signature parity
+def _alias_sweep_workflow_configs(
+    quick: bool,
+) -> List[Dict[str, Any]]:  # noqa: ARG001 - signature parity
     """Single-element config grid shared by every ``alias_sweep_*`` workflow.
 
     All 8 cells use the SAME threshold kwargs (pinned at strict defaults via
@@ -1083,15 +1082,9 @@ def _build_alias_sweep_predictor_factory(
                     intensity_threshold_factor=float(
                         _ALIAS_SWEEP_BASE_KWARGS["intensity_threshold_factor"]
                     ),
-                    detection_threshold=float(
-                        _ALIAS_SWEEP_BASE_KWARGS["detection_threshold"]
-                    ),
-                    chance_window_scale=float(
-                        _ALIAS_SWEEP_BASE_KWARGS["chance_window_scale"]
-                    ),
-                    max_lines_per_element=int(
-                        _ALIAS_SWEEP_BASE_KWARGS["max_lines_per_element"]
-                    ),
+                    detection_threshold=float(_ALIAS_SWEEP_BASE_KWARGS["detection_threshold"]),
+                    chance_window_scale=float(_ALIAS_SWEEP_BASE_KWARGS["chance_window_scale"]),
+                    max_lines_per_element=int(_ALIAS_SWEEP_BASE_KWARGS["max_lines_per_element"]),
                     **cell_kwargs,
                     **_jax_identifier_flags_for(ALIASIdentifier),
                 )
@@ -1981,7 +1974,10 @@ def _fit_hybrid_manifold_pipeline(
     return predictor
 
 
-def build_composition_workflow_registry(quick: bool = False) -> Dict[str, CompositionWorkflowSpec]:
+def build_composition_workflow_registry(
+    quick: bool = False,
+    bayesian_mcmc_override: Optional[Dict[str, int]] = None,
+) -> Dict[str, CompositionWorkflowSpec]:
     from cflibs.inversion.boltzmann import FitMethod
 
     weighting = _validate_boltzmann_weighting("aki_inverse_variance")
@@ -2022,8 +2018,21 @@ def build_composition_workflow_registry(quick: bool = False) -> Dict[str, Compos
     # Bayesian: the parameter grid is shaped to keep MCMC wall time bounded
     # for the benchmark gate.  In quick mode we run a single small
     # configuration; the full grid sweeps a couple of warmup/sample points.
-    if quick:
+    if bayesian_mcmc_override is not None:
+        # CLI override (--bayesian-mcmc N_WARMUP,N_SAMPLES,N_CHAINS) collapses
+        # the parameter grid to a single configuration. Used by the
+        # CF-LIBS-improved-4rwe before/after Stark T-factor benchmark and any
+        # other ablation that needs a single pinned MCMC budget per run.
         bayesian_configs: List[Dict[str, Any]] = [
+            {
+                "num_warmup": int(bayesian_mcmc_override["num_warmup"]),
+                "num_samples": int(bayesian_mcmc_override["num_samples"]),
+                "num_chains": int(bayesian_mcmc_override["num_chains"]),
+                "seed": int(bayesian_mcmc_override.get("seed", 0)),
+            }
+        ]
+    elif quick:
+        bayesian_configs = [
             {"num_warmup": 200, "num_samples": 400, "num_chains": 1, "seed": 0},
         ]
     else:
@@ -3284,10 +3293,14 @@ class UnifiedBenchmarkRunner:
         db_path: Path,
         basis_dir: Optional[Path] = None,
         quick: bool = False,
+        bayesian_mcmc_override: Optional[Dict[str, int]] = None,
     ):
         self.context = UnifiedBenchmarkContext(db_path=db_path, basis_dir=basis_dir)
         self.id_registry = build_id_workflow_registry(quick=quick)
-        self.composition_registry = build_composition_workflow_registry(quick=quick)
+        self.composition_registry = build_composition_workflow_registry(
+            quick=quick,
+            bayesian_mcmc_override=bayesian_mcmc_override,
+        )
 
     def run_identification(
         self,
