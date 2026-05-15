@@ -264,14 +264,11 @@ def test_stark_gamma_applies_temperature_power_law(bayesian_db):
     snapshot = AtomicDatabase(bayesian_db).snapshot(
         elements=["Fe", "Cu"], wavelength_range=(200.0, 600.0)
     )
-    # Confirm AtomicDatabase populated line_stark_alpha (precondition).
-    assert (
-        snapshot.line_stark_alpha is not None
-    ), "AtomicSnapshot.line_stark_alpha must be populated by AtomicDatabase.snapshot"
     alpha = np.asarray(snapshot.line_stark_alpha)
     stark_w = np.asarray(snapshot.line_stark_w)
     assert alpha.shape == stark_w.shape
-    # Fixture has Fe I (0.5), Fe II (0.6), Cu I (0.5) — all alpha > 0.
+    # Fixture has Fe I (0.5), Fe II (0.6), Cu I (0.5) — all alpha > 0 so
+    # the T-factor is non-trivial line-by-line.
     assert np.all(alpha > 0.0), f"Test fixture alphas must be non-zero: {alpha}"
 
     n_e = 1.0e17
@@ -320,38 +317,33 @@ def test_stark_gamma_t_clamped_at_low_temperature(bayesian_db):
     assert np.all(np.isfinite(gamma_below_clamp))
 
 
-def test_stark_gamma_back_compat_when_alpha_absent():
-    """Snapshots built outside ``AtomicDatabase.snapshot`` (synthetic test
-    fixtures, hand-built stubs) may not supply ``line_stark_alpha``. The
-    kernel must degrade gracefully to the temperature-independent formula
-    in that case so existing callers that build synthetic snapshots keep
-    working.
+def test_stark_gamma_alpha_zero_collapses_to_legacy_formula(bayesian_db):
+    """When ``line_stark_alpha == 0`` the kernel must reduce to the legacy
+    temperature-independent formula ``gamma = stark_w * (n_e / 1e16)``.
+
+    The :meth:`AtomicDatabase.snapshot` builder defaults ``stark_alpha = 0``
+    for any DB row without catalogued temperature dependence, so this is
+    the canonical "missing data" branch — and it falls out of the math
+    automatically (``T^0 = 1``) without any kernel-side special-casing.
     """
-    from cflibs.core.jax_runtime import AtomicSnapshot
+    from cflibs.atomic import AtomicDatabase
     from cflibs.radiation.kernels import _per_line_stark_gamma
 
-    n_lines = 4
-    snap = AtomicSnapshot(
-        species=(("Fe", 1),),
-        line_wavelengths_nm=jnp.array([400.0, 410.0, 420.0, 430.0]),
-        line_A_ki=jnp.zeros(n_lines),
-        line_E_k_ev=jnp.zeros(n_lines),
-        line_g_k=jnp.ones(n_lines),
-        line_E_i_ev=jnp.zeros(n_lines),
-        line_g_i=jnp.ones(n_lines),
-        line_species_index=jnp.zeros(n_lines, dtype=jnp.int32),
-        line_stark_w=jnp.array([0.02, 0.03, 0.04, 0.05]),
-        line_natural_w=jnp.zeros(n_lines),
-        partition_coeffs=jnp.zeros((1, 5)),
-        ionization_potential_ev=jnp.array([7.87]),
-        # line_stark_alpha intentionally omitted (defaults to None).
+    snapshot = AtomicDatabase(bayesian_db).snapshot(
+        elements=["Fe", "Cu"], wavelength_range=(200.0, 600.0)
     )
-    assert snap.line_stark_alpha is None
+    # Overwrite alpha array to zero to exercise the "no T-dependence" path
+    # without needing a separate DB fixture.
+    snap = type(snapshot)(
+        **{
+            **{f: getattr(snapshot, f) for f in snapshot.__dataclass_fields__},
+            "line_stark_alpha": jnp.zeros_like(snapshot.line_stark_alpha),
+        }
+    )
     n_e = 1.0e17
     gamma_T05 = np.asarray(_per_line_stark_gamma(snap, n_e, 0.5))
     gamma_T20 = np.asarray(_per_line_stark_gamma(snap, n_e, 2.0))
-    # T should not matter when alpha is unknown — both temperatures give
-    # the same gamma = stark_w * (n_e / 1e16).
+    # Equal across temperature because alpha=0.
     np.testing.assert_allclose(gamma_T05, gamma_T20, rtol=1e-12, atol=0.0)
     expected = np.asarray(snap.line_stark_w) * (n_e / 1.0e16)
     np.testing.assert_allclose(gamma_T05, expected, rtol=1e-12, atol=0.0)
