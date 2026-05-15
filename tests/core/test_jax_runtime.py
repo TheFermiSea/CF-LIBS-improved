@@ -187,6 +187,7 @@ def _make_snapshot(n_lines=4, n_species=2):
         line_g_i=rng.integers(1, 12, size=n_lines).astype(float),
         line_species_index=rng.integers(0, n_species, size=n_lines).astype(np.int32),
         line_stark_w=np.full(n_lines, 0.01),
+        line_stark_alpha=np.zeros(n_lines),
         line_natural_w=np.zeros(n_lines),
         partition_coeffs=rng.normal(size=(n_species, 5)),
         ionization_potential_ev=np.array([7.87, 16.18][:n_species]),
@@ -295,9 +296,9 @@ def test_atomic_snapshot_is_a_jax_pytree():
 
     snap = _make_snapshot(n_lines=3, n_species=2)
     leaves, treedef = jax.tree_util.tree_flatten(snap)
-    # 11 mandatory array leaves (level_g/level_E_ev/level_mask are None →
+    # 12 mandatory array leaves (level_g/level_E_ev/level_mask are None →
     # not exposed as leaves by jax.tree_util).
-    assert len(leaves) == 11
+    assert len(leaves) == 12
     rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
     assert rebuilt.species == snap.species
     np.testing.assert_array_equal(rebuilt.line_wavelengths_nm, snap.line_wavelengths_nm)
