@@ -40,6 +40,7 @@ when JAX is present. On Metal (no fp64) callers must construct
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
@@ -350,8 +351,17 @@ def _per_line_stark_gamma(snapshot, n_e, T_eV):
     Bug history (CF-LIBS-improved-vjbh): the original T1-2 kernel omitted
     the temperature factor entirely, which silently dropped the
     BayesianForwardModel's Stark T-dependence after the T1-6 migration.
+
+    Env-var override: ``CFLIBS_DISABLE_STARK_T_FACTOR=1`` collapses
+    ``factor_T`` to 1.0, reproducing the pre-vjbh kernel for ablation /
+    benchmark comparisons (CF-LIBS-improved-4rwe). Off by default. The
+    check is host-side: it resolves at jit-trace time so the toggled
+    kernel keeps a separate jit cache key from the default one and
+    runtime cost is zero in either branch.
     """
     stark_w = jnp.asarray(snapshot.line_stark_w)
+    if os.environ.get("CFLIBS_DISABLE_STARK_T_FACTOR", "0") == "1":
+        return stark_w * (n_e / 1.0e16)
     alpha = jnp.asarray(snapshot.line_stark_alpha)
     REF_T_EV = 0.86173  # 10000 K — Griem / NIST reference temperature.
     factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -alpha)

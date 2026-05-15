@@ -103,25 +103,17 @@ def _parse_dataset_shard(value: str) -> tuple[int, int]:
     where sharding stops paying back the per-shard JAX cold-start).
     """
     if "/" not in value:
-        raise ValueError(
-            f"--dataset-shard must be 'N/K', got {value!r}"
-        )
+        raise ValueError(f"--dataset-shard must be 'N/K', got {value!r}")
     n_str, k_str = value.split("/", 1)
     try:
         shard_n = int(n_str.strip())
         shard_k = int(k_str.strip())
     except ValueError as exc:
-        raise ValueError(
-            f"--dataset-shard N/K must be integers, got {value!r}"
-        ) from exc
+        raise ValueError(f"--dataset-shard N/K must be integers, got {value!r}") from exc
     if shard_k < 1 or shard_k > 16:
-        raise ValueError(
-            f"--dataset-shard K must be in [1, 16], got K={shard_k}"
-        )
+        raise ValueError(f"--dataset-shard K must be in [1, 16], got K={shard_k}")
     if shard_n < 1 or shard_n > shard_k:
-        raise ValueError(
-            f"--dataset-shard requires 1 <= N <= K; got N={shard_n}, K={shard_k}"
-        )
+        raise ValueError(f"--dataset-shard requires 1 <= N <= K; got N={shard_n}, K={shard_k}")
     return shard_n, shard_k
 
 
@@ -185,7 +177,9 @@ def _run_identification_phase(
     max_outer_folds: int | None,
 ):
     if not identification_datasets:
-        parser.error("No identification-capable datasets were found in the selected data directory.")
+        parser.error(
+            "No identification-capable datasets were found in the selected data directory."
+        )
     return runner.run_identification(
         identification_datasets,
         workflow_names=id_workflows,
@@ -355,6 +349,20 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--bayesian-mcmc",
+        default=None,
+        metavar="N_WARMUP,N_SAMPLES,N_CHAINS",
+        help=(
+            "Override the bayesian composition workflow's MCMC budget grid "
+            "with a single pinned configuration. Format: "
+            "``--bayesian-mcmc 500,1000,2`` => num_warmup=500 num_samples=1000 "
+            "num_chains=2. Useful for ablation runs (e.g. the "
+            "CF-LIBS-improved-4rwe before/after Stark T-factor benchmark) "
+            "that need a deterministic single-budget sweep. When omitted, "
+            "the default 200/400/1 (+ 500/1000/1 unless --quick) grid runs."
+        ),
+    )
+    parser.add_argument(
         "--quick",
         action="store_true",
         help="Use smaller parameter grids for a faster smoke run.",
@@ -494,10 +502,28 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _validate_paths(parser, args)
 
+    bayesian_mcmc_override = None
+    if args.bayesian_mcmc:
+        parts = [p.strip() for p in args.bayesian_mcmc.split(",")]
+        if len(parts) != 3:
+            parser.error(
+                "--bayesian-mcmc must be 'N_WARMUP,N_SAMPLES,N_CHAINS' "
+                f"(got {args.bayesian_mcmc!r})"
+            )
+        try:
+            bayesian_mcmc_override = {
+                "num_warmup": int(parts[0]),
+                "num_samples": int(parts[1]),
+                "num_chains": int(parts[2]),
+            }
+        except ValueError as exc:
+            parser.error(f"--bayesian-mcmc must be integers: {exc}")
+
     runner = UnifiedBenchmarkRunner(
         db_path=args.db_path,
         basis_dir=args.basis_dir if args.basis_dir.exists() else None,
         quick=args.quick,
+        bayesian_mcmc_override=bayesian_mcmc_override,
     )
 
     id_workflows = _normalize_workflow_list(args.id_workflows) or list(runner.id_registry.keys())
@@ -528,7 +554,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     identification_datasets = _select_datasets(
         datasets,
-        truth_types=(TruthType.ASSAY, TruthType.FORMULA_PROXY, TruthType.SYNTHETIC, TruthType.BLIND),
+        truth_types=(
+            TruthType.ASSAY,
+            TruthType.FORMULA_PROXY,
+            TruthType.SYNTHETIC,
+            TruthType.BLIND,
+        ),
     )
     composition_datasets = _select_datasets(
         datasets,
@@ -561,15 +592,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     run_metadata = {
         "cell": args.cell,
-        "identifier": (
-            id_workflows[0] if id_workflows else None
-        ),
-        "platform": args.platform
-        or ("jax-cpu" if args.jax_identifier else None),
+        "identifier": (id_workflows[0] if id_workflows else None),
+        "platform": args.platform or ("jax-cpu" if args.jax_identifier else None),
         "seed": args.seed,
         "iter_index": args.iter_index,
-        "experiment_label": args.experiment_label
-        or args.output_dir.name,
+        "experiment_label": args.experiment_label or args.output_dir.name,
         "shard_n": shard_tuple[0],
         "shard_k": shard_tuple[1],
     }
@@ -634,10 +661,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(line)
 
     if pc_report.blocked:
-        print(
-            "Physical-consistency gate BLOCKED — see "
-            f"{pc_path.resolve()} for details."
-        )
+        print("Physical-consistency gate BLOCKED — see " f"{pc_path.resolve()} for details.")
         # Skip the perturbation battery when the Tier-1 gate has
         # already blocked: there is no reason to spend GPU time
         # perturbing a pipeline that's failing first-principles physics.
@@ -683,19 +707,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             report_path = args.output_dir / "perturbation_report.json"
             report.save_json(report_path)
-            print(
-                f"[--perturb] Wrote {report_path.resolve()} "
-                f"({len(report.results)} rows)."
-            )
+            print(f"[--perturb] Wrote {report_path.resolve()} " f"({len(report.results)} rows).")
             for name, summary in report.reduce_to_summary(
                 bootstrap_iterations=200,
                 rng=np.random.default_rng(args.perturb_seed + 1),
             ).items():
-                threshold = (
-                    f"<{summary.threshold:.3f}"
-                    if summary.threshold is not None
-                    else "n/a"
-                )
+                threshold = f"<{summary.threshold:.3f}" if summary.threshold is not None else "n/a"
                 print(
                     f"[--perturb]   {name}: mean Δd_A={summary.mean_delta_d_a:.4f} "
                     f"(threshold {threshold}, "
