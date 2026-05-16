@@ -49,7 +49,7 @@ if [[ -z "$LABEL" ]]; then
     exit 2
 fi
 
-REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+REPO_ROOT="${REPO_ROOT:-${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}}"
 OUTPUT_DIR="${REPO_ROOT}/output/stark-fix-vjbh/${LABEL}"
 mkdir -p "${OUTPUT_DIR}" "${REPO_ROOT}/logs/slurm"
 
