@@ -58,7 +58,7 @@ mkdir -p "${OUTPUT_DIR}" "${REPO_ROOT}/logs/slurm"
 # _per_line_stark_gamma gives the two runs distinct jit cache keys, so
 # the cache is shared safely.
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda}"
-export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/cluster/shared/jax-cache}"
+export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/home/brian/jax-cache}"
 
 echo "=== stark-vjbh benchmark run ==="
 echo "Label:                       ${LABEL}"
