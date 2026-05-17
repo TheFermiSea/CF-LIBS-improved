@@ -2632,15 +2632,17 @@ def evaluate_composition_workflow(
     records: List[CompositionEvaluationRecord] = []
 
     # Checkpoint plumbing. When ``CFLIBS_BENCH_CHECKPOINT_PATH`` is exported the
-    # function writes its accumulated records to that parquet path every
+    # function appends its accumulated records to that parquet path every
     # ``CFLIBS_BENCH_CHECKPOINT_EVERY`` spectra so a SLURM timeout leaves
-    # something on disk. The file is overwritten each time (no append); see
-    # :func:`cflibs.benchmark.results.write_parquet` for the schema.
+    # something on disk. ``evaluate_composition_workflow`` is invoked many
+    # times across (dataset, id_workflow, comp_workflow, fold) tuples; using
+    # ``append=True`` on :func:`cflibs.benchmark.results.write_parquet`
+    # accumulates records across every call.
     checkpoint_path_str = os.environ.get("CFLIBS_BENCH_CHECKPOINT_PATH")
     try:
-        checkpoint_every = int(os.environ.get("CFLIBS_BENCH_CHECKPOINT_EVERY", "10"))
+        checkpoint_every = int(os.environ.get("CFLIBS_BENCH_CHECKPOINT_EVERY", "1"))
     except ValueError:
-        checkpoint_every = 10
+        checkpoint_every = 1
     checkpoint_path = Path(checkpoint_path_str) if checkpoint_path_str else None
 
     eligible_total = sum(1 for s in spectra if s.truth_type != TruthType.BLIND)
@@ -2707,23 +2709,34 @@ def evaluate_composition_workflow(
                 )
             )
 
-        # Incremental checkpoint -- best-effort, never blocks the gate.
-        if checkpoint_path is not None and (processed % checkpoint_every == 0):
+        # Incremental checkpoint -- best-effort, never blocks the gate. We
+        # append each newly-finished spectrum (just one record per loop
+        # iteration) so the on-disk parquet accumulates across every
+        # ``evaluate_composition_workflow`` invocation, not just the spectra
+        # processed by this call.
+        if (
+            checkpoint_path is not None
+            and records  # guard against empty failure-only batches
+            and (processed % checkpoint_every == 0)
+        ):
             try:
                 from cflibs.benchmark.results import (  # noqa: PLC0415
                     write_parquet as _checkpoint_write_parquet,
                 )
 
+                # Pass only the most recent record (the one just appended)
+                # so ``append=True`` adds it on top of whatever previous
+                # calls already wrote. Whole-list passes would duplicate
+                # rows across invocations.
                 _checkpoint_write_parquet(
                     checkpoint_path,
-                    composition_records=records,
+                    composition_records=[records[-1]],
+                    append=True,
                 )
-                # Print to stderr (same rationale as progress markers above:
-                # the runner doesn't configure logging so logger.info would
-                # be invisible).
                 print(
-                    f"[checkpoint] wrote {len(records)} composition records to "
-                    f"{checkpoint_path} after {processed} spectra",
+                    f"[checkpoint] appended record (cumulative on-disk "
+                    f"after spectrum {processed} of this call) to "
+                    f"{checkpoint_path}",
                     file=sys.stderr,
                     flush=True,
                 )
