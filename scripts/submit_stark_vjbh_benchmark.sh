@@ -72,17 +72,25 @@ echo "=================================="
 
 cd "${REPO_ROOT}"
 
-# MCMC budget: 500 warmup / 1000 samples / 2 chains (per the
-# CF-LIBS-improved-4rwe plan — 5x default, 2 chains so R-hat is meaningful).
-# Dataset selection: aalto + bhvo2 (auto-loaded) + vrabel2020 with
-# --vrabel-max-shots 5 (~500 spectra) for ~16h wall-time per job.
+# MCMC budget: 500 warmup / 1000 samples / 2 chains. With the post-xsuj fix
+# (chain_method=vectorized + max_tree_depth=8) measured throughput on V100S is
+# ~13 min/spectrum; ``--vrabel-max-shots 1`` (~100 vrabel spectra) fits the
+# aalto + bhvo2 + vrabel workload into ~22h, leaving slack inside the 24h
+# SLURM budget. The original ``--vrabel-max-shots 5`` setting overran by 4×.
+#
+# CFLIBS_BENCH_CHECKPOINT_PATH directs ``evaluate_composition_workflow`` to
+# append a parquet checkpoint after every spectrum, so a SLURM timeout
+# preserves completed records.
 #
 # --seed 0 pins the NUTS PRNG so before/after records align 1:1.
+export CFLIBS_BENCH_CHECKPOINT_PATH="${OUTPUT_DIR}/composition_checkpoint.parquet"
+
 exec .venv/bin/python scripts/run_unified_benchmark.py \
     --composition-workflows bayesian iterative_jax \
     --sections composition \
-    --vrabel-max-shots 5 \
+    --vrabel-max-shots 1 \
     --max-outer-folds 1 \
     --seed 0 \
     --bayesian-mcmc 500,1000,2 \
+    --output-format parquet \
     --output-dir "${OUTPUT_DIR}"
