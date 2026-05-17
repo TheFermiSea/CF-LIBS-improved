@@ -1186,6 +1186,24 @@ def _hybrid_workflow_configs(require_both: bool, quick: bool) -> List[Dict[str, 
     ]
 
 
+def _hybrid_consensus_2of3_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
+    """Configs for the ``hybrid_consensus_2of3`` workflow.
+
+    This workflow runs ALIAS, Comb, and Correlation identifiers in parallel
+    and applies a 2-of-3 majority vote. The vote threshold is fixed at 2
+    (the "2-of-3" rule) — no parameter grid is needed because the consensus
+    semantics are the entire point of this workflow.
+
+    The three constituent identifiers use their default strict thresholds
+    (same as the ``alias``, ``comb``, and ``correlation`` workflows) so the
+    consensus gate only changes the *decision rule*, not the per-identifier
+    sensitivity.
+    """
+    return [{}]
+
+
+
+
 def _nnls_concentration_configs(quick: bool) -> List[Dict[str, Any]]:
     thresholds = [0.005, 0.02] if quick else [0.001, 0.005, 0.01, 0.02, 0.05]
     cdegs = [2] if quick else [2, 3]
@@ -1348,6 +1366,89 @@ def _build_hybrid_predictor(
     return predictor
 
 
+def _build_hybrid_consensus_2of3_predictor(
+    context: UnifiedBenchmarkContext,
+    candidate_elements: List[str],
+    config: Dict[str, Any],
+) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
+    """Predictor for ``hybrid_consensus_2of3``.
+
+    Constructs ALIAS, Comb, and Correlation identifiers, runs them on the
+    spectrum, then combines their outputs via a 2-of-3 majority vote using
+    :class:`cflibs.inversion.identify.hybrid_consensus.HybridConsensusIdentifier`.
+
+    This workflow trades recall for precision: an element must be confirmed
+    by at least 2 of the 3 line-matchers to be reported as detected.
+    """
+
+    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
+        from cflibs.atomic.database import AtomicDatabase
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+        from cflibs.inversion.comb_identifier import CombIdentifier
+        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+        from cflibs.inversion.identify.hybrid_consensus import (
+            HybridConsensusIdentifier,
+        )
+
+        rp = _estimate_rp_for_spectrum(spectrum)
+
+        with AtomicDatabase(str(context.db_path)) as db:
+            # Build the three constituent identifiers with their default
+            # strict thresholds (matching the alias/comb/correlation workflows).
+            alias_id = ALIASIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=rp,
+                intensity_threshold_factor=3.0,
+                detection_threshold=0.02,
+                chance_window_scale=0.4,
+                max_lines_per_element=30,
+                **_jax_identifier_flags_for(ALIASIdentifier),
+            )
+            comb_id = CombIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=rp,
+                min_correlation=0.08,
+                tooth_activation_threshold=0.35,
+                relative_threshold_scale=1.4,
+                min_aki_gk=3000.0,
+                **_jax_identifier_flags_for(CombIdentifier),
+            )
+            correlation_id = CorrelationIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=rp,
+                min_confidence=0.008,
+                relative_threshold_scale=1.2,
+                min_line_strength=1000.0,
+                T_range_K=(5000, 15000),
+                T_steps=7,
+                n_e_range_cm3=(1e15, 5e17),
+                **_jax_identifier_flags_for(CorrelationIdentifier),
+            )
+
+            # Run all three identifiers.
+            alias_result = alias_id.identify(spectrum.wavelength_nm, spectrum.intensity)
+            comb_result = comb_id.identify(spectrum.wavelength_nm, spectrum.intensity)
+            correlation_result = correlation_id.identify(
+                spectrum.wavelength_nm, spectrum.intensity, mode="classic"
+            )
+
+            # Combine via 2-of-3 majority vote.
+            consensus = HybridConsensusIdentifier(
+                identifiers=[alias_id, comb_id, correlation_id],
+                elements=candidate_elements,
+                min_agreeing=2,
+            )
+            result = consensus.combine([alias_result, comb_result, correlation_result])
+            result.parameters["candidate_elements"] = list(candidate_elements)
+            return result
+
+    return predictor
+
+
+
 def _build_voigt_alias_predictor(
     context: UnifiedBenchmarkContext,
     candidate_elements: List[str],
@@ -1500,6 +1601,12 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
             "hybrid_union",
             _hybrid_workflow_configs(False, quick),
             _build_hybrid_predictor,
+            _config_name,
+        ),
+        "hybrid_consensus_2of3": IDWorkflowSpec(
+            "hybrid_consensus_2of3",
+            _hybrid_consensus_2of3_workflow_configs(quick),
+            _build_hybrid_consensus_2of3_predictor,
             _config_name,
         ),
         "voigt_alias": IDWorkflowSpec(
