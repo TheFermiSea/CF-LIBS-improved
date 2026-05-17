@@ -86,6 +86,7 @@ cd "${REPO_ROOT}"
 export CFLIBS_BENCH_CHECKPOINT_PATH="${OUTPUT_DIR}/composition_checkpoint.parquet"
 
 exec .venv/bin/python scripts/run_unified_benchmark.py \
+    --id-workflows alias \
     --composition-workflows bayesian iterative_jax \
     --sections composition \
     --vrabel-max-shots 1 \
