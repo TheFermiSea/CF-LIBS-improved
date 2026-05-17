@@ -370,3 +370,76 @@ def test_forward_py_body_does_not_call_adapter():
         "BayesianForwardModel.forward.py must not call "
         "_atomic_data_arrays_from_snapshot after the T1-6 migration."
     )
+
+
+# ---------------------------------------------------------------------------
+# Bead xsuj — chain_method='vectorized' guard (NUTS multi-chain on one GPU)
+# ---------------------------------------------------------------------------
+
+
+def test_compute_spectrum_supports_vmap_chain_axis(bayesian_db):
+    """``_compute_spectrum`` must broadcast cleanly under ``jax.vmap``.
+
+    ``MCMCSampler`` defaults to ``chain_method='vectorized'`` so NumPyro
+    runs all NUTS chains as a single JIT'd kernel with a leading chain
+    axis. The forward model's plasma-species dict must therefore tolerate
+    ``concentrations`` of shape ``(num_chains, n_elements)`` and emit a
+    spectrum of shape ``(num_chains, n_wavelengths)``.
+
+    Pre-fix the dict-comprehension ``concentrations[i] * total_density``
+    picked the wrong axis under vmap and corrupted chains; the post-fix
+    body uses ``(concentrations * total_density)[..., i]`` which carries
+    the leading batch dim transparently.
+    """
+    from cflibs.inversion.solve.bayesian.forward import BayesianForwardModel
+
+    pixels = 64
+    elements = ["Fe", "Cu"]
+    model = BayesianForwardModel(
+        db_path=bayesian_db,
+        elements=elements,
+        wavelength_range=(200.0, 600.0),
+        pixels=pixels,
+        instrument_fwhm_nm=0.05,
+    )
+
+    num_chains = 2
+    concentrations_batched = jnp.array([[0.7, 0.3], [0.4, 0.6]])
+
+    batched_compute = jax.vmap(model._compute_spectrum, in_axes=(None, None, 0))
+    spectra = batched_compute(1.0, 1.0e17, concentrations_batched)
+
+    spectra_np = np.asarray(spectra)
+    assert spectra_np.shape == (num_chains, pixels), (
+        f"vmap output must be (num_chains, n_wavelengths)={(num_chains, pixels)}, "
+        f"got {spectra_np.shape}"
+    )
+    assert np.all(np.isfinite(spectra_np))
+    assert np.all(spectra_np >= 0.0)
+    # The two chains have different concentrations, so the resulting
+    # spectra must differ -- guards against silently broadcasting one
+    # chain's compositions over both rows.
+    assert not np.allclose(spectra_np[0], spectra_np[1]), (
+        "Vmap over distinct concentrations must yield distinct spectra"
+    )
+
+
+def test_mcmc_sampler_default_chain_method_is_vectorized():
+    """``MCMCSampler.run`` defaults ``chain_method`` to ``'vectorized'``.
+
+    Required so multi-chain NUTS on a single GPU actually parallelises
+    chains within one JIT kernel instead of silently downgrading to
+    sequential single-chain (bead ``CF-LIBS-improved-xsuj``).
+    """
+    import inspect
+
+    from cflibs.inversion.solve.bayesian.samplers import MCMCSampler
+
+    sig = inspect.signature(MCMCSampler.run)
+    assert "chain_method" in sig.parameters, (
+        "MCMCSampler.run must expose ``chain_method`` so callers can override"
+    )
+    assert sig.parameters["chain_method"].default == "vectorized", (
+        "MCMCSampler.run default ``chain_method`` must be 'vectorized' for "
+        "single-GPU multi-chain NUTS"
+    )

@@ -1846,8 +1846,12 @@ def _fit_bayesian_pipeline(
             # Explicitly pin to GPU if requested; avoids CPU-bound NUTS on heavy tier
             if os.environ.get("JAX_PLATFORMS") == "cuda":
                 numpyro.set_platform("gpu")
-            # Ensure host device count matches chain count for parallel sampling
-            numpyro.set_host_device_count(max(1, int(config.get("num_chains", 1))))
+            # NOTE: ``numpyro.set_host_device_count`` previously lived here but
+            # took effect only when called before JAX initialization, which is
+            # never true by this point in the runner. The downstream
+            # ``MCMCSampler`` now defaults to ``chain_method='vectorized'``,
+            # which batches every chain into a single JIT'd kernel on the
+            # current device -- no multi-device requirement.
         except Exception as e:
             logger.debug("bayesian: failed to set NumPyro platform: %s", e)
 
@@ -2627,9 +2631,35 @@ def evaluate_composition_workflow(
 ) -> List[CompositionEvaluationRecord]:
     records: List[CompositionEvaluationRecord] = []
 
+    # Checkpoint plumbing. When ``CFLIBS_BENCH_CHECKPOINT_PATH`` is exported the
+    # function writes its accumulated records to that parquet path every
+    # ``CFLIBS_BENCH_CHECKPOINT_EVERY`` spectra so a SLURM timeout leaves
+    # something on disk. The file is overwritten each time (no append); see
+    # :func:`cflibs.benchmark.results.write_parquet` for the schema.
+    checkpoint_path_str = os.environ.get("CFLIBS_BENCH_CHECKPOINT_PATH")
+    try:
+        checkpoint_every = int(os.environ.get("CFLIBS_BENCH_CHECKPOINT_EVERY", "10"))
+    except ValueError:
+        checkpoint_every = 10
+    checkpoint_path = Path(checkpoint_path_str) if checkpoint_path_str else None
+
+    eligible_total = sum(1 for s in spectra if s.truth_type != TruthType.BLIND)
+    processed = 0
+
     for spectrum in spectra:
         if spectrum.truth_type == TruthType.BLIND:
             continue
+        processed += 1
+        logger.info(
+            "[%s/%s] %s spectrum %d/%d id_workflow=%s comp_workflow=%s",
+            (spectrum.dataset_id or "unknown"),
+            spectrum.spectrum_id,
+            composition_workflow.name,
+            processed,
+            eligible_total,
+            id_workflow_name,
+            composition_workflow.name,
+        )
         start = time.perf_counter()
         try:
             id_result = id_predictor(spectrum)
@@ -2673,6 +2703,27 @@ def evaluate_composition_workflow(
                     failure_reason=str(exc),
                 )
             )
+
+        # Incremental checkpoint -- best-effort, never blocks the gate.
+        if checkpoint_path is not None and (processed % checkpoint_every == 0):
+            try:
+                from cflibs.benchmark.results import (  # noqa: PLC0415
+                    write_parquet as _checkpoint_write_parquet,
+                )
+
+                _checkpoint_write_parquet(
+                    checkpoint_path,
+                    composition_records=records,
+                )
+                logger.info(
+                    "checkpoint: wrote %d composition records to %s after %d spectra",
+                    len(records),
+                    checkpoint_path,
+                    processed,
+                )
+            except Exception as cp_exc:  # noqa: BLE001
+                logger.warning("checkpoint write failed: %s", cp_exc)
+
     return records
 
 
