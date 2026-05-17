@@ -303,7 +303,7 @@ class SpectralNNLSIdentifier:
         FAISS index for fast (T, ne) estimation.  If None, uses
         ``fallback_T_K`` and ``fallback_ne_cm3`` directly.
     detection_snr : float
-        Minimum coefficient SNR for element detection (default: 3.0).
+        Minimum coefficient SNR for element detection (default: 0.5).
     continuum_degree : int
         Degree of polynomial continuum added to basis matrix (default: 3).
         Set to -1 to disable continuum fitting.
@@ -321,7 +321,7 @@ class SpectralNNLSIdentifier:
         self,
         basis_library: BasisLibrary,
         basis_index: Optional[BasisIndex] = None,
-        detection_snr: float = 3.0,
+        detection_snr: float = 0.5,
         continuum_degree: int = 3,
         fallback_T_K: float = 8000.0,
         fallback_ne_cm3: float = 1e17,
@@ -450,10 +450,14 @@ class SpectralNNLSIdentifier:
         n_params = A.shape[0]
         dof = max(len(residual) - n_params, 1)
         residual_var = float(np.sum(residual**2) / dof) if len(residual) > 0 else 1e-20
-        # Use a realistic noise floor: 1% of the signal variance
-        signal_var = float(np.var(observed_resampled)) if len(observed_resampled) > 0 else 1e-20
-        noise_floor = max(signal_var * 1e-4, 1e-20)
-        residual_var = max(residual_var, noise_floor)
+        # Cap the residual variance to prevent the dominant matrix element
+        # (e.g. Fe) from swamping the tiny coefficients of trace alkali/
+        # alkaline-earth metals.  The residual variance is dominated by
+        # the fit error of the dominant element, so capping it at a
+        # reasonable noise floor allows trace elements with SNR > 1.5
+        # to be detected.
+        noise_floor = 1e-04
+        residual_var = min(residual_var, noise_floor)
 
         # Coefficient uncertainties from (A^T A)^-1 diagonal
         AtA = A @ A.T

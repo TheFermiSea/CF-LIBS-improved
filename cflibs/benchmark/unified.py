@@ -1447,6 +1447,70 @@ def _build_nnls_concentration_predictor(
     return predictor
 
 
+
+def _alias_boltzmann_r2_sweep_configs(quick: bool) -> List[Dict[str, Any]]:
+    """Configs for the alias_boltzmann_r2_sweep workflow.
+
+    Sweeps boltzmann_r2_min across {0.70, 0.80, 0.85, 0.90} to find
+    the best line-quality floor. Default is 0.85. Higher values enforce
+    stricter line quality (higher precision but lower recall), while
+    lower values allow more permissive acceptance.
+
+    This workflow uses r2_gate_mode="fixed" so the gate applies the
+    static boltzmann_r2_min floor to all candidates with >= 3 matched
+    lines.
+    """
+    r2_values = [0.70, 0.80, 0.85, 0.90]
+    if quick:
+        # Quick mode: only test 0.80 and 0.85
+        r2_values = [0.80, 0.85]
+    return [
+        {
+            "boltzmann_r2_min": r2,
+            "chance_window_scale": 0.4,
+            "max_lines_per_element": 30,
+        }
+        for r2 in r2_values
+    ]
+
+
+def _build_alias_boltzmann_r2_sweep_predictor(
+    context: UnifiedBenchmarkContext,
+    candidate_elements: List[str],
+    config: Dict[str, Any],
+) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
+    """Predictor for alias_boltzmann_r2_sweep.
+
+    Constructs ALIASIdentifier with r2_gate_mode="fixed" and the
+    sweep-specific boltzmann_r2_min value. Strict threshold defaults
+    (intensity_threshold_factor=3.0, detection_threshold=0.02) are
+    preserved by NOT passing them through the constructor.
+    """
+
+    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
+        from cflibs.atomic.database import AtomicDatabase
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+
+        with AtomicDatabase(str(context.db_path)) as db:
+            identifier = ALIASIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=_estimate_rp_for_spectrum(spectrum),
+                r2_gate_mode="fixed",
+                boltzmann_r2_min=float(config["boltzmann_r2_min"]),
+                chance_window_scale=float(config["chance_window_scale"]),
+                max_lines_per_element=int(config["max_lines_per_element"]),
+                **_jax_identifier_flags_for(ALIASIdentifier),
+            )
+            result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
+            result.parameters["candidate_elements"] = list(candidate_elements)
+            result.parameters["alias_mode"] = "boltzmann_r2_sweep"
+            result.parameters["boltzmann_r2_min"] = float(config["boltzmann_r2_min"])
+            return result
+
+    return predictor
+
+
 def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]:
     return {
         "alias": IDWorkflowSpec(
@@ -1456,6 +1520,12 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
             "alias_v2",
             _alias_v2_workflow_configs(quick),
             _build_alias_v2_predictor,
+            _config_name,
+        ),
+        "alias_boltzmann_r2_sweep": IDWorkflowSpec(
+            "alias_boltzmann_r2_sweep",
+            _alias_boltzmann_r2_sweep_configs(quick),
+            _build_alias_boltzmann_r2_sweep_predictor,
             _config_name,
         ),
         "alias_high_recall": IDWorkflowSpec(
