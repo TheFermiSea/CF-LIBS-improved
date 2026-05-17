@@ -2650,15 +2650,18 @@ def evaluate_composition_workflow(
         if spectrum.truth_type == TruthType.BLIND:
             continue
         processed += 1
-        logger.info(
-            "[%s/%s] %s spectrum %d/%d id_workflow=%s comp_workflow=%s",
-            (spectrum.dataset_id or "unknown"),
-            spectrum.spectrum_id,
-            composition_workflow.name,
-            processed,
-            eligible_total,
-            id_workflow_name,
-            composition_workflow.name,
+        # Emit directly to stderr so the marker is visible even when the
+        # CF-LIBS logger has not been configured (the unified-benchmark
+        # runner does not call ``setup_logging`` and Python's default
+        # root level is WARNING -- swallowing ``logger.info``).
+        print(
+            f"[progress] {spectrum.dataset_id or 'unknown'}/"
+            f"{spectrum.spectrum_id} {composition_workflow.name} "
+            f"spectrum {processed}/{eligible_total} "
+            f"id_workflow={id_workflow_name} "
+            f"comp_workflow={composition_workflow.name}",
+            file=sys.stderr,
+            flush=True,
         )
         start = time.perf_counter()
         try:
@@ -2715,11 +2718,14 @@ def evaluate_composition_workflow(
                     checkpoint_path,
                     composition_records=records,
                 )
-                logger.info(
-                    "checkpoint: wrote %d composition records to %s after %d spectra",
-                    len(records),
-                    checkpoint_path,
-                    processed,
+                # Print to stderr (same rationale as progress markers above:
+                # the runner doesn't configure logging so logger.info would
+                # be invisible).
+                print(
+                    f"[checkpoint] wrote {len(records)} composition records to "
+                    f"{checkpoint_path} after {processed} spectra",
+                    file=sys.stderr,
+                    flush=True,
                 )
             except Exception as cp_exc:  # noqa: BLE001
                 logger.warning("checkpoint write failed: %s", cp_exc)
