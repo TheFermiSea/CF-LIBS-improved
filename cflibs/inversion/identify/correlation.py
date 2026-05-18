@@ -241,7 +241,7 @@ class CorrelationIdentifier:
         library_spectra: Optional[np.ndarray] = None,
         elements: Optional[List[str]] = None,
         resolving_power: Optional[float] = None,
-        wavelength_tolerance_nm: float = 0.1,
+        wavelength_tolerance_nm: float = 0.08,
         top_k: int = 10,
         min_confidence: float = 0.03,
         T_range_K: Tuple[float, float] = (8000, 12000),
