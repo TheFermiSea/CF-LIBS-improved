@@ -1,6 +1,4 @@
 # Configuration file for the Sphinx documentation builder.
-import os
-import sys
 
 # -- Project information -----------------------------------------------------
 project = 'CF-LIBS'

@@ -271,7 +271,7 @@ def main():
         json.dump(results, f, indent=2)
 
     print(f"\n{'='*60}")
-    print(f"  Summary")
+    print("  Summary")
     print(f"{'='*60}")
     print(f"  Pure elements: {n_pure_success}/{len(results['pure_elements'])} succeeded")
     print(f"  Minerals: {n_mineral_success}/{len(results['minerals'])} succeeded")

@@ -38,7 +38,8 @@ class LibsEngine:
         Calculates N_II / N_I ratio using Saha-Eggert Equation.
         """
         ip_ev = self.get_ionization_potential(element, 1)
-        if not ip_ev: return 0.0
+        if not ip_ev:
+            return 0.0
         
         # Saha-Eggert Ratio (Simplified for speed)
         # Ratio = N(z+1)/N(z)

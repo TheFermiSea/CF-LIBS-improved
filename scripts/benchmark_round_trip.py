@@ -85,11 +85,13 @@ def main():
                     if not noise:
                         total_noiseless += 1
                         passed_target = (t_err_pct < 5.0) and (ne_err_pct < 20.0) and (max_c_err_pp < 5.0) and result.converged
-                        if passed_target: success_noiseless += 1
+                        if passed_target:
+                            success_noiseless += 1
                     else:
                         total_noisy += 1
                         passed_target = (t_err_pct < 10.0) and (ne_err_pct < 30.0) and (max_c_err_pp < 10.0) and result.converged
-                        if passed_target: success_noisy += 1
+                        if passed_target:
+                            success_noisy += 1
 
                     # Log to console
                     noise_str = "Yes" if noise else "No"
@@ -138,7 +140,8 @@ def main():
         # Group by noise
         for noise_state in [False, True]:
             state_failures = [f for f in failures if f["noise"] == noise_state]
-            if not state_failures: continue
+            if not state_failures:
+                continue
             print(f"  Noise={noise_state}: {len(state_failures)} failures")
             # See if failures correlate with low T or high ne
             low_t_fails = len([f for f in state_failures if f["true_T"] <= 8000])

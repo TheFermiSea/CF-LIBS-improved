@@ -1,9 +1,10 @@
+import os
+
 import numpy as np
 import pandas as pd
-from scipy.sparse import csc_matrix, eye, diags
+from scipy.sparse import csc_matrix, diags
 from scipy.sparse.linalg import spsolve
 from scipy.optimize import nnls
-from scipy.special import wofz
 
 class LineIdentifier:
     """
@@ -51,7 +52,7 @@ class LineIdentifier:
         Vectorized Pseudo-Voigt profile (Sum of Gaussian and Lorentzian).
         Used to construct the design matrix for deconvolution.
         """
-        z = (x - center) / (sigma * np.sqrt(2))
+        _z = (x - center) / (sigma * np.sqrt(2))
         # Approximation using Faddeeva (wofz) is accurate but slow.
         # For High-Throughput, we use the linear combo approximation:
         # PV(x) = eta * L(x) + (1-eta) * G(x)
@@ -175,7 +176,6 @@ class LineIdentifier:
 # Usage Example
 if __name__ == "__main__":
     import sqlite3
-    import matplotlib.pyplot as plt
     
     # Mock DB connection (Requires your libs_production.db)
     if not os.path.exists("libs_production.db"):

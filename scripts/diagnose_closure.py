@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -35,9 +35,7 @@ from cflibs.benchmark.synthetic_eval import (
     run_inversion_pipeline,
     derive_truth_elements,
 )
-from cflibs.inversion.closure import ClosureResult, ClosureMode
 from cflibs.inversion.softmax_closure import softmax_closure as jax_softmax_closure
-from cflibs.benchmark.metrics import ElementMetrics, EvaluationResult, MetricType
 
 
 def compute_rmsep(predictions: np.ndarray, true_values: np.ndarray) -> float:
@@ -361,7 +359,7 @@ def compare_closure_methods(
         seed=seed,
     )
     
-    db = AtomicDatabase()
+    _db = AtomicDatabase()  # noqa: F841 — instantiated for side-effects / future use
     elements = [cr.element for cr in composition_ranges]
     
     results = {
@@ -460,26 +458,26 @@ def print_diagnostics_report(diagnostics: Dict[str, ClosureDiagnostics]) -> None
         print(f"  Samples: {diag.n_samples}")
         print(f"  Truth: mean={diag.truth_mean:.4f}, std={diag.truth_std:.4f}, range=[{diag.truth_range[0]:.4f}, {diag.truth_range[1]:.4f}]")
         
-        print(f"  Raw estimates:")
+        print("  Raw estimates:")
         print(f"    RMSEP: {diag.raw_rmsep:.4f}")
         print(f"    Bias:  {diag.raw_bias:+.4f}")
         print(f"    By category: major={diag.raw_rmseps_by_category['major']:.4f}, "
               f"minor={diag.raw_rmseps_by_category['minor']:.4f}, "
               f"trace={diag.raw_rmseps_by_category['trace']:.4f}")
         
-        print(f"  Closed estimates:")
+        print("  Closed estimates:")
         print(f"    RMSEP: {diag.closed_rmsep:.4f}")
         print(f"    Bias:  {diag.closed_bias:+.4f}")
         print(f"    By category: major={diag.closed_rmseps_by_category['major']:.4f}, "
               f"minor={diag.closed_rmseps_by_category['minor']:.4f}, "
               f"trace={diag.closed_rmseps_by_category['trace']:.4f}")
         
-        print(f"  Closure impact:")
+        print("  Closure impact:")
         if diag.error_amplified:
-            print(f"    ⚠️  ERROR AMPLIFIED by closure")
+            print("    ⚠️  ERROR AMPLIFIED by closure")
             print(f"    Amplification factor: {diag.amplification_factor:.2f}x")
         else:
-            print(f"    ✓  Error reduced by closure")
+            print("    ✓  Error reduced by closure")
             print(f"    Improvement factor: {1/diag.amplification_factor:.2f}x")
     
     # Summary by category
