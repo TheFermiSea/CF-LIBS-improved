@@ -535,3 +535,55 @@ def test_read_parquet_dir_raises_on_empty_dir(tmp_path: Path):
     empty.mkdir()
     with pytest.raises(FileNotFoundError):
         read_parquet_dir(empty)
+
+
+def test_read_parquet_dir_skips_orphan_tmp_files(tmp_path: Path):
+    """Atomic-write contract: `.parquet.tmp` shards from a crashed mid-write
+    must NOT be picked up by ``read_parquet_dir``. The unified-benchmark
+    checkpoint writer (Phase 3 of CF-LIBS-improved-xsuj) stages parts as
+    ``part_<slug>_<seq>.parquet.tmp`` then ``rename()``s to the final
+    ``.parquet`` suffix — a SIGKILL between write+rename would otherwise
+    leave a truncated shard that breaks ``pyarrow.concat_tables``.
+    """
+    parts_dir = tmp_path / "checkpoint.parts"
+    parts_dir.mkdir()
+
+    # Two legitimate shards.
+    _id_a, comp_a = _build_dataset(n_spectra=2)
+    _id_b, comp_b = _build_dataset(n_spectra=3)
+    write_parquet(parts_dir / "part_alpha_00001.parquet", composition_records=comp_a)
+    write_parquet(parts_dir / "part_alpha_00002.parquet", composition_records=comp_b)
+
+    # An orphan .tmp left behind by a hypothetical crash. Empty/truncated
+    # content — would crash pq.read_table if the glob picked it up.
+    (parts_dir / "part_alpha_00003.parquet.tmp").write_bytes(b"PARTIAL_GARBAGE")
+
+    table = read_parquet_dir(parts_dir)
+    assert table.num_rows == len(comp_a) + len(comp_b)
+
+
+def test_checkpoint_filename_includes_run_id_for_restart_safety():
+    """Filename contract: when CFLIBS_BENCH_CHECKPOINT_PATH is set, the
+    per-shard filename includes a run_id slug so a SLURM --requeue or
+    PID-reuse restart on the same host doesn't overwrite prior parts.
+
+    This is a contract probe — it grep's the unified.py source for the
+    expected filename format. A semantic test would require driving
+    evaluate_composition_workflow end-to-end with two different runs,
+    which is heavy.
+    """
+    import pathlib
+
+    unified_src = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "cflibs/benchmark/unified.py"
+    ).read_text()
+    # Slug construction: hostname + pid + first-8-chars of run_id UUID.
+    assert "_run_id_slug = checkpoint_run_id.replace" in unified_src, (
+        "checkpoint_worker_slug must include a run_id-derived suffix to "
+        "prevent same-host/same-PID restarts from overwriting prior parts"
+    )
+    assert (
+        'checkpoint_worker_slug = f"{_host_slug}_{os.getpid():d}_{_run_id_slug}"'
+        in unified_src
+    ), "checkpoint_worker_slug filename format regressed"
