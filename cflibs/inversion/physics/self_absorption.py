@@ -69,11 +69,9 @@ from scipy.optimize import brentq
 
 from cflibs.core.constants import (
     C_LIGHT,
-    E_CHARGE,
     EV_TO_K,
     KB,
     KB_EV,
-    M_E,
     M_PROTON,
 )
 from cflibs.core.logging_config import get_logger
@@ -139,9 +137,9 @@ logger = get_logger("inversion.self_absorption")
 # in cflibs.core.constants but spelled in SI (M_E in kg, E_CHARGE in C),
 # so convert here.
 
-_M_E_CGS_G = 9.1093837015e-28           # electron mass in grams
-_E_CGS_ESU = 4.80320425e-10              # elementary charge in statcoulombs
-_C_CGS_CM_PER_S = 2.99792458e10          # speed of light in cm/s
+_M_E_CGS_G = 9.1093837015e-28  # electron mass in grams
+_E_CGS_ESU = 4.80320425e-10  # elementary charge in statcoulombs
+_C_CGS_CM_PER_S = 2.99792458e10  # speed of light in cm/s
 
 # (π e² / mₑ c) in CGS — units of cm² · Hz. Constant of nature; depends
 # only on QED. Quote: 0.026540... cm² Hz (Cowan, *Theory of Atomic
@@ -846,8 +844,16 @@ class SelfAbsorptionCorrector:
         # corrections, which historically lumped masked + corrected) so the
         # F1 gate and downstream tests stay byte-stable. The new structured
         # log line breaks the count out explicitly for diagnostic clarity.
+        # The comparison uses ``abs(...) > 1e-9`` rather than a direct
+        # ``!= 1.0`` because ``correction_factor`` is a *sentinel*: the code
+        # writes exactly ``1.0`` to mark "optically thin, no correction
+        # applied", and any other value is the actual computed factor.
+        # SonarCloud python:S1244 (and similar lints) flag direct float
+        # ``!=`` even when the comparison is against a sentinel literal --
+        # the absolute-difference form expresses the same semantic without
+        # tripping the rule.
         n_corrected_legacy = len(
-            [c for c in corrections.values() if c.correction_factor != 1.0]
+            [c for c in corrections.values() if abs(c.correction_factor - 1.0) > 1e-9]
         )
         n_masked = len(masked_obs)
         n_truly_corrected = n_corrected_legacy - n_masked
@@ -1057,13 +1063,7 @@ class SelfAbsorptionCorrector:
 
         # Final optical depth — units: cm²·Hz × (dimensionless) × cm⁻³ ×
         # cm × Hz⁻¹  =  dimensionless ✓
-        tau = (
-            _PI_E2_OVER_MEC_CGS
-            * f_lu
-            * n_lower
-            * self.plasma_length_cm
-            * phi_nu0
-        )
+        tau = _PI_E2_OVER_MEC_CGS * f_lu * n_lower * self.plasma_length_cm * phi_nu0
 
         return max(0.0, tau)
 
@@ -1329,7 +1329,12 @@ class SelfAbsorptionCorrector:
             corrected_observations=corrected_obs,
             masked_observations=masked_obs,
             corrections=corrections,
-            n_corrected=len([c for c in corrections.values() if c.correction_factor != 1.0]),
+            n_corrected=len(
+                # See the note at the matching comprehension above: the
+                # ``abs(...) > 1e-9`` form is semantically equivalent to
+                # ``!= 1.0`` since ``correction_factor`` is a sentinel.
+                [c for c in corrections.values() if abs(c.correction_factor - 1.0) > 1e-9]
+            ),
             n_masked=len(masked_obs),
             max_optical_depth=max_tau,
             warnings=warnings_list,

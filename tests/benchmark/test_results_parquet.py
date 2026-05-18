@@ -535,3 +535,84 @@ def test_read_parquet_dir_raises_on_empty_dir(tmp_path: Path):
     empty.mkdir()
     with pytest.raises(FileNotFoundError):
         read_parquet_dir(empty)
+
+
+def test_read_parquet_dir_skips_orphan_tmp_files(tmp_path: Path):
+    """Atomic-write contract: `.parquet.tmp` shards from a crashed mid-write
+    must NOT be picked up by ``read_parquet_dir``. The unified-benchmark
+    checkpoint writer (Phase 3 of CF-LIBS-improved-xsuj) stages parts as
+    ``part_<slug>_<seq>.parquet.tmp`` then ``rename()``s to the final
+    ``.parquet`` suffix — a SIGKILL between write+rename would otherwise
+    leave a truncated shard that breaks ``pyarrow.concat_tables``.
+    """
+    parts_dir = tmp_path / "checkpoint.parts"
+    parts_dir.mkdir()
+
+    # Two legitimate shards.
+    _id_a, comp_a = _build_dataset(n_spectra=2)
+    _id_b, comp_b = _build_dataset(n_spectra=3)
+    write_parquet(parts_dir / "part_alpha_00001.parquet", composition_records=comp_a)
+    write_parquet(parts_dir / "part_alpha_00002.parquet", composition_records=comp_b)
+
+    # An orphan .tmp left behind by a hypothetical crash. Empty/truncated
+    # content — would crash pq.read_table if the glob picked it up.
+    (parts_dir / "part_alpha_00003.parquet.tmp").write_bytes(b"PARTIAL_GARBAGE")
+
+    table = read_parquet_dir(parts_dir)
+    assert table.num_rows == len(comp_a) + len(comp_b)
+
+
+def test_checkpoint_filename_includes_run_id_for_restart_safety():
+    """Behavior contract: ``make_worker_slug`` must produce slugs that
+    differ for two distinct run_ids on the same host+pid.
+
+    On SLURM ``--requeue`` or PID reuse, two runs can share the
+    ``(hostname, getpid())`` tuple. If the slug depended only on those,
+    the second run's part-files would silently overwrite the first.
+    The slug therefore folds the run_id (an 8-char hex prefix of
+    UUID4) into the filename. This test calls ``make_worker_slug``
+    twice with different run_ids and asserts the outputs disagree.
+
+    Replaces an earlier brittle grep-the-source test (per Copilot
+    review on PR #188): two cosmetic refactors that preserve behavior
+    would have broken the old test.
+    """
+    from cflibs.benchmark.checkpoint import make_worker_slug
+
+    run_id_a = "11111111-2222-3333-4444-555555555555"
+    run_id_b = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    slug_a = make_worker_slug(run_id_a)
+    slug_b = make_worker_slug(run_id_b)
+
+    # Same host+pid (we're in one process), so the only thing that varies
+    # is the run_id-derived portion.
+    assert slug_a != slug_b, (
+        "make_worker_slug must produce distinct slugs for distinct "
+        "run_ids so same-host/same-PID restarts cannot overwrite prior "
+        f"parts. Got identical slug={slug_a!r}"
+    )
+    # And the slug must reference the run_id prefix, not something
+    # accidentally derived from the full hex (which would still vary
+    # across runs but not match the documented 8-char-prefix contract).
+    assert run_id_a.replace("-", "")[:8] in slug_a, (
+        "slug must embed the first 8 hex chars of run_id (with dashes "
+        f"stripped). Got slug={slug_a!r}"
+    )
+    assert run_id_b.replace("-", "")[:8] in slug_b
+
+
+def test_checkpoint_new_run_id_returns_unique_uuids():
+    """``new_run_id`` returns a fresh UUID4 string every call.
+
+    The checkpoint flow generates one run_id per evaluate_composition_workflow
+    invocation and threads it through every ``write_parquet(run_id=...)``
+    call so the part-files share a queryable run_id. Two consecutive calls
+    must return distinct values.
+    """
+    from cflibs.benchmark.checkpoint import new_run_id
+
+    a = new_run_id()
+    b = new_run_id()
+    assert a != b, f"new_run_id should yield fresh UUIDs but got identical: {a}"
+    # UUID4 string form: 8-4-4-4-12 = 36 chars including dashes.
+    assert len(a) == 36 and a.count("-") == 4

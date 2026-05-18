@@ -375,9 +375,7 @@ class CorrelationIdentifier:
         rejected_elements = []
 
         for element, score, confidence, matched_lines, unmatched_lines in element_scores:
-            detected_flag = (
-                confidence >= self.min_confidence and confidence >= relative_threshold
-            )
+            detected_flag = confidence >= self.min_confidence and confidence >= relative_threshold
             elem_id = ElementIdentification(
                 element=element,
                 detected=detected_flag,
@@ -434,9 +432,7 @@ class CorrelationIdentifier:
             n_matched_peaks=n_matched_peaks,
             n_unmatched_peaks=n_unmatched_peaks,
             algorithm="correlation",
-            parameters=merge_coverage_into_parameters(
-                base_parameters, coverage.build_payload()
-            ),
+            parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
         )
 
     def _identify_classic(

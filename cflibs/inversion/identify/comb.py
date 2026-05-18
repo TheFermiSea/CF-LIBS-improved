@@ -26,7 +26,6 @@ from cflibs.inversion.preprocessing import detect_peaks_auto
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.identify._coverage import (
     CoverageTracker,
-    count_lines_in_range,
     merge_coverage_into_parameters,
 )
 
@@ -467,9 +466,7 @@ class CombIdentifier:
             n_matched_peaks=n_matched_peaks,
             n_unmatched_peaks=len(experimental_peaks) - n_matched_peaks,
             algorithm="comb",
-            parameters=merge_coverage_into_parameters(
-                base_parameters, coverage.build_payload()
-            ),
+            parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
         )
 
         logger.info(

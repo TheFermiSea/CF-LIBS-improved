@@ -453,7 +453,7 @@ def _run_estimator(identifier, peak_records, wl_min=300.0, wl_max=500.0):
     """Drive _estimate_plasma_temperature with a peak list + intensity array."""
     # peaks: list of (idx, wl); corrected_intensity is keyed by idx.
     peaks = [(i, wl) for i, (wl, _I) in enumerate(peak_records)]
-    intensity = np.array([I for _wl, I in peak_records], dtype=float)
+    intensity = np.array([intens for _wl, intens in peak_records], dtype=float)
     identifier._effective_R = 5000.0
     identifier._global_wl_shift = 0.0
     identifier._estimated_T = None

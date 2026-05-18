@@ -234,8 +234,7 @@ class CoverageTracker:
         if not passed and element not in self.elements_below_fingerprint_floor:
             self.elements_below_fingerprint_floor.append(element)
         logger.debug(
-            "L4 fingerprint spectrum_id=%s identifier=%s element=%s passed=%s "
-            "score=%s floor=%s",
+            "L4 fingerprint spectrum_id=%s identifier=%s element=%s passed=%s " "score=%s floor=%s",
             self.spectrum_id,
             self.identifier_name,
             element,
