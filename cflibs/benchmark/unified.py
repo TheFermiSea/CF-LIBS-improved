@@ -2673,9 +2673,15 @@ def evaluate_composition_workflow(
         checkpoint_parts_dir = checkpoint_path.with_name(checkpoint_path.name + ".parts")
         checkpoint_parts_dir.mkdir(parents=True, exist_ok=True)
         checkpoint_run_id = str(_uuid.uuid4())
-        # Hostname disambiguates PID collisions across SLURM nodes.
+        # Hostname disambiguates PID collisions across SLURM nodes. The
+        # 8-char run_id prefix in the filename disambiguates same-host /
+        # same-PID restarts (Linux can recycle PIDs after wraparound, and
+        # SLURM --requeue jobs frequently land on the same node with the
+        # exact same PID). Without the run_id suffix, restart-from-scratch
+        # in the same `.parts/` dir would silently overwrite prior parts.
         _host_slug = socket.gethostname().replace(".", "_").replace("/", "_")
-        checkpoint_worker_slug = f"{_host_slug}_{os.getpid():d}"
+        _run_id_slug = checkpoint_run_id.replace("-", "")[:8]
+        checkpoint_worker_slug = f"{_host_slug}_{os.getpid():d}_{_run_id_slug}"
 
     eligible_total = sum(1 for s in spectra if s.truth_type != TruthType.BLIND)
     processed = 0
@@ -2806,11 +2812,19 @@ def _emit_checkpoint_part(
         part_path = checkpoint_parts_dir / (
             f"part_{checkpoint_worker_slug}_{checkpoint_part_seq:05d}.parquet"
         )
+        # Atomic write: stage into ``.tmp`` then rename. A SLURM SIGKILL
+        # (or any crash) mid-write would otherwise leave a truncated
+        # parquet shard that breaks the whole-directory read via
+        # ``cflibs.benchmark.results.read_parquet_dir`` (pyarrow refuses
+        # to concat tables when one shard is corrupt). ``rename`` is
+        # atomic within a filesystem.
+        tmp_path = part_path.with_suffix(part_path.suffix + ".tmp")
         _checkpoint_write_parquet(
-            part_path,
+            tmp_path,
             composition_records=list(records_to_write),
             run_id=checkpoint_run_id,
         )
+        tmp_path.rename(part_path)
         tag = "[checkpoint final-flush]" if final_flush else "[checkpoint]"
         print(
             f"{tag} wrote {len(records_to_write)} records to {part_path.name} "
