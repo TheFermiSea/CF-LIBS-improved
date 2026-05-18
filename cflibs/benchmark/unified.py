@@ -1846,8 +1846,12 @@ def _fit_bayesian_pipeline(
             # Explicitly pin to GPU if requested; avoids CPU-bound NUTS on heavy tier
             if os.environ.get("JAX_PLATFORMS") == "cuda":
                 numpyro.set_platform("gpu")
-            # Ensure host device count matches chain count for parallel sampling
-            numpyro.set_host_device_count(max(1, int(config.get("num_chains", 1))))
+            # NOTE: ``numpyro.set_host_device_count`` previously lived here but
+            # took effect only when called before JAX initialization, which is
+            # never true by this point in the runner. The downstream
+            # ``MCMCSampler`` now defaults to ``chain_method='vectorized'``,
+            # which batches every chain into a single JIT'd kernel on the
+            # current device -- no multi-device requirement.
         except Exception as e:
             logger.debug("bayesian: failed to set NumPyro platform: %s", e)
 
@@ -2627,9 +2631,72 @@ def evaluate_composition_workflow(
 ) -> List[CompositionEvaluationRecord]:
     records: List[CompositionEvaluationRecord] = []
 
+    # Checkpoint plumbing. When ``CFLIBS_BENCH_CHECKPOINT_PATH`` is exported the
+    # function writes a part-file for every newly completed batch of
+    # ``CFLIBS_BENCH_CHECKPOINT_EVERY`` spectra so a SLURM timeout leaves
+    # something on disk. Part-files live under
+    # ``<checkpoint_path>.parts/part_<hostname>_<pid>_<seq>.parquet`` and can
+    # be merged via ``pyarrow.parquet.read_table(<dir>)`` (note: row order is
+    # filesystem-dependent; consumers that need a global ordering should sort
+    # on ``(dataset_id, spectrum_id, composition_workflow_name)``).
+    #
+    # The part-file approach replaces an earlier ``write_parquet(append=True)``
+    # design that re-read and rewrote the entire on-disk parquet every call
+    # -- O(n^2) I/O on large benchmarks (Copilot review on PR #186).
+    #
+    # Robustness fixes from CodeRabbit review on PR #186:
+    #   * ``run_id`` is generated once for the whole loop so every part-file
+    #     shares the same ``run_id`` (prevents ``WHERE run_id = ?`` queries
+    #     from silently dropping data).
+    #   * Hostname is baked into the part-file name so two workers with the
+    #     same PID on different SLURM nodes can't silently overwrite each
+    #     other.
+    #   * A post-loop flush captures any trailing records that didn't trip
+    #     the ``processed % checkpoint_every == 0`` gate.
+    checkpoint_path_str = os.environ.get("CFLIBS_BENCH_CHECKPOINT_PATH")
+    try:
+        checkpoint_every = int(os.environ.get("CFLIBS_BENCH_CHECKPOINT_EVERY", "1"))
+    except ValueError:
+        checkpoint_every = 1
+    # Guard against misconfiguration: ``0`` or negative would deadlock the
+    # modulo check (ZeroDivisionError) or never trigger.
+    checkpoint_every = max(1, checkpoint_every)
+    checkpoint_path = Path(checkpoint_path_str) if checkpoint_path_str else None
+    checkpoint_parts_dir: Optional[Path] = None
+    checkpoint_part_seq = 0
+    checkpoint_run_id: Optional[str] = None
+    checkpoint_worker_slug = ""
+    if checkpoint_path is not None:
+        import socket  # noqa: PLC0415
+        import uuid as _uuid  # noqa: PLC0415
+
+        checkpoint_parts_dir = checkpoint_path.with_name(checkpoint_path.name + ".parts")
+        checkpoint_parts_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_run_id = str(_uuid.uuid4())
+        # Hostname disambiguates PID collisions across SLURM nodes.
+        _host_slug = socket.gethostname().replace(".", "_").replace("/", "_")
+        checkpoint_worker_slug = f"{_host_slug}_{os.getpid():d}"
+
+    eligible_total = sum(1 for s in spectra if s.truth_type != TruthType.BLIND)
+    processed = 0
+
     for spectrum in spectra:
         if spectrum.truth_type == TruthType.BLIND:
             continue
+        processed += 1
+        # Emit directly to stderr so the marker is visible even when the
+        # CF-LIBS logger has not been configured (the unified-benchmark
+        # runner does not call ``setup_logging`` and Python's default
+        # root level is WARNING -- swallowing ``logger.info``).
+        print(
+            f"[progress] {spectrum.dataset_id or 'unknown'}/"
+            f"{spectrum.spectrum_id} {composition_workflow.name} "
+            f"spectrum {processed}/{eligible_total} "
+            f"id_workflow={id_workflow_name} "
+            f"comp_workflow={composition_workflow.name}",
+            file=sys.stderr,
+            flush=True,
+        )
         start = time.perf_counter()
         try:
             id_result = id_predictor(spectrum)
@@ -2673,7 +2740,87 @@ def evaluate_composition_workflow(
                     failure_reason=str(exc),
                 )
             )
+
+        # Incremental checkpoint -- best-effort, never blocks the gate. Each
+        # checkpoint write is a fresh part-file (O(1) I/O per write), so the
+        # on-disk state grows linearly with the number of completed spectra
+        # instead of quadratically as a single append-rewritten parquet would.
+        if (
+            checkpoint_parts_dir is not None
+            and records  # guard against empty failure-only batches
+            and (processed % checkpoint_every == 0)
+        ):
+            checkpoint_part_seq = _emit_checkpoint_part(
+                checkpoint_parts_dir=checkpoint_parts_dir,
+                checkpoint_run_id=checkpoint_run_id,
+                checkpoint_worker_slug=checkpoint_worker_slug,
+                checkpoint_part_seq=checkpoint_part_seq,
+                records_to_write=records[-checkpoint_every:],
+                processed=processed,
+            )
+
+    # Final-flush: capture any trailing records that didn't trip the modulo
+    # gate (e.g. ``processed == 7`` with ``checkpoint_every == 5``). Without
+    # this, up to ``checkpoint_every - 1`` records would be lost on a SLURM
+    # timeout that fires *between* the loop end and ``write_outputs``.
+    # ``_emit_checkpoint_part`` owns the sequence increment, so we pass the
+    # current ``checkpoint_part_seq`` unchanged -- the helper handles the
+    # ``+= 1`` internally so the on-disk file numbers are gap-free.
+    if checkpoint_parts_dir is not None and records:
+        trailing = processed % checkpoint_every
+        if trailing > 0:
+            _emit_checkpoint_part(
+                checkpoint_parts_dir=checkpoint_parts_dir,
+                checkpoint_run_id=checkpoint_run_id,
+                checkpoint_worker_slug=checkpoint_worker_slug,
+                checkpoint_part_seq=checkpoint_part_seq,
+                records_to_write=records[-trailing:],
+                processed=processed,
+                final_flush=True,
+            )
+
     return records
+
+
+def _emit_checkpoint_part(
+    *,
+    checkpoint_parts_dir: Path,
+    checkpoint_run_id: Optional[str],
+    checkpoint_worker_slug: str,
+    checkpoint_part_seq: int,
+    records_to_write: Sequence[Any],
+    processed: int,
+    final_flush: bool = False,
+) -> int:
+    """Write one checkpoint part-file under ``<dir>/part_<worker>_<seq>.parquet``.
+
+    Returns the (possibly-incremented) sequence number so the caller can
+    continue from there.
+    """
+    try:
+        from cflibs.benchmark.results import (  # noqa: PLC0415
+            write_parquet as _checkpoint_write_parquet,
+        )
+
+        checkpoint_part_seq += 1
+        part_path = checkpoint_parts_dir / (
+            f"part_{checkpoint_worker_slug}_{checkpoint_part_seq:05d}.parquet"
+        )
+        _checkpoint_write_parquet(
+            part_path,
+            composition_records=list(records_to_write),
+            run_id=checkpoint_run_id,
+        )
+        tag = "[checkpoint final-flush]" if final_flush else "[checkpoint]"
+        print(
+            f"{tag} wrote {len(records_to_write)} records to {part_path.name} "
+            f"(cumulative {processed} spectra this call) under {checkpoint_parts_dir}",
+            file=sys.stderr,
+            flush=True,
+        )
+    except Exception as cp_exc:  # noqa: BLE001
+        logger.warning("checkpoint write failed: %s", cp_exc)
+    return checkpoint_part_seq
 
 
 def tune_composition_workflow(

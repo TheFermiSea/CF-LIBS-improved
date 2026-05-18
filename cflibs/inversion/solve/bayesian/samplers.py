@@ -261,8 +261,9 @@ class MCMCSampler:
         num_chains: int = 1,
         seed: int = 0,
         target_accept_prob: float = 0.8,
-        max_tree_depth: int = 10,
+        max_tree_depth: int = 8,
         progress_bar: bool = True,
+        chain_method: str = "vectorized",
     ) -> MCMCResult:
         """Run MCMC sampling and return a fully populated :class:`MCMCResult`."""
         import jax.random as random
@@ -285,6 +286,7 @@ class MCMCSampler:
             num_warmup=num_warmup,
             num_samples=num_samples,
             num_chains=num_chains,
+            chain_method=chain_method,
             progress_bar=progress_bar,
         )
 
