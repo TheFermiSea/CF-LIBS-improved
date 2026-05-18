@@ -2763,6 +2763,9 @@ def evaluate_composition_workflow(
     # gate (e.g. ``processed == 7`` with ``checkpoint_every == 5``). Without
     # this, up to ``checkpoint_every - 1`` records would be lost on a SLURM
     # timeout that fires *between* the loop end and ``write_outputs``.
+    # ``_emit_checkpoint_part`` owns the sequence increment, so we pass the
+    # current ``checkpoint_part_seq`` unchanged -- the helper handles the
+    # ``+= 1`` internally so the on-disk file numbers are gap-free.
     if checkpoint_parts_dir is not None and records:
         trailing = processed % checkpoint_every
         if trailing > 0:
@@ -2770,7 +2773,7 @@ def evaluate_composition_workflow(
                 checkpoint_parts_dir=checkpoint_parts_dir,
                 checkpoint_run_id=checkpoint_run_id,
                 checkpoint_worker_slug=checkpoint_worker_slug,
-                checkpoint_part_seq=checkpoint_part_seq + 1,
+                checkpoint_part_seq=checkpoint_part_seq,
                 records_to_write=records[-trailing:],
                 processed=processed,
                 final_flush=True,

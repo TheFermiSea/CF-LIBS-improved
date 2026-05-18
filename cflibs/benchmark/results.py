@@ -627,5 +627,6 @@ __all__ = [
     "build_rows",
     "write_parquet",
     "read_parquet",
+    "read_parquet_dir",
     "parquet_available",
 ]
