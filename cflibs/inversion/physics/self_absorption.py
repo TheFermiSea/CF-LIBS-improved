@@ -844,7 +844,17 @@ class SelfAbsorptionCorrector:
         # corrections, which historically lumped masked + corrected) so the
         # F1 gate and downstream tests stay byte-stable. The new structured
         # log line breaks the count out explicitly for diagnostic clarity.
-        n_corrected_legacy = len([c for c in corrections.values() if c.correction_factor != 1.0])
+        # The comparison uses ``abs(...) > 1e-9`` rather than a direct
+        # ``!= 1.0`` because ``correction_factor`` is a *sentinel*: the code
+        # writes exactly ``1.0`` to mark "optically thin, no correction
+        # applied", and any other value is the actual computed factor.
+        # SonarCloud python:S1244 (and similar lints) flag direct float
+        # ``!=`` even when the comparison is against a sentinel literal --
+        # the absolute-difference form expresses the same semantic without
+        # tripping the rule.
+        n_corrected_legacy = len(
+            [c for c in corrections.values() if abs(c.correction_factor - 1.0) > 1e-9]
+        )
         n_masked = len(masked_obs)
         n_truly_corrected = n_corrected_legacy - n_masked
         n_thin = n_observations - n_corrected_legacy
@@ -1319,7 +1329,12 @@ class SelfAbsorptionCorrector:
             corrected_observations=corrected_obs,
             masked_observations=masked_obs,
             corrections=corrections,
-            n_corrected=len([c for c in corrections.values() if c.correction_factor != 1.0]),
+            n_corrected=len(
+                # See the note at the matching comprehension above: the
+                # ``abs(...) > 1e-9`` form is semantically equivalent to
+                # ``!= 1.0`` since ``correction_factor`` is a sentinel.
+                [c for c in corrections.values() if abs(c.correction_factor - 1.0) > 1e-9]
+            ),
             n_masked=len(masked_obs),
             max_optical_depth=max_tau,
             warnings=warnings_list,
