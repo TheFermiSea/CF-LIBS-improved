@@ -69,11 +69,9 @@ from scipy.optimize import brentq
 
 from cflibs.core.constants import (
     C_LIGHT,
-    E_CHARGE,
     EV_TO_K,
     KB,
     KB_EV,
-    M_E,
     M_PROTON,
 )
 from cflibs.core.logging_config import get_logger

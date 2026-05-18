@@ -16,25 +16,24 @@ from scipy.special import erf
 from scipy.stats import binom, linregress
 
 from cflibs.atomic.database import AtomicDatabase
-from cflibs.core.logging_config import get_logger
-from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 from cflibs.core.constants import KB_EV
-from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, LineObservation
-
-logger = get_logger("inversion.identify.alias")
+from cflibs.core.logging_config import get_logger
+from cflibs.core.logging_config import get_logger as _get_alias_logger
 from cflibs.inversion.element_id import (
-    IdentifiedLine,
     ElementIdentification,
     ElementIdentificationResult,
+    IdentifiedLine,
     get_wavelength_tolerance,
 )
-from cflibs.inversion.preprocessing import estimate_baseline, estimate_noise
 from cflibs.inversion.identify._coverage import (
     CoverageTracker,
     merge_coverage_into_parameters,
 )
-from cflibs.core.logging_config import get_logger as _get_alias_logger
+from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, LineObservation
+from cflibs.inversion.preprocessing import estimate_baseline, estimate_noise
+from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 
+logger = get_logger("inversion.identify.alias")
 _alias_logger = _get_alias_logger("inversion.identify.alias")
 
 # JAX is an optional fast path for the per-spectrum Boltzmann temperature fit

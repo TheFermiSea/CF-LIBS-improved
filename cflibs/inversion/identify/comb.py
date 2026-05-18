@@ -26,7 +26,6 @@ from cflibs.inversion.preprocessing import detect_peaks_auto
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.identify._coverage import (
     CoverageTracker,
-    count_lines_in_range,
     merge_coverage_into_parameters,
 )
 
