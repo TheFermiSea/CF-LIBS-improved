@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -14,12 +15,20 @@ pytestmark = pytest.mark.integration
 
 
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
+    # Inherit the parent's env but force JAX into 64-bit float mode. The
+    # forward model's Boltzmann factor ``exp(-E/kT)`` underflows in float32
+    # at LIBS-relevant temperatures, producing all-zero synthetic spectra
+    # and failing assertions like ``np.any(spectra > 0.0)``. The conftest
+    # in this repo sets ``jax_enable_x64=True`` for in-process tests, but
+    # subprocesses need the env var instead.
+    env = {**os.environ, "JAX_ENABLE_X64": "1"}
     try:
         return subprocess.run(
             [sys.executable, str(SCRIPT), *args],
             capture_output=True,
             text=True,
             timeout=30,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:  # pragma: no cover - defensive test guard
         pytest.fail(f"generate_model_library.py timed out: {exc}")

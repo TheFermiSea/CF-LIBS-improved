@@ -661,14 +661,21 @@ class USGSDataset:
     # ------------------------------------------------------------- helpers
 
     def _locate_spectrum_file(self, standard_id: str) -> Optional[Path]:
-        """Look up a cached spectrum file for ``standard_id`` in ``data_dir``."""
+        """Look up a cached spectrum file for ``standard_id`` in ``data_dir``.
+
+        Tries common naming variations: hyphen-stripped, underscore-replaced,
+        ``USGS_``/``usgs_`` prefixed, and ``.csv``/``.txt``/``.tsv`` suffix.
+        Falls back to a **case-insensitive** scan of ``data_dir`` against
+        the same variants so that ``get_spectrum("AGV-2")`` matches an
+        ``agv_2.csv`` on disk (common when users export from Excel/etc.).
+        """
         if not self.data_dir.is_dir():
             return None
         # Try a few common naming conventions; first hit wins. Hyphens are
         # often dropped or replaced with underscores in filenames.
         flat = standard_id.replace("-", "")
         under = standard_id.replace("-", "_")
-        candidates = [
+        exact_candidates = [
             self.data_dir / f"{standard_id}.csv",
             self.data_dir / f"{flat}.csv",
             self.data_dir / f"{under}.csv",
@@ -677,7 +684,15 @@ class USGSDataset:
             self.data_dir / f"{standard_id}.txt",
             self.data_dir / f"{standard_id}.tsv",
         ]
-        for candidate in candidates:
+        for candidate in exact_candidates:
             if candidate.is_file():
                 return candidate
+
+        # Fallback: case-insensitive scan. Build the set of accepted names
+        # (lowercased) and walk ``data_dir`` once. Pure lookup; never falls
+        # back to a partial match.
+        accepted_lower = {candidate.name.lower() for candidate in exact_candidates}
+        for path in self.data_dir.iterdir():
+            if path.is_file() and path.name.lower() in accepted_lower:
+                return path
         return None
