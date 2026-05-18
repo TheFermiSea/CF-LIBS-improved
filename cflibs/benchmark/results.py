@@ -579,6 +579,33 @@ def read_parquet(path: Path) -> "Any":
     return pq.read_table(str(Path(path)))
 
 
+def read_parquet_dir(path: Path) -> "Any":
+    """Load every parquet file under ``path`` as a single pyarrow ``Table``.
+
+    Reads each ``*.parquet`` shard in lexicographic order (sorted by file
+    name so the result is deterministic regardless of filesystem listing
+    order) and concatenates them with ``pyarrow.concat_tables``. The merged
+    table inherits the row schema of the first shard; mismatched shards
+    raise ``pyarrow.lib.ArrowInvalid``.
+
+    This is the canonical reader for the ``<checkpoint>.parts/`` directories
+    written incrementally by
+    :func:`cflibs.benchmark.unified.evaluate_composition_workflow` when
+    ``CFLIBS_BENCH_CHECKPOINT_PATH`` is set.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    path = Path(path)
+    if not path.is_dir():
+        raise NotADirectoryError(f"read_parquet_dir requires a directory, got {path}")
+    shards = sorted(path.glob("*.parquet"))
+    if not shards:
+        raise FileNotFoundError(f"No *.parquet shards found under {path}")
+    tables = [pq.read_table(str(p)) for p in shards]
+    return pa.concat_tables(tables, promote_options="default")
+
+
 def parquet_available() -> bool:
     """Return ``True`` if pyarrow is importable.
 

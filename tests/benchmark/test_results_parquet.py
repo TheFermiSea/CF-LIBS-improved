@@ -33,6 +33,7 @@ from cflibs.benchmark.results import (  # noqa: E402  (after importorskip)
     SCHEMA_VERSION,
     build_rows,
     read_parquet,
+    read_parquet_dir,
     write_parquet,
 )
 from cflibs.benchmark.unified import (  # noqa: E402
@@ -473,3 +474,64 @@ def test_empty_inputs_produce_valid_empty_parquet(tmp_path: Path):
     # Schema fields are still present so downstream readers don't crash.
     assert "d_a" in table.column_names
     assert "record_kind" in table.column_names
+
+
+# ---------------------------------------------------------------------------
+# read_parquet_dir — checkpoint part-file reader
+# (CF-LIBS-improved-xsuj — CodeRabbit review on PR #186)
+# ---------------------------------------------------------------------------
+
+
+def test_read_parquet_dir_concatenates_shards(tmp_path: Path):
+    """Multiple part-files in a directory merge into a single Table."""
+    parts_dir = tmp_path / "parts"
+    parts_dir.mkdir()
+
+    # Write two shards with one composition record each (mimicking what
+    # ``evaluate_composition_workflow`` writes on each checkpoint trigger).
+    write_parquet(
+        parts_dir / "part_a.parquet",
+        composition_records=[_make_comp_record(spectrum_id="s1")],
+    )
+    write_parquet(
+        parts_dir / "part_b.parquet",
+        composition_records=[_make_comp_record(spectrum_id="s2")],
+    )
+
+    merged = read_parquet_dir(parts_dir)
+    assert merged.num_rows == 2
+    spectrum_ids = merged.column("spectrum_id").to_pylist()
+    assert set(spectrum_ids) == {"s1", "s2"}
+
+
+def test_read_parquet_dir_lexicographic_shard_order(tmp_path: Path):
+    """Shards merge in sorted-filename order so the result is deterministic."""
+    parts_dir = tmp_path / "parts"
+    parts_dir.mkdir()
+    write_parquet(
+        parts_dir / "part_00002.parquet",
+        composition_records=[_make_comp_record(spectrum_id="z")],
+    )
+    write_parquet(
+        parts_dir / "part_00001.parquet",
+        composition_records=[_make_comp_record(spectrum_id="a")],
+    )
+    merged = read_parquet_dir(parts_dir)
+    # "part_00001" sorts first, so "a" comes first in the merged table.
+    assert merged.column("spectrum_id").to_pylist() == ["a", "z"]
+
+
+def test_read_parquet_dir_rejects_file_path(tmp_path: Path):
+    """Passing a single parquet file (not a dir) raises a clear error."""
+    out_path = tmp_path / "results.parquet"
+    write_parquet(out_path, composition_records=[_make_comp_record(spectrum_id="s1")])
+    with pytest.raises(NotADirectoryError):
+        read_parquet_dir(out_path)
+
+
+def test_read_parquet_dir_raises_on_empty_dir(tmp_path: Path):
+    """Reading an empty directory raises FileNotFoundError, not silent empty Table."""
+    empty = tmp_path / "no_shards"
+    empty.mkdir()
+    with pytest.raises(FileNotFoundError):
+        read_parquet_dir(empty)
