@@ -2632,18 +2632,29 @@ def evaluate_composition_workflow(
     records: List[CompositionEvaluationRecord] = []
 
     # Checkpoint plumbing. When ``CFLIBS_BENCH_CHECKPOINT_PATH`` is exported the
-    # function appends its accumulated records to that parquet path every
+    # function writes a part-file for every newly completed batch of
     # ``CFLIBS_BENCH_CHECKPOINT_EVERY`` spectra so a SLURM timeout leaves
-    # something on disk. ``evaluate_composition_workflow`` is invoked many
-    # times across (dataset, id_workflow, comp_workflow, fold) tuples; using
-    # ``append=True`` on :func:`cflibs.benchmark.results.write_parquet`
-    # accumulates records across every call.
+    # something on disk. Part-files live under
+    # ``<checkpoint_path>.parts/part_<pid>_<seq>.parquet`` and can be combined
+    # by :func:`cflibs.benchmark.results.read_parquet_dir` (or pyarrow's
+    # dataset reader) on resume. The part-file approach replaces an earlier
+    # ``write_parquet(..., append=True)`` design that re-read and rewrote the
+    # entire on-disk parquet every call -- O(n^2) I/O on large benchmarks
+    # (Copilot review comment on PR #186).
     checkpoint_path_str = os.environ.get("CFLIBS_BENCH_CHECKPOINT_PATH")
     try:
         checkpoint_every = int(os.environ.get("CFLIBS_BENCH_CHECKPOINT_EVERY", "1"))
     except ValueError:
         checkpoint_every = 1
+    # Guard against misconfiguration: ``0`` or negative would deadlock the
+    # modulo check (ZeroDivisionError) or never trigger.
+    checkpoint_every = max(1, checkpoint_every)
     checkpoint_path = Path(checkpoint_path_str) if checkpoint_path_str else None
+    checkpoint_parts_dir: Optional[Path] = None
+    checkpoint_part_seq = 0
+    if checkpoint_path is not None:
+        checkpoint_parts_dir = checkpoint_path.with_name(checkpoint_path.name + ".parts")
+        checkpoint_parts_dir.mkdir(parents=True, exist_ok=True)
 
     eligible_total = sum(1 for s in spectra if s.truth_type != TruthType.BLIND)
     processed = 0
@@ -2709,13 +2720,12 @@ def evaluate_composition_workflow(
                 )
             )
 
-        # Incremental checkpoint -- best-effort, never blocks the gate. We
-        # append each newly-finished spectrum (just one record per loop
-        # iteration) so the on-disk parquet accumulates across every
-        # ``evaluate_composition_workflow`` invocation, not just the spectra
-        # processed by this call.
+        # Incremental checkpoint -- best-effort, never blocks the gate. Each
+        # checkpoint write is a fresh part-file (O(1) I/O per write), so the
+        # on-disk state grows linearly with the number of completed spectra
+        # instead of quadratically as a single append-rewritten parquet would.
         if (
-            checkpoint_path is not None
+            checkpoint_parts_dir is not None
             and records  # guard against empty failure-only batches
             and (processed % checkpoint_every == 0)
         ):
@@ -2724,19 +2734,24 @@ def evaluate_composition_workflow(
                     write_parquet as _checkpoint_write_parquet,
                 )
 
-                # Pass only the most recent record (the one just appended)
-                # so ``append=True`` adds it on top of whatever previous
-                # calls already wrote. Whole-list passes would duplicate
-                # rows across invocations.
+                checkpoint_part_seq += 1
+                part_path = checkpoint_parts_dir / (
+                    f"part_{os.getpid():d}_{checkpoint_part_seq:05d}.parquet"
+                )
+                # One part-file per checkpoint trigger; the new records since
+                # the last checkpoint are exactly the trailing
+                # ``checkpoint_every`` entries (or fewer if the loop is
+                # ending). Reading the directory back via pyarrow's dataset
+                # API concatenates them in lexicographic order.
+                new_rows = records[-checkpoint_every:]
                 _checkpoint_write_parquet(
-                    checkpoint_path,
-                    composition_records=[records[-1]],
-                    append=True,
+                    part_path,
+                    composition_records=new_rows,
                 )
                 print(
-                    f"[checkpoint] appended record (cumulative on-disk "
-                    f"after spectrum {processed} of this call) to "
-                    f"{checkpoint_path}",
+                    f"[checkpoint] wrote {len(new_rows)} records to "
+                    f"{part_path.name} (cumulative {processed} spectra "
+                    f"this call) under {checkpoint_parts_dir}",
                     file=sys.stderr,
                     flush=True,
                 )
