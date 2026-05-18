@@ -257,6 +257,51 @@ class BayesianForwardModel:
         direct-summation path used. The legacy
         :func:`_atomic_data_arrays_from_snapshot` adapter is no longer
         invoked from this code path.
+
+        Batching contract
+        -----------------
+        The single supported batching mode is **JAX ``vmap``**, as used
+        internally by NumPyro NUTS when ``MCMCSampler`` is configured
+        with ``chain_method='vectorized'`` (the project default; see
+        :func:`test_mcmc_sampler_default_chain_method_is_vectorized`).
+        Under that path JAX adds a *leading* chain axis to every traced
+        input, so ``concentrations`` typically arrives with shape
+        ``(num_chains, n_elements)``. The species-density broadcast
+        below tolerates that leading axis transparently via the
+        ``[..., i]`` element selector, and the resulting
+        ``plasma_state.species[el]`` leaves carry the chain axis
+        through ``forward_model``.
+
+        **Manual batching is NOT supported.** Calling
+        ``_compute_spectrum`` directly with a Python-side stacked
+        ``concentrations`` of shape ``(batch, n_elements)`` is not a
+        public path: in that scenario ``total_species_density`` is a
+        scalar and does *not* broadcast against the leading batch axis
+        on its own (PR #186's species-dict refactor is benign for vmap
+        but does not enable a free manual-batching mode -- the existing
+        ``test_compute_spectrum_supports_vmap_chain_axis`` test passes
+        with both the pre-PR and post-PR bodies because vmap re-traces
+        the function under the leading axis either way). Any future
+        caller that wants explicit (non-vmap) batching must:
+
+        1. Reshape ``total_species_density`` to
+           ``total_species_density[..., None]`` *before* the
+           ``concentrations * total_species_density`` product, so the
+           scalar density broadcasts cleanly against the leading batch
+           axis.
+        2. Also batch the scalar ``T_eV`` and ``n_e`` inputs --
+           ``forward_model`` currently assumes scalar JAX tracers, not
+           arrays, for those.
+
+        In short: if you need to run many compositions concurrently,
+        wrap this method in ``jax.vmap`` rather than stacking arrays
+        in Python. The dict-comprehension over ``self.elements`` plus
+        the ``[..., i]`` indexing has been deliberately chosen for
+        vmap compatibility; do not "optimize" it back to per-index
+        scalar lookups (``concentrations[i] * total_density``) without
+        verifying both the vmap test
+        (:func:`test_compute_spectrum_supports_vmap_chain_axis`) and
+        a fresh manual-batch test still hold.
         """
         from cflibs.plasma.state import SingleZoneLTEPlasma  # noqa: PLC0415
         from cflibs.radiation.kernels import forward_model  # noqa: PLC0415
