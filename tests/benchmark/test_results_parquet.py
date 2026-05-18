@@ -563,47 +563,56 @@ def test_read_parquet_dir_skips_orphan_tmp_files(tmp_path: Path):
 
 
 def test_checkpoint_filename_includes_run_id_for_restart_safety():
-    """Filename contract: when CFLIBS_BENCH_CHECKPOINT_PATH is set, the
-    per-shard filename includes a run_id slug so a SLURM --requeue or
-    PID-reuse restart on the same host doesn't overwrite prior parts.
+    """Behavior contract: ``make_worker_slug`` must produce slugs that
+    differ for two distinct run_ids on the same host+pid.
 
-    This is a contract probe — it grep's the
-    :mod:`cflibs.benchmark.checkpoint` source for the expected filename
-    format. A semantic test would require driving
-    evaluate_composition_workflow end-to-end with two different runs,
-    which is heavy.
+    On SLURM ``--requeue`` or PID reuse, two runs can share the
+    ``(hostname, getpid())`` tuple. If the slug depended only on those,
+    the second run's part-files would silently overwrite the first.
+    The slug therefore folds the run_id (an 8-char hex prefix of
+    UUID4) into the filename. This test calls ``make_worker_slug``
+    twice with different run_ids and asserts the outputs disagree.
 
-    Note: the checkpoint primitives moved out of ``unified.py`` into a
-    dedicated ``checkpoint.py`` module in the unified-module-split
-    refactor; ``unified.py`` re-imports them and exposes a backward-compat
-    ``_emit_checkpoint_part`` alias for older callers.
+    Replaces an earlier brittle grep-the-source test (per Copilot
+    review on PR #188): two cosmetic refactors that preserve behavior
+    would have broken the old test.
     """
-    import pathlib
+    from cflibs.benchmark.checkpoint import make_worker_slug
 
-    checkpoint_src = (
-        pathlib.Path(__file__).resolve().parents[2]
-        / "cflibs/benchmark/checkpoint.py"
-    ).read_text()
-    # Slug construction: hostname + pid + first-8-chars of run_id UUID.
-    assert 'run_id_slug = run_id.replace("-", "")[:8]' in checkpoint_src, (
-        "checkpoint worker_slug must include a run_id-derived suffix to "
-        "prevent same-host/same-PID restarts from overwriting prior parts"
-    )
-    assert (
-        'return f"{host_slug}_{os.getpid():d}_{run_id_slug}"' in checkpoint_src
-    ), "make_worker_slug filename format regressed"
+    run_id_a = "11111111-2222-3333-4444-555555555555"
+    run_id_b = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    slug_a = make_worker_slug(run_id_a)
+    slug_b = make_worker_slug(run_id_b)
 
-    # The call-site in unified.py must still wire the primitives together
-    # so the public ``evaluate_composition_workflow`` behavior is preserved.
-    unified_src = (
-        pathlib.Path(__file__).resolve().parents[2]
-        / "cflibs/benchmark/unified.py"
-    ).read_text()
-    assert "checkpoint_run_id = new_run_id()" in unified_src, (
-        "unified.py must use checkpoint.new_run_id() to build the shared "
-        "per-call run_id"
+    # Same host+pid (we're in one process), so the only thing that varies
+    # is the run_id-derived portion.
+    assert slug_a != slug_b, (
+        "make_worker_slug must produce distinct slugs for distinct "
+        "run_ids so same-host/same-PID restarts cannot overwrite prior "
+        f"parts. Got identical slug={slug_a!r}"
     )
-    assert (
-        "checkpoint_worker_slug = make_worker_slug(checkpoint_run_id)"
-        in unified_src
-    ), "unified.py must use checkpoint.make_worker_slug() to build the slug"
+    # And the slug must reference the run_id prefix, not something
+    # accidentally derived from the full hex (which would still vary
+    # across runs but not match the documented 8-char-prefix contract).
+    assert run_id_a.replace("-", "")[:8] in slug_a, (
+        "slug must embed the first 8 hex chars of run_id (with dashes "
+        f"stripped). Got slug={slug_a!r}"
+    )
+    assert run_id_b.replace("-", "")[:8] in slug_b
+
+
+def test_checkpoint_new_run_id_returns_unique_uuids():
+    """``new_run_id`` returns a fresh UUID4 string every call.
+
+    The checkpoint flow generates one run_id per evaluate_composition_workflow
+    invocation and threads it through every ``write_parquet(run_id=...)``
+    call so the part-files share a queryable run_id. Two consecutive calls
+    must return distinct values.
+    """
+    from cflibs.benchmark.checkpoint import new_run_id
+
+    a = new_run_id()
+    b = new_run_id()
+    assert a != b, f"new_run_id should yield fresh UUIDs but got identical: {a}"
+    # UUID4 string form: 8-4-4-4-12 = 36 chars including dashes.
+    assert len(a) == 36 and a.count("-") == 4

@@ -137,9 +137,9 @@ logger = get_logger("inversion.self_absorption")
 # in cflibs.core.constants but spelled in SI (M_E in kg, E_CHARGE in C),
 # so convert here.
 
-_M_E_CGS_G = 9.1093837015e-28           # electron mass in grams
-_E_CGS_ESU = 4.80320425e-10              # elementary charge in statcoulombs
-_C_CGS_CM_PER_S = 2.99792458e10          # speed of light in cm/s
+_M_E_CGS_G = 9.1093837015e-28  # electron mass in grams
+_E_CGS_ESU = 4.80320425e-10  # elementary charge in statcoulombs
+_C_CGS_CM_PER_S = 2.99792458e10  # speed of light in cm/s
 
 # (π e² / mₑ c) in CGS — units of cm² · Hz. Constant of nature; depends
 # only on QED. Quote: 0.026540... cm² Hz (Cowan, *Theory of Atomic
@@ -844,9 +844,7 @@ class SelfAbsorptionCorrector:
         # corrections, which historically lumped masked + corrected) so the
         # F1 gate and downstream tests stay byte-stable. The new structured
         # log line breaks the count out explicitly for diagnostic clarity.
-        n_corrected_legacy = len(
-            [c for c in corrections.values() if c.correction_factor != 1.0]
-        )
+        n_corrected_legacy = len([c for c in corrections.values() if c.correction_factor != 1.0])
         n_masked = len(masked_obs)
         n_truly_corrected = n_corrected_legacy - n_masked
         n_thin = n_observations - n_corrected_legacy
@@ -1055,13 +1053,7 @@ class SelfAbsorptionCorrector:
 
         # Final optical depth — units: cm²·Hz × (dimensionless) × cm⁻³ ×
         # cm × Hz⁻¹  =  dimensionless ✓
-        tau = (
-            _PI_E2_OVER_MEC_CGS
-            * f_lu
-            * n_lower
-            * self.plasma_length_cm
-            * phi_nu0
-        )
+        tau = _PI_E2_OVER_MEC_CGS * f_lu * n_lower * self.plasma_length_cm * phi_nu0
 
         return max(0.0, tau)
 

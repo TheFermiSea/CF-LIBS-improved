@@ -660,10 +660,7 @@ def _evaluate_candidate_with_multi_metric_gate(
 
     # Composite score
     composite_score = (
-        0.4 * correctness
-        + 0.3 * physics_validity
-        + 0.15 * efficiency
-        + 0.15 * interpretability
+        0.4 * correctness + 0.3 * physics_validity + 0.15 * efficiency + 0.15 * interpretability
     )
 
     # Detection decision: composite score must exceed threshold
@@ -684,7 +681,6 @@ def _evaluate_candidate_with_multi_metric_gate(
         "efficiency": efficiency,
         "interpretability": interpretability,
     }
-
 
 
 class ALIASIdentifier:
@@ -1106,8 +1102,7 @@ class ALIASIdentifier:
                 continue
             if not (np.isfinite(_kw_val) and 0.0 <= _kw_val <= 1.0):
                 raise ValueError(
-                    f"{_kw_name} must be finite and in [0.0, 1.0], "
-                    f"got {_kw_val!r}"
+                    f"{_kw_name} must be finite and in [0.0, 1.0], " f"got {_kw_val!r}"
                 )
         self.relative_cl_threshold_neutral = (
             float(relative_cl_threshold_neutral)
@@ -1131,14 +1126,9 @@ class ALIASIdentifier:
         # See the docstring for the rationale on adaptive_t / disabled.
         _R2_GATE_MODES = ("fixed", "adaptive_t", "disabled")
         if r2_gate_mode not in _R2_GATE_MODES:
-            raise ValueError(
-                f"r2_gate_mode must be one of {_R2_GATE_MODES}, got {r2_gate_mode!r}"
-            )
+            raise ValueError(f"r2_gate_mode must be one of {_R2_GATE_MODES}, got {r2_gate_mode!r}")
         self.r2_gate_mode = r2_gate_mode
-        if not (
-            np.isfinite(r2_gate_t_quality_threshold)
-            and r2_gate_t_quality_threshold > 0
-        ):
+        if not (np.isfinite(r2_gate_t_quality_threshold) and r2_gate_t_quality_threshold > 0):
             raise ValueError(
                 f"r2_gate_t_quality_threshold must be finite and > 0, "
                 f"got {r2_gate_t_quality_threshold!r}"
@@ -1154,17 +1144,14 @@ class ALIASIdentifier:
         # Self-absorption scoring knobs (CF-LIBS-improved-self-abs-audit).
         # Defaults preserve the historical behavior — see the docstring.
         self.self_absorption_aware = bool(self_absorption_aware)
-        if not (
-            np.isfinite(self_absorption_damping) and 0.0 < self_absorption_damping <= 1.0
-        ):
+        if not (np.isfinite(self_absorption_damping) and 0.0 < self_absorption_damping <= 1.0):
             raise ValueError(
                 f"self_absorption_damping must be finite and in (0, 1], "
                 f"got {self_absorption_damping!r}"
             )
         self.self_absorption_damping = float(self_absorption_damping)
         if not (
-            np.isfinite(self_absorption_e_i_cutoff_ev)
-            and self_absorption_e_i_cutoff_ev >= 0.0
+            np.isfinite(self_absorption_e_i_cutoff_ev) and self_absorption_e_i_cutoff_ev >= 0.0
         ):
             raise ValueError(
                 f"self_absorption_e_i_cutoff_ev must be finite and >= 0, "
@@ -1260,9 +1247,7 @@ class ALIASIdentifier:
         def _dominant_ion_stage(elem_id) -> Optional[int]:
             if not elem_id.matched_lines:
                 return None
-            dominant = max(
-                elem_id.matched_lines, key=lambda ln: ln.intensity_exp
-            )
+            dominant = max(elem_id.matched_lines, key=lambda ln: ln.intensity_exp)
             return int(dominant.ionization_stage)
 
         neutrals = []
@@ -1919,9 +1904,7 @@ class ALIASIdentifier:
             n_matched_peaks=len(matched_peak_indices),
             n_unmatched_peaks=len(peaks) - len(matched_peak_indices),
             algorithm="alias",
-            parameters=merge_coverage_into_parameters(
-                base_parameters, coverage.build_payload()
-            ),
+            parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
         )
 
     def _detect_peaks(
@@ -2126,12 +2109,10 @@ class ALIASIdentifier:
                     "n_elements=%d, per_element=%s, median_T_K=%.0f, "
                     "n_within_2000K=%d, selected_T_K=%s",
                     len(robust_candidates),
-                    [(el, round(T, 0), round(r2, 3), n)
-                     for el, T, r2, n in robust_candidates],
+                    [(el, round(T, 0), round(r2, 3), n) for el, T, r2, n in robust_candidates],
                     T_median,
                     int(within_window),
-                    f"{T_median:.0f}" if within_window >= 3
-                    else "fall-through-to-pass2",
+                    f"{T_median:.0f}" if within_window >= 3 else "fall-through-to-pass2",
                 )
                 if (
                     within_window >= 3
@@ -2143,9 +2124,7 @@ class ALIASIdentifier:
                 # individual fit (highest r_sq, then largest n_lines) if
                 # any single element looks credible.
                 # Otherwise fall through to Pass 2.
-                robust_candidates.sort(
-                    key=lambda c: (c[2], c[3]), reverse=True
-                )
+                robust_candidates.sort(key=lambda c: (c[2], c[3]), reverse=True)
                 best_el, best_T, best_r2, best_n = robust_candidates[0]
                 if (
                     best_r2 > 0.5
@@ -2157,7 +2136,10 @@ class ALIASIdentifier:
                         "no cross-element consensus, accepting best "
                         "single-element fit element=%s T_K=%.0f r_sq=%.3f "
                         "n_lines=%d",
-                        best_el, best_T, best_r2, best_n,
+                        best_el,
+                        best_T,
+                        best_r2,
+                        best_n,
                     )
                     self._estimated_T = float(best_T)
                     return
@@ -2220,15 +2202,9 @@ class ALIASIdentifier:
                         keep_mask = I_arr_local > snr_cutoff
                         # Keep at least 4 lines so the fit remains tractable.
                         if int(np.sum(keep_mask)) >= 4:
-                            E_k_vals = [
-                                e for e, k in zip(E_k_vals, keep_mask) if k
-                            ]
-                            y_vals = [
-                                y for y, k in zip(y_vals, keep_mask) if k
-                            ]
-                            I_vals = [
-                                i for i, k in zip(I_vals, keep_mask) if k
-                            ]
+                            E_k_vals = [e for e, k in zip(E_k_vals, keep_mask) if k]
+                            y_vals = [y for y, k in zip(y_vals, keep_mask) if k]
+                            I_vals = [i for i, k in zip(I_vals, keep_mask) if k]
 
                 if len(E_k_vals) < 4:
                     continue
@@ -2369,9 +2345,7 @@ class ALIASIdentifier:
         except (KeyError, ValueError, AttributeError):
             return None
 
-        good_trans = [
-            t for t in transitions if t.A_ki > 0 and t.g_k > 0 and t.E_k_ev > 0
-        ]
+        good_trans = [t for t in transitions if t.A_ki > 0 and t.g_k > 0 and t.E_k_ev > 0]
         if len(good_trans) < 4:
             return None
 

@@ -208,9 +208,7 @@ class HybridIdentifier:
         # unchanged.
         alias_params = alias_result.parameters or {}
         alias_zero_db = set(alias_params.get("elements_with_zero_db_lines_in_range", []) or [])
-        alias_zero_matches = set(
-            alias_params.get("elements_with_zero_peak_matches", []) or []
-        )
+        alias_zero_matches = set(alias_params.get("elements_with_zero_peak_matches", []) or [])
 
         all_element_ids: List[ElementIdentification] = []
         for element in self.elements:
@@ -229,9 +227,11 @@ class HybridIdentifier:
             coverage.record_fingerprint(
                 element,
                 passed=bool(detected),
-                score=0.0
-                if not (in_nnls or in_alias)
-                else float(nnls_scores.get(element, 0.0) + alias_scores.get(element, 0.0)),
+                score=(
+                    0.0
+                    if not (in_nnls or in_alias)
+                    else float(nnls_scores.get(element, 0.0) + alias_scores.get(element, 0.0))
+                ),
             )
 
             alias_eid = alias_elements_map.get(element)
@@ -294,7 +294,5 @@ class HybridIdentifier:
             n_matched_peaks=alias_result.n_matched_peaks,
             n_unmatched_peaks=alias_result.n_unmatched_peaks,
             algorithm="hybrid_nnls_alias",
-            parameters=merge_coverage_into_parameters(
-                base_parameters, coverage.build_payload()
-            ),
+            parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
         )

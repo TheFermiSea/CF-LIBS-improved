@@ -466,9 +466,7 @@ class CombIdentifier:
             n_matched_peaks=n_matched_peaks,
             n_unmatched_peaks=len(experimental_peaks) - n_matched_peaks,
             algorithm="comb",
-            parameters=merge_coverage_into_parameters(
-                base_parameters, coverage.build_payload()
-            ),
+            parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
         )
 
         logger.info(
