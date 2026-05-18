@@ -567,23 +567,43 @@ def test_checkpoint_filename_includes_run_id_for_restart_safety():
     per-shard filename includes a run_id slug so a SLURM --requeue or
     PID-reuse restart on the same host doesn't overwrite prior parts.
 
-    This is a contract probe — it grep's the unified.py source for the
-    expected filename format. A semantic test would require driving
+    This is a contract probe — it grep's the
+    :mod:`cflibs.benchmark.checkpoint` source for the expected filename
+    format. A semantic test would require driving
     evaluate_composition_workflow end-to-end with two different runs,
     which is heavy.
+
+    Note: the checkpoint primitives moved out of ``unified.py`` into a
+    dedicated ``checkpoint.py`` module in the unified-module-split
+    refactor; ``unified.py`` re-imports them and exposes a backward-compat
+    ``_emit_checkpoint_part`` alias for older callers.
     """
     import pathlib
 
+    checkpoint_src = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "cflibs/benchmark/checkpoint.py"
+    ).read_text()
+    # Slug construction: hostname + pid + first-8-chars of run_id UUID.
+    assert 'run_id_slug = run_id.replace("-", "")[:8]' in checkpoint_src, (
+        "checkpoint worker_slug must include a run_id-derived suffix to "
+        "prevent same-host/same-PID restarts from overwriting prior parts"
+    )
+    assert (
+        'return f"{host_slug}_{os.getpid():d}_{run_id_slug}"' in checkpoint_src
+    ), "make_worker_slug filename format regressed"
+
+    # The call-site in unified.py must still wire the primitives together
+    # so the public ``evaluate_composition_workflow`` behavior is preserved.
     unified_src = (
         pathlib.Path(__file__).resolve().parents[2]
         / "cflibs/benchmark/unified.py"
     ).read_text()
-    # Slug construction: hostname + pid + first-8-chars of run_id UUID.
-    assert "_run_id_slug = checkpoint_run_id.replace" in unified_src, (
-        "checkpoint_worker_slug must include a run_id-derived suffix to "
-        "prevent same-host/same-PID restarts from overwriting prior parts"
+    assert "checkpoint_run_id = new_run_id()" in unified_src, (
+        "unified.py must use checkpoint.new_run_id() to build the shared "
+        "per-call run_id"
     )
     assert (
-        'checkpoint_worker_slug = f"{_host_slug}_{os.getpid():d}_{_run_id_slug}"'
+        "checkpoint_worker_slug = make_worker_slug(checkpoint_run_id)"
         in unified_src
-    ), "checkpoint_worker_slug filename format regressed"
+    ), "unified.py must use checkpoint.make_worker_slug() to build the slug"

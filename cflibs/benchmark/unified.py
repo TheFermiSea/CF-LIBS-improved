@@ -65,6 +65,11 @@ from cflibs.benchmark.dataset import (  # noqa: E402
     TruthType,
 )
 from cflibs.benchmark.loaders import load_benchmark  # noqa: E402
+from cflibs.benchmark.checkpoint import (  # noqa: E402
+    emit_checkpoint_part,
+    make_worker_slug,
+    new_run_id,
+)
 from cflibs.benchmark.composition_metrics import (  # noqa: E402
     aitchison_distance,
     load_subcompositional_pairs,
@@ -79,6 +84,12 @@ if TYPE_CHECKING:
     from cflibs.inversion.element_id import ElementIdentificationResult
 
 logger = get_logger("benchmark.unified")
+
+# Backward-compat alias: ``_emit_checkpoint_part`` was the original private
+# helper in this module before the checkpoint primitives moved to
+# :mod:`cflibs.benchmark.checkpoint`.  Any external caller (incl. older test
+# fixtures) that imports the old name still works.
+_emit_checkpoint_part = emit_checkpoint_part
 
 try:
     from scipy.signal import find_peaks
@@ -2667,21 +2678,16 @@ def evaluate_composition_workflow(
     checkpoint_run_id: Optional[str] = None
     checkpoint_worker_slug = ""
     if checkpoint_path is not None:
-        import socket  # noqa: PLC0415
-        import uuid as _uuid  # noqa: PLC0415
-
         checkpoint_parts_dir = checkpoint_path.with_name(checkpoint_path.name + ".parts")
         checkpoint_parts_dir.mkdir(parents=True, exist_ok=True)
-        checkpoint_run_id = str(_uuid.uuid4())
-        # Hostname disambiguates PID collisions across SLURM nodes. The
-        # 8-char run_id prefix in the filename disambiguates same-host /
-        # same-PID restarts (Linux can recycle PIDs after wraparound, and
-        # SLURM --requeue jobs frequently land on the same node with the
-        # exact same PID). Without the run_id suffix, restart-from-scratch
-        # in the same `.parts/` dir would silently overwrite prior parts.
-        _host_slug = socket.gethostname().replace(".", "_").replace("/", "_")
-        _run_id_slug = checkpoint_run_id.replace("-", "")[:8]
-        checkpoint_worker_slug = f"{_host_slug}_{os.getpid():d}_{_run_id_slug}"
+        # ``new_run_id`` + ``make_worker_slug`` live in
+        # :mod:`cflibs.benchmark.checkpoint`. The worker_slug bakes in
+        # hostname + PID + first-8-chars of the run_id so the
+        # part-file filename survives SLURM --requeue (same host,
+        # same PID) and cross-node PID collisions without silent
+        # overwrite. See ``checkpoint.make_worker_slug`` docstring.
+        checkpoint_run_id = new_run_id()
+        checkpoint_worker_slug = make_worker_slug(checkpoint_run_id)
 
     eligible_total = sum(1 for s in spectra if s.truth_type != TruthType.BLIND)
     processed = 0
@@ -2756,12 +2762,12 @@ def evaluate_composition_workflow(
             and records  # guard against empty failure-only batches
             and (processed % checkpoint_every == 0)
         ):
-            checkpoint_part_seq = _emit_checkpoint_part(
-                checkpoint_parts_dir=checkpoint_parts_dir,
-                checkpoint_run_id=checkpoint_run_id,
-                checkpoint_worker_slug=checkpoint_worker_slug,
-                checkpoint_part_seq=checkpoint_part_seq,
-                records_to_write=records[-checkpoint_every:],
+            checkpoint_part_seq = emit_checkpoint_part(
+                parts_dir=checkpoint_parts_dir,
+                run_id=checkpoint_run_id,
+                worker_slug=checkpoint_worker_slug,
+                seq=checkpoint_part_seq,
+                records=records[-checkpoint_every:],
                 processed=processed,
             )
 
@@ -2769,72 +2775,23 @@ def evaluate_composition_workflow(
     # gate (e.g. ``processed == 7`` with ``checkpoint_every == 5``). Without
     # this, up to ``checkpoint_every - 1`` records would be lost on a SLURM
     # timeout that fires *between* the loop end and ``write_outputs``.
-    # ``_emit_checkpoint_part`` owns the sequence increment, so we pass the
+    # ``emit_checkpoint_part`` owns the sequence increment, so we pass the
     # current ``checkpoint_part_seq`` unchanged -- the helper handles the
     # ``+= 1`` internally so the on-disk file numbers are gap-free.
     if checkpoint_parts_dir is not None and records:
         trailing = processed % checkpoint_every
         if trailing > 0:
-            _emit_checkpoint_part(
-                checkpoint_parts_dir=checkpoint_parts_dir,
-                checkpoint_run_id=checkpoint_run_id,
-                checkpoint_worker_slug=checkpoint_worker_slug,
-                checkpoint_part_seq=checkpoint_part_seq,
-                records_to_write=records[-trailing:],
+            emit_checkpoint_part(
+                parts_dir=checkpoint_parts_dir,
+                run_id=checkpoint_run_id,
+                worker_slug=checkpoint_worker_slug,
+                seq=checkpoint_part_seq,
+                records=records[-trailing:],
                 processed=processed,
                 final_flush=True,
             )
 
     return records
-
-
-def _emit_checkpoint_part(
-    *,
-    checkpoint_parts_dir: Path,
-    checkpoint_run_id: Optional[str],
-    checkpoint_worker_slug: str,
-    checkpoint_part_seq: int,
-    records_to_write: Sequence[Any],
-    processed: int,
-    final_flush: bool = False,
-) -> int:
-    """Write one checkpoint part-file under ``<dir>/part_<worker>_<seq>.parquet``.
-
-    Returns the (possibly-incremented) sequence number so the caller can
-    continue from there.
-    """
-    try:
-        from cflibs.benchmark.results import (  # noqa: PLC0415
-            write_parquet as _checkpoint_write_parquet,
-        )
-
-        checkpoint_part_seq += 1
-        part_path = checkpoint_parts_dir / (
-            f"part_{checkpoint_worker_slug}_{checkpoint_part_seq:05d}.parquet"
-        )
-        # Atomic write: stage into ``.tmp`` then rename. A SLURM SIGKILL
-        # (or any crash) mid-write would otherwise leave a truncated
-        # parquet shard that breaks the whole-directory read via
-        # ``cflibs.benchmark.results.read_parquet_dir`` (pyarrow refuses
-        # to concat tables when one shard is corrupt). ``rename`` is
-        # atomic within a filesystem.
-        tmp_path = part_path.with_suffix(part_path.suffix + ".tmp")
-        _checkpoint_write_parquet(
-            tmp_path,
-            composition_records=list(records_to_write),
-            run_id=checkpoint_run_id,
-        )
-        tmp_path.rename(part_path)
-        tag = "[checkpoint final-flush]" if final_flush else "[checkpoint]"
-        print(
-            f"{tag} wrote {len(records_to_write)} records to {part_path.name} "
-            f"(cumulative {processed} spectra this call) under {checkpoint_parts_dir}",
-            file=sys.stderr,
-            flush=True,
-        )
-    except Exception as cp_exc:  # noqa: BLE001
-        logger.warning("checkpoint write failed: %s", cp_exc)
-    return checkpoint_part_seq
 
 
 def tune_composition_workflow(
