@@ -21,7 +21,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, Tuple
-from unittest.mock import MagicMock
 
 import pytest
 
