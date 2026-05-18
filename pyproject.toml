@@ -167,11 +167,13 @@ disable_error_code = [
 
 # Third-party packages that use PEP 695 ``type X[T]`` syntax (Python 3.12+).
 # Our mypy is pinned at ``python_version = "3.10"`` for our own code, so
-# following imports into these packages produces a parse error on their
-# generic class definitions. ``ignore_errors`` skips type-checking inside
-# them while still allowing imports to resolve.
+# following imports into these packages produces a **parse error** on their
+# generic class definitions -- not a type error. ``ignore_errors`` skips
+# only type errors, so we need ``follow_imports = "skip"`` to bypass the
+# parser entirely while still letting our own code import the module.
 [[tool.mypy.overrides]]
 module = "zarr.*"
+follow_imports = "skip"
 ignore_errors = true
 
 [tool.ruff]
