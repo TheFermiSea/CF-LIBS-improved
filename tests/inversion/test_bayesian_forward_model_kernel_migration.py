@@ -380,16 +380,29 @@ def test_forward_py_body_does_not_call_adapter():
 def test_compute_spectrum_supports_vmap_chain_axis(bayesian_db):
     """``_compute_spectrum`` must broadcast cleanly under ``jax.vmap``.
 
-    ``MCMCSampler`` defaults to ``chain_method='vectorized'`` so NumPyro
-    runs all NUTS chains as a single JIT'd kernel with a leading chain
-    axis. The forward model's plasma-species dict must therefore tolerate
-    ``concentrations`` of shape ``(num_chains, n_elements)`` and emit a
-    spectrum of shape ``(num_chains, n_wavelengths)``.
+    What this test covers
+    ---------------------
+    *Only* vmap correctness: namely, that wrapping
+    ``_compute_spectrum`` in ``jax.vmap(..., in_axes=(None, None, 0))``
+    over a 2-D ``concentrations`` of shape ``(num_chains, n_elements)``
+    yields per-chain spectra of shape ``(num_chains, n_wavelengths)``
+    whose rows differ when the input compositions differ. This is the
+    code path NumPyro uses when ``MCMCSampler`` runs NUTS with
+    ``chain_method='vectorized'`` (the project default; see
+    :func:`test_mcmc_sampler_default_chain_method_is_vectorized`).
 
-    Pre-fix the dict-comprehension ``concentrations[i] * total_density``
-    picked the wrong axis under vmap and corrupted chains; the post-fix
-    body uses ``(concentrations * total_density)[..., i]`` which carries
-    the leading batch dim transparently.
+    What this test does NOT cover
+    -----------------------------
+    Manual (non-vmap) batching is **not** validated here, and is in
+    fact unsupported by ``_compute_spectrum`` -- see the "Batching
+    contract" section of that method's docstring. PR #186 swapped a
+    per-index ``concentrations[i] * total_density`` for a broadcast
+    ``(concentrations * total_density)[..., i]``; both forms pass
+    *this* test because ``jax.vmap`` re-traces the function under a
+    leading axis and lifts scalar reads regardless. The test's
+    discriminating power is therefore against gross shape regressions
+    (e.g. accidentally returning a single spectrum) and against
+    silently broadcasting one chain's composition over both rows.
     """
     from cflibs.inversion.solve.bayesian.forward import BayesianForwardModel
 
