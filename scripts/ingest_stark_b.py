@@ -84,11 +84,10 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-import os
 import re
 import sqlite3
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 T_REF_K = 10000.0

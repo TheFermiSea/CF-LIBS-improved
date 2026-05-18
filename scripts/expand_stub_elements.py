@@ -565,7 +565,7 @@ def main() -> int:
 
     print(f"Expanding stub elements in: {args.db}")
     print()
-    stats = expand_stubs(args.db, dry_run=args.dry_run)
+    _stats = expand_stubs(args.db, dry_run=args.dry_run)
     return 0
 
 

@@ -14,13 +14,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import subprocess
 import sys
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
 RESULTS_ROOT = Path("/cluster/shared/cf-libs-bench/results/exp001")
 SHARDS = ("shard1", "shard2", "shard3")

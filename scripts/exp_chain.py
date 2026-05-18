@@ -79,7 +79,7 @@ def _aggregate_exp1() -> dict:
         workflow_scores.items(),
         key=lambda kv: -(sum(kv[1]) / len(kv[1]) if kv[1] else 0.0),
     )
-    print(f"[chain] Exp 1 workflow rankings by mean F1:", flush=True)
+    print("[chain] Exp 1 workflow rankings by mean F1:", flush=True)
     for wf, scores in ranked:
         mean = sum(scores) / len(scores) if scores else 0.0
         print(f"  {wf:24s} F1={mean:.3f}  n={len(scores)}", flush=True)
@@ -118,7 +118,7 @@ def _build_exp2_cells(top_n: int = 3) -> list[dict]:
 def _launch_shard(shard: str, config_path: str, results_dir: str, n_iters: int = 15) -> None:
     """Launch one parameter_sweep shard on its assigned vasp node."""
     host = HOSTS[shard]
-    shard_num = shard[-1]
+    _shard_num = shard[-1]  # noqa: F841 — kept for debug inspection
     # Patch the config file's dataset-shard tail for this shard.
     cmd = (
         f"cd /scratch/cf-libs-exp001 && "

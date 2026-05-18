@@ -48,7 +48,10 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import TYPE_CHECKING, Iterable, Sequence
+
+if TYPE_CHECKING:
+    import pyarrow  # noqa: F401 — used only in string forward-refs below
 
 
 def _build_parser() -> argparse.ArgumentParser:
