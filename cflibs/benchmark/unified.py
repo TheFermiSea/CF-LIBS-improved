@@ -794,6 +794,7 @@ def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
             "intensity_threshold_factor",
             "chance_window_scale",
             "max_lines_per_element",
+            "boltzmann_r2_min",
         ),
     )
     # PR #159 changed ALIASIdentifier's threshold-kwarg defaults from
@@ -1231,6 +1232,7 @@ def _build_alias_predictor(
                 detection_threshold=float(config["detection_threshold"]),
                 chance_window_scale=float(config["chance_window_scale"]),
                 max_lines_per_element=int(config["max_lines_per_element"]),
+                boltzmann_r2_min=float(config.get("boltzmann_r2_min", 0.85)),
                 **_jax_identifier_flags_for(ALIASIdentifier),
             )
             result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
