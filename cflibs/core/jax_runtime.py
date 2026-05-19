@@ -534,15 +534,16 @@ def _register_cflibs_pytrees() -> None:
         T_e = children[0]
         n_e = children[1]
         density_leaves = children[2:]
-        # Bypass __init__ — it logs an f-string format on T_e which fails on
-        # batched/traced arrays. Reconstruct via object.__new__ + field set.
-        instance = object.__new__(SingleZoneLTEPlasma)
+        # __init__ is now JAX-safe (logger gated on tracer detection), so we
+        # can construct normally.
         species = dict(zip(elements, density_leaves))
-        instance.T_e = T_e
-        instance.n_e = n_e
-        instance.species = species
-        instance.T_g = T_g
-        instance.pressure = pressure
+        instance = SingleZoneLTEPlasma(
+            T_e=T_e,
+            n_e=n_e,
+            species=species,
+            T_g=T_g,
+            pressure=pressure,
+        )
         return instance
 
     def _instrument_flatten(instrument: "InstrumentModel"):

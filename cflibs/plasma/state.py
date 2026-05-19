@@ -10,6 +10,29 @@ from typing import Mapping
 
 from cflibs.core.constants import KB_EV
 from cflibs.core.jax_runtime import HAS_JAX, jnp  # noqa: F401  -- re-exported for callers
+
+# Import Tracer for JAX-safety checks (only when JAX is available)
+if HAS_JAX:
+    import jax.core
+    _JAX_TRACER = jax.core.Tracer
+else:
+    _JAX_TRACER = type(None)  # sentinel that will never match
+
+
+def _is_jax_tracer_or_array(value):
+    """Check if value is a JAX tracer or array (not a concrete scalar).
+    
+    Returns True if value is a JAX tracer (during JIT/vmap) or a JAX/numpy
+    array (during vmap batching), False if it's a concrete scalar.
+    """
+    if HAS_JAX:
+        # Check if it's a JAX tracer
+        if isinstance(value, _JAX_TRACER):
+            return True
+        # Check if it's an array (has ndim attribute and ndim > 0, or is an array type)
+        if hasattr(value, "ndim"):
+            return True
+    return False
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("plasma.state")
@@ -232,10 +255,13 @@ class SingleZoneLTEPlasma(PlasmaState):
             Pressure in atm
         """
         super().__init__(T_e, n_e, species, T_g, pressure)
-        logger.info(
-            f"Created SingleZoneLTEPlasma: T_e={T_e:.1f} K, n_e={n_e:.2e} cm^-3, "
-            f"species={list(species.keys())}"
-        )
+        # Gate logging on tracer/array detection to avoid ConcretizationTypeError
+        # when called inside JAX jit/vmap traces or with batched arrays.
+        if not _is_jax_tracer_or_array(T_e):
+            logger.info(
+                f"Created SingleZoneLTEPlasma: T_e={T_e:.1f} K, n_e={n_e:.2e} cm^-3, "
+                f"species={list(species.keys())}"
+            )
 
     @classmethod
     def from_number_fractions(
@@ -402,10 +428,13 @@ class TwoRegionPlasma(SingleZoneLTEPlasma):
         super().__init__(T_core, n_e, species, T_g, pressure)
         self.T_core = T_core
         self.T_corona = T_corona
-        logger.info(
-            f"Created TwoRegionPlasma: T_core={T_core:.1f} K, T_corona={T_corona:.1f} K, "
-            f"n_e={n_e:.2e} cm^-3"
-        )
+        # Gate logging on tracer detection to avoid ConcretizationTypeError
+        # when called inside JAX jit/vmap traces.
+        if not isinstance(T_core, _JAX_TRACER):
+            logger.info(
+                f"Created TwoRegionPlasma: T_core={T_core:.1f} K, T_corona={T_corona:.1f} K, "
+                f"n_e={n_e:.2e} cm^-3"
+            )
 
     def validate(self) -> bool:
         """Validate two-region plasma state."""

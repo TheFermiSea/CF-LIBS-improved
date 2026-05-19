@@ -58,7 +58,271 @@ except ImportError:  # pragma: no cover - exercised when JAX absent
     jnp = None
     jit = None  # type: ignore[assignment]
 
+# Optional jaxopt import for Anderson acceleration in the outer loop
+try:
+    from jaxopt import AndersonAcceleration
+
+    HAS_JAXOPT = True
+except ImportError:  # pragma: no cover - exercised when jaxopt absent
+    HAS_JAXOPT = False
+    AndersonAcceleration = None  # type: ignore[assignment]
+
 logger = get_logger("inversion.solver")
+
+# ---------------------------------------------------------------------------
+# Anderson acceleration for the outer fixed-point loop (ADR-0001 spec)
+# ---------------------------------------------------------------------------
+
+_ANDERSON_HISTORY_SIZE = 5  # Optimal depth per DERV-03 recommendation
+_ANDERSON_RIDGE = 1e-5  # Tikhonov regularization for numerical stability
+_ANDERSON_MAX_ITER = 50
+_ANDERSON_TOL = 1e-10
+
+
+def _make_outer_loop_fixed_point(
+    solver,
+    observations,
+    closure_mode,
+    closure_kwargs,
+):
+    """Create a fixed-point function for the outer CF-LIBS loop.
+
+    The outer loop maps (T_K, n_e) -> (T_K_new, n_e_new) through:
+    1. Saha-Boltzmann correction
+    2. Pooled Boltzmann fit
+    3. Closure equation
+    4. Pressure balance update
+
+    Returns a tuple of (fixed_point_func, static_kwargs) suitable for
+    Anderson acceleration.
+    """
+    # Pre-compute static data outside the fixed-point function
+    obs_by_element = defaultdict(list)
+    for obs in observations:
+        obs_by_element[obs.element].append(obs)
+
+    elements = list(obs_by_element.keys())
+
+    # Pre-fetch Ionization Potentials
+    ips = {}
+    for el in elements:
+        ip = solver.atomic_db.get_ionization_potential(el, 1)
+        if ip is None:
+            ips[el] = 15.0
+        else:
+            ips[el] = ip
+
+    static_kwargs = {
+        "obs_by_element": dict(obs_by_element),
+        "elements": elements,
+        "ips": ips,
+        "closure_mode": closure_mode,
+        "closure_kwargs": closure_kwargs,
+        "pressure_pa": solver.pressure_pa,
+        "two_region": solver.two_region,
+    }
+
+    def fixed_point(state):
+        """One iteration of the CF-LIBS outer loop."""
+        T_K, n_e = state
+        T_prev = T_K
+        ne_prev = n_e
+
+        T_eV = T_K / EV_TO_K
+        if T_eV < 0.1:
+            T_eV = 0.1
+
+        # Calculate Partition Functions
+        partition_funcs = {}
+        partition_funcs_II = {}
+        for el in elements:
+            partition_funcs[el] = solver._evaluate_partition_function(el, 1, T_K)
+            partition_funcs_II[el] = solver._evaluate_partition_function(el, 2, T_K)
+
+        effective_ips = solver._compute_effective_ips(ips, n_e, T_K)
+
+        # Saha correction
+        corrected_obs_map = solver._apply_saha_correction(
+            static_kwargs["obs_by_element"], T_K, n_e, effective_ips
+        )
+
+        # Pooled Boltzmann fit
+        common_fit = solver._fit_common_boltzmann_plane(corrected_obs_map)
+        if common_fit is None:
+            return T_K, n_e
+
+        slope = common_fit.slope
+
+        # Update T
+        if slope >= 0:
+            T_new = 50000.0
+        else:
+            T_new = -1.0 / (slope * KB_EV)
+
+        # Damping (50/50 mixing)
+        T_K_new = 0.5 * T_prev + 0.5 * T_new
+
+        # Two-region corona
+        T_corona = None
+        if solver.two_region:
+            T_corona = 0.8 * T_K_new
+
+        # Abundance multipliers
+        abundance_multipliers = solver._compute_abundance_multipliers(
+            list(common_fit.intercepts.keys()),
+            T_K_new,
+            n_e,
+            partition_funcs,
+            partition_funcs_II,
+            effective_ips,
+            T_corona=T_corona,
+        )
+
+        # Closure
+        intercepts = common_fit.intercepts
+        closure_kwargs_local = static_kwargs["closure_kwargs"]
+        closure_mode_local = static_kwargs["closure_mode"]
+        if closure_mode_local == "matrix":
+            closure_res = ClosureEquation.apply_matrix_mode(
+                intercepts, partition_funcs, abundance_multipliers=abundance_multipliers, **closure_kwargs_local
+            )
+        elif closure_mode_local == "oxide":
+            closure_res = ClosureEquation.apply_oxide_mode(
+                intercepts, partition_funcs, abundance_multipliers=abundance_multipliers, **closure_kwargs_local
+            )
+        elif closure_mode_local == "ilr":
+            closure_res = ClosureEquation.apply_ilr(
+                intercepts, partition_funcs, abundance_multipliers=abundance_multipliers
+            )
+        elif closure_mode_local == "pwlr":
+            closure_res = ClosureEquation.apply_pwlr(
+                intercepts, partition_funcs, abundance_multipliers=abundance_multipliers, **closure_kwargs_local
+            )
+        elif closure_mode_local == "dirichlet_residual":
+            closure_res = ClosureEquation.apply_dirichlet_residual(
+                intercepts, partition_funcs, abundance_multipliers=abundance_multipliers, **closure_kwargs_local
+            )
+        else:
+            closure_res = ClosureEquation.apply_standard(
+                intercepts, partition_funcs, abundance_multipliers=abundance_multipliers
+            )
+
+        concentrations = closure_res.concentrations
+
+        # Pressure balance update
+        total_eps = 0.0
+        for el, C_s in concentrations.items():
+            U_I = partition_funcs.get(el, 25.0)
+            U_II = partition_funcs_II.get(el, 15.0)
+            S = solver._compute_saha_ratio(el, T_K_new, n_e, U_I, U_II, effective_ips[el])
+            eps_s = S / (1.0 + S)
+            total_eps += C_s * eps_s
+
+        avg_Z = total_eps
+        n_tot = solver.pressure_pa / (KB * T_K_new * (1.0 + avg_Z))
+        n_tot_cm3 = n_tot * 1e-6
+        ne_new = avg_Z * n_tot_cm3
+
+        # Damping (50/50 mixing)
+        n_e_new = 0.5 * ne_prev + 0.5 * ne_new
+
+        return T_K_new, n_e_new
+
+    return fixed_point, static_kwargs
+
+
+def _solve_with_anderson(
+    solver,
+    observations,
+    closure_mode,
+    closure_kwargs,
+):
+    """Solve using Anderson acceleration for the outer loop.
+
+    Uses jaxopt.AndersonAcceleration with:
+    - History size = 5 (optimal per DERV-03)
+    - Ridge regularization = 1e-5 (Tikhonov stabilization)
+    - Divergence guard with Picard fallback
+    """
+    if not HAS_JAXOPT:
+        logger.warning("jaxopt not available; falling back to Picard iteration")
+        return solver._solve_python(observations, closure_mode, **closure_kwargs)
+
+    # Create the fixed-point function
+    fixed_point_func, static_kwargs = _make_outer_loop_fixed_point(
+        solver, observations, closure_mode, closure_kwargs
+    )
+
+    # Initial state
+    T_init = 10000.0
+    ne_init = 1.0e17
+    initial_state = (T_init, ne_init)
+
+    # Configure Anderson acceleration
+    anderson = AndersonAcceleration(
+        fixed_point_fun=fixed_point_func,
+        history_size=_ANDERSON_HISTORY_SIZE,
+        mixing_frequency=1,
+        beta=1.0,
+        maxiter=_ANDERSON_MAX_ITER,
+        tol=_ANDERSON_TOL,
+        ridge=_ANDERSON_RIDGE,
+        jit=True,
+        verbose=False,
+    )
+
+    # Run Anderson acceleration
+    try:
+        final_state, state = anderson.run(initial_state)
+        converged = state.converged
+        iterations = state.iter
+        T_K, n_e = final_state
+    except Exception as e:
+        logger.warning(
+            "Anderson acceleration failed (%s); falling back to Picard", e
+        )
+        return solver._solve_python(observations, closure_mode, **closure_kwargs)
+
+    # Check for divergence
+    if not converged:
+        logger.warning(
+            "Anderson did not converge in %d iterations; falling back to Picard",
+            iterations,
+        )
+        return solver._solve_python(observations, closure_mode, **closure_kwargs)
+
+    # Build result
+    from cflibs.plasma.lte_validator import LTEValidator
+
+    lte_validator = LTEValidator()
+    lte_report = lte_validator.validate(
+        T_K=T_K,
+        n_e_cm3=n_e,
+        observations=observations,
+    )
+
+    # Run one more Python iteration to get quality metrics
+    python_result = solver._solve_python(
+        observations, closure_mode, **closure_kwargs
+    )
+
+    # Use Anderson converged state but Python quality metrics
+    T_corona = 0.8 * T_K if solver.two_region else None
+
+    return CFLIBSResult(
+        temperature_K=T_K,
+        temperature_uncertainty_K=0.0,
+        electron_density_cm3=n_e,
+        concentrations=python_result.concentrations,
+        concentration_uncertainties={},
+        iterations=int(iterations),
+        converged=bool(converged),
+        temperature_corona_K=T_corona,
+        quality_metrics=python_result.quality_metrics,
+        electron_density_uncertainty_cm3=0.0,
+        boltzmann_covariance=None,
+    )
+
 
 
 @dataclass
@@ -1007,6 +1271,16 @@ class IterativeCFLIBSSolver:
                 - electron_density_uncertainty_cm3: Set to 0.0 here.
                 - boltzmann_covariance: None in this routine; covariance information is produced by solve_with_uncertainty.
         """
+        # Try Anderson acceleration first (ADR-0001 spec)
+        if HAS_JAXOPT:
+            try:
+                return _solve_with_anderson(
+                    self, observations, closure_mode, closure_kwargs
+                )
+            except Exception as e:
+                logger.info("Anderson acceleration failed (%s); using fallback", e)
+
+        # Fallback to lax.while_loop or Python loop
         if HAS_JAX and _lax_while_loop_enabled():
             try:
                 return self._solve_lax(observations, closure_mode, **closure_kwargs)

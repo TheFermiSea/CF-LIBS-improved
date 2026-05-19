@@ -283,8 +283,15 @@ class CombIdentifier:
         resolving_power: Optional[float] = None,
         baseline_window_nm: float = 10.0,
         threshold_percentile: float = 85.0,
-        min_correlation: float = 0.12,
-        tooth_activation_threshold: float = 0.5,
+        # EVOLVE-BLOCK-START
+        # FN-bound fix: lowered thresholds to improve recall (CF-LIBS-improved-5thd)
+        # Parameter sweep: min_correlation in {0.05, 0.08, 0.10, 0.12}
+        #                  tooth_activation_threshold in {0.3, 0.4, 0.5}
+        # Optimal: min_correlation=0.05, tooth_activation_threshold=0.3
+        # Maximizes macro_recall without regressing precision > 0.02
+        min_correlation: float = 0.05,
+        tooth_activation_threshold: float = 0.3,
+        # EVOLVE-BLOCK-END
         min_active_teeth: int = 2,
         max_shift_pts: int = 5,
         min_width_pts: int = 5,

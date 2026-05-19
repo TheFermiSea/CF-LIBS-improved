@@ -187,12 +187,14 @@ def test_compute_spectrum_matches_direct_forward_model_call(bayesian_db):
     T_eV_jnp = jnp.asarray(T_eV, dtype=spectrum_via_method.dtype)
     n_e_jnp = jnp.asarray(n_e, dtype=spectrum_via_method.dtype)
     total_density = n_e_jnp
-    plasma = object.__new__(SingleZoneLTEPlasma)
-    plasma.T_e = T_eV_jnp * EV_TO_K
-    plasma.n_e = n_e_jnp
-    plasma.species = {el: concentrations[i] * total_density for i, el in enumerate(elements)}
-    plasma.T_g = None
-    plasma.pressure = None
+    species = {el: concentrations[i] * total_density for i, el in enumerate(elements)}
+    plasma = SingleZoneLTEPlasma(
+        T_e=T_eV_jnp * EV_TO_K,
+        n_e=n_e_jnp,
+        species=species,
+        T_g=None,
+        pressure=None,
+    )
     raw = forward_model(
         plasma,
         model.snapshot,

@@ -313,20 +313,22 @@ class BayesianForwardModel:
         total_species_density = _resolve_total_species_density_cm3(n_e, total_species_density_cm3)
 
         # Build a SingleZoneLTEPlasma whose pytree leaves carry the traced
-        # MCMC inputs. Bypass ``__init__`` -- it logs an f-string formatted
-        # against T_e, which fails on JAX tracers.
-        plasma_state = object.__new__(SingleZoneLTEPlasma)
-        plasma_state.T_e = T_eV * EV_TO_K
-        plasma_state.n_e = n_e
+        # MCMC inputs. The __init__ logger is now JAX-safe (gated on tracer
+        # detection), so we can construct normally.
         # Compute element densities by broadcast, then split along the element
         # axis. The ``[..., i]`` indexing pattern preserves any leading batch
         # axes added by ``vmap`` (e.g. NUTS ``chain_method='vectorized'``).
         density_per_element = concentrations * total_species_density
-        plasma_state.species = {
+        species_dict = {
             el: density_per_element[..., i] for i, el in enumerate(self.elements)
         }
-        plasma_state.T_g = None
-        plasma_state.pressure = None
+        plasma_state = SingleZoneLTEPlasma(
+            T_e=T_eV * EV_TO_K,
+            n_e=n_e,
+            species=species_dict,
+            T_g=None,
+            pressure=None,
+        )
 
         intensity = forward_model(
             plasma_state,

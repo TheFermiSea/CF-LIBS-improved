@@ -393,11 +393,11 @@ def test_tier2_defaults_are_strict():
     identifier = CombIdentifier(mock_db)
     assert identifier.strict_tier2 is True
     assert identifier.tier2_tooth_activation_threshold == 0.7
-    # Global default is the paper's 0.5.
-    assert identifier.tooth_activation_threshold == 0.5
+    # Global default lowered to 0.3 for improved recall (was 0.5).
+    assert identifier.tooth_activation_threshold == 0.3
     # And the effective threshold for Mn/Na/K is 0.7.
     for elt in ("Mn", "Na", "K"):
         assert identifier._tier2_effective_activation_threshold(elt) == 0.7
     # Non-Tier-2 sees the global 0.5.
     for elt in ("Fe", "Ti", "Si", "Ca", "Al"):
-        assert identifier._tier2_effective_activation_threshold(elt) == 0.5
+        assert identifier._tier2_effective_activation_threshold(elt) == 0.3
