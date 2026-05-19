@@ -11,20 +11,35 @@ to the publisher landing page (preferred) or an open-access mirror.
 
 ---
 
-## NotebookLM ingestion workflow
+## NotebookLM ingestion — STATUS: COMPLETE
 
-1. Open the **CF-LIBS Repository Citations** notebook (create one if it
-   doesn't exist yet — that's the canonical home for this repo's
-   bibliography).
-2. For each row in §"Verified — added to paper/refs.bib" below:
-   - **Add source → URL** with the link in the "Source URL" column.
-   - When NotebookLM prompts for a title, use the value from "Title".
-   - Tag with the cite-key (e.g. `LabutinEtAl2013`) for cross-reference.
-3. For each row in §"Unverified — flagged for follow-up" below:
-   - Either find the canonical paper via a focused Asta search, OR
-   - Add a Note in NotebookLM: "Cited in CF-LIBS code/docs at
-     {file:line} but unable to locate authoritative version; consult
-     author or remove the reference."
+The 14 verified citations below are now **live in NotebookLM**:
+
+- **Notebook:** *CF-LIBS Repository Citations*
+- **Notebook ID:** `6307a6a1-a4e9-4c43-ba9f-24ebb2f2fb9f`
+- **Source count:** 14
+- **Ingested:** 2026-05-19 (via `nlm source add --text` from `briansquires@brians-macbook-pro-2310`)
+
+Why a new notebook rather than the existing 71-source "CF-LIBS:
+Calibration-Free Laser-Induced Breakdown Spectroscopy" master notebook:
+that one is at NotebookLM's per-notebook source cap (URL/text adds to
+it return error code `[9]` "generic" — empirically the cap is around
+70–75 sources). The new notebook is a clean, repo-focused index that
+mirrors `paper/refs.bib`; sources are titled with the cite-key so a
+search for `\cite{LabutinEtAl2013}` in code maps directly to the
+NotebookLM source.
+
+URL-based ingestion was attempted first but failed for the publisher
+landing pages (Wiley / ScienceDirect / AIP all returned the same `[9]`
+error — paywalled abstract pages aren't crawlable by NotebookLM). The
+final ingestion used `--text` with a structured citation block (DOI,
+authors, journal, URL, CF-LIBS code-site cross-reference) per source.
+
+For each row in §"Unverified — flagged for follow-up" below:
+- Either find the canonical paper via a focused Asta search, OR
+- Add a Note in NotebookLM: "Cited in CF-LIBS code/docs at
+  {file:line} but unable to locate authoritative version; consult
+  author or remove the reference."
 
 ---
 
