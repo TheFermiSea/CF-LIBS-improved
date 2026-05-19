@@ -30,14 +30,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
-import os
 import statistics
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Tuple
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _RUN_UNIFIED = _REPO_ROOT / "scripts" / "run_unified_benchmark.py"
@@ -347,7 +345,7 @@ def _write_markdown_report(
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     with report_path.open("w") as f:
-        f.write(f"# Boltzmann R^2 Min Parameter Sweep Report\n\n")
+        f.write("# Boltzmann R^2 Min Parameter Sweep Report\n\n")
         f.write(f"Date: {report_date}\n\n")
 
         # Summary table
@@ -383,13 +381,11 @@ def _write_markdown_report(
             for result in results:
                 if result.r2_value == 0.85:
                     continue
-                regression_ok = True
                 for metric in _OVERALL_METRICS:
                     mean_val, _ = result.get_mean_std(metric)
                     baseline_mean, _ = baseline.get_mean_std(metric)
                     regression = baseline_mean - mean_val
                     if regression > _PROMOTION_GUARD_TOL:
-                        regression_ok = False
                         f.write(
                             f"- **{result.r2_value:.2f}**: FAILED - "
                             f"{metric} regressed by {regression:.3f} > {_PROMOTION_GUARD_TOL}\n"

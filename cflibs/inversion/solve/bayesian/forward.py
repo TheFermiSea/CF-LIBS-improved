@@ -437,12 +437,19 @@ class TwoZoneBayesianForwardModel:
         element_conc = concentrations[el_idx]
         N_species = element_conc * total_species_density * pop_fraction
 
+        # N_species is in cm⁻³ (project convention). The emissivity formula
+        # below uses SI constants (h, c, λ in m) and therefore needs n_upper
+        # in m⁻³. The single-zone kernels.forward_model path applies this
+        # same `* 1.0e6` conversion at its emissivity site (kernels.py:506);
+        # the TwoZone path was missing it, making every TwoZone emission
+        # 10⁶× too small. Bug surfaced 2026-05-19 by AI physics review.
         n_upper = N_species * (data.gk / U_val) * jnp.exp(-data.ek_ev / T_eV)
+        n_upper_m3 = n_upper * _as_jax_real(1.0e6)
 
         epsilon = (
             (_JAX_H_PLANCK * _JAX_C_LIGHT / (4 * jnp.pi * data.wavelength_nm * _as_jax_real(1e-9)))
             * data.aki
-            * n_upper
+            * n_upper_m3
         )
 
         mass_kg = data.mass_amu * _JAX_M_PROTON
@@ -472,9 +479,12 @@ class TwoZoneBayesianForwardModel:
         intensity = jnp.clip(intensity, 0.0, 1e12)
 
         ei_ev = data.ei_ev if data.ei_ev is not None else jnp.zeros_like(data.ek_ev)
+        # Same cm⁻³→m⁻³ conversion as n_upper above — kappa_0 uses SI
+        # constants so n_lower must be in m⁻³.
         n_lower = N_species * (1.0 / U_val) * jnp.exp(-ei_ev / T_eV)
+        n_lower_m3 = n_lower * _as_jax_real(1.0e6)
         f_osc = data.f_osc if data.f_osc is not None else jnp.ones_like(data.aki) * 1e-2
-        kappa_0 = (jnp.pi * _JAX_E_CHARGE**2 / (_JAX_M_E * _JAX_C_LIGHT)) * f_osc * n_lower
+        kappa_0 = (jnp.pi * _JAX_E_CHARGE**2 / (_JAX_M_E * _JAX_C_LIGHT)) * f_osc * n_lower_m3
         absorption = jnp.sum(kappa_0 * profile, axis=1)
         absorption = jnp.clip(absorption, 0.0, 1e12)
 
