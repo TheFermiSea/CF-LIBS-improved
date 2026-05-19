@@ -343,50 +343,47 @@ dispatch calls eliminated over a full chain.
 
 ## Citation gap list
 
-These appear in code/docs but have NO entry in `paper/refs.bib`. Each
-needs verification + a BibTeX entry. **When NotebookLM reconnects, this
-list should be ingested into the citation notebook.**
+> **STATUS: SUPERSEDED 2026-05-19** — the 19 hanging citations cataloged
+> in this section have been triaged via the docs-2 (`s5ba`) follow-up.
+> 14 are now verified and present in `paper/refs.bib`; 4 are flagged
+> for follow-up; 1 was a year-typo. See the resolution manifest at
+> `docs/literature/2026-05-19-citation-backfill-manifest.md` for the
+> per-citation outcomes, DOI links, and NotebookLM ingestion order.
+> The original gap table is retained below for historical traceability.
 
-### Code-level (12 hanging)
+### Resolved (14 — added to `paper/refs.bib`)
 
-| Citation | First seen at | Topic |
+| Cite-key | Topic | First seen at |
 |---|---|---|
-| Black et al. 2024 | `alias.py:1502` | Sparse NNLS overfitting in spectral unmixing |
-| Noel et al. 2025 | `alias.py:4,1940` | ALIAS algorithm, peak-detection enhancement |
-| Vrabel et al. 2020 | `loaders.py:835` | LIBS benchmark dataset (Sci Data 7:175) |
-| Wakil et al. 2023 | `boltzmann.py:146` | Boltzmann fit multiplet aggregation |
-| Gajarska et al. 2024 | `comb.py:4` | Comb matching per-tooth activation threshold |
-| Cristoforetti et al. 2010 | `temporal.py:47` | Spectrochim. Acta B 65, 86–95 (gate optimization) |
-| El Sherbini et al. 2020 | `boltzmann.py:12` | Curve-of-growth self-absorption detection |
-| Jochum et al. 2005 | `reference_compositions.py:12` | USGS GeoReM standards |
-| Jochum et al. 2016 | `usgs.py:333` | USGS G-2 granite composition |
-| Jochum et al. 2022 | `usgs.py:333` | USGS reference material update |
-| Labutin et al. 2013 | `alias.py:1940` | Spectral correlation peak-region semantics |
-| van den Bekerom & Pannier 2021 | `ADR-0001-RUNBOOK.md` (LDM bead T1-4) | LDM broadening |
+| `KepesEtAl2020` | LIBS benchmark dataset (Sci Data 7:53; cite-key uses lead author Képeš, not Vrabel) | `loaders.py:835` |
+| `NoelEtAl2025` | ALIAS algorithm | `alias.py:4,1940` |
+| `JochumEtAl2005` | GeoReM database | `reference_compositions.py:12` |
+| `JochumEtAl2016` | GeoReM ISO-guideline RM update | `usgs.py:333` |
+| `LabutinEtAl2013` | Correlation-based identifier | `alias.py:1940` |
+| `CristoforettiEtAl2010` | LTE/McWhirter (Spectrochim. Acta B 65:86-95) | `temporal.py:47` |
+| `VandenbekeromPannier2021` | LDM/DIT spectral synthesis | `ADR-0001-RUNBOOK.md` |
+| `PannierLaux2018` | RADIS library | `docs/adr/ADR-0001-radis-jaxrts-pattern-survey.md` |
+| `VolkerGornushkin2023` | Boltzmann multiplet aggregation (NOT Wakil — that was a misattribution in the code comment) | `boltzmann.py:146` |
+| `GajarskaEtAl2024` | Comb-filter identifier | `comb.py:4` |
+| `KramidaEtAl2024NIST` | NIST ASD v5.12 database release | `docs/atomic_data/kramida_2024_delta.md` |
+| `Salzmann1998` | Atomic Physics in Hot Plasmas (book) | `README.md:288` |
+| `ColombantTonon1973` | LPP X-ray emission (J. Appl. Phys. 44:3524 — NOT Phys. Fluids as cited) | `README.md:289` |
+| `Griem1974` | Spectral Line Broadening by Plasmas (book) | `README.md:293` |
 
-### Doc-level (7 additional)
+### Unverified (4 — follow-up needed)
 
-| Citation | File:line | Topic |
+| Citation as written | File:line | Likely scenario |
 |---|---|---|
-| Salzmann (1998) | `README.md:288` | Saha-Boltzmann equilibrium book |
-| Colombant & Tonon (1973) | `README.md:289` | X-ray emission from laser-produced plasmas |
-| Landi & Degl'Innocenti (1999) | `README.md:294` | Stark broadening of H lines |
-| Griem (1974) | `README.md:293` | Spectral Line Broadening (book) |
-| RADIS library | `docs/adr/ADR-0001-radis-jaxrts-pattern-survey.md` | Reference radiative-transfer library |
-| Kramida 2024 | `docs/atomic_data/kramida_2024_delta.md` | NIST ASD delta atomic data |
-| Ciucci et al. (2009 vs 1999 year mismatch) | `README.md:282` | CF-LIBS method (year is wrong; bib has 1999) |
+| Black et al. 2024 | `alias.py:1502` | Cannot locate; trace original reviewer or remove. |
+| El Sherbini et al. 2020 | `boltzmann.py:12` | Only the 2005 paper findable; may be a misattribution of year. |
+| Landi & Degl'Innocenti 1999 | `README.md:294` | Could not locate a specific 1999 paper; author works span 1994–2004. |
+| Jochum 2022 | `usgs.py:333` | Likely a year typo for `JochumEtAl2016`. |
 
-### Recommended ingestion workflow once NotebookLM reconnects
+### Year typo (1)
 
-1. Create a notebook `CF-LIBS Repository Citations` (or reuse an existing
-   physics-references notebook if one exists).
-2. Add each verified paper as a source (DOI, arXiv ID, or PDF if open).
-3. Generate BibTeX from each source and merge into `paper/refs.bib`.
-4. Mass-update code/doc references: `Noel et al. 2025` → `\cite{NoelEtAl2025}`.
-
-For papers that *cannot* be verified (no DOI, no arXiv, no journal):
-- Drop the in-code reference, or
-- Mark with `# CITATION-NEEDED:` and file a bead.
+`README.md:282` cites "Ciucci et al. (2009)"; the canonical CF-LIBS
+paper is **Ciucci et al. (1999)**, already in the bib as `Ciucci1999`.
+Pure year-correction; addressed by docs-1 or its own one-line PR.
 
 ---
 
