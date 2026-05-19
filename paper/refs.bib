@@ -398,3 +398,178 @@
   doi     = {10.1039/C8JA00220G},
   note    = {OPSIAL software; arXiv:1802.01000}
 }
+
+% =========================================================================
+% === Added 2026-05-19 — codebase-audit citation backfill (bead docs-2/s5ba)
+% Each entry below was cited in code or docs without backing in refs.bib;
+% verified via Asta-equivalent searches (Semantic Scholar / Scopus / arXiv
+% / publisher landing pages). See docs/architecture/codebase-audit-2026-05-19.md
+% =========================================================================
+
+@article{KepesEtAl2020,
+  author  = {K{\'e}pe{\v{s}}, Erik and Vr{\'a}bel, Jakub and St{\v{r}}{\'i}te{\v{z}}sk{\'a}, S{\'a}ra and Po{\v{r}}{\'i}zka, Pavel and Kaiser, Jozef},
+  title   = {Benchmark Classification Dataset for {Laser-Induced Breakdown Spectroscopy}},
+  journal = {Scientific Data},
+  volume  = {7},
+  pages   = {53},
+  year    = {2020},
+  doi     = {10.1038/s41597-020-0396-8},
+  note    = {138 soil samples in 12 classes; canonical CF-LIBS benchmark dataset. Code path uses ``vrabel2020_soil_benchmark'' as the dataset id after the second author.}
+}
+
+@article{NoelEtAl2025,
+  author  = {Noel, Cl{\'e}ment and Neori{\v{c}}i{\'c}-Maclot, Lana and Alvarez-Llamas, C{\'e}sar and Cug{\'e}rone, Alexandre and Fabre, C{\'e}cile and Duponchel, Ludovic and Motto-Ros, Vincent},
+  title   = {Automated Line Identification for Atomic Spectroscopy ({ALIAS}): Application to {LIBS} Imaging Data Processing},
+  journal = {Spectrochimica Acta Part B: Atomic Spectroscopy},
+  year    = {2025},
+  doi     = {10.1016/j.sab.2025.107179},
+  note    = {ALIAS algorithm — peak detection, theoretical-emissivity scoring, decision pipeline. Implemented in cflibs/inversion/identify/alias.py.}
+}
+
+@article{JochumEtAl2005,
+  author  = {Jochum, Klaus Peter and Nohl, Ulrike and Herwig, Kirstin and Lammel, Elke and Stoll, Brigitte and Hofmann, Albrecht W.},
+  title   = {{GeoReM}: A New Geochemical Database for Reference Materials and Isotopic Standards},
+  journal = {Geostandards and Geoanalytical Research},
+  volume  = {29},
+  number  = {3},
+  pages   = {333--338},
+  year    = {2005},
+  doi     = {10.1111/j.1751-908X.2005.tb00904.x},
+  note    = {Source of canonical USGS reference compositions used in cflibs/benchmark/reference_compositions.py.}
+}
+
+@article{JochumEtAl2016,
+  author  = {Jochum, Klaus Peter and Weis, Ulrike and Schwager, Beate and Stoll, Brigitte and Wilson, Stephen A. and Haug, Gerald H. and Andreae, Meinrat O. and Enzweiler, J{\'a}cinta},
+  title   = {Reference Values Following {ISO} Guidelines for Frequently Requested Rock Reference Materials},
+  journal = {Geostandards and Geoanalytical Research},
+  volume  = {40},
+  number  = {3},
+  pages   = {333--350},
+  year    = {2016},
+  doi     = {10.1111/j.1751-908X.2015.00392.x},
+  note    = {Updated certified values for USGS BHVO-2 / AGV-2 / BCR-2 / G-2 used as ground-truth in cflibs/benchmark/datasets/usgs.py.}
+}
+
+@article{LabutinEtAl2013,
+  author  = {Labutin, Timur A. and Zaytsev, Sergey M. and Popov, Andrey M. and Zorov, Nikita B.},
+  title   = {Automatic Identification of Emission Lines in Laser-Induced Plasma by Correlation of Model and Experimental Spectra},
+  journal = {Analytical Chemistry},
+  volume  = {85},
+  number  = {3},
+  pages   = {1944--1949},
+  year    = {2013},
+  doi     = {10.1021/ac303270q},
+  note    = {Foundational correlation-based identifier; predecessor pattern for cflibs/inversion/identify/correlation.py.}
+}
+
+@article{CristoforettiEtAl2010,
+  author  = {Cristoforetti, Gabriele and De Giacomo, Alessandro and Dell'Aglio, Marcella and Legnaioli, Stefano and Tognoni, Elisabetta and Palleschi, Vincenzo and Omenetto, Nicol{\`o}},
+  title   = {Local Thermodynamic Equilibrium in {Laser-Induced Breakdown Spectroscopy}: Beyond the {McWhirter} Criterion},
+  journal = {Spectrochimica Acta Part B: Atomic Spectroscopy},
+  volume  = {65},
+  number  = {1},
+  pages   = {86--95},
+  year    = {2010},
+  doi     = {10.1016/j.sab.2009.11.005},
+  note    = {Cited in cflibs/inversion/runtime/temporal.py for plasma-gate optimization; canonical LTE-validity reference.}
+}
+
+@article{VandenbekeromPannier2021,
+  author  = {van den Bekerom, D. C. M. and Pannier, Erwan},
+  title   = {A Discrete Integral Transform for Rapid Spectral Synthesis},
+  journal = {Journal of Quantitative Spectroscopy and Radiative Transfer},
+  volume  = {261},
+  pages   = {107476},
+  year    = {2021},
+  doi     = {10.1016/j.jqsrt.2020.107476},
+  note    = {LDM (Line-by-Line Decomposed Method) for fast Voigt synthesis; the algorithm bead T1-4 (ADR-0001) ports into cflibs/manifold/.}
+}
+
+@article{PannierLaux2018,
+  author  = {Pannier, Erwan and Laux, Christophe O.},
+  title   = {{RADIS}: A Nonequilibrium Line-by-Line Radiative Code for {CO\textsubscript{2}} and {HITRAN}-like Database Species},
+  journal = {Journal of Quantitative Spectroscopy and Radiative Transfer},
+  volume  = {222--223},
+  pages   = {12--25},
+  year    = {2019},
+  doi     = {10.1016/j.jqsrt.2018.09.027},
+  note    = {Reference Python implementation; pattern survey precedent for the ADR-0001 unified forward-kernel split. The 2018 manuscript date is for submission; journal volume is 2019.}
+}
+
+@article{VolkerGornushkin2023,
+  author  = {V{\"o}lker, Tobias and Gornushkin, Igor B.},
+  title   = {Extension of the {Boltzmann} Plot Method for Multiplet Emission Lines},
+  journal = {Journal of Quantitative Spectroscopy and Radiative Transfer},
+  volume  = {308},
+  pages   = {108741},
+  year    = {2023},
+  doi     = {10.1016/j.jqsrt.2023.108741},
+  note    = {Code comment in cflibs/inversion/physics/boltzmann.py:146 attributes this to ``Wakil 2023'' — likely a misattribution; the canonical multiplet-aggregation paper is V{\"o}lker \& Gornushkin 2023.}
+}
+
+@article{GajarskaEtAl2024,
+  author  = {Gajarska, Zuzana and Brunnbauer, Lukas and Hrdli{\v{c}}ka, Ale{\v{s}} and Praus, Petr and Kaiser, Jozef and Lendl, Bernhard and Limbeck, Andreas},
+  title   = {Automated Detection of Element-specific Features in {LIBS} Spectra},
+  journal = {Journal of Analytical Atomic Spectrometry},
+  volume  = {39},
+  pages   = {2752--2769},
+  year    = {2024},
+  doi     = {10.1039/D4JA00247D},
+  note    = {Comb-filter-based identifier; pattern source for cflibs/inversion/identify/comb.py.}
+}
+
+@misc{KramidaEtAl2024NIST,
+  author       = {Kramida, A. and Ralchenko, Yu. and Reader, J. and {NIST ASD Team}},
+  title        = {{NIST} Atomic Spectra Database (Version 5.12)},
+  howpublished = {National Institute of Standards and Technology, Gaithersburg, MD},
+  year         = {2024},
+  url          = {https://physics.nist.gov/asd},
+  note         = {Database, accessed via ``cflibs generate-db``. Last data update November 2024.}
+}
+
+@book{Salzmann1998,
+  author    = {Salzmann, David},
+  title     = {Atomic Physics in Hot Plasmas},
+  publisher = {Oxford University Press},
+  address   = {New York},
+  series    = {International Series of Monographs on Physics},
+  volume    = {97},
+  year      = {1998},
+  isbn      = {9780195109306},
+  note      = {Saha-Boltzmann equilibrium reference cited in README.md.}
+}
+
+@article{ColombantTonon1973,
+  author  = {Colombant, Denis and Tonon, Gilbert F.},
+  title   = {X-ray Emission in Laser-Produced Plasmas},
+  journal = {Journal of Applied Physics},
+  volume  = {44},
+  number  = {8},
+  pages   = {3524--3537},
+  year    = {1973},
+  doi     = {10.1063/1.1662796},
+  note    = {Collisional-radiative model; foundational LPP X-ray-source reference. README.md cites as Phys. Fluids which is incorrect — canonical venue is J. Appl. Phys.}
+}
+
+@book{Griem1974,
+  author    = {Griem, Hans R.},
+  title     = {Spectral Line Broadening by Plasmas},
+  publisher = {Academic Press},
+  address   = {New York},
+  series    = {Pure and Applied Physics},
+  volume    = {39},
+  year      = {1974},
+  isbn      = {9780123028501},
+  note      = {Canonical Stark broadening reference. Online supplementary tables at https://griem.obspm.fr.}
+}
+
+% Unverified citations — flagged for manual lookup or removal. Each appears
+% in code/docs but could not be located on Semantic Scholar / Scopus /
+% arXiv / publisher landing pages with the metadata as written. Filing as
+% follow-up beads under docs-2/s5ba.
+
+% Black2024 — sparse NNLS overfitting; cited in alias.py:1502.
+% El-Sherbini2020 — curve-of-growth self-absorption; cited in boltzmann.py:12. Only El Sherbini's 2005 paper findable.
+% LandiDegl'Innocenti1999 — Stark broadening of H; cited in README.md:294.
+% Jochum2022 — USGS reference update; cited in usgs.py:333. Likely refers to the 2016 update; year may be a typo.
+
