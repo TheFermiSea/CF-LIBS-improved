@@ -519,7 +519,17 @@ class NestedSampler:
 
             sigma_read = self.noise_params.readout_noise
             dark = self.noise_params.dark_current
-            variance = np.abs(predicted) + sigma_read**2 + dark
+            gain = self.noise_params.gain
+            # Match the NumPyro-side `bayesian_model` + module-level
+            # `log_likelihood` exactly: Poisson shot-noise term is
+            # `predicted / gain`, not raw `predicted`. Use `maximum(...,
+            # 1e-10)` instead of `abs` so a negative predicted value
+            # (possible after polynomial baseline) is flagged rather than
+            # silently flipped positive. Bug surfaced 2026-05-19 by AI
+            # physics review — was making MCMC posterior vs nested-
+            # sampling-evidence Bayes factors incoherent.
+            pred_safe = np.maximum(predicted, 1e-10)
+            variance = pred_safe / gain + sigma_read**2 + dark
 
             residuals = observed - predicted
             log_lik = -0.5 * np.sum(residuals**2 / variance + np.log(2 * np.pi * variance))

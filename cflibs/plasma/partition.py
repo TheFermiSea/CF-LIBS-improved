@@ -158,20 +158,38 @@ def direct_sum_partition_function_batch(
     np.ndarray
         Shape (N_temps,) partition function values.
     """
-    delta_chi = ionization_potential_depression(n_e, temperatures_K.mean()) if n_e else 0.0
-    e_max = ip_ev - delta_chi
-    mask = E_levels_ev < e_max
+    # IPD per-temperature, not at the batch mean. The Debye-Hückel IPD
+    # depends on T as ~T^{-1/2}, so applying the mean-T cutoff to all
+    # temperatures incorrectly excludes (or includes) levels just below
+    # the cutoff at low- and high-T edges of the batch. The scalar path
+    # at `direct_sum_partition_function` and the JAX path at
+    # `_direct_sum_single_temp` already compute IPD per-T; the NumPy
+    # batch path here was the only one with the mean(T) bug. Surfaced
+    # 2026-05-19 by AI physics review; cuts the basis-library generator
+    # error for non-mean-T plasma conditions.
+    if n_e:
+        delta_chis = np.array(
+            [ionization_potential_depression(n_e, T) for T in temperatures_K]
+        )  # (N_temps,)
+    else:
+        delta_chis = np.zeros_like(temperatures_K, dtype=float)
+    e_maxes = ip_ev - delta_chis  # (N_temps,)
+    # Per-temperature mask: shape (N_temps, N_levels).
+    mask = E_levels_ev[np.newaxis, :] < e_maxes[:, np.newaxis]
 
-    g_masked = g_levels[mask]
-    E_masked = E_levels_ev[mask]
-
-    if len(g_masked) == 0:
+    if not np.any(mask):
         return np.ones_like(temperatures_K)
 
     # Shape: (N_temps, N_levels) via broadcasting
     kT = KB_EV * temperatures_K[:, np.newaxis]  # (N_temps, 1)
-    boltzmann = np.exp(-E_masked[np.newaxis, :] / kT)  # (N_temps, N_levels)
-    U = np.sum(g_masked[np.newaxis, :] * boltzmann, axis=1)  # (N_temps,)
+    boltzmann = np.exp(-E_levels_ev[np.newaxis, :] / kT)  # (N_temps, N_levels)
+    # Apply the per-temperature level mask so excluded levels contribute 0
+    # to that temperature's U, but included levels still contribute at
+    # neighboring temperatures.
+    U = np.sum(
+        g_levels[np.newaxis, :] * boltzmann * mask.astype(boltzmann.dtype),
+        axis=1,
+    )  # (N_temps,)
     return np.maximum(U, 1.0)
 
 

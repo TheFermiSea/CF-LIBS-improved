@@ -274,8 +274,21 @@ def _format_atomic_data_arrays(
 
     gk_vals = df["gk"].values.astype(float)
     aki_vals = df["aki"].values.astype(float)
-    # Oscillator strength approximation (g_i ~= g_k):
-    f_osc = 1.499e-16 * df["wavelength_nm"].values ** 2 * aki_vals
+    # Oscillator strength: the Einstein-A ↔ f_ik relation is
+    #   f_ik = (m_e c) / (8 π² e²) × λ² × (g_k / g_i) × A_ki
+    # which in nm units evaluates to 1.499e-16 × λ² × (g_k/g_i) × A_ki.
+    # The atomic DB's `lines` table doesn't carry g_i (lower-level
+    # degeneracy) directly; the `energy_levels` join on
+    # (element, sp_num, ei_ev) would multi-match in practice because the
+    # same g can appear at the same energy across multiple ek_ev rows.
+    # Until that lookup is wired, we keep the g_k ≈ g_i approximation
+    # but CLAMP the result to physically plausible bounds
+    # (f_osc ∈ [1e-6, 2.0]) so the worst-case 2–10× error on Tier-2
+    # transitions doesn't propagate into a TwoZone optical-depth blowup.
+    # Bug surfaced 2026-05-19 by AI physics review; full g_i lookup is a
+    # documented follow-up.
+    f_osc_raw = 1.499e-16 * df["wavelength_nm"].values ** 2 * aki_vals
+    f_osc = np.clip(f_osc_raw, 1e-6, 2.0)
 
     return AtomicDataArrays(
         wavelength_nm=jnp.array(df["wavelength_nm"].values, dtype=jnp.float32),
