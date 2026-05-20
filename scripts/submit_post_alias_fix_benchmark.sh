@@ -18,8 +18,8 @@
 #   sbatch scripts/submit_post_alias_fix_benchmark.sh [--node vasp-02]
 #
 #SBATCH --job-name=post-alias-fix-bench
-#SBATCH --time=04:00:00
-#SBATCH --partition=priority
+#SBATCH --time=12:00:00
+#SBATCH --partition=normal
 #SBATCH --gpus-per-task=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -47,23 +47,25 @@ mkdir -p "${OUTPUT_DIR}" "${REPO_ROOT}/logs/slurm"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda}"
 export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/home/brian/jax-cache}"
 
-# Workflows to benchmark:
+# PHASE 1: Identification-only on the lightweight ALIAS-family + canonical
+# baselines. Basis-driven workflows (spectral_nnls, hybrid_union,
+# hybrid_consensus_2of3, hybrid_intersect) are deferred to a follow-up run
+# because they need the on-cluster basis_libraries and substantially more
+# compute per spectrum. Job 2059 (8 workflows, --time=4h) timed out with
+# zero output because the ID-side harness has no incremental write —
+# everything dumps at the end. Phase 1 is scoped to fit comfortably.
 ID_WORKFLOWS=(
-    alias                       # baseline (pre-fix behavior, r2_gate_mode=fixed)
+    alias                       # baseline (pre-fix default, r2_gate_mode=fixed)
     alias_v2                    # ftp1 + dj6y bundled (Phase D winner)
     alias_high_recall           # recall-focused tuning
     comb                        # canonical comb identifier
     correlation                 # cross-correlation baseline
-    spectral_nnls               # NNLS sparse identifier
-    hybrid_union                # 5-identifier consensus (prior best, F1=0.69)
-    hybrid_consensus_2of3       # 2-of-3 majority (per asta-12 — alkali FP fix)
 )
 
-# Composition: iterative_jax only on this pass. From stark-vjbh data:
-# - iterative_jax matches bayesian to ~1e-12 on Aitchison
-# - iterative_jax is ~3000-6000x faster (0.2s vs 630s on BHVO-2)
-# A follow-up bead can run the bayesian pass for posterior diagnostics.
-COMP_WORKFLOWS=(iterative_jax)
+# Composition section turned off in Phase 1 — focus is the macro-F1 / recall
+# delta on identification only. Composition (iterative_jax) is fast but adds
+# JAX warm-up overhead per spectrum.
+SECTIONS=id
 
 echo "=== Post-ALIAS-fix benchmark (bead d553) ==="
 echo "Output dir:                  ${OUTPUT_DIR}"
@@ -71,7 +73,7 @@ echo "JAX_PLATFORMS:               ${JAX_PLATFORMS}"
 echo "JAX_COMPILATION_CACHE_DIR:   ${JAX_COMPILATION_CACHE_DIR}"
 echo "Commit:                      $(git -C "${REPO_ROOT}" rev-parse HEAD)"
 echo "ID workflows:                ${ID_WORKFLOWS[*]}"
-echo "Composition workflows:       ${COMP_WORKFLOWS[*]}"
+echo "Sections:                    ${SECTIONS}"
 echo "=================================="
 
 cd "${REPO_ROOT}"
@@ -91,12 +93,13 @@ echo "Data dir:                    ${DATA_DIR}"
 .venv/bin/python scripts/run_unified_benchmark.py \
     --data-dir "${DATA_DIR}" \
     --output-dir "${OUTPUT_DIR}" \
-    --sections all \
+    --sections "${SECTIONS}" \
     --id-workflows "${ID_WORKFLOWS[@]}" \
-    --composition-workflows "${COMP_WORKFLOWS[@]}" \
+    --quick \
     --vrabel-max-shots 1 \
+    --max-outer-folds 1 \
     --output-format parquet \
-    --experiment-label "post-alias-fix-d553" \
+    --experiment-label "post-alias-fix-d553-phase1" \
     --seed 42
 
 echo "=== Benchmark complete. Results in ${OUTPUT_DIR} ==="
