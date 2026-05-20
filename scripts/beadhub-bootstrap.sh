@@ -61,7 +61,7 @@ request = urllib.request.Request(
     method="POST",
 )
 try:
-    with urllib.request.urlopen(request) as response:
+    with urllib.request.urlopen(request, timeout=30) as response:
         payload = json.loads(response.read().decode())
 except urllib.error.HTTPError as exc:
     body = exc.read().decode()

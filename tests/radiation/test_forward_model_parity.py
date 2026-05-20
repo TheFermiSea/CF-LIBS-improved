@@ -161,14 +161,15 @@ def test_manifold_single_spectrum_kernel_parity_smoke(atomic_db):
 
 
 def test_bayesian_forward_kernel_parity_deferred():
-    """BayesianForwardModel parity is deferred to T1-6 -- documented stub.
+    """Drift-guard that BayesianForwardModel has migrated to the unified kernel.
 
-    The BayesianForwardModel atomic-data carrier (``AtomicDataArrays``) and
-    its partition-function model (constant log U placeholders) diverge from
-    the canonical :class:`AtomicSnapshot` (polynomial coefficients). Direct
-    substitution of the kernel forward path here shifts intensities by
-    O(1%) -- outside the ``rtol=1e-5`` parity target. T1-6's decomposition
-    will unify them via :func:`_atomic_data_arrays_from_snapshot` (added in
-    T1-2 as a bridge helper).
+    The legacy file-level skip referenced T1-6 (the BayesianForwardModel
+    kernel migration); that work landed and the active drift guard now lives
+    in :mod:`tests.inversion.test_bayesian_forward_model_kernel_migration`.
+    This test stays as a top-level sentinel: if the migration regresses, the
+    import below fails fast.
     """
-    pytest.skip("Bayesian-vs-kernel parity is T1-6 scope; bridge helper landed in T1-2.")
+    from cflibs.inversion.solve.bayesian.forward import BayesianForwardModel
+    from cflibs.radiation.kernels import forward_model  # noqa: F401
+
+    assert hasattr(BayesianForwardModel, "_compute_spectrum")

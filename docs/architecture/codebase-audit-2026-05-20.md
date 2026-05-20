@@ -73,7 +73,16 @@ module = "cflibs.*"
 disable_error_code = ["assignment", "arg-type", "attr-defined", "return-value", "dict-item", "operator", "call-arg"]
 ```
 
-Empirical check: `mypy cflibs/` with each code re-enabled produces **0 errors** (per the type-strictness agent's investigation). This is dead config — flip it.
+**Correction (2026-05-20 implementation pass):** the type-strictness agent
+claimed this was zero-cost. Direct verification — removing the override
+and running `mypy cflibs/ --no-incremental` — surfaces **187 errors
+across 45 files**. Top offenders: `cflibs/benchmark/unified.py`,
+`cflibs/inversion/solve/iterative.py`, `cflibs/inversion/forward_models/`.
+The audit's "zero-cost flip" framing was wrong; the override stays. The
+right shape of work is per-category: re-enable one code at a time, fix
+the resulting errors, drop that entry. `attr-defined` / `call-arg`
+likely the cheapest first; `arg-type` / `dict-item` are the bulk of the
+real work. Bead `cclj` updated accordingly.
 
 ### type-2 — Add `__all__` to 15 modules with 3+ public symbols **(MED / S)**
 Top offenders by public-symbol count: `cflibs/hardware/abc.py` (42), `cflibs/inversion/runtime/streaming.py` (41), `cflibs/inversion/runtime/temporal.py` (33), `cflibs/radiation/profiles.py` (29), `cflibs/inversion/preprocess/outliers.py` (26), `cflibs/benchmark/metrics.py` (25). Concrete cleanup that signals stable API.
