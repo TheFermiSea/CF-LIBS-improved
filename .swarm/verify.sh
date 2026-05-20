@@ -44,8 +44,38 @@ log() {
 
 # ─── 1. Broader regression pytest ─────────────────────────────────────────
 
-# Only run if any of the listed test trees exist. Each one is gated
-# individually so a fresh clone with a partial tree doesn't blow up.
+# Skip pytest when the diff is non-functional: workflow yaml, docs,
+# READMEs, files we don't import. Without this short-circuit, EVERY
+# change — including editing a comment in `.github/workflows/docs.yml` —
+# blocks on a ~15-minute pytest run that has no relevance to the change.
+# Observed 2026-05-20: y6b5 (workflow-only SHA-pin task) rejected by
+# project-verify even though no test/source code was touched. The gate
+# becomes "pytest baseline is green" instead of "your diff doesn't
+# break pytest."
+#
+# Heuristic: pytest IS relevant only when the architect touched any of
+#   - cflibs/**           (importable source)
+#   - tests/**            (test code)
+#   - scripts/*.py        (python helpers used by tests)
+#   - pyproject.toml      (dep/version pins that affect import)
+#   - .swarm/verify.sh    (gate logic itself — meta-test)
+# Anything else (workflows, docs, .github/, .gitignore, manifests we
+# don't import) is non-functional from pytest's perspective and the
+# gate short-circuits to a pass.
+NEED_PYTEST=0
+if [[ -n "${SWARM_CHANGED_FILES:-}" ]]; then
+  while IFS= read -r path; do
+    [[ -z "$path" ]] && continue
+    case "$path" in
+      cflibs/*|tests/*|pyproject.toml|.swarm/verify.sh) NEED_PYTEST=1; break ;;
+      scripts/*.py) NEED_PYTEST=1; break ;;
+    esac
+  done <<< "$SWARM_CHANGED_FILES"
+else
+  # Empty diff signal — be safe and run pytest.
+  NEED_PYTEST=1
+fi
+
 PYTEST_TARGETS=()
 for d in tests/inversion tests/benchmark tests/scripts; do
   if [[ -d "$WT/$d" ]]; then
@@ -53,7 +83,9 @@ for d in tests/inversion tests/benchmark tests/scripts; do
   fi
 done
 
-if (( ${#PYTEST_TARGETS[@]} > 0 )); then
+if (( NEED_PYTEST == 0 )); then
+  log "skip: diff touches no source/test/dep files — pytest not relevant"
+elif (( ${#PYTEST_TARGETS[@]} > 0 )); then
   log "Running broader pytest: ${PYTEST_TARGETS[*]}"
   # Allocate ~1/3 of budget to pytest; remainder reserved for F1 smoke.
   PYTEST_TIMEOUT=$(( BUDGET / 3 ))
