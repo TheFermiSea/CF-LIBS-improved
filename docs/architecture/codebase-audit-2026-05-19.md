@@ -16,16 +16,16 @@ so line numbers may be ±1–2.
 
 | # | Action | Severity | Effort | Bead |
 |---|---|---|---|---|
-| 1 | Retarget new-location modules to stop importing through legacy flat shims | high | S | `arch-1` |
-| 2 | Enable JAX on-disk compile cache at cluster startup | high | S | `perf-1` |
-| 3 | Move `_saha_two_stage_populations` index-building out of every leapfrog call | high | S | `perf-2` |
-| 4 | Extract `unified.py` (still 2206 lines) into Runner + 4 sibling modules | high | M | `arch-2` |
-| 5 | Promote `AtomicSnapshot` arrays to float64 once (eliminate per-call dtype promotion) | high | S | `perf-3` |
-| 6 | Replace `SingleZoneLTEPlasma` species dict with flat pytree array | high | M | `perf-4` |
-| 7 | Consolidate setup instructions across README/CLAUDE.md/AGENTS.md | medium | S | `docs-1` |
-| 8 | Add `.bib` entries for the 12 hanging code citations (use Asta/paper_search) | medium | S | `docs-2` |
-| 9 | Introduce `BaseIdentifier` to share peak/baseline/coverage preprocessing | medium | M | `arch-3` |
-| 10 | Delete the `cflibs/benchmarks/` (trailing-s) shim package | medium | S | `arch-4` |
+| 1 | Retarget new-location modules to stop importing through legacy flat shims | high | S | `arch-1` → [`CF-LIBS-improved-38xr`](.beads/issues.jsonl) |
+| 2 | Enable JAX on-disk compile cache at cluster startup | high | S | `perf-1` → `CF-LIBS-improved-vym9` |
+| 3 | Move `_saha_two_stage_populations` index-building out of every leapfrog call | high | S | `perf-2` → `CF-LIBS-improved-wiqb` |
+| 4 | Extract `unified.py` (was 2206 lines at audit time; 2423+ at b225e41) into Runner + 4 sibling modules | high | M | `arch-2` → `CF-LIBS-improved-oso3` |
+| 5 | Promote `AtomicSnapshot` arrays to float64 once (eliminate per-call dtype promotion) | high | S | `perf-3` → `CF-LIBS-improved-2ygu` |
+| 6 | Replace `SingleZoneLTEPlasma` species dict with flat pytree array | high | M | `perf-4` → `CF-LIBS-improved-xtak` |
+| 7 | Consolidate setup instructions across README/CLAUDE.md/AGENTS.md | medium | S | `docs-1` → `CF-LIBS-improved-v3r6` |
+| 8 | Add `.bib` entries for the 12 hanging code citations (use Asta/paper_search) | medium | S | `docs-2` → `CF-LIBS-improved-s5ba` (CLOSED) |
+| 9 | Introduce `BaseIdentifier` to share peak/baseline/coverage preprocessing | medium | M | `arch-3` → `CF-LIBS-improved-5d1b` |
+| 10 | Delete the `cflibs/benchmarks/` (trailing-s) shim package | medium | S | `arch-4` → `CF-LIBS-improved-4ig9` |
 
 **Wall-time effect of #1–6:** with the architecture fixes plus the four
 perf wins, the bayesian benchmark per-spectrum time projects from 945 s →
@@ -351,24 +351,13 @@ dispatch calls eliminated over a full chain.
 > per-citation outcomes, DOI links, and NotebookLM ingestion order.
 > The original gap table is retained below for historical traceability.
 
-### Resolved (14 — added to `paper/refs.bib`)
+### Resolved (14)
 
-| Cite-key | Topic | First seen at |
-|---|---|---|
-| `KepesEtAl2020` | LIBS benchmark dataset (Sci Data 7:53; cite-key uses lead author Képeš, not Vrabel) | `loaders.py:835` |
-| `NoelEtAl2025` | ALIAS algorithm | `alias.py:4,1940` |
-| `JochumEtAl2005` | GeoReM database | `reference_compositions.py:12` |
-| `JochumEtAl2016` | GeoReM ISO-guideline RM update | `usgs.py:333` |
-| `LabutinEtAl2013` | Correlation-based identifier | `alias.py:1940` |
-| `CristoforettiEtAl2010` | LTE/McWhirter (Spectrochim. Acta B 65:86-95) | `temporal.py:47` |
-| `VandenbekeromPannier2021` | LDM/DIT spectral synthesis | `ADR-0001-RUNBOOK.md` |
-| `PannierLaux2018` | RADIS library | `docs/adr/ADR-0001-radis-jaxrts-pattern-survey.md` |
-| `VolkerGornushkin2023` | Boltzmann multiplet aggregation (NOT Wakil — that was a misattribution in the code comment) | `boltzmann.py:146` |
-| `GajarskaEtAl2024` | Comb-filter identifier | `comb.py:4` |
-| `KramidaEtAl2024NIST` | NIST ASD v5.12 database release | `docs/atomic_data/kramida_2024_delta.md` |
-| `Salzmann1998` | Atomic Physics in Hot Plasmas (book) | `README.md:288` |
-| `ColombantTonon1973` | LPP X-ray emission (J. Appl. Phys. 44:3524 — NOT Phys. Fluids as cited) | `README.md:289` |
-| `Griem1974` | Spectral Line Broadening by Plasmas (book) | `README.md:293` |
+All 14 verified citations and their per-paper landing URLs / cite-keys
+live in [`docs/literature/2026-05-19-citation-backfill-manifest.md`](../literature/2026-05-19-citation-backfill-manifest.md).
+That manifest is the canonical source going forward — duplicate listing
+here was removed during the /simplify pass to prevent drift between
+the two docs.
 
 ### Unverified (4 — follow-up needed)
 

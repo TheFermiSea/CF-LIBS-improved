@@ -35,6 +35,15 @@ error — paywalled abstract pages aren't crawlable by NotebookLM). The
 final ingestion used `--text` with a structured citation block (DOI,
 authors, journal, URL, CF-LIBS code-site cross-reference) per source.
 
+**Cap-overflow guidance:** NotebookLM enforces an empirically ~70-source
+per-notebook ceiling (the master "CF-LIBS: Calibration-Free LIBS"
+notebook hit this at 71 sources — every URL/text add to it now returns
+`[9] "generic"`). When the *CF-LIBS Repository Citations* notebook
+approaches ~60 sources, the same trap is on the horizon. Plan: create
+a successor notebook ("CF-LIBS Repository Citations — Continued") and
+update this manifest's notebook-ID field to point at the new one.
+Sources already added need not be migrated.
+
 For each row in §"Unverified — flagged for follow-up" below:
 - Either find the canonical paper via a focused Asta search, OR
 - Add a Note in NotebookLM: "Cited in CF-LIBS code/docs at
