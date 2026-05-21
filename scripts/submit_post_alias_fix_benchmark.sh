@@ -47,24 +47,23 @@ mkdir -p "${OUTPUT_DIR}" "${REPO_ROOT}/logs/slurm"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda}"
 export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/home/brian/jax-cache}"
 
-# PHASE 1: Identification-only on the lightweight ALIAS-family + canonical
-# baselines. Basis-driven workflows (spectral_nnls, hybrid_union,
-# hybrid_consensus_2of3, hybrid_intersect) are deferred to a follow-up run
-# because they need the on-cluster basis_libraries and substantially more
-# compute per spectrum. Job 2059 (8 workflows, --time=4h) timed out with
-# zero output because the ID-side harness has no incremental write —
-# everything dumps at the end. Phase 1 is scoped to fit comfortably.
+# PHASE 1b: Headline comparison only — alias (baseline, pre-fix default
+# r2_gate_mode=fixed) vs alias_v2 (ftp1 + dj6y bundled, Phase D winner) vs
+# alias_high_recall (recall-tuned). Job 2059 timed out at 4h (8 workflows).
+# Job 2062 cancelled at 1h46m stuck in correlation. The ID-side harness
+# writes parquet only at the END; we need to scope this tight enough that
+# completion is near-guaranteed.
+#
+# Comb (F1=0.03 on 2026-05-14, known baseline) and correlation (slow O(elements
+# × spectra) SQLite lookups) deferred to a Phase 2 run. Basis-driven
+# workflows (spectral_nnls, hybrid_*) deferred to Phase 3.
 ID_WORKFLOWS=(
-    alias                       # baseline (pre-fix default, r2_gate_mode=fixed)
+    alias                       # pre-fix default (r2_gate_mode=fixed) — baseline
     alias_v2                    # ftp1 + dj6y bundled (Phase D winner)
     alias_high_recall           # recall-focused tuning
-    comb                        # canonical comb identifier
-    correlation                 # cross-correlation baseline
 )
 
-# Composition section turned off in Phase 1 — focus is the macro-F1 / recall
-# delta on identification only. Composition (iterative_jax) is fast but adds
-# JAX warm-up overhead per spectrum.
+# ID-only; composition deferred to a separate run.
 SECTIONS=id
 
 echo "=== Post-ALIAS-fix benchmark (bead d553) ==="
