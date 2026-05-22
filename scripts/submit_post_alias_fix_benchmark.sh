@@ -47,23 +47,26 @@ mkdir -p "${OUTPUT_DIR}" "${REPO_ROOT}/logs/slurm"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda}"
 export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/home/brian/jax-cache}"
 
-# PHASE 2: ceiling-test bead n3rf.3. Phase 1b (job 2063, 5m18s) measured
-# the 3 alias variants — alias_v2 macro-F1=0.364, alias=0.139. Phase 2 adds
-# the basis-driven ensemble workflows to find the new top-line ceiling. Key
-# question: with alias_v2 replacing alias in the hybrid_union ensemble, does
-# the new ceiling exceed the prior 0.69, and how close to the 0.85 literature
-# target?
+# PHASE 3: validate the two fixes from epic jbfg. Phase 2 (job 2082) found
+# (a) the alias JAX path silently dropped to float32 because the identifier
+# code path didn't enable JAX x64 — fixed in commit 20ad2e7 by enabling x64
+# inside _jax_identifier_flags_for; (b) hybrid_consensus_2of3 collapsed to
+# macro_F1=0.028 because NNLS was excluded from the voter pool — fixed by
+# adding a new hybrid_consensus_2of4_with_nnls workflow.
 #
-# Correlation is omitted (job 2062 demonstrated it dominates runtime via
-# O(elements × spectra) SQLite partition-function lookups; not worth blocking
-# on for a ceiling test). alias and alias_high_recall are also omitted —
-# Phase 1b covered them and they're tracked in beads n3rf.1 / n3rf.2.
+# This run measures: (1) is alias_v2 JAX/CPU parity restored — does the
+# Phase 3 alias_v2 macro_F1 match Phase 1b's 0.364 within rtol≤1e-3?
+# (2) does hybrid_consensus_2of4_with_nnls land between alias_v2 (0.304)
+# and hybrid_union (0.621), as a 2-of-4 voting rule with NNLS in the pool
+# should? Keep hybrid_consensus_2of3 in the workflow list for the apples-to-
+# apples comparison against Phase 2.
 ID_WORKFLOWS=(
-    alias_v2                    # new ALIAS line in the ensemble
-    comb                        # canonical sanity (F1=0.03 known)
-    spectral_nnls               # basis-driven sparse ID (F1=0.44 prior)
-    hybrid_union                # 5-identifier consensus (prior best, F1=0.69)
-    hybrid_consensus_2of3       # 2-of-3 majority (asta-12 alkali-FP fix)
+    alias_v2                              # parity check vs Phase 1b/2
+    comb                                  # baseline
+    spectral_nnls                         # NNLS sparse ID
+    hybrid_union                          # 5-identifier consensus (prior best)
+    hybrid_consensus_2of3                 # old workflow (broken, Phase 2 F1=0.028)
+    hybrid_consensus_2of4_with_nnls       # NEW — jbfg.2 fix
 )
 
 # ID-only; composition deferred to a separate run.
@@ -102,7 +105,7 @@ echo "Data dir:                    ${DATA_DIR}"
     --vrabel-max-shots 1 \
     --max-outer-folds 1 \
     --output-format parquet \
-    --experiment-label "post-alias-fix-d553-phase2" \
+    --experiment-label "post-alias-fix-d553-phase3-jbfg-validation" \
     --seed 42
 
 echo "=== Benchmark complete. Results in ${OUTPUT_DIR} ==="
