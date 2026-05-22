@@ -15,7 +15,7 @@
       {
         "hooks": [
           {
-            "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/enforce-branch-before-edit.sh",
+            "command": ".claude/hooks/enforce-branch-before-edit.sh",
             "type": "command"
           }
         ],
@@ -24,7 +24,7 @@
       {
         "hooks": [
           {
-            "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/enforce-branch-before-edit.sh",
+            "command": ".claude/hooks/enforce-branch-before-edit.sh",
             "type": "command"
           }
         ],
@@ -44,7 +44,7 @@
       {
         "hooks": [
           {
-            "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/session-start.sh",
+            "command": ".claude/hooks/session-start.sh",
             "type": "command"
           }
         ]
@@ -63,7 +63,7 @@
       {
         "hooks": [
           {
-            "command": "/Users/briansquires/code/CF-LIBS/.claude/hooks/clarify-vague-request.sh",
+            "command": ".claude/hooks/clarify-vague-request.sh",
             "type": "command"
           }
         ]
