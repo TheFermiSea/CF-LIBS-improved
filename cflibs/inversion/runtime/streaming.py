@@ -78,6 +78,23 @@ from cflibs.inversion.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.solver import CFLIBSResult, IterativeCFLIBSSolver
 from cflibs.inversion.line_selection import LineSelector
 
+__all__ = [
+    "AnalysisMode",
+    "BaseStreamingAnalyzer",
+    "EdgeOptimizedModel",
+    "FastAnalyzer",
+    "LatencyMonitor",
+    "LatencyStats",
+    "ResultCallback",
+    "SpectrumBuffer",
+    "SpectrumPacket",
+    "StandardAnalyzer",
+    "StreamingAnalyzer",
+    "StreamingConfig",
+    "StreamingResult",
+    "create_streaming_pipeline",
+]
+
 
 def _jax_boltzmann_composition_enabled() -> bool:
     """Opt-in env-var toggle for routing the inner Boltzmann sigma-clip
