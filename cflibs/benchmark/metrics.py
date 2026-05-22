@@ -27,6 +27,16 @@ import numpy as np
 
 from cflibs.core.logging_config import get_logger
 
+__all__ = [
+    "BenchmarkMetrics",
+    "ElementMetrics",
+    "EvaluationResult",
+    "MetricType",
+    "calculate_figure_of_merit",
+    "create_comparison_table",
+]
+
+
 logger = get_logger("benchmark.metrics")
 
 

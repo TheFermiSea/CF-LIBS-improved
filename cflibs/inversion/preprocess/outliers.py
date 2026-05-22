@@ -27,6 +27,21 @@ import numpy as np
 
 from cflibs.core.logging_config import get_logger
 
+__all__ = [
+    "MADOutlierDetector",
+    "MADResult",
+    "MAD_SCALE_FACTOR",
+    "OutlierMethod",
+    "SAMResult",
+    "SpectralAngleMapper",
+    "detect_outlier_spectra",
+    "mad_clean_channels",
+    "mad_outliers_1d",
+    "mad_outliers_spectra",
+    "sam_distance",
+]
+
+
 logger = get_logger("inversion.outliers")
 
 
