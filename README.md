@@ -291,7 +291,6 @@ See [CONTRIBUTING.md](/CONTRIBUTING.md) for coding style, type hints, physics do
 ### Line Broadening
 
 - **Griem (1974)** — "Spectral Line Broadening by Plasmas" (Stark, Doppler, Lorentzian mechanics)
-- **Landi & Degl'Innocenti (1999)** — "Stark broadening of hydrogen lines"
 
 ---
 
