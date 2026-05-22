@@ -39,6 +39,15 @@ def _jax_identifier_flags_for(cls) -> Dict[str, bool]:
     This is the toggle the unified benchmark CLI flips via
     ``--jax-identifier``.  See PR #118, #119, #120, #121, #122 for the
     identifier-side opt-in flags this targets.
+
+    Side effect (bead ``CF-LIBS-improved-jbfg.1``): enable JAX x64 mode
+    before returning a non-empty dict. Every identifier's JAX helpers
+    explicitly request ``jnp.float64`` but without this flag JAX silently
+    demotes to float32, which biases ``compute_p_snr_jax``, Boltzmann
+    fits, and FISTA NNLS enough to flip per-element gate decisions and
+    lose ~0.07 macro_recall vs the CPU path. The composition-side
+    pipelines (``_fit_iterative_pipeline``, ``_fit_bayesian_pipeline``)
+    already enable x64 locally; the identifier path was the gap.
     """
     if os.environ.get("CFLIBS_USE_JAX_IDENTIFIER", "0") != "1":
         return {}
@@ -46,7 +55,15 @@ def _jax_identifier_flags_for(cls) -> Dict[str, bool]:
         sig = inspect.signature(cls.__init__)
     except (TypeError, ValueError):
         return {}
-    return {name: True for name in sig.parameters if name.startswith("use_jax_")}
+    flags = {name: True for name in sig.parameters if name.startswith("use_jax_")}
+    if flags:
+        try:
+            import jax
+
+            jax.config.update("jax_enable_x64", True)
+        except ImportError:
+            pass
+    return flags
 
 
 # These imports sit AFTER the `_jax_param_keys` helper above to keep that
@@ -1365,8 +1382,14 @@ def _build_hybrid_consensus_2of3_predictor(
     spectrum, then combines their outputs via a 2-of-3 majority vote using
     :class:`cflibs.inversion.identify.hybrid_consensus.HybridConsensusIdentifier`.
 
-    This workflow trades recall for precision: an element must be confirmed
-    by at least 2 of the 3 line-matchers to be reported as detected.
+    .. warning:: bead ``CF-LIBS-improved-jbfg.2`` — this 3-voter design is
+        empirically broken (Phase 2 macro_F1=0.028, worse than ``comb``
+        alone at 0.014). The 2026-05-14 NNLS-exclusion policy in
+        :mod:`cflibs.inversion.identify.hybrid_consensus` removes the
+        strongest single identifier from the vote, so ALIAS becomes the
+        only reliable voter and the 2-of-3 rule almost never triggers.
+        Use :func:`_build_hybrid_consensus_2of4_with_nnls_predictor`
+        (workflow ``hybrid_consensus_2of4_with_nnls``) instead.
     """
 
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
@@ -1431,6 +1454,102 @@ def _build_hybrid_consensus_2of3_predictor(
             )
             result = consensus.combine([alias_result, comb_result, correlation_result])
             result.parameters["candidate_elements"] = list(candidate_elements)
+            return result
+
+    return predictor
+
+
+def _build_hybrid_consensus_2of4_with_nnls_predictor(
+    context: UnifiedBenchmarkContext,
+    candidate_elements: List[str],
+    config: Dict[str, Any],
+) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
+    """Predictor for ``hybrid_consensus_2of4_with_nnls`` (bead jbfg.2 fix).
+
+    Same 2-of-N majority voting as :func:`_build_hybrid_consensus_2of3_predictor`,
+    but with ``SpectralNNLSIdentifier`` added as a fourth voter. The 2026-05-14
+    NNLS-exclusion policy is overruled by the Phase 2 benchmark evidence —
+    NNLS at F1=0.399 is the strongest single identifier, and removing it from
+    the consensus pool drove the original 2-of-3 workflow to F1=0.028 (worse
+    than ``comb`` standalone). Reinstating NNLS as a voter lets the consensus
+    actually exceed any single inner identifier.
+
+    Inner thresholds match the leaderboard winners for the standalone
+    ``alias_v2`` / ``comb`` / ``correlation`` / ``spectral_nnls`` workflows on
+    Vrabel rp=30k (cf. ``output/post-alias-fix-d553-phase2/id_config_selections.json``).
+    """
+
+    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
+        from cflibs.atomic.database import AtomicDatabase
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+        from cflibs.inversion.comb_identifier import CombIdentifier
+        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+        from cflibs.inversion.identify.hybrid_consensus import (
+            HybridConsensusIdentifier,
+        )
+
+        rp = _estimate_rp_for_spectrum(spectrum)
+        basis, basis_fwhm, mismatch = context.basis_for_rp(spectrum.rp_estimate)
+
+        with AtomicDatabase(str(context.db_path)) as db:
+            alias_id = ALIASIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=rp,
+                intensity_threshold_factor=3.0,
+                detection_threshold=0.02,
+                chance_window_scale=0.4,
+                max_lines_per_element=30,
+                **_jax_identifier_flags_for(ALIASIdentifier),
+            )
+            comb_id = CombIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=rp,
+                min_correlation=0.08,
+                tooth_activation_threshold=0.35,
+                relative_threshold_scale=1.4,
+                min_aki_gk=3000.0,
+                **_jax_identifier_flags_for(CombIdentifier),
+            )
+            correlation_id = CorrelationIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=rp,
+                min_confidence=0.008,
+                relative_threshold_scale=1.2,
+                min_line_strength=1000.0,
+                T_range_K=(5000, 15000),
+                T_steps=7,
+                n_e_range_cm3=(1e15, 5e17),
+                **_jax_identifier_flags_for(CorrelationIdentifier),
+            )
+            nnls_id = SpectralNNLSIdentifier(
+                basis_library=basis,
+                detection_snr=3.0,
+                continuum_degree=2,
+                fallback_T_K=10000.0,
+                fallback_ne_cm3=1e17,
+                **_jax_identifier_flags_for(SpectralNNLSIdentifier),
+            )
+
+            alias_result = alias_id.identify(spectrum.wavelength_nm, spectrum.intensity)
+            comb_result = comb_id.identify(spectrum.wavelength_nm, spectrum.intensity)
+            correlation_result = correlation_id.identify(
+                spectrum.wavelength_nm, spectrum.intensity, mode="classic"
+            )
+            nnls_result = nnls_id.identify(spectrum.wavelength_nm, spectrum.intensity)
+
+            consensus = HybridConsensusIdentifier(
+                identifiers=[alias_id, comb_id, correlation_id, nnls_id],
+                elements=candidate_elements,
+                min_agreeing=2,
+            )
+            result = consensus.combine([alias_result, comb_result, correlation_result, nnls_result])
+            result.parameters["candidate_elements"] = list(candidate_elements)
+            result.parameters["basis_fwhm_nm"] = basis_fwhm
+            result.parameters["basis_fwhm_mismatch_nm"] = mismatch
             return result
 
     return predictor
@@ -1594,6 +1713,12 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
             "hybrid_consensus_2of3",
             _hybrid_consensus_2of3_workflow_configs(quick),
             _build_hybrid_consensus_2of3_predictor,
+            _config_name,
+        ),
+        "hybrid_consensus_2of4_with_nnls": IDWorkflowSpec(
+            "hybrid_consensus_2of4_with_nnls",
+            [{}],  # singleton config — consensus rule is the experiment
+            _build_hybrid_consensus_2of4_with_nnls_predictor,
             _config_name,
         ),
         "voigt_alias": IDWorkflowSpec(
