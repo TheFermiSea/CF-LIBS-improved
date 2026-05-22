@@ -97,11 +97,12 @@ echo "Data dir:                    ${DATA_DIR}"
     --output-dir "${OUTPUT_DIR}" \
     --sections "${SECTIONS}" \
     --id-workflows "${ID_WORKFLOWS[@]}" \
+    --jax-identifier \
     --quick \
     --vrabel-max-shots 1 \
     --max-outer-folds 1 \
     --output-format parquet \
-    --experiment-label "post-alias-fix-d553-phase1" \
+    --experiment-label "post-alias-fix-d553-phase2" \
     --seed 42
 
 echo "=== Benchmark complete. Results in ${OUTPUT_DIR} ==="
