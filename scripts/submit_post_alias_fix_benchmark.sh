@@ -47,20 +47,23 @@ mkdir -p "${OUTPUT_DIR}" "${REPO_ROOT}/logs/slurm"
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda}"
 export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/home/brian/jax-cache}"
 
-# PHASE 1b: Headline comparison only — alias (baseline, pre-fix default
-# r2_gate_mode=fixed) vs alias_v2 (ftp1 + dj6y bundled, Phase D winner) vs
-# alias_high_recall (recall-tuned). Job 2059 timed out at 4h (8 workflows).
-# Job 2062 cancelled at 1h46m stuck in correlation. The ID-side harness
-# writes parquet only at the END; we need to scope this tight enough that
-# completion is near-guaranteed.
+# PHASE 2: ceiling-test bead n3rf.3. Phase 1b (job 2063, 5m18s) measured
+# the 3 alias variants — alias_v2 macro-F1=0.364, alias=0.139. Phase 2 adds
+# the basis-driven ensemble workflows to find the new top-line ceiling. Key
+# question: with alias_v2 replacing alias in the hybrid_union ensemble, does
+# the new ceiling exceed the prior 0.69, and how close to the 0.85 literature
+# target?
 #
-# Comb (F1=0.03 on 2026-05-14, known baseline) and correlation (slow O(elements
-# × spectra) SQLite lookups) deferred to a Phase 2 run. Basis-driven
-# workflows (spectral_nnls, hybrid_*) deferred to Phase 3.
+# Correlation is omitted (job 2062 demonstrated it dominates runtime via
+# O(elements × spectra) SQLite partition-function lookups; not worth blocking
+# on for a ceiling test). alias and alias_high_recall are also omitted —
+# Phase 1b covered them and they're tracked in beads n3rf.1 / n3rf.2.
 ID_WORKFLOWS=(
-    alias                       # pre-fix default (r2_gate_mode=fixed) — baseline
-    alias_v2                    # ftp1 + dj6y bundled (Phase D winner)
-    alias_high_recall           # recall-focused tuning
+    alias_v2                    # new ALIAS line in the ensemble
+    comb                        # canonical sanity (F1=0.03 known)
+    spectral_nnls               # basis-driven sparse ID (F1=0.44 prior)
+    hybrid_union                # 5-identifier consensus (prior best, F1=0.69)
+    hybrid_consensus_2of3       # 2-of-3 majority (asta-12 alkali-FP fix)
 )
 
 # ID-only; composition deferred to a separate run.
