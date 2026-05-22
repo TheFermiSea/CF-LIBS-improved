@@ -9,7 +9,6 @@ methods based on literature recommendations:
 - **Huber**: M-estimation with Huber loss function for moderate outliers
 
 References:
-    - El Sherbini et al. (2020): Curve-of-growth self-absorption detection
     - Huber, P.J. (1981): Robust Statistics
 """
 

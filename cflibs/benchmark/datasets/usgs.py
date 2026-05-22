@@ -330,7 +330,7 @@ _BHVO_2 = USGSStandardComposition(
     ),
     notes=(
         "Tholeiitic basalt. Values from USGS Information Sheet (Rev. June 2022), "
-        "Table 1, citing Jochum et al. (2016) Table 3. Fe2O3T is total iron "
+        "Table 1, Fe2O3T is total iron "
         "expressed as Fe2O3."
     ),
 )

@@ -1499,8 +1499,6 @@ class ALIASIdentifier:
                 P_mix_arr, P_local_arr, _ = self._compute_nnls_attribution(A, peak_intensities_arr)
 
             # Sparse NNLS: L1-penalized fit suppresses diffuse FPs
-            # (Black et al. 2024: standard NNLS overfits → many small
-            # non-zero coefficients for absent elements)
             # Higher alpha at low RP where blending causes more false sharing
             sparse_alpha = 0.05 if self.resolving_power < 1000 else 0.01
             if self.use_jax_nnls:
