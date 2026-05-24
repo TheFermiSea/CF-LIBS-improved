@@ -303,7 +303,7 @@ def solve_nnls_jax(
     A: np.ndarray,
     b: np.ndarray,
     *,
-    max_iter: int = 1000,
+    max_iter: int = 50000,
     l1: float = 0.0,
     l2: float = 0.0,
 ) -> np.ndarray:
@@ -312,11 +312,17 @@ def solve_nnls_jax(
     ``np.linalg.norm(A @ x - b)``).
 
     Minimizes ``0.5 ||A x - b||^2 + l1 sum(x) + 0.5 l2 ||x||^2`` subject to
-    ``x >= 0`` via FISTA with adaptive (gradient-based) restart. Hits
-    ``rtol 1e-5`` versus ``scipy.optimize.nnls`` on well-conditioned
-    LIBS-style template matrices in <1000 iters; the adaptive restart
-    recovers full precision on highly correlated columns where vanilla FISTA
-    plateaus.
+    ``x >= 0`` via FISTA with adaptive (gradient-based) restart.
+
+    .. note:: bead ``CF-LIBS-improved-jbfg.1`` — the prior docstring claim
+        that this hits ``rtol 1e-5`` vs scipy in ``<1000 iters`` was
+        falsified on the Vrabel 11×854 column-correlated LIBS template
+        matrix (FISTA c[Fe]=0.586 vs scipy c[Fe]=11.196 at max_iter=1000,
+        a 95% error). Empirical sweep showed max_iter=5000 → max-diff
+        44.9, max_iter=20000 → 40.4, max_iter=50000 → rtol≈1e-3,
+        max_iter=100000 → rtol≈1e-7. Default bumped to 50000 to land
+        within rtol 1e-3 on highly column-correlated regimes; this is
+        still cheap on GPU.
 
     Parameters
     ----------
@@ -326,7 +332,7 @@ def solve_nnls_jax(
         Observed signal.
     max_iter : int, optional
         FISTA iteration count. Fixed (not adaptive) to keep the loop
-        jit/vmap-friendly (default: 1000).
+        jit/vmap-friendly (default: 50000 — was 1000, see note above).
     l1 : float, optional
         L1 regularization strength. Under ``x >= 0`` the L1 term is the
         smooth ``l1 * sum(x)``, so a separate proximal step isn't needed
@@ -368,7 +374,7 @@ def solve_sparse_nnls_jax(
     *,
     alpha: float = 0.01,
     l1_ratio: float = 0.9,
-    max_iter: int = 1000,
+    max_iter: int = 50000,
 ) -> Tuple[np.ndarray, float]:
     """JAX FISTA elastic-net NNLS, drop-in for the L-BFGS-B path in
     ``ALIASIdentifier._compute_sparse_nnls_scores``.
@@ -424,7 +430,7 @@ def compute_nnls_attribution_jax(
     A: np.ndarray,
     peak_intensities: np.ndarray,
     *,
-    max_iter: int = 1000,
+    max_iter: int = 50000,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """JAX-vectorized counterpart of ``_compute_nnls_attribution``.
 
@@ -438,7 +444,10 @@ def compute_nnls_attribution_jax(
     A : np.ndarray, shape (n_peaks, n_cands)
     peak_intensities : np.ndarray, shape (n_peaks,)
     max_iter : int, optional
-        FISTA iteration count (default: 1000).
+        FISTA iteration count (default: 50000). Bumped from 1000 per bead
+        ``CF-LIBS-improved-jbfg.1`` — on the heavily column-correlated
+        11×854 Vrabel template matrix the 1000-iter default left coefficient
+        errors of ~95% (Fe) and ~99% (Si/Pb) vs scipy active-set.
 
     Returns
     -------

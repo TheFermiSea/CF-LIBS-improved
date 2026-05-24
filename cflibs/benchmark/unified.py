@@ -1493,12 +1493,18 @@ def _build_hybrid_consensus_2of4_with_nnls_predictor(
         basis, basis_fwhm, mismatch = context.basis_for_rp(spectrum.rp_estimate)
 
         with AtomicDatabase(str(context.db_path)) as db:
+            # bead jbfg.2: inherit alias_v2 config (r2_gate_mode='adaptive_t'
+            # + relative_cl_per_ion_stage=True). The previous "vanilla"
+            # ALIAS construction caused ALIAS to fire on only 0.9% of
+            # (spectrum, element) decisions in the audit at /tmp/vote_audit_
+            # results.json, starving the 2-of-4 rule of its strongest
+            # line-matching voter.
             alias_id = ALIASIdentifier(
                 atomic_db=db,
                 elements=candidate_elements,
                 resolving_power=rp,
-                intensity_threshold_factor=3.0,
-                detection_threshold=0.02,
+                r2_gate_mode="adaptive_t",
+                relative_cl_per_ion_stage=True,
                 chance_window_scale=0.4,
                 max_lines_per_element=30,
                 **_jax_identifier_flags_for(ALIASIdentifier),
