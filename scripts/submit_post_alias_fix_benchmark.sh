@@ -61,12 +61,12 @@ export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/home/brian/jax-c
 # should? Keep hybrid_consensus_2of3 in the workflow list for the apples-to-
 # apples comparison against Phase 2.
 ID_WORKFLOWS=(
-    alias_v2                              # parity check vs Phase 1b/2
+    alias_v2                              # n3rf.1 resonance-filter validation (auto via nnls_significant)
     comb                                  # baseline
     spectral_nnls                         # NNLS sparse ID
-    hybrid_union                          # 5-identifier consensus (prior best)
-    hybrid_consensus_2of3                 # old workflow (broken, Phase 2 F1=0.028)
-    hybrid_consensus_2of4_with_nnls       # NEW — jbfg.2 fix
+    hybrid_union                          # current top (Phase 4 F1=0.621)
+    hybrid_consensus_2of4_with_nnls       # Phase 4 F1=0.342 (high-precision option)
+    hybrid_consensus_weighted             # NEW — Detective B's structural fix
 )
 
 # ID-only; composition deferred to a separate run.
@@ -105,7 +105,7 @@ echo "Data dir:                    ${DATA_DIR}"
     --vrabel-max-shots 1 \
     --max-outer-folds 1 \
     --output-format parquet \
-    --experiment-label "post-alias-fix-d553-phase4-jbfg-fista-fix" \
+    --experiment-label "post-alias-fix-d553-phase5-weighted-consensus" \
     --seed 42
 
 echo "=== Benchmark complete. Results in ${OUTPUT_DIR} ==="
