@@ -1551,6 +1551,112 @@ def _build_hybrid_consensus_2of4_with_nnls_predictor(
                 identifiers=[alias_id, comb_id, correlation_id, nnls_id],
                 elements=candidate_elements,
                 min_agreeing=2,
+                names=["alias", "comb", "correlation", "nnls"],
+            )
+            result = consensus.combine([alias_result, comb_result, correlation_result, nnls_result])
+            result.parameters["candidate_elements"] = list(candidate_elements)
+            result.parameters["basis_fwhm_nm"] = basis_fwhm
+            result.parameters["basis_fwhm_mismatch_nm"] = mismatch
+            return result
+
+    return predictor
+
+
+def _build_hybrid_consensus_weighted_predictor(
+    context: UnifiedBenchmarkContext,
+    candidate_elements: List[str],
+    config: Dict[str, Any],
+) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
+    """Predictor for ``hybrid_consensus_weighted`` — Detective B's structural fix.
+
+    Same 4 voters as :func:`_build_hybrid_consensus_2of4_with_nnls_predictor`
+    (ALIAS-v2 + Comb + Correlation + NNLS) but with weighted-confidence
+    voting instead of the binary 2-of-4 rule. Per-voter weights are
+    proportional to each workflow's Phase 4 standalone macro_F1:
+
+    - nnls=0.46, alias=0.30, comb=0.12, correlation=0.12 (sums to 1.0)
+
+    At ``weight_threshold=0.40`` the rule permits NNLS alone to pass
+    (w=0.46 ≥ 0.40), preserving the NNLS-only-TPs that the binary 2-of-4
+    rule discards (Detective B's audit showed those drive most of the
+    hybrid_union F1 advantage). It still requires comb+correlation or
+    alias+anything from the line-matcher side to pass, which suppresses
+    the alkali-FP regression flagged in asta-12.
+    """
+
+    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
+        from cflibs.atomic.database import AtomicDatabase
+        from cflibs.inversion.alias_identifier import ALIASIdentifier
+        from cflibs.inversion.comb_identifier import CombIdentifier
+        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+        from cflibs.inversion.identify.hybrid_consensus import (
+            HybridConsensusIdentifier,
+        )
+
+        rp = _estimate_rp_for_spectrum(spectrum)
+        basis, basis_fwhm, mismatch = context.basis_for_rp(spectrum.rp_estimate)
+
+        with AtomicDatabase(str(context.db_path)) as db:
+            alias_id = ALIASIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=rp,
+                r2_gate_mode="adaptive_t",
+                relative_cl_per_ion_stage=True,
+                chance_window_scale=0.4,
+                max_lines_per_element=30,
+                **_jax_identifier_flags_for(ALIASIdentifier),
+            )
+            comb_id = CombIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=rp,
+                min_correlation=0.08,
+                tooth_activation_threshold=0.35,
+                relative_threshold_scale=1.4,
+                min_aki_gk=3000.0,
+                **_jax_identifier_flags_for(CombIdentifier),
+            )
+            correlation_id = CorrelationIdentifier(
+                atomic_db=db,
+                elements=candidate_elements,
+                resolving_power=rp,
+                min_confidence=0.008,
+                relative_threshold_scale=1.2,
+                min_line_strength=1000.0,
+                T_range_K=(5000, 15000),
+                T_steps=7,
+                n_e_range_cm3=(1e15, 5e17),
+                **_jax_identifier_flags_for(CorrelationIdentifier),
+            )
+            nnls_id = SpectralNNLSIdentifier(
+                basis_library=basis,
+                detection_snr=3.0,
+                continuum_degree=2,
+                fallback_T_K=10000.0,
+                fallback_ne_cm3=1e17,
+                **_jax_identifier_flags_for(SpectralNNLSIdentifier),
+            )
+
+            alias_result = alias_id.identify(spectrum.wavelength_nm, spectrum.intensity)
+            comb_result = comb_id.identify(spectrum.wavelength_nm, spectrum.intensity)
+            correlation_result = correlation_id.identify(
+                spectrum.wavelength_nm, spectrum.intensity, mode="classic"
+            )
+            nnls_result = nnls_id.identify(spectrum.wavelength_nm, spectrum.intensity)
+
+            consensus = HybridConsensusIdentifier(
+                identifiers=[alias_id, comb_id, correlation_id, nnls_id],
+                elements=candidate_elements,
+                names=["alias", "comb", "correlation", "nnls"],
+                voter_weights={
+                    "alias": float(config.get("w_alias", 0.30)),
+                    "comb": float(config.get("w_comb", 0.12)),
+                    "correlation": float(config.get("w_correlation", 0.12)),
+                    "nnls": float(config.get("w_nnls", 0.46)),
+                },
+                weight_threshold=float(config.get("weight_threshold", 0.40)),
             )
             result = consensus.combine([alias_result, comb_result, correlation_result, nnls_result])
             result.parameters["candidate_elements"] = list(candidate_elements)
@@ -1725,6 +1831,23 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
             "hybrid_consensus_2of4_with_nnls",
             [{}],  # singleton config — consensus rule is the experiment
             _build_hybrid_consensus_2of4_with_nnls_predictor,
+            _config_name,
+        ),
+        "hybrid_consensus_weighted": IDWorkflowSpec(
+            "hybrid_consensus_weighted",
+            (
+                [
+                    # Weight grid sweeps the threshold; weights themselves fixed
+                    # to Phase 4 F1 ratios. quick=True picks just the middle
+                    # threshold; full grid sweeps three thresholds.
+                    {"weight_threshold": 0.40},
+                    {"weight_threshold": 0.35},
+                    {"weight_threshold": 0.45},
+                ]
+                if not quick
+                else [{"weight_threshold": 0.40}]
+            ),
+            _build_hybrid_consensus_weighted_predictor,
             _config_name,
         ),
         "voigt_alias": IDWorkflowSpec(

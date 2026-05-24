@@ -320,3 +320,102 @@ class TestConstructorValidation:
         stubs = [_StubIdentifier(_make_result(set(), ["Fe"])) for _ in range(4)]
         identifier = HybridConsensusIdentifier(stubs, elements=["Fe"], min_agreeing=3)
         assert identifier.names == ["id0", "id1", "id2", "id3"]
+
+
+# --------------------------------------------------------------------- #
+# Invariant 3: weighted-confidence voting (bead jbfg follow-up)         #
+# --------------------------------------------------------------------- #
+class TestWeightedConsensusVoting:
+    """
+    Detective B's structural fix: with binary 2-of-N voting, a strong
+    voter like NNLS (Phase 4 F1=0.399) is treated identically to a weak
+    voter like comb (F1=0.014). The weighted-confidence path applies
+    per-voter weights ∝ standalone F1 and uses an absolute
+    ``weight_threshold``; with NNLS at w=0.46 and threshold=0.40, NNLS
+    can pass an element alone — recovering the NNLS-only TPs that the
+    binary rule discards.
+    """
+
+    @pytest.fixture
+    def universe(self):
+        return ["Fe", "Si", "Mg"]
+
+    @pytest.fixture
+    def per_identifier_results(self, universe):
+        # NNLS uniquely sees Fe (strong voter); ALIAS uniquely sees Mg;
+        # ALIAS+comb both see Si (weak coalition).
+        alias = _make_result({"Si", "Mg"}, universe, algorithm="alias")
+        comb = _make_result({"Si"}, universe, algorithm="comb")
+        correlation = _make_result(set(), universe, algorithm="correlation")
+        nnls = _make_result({"Fe"}, universe, algorithm="nnls")
+        return [alias, comb, correlation, nnls]
+
+    @pytest.fixture
+    def stubs(self, per_identifier_results):
+        return [_StubIdentifier(r) for r in per_identifier_results]
+
+    def test_binary_mode_unchanged_when_no_weights(self, stubs, universe):
+        """voter_weights=None → identical to existing binary rule."""
+        binary = HybridConsensusIdentifier(
+            stubs,
+            elements=universe,
+            min_agreeing=2,
+            names=["alias", "comb", "correlation", "nnls"],
+        )
+        result = binary.identify(wavelength=None, intensity=None)
+        detected = {e.element for e in result.detected_elements}
+        # Si: alias+comb agree (2 votes) → pass.
+        # Fe: only NNLS → 1 vote, fails.
+        # Mg: only ALIAS → 1 vote, fails.
+        assert detected == {"Si"}
+
+    def test_weighted_lets_nnls_pass_alone_at_threshold_0_40(self, stubs, universe):
+        """NNLS-only Fe now passes via w_nnls=0.46 ≥ threshold=0.40."""
+        weighted = HybridConsensusIdentifier(
+            stubs,
+            elements=universe,
+            names=["alias", "comb", "correlation", "nnls"],
+            voter_weights={
+                "alias": 0.30, "comb": 0.12, "correlation": 0.12, "nnls": 0.46,
+            },
+            weight_threshold=0.40,
+        )
+        result = weighted.identify(wavelength=None, intensity=None)
+        detected = {e.element for e in result.detected_elements}
+        # Fe: nnls alone = 0.46 ≥ 0.40 → pass.
+        # Si: alias+comb = 0.42 ≥ 0.40 → pass.
+        # Mg: alias alone = 0.30 < 0.40 → fail.
+        assert detected == {"Fe", "Si"}
+
+    def test_weighted_metadata_records_score_and_weights(self, stubs, universe):
+        weighted = HybridConsensusIdentifier(
+            stubs,
+            elements=universe,
+            names=["alias", "comb", "correlation", "nnls"],
+            voter_weights={
+                "alias": 0.30, "comb": 0.12, "correlation": 0.12, "nnls": 0.46,
+            },
+            weight_threshold=0.40,
+        )
+        result = weighted.identify(wavelength=None, intensity=None)
+        fe_eid = next(e for e in result.all_elements if e.element == "Fe")
+        assert fe_eid.metadata["weighted_score"] == pytest.approx(0.46)
+        assert fe_eid.metadata["weight_threshold"] == 0.40
+        assert fe_eid.metadata["consensus_mode"].startswith("weighted_")
+        assert result.algorithm.startswith("hybrid_consensus_weighted_")
+
+    def test_weighted_rejects_unknown_voter_name(self, stubs, universe):
+        with pytest.raises(ValueError, match="voter_weights contains names"):
+            HybridConsensusIdentifier(
+                stubs,
+                elements=universe,
+                names=["alias", "comb", "correlation", "nnls"],
+                voter_weights={"bogus_voter": 1.0},
+            )
+
+    def test_workflow_registry_includes_hybrid_consensus_weighted(self):
+        """The new workflow is registered in build_id_workflow_registry."""
+        from cflibs.benchmark.unified import build_id_workflow_registry
+
+        reg = build_id_workflow_registry(quick=True)
+        assert "hybrid_consensus_weighted" in reg

@@ -1714,7 +1714,16 @@ class ALIASIdentifier:
             CL *= 0.5 + 0.5 * R_rat
 
             # Gate 4: Boltzmann consistency — verify matched lines follow
-            # ln(I·λ/gA) vs E_k with physically reasonable temperature
+            # ln(I·λ/gA) vs E_k with physically reasonable temperature.
+            #
+            # Bead CF-LIBS-improved-n3rf.1: Detective C established that
+            # on Vrabel Si-positive spectra the Boltzmann R² collapses to
+            # 0.000–0.220 because the Si I 288.16 nm resonance line is
+            # heavily self-absorbed, dragging its ln(I·λ/gA) off the
+            # linear fit. Pass nnls_significant down so the consistency
+            # check can drop resonance lines when there's independent
+            # NNLS evidence that the candidate is real — only then is it
+            # safe to suspect self-absorption rather than a false candidate.
             boltz_factor, boltz_r2 = self._boltzmann_consistency_check(
                 element,
                 fused_lines,
@@ -1722,6 +1731,7 @@ class ALIASIdentifier:
                 matched_peak_idx,
                 corrected_intensity,
                 peaks,
+                nnls_significant=bool(cand.get("nnls_significant", False)),
             )
             CL *= boltz_factor
 
@@ -2593,12 +2603,26 @@ class ALIASIdentifier:
         matched_peak_idx: np.ndarray,
         intensity: np.ndarray,
         peaks: List[Tuple[int, float]],
+        nnls_significant: bool = False,
     ) -> Tuple[float, float]:
         """
         Boltzmann consistency check for matched lines.
 
         For elements with >=3 matched lines, fit ln(I*lambda/(g*A)) vs E_k.
         Slope should give physical temperature (3000-50000K) with reasonable R^2.
+
+        Parameters
+        ----------
+        nnls_significant : bool, optional
+            When True AND ``self.self_absorption_aware`` is enabled, drop
+            resonance lines (``E_i_ev < self.self_absorption_e_i_cutoff_ev``)
+            from the regression before fitting. Bead n3rf.1: on Vrabel
+            Si-positive spectra the Si I 288.16 nm + 244.34 nm resonance
+            lines at common E_k=5.082 eV give a 5-unit spread in
+            ln(I·λ/gA) — self-absorption, not statistical noise. Filtering
+            them is only safe when independent NNLS evidence supports the
+            candidate (otherwise the gate would let in genuine false
+            positives whose Boltzmann inconsistency IS the signal).
 
         Returns
         -------
@@ -2611,6 +2635,11 @@ class ALIASIdentifier:
             return 0.5, 0.0  # Penalize — not enough lines for Boltzmann check
 
         observations = []
+        n_resonance_filtered = 0
+        resonance_cutoff = float(getattr(self, "self_absorption_e_i_cutoff_ev", 0.1))
+        apply_resonance_filter = bool(
+            nnls_significant and getattr(self, "self_absorption_aware", True)
+        )
 
         for i in matched_indices:
             trans = fused_lines[i]["transition"]
@@ -2620,6 +2649,15 @@ class ALIASIdentifier:
             I_obs = intensity[peaks[pidx][0]]
             if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
                 continue
+
+            # Drop resonance lines when caller has NNLS-significance evidence
+            # for the candidate. Self-absorption on these lines biases the
+            # slope but does not appear in the basis-spectrum NNLS check.
+            if apply_resonance_filter:
+                e_i = float(getattr(trans, "E_i_ev", 1.0))
+                if e_i < resonance_cutoff:
+                    n_resonance_filtered += 1
+                    continue
 
             observations.append(
                 LineObservation(
@@ -2635,6 +2673,12 @@ class ALIASIdentifier:
             )
 
         if len(observations) < 3:
+            # Filtering may have dropped us below the minimum. If we filtered
+            # at all and got too few lines for a fit, treat as "no evidence
+            # against the candidate" (boltz_factor=1.0) rather than
+            # penalising — the NNLS-significance flag is the upstream gate.
+            if apply_resonance_filter and n_resonance_filtered > 0:
+                return 1.0, 0.0
             return 0.5, 0.0
 
         # Need some spread in E_k for meaningful fit

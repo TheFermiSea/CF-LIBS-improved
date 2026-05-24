@@ -97,6 +97,8 @@ class HybridConsensusIdentifier:
         *,
         min_agreeing: int = 2,
         names: Optional[Sequence[str]] = None,
+        voter_weights: Optional[Dict[str, float]] = None,
+        weight_threshold: float = 0.5,
     ):
         if len(identifiers) < 2:
             raise ValueError(
@@ -127,6 +129,25 @@ class HybridConsensusIdentifier:
                     f"length ({len(identifiers)})"
                 )
             self.names = [str(n) for n in names]
+
+        # Optional weighted-confidence voting (bead jbfg structural follow-up).
+        # When voter_weights is provided, the detection rule becomes
+        # ``weighted_score >= weight_threshold`` instead of the binary
+        # ``vote_count >= min_agreeing``. The binary rule is preserved when
+        # voter_weights is None so all existing callers get byte-identical
+        # behavior. Weights are keyed by the per-identifier ``names`` —
+        # voters whose names are missing from the dict default to weight 0.
+        if voter_weights is not None:
+            unknown = set(voter_weights) - set(self.names)
+            if unknown:
+                raise ValueError(
+                    f"voter_weights contains names not in identifier list: "
+                    f"{sorted(unknown)}; expected subset of {self.names}"
+                )
+        self.voter_weights: Optional[Dict[str, float]] = (
+            dict(voter_weights) if voter_weights is not None else None
+        )
+        self.weight_threshold = float(weight_threshold)
 
     # ------------------------------------------------------------------ #
     # Pure combine path: no identifier execution, just merge results.    #
@@ -201,7 +222,18 @@ class HybridConsensusIdentifier:
             for name, detected_set in zip(self.names, per_detected):
                 votes_by[name] = element in detected_set
             vote_count = sum(1 for v in votes_by.values() if v)
-            detected = vote_count >= self.min_agreeing
+            if self.voter_weights is not None:
+                # Weighted-confidence rule (bead jbfg follow-up). Each
+                # voter contributes its configured weight only when it
+                # votes yes; threshold is absolute (not normalized) so
+                # one strong voter (e.g. NNLS at w=0.46) can pass alone
+                # if its weight already meets ``weight_threshold``.
+                weighted_score = sum(
+                    self.voter_weights.get(name, 0.0) for name, voted in votes_by.items() if voted
+                )
+                detected = weighted_score >= self.weight_threshold
+            else:
+                detected = vote_count >= self.min_agreeing
 
             # Mean score across *voting* identifiers; 0 when none voted yes.
             voting_scores = [
@@ -256,7 +288,11 @@ class HybridConsensusIdentifier:
                     n_total = eid.n_total_lines
 
             metadata = {
-                "consensus_mode": f"{self.min_agreeing}_of_{len(self.identifiers)}",
+                "consensus_mode": (
+                    f"weighted_w{self.weight_threshold:.2f}"
+                    if self.voter_weights is not None
+                    else f"{self.min_agreeing}_of_{len(self.identifiers)}"
+                ),
                 "votes_by": dict(votes_by),
                 "vote_count": vote_count,
                 "min_agreeing": self.min_agreeing,
@@ -264,6 +300,12 @@ class HybridConsensusIdentifier:
                     name: per_score[i].get(element, 0.0) for i, name in enumerate(self.names)
                 },
             }
+            if self.voter_weights is not None:
+                metadata["voter_weights"] = dict(self.voter_weights)
+                metadata["weight_threshold"] = self.weight_threshold
+                metadata["weighted_score"] = sum(
+                    self.voter_weights.get(name, 0.0) for name, voted in votes_by.items() if voted
+                )
 
             all_element_ids.append(
                 ElementIdentification(
@@ -298,12 +340,22 @@ class HybridConsensusIdentifier:
             n_peaks=n_peaks,
             n_matched_peaks=n_matched_peaks,
             n_unmatched_peaks=n_unmatched_peaks,
-            algorithm=f"hybrid_consensus_{self.min_agreeing}of{len(self.identifiers)}",
+            algorithm=(
+                f"hybrid_consensus_weighted_w{self.weight_threshold:.2f}"
+                if self.voter_weights is not None
+                else f"hybrid_consensus_{self.min_agreeing}of{len(self.identifiers)}"
+            ),
             parameters={
                 "min_agreeing": self.min_agreeing,
                 "n_identifiers": len(self.identifiers),
                 "identifier_names": list(self.names),
                 "n_detected": len(detected_elements),
+                "voter_weights": (
+                    dict(self.voter_weights) if self.voter_weights is not None else None
+                ),
+                "weight_threshold": (
+                    self.weight_threshold if self.voter_weights is not None else None
+                ),
             },
         )
 
