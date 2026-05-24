@@ -105,7 +105,7 @@ echo "Data dir:                    ${DATA_DIR}"
     --vrabel-max-shots 1 \
     --max-outer-folds 1 \
     --output-format parquet \
-    --experiment-label "post-alias-fix-d553-phase3-jbfg-validation" \
+    --experiment-label "post-alias-fix-d553-phase4-jbfg-fista-fix" \
     --seed 42
 
 echo "=== Benchmark complete. Results in ${OUTPUT_DIR} ==="
