@@ -2634,13 +2634,33 @@ class ALIASIdentifier:
         if len(matched_indices) < 3:
             return 0.5, 0.0  # Penalize — not enough lines for Boltzmann check
 
-        observations = []
-        n_resonance_filtered = 0
         resonance_cutoff = float(getattr(self, "self_absorption_e_i_cutoff_ev", 0.1))
         apply_resonance_filter = bool(
             nnls_significant and getattr(self, "self_absorption_aware", True)
         )
 
+        # Bead n3rf.4: pre-scan to decide whether filtering would leave
+        # enough non-resonance lines for a Boltzmann fit. If not (e.g.,
+        # Al I 396.15 + Al I 308.21 are both resonance lines), keep all
+        # lines — falling back to the pre-filter behavior is better than
+        # forcing the element to fail the R² gate via insufficient lines.
+        if apply_resonance_filter:
+            n_non_resonance_valid = 0
+            for i in matched_indices:
+                trans = fused_lines[i]["transition"]
+                pidx = int(matched_peak_idx[i])
+                if pidx < 0 or pidx >= len(peaks):
+                    continue
+                I_obs = intensity[peaks[pidx][0]]
+                if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
+                    continue
+                e_i = float(getattr(trans, "E_i_ev", 1.0))
+                if e_i >= resonance_cutoff:
+                    n_non_resonance_valid += 1
+            if n_non_resonance_valid < 3:
+                apply_resonance_filter = False  # not enough non-resonance lines
+
+        observations = []
         for i in matched_indices:
             trans = fused_lines[i]["transition"]
             pidx = int(matched_peak_idx[i])
@@ -2651,12 +2671,12 @@ class ALIASIdentifier:
                 continue
 
             # Drop resonance lines when caller has NNLS-significance evidence
-            # for the candidate. Self-absorption on these lines biases the
-            # slope but does not appear in the basis-spectrum NNLS check.
+            # AND the pre-scan confirmed enough non-resonance lines remain.
+            # Self-absorption on these lines biases the slope; basis-spectrum
+            # NNLS independently confirms the candidate. n3rf.1 + n3rf.4.
             if apply_resonance_filter:
                 e_i = float(getattr(trans, "E_i_ev", 1.0))
                 if e_i < resonance_cutoff:
-                    n_resonance_filtered += 1
                     continue
 
             observations.append(
@@ -2673,12 +2693,6 @@ class ALIASIdentifier:
             )
 
         if len(observations) < 3:
-            # Filtering may have dropped us below the minimum. If we filtered
-            # at all and got too few lines for a fit, treat as "no evidence
-            # against the candidate" (boltz_factor=1.0) rather than
-            # penalising — the NNLS-significance flag is the upstream gate.
-            if apply_resonance_filter and n_resonance_filtered > 0:
-                return 1.0, 0.0
             return 0.5, 0.0
 
         # Need some spread in E_k for meaningful fit
