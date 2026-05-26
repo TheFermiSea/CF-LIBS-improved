@@ -731,6 +731,22 @@ class CombIdentifier:
         """
         Estimate baseline using moving median and compute peak threshold.
 
+        Bead ``CF-LIBS-improved-s1qr.2`` (2026-05-26): on clean spectra
+        (low background, sparse true peaks), the prior threshold
+        ``np.percentile(positive_residual, 85)`` was barely above the
+        noise σ — random-noise triangle shapes produced Pearson
+        correlations > 0.9 against the comb's triangular template, and
+        any element with ≥10 DB lines could thus accumulate 10 active
+        teeth on pure noise and pass the 0.12 ``min_correlation`` gate
+        (e.g. Ti FP on Fe-only synthetic at R=10000-40000).
+
+        Fix: enforce a MAD-based 5σ noise floor in addition to the
+        percentile threshold. ``threshold = max(pct_thr, 5 * 1.4826 *
+        median_abs_dev(residual))`` keeps the percentile behavior on
+        real (noisy, peak-rich) spectra where ``pct_thr >> 5σ``, and
+        adds the floor only where the percentile estimate is dominated
+        by noise (clean spectra, between-peak regions).
+
         Parameters
         ----------
         wavelength : np.ndarray
@@ -743,7 +759,7 @@ class CombIdentifier:
         baseline : np.ndarray
             Estimated baseline
         threshold : float
-            Peak detection threshold
+            Peak detection threshold (at least 5σ above robust noise std)
         """
         # Compute window size in points
         dwl_median = np.median(np.diff(wavelength))
@@ -759,12 +775,25 @@ class CombIdentifier:
         # Compute residual
         residual = intensity - baseline
 
-        # Threshold based on percentile of positive residuals
+        # Robust noise floor from the FULL residual (MAD is symmetric:
+        # uses both positive and negative deviations from zero, so it's
+        # not biased by a few large positive peaks). Scale by 1.4826
+        # to convert MAD to a Gaussian-equivalent std deviation.
+        noise_std = float(1.4826 * np.median(np.abs(residual - np.median(residual))))
+        noise_floor = 5.0 * noise_std
+
+        # Threshold based on percentile of positive residuals (existing logic)
         positive_residual = residual[residual > 0]
         if len(positive_residual) > 0:
-            threshold = np.percentile(positive_residual, self.threshold_percentile)
+            pct_threshold = float(np.percentile(positive_residual, self.threshold_percentile))
         else:
-            threshold = 0.0
+            pct_threshold = 0.0
+
+        # Take the stricter of the two: percentile-based estimate AND
+        # 5σ noise floor. On real noisy peak-rich spectra pct_threshold
+        # dominates (no behavior change); on clean low-peak spectra the
+        # noise floor prevents random-noise shape matches.
+        threshold = max(pct_threshold, noise_floor)
 
         return baseline, threshold
 
