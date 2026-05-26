@@ -442,9 +442,9 @@ def detect_line_observations(
     intensity: np.ndarray,
     atomic_db: AtomicDatabase,
     elements: List[str],
-    wavelength_tolerance_nm: float = 0.1,
+    wavelength_tolerance_nm: Optional[float] = None,
     min_peak_height: float = 0.01,
-    peak_width_nm: float = 0.2,
+    peak_width_nm: Optional[float] = None,
     min_relative_intensity: Optional[float] = None,
     ground_state_threshold_ev: float = 0.1,
     shift_scan_nm: float = 0.5,
@@ -464,6 +464,7 @@ def detect_line_observations(
     use_deconvolution: bool = False,
     use_jax_kdet: bool = False,
     use_jax_peak_fallback: bool = False,
+    resolving_power: Optional[float] = None,
 ) -> LineDetectionResult:
     """
     Detect spectral peaks and match them to known atomic transitions.
@@ -478,12 +479,21 @@ def detect_line_observations(
         Atomic database instance
     elements : List[str]
         Elements to match against
-    wavelength_tolerance_nm : float
-        Matching tolerance for known lines in nm
+    wavelength_tolerance_nm : float, optional
+        Matching tolerance for known lines in nm. When ``None`` (default), an
+        adaptive value is used: ``max(2 * wl_step, lambda_mid / resolving_power)``
+        if ``resolving_power`` is provided, else the legacy ``0.1`` constant.
+        This avoids R-independent false matches in dense atomic catalogs
+        (see CF-LIBS-improved-s1qr.2).
     min_peak_height : float
         Minimum peak height as fraction of max intensity
-    peak_width_nm : float
-        Expected peak width for integration (nm)
+    peak_width_nm : float, optional
+        Expected peak width for integration (nm). When ``None`` (default), an
+        adaptive value is used: ``max(2 * wl_step, lambda_mid / resolving_power)``
+        if ``resolving_power`` is provided, else the legacy ``0.2`` constant.
+        The default 0.2 nm imposes an R-independent resolution floor at
+        high-R; the adaptive form tracks the actual instrumental FWHM
+        (see CF-LIBS-improved-s1qr.2).
     min_relative_intensity : float, optional
         Minimum relative intensity threshold for database lines
     ground_state_threshold_ev : float
@@ -532,6 +542,12 @@ def detect_line_observations(
         ``scipy.signal.find_peaks`` path is intentionally preserved
         regardless of this flag (see ``docs/jax-port/line-detection-
         consultation.md``).
+    resolving_power : float, optional
+        Instrument resolving power (lambda / FWHM). When provided and the
+        caller leaves ``wavelength_tolerance_nm`` / ``peak_width_nm``
+        unset (``None``), those defaults become 1 FWHM at the band
+        midpoint instead of the legacy fixed values. Explicit overrides
+        from the caller take precedence (see CF-LIBS-improved-s1qr.2).
 
     Returns
     -------
@@ -566,6 +582,29 @@ def detect_line_observations(
     wl_min = float(np.min(wavelength))
     wl_max = float(np.max(wavelength))
 
+    # --- Adaptive defaults (CF-LIBS-improved-s1qr.2) -------------------
+    # When the caller leaves ``wavelength_tolerance_nm`` or ``peak_width_nm``
+    # unset (``None``), derive R-aware defaults: one FWHM at the band
+    # midpoint when ``resolving_power`` is provided, else fall back to the
+    # legacy fixed constants (0.1 and 0.2 nm respectively) so existing
+    # callers see byte-identical behaviour. The 1-FWHM scale (``lambda/R``)
+    # matches the instrument resolution element: two database transitions
+    # closer than this cannot be separated by the spectrometer, so
+    # admitting matches inside a tighter window would amplify
+    # ambiguous-catalog noise (CF-LIBS-improved-s1qr.2).
+    wl_step = _estimate_wl_step(wavelength)
+    lambda_mid = 0.5 * (wl_min + wl_max)
+    if wavelength_tolerance_nm is None:
+        if resolving_power is not None and resolving_power > 0:
+            wavelength_tolerance_nm = max(2.0 * wl_step, lambda_mid / resolving_power)
+        else:
+            wavelength_tolerance_nm = 0.1
+    if peak_width_nm is None:
+        if resolving_power is not None and resolving_power > 0:
+            peak_width_nm = max(2.0 * wl_step, lambda_mid / resolving_power)
+        else:
+            peak_width_nm = 0.2
+
     transitions = _load_transitions(
         atomic_db,
         elements,
@@ -593,7 +632,6 @@ def detect_line_observations(
         use_jax_fallback=use_jax_peak_fallback,
     )
 
-    wl_step = _estimate_wl_step(wavelength)
     half_width_px = max(int((peak_width_nm / max(wl_step, 1e-9)) / 2), 1)
 
     observations: List[LineObservation] = []
