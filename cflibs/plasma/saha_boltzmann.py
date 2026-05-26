@@ -190,7 +190,16 @@ class SahaBoltzmannSolver(SolverStrategy):
         if hasattr(self.atomic_db, "get_partition_coefficients"):
             pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
             if pf is not None:
-                return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
+                from cflibs.plasma.partition import get_ground_state_g
+
+                g0 = get_ground_state_g(self.atomic_db, element, ionization_stage)
+                return PartitionFunctionEvaluator.evaluate(
+                    T_K,
+                    pf.coefficients,
+                    t_min=pf.t_min,
+                    t_max=pf.t_max,
+                    g0=g0,
+                )
 
         # Fallback 2: manual summation over EnergyLevel objects
         levels = self.atomic_db.get_energy_levels(element, ionization_stage)
@@ -572,7 +581,16 @@ class SahaBoltzmannSolverJax(SolverStrategy):
             if hasattr(self.atomic_db, "get_partition_coefficients"):
                 pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
                 if pf is not None:
-                    return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
+                    from cflibs.plasma.partition import get_ground_state_g
+
+                    g0 = get_ground_state_g(self.atomic_db, element, ionization_stage)
+                    return PartitionFunctionEvaluator.evaluate(
+                        T_K,
+                        pf.coefficients,
+                        t_min=pf.t_min,
+                        t_max=pf.t_max,
+                        g0=g0,
+                    )
             energy_levels = self.atomic_db.get_energy_levels(element, ionization_stage)
             if not energy_levels:
                 return 2.0

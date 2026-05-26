@@ -368,7 +368,60 @@ def get_levels_for_species(
 # ---------------------------------------------------------------------------
 
 
-def polynomial_partition_function(T_K: float, coefficients: List[float]) -> float:
+def get_ground_state_g(
+    atomic_db: Any,
+    element: str,
+    ionization_stage: int,
+    default: float = 1.0,
+) -> float:
+    """Look up the ground-state statistical weight g0 from the energy_levels table.
+
+    Used as the physical lower bound for polynomial-fallback partition function
+    evaluation (a partition function U(T) cannot be less than the ground state's
+    degeneracy because the ground state always contributes a Boltzmann weight of
+    1).  Falls back to ``default`` when the DB lookup fails for any reason
+    (missing species, no levels, exception).
+
+    Parameters
+    ----------
+    atomic_db : Any
+        Atomic data source exposing ``get_energy_levels``.
+    element : str
+        Element symbol.
+    ionization_stage : int
+        Ionization stage (1 = neutral).
+    default : float
+        Value returned when no levels are available (default 1.0, since
+        every level has g >= 1).
+
+    Returns
+    -------
+    float
+        Ground-state statistical weight, or ``default`` if unavailable.
+    """
+    try:
+        levels = atomic_db.get_energy_levels(element, ionization_stage)
+    except Exception:
+        return default
+    if not levels:
+        return default
+    # Lowest-energy level — sort by energy_ev just in case the DB iteration
+    # order is not energy-sorted.
+    try:
+        g0 = min(levels, key=lambda lev: lev.energy_ev).g
+    except Exception:
+        return default
+    return float(g0) if g0 and g0 > 0 else default
+
+
+def polynomial_partition_function(
+    T_K: float,
+    coefficients: List[float],
+    *,
+    t_min: Optional[float] = None,
+    t_max: Optional[float] = None,
+    g0: Optional[float] = None,
+) -> float:
     """
     Evaluate partition function using the Irwin (1981) polynomial form,
     *natural-log basis*.
@@ -382,12 +435,33 @@ def polynomial_partition_function(T_K: float, coefficients: List[float]) -> floa
     published Table II uses base-10 logs; convert his coefficients with
     :func:`irwin_log10_to_ln_coeffs` before storing them as ``a_n`` here.
 
+    Extrapolation guard (bead CF-LIBS-improved-s1qr.1, 2026-05-25): outside
+    the fit domain ``[t_min, t_max]`` the polynomial is unconstrained and
+    can blow up exponentially (e.g. Ca I U(100 000 K) = 1.14e5 vs the
+    direct-sum truth of ~200, 560× wrong) or fall below the ground-state
+    degeneracy (e.g. Nb I U(500 K) = 0.31 < g0=1).  When ``t_min``/``t_max``
+    are supplied, the input temperature is clamped to that interval before
+    evaluation; when ``g0`` is supplied, the result is floored at ``g0``.
+    All three are keyword-only so legacy callers retain bit-identical
+    behaviour.
+
     Parameters
     ----------
     T_K : float
         Temperature in Kelvin
     coefficients : List[float]
         Polynomial coefficients [a0, a1, a2, a3, a4], natural-log basis.
+    t_min, t_max : float, optional
+        Validity range of the polynomial fit (from the ``partition_functions``
+        table).  When both are supplied, ``T_K`` is clamped to
+        ``[t_min, t_max]`` prior to polynomial evaluation.  Passing one
+        alone clamps on that side only.
+    g0 : float, optional
+        Ground-state degeneracy (statistical weight of the lowest energy
+        level).  The returned value is floored at ``g0`` so the partition
+        function cannot drop below the ground-state contribution, which is
+        a strict physical lower bound.  Defaults to no floor when omitted
+        (legacy behaviour).
 
     Returns
     -------
@@ -400,15 +474,27 @@ def polynomial_partition_function(T_K: float, coefficients: List[float]) -> floa
         to the natural-log basis used here.
     """
     if T_K <= 1.0:
-        return 1.0
+        return 1.0 if g0 is None else max(1.0, float(g0))
 
-    ln_T = np.log(T_K)
+    # Clamp T to the polynomial's validity window (if supplied) before
+    # evaluating — extrapolating exp(quartic in ln T) outside [t_min, t_max]
+    # is the root cause of the 560× Ca I error documented above.
+    T_eval = float(T_K)
+    if t_min is not None:
+        T_eval = max(T_eval, float(t_min))
+    if t_max is not None:
+        T_eval = min(T_eval, float(t_max))
+
+    ln_T = np.log(T_eval)
     ln_U = 0.0
 
     for i, a in enumerate(coefficients):
         ln_U += a * (ln_T**i)
 
-    return np.exp(ln_U)
+    U = float(np.exp(ln_U))
+    if g0 is not None:
+        U = max(U, float(g0))
+    return U
 
 
 def irwin_log10_to_ln_coeffs(b: List[float]) -> List[float]:
@@ -445,8 +531,29 @@ def irwin_log10_to_ln_coeffs(b: List[float]) -> List[float]:
 if HAS_JAX:
 
     @jit
-    def polynomial_partition_function_jax(
+    def _polynomial_partition_function_jax_core(
         T_K: Union[float, jnp.ndarray], coefficients: jnp.ndarray
+    ) -> jnp.ndarray:
+        """Inner JIT-compiled polynomial evaluation (no clamping)."""
+        ln_T = jnp.log(jnp.maximum(T_K, 1.0))
+
+        ln_U = (
+            coefficients[..., 0]
+            + coefficients[..., 1] * ln_T
+            + coefficients[..., 2] * (ln_T**2)
+            + coefficients[..., 3] * (ln_T**3)
+            + coefficients[..., 4] * (ln_T**4)
+        )
+
+        return jnp.exp(ln_U)
+
+    def polynomial_partition_function_jax(
+        T_K: Union[float, jnp.ndarray],
+        coefficients: jnp.ndarray,
+        *,
+        t_min: Optional[Union[float, jnp.ndarray]] = None,
+        t_max: Optional[Union[float, jnp.ndarray]] = None,
+        g0: Optional[Union[float, jnp.ndarray]] = None,
     ) -> jnp.ndarray:
         """
         JAX-compatible evaluation of partition function.
@@ -458,32 +565,34 @@ if HAS_JAX:
         coefficients : array
             Coefficients [a0, a1, a2, a3, a4]
             Can be shape (5,) or (N, 5)
+        t_min, t_max : float or array, optional
+            Validity range of the polynomial fit.  When supplied, ``T_K`` is
+            clamped to ``[t_min, t_max]`` before evaluation (broadcasts
+            against ``T_K``).  See the NumPy twin for the rationale.
+        g0 : float or array, optional
+            Ground-state degeneracy.  Result is floored at ``g0`` (broadcasts
+            against the output).
 
         Returns
         -------
         array
             Partition function value U(T)
         """
-        # Ensure T_K is not too close to zero to avoid log(0)
-        # In practice T_eV > 0.4 checked in generator, so T_K > 4000
-        ln_T = jnp.log(jnp.maximum(T_K, 1.0))
+        # Clamp T to validity window (if provided).  Kwargs are evaluated
+        # eagerly in Python so this wrapper stays jit-friendly without
+        # needing static_argnames.
+        T_clamped = T_K
+        if t_min is not None and t_max is not None:
+            T_clamped = jnp.clip(T_K, t_min, t_max)
+        elif t_min is not None:
+            T_clamped = jnp.maximum(T_K, t_min)
+        elif t_max is not None:
+            T_clamped = jnp.minimum(T_K, t_max)
 
-        # Expand dimensions if necessary for broadcasting
-        # If coefficients is (N, 5) and T_K is scalar, result is (N,)
-
-        # Calculate sum a_n * (ln T)^n
-        # Manual expansion for 5 coefficients is fast and clear
-        # Assuming coefficients shape ends in 5
-
-        ln_U = (
-            coefficients[..., 0]
-            + coefficients[..., 1] * ln_T
-            + coefficients[..., 2] * (ln_T**2)
-            + coefficients[..., 3] * (ln_T**3)
-            + coefficients[..., 4] * (ln_T**4)
-        )
-
-        return jnp.exp(ln_U)
+        U = _polynomial_partition_function_jax_core(T_clamped, coefficients)
+        if g0 is not None:
+            U = jnp.maximum(U, g0)
+        return U
 
 else:
 
@@ -526,14 +635,36 @@ class PartitionFunctionEvaluator:
         return direct_sum_partition_function(T_K, g_levels, E_levels_ev, ip_ev, n_e)
 
     @staticmethod
-    def evaluate(T_K: float, coefficients: List[float]) -> float:
-        """Evaluate using polynomial coefficients (legacy fallback)."""
-        return polynomial_partition_function(T_K, coefficients)
+    def evaluate(
+        T_K: float,
+        coefficients: List[float],
+        *,
+        t_min: Optional[float] = None,
+        t_max: Optional[float] = None,
+        g0: Optional[float] = None,
+    ) -> float:
+        """Evaluate using polynomial coefficients (legacy fallback).
+
+        Forwards optional ``t_min``/``t_max``/``g0`` extrapolation guards to
+        :func:`polynomial_partition_function`.
+        """
+        return polynomial_partition_function(T_K, coefficients, t_min=t_min, t_max=t_max, g0=g0)
 
     @staticmethod
-    def evaluate_jax(T_K: float, coefficients: Any) -> Any:
-        """Evaluate using JAX polynomial implementation (legacy)."""
-        return polynomial_partition_function_jax(T_K, coefficients)
+    def evaluate_jax(
+        T_K: float,
+        coefficients: Any,
+        *,
+        t_min: Optional[float] = None,
+        t_max: Optional[float] = None,
+        g0: Optional[float] = None,
+    ) -> Any:
+        """Evaluate using JAX polynomial implementation (legacy).
+
+        Forwards optional ``t_min``/``t_max``/``g0`` extrapolation guards to
+        :func:`polynomial_partition_function_jax`.
+        """
+        return polynomial_partition_function_jax(T_K, coefficients, t_min=t_min, t_max=t_max, g0=g0)
 
     @staticmethod
     def evaluate_direct_batch(

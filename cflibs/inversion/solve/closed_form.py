@@ -80,7 +80,16 @@ class ClosedFormILRSolver:
 
         pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
         if pf:
-            return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
+            from cflibs.plasma.partition import get_ground_state_g
+
+            g0 = get_ground_state_g(self.atomic_db, element, ionization_stage)
+            return PartitionFunctionEvaluator.evaluate(
+                T_K,
+                pf.coefficients,
+                t_min=pf.t_min,
+                t_max=pf.t_max,
+                g0=g0,
+            )
         if ionization_stage == 1:
             return 25.0
         if ionization_stage == 2:
