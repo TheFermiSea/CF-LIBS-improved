@@ -61,12 +61,13 @@ export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/home/brian/jax-c
 # should? Keep hybrid_consensus_2of3 in the workflow list for the apples-to-
 # apples comparison against Phase 2.
 ID_WORKFLOWS=(
-    alias_v2                              # n3rf.1 resonance-filter validation (auto via nnls_significant)
-    comb                                  # baseline
-    spectral_nnls                         # NNLS sparse ID
-    hybrid_union                          # current top (Phase 4 F1=0.621)
-    hybrid_consensus_2of4_with_nnls       # Phase 4 F1=0.342 (high-precision option)
-    hybrid_consensus_weighted             # NEW — Detective B's structural fix
+    alias                                 # baseline (pre-fix); also validates partition fix (s1qr.1)
+    alias_v2                              # post-resonance-filter (n3rf.4)
+    alias_high_recall                     # n3rf.2 fix — should now exceed alias_v2 on recall
+    comb                                  # s1qr.2 fix — adaptive wavelength_tolerance
+    spectral_nnls                         # control (no changes)
+    hybrid_union                          # current top (Phase 6 F1=0.619)
+    hybrid_consensus_weighted             # Detective B (Phase 5 F1=0.491)
 )
 
 # ID-only; composition deferred to a separate run.
@@ -105,7 +106,7 @@ echo "Data dir:                    ${DATA_DIR}"
     --vrabel-max-shots 1 \
     --max-outer-folds 1 \
     --output-format parquet \
-    --experiment-label "post-alias-fix-d553-phase6-al-regression-fix" \
+    --experiment-label "post-alias-fix-d553-phase7-s1qr+n3rf2-validation" \
     --seed 42
 
 echo "=== Benchmark complete. Results in ${OUTPUT_DIR} ==="
