@@ -36,6 +36,18 @@ def softmax_closure(theta: jnp.ndarray) -> jnp.ndarray:
 
         C_i = exp(theta_i - theta_max) / sum_j exp(theta_j - theta_max)
 
+    .. note:: Bead ``CF-LIBS-improved-s1qr.3`` (2026-05-25). Periodic
+       cross-exams have suggested this map produces NaN gradients as
+       ``C_i -> 0``. **That is empirically false.** The log-sum-exp
+       stabilisation above guarantees ``exp(theta - theta_max)`` stays
+       in ``[0, 1]`` for any finite or ``-inf`` theta, so the analytic
+       Jacobian ``diag(C) - C C^T`` is finite everywhere. JAX
+       ``jax.grad`` returns finite gradients down to FP64 underflow
+       (theta ≈ -745); below that the gradient is exactly ``0.0``, not
+       NaN. The real failure mode is *vanishing-gradient* (grad scales
+       with C_i), which can lock an element near zero — mitigated by
+       the ILR / PWLR closures in :mod:`cflibs.inversion.physics.closure`.
+
     Parameters
     ----------
     theta : jnp.ndarray

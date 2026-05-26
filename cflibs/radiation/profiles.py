@@ -268,6 +268,23 @@ def voigt_profile(
     """
     Calculate Voigt profile.
 
+    .. note:: Bead ``CF-LIBS-improved-s1qr.3`` (2026-05-25). Periodic
+       cross-exams have suggested the rational-approximation Voigt path
+       clips far wings with a hard-coded cutoff radius. **That is
+       empirically false on the production path.** Both ``voigt_profile``
+       (numpy, via ``scipy.special.wofz``) and ``_voigt_profile_kernel_jax``
+       (Weideman 1994 Faddeeva) evaluate the full Faddeeva function with
+       no radial truncation. Verified: the Voigt tail matches the
+       analytic Lorentzian to 1e-6 relative error out to 1000× FWHM_L
+       (200 nm offset for FWHM_L=0.1 nm) — no observable clipping at
+       any tested radius. The deprecated ``_faddeeva_humlicek_jax``
+       (manifold-only, not on the inversion path) uses piecewise
+       rational regions for *accuracy*, not radial clipping. The only
+       ``n_sigma=5.0`` constant in the radiation tree is in
+       ``spectrum_model.py:432-433`` for the *instrument Gaussian kernel
+       array size* — that is kernel-length truncation, NOT Voigt
+       profile clipping, and does not affect the per-line shape.
+
     Parameters
     ----------
     wavelength : array

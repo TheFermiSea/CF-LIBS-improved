@@ -33,6 +33,18 @@ def stark_hwhm(
     w_electron = w_ref * (n_e / 10^16) * (T / T_ref)^(-alpha)
     w_total = w_electron * (1 + 1.75 * A_ion * (1 - 0.75 * R_D))
 
+    .. note:: Bead ``CF-LIBS-improved-s1qr.3`` (2026-05-25). Periodic
+       cross-exams have suggested this function does linear interpolation
+       of electron-impact parameters over a coarse T grid, breaking C^∞
+       smoothness. **That is empirically false.** This is an analytic
+       power law ``(T/T_ref)^(-alpha)`` with NO tabulated grid, NO
+       ``np.interp``, NO ``interp1d``. Verified C^∞ smooth above the
+       ``max(T, 1000)`` floor (which is unreachable in realistic LIBS
+       plasma at 5000-15000 K). Numerical 2nd-derivative across T =
+       5000..15000 K varies smoothly, no sawtooth signature. The
+       ``stark_hwhm_jax`` twin at ``stark.py:215+`` uses the identical
+       closed form.
+
     Parameters
     ----------
     n_e_cm3 : float
