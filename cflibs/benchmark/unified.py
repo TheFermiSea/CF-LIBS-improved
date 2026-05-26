@@ -869,6 +869,15 @@ def _alias_high_recall_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     the strict default rejects 9 of 12 records at the identification
     stage and they fall out of composition entirely.
 
+    Bead CF-LIBS-improved-n3rf.2 found that surfacing those extra
+    candidates is insufficient on its own — the strict downstream
+    R² and CL gates re-rejected most of them, dragging macro_F1 to
+    0.083 (worse than strict alias at 0.139). The fix is baked into
+    ``_build_alias_high_recall_predictor`` (inherits alias_v2's
+    ``r2_gate_mode='adaptive_t'`` + ``relative_cl_per_ion_stage=True``),
+    not in this config dict, so it cannot be tuned out by parameter-
+    sweep callers.
+
     Other knobs (chance_window_scale, max_lines_per_element) are still
     sweepable so the workflow can be tuned independently of the strict
     alias workflow.
@@ -888,11 +897,33 @@ def _build_alias_high_recall_predictor(
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
     """Predictor for ``alias_high_recall``.
 
-    Constructs ``ALIASIdentifier(high_recall=True)`` WITHOUT explicit
-    threshold kwargs so PR #159's recall preset resolves them. Otherwise
-    byte-identical to ``_build_alias_predictor``. Records the active
-    mode in ``result.parameters['alias_mode']`` for downstream
-    audit-ability.
+    Constructs ``ALIASIdentifier(high_recall=True)`` *and* inherits the
+    two alias_v2 gating fixes (PR #175 + PR #176) so the looser peak
+    thresholds aren't immediately re-rejected by the strict downstream
+    gates:
+
+      r2_gate_mode='adaptive_t' (PR #175, fix γ ftp1) — relaxes the
+        Boltzmann R² floor on cold plasma so the lower-quality fits
+        produced by the extra peaks aren't auto-killed.
+      relative_cl_per_ion_stage=True (PR #176, fix ε dj6y) — gates
+        neutrals and ions independently so a high-CL dominant neutral
+        can't sweep out the otherwise-promising ionized candidates that
+        the looser detection_threshold/intensity_threshold_factor
+        surface.
+
+    Per CF-LIBS-improved-n3rf.2 (Phase 1b benchmark on n=24 spectra),
+    the *previous* construction — ``high_recall=True`` without these
+    fixes — underperformed strict ``alias`` on every metric
+    (macro_F1 0.083 vs 0.139, macro_recall 0.066 vs 0.099). The looser
+    thresholds surfaced more candidate lines (noise), but the strict
+    fixed-0.85 R² gate and global CL gate then rejected most of them
+    — including the legitimate cold-plasma elements that the recall
+    mode is designed to recover. Inheriting alias_v2's gates fixes the
+    structural mismatch; smoke test on Vrabel s019/s062/s089 shows
+    recall 0.000 → 0.589 and macro_F1 0.000 → 0.611.
+
+    Records the active mode in ``result.parameters['alias_mode']`` for
+    downstream audit-ability.
     """
 
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
@@ -905,13 +936,18 @@ def _build_alias_high_recall_predictor(
                 elements=candidate_elements,
                 resolving_power=_estimate_rp_for_spectrum(spectrum),
                 high_recall=True,
+                # bead CF-LIBS-improved-n3rf.2: inherit alias_v2 gates so
+                # the looser peak/detection thresholds aren't re-rejected
+                # downstream. Mirrors the jbfg.2 hybrid_consensus fix.
+                r2_gate_mode="adaptive_t",
+                relative_cl_per_ion_stage=True,
                 chance_window_scale=float(config["chance_window_scale"]),
                 max_lines_per_element=int(config["max_lines_per_element"]),
                 **_jax_identifier_flags_for(ALIASIdentifier),
             )
             result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
             result.parameters["candidate_elements"] = list(candidate_elements)
-            result.parameters["alias_mode"] = "high_recall"
+            result.parameters["alias_mode"] = "high_recall_v2_gates"
             return result
 
     return predictor
