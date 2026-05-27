@@ -84,33 +84,40 @@ class TestSoftmaxClosureParity:
         return self.jax.random.normal(key, shape=(D,), dtype=self.jnp.float64)
 
     def test_bit_identical_1d(self):
+        # Use np.testing.assert_array_equal for byte-identical assertion — semantically
+        # equivalent to `legacy_out == adapter_out` but the proper idiom for arrays
+        # and (importantly) doesn't trip Sonar's float-equality rule.
         for seed in range(50):
             D = (seed % 12) + 2
             theta = self._random_theta(D, seed=seed)
             legacy_out = self.legacy(theta)
             adapter_out = self.adapter.apply(theta)
-            err = float(self.jnp.max(self.jnp.abs(legacy_out - adapter_out)))
-            # NOSONAR — bit-identical assertion is the whole point of this parity test.
-            assert (
-                err == 0.0
-            ), f"Non-bit-identical at seed={seed}, D={D}: err={err}"  # noqa: PLR2004
+            np.testing.assert_array_equal(
+                np.asarray(legacy_out),
+                np.asarray(adapter_out),
+                err_msg=f"Non-bit-identical at seed={seed}, D={D}",
+            )
 
     def test_bit_identical_batched(self):
         key = self.jax.random.PRNGKey(123)
         theta_batch = self.jax.random.normal(key, shape=(7, 4), dtype=self.jnp.float64)
         legacy_out = self.legacy(theta_batch)
         adapter_out = self.adapter.apply(theta_batch)
-        err = float(self.jnp.max(self.jnp.abs(legacy_out - adapter_out)))
-        # NOSONAR — bit-identical assertion is the whole point of this parity test.
-        assert err == 0.0, f"Non-bit-identical for batch: err={err}"  # noqa: PLR2004
+        np.testing.assert_array_equal(
+            np.asarray(legacy_out),
+            np.asarray(adapter_out),
+            err_msg="Non-bit-identical for batched theta",
+        )
 
     def test_bit_identical_extreme_values(self):
         theta = self.jnp.array([500.0, -500.0, 0.0], dtype=self.jnp.float64)
         legacy_out = self.legacy(theta)
         adapter_out = self.adapter.apply(theta)
-        err = float(self.jnp.max(self.jnp.abs(legacy_out - adapter_out)))
-        # NOSONAR — bit-identical assertion is the whole point of this parity test.
-        assert err == 0.0, f"Non-bit-identical for extreme theta: err={err}"  # noqa: PLR2004
+        np.testing.assert_array_equal(
+            np.asarray(legacy_out),
+            np.asarray(adapter_out),
+            err_msg="Non-bit-identical for extreme theta",
+        )
 
 
 # ---------------------------------------------------------------------------
