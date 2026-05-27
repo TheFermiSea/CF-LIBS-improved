@@ -33,6 +33,7 @@ import numpy as np
 
 from cflibs.core.constants import EV_TO_K
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.physics.closure_strategy import ClosureStrategy
 from cflibs.inversion.result_base import ResultTableMixin, StatisticsMixin
 
 logger = get_logger("inversion.joint_optimizer")
@@ -277,6 +278,7 @@ class JointOptimizer:
         max_iterations: int = 200,
         tolerance: float = 1e-8,
         gradient_tolerance: float = 1e-6,
+        closure: Optional[ClosureStrategy] = None,
     ):
         if not HAS_JAX:
             raise ImportError(
@@ -299,12 +301,21 @@ class JointOptimizer:
         self.tolerance = tolerance
         self.gradient_tolerance = gradient_tolerance
 
+        # Closure strategy — defaults to softmax for backward compatibility.
+        # Constructed lazily to keep imports cheap on JAX-less platforms.
+        if closure is None:
+            from cflibs.inversion.physics.closure_strategy import SoftmaxClosure
+
+            closure = SoftmaxClosure()
+        self.closure: ClosureStrategy = closure
+
         # Parameter dimension: log(T) + log10(n_e) + n_elements (softmax params)
         self.n_params = 2 + self.n_elements
 
         logger.info(
             f"JointOptimizer initialized: {self.n_elements} elements, "
-            f"{self.n_wavelength} wavelengths, loss={loss_type.value}"
+            f"{self.n_wavelength} wavelengths, loss={loss_type.value}, "
+            f"closure={self.closure.name}"
         )
 
     def optimize(
@@ -547,7 +558,7 @@ class JointOptimizer:
 
         T_eV = jnp.exp(log_T)
         n_e = jnp.power(10.0, log_ne)
-        concentrations = softmax_closure(theta)
+        concentrations = self.closure.apply(theta)
 
         return T_eV, n_e, concentrations
 
