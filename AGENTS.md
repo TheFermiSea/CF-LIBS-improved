@@ -121,7 +121,7 @@ Full guidance: see [`CLAUDE.md` § Code Intelligence](CLAUDE.md#code-intelligenc
 
    ```bash
    git pull --rebase
-   bash ./scripts/bdh :force-sync  # only needed after bead-state changes such as claim/complete/update actions or index/schema migrations; bdh mutations otherwise auto-sync
+   bd dolt push  # only if you made bead state changes (claim/complete/update)
    git push
    git status  # MUST show "up to date with origin"
    ```
@@ -136,90 +136,24 @@ Full guidance: see [`CLAUDE.md` § Code Intelligence](CLAUDE.md#code-intelligenc
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 
-<!-- BEADHUB:START -->
-## BeadHub Coordination Rules
+## Coordination
 
-This project uses `bash ./scripts/bdh` for multi-agent coordination and issue tracking. It is a thin repo-local wrapper around `bdh`, and `bdh` is a wrapper on top of `bd` (beads). Commands starting with `:` like `bash ./scripts/bdh :status` are managed by BeadHub. Other commands are sent to `bd`.
-
-`.beadhub`, `.aw/`, and `.beadhub-cache/` are per-worktree and intentionally gitignored. New worktrees do not inherit the root checkout's BeadHub identity, so each worktree must have its own local bootstrap:
-
-```bash
-bash ./scripts/beadhub-bootstrap.sh
-```
-
-In this repo's local OSS setup, the BeadHub server uses `http://localhost:8000` as the API base (with endpoints under `/v1`). The local bootstrap avoids writes to `~/.config/aw`, writes repo-local AW files under `.aw/`, and `bash ./scripts/bdh` exports the workspace API key from that local config so `bdh` can authenticate consistently in sandboxed Codex worktrees. Do not append `/api` unless you are intentionally switching this workspace to BeadHub Cloud or another server that expects that base path.
-
-You are expected to work and coordinate with a team of agents. ALWAYS prioritize the team vs your particular task.
-
-You will see notifications telling you that other agents have written mails or chat messages, or are waiting for you. NEVER ignore notifications. It is rude towards your fellow agents. Do not be rude.
-
-Your goal is for the team to succeed in the shared project.
-
-The active project policy as well as the expected behaviour associated to your role is shown via `bash ./scripts/bdh :policy`.
+This project uses **native `bd` (beads)** for issue tracking and persistent context. Do **not** use `bdh` (the BeadHub Go wrapper) or any `bash ./scripts/bdh` wrapper. BeadHub was removed from this project in commit `6b64e93` and there is no BeadHub server configured here. The `bdh` binary adds a server-coordination layer (chat, mail, locks, presence) that this project doesn't run.
 
 ## Start Here (Every Session)
 
 ```bash
-bash ./scripts/bdh :policy    # READ CAREFULLY and follow diligently
-bash ./scripts/bdh :status    # who am I? (alias/workspace/role) + team status
-bash ./scripts/bdh ready      # find unblocked work
+bd prime       # session context: workflow + ready work + memories
+bd memories    # list persistent notes
+bd ready       # find unblocked work
 ```
-
-Use `bash ./scripts/bdh :help` for BeadHub-specific help in this repo.
 
 ## Rules
 
-- Always use `bash ./scripts/bdh` (not raw `bd` or raw `bdh`) so work is coordinated and uses the workspace-local BeadHub config.
-- Default to mail (`bash ./scripts/bdh :aweb mail list|open|send`) for coordination; use chat (`bash ./scripts/bdh :aweb chat pending|open|send-and-wait|send-and-leave|history|extend-wait`) when you need a conversation with another agent.
-- Respond immediately to WAITING notifications — someone is blocked.
-- Notifications are for YOU, the agent, not for the human.
-- Don't overwrite the work of other agents without coordinating first.
-- ALWAYS check what other agents are working on with `bash ./scripts/bdh :status`, which will tell you which beads they have claimed and what files they are working on (reservations).
-- `bash ./scripts/bdh` derives your identity from the `.beadhub` file in the current worktree. If you run it from another directory you will be impersonating another agent, do not do that.
-- Prioritize good communication — your goal is for the team to succeed
-
-## Using mail
-
-Mail is fire-and-forget — use it for status updates, handoffs, and non-blocking questions.
-
-```bash
-bash ./scripts/bdh :aweb mail send <alias> "message"                         # Send a message
-bash ./scripts/bdh :aweb mail send <alias> "message" --subject "API design"  # With subject
-bash ./scripts/bdh :aweb mail list                                           # Check your inbox
-bash ./scripts/bdh :aweb mail open <alias>                                   # Read & acknowledge
-```
-
-## Using chat
-
-Chat sessions are persistent per participant pair. Use `--start-conversation` when initiating a new exchange (longer wait timeout).
-
-**Starting a conversation:**
-
-```bash
-bash ./scripts/bdh :aweb chat send-and-wait <alias> "question" --start-conversation
-```
-
-**Replying (when someone is waiting for you):**
-
-```bash
-bash ./scripts/bdh :aweb chat send-and-wait <alias> "response"
-```
-
-**Final reply (you don't need their answer):**
-
-```bash
-bash ./scripts/bdh :aweb chat send-and-leave <alias> "thanks, got it"
-```
-
-**Other commands:**
-
-```bash
-bash ./scripts/bdh :aweb chat pending          # List conversations with unread messages
-bash ./scripts/bdh :aweb chat open <alias>     # Read unread messages
-bash ./scripts/bdh :aweb chat history <alias>  # Full conversation history
-bash ./scripts/bdh :aweb chat extend-wait <alias> "need more time"  # Ask for patience
-```
-<!-- BEADHUB:END -->
+- Use `bd` directly. No wrappers, no `bdh`.
+- Persistent context goes in `bd remember` (Dolt-backed, survives sessions).
+- `bd dolt push` after bead state changes (claim/complete/update) so the federation hub stays in sync.
+- Coordination across multiple human-facing sessions on the same repo is handled by branches + PRs, not by an agent-coordination server.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
