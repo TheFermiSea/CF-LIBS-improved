@@ -6,7 +6,21 @@ After=network.target
 Type=oneshot
 # Deploy target is ai-proxy (Linux LXC). Per beefcake-swarm CLAUDE.md
 # the swarm's working trees live under /home/brian/code/.
+User=brian
+Group=brian
 WorkingDirectory=/home/brian/code/CF-LIBS-improved
 Environment=PATH=/home/brian/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=BEADS_NO_DAEMON=1
 ExecStart=/usr/bin/env python3 /home/brian/code/CF-LIBS-improved/scripts/orphan-claim-watchdog.py
+# Security hardening — see systemd.exec(5).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/brian/code/CF-LIBS-improved
+RestrictSUIDSGID=true
+LockPersonality=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
