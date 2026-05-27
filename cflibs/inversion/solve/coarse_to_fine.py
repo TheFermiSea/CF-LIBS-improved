@@ -20,6 +20,7 @@ import numpy as np
 
 from cflibs.core.constants import KB_EV, EV_TO_J, EV_TO_K, C_LIGHT
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.physics.closure_strategy import ClosureStrategy
 
 logger = get_logger("inversion.hybrid")
 
@@ -259,6 +260,7 @@ class HybridInverter:
         forward_model: Optional[Callable] = None,
         max_iterations: int = 100,
         tolerance: float = 1e-6,
+        closure: Optional[ClosureStrategy] = None,
     ):
         if not HAS_JAX:
             raise ImportError(
@@ -270,6 +272,23 @@ class HybridInverter:
         self.max_iterations = max_iterations
         self.tolerance = tolerance
 
+        # Closure strategy — defaults to softmax for backward compatibility.
+        if closure is None:
+            from cflibs.inversion.physics.closure_strategy import SoftmaxClosure
+
+            closure = SoftmaxClosure()
+        # HybridInverter traces the loss through jax.value_and_grad, so the closure
+        # must be JAX-native. NumPy closures (ILR/PWLR) call np.asarray(params) which
+        # either ConcretizationTypeErrors on a tracer or silently produces wrong
+        # gradients on a concrete array. Reject early with a clear message.
+        if closure.backend != "jax":
+            raise ValueError(
+                f"HybridInverter requires a JAX-backend closure for autodiff, "
+                f"got {closure.name!r} (backend={closure.backend!r}). "
+                f"Use SoftmaxClosure() or another JAX-compatible strategy."
+            )
+        self.closure: ClosureStrategy = closure
+
         # Extract manifold info
         self.wavelength = jnp.array(manifold.wavelength)
         self.elements = list(manifold.elements)
@@ -277,7 +296,7 @@ class HybridInverter:
 
         logger.info(
             f"HybridInverter initialized: {self.n_elements} elements, "
-            f"{len(self.wavelength)} wavelengths"
+            f"{len(self.wavelength)} wavelengths, closure={self.closure.name}"
         )
 
     def invert(
@@ -415,8 +434,11 @@ class HybridInverter:
         return _pack_params(T_eV, n_e, concentrations, self.elements)
 
     def _unpack_params(self, x: jnp.ndarray) -> Tuple[float, float, jnp.ndarray]:
-        """Unpack optimization vector to parameters."""
-        return _unpack_params(x)
+        """Unpack optimization vector to parameters using the configured closure."""
+        T_eV = jnp.exp(x[0])
+        n_e = jnp.exp(x[1])
+        conc = self.closure.apply(x[2:])
+        return T_eV, n_e, conc
 
     def _default_forward_model(
         self,
@@ -508,6 +530,7 @@ class SpectralFitter:
         forward_model: Callable,
         elements: List[str],
         wavelength: np.ndarray,
+        closure: Optional[ClosureStrategy] = None,
     ):
         if not HAS_JAX:
             raise ImportError(
@@ -518,6 +541,19 @@ class SpectralFitter:
         self.elements = elements
         self.wavelength = jnp.array(wavelength)
         self.n_elements = len(elements)
+        if closure is None:
+            from cflibs.inversion.physics.closure_strategy import SoftmaxClosure
+
+            closure = SoftmaxClosure()
+        # SpectralFitter traces the loss through jax.value_and_grad — see the
+        # matching check in HybridInverter for full rationale.
+        if closure.backend != "jax":
+            raise ValueError(
+                f"SpectralFitter requires a JAX-backend closure for autodiff, "
+                f"got {closure.name!r} (backend={closure.backend!r}). "
+                f"Use SoftmaxClosure() or another JAX-compatible strategy."
+            )
+        self.closure: ClosureStrategy = closure
 
     def fit(
         self,
@@ -611,5 +647,8 @@ class SpectralFitter:
         return _pack_params(T_eV, n_e, concentrations, self.elements)
 
     def _unpack(self, x: jnp.ndarray) -> Tuple[float, float, jnp.ndarray]:
-        """Unpack parameters."""
-        return _unpack_params(x)
+        """Unpack parameters using the configured closure strategy."""
+        T_eV = jnp.exp(x[0])
+        n_e = jnp.exp(x[1])
+        conc = self.closure.apply(x[2:])
+        return T_eV, n_e, conc

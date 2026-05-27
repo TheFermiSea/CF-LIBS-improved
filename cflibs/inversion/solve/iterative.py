@@ -13,6 +13,7 @@ from cflibs.core.constants import KB, KB_EV, SAHA_CONST_CM3, STP_PRESSURE, EV_TO
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.inversion.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.closure import ClosureEquation
+from cflibs.inversion.physics.closure_strategy import ClosureStrategy
 from cflibs.plasma.partition import PartitionFunctionEvaluator
 from cflibs.core.logging_config import get_logger
 
@@ -704,6 +705,7 @@ class IterativeCFLIBSSolver:
         apply_ipd: bool = False,
         aki_uncertainty_weighting: bool = True,
         two_region: bool = False,
+        closure: Optional[ClosureStrategy] = None,
     ):
         self.atomic_db = atomic_db
         self.max_iterations = max_iterations
@@ -713,6 +715,18 @@ class IterativeCFLIBSSolver:
         self.apply_ipd = apply_ipd
         self.aki_uncertainty_weighting = aki_uncertainty_weighting
         self.two_region = two_region
+        # Closure strategy — defaults to ILR per architecture-review
+        # Candidate 3 (ILR has well-conditioned gradients down to the
+        # trace-element regime).  The per-call ``closure_mode`` argument
+        # of :meth:`solve` continues to override this and remains the
+        # primary closure-selection API for the iterative solver, so the
+        # legacy default (``closure_mode='standard'``) is preserved
+        # bit-for-bit when callers do not pass ``closure_mode``.
+        if closure is None:
+            from cflibs.inversion.physics.closure_strategy import ILRClosure
+
+            closure = ILRClosure()
+        self.closure: ClosureStrategy = closure
         self.boltzmann_fitter = BoltzmannPlotFitter(
             outlier_sigma=2.5,
             use_jax=_jax_boltzmann_composition_enabled(),
