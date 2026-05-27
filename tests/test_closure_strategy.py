@@ -124,12 +124,7 @@ class TestILRClosureParity:
         legacy = ClosureEquation.apply_ilr(intercepts, partition_funcs)
         legacy_arr = np.array([legacy.concentrations[el] for el in sorted(elements)])
 
-        raw = np.array(
-            [
-                partition_funcs[el] * np.exp(intercepts[el])
-                for el in sorted(elements)
-            ]
-        )
+        raw = np.array([partition_funcs[el] * np.exp(intercepts[el]) for el in sorted(elements)])
         adapter = ILRClosure().apply(raw)
         np.testing.assert_allclose(adapter, legacy_arr, rtol=1e-12, atol=1e-15)
 
@@ -166,16 +161,9 @@ class TestPWLRClosureParity:
         partition_funcs = {"Fe": 25.0, "Cu": 2.0, "Zn": 1.0}
 
         legacy = ClosureEquation.apply_pwlr(intercepts, partition_funcs)
-        legacy_arr = np.array(
-            [legacy.concentrations[el] for el in sorted(intercepts)]
-        )
+        legacy_arr = np.array([legacy.concentrations[el] for el in sorted(intercepts)])
 
-        raw = np.array(
-            [
-                partition_funcs[el] * np.exp(intercepts[el])
-                for el in sorted(intercepts)
-            ]
-        )
+        raw = np.array([partition_funcs[el] * np.exp(intercepts[el]) for el in sorted(intercepts)])
         adapter = PWLRClosure().apply(raw)
         np.testing.assert_allclose(adapter, legacy_arr, rtol=1e-12, atol=1e-15)
 
@@ -223,3 +211,91 @@ def test_pwlr_gradient_check_accepts_open_simplex():
     assert closure.gradient_check(np.array([0.5, 0.3, 0.2])) is True
     assert closure.gradient_check(np.array([0.99999, 1e-5])) is True
     assert closure.gradient_check(np.array([1.0, 0.0])) is False
+
+
+# ---------------------------------------------------------------------------
+# Solver backend-guard tests
+#
+# JAX solvers (HybridInverter, SpectralFitter, JointOptimizer) trace the loss
+# through jax.value_and_grad. A NumPy-backend closure (ILR/PWLR) would either
+# ConcretizationTypeError on a tracer or silently produce wrong gradients.
+# The constructors must reject a non-JAX closure with a clear ValueError
+# instead of leaving the failure latent until the first .invert()/.fit() call.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.requires_jax
+def test_hybrid_inverter_rejects_numpy_closure():
+    pytest.importorskip("jax")
+    from cflibs.inversion.solve.coarse_to_fine import HybridInverter
+
+    class _StubManifold:
+        def __init__(self, n_elements=2, n_wl=8):
+            import jax.numpy as jnp
+
+            self.wavelength = jnp.linspace(400.0, 500.0, n_wl)
+            self.elements = [f"E{i}" for i in range(n_elements)]
+
+    manifold = _StubManifold()
+    with pytest.raises(ValueError, match=r"requires a JAX-backend closure.*ilr"):
+        HybridInverter(manifold=manifold, closure=ILRClosure())
+    with pytest.raises(ValueError, match=r"requires a JAX-backend closure.*pwlr"):
+        HybridInverter(manifold=manifold, closure=PWLRClosure())
+
+
+@pytest.mark.requires_jax
+def test_spectral_fitter_rejects_numpy_closure():
+    pytest.importorskip("jax")
+    from cflibs.inversion.solve.coarse_to_fine import SpectralFitter
+
+    def _stub_forward(*args, **kwargs):  # pragma: no cover - never called
+        raise AssertionError("forward model should not be invoked before guard fires")
+
+    with pytest.raises(ValueError, match=r"requires a JAX-backend closure.*ilr"):
+        SpectralFitter(
+            forward_model=_stub_forward,
+            elements=["Fe", "Ni"],
+            wavelength=np.linspace(400.0, 500.0, 8),
+            closure=ILRClosure(),
+        )
+
+
+@pytest.mark.requires_jax
+def test_joint_optimizer_rejects_numpy_closure():
+    pytest.importorskip("jax")
+    from cflibs.inversion.solve.joint_optimizer import JointOptimizer
+
+    def _stub_forward(*args, **kwargs):  # pragma: no cover - never called
+        raise AssertionError("forward model should not be invoked before guard fires")
+
+    with pytest.raises(ValueError, match=r"requires a JAX-backend closure.*pwlr"):
+        JointOptimizer(
+            forward_model=_stub_forward,
+            elements=["Fe", "Ni"],
+            wavelength=np.linspace(400.0, 500.0, 8),
+            closure=PWLRClosure(),
+        )
+
+
+@pytest.mark.requires_jax
+def test_jax_solvers_accept_default_softmax():
+    """Sanity check: default (None) and explicit SoftmaxClosure both pass the guard."""
+    pytest.importorskip("jax")
+    import jax.numpy as jnp
+
+    from cflibs.inversion.solve.coarse_to_fine import SpectralFitter
+
+    def _stub_forward(*args, **kwargs):  # pragma: no cover - never called
+        raise AssertionError("forward model should not be invoked at construction")
+
+    SpectralFitter(
+        forward_model=_stub_forward,
+        elements=["Fe", "Ni"],
+        wavelength=jnp.linspace(400.0, 500.0, 8),
+    )
+    SpectralFitter(
+        forward_model=_stub_forward,
+        elements=["Fe", "Ni"],
+        wavelength=jnp.linspace(400.0, 500.0, 8),
+        closure=SoftmaxClosure(),
+    )

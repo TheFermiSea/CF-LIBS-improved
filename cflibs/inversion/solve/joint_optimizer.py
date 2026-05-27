@@ -307,6 +307,15 @@ class JointOptimizer:
             from cflibs.inversion.physics.closure_strategy import SoftmaxClosure
 
             closure = SoftmaxClosure()
+        # JointOptimizer runs the closure inside a jax.value_and_grad-traced loss,
+        # so the closure must be JAX-native — NumPy closures (ILR/PWLR) would
+        # ConcretizationTypeError on a tracer or silently break gradients.
+        if closure.backend != "jax":
+            raise ValueError(
+                f"JointOptimizer requires a JAX-backend closure for autodiff, "
+                f"got {closure.name!r} (backend={closure.backend!r}). "
+                f"Use SoftmaxClosure() or another JAX-compatible strategy."
+            )
         self.closure: ClosureStrategy = closure
 
         # Parameter dimension: log(T) + log10(n_e) + n_elements (softmax params)

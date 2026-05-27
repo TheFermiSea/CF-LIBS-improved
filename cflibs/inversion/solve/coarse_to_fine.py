@@ -277,6 +277,16 @@ class HybridInverter:
             from cflibs.inversion.physics.closure_strategy import SoftmaxClosure
 
             closure = SoftmaxClosure()
+        # HybridInverter traces the loss through jax.value_and_grad, so the closure
+        # must be JAX-native. NumPy closures (ILR/PWLR) call np.asarray(params) which
+        # either ConcretizationTypeErrors on a tracer or silently produces wrong
+        # gradients on a concrete array. Reject early with a clear message.
+        if closure.backend != "jax":
+            raise ValueError(
+                f"HybridInverter requires a JAX-backend closure for autodiff, "
+                f"got {closure.name!r} (backend={closure.backend!r}). "
+                f"Use SoftmaxClosure() or another JAX-compatible strategy."
+            )
         self.closure: ClosureStrategy = closure
 
         # Extract manifold info
@@ -535,6 +545,14 @@ class SpectralFitter:
             from cflibs.inversion.physics.closure_strategy import SoftmaxClosure
 
             closure = SoftmaxClosure()
+        # SpectralFitter traces the loss through jax.value_and_grad — see the
+        # matching check in HybridInverter for full rationale.
+        if closure.backend != "jax":
+            raise ValueError(
+                f"SpectralFitter requires a JAX-backend closure for autodiff, "
+                f"got {closure.name!r} (backend={closure.backend!r}). "
+                f"Use SoftmaxClosure() or another JAX-compatible strategy."
+            )
         self.closure: ClosureStrategy = closure
 
     def fit(
