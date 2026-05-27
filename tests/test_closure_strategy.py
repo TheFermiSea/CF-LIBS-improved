@@ -90,7 +90,10 @@ class TestSoftmaxClosureParity:
             legacy_out = self.legacy(theta)
             adapter_out = self.adapter.apply(theta)
             err = float(self.jnp.max(self.jnp.abs(legacy_out - adapter_out)))
-            assert err == 0.0, f"Non-bit-identical at seed={seed}, D={D}: err={err}"
+            # NOSONAR — bit-identical assertion is the whole point of this parity test.
+            assert (
+                err == 0.0
+            ), f"Non-bit-identical at seed={seed}, D={D}: err={err}"  # noqa: PLR2004
 
     def test_bit_identical_batched(self):
         key = self.jax.random.PRNGKey(123)
@@ -98,14 +101,16 @@ class TestSoftmaxClosureParity:
         legacy_out = self.legacy(theta_batch)
         adapter_out = self.adapter.apply(theta_batch)
         err = float(self.jnp.max(self.jnp.abs(legacy_out - adapter_out)))
-        assert err == 0.0, f"Non-bit-identical for batch: err={err}"
+        # NOSONAR — bit-identical assertion is the whole point of this parity test.
+        assert err == 0.0, f"Non-bit-identical for batch: err={err}"  # noqa: PLR2004
 
     def test_bit_identical_extreme_values(self):
         theta = self.jnp.array([500.0, -500.0, 0.0], dtype=self.jnp.float64)
         legacy_out = self.legacy(theta)
         adapter_out = self.adapter.apply(theta)
         err = float(self.jnp.max(self.jnp.abs(legacy_out - adapter_out)))
-        assert err == 0.0, f"Non-bit-identical for extreme theta: err={err}"
+        # NOSONAR — bit-identical assertion is the whole point of this parity test.
+        assert err == 0.0, f"Non-bit-identical for extreme theta: err={err}"  # noqa: PLR2004
 
 
 # ---------------------------------------------------------------------------
