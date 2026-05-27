@@ -50,8 +50,10 @@ class TestRefinementResultDataclassCoverage:
             chi_squared=10.0,
             chi_squared_reduced=0.5,
         )
-        assert r.T_K == 8000.0
-        assert r.concentrations["Fe"] == 0.5
+        # NOSONAR — these are setter/getter round-trip checks on values literally
+        # passed to RefinementResult() above; exact equality is the correct test.
+        assert r.T_K == 8000.0  # noqa: PLR2004
+        assert r.concentrations["Fe"] == 0.5  # noqa: PLR2004
         assert r.converged is True
 
 
@@ -71,7 +73,9 @@ class TestSpectralRefinerEmptyPathsCoverage:
         assert result.concentrations == {}
         assert result.n_iterations == 0
         assert result.converged is True
-        assert result.T_K == 9000.0
+        assert (
+            result.T_K == 9000.0
+        )  # NOSONAR — T_init_K was set literally above; exact eq is correct
 
     def test_detected_elements_not_in_library(self):
         lib = _FakeBasisLibrary(elements=["Fe", "Ca"])
