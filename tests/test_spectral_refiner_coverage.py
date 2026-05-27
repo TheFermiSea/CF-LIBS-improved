@@ -8,7 +8,6 @@ symbols. Followup to test-coverage audit (2026-05-20).
 from dataclasses import dataclass
 
 import numpy as np
-import pytest
 
 from cflibs.inversion.solve.spectral_refiner import (
     RefinementResult,

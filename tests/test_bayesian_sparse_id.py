@@ -1,7 +1,5 @@
 """Tests for cflibs.benchmark.bayesian_sparse_id config + helpers."""
 
-import pytest
-
 from cflibs.benchmark.bayesian_sparse_id import (
     _empty_result,
     bayesian_sparse_config_name,
