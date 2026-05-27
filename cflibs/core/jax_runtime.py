@@ -453,6 +453,20 @@ class AtomicSnapshot:
     level_E_ev: Any = None
     level_mask: Any = None
 
+    # Per-species validity-window + g0 arrays for the
+    # ``BatchedPartitionFunctionProvider`` (arch candidate 4).  Shape
+    # ``(N_species,)``.  Optional / nullable to keep the snapshot
+    # back-compatible with callers built before the provider rollout — when
+    # ``None`` the legacy ``partition_coeffs``-only path is used and the
+    # polynomial extrapolates without clamping (the same behaviour shipped
+    # before the s1qr.1 fix).  ``partition_g0`` defaults to 1.0 per
+    # species in the snapshot builder; ``partition_t_min/max`` default to
+    # the standard CF-LIBS DB window (2000–25000 K) when no row is
+    # available.
+    partition_t_min: Any = None
+    partition_t_max: Any = None
+    partition_g0: Any = None
+
 
 # Register AtomicSnapshot as a pytree so it can flow through jit/vmap.
 if HAS_JAX:
@@ -472,6 +486,9 @@ if HAS_JAX:
         "level_g",
         "level_E_ev",
         "level_mask",
+        "partition_t_min",
+        "partition_t_max",
+        "partition_g0",
     )
 
     def _snapshot_flatten(snap: AtomicSnapshot):

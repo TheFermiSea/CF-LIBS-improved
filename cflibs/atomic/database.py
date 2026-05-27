@@ -581,6 +581,42 @@ class AtomicDatabase(AtomicDataSource):
             source=res[7],
         )
 
+    def partition_function_for(self, element: str, ionization_stage: int):
+        """Return an encapsulated :class:`PartitionFunctionProvider` for a species.
+
+        Vending the provider — instead of the raw :class:`PartitionFunction`
+        dataclass — concentrates the ``[t_min, t_max]`` clamp and the ``g0``
+        floor inside the provider's ``.at()`` method.  Every CF-LIBS call
+        site that consumes this method picks up the extrapolation guard
+        automatically; previously each site had to remember to thread
+        ``t_min``/``t_max``/``g0`` through :func:`polynomial_partition_function`
+        and half of them silently didn't.
+
+        Returns ``None`` when no row exists for ``(element, stage)``; callers
+        should fall back to direct-summation or a default provider in that
+        case.  See ``docs/architecture/2026-05-26-architecture-review.md``
+        § Candidate 4 and ADR-0001 § B-P7.
+        """
+        from cflibs.plasma.partition import (
+            PolynomialPartitionFunctionProvider,
+            get_ground_state_g,
+        )
+
+        pf = self.get_partition_coefficients(element, ionization_stage)
+        if pf is None:
+            return None
+        coeffs = list(pf.coefficients)
+        coeffs += [0.0] * (5 - len(coeffs))
+        return PolynomialPartitionFunctionProvider(
+            element=element,
+            ionization_stage=ionization_stage,
+            coefficients=tuple(float(c) for c in coeffs[:5]),
+            t_min=float(pf.t_min),
+            t_max=float(pf.t_max),
+            _g0=float(get_ground_state_g(self, element, ionization_stage)),
+            source=str(pf.source or ""),
+        )
+
     def get_species_physics(self, element: str, ionization_stage: int) -> SpeciesPhysics | None:
         """
         Get physical properties for a species.
@@ -736,8 +772,18 @@ class AtomicDatabase(AtomicDataSource):
         species_keys: list[tuple[str, int]] = []
         ip_list: list[float] = []
         partition_rows: list[list[float]] = []
+        # Per-species t_min / t_max / g0 carried alongside the polynomial
+        # coefficients for the BatchedPartitionFunctionProvider.  Default
+        # window (2000–25000 K) matches the production fit range used in
+        # ``populate_partition_functions.py``; default g0 = 1.0 is the
+        # conservative physical lower bound (every quantum level has g >= 1).
+        partition_t_min_list: list[float] = []
+        partition_t_max_list: list[float] = []
+        partition_g0_list: list[float] = []
         level_g_rows: list[list[float]] = []
         level_E_rows: list[list[float]] = []
+
+        from cflibs.plasma.partition import get_ground_state_g
 
         for element in elements:
             for stage in (1, 2):
@@ -749,10 +795,15 @@ class AtomicDatabase(AtomicDataSource):
                 pf = self.get_partition_coefficients(element, stage)
                 if pf is None:
                     partition_rows.append([float(np.log(2.0)), 0.0, 0.0, 0.0, 0.0])
+                    partition_t_min_list.append(2000.0)
+                    partition_t_max_list.append(25000.0)
                 else:
                     coeffs = list(pf.coefficients)
                     coeffs += [0.0] * (5 - len(coeffs))
                     partition_rows.append([float(c) for c in coeffs[:5]])
+                    partition_t_min_list.append(float(pf.t_min))
+                    partition_t_max_list.append(float(pf.t_max))
+                partition_g0_list.append(float(get_ground_state_g(self, element, stage)))
                 if include_levels:
                     levels = self.get_energy_levels(element, stage)
                     level_g_rows.append([float(lev.g) for lev in levels])
@@ -763,6 +814,9 @@ class AtomicDatabase(AtomicDataSource):
             species_keys.extend([("", 0)] * pad)
             ip_list.extend([0.0] * pad)
             partition_rows.extend([[0.0] * 5 for _ in range(pad)])
+            partition_t_min_list.extend([2000.0] * pad)
+            partition_t_max_list.extend([25000.0] * pad)
+            partition_g0_list.extend([1.0] * pad)
             if include_levels:
                 level_g_rows.extend([[] for _ in range(pad)])
                 level_E_rows.extend([[] for _ in range(pad)])
@@ -820,8 +874,14 @@ class AtomicDatabase(AtomicDataSource):
 
         if partition_rows:
             partition_coeffs = _xp.asarray(partition_rows, dtype=_real_dtype)
+            partition_t_min = _xp.asarray(partition_t_min_list, dtype=_real_dtype)
+            partition_t_max = _xp.asarray(partition_t_max_list, dtype=_real_dtype)
+            partition_g0 = _xp.asarray(partition_g0_list, dtype=_real_dtype)
         else:
             partition_coeffs = _xp.zeros((0, 5), dtype=_real_dtype)
+            partition_t_min = _xp.zeros((0,), dtype=_real_dtype)
+            partition_t_max = _xp.zeros((0,), dtype=_real_dtype)
+            partition_g0 = _xp.zeros((0,), dtype=_real_dtype)
         ionization_potential_ev = _xp.asarray(ip_list, dtype=_real_dtype)
 
         level_g_out: Any
@@ -862,6 +922,9 @@ class AtomicDatabase(AtomicDataSource):
             level_g=level_g_out,
             level_E_ev=level_E_ev_out,
             level_mask=level_mask_out,
+            partition_t_min=partition_t_min,
+            partition_t_max=partition_t_max,
+            partition_g0=partition_g0,
         )
 
     def close(self):

@@ -984,9 +984,7 @@ class BatchedPartitionFunctionProvider:
         g0_arr = np.asarray(self.g0, dtype=np.float64)
         T_clamped = np.clip(np.asarray(T_K, dtype=np.float64), t_min, t_max)
         ln_T = np.log(np.maximum(T_clamped, 1.0))
-        powers = np.stack(
-            [np.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1
-        )
+        powers = np.stack([np.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1)
         ln_U = np.sum(coeffs * powers, axis=-1)
         return np.maximum(np.exp(ln_U), g0_arr)
 
@@ -1022,8 +1020,6 @@ class BatchedPartitionFunctionProvider:
         g0_arr = np.asarray(self.g0, dtype=np.float64)[idx]
         T_clamped = np.clip(np.asarray(T_K, dtype=np.float64), t_min, t_max)
         ln_T = np.log(np.maximum(T_clamped, 1.0))
-        powers = np.stack(
-            [np.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1
-        )
+        powers = np.stack([np.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1)
         ln_U = np.sum(coeffs * powers, axis=-1)
         return np.maximum(np.exp(ln_U), g0_arr)

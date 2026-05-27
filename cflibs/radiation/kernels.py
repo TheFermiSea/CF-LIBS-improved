@@ -167,7 +167,7 @@ def _species_mass_array(snapshot: "AtomicSnapshot") -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def _polynomial_partition_function_jax(T_K, coeffs):
+def _polynomial_partition_function_jax(T_K, coeffs, t_min=None, t_max=None, g0=None):
     """ln U = sum_n a_n (ln T_K)^n. Returns U on the active dtype.
 
     The Irwin (1981) partition-function coefficients shipped in the
@@ -182,11 +182,27 @@ def _polynomial_partition_function_jax(T_K, coeffs):
     :func:`cflibs.plasma.partition.polynomial_partition_function_jax`
     (the canonical implementation, which also uses ``jnp.log``) but
     inlined to avoid extra import overhead inside the jit.
+
+    Optional ``t_min`` / ``t_max`` / ``g0`` arrays broadcast against
+    ``coeffs`` and apply the arch-candidate-4 extrapolation guard:
+    ``T`` is clamped to ``[t_min, t_max]`` before evaluation and the
+    result is floored at ``g0``.  Passing ``None`` for all three
+    preserves the legacy un-clamped behaviour.
     """
-    ln_T = jnp.log(jnp.maximum(T_K, 1.0))
+    T_clamped = T_K
+    if t_min is not None and t_max is not None:
+        T_clamped = jnp.clip(T_K, t_min, t_max)
+    elif t_min is not None:
+        T_clamped = jnp.maximum(T_K, t_min)
+    elif t_max is not None:
+        T_clamped = jnp.minimum(T_K, t_max)
+    ln_T = jnp.log(jnp.maximum(T_clamped, 1.0))
     ln_T_powers = jnp.stack([jnp.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1)
     ln_U = jnp.sum(coeffs * ln_T_powers, axis=-1)
-    return jnp.exp(ln_U)
+    U = jnp.exp(ln_U)
+    if g0 is not None:
+        U = jnp.maximum(U, g0)
+    return U
 
 
 def _saha_two_stage_populations(plasma_state, snapshot):
@@ -261,7 +277,25 @@ def _saha_two_stage_populations(plasma_state, snapshot):
     # ---- Partition functions for every species row (traced) ----
     pf_all = jnp.asarray(snapshot.partition_coeffs, dtype=dtype)
     ip_all = jnp.asarray(snapshot.ionization_potential_ev, dtype=dtype)
-    U_per_species = jnp.maximum(_polynomial_partition_function_jax(T_K, pf_all), 1e-30)
+    # Per-species bounds + g0 routed through the encapsulated provider
+    # (arch candidate 4).  Older snapshots produced before the candidate-4
+    # rollout leave these fields as ``None`` — fall back to the legacy
+    # unclamped evaluation so we don't break callers that build their
+    # own snapshots without the bounds arrays.
+    if snapshot.partition_t_min is not None and snapshot.partition_t_max is not None:
+        tmin_arr = jnp.asarray(snapshot.partition_t_min, dtype=dtype)
+        tmax_arr = jnp.asarray(snapshot.partition_t_max, dtype=dtype)
+        g0_arr = (
+            jnp.asarray(snapshot.partition_g0, dtype=dtype)
+            if snapshot.partition_g0 is not None
+            else None
+        )
+        U_per_species = jnp.maximum(
+            _polynomial_partition_function_jax(T_K, pf_all, tmin_arr, tmax_arr, g0_arr),
+            1e-30,
+        )
+    else:
+        U_per_species = jnp.maximum(_polynomial_partition_function_jax(T_K, pf_all), 1e-30)
 
     # Gather stage-I / stage-II values per element. For missing-stage
     # elements (sentinel -1) we fall back to species 0 then zero out the

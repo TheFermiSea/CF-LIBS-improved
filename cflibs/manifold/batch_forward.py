@@ -91,6 +91,13 @@ class BatchAtomicData(NamedTuple):
         Ionization potentials [eV].  Index 0 = I->II, 1 = II->III.
     partition_coeffs : array, shape (N_elements, max_stages, 5)
         Polynomial partition function coefficients (Irwin form).
+    partition_t_min, partition_t_max : array, shape (N_elements, max_stages)
+        Per-species validity window for the polynomial fit.  Optional
+        (``None`` falls back to legacy un-clamped evaluation); supply
+        these to pick up the arch-candidate-4 extrapolation guard.
+    partition_g0 : array, shape (N_elements, max_stages)
+        Per-species ground-state statistical weight — strict physical
+        lower bound on U.  Optional; defaults to ``None`` (no floor).
     n_elements : int
         Number of elements.
     n_stages : int
@@ -109,20 +116,28 @@ class BatchAtomicData(NamedTuple):
     partition_coeffs: Any
     n_elements: int
     n_stages: int
+    partition_t_min: Any = None
+    partition_t_max: Any = None
+    partition_g0: Any = None
 
 
 # Register as JAX pytree
 if HAS_JAX:
     _BATCH_ATOMIC_FIELDS = BatchAtomicData._fields
+    # Treat n_elements / n_stages as static (aux); everything else is a leaf.
+    _BATCH_ATOMIC_LEAF_FIELDS = tuple(
+        f for f in _BATCH_ATOMIC_FIELDS if f not in ("n_elements", "n_stages")
+    )
 
     def _batch_atomic_flatten(data: BatchAtomicData):
-        # Treat n_elements and n_stages as auxiliary (static) data
-        children = [getattr(data, f) for f in _BATCH_ATOMIC_FIELDS[:-2]]
+        children = [getattr(data, f) for f in _BATCH_ATOMIC_LEAF_FIELDS]
         aux = (data.n_elements, data.n_stages)
         return children, aux
 
     def _batch_atomic_unflatten(aux, children):
-        return BatchAtomicData(*children, *aux)
+        kwargs = dict(zip(_BATCH_ATOMIC_LEAF_FIELDS, children))
+        n_elements, n_stages = aux
+        return BatchAtomicData(n_elements=n_elements, n_stages=n_stages, **kwargs)
 
     jax.tree_util.register_pytree_node(
         BatchAtomicData, _batch_atomic_flatten, _batch_atomic_unflatten
@@ -229,6 +244,9 @@ if HAS_JAX:
         ip: jnp.ndarray,
         pf_coeffs: jnp.ndarray,
         n_stages: int,
+        pf_tmin: jnp.ndarray,
+        pf_tmax: jnp.ndarray,
+        pf_g0: jnp.ndarray,
     ) -> jnp.ndarray:
         """Compute ionization fractions for one element via direct Saha.
 
@@ -252,8 +270,14 @@ if HAS_JAX:
         """
         T_K = T_eV * _EV_TO_K
 
-        # Evaluate partition functions for all stages
-        U = polynomial_partition_function_jax(T_K, pf_coeffs)  # (max_stages,)
+        # Evaluate partition functions for all stages.  Threading per-species
+        # ``t_min``/``t_max``/``g0`` arrays (arch candidate 4) keeps the
+        # polynomial inside its fit window — the Ca I @ 100 000 K, 560×
+        # extrapolation case otherwise leaks into manifold cells outside
+        # the canonical 2000–25000 K window.
+        U = polynomial_partition_function_jax(
+            T_K, pf_coeffs, t_min=pf_tmin, t_max=pf_tmax, g0=pf_g0
+        )  # (max_stages,)
         U = jnp.maximum(U, 1e-30)
 
         # Saha prefactor: SAHA_CONST / n_e * T_eV^1.5
@@ -326,11 +350,36 @@ if HAS_JAX:
         n_stages = atomic_data.n_stages
         ip = jnp.asarray(atomic_data.ionization_potentials, dtype=jnp.float64)
         pf_coeffs = jnp.asarray(atomic_data.partition_coeffs, dtype=jnp.float64)
+        # Per-species validity-window arrays for the partition-function
+        # provider (arch candidate 4).  When the BatchAtomicData was built
+        # without these (legacy callers), fall back to un-clamped
+        # evaluation.
+        has_pf_bounds = (
+            atomic_data.partition_t_min is not None and atomic_data.partition_t_max is not None
+        )
+        pf_tmin = (
+            jnp.asarray(atomic_data.partition_t_min, dtype=jnp.float64) if has_pf_bounds else None
+        )
+        pf_tmax = (
+            jnp.asarray(atomic_data.partition_t_max, dtype=jnp.float64) if has_pf_bounds else None
+        )
+        pf_g0 = (
+            jnp.asarray(atomic_data.partition_g0, dtype=jnp.float64)
+            if atomic_data.partition_g0 is not None
+            else None
+        )
 
         # ----- Stage 1: Saha ionization fractions for each element -----
         def _elem_fractions(elem_idx):
             return _saha_ionization_fractions(
-                T_eV, n_e, ip[elem_idx], pf_coeffs[elem_idx], n_stages
+                T_eV,
+                n_e,
+                ip[elem_idx],
+                pf_coeffs[elem_idx],
+                n_stages,
+                pf_tmin[elem_idx] if pf_tmin is not None else None,
+                pf_tmax[elem_idx] if pf_tmax is not None else None,
+                pf_g0[elem_idx] if pf_g0 is not None else None,
             )
 
         # (N_elements, max_stages)
@@ -351,9 +400,15 @@ if HAS_JAX:
 
         T_K = T_eV * _EV_TO_K
 
-        # Evaluate partition functions for all (element, stage) pairs
+        # Evaluate partition functions for all (element, stage) pairs with
+        # bounds clamping + g0 floor (arch candidate 4).
         pf_flat = pf_coeffs.reshape(-1, 5)
-        U_flat = polynomial_partition_function_jax(T_K, pf_flat)
+        tmin_flat = pf_tmin.reshape(-1) if pf_tmin is not None else None
+        tmax_flat = pf_tmax.reshape(-1) if pf_tmax is not None else None
+        g0_flat = pf_g0.reshape(-1) if pf_g0 is not None else None
+        U_flat = polynomial_partition_function_jax(
+            T_K, pf_flat, t_min=tmin_flat, t_max=tmax_flat, g0=g0_flat
+        )
         U_all = U_flat.reshape(n_elem, n_stages)  # (N_elem, max_stages)
 
         # Per-line: gather the relevant quantities

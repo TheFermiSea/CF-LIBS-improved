@@ -281,6 +281,16 @@ class ManifoldGenerator:
 
         coeffs = np.zeros((num_elements, max_stages, 5), dtype=np.float32)
         ips = np.zeros((num_elements, max_stages), dtype=np.float32)
+        # Per-species t_min / t_max / g0 for the encapsulated partition
+        # provider (arch candidate 4).  Default window 2000–25000 K matches
+        # the canonical CF-LIBS fit range; default g0 = 1.0 is the
+        # conservative physical lower bound.  Without these the polynomial
+        # in :meth:`_calculate_partition_functions` would extrapolate
+        # outside the fit window — the Ca I @ 100 000 K, 560× error case
+        # documented in CF-LIBS-improved-s1qr.1.
+        tmin = np.full((num_elements, max_stages), 2000.0, dtype=np.float32)
+        tmax = np.full((num_elements, max_stages), 25000.0, dtype=np.float32)
+        g0 = np.ones((num_elements, max_stages), dtype=np.float32)
 
         # Set defaults for coeffs (approximate log(U))
         coeffs[:, 0, 0] = np.log(25.0)
@@ -314,27 +324,46 @@ class ManifoldGenerator:
                 )
                 if cursor.fetchone():
                     pf_query = f"""
-                        SELECT element, sp_num, a0, a1, a2, a3, a4
+                        SELECT element, sp_num, a0, a1, a2, a3, a4, t_min, t_max
                         FROM partition_functions
                         WHERE element IN ({placeholders})
                     """
                     cursor.execute(pf_query, self.config.elements)
                     count = 0
                     for row in cursor.fetchall():
-                        el, sp_num, a0, a1, a2, a3, a4 = row
+                        el, sp_num, a0, a1, a2, a3, a4, t_min_row, t_max_row = row
                         if el in el_map:
                             el_idx = el_map[el]
                             stage_idx = sp_num - 1
                             if 0 <= stage_idx < max_stages:
                                 coeffs[el_idx, stage_idx] = [a0, a1, a2, a3, a4]
+                                if t_min_row is not None:
+                                    tmin[el_idx, stage_idx] = float(t_min_row)
+                                if t_max_row is not None:
+                                    tmax[el_idx, stage_idx] = float(t_max_row)
                                 count += 1
                     logger.info(f"Loaded partition coefficients for {count} species")
+
+                # Per-species g0 from energy_levels lowest-E row.
+                try:
+                    from cflibs.plasma.partition import get_ground_state_g
+
+                    for el, el_idx in el_map.items():
+                        for stage in range(1, max_stages + 1):
+                            g0[el_idx, stage - 1] = float(
+                                get_ground_state_g(self.atomic_db, el, stage)
+                            )
+                except Exception as exc:  # pragma: no cover - DB shape fallback
+                    logger.debug(f"g0 lookup failed, using defaults: {exc}")
 
         except Exception as e:
             logger.warning(f"Failed to load physics data: {e}")
 
         partition_coeffs = jnp.array(coeffs, dtype=jnp.float32)
         ionization_potentials = jnp.array(ips, dtype=jnp.float32)
+        partition_t_min = jnp.array(tmin, dtype=jnp.float32)
+        partition_t_max = jnp.array(tmax, dtype=jnp.float32)
+        partition_g0 = jnp.array(g0, dtype=jnp.float32)
 
         return (
             lines_wl,
@@ -349,6 +378,9 @@ class ManifoldGenerator:
             lines_stark_w,
             lines_stark_alpha,
             lines_mass_amu,
+            partition_t_min,
+            partition_t_max,
+            partition_g0,
         )
 
     def _build_ldm_sigma_grid(self) -> np.ndarray:
@@ -406,13 +438,40 @@ class ManifoldGenerator:
 
     @staticmethod
     def _calculate_partition_functions(t_k, atomic_data):
-        """Calculates neutral and ion partition functions for all lines' elements."""
+        """Calculates neutral and ion partition functions for all lines' elements.
+
+        Threads the per-species ``t_min`` / ``t_max`` / ``g0`` arrays
+        (atomic_data indices 12/13/14) through
+        :func:`polynomial_partition_function_jax` so the polynomial is
+        clamped to its fit window and floored at the ground-state
+        degeneracy — the arch-candidate-4 extrapolation guard.  Without
+        this clamp, manifold grids that sweep T outside the polynomial
+        fit window silently produced 100×+ partition-function errors
+        (the Ca I @ 100 000 K, 560× regression case).
+        """
         lines_el_idx = atomic_data[6]
         partition_coeffs = atomic_data[7]
         coeffs_0 = partition_coeffs[lines_el_idx, 0]
         coeffs_1 = partition_coeffs[lines_el_idx, 1]
-        u0 = polynomial_partition_function_jax(t_k, coeffs_0)
-        u1 = polynomial_partition_function_jax(t_k, coeffs_1)
+        if len(atomic_data) > 12:
+            partition_t_min = atomic_data[12]
+            partition_t_max = atomic_data[13]
+            partition_g0 = atomic_data[14]
+            tmin_0 = partition_t_min[lines_el_idx, 0]
+            tmin_1 = partition_t_min[lines_el_idx, 1]
+            tmax_0 = partition_t_max[lines_el_idx, 0]
+            tmax_1 = partition_t_max[lines_el_idx, 1]
+            g0_0 = partition_g0[lines_el_idx, 0]
+            g0_1 = partition_g0[lines_el_idx, 1]
+            u0 = polynomial_partition_function_jax(
+                t_k, coeffs_0, t_min=tmin_0, t_max=tmax_0, g0=g0_0
+            )
+            u1 = polynomial_partition_function_jax(
+                t_k, coeffs_1, t_min=tmin_1, t_max=tmax_1, g0=g0_1
+            )
+        else:
+            u0 = polynomial_partition_function_jax(t_k, coeffs_0)
+            u1 = polynomial_partition_function_jax(t_k, coeffs_1)
         return u0, u1
 
     @staticmethod
