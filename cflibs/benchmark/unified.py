@@ -904,9 +904,7 @@ def _build_alias_high_recall_predictor(
     don't immediately re-reject the extra candidates. Records
     ``parameters['alias_mode']='high_recall_v2_gates'``.
     """
-    return _resolve_id_workflow_preset("alias_high_recall")(
-        context, candidate_elements, config
-    )
+    return _resolve_id_workflow_preset("alias_high_recall")(context, candidate_elements, config)
 
 
 def _alias_v2_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
@@ -1443,8 +1441,7 @@ def _make_predictor(
     """
     if preset_name not in _ALIAS_COCKTAILS:
         raise KeyError(
-            f"Unknown ALIAS preset {preset_name!r}; expected one of "
-            f"{sorted(_ALIAS_COCKTAILS)}"
+            f"Unknown ALIAS preset {preset_name!r}; expected one of " f"{sorted(_ALIAS_COCKTAILS)}"
         )
 
     cocktail_fn, alias_mode_tag = _ALIAS_COCKTAILS[preset_name]
@@ -1587,7 +1584,11 @@ ID_WORKFLOW_PRESETS: Dict[str, Dict[str, Any]] = {
     },
     "hybrid_consensus_2of4_with_nnls": {
         "identifier": "ALIASIdentifier",
-        "preset_name": "v2",
+        # ``v2_consensus`` pins ``chance_window_scale`` and
+        # ``max_lines_per_element`` — the consensus config grid is ``[{}]``
+        # and the pre-refactor hand-rolled builder hard-coded these values.
+        # Using ``"v2"`` here would raise KeyError at runtime.
+        "preset_name": "v2_consensus",
         "voting": _BinaryVoting(
             min_agreeing=2,
             voter_names=("alias", "comb", "correlation", "nnls"),
@@ -1600,7 +1601,10 @@ ID_WORKFLOW_PRESETS: Dict[str, Dict[str, Any]] = {
     },
     "hybrid_consensus_weighted": {
         "identifier": "ALIASIdentifier",
-        "preset_name": "v2",
+        # ``v2_consensus`` for the same reason as above — the weighted
+        # consensus config grid is ``[{"weight_threshold": ...}]``, no
+        # ALIAS thresholds, so the pinned cocktail is required.
+        "preset_name": "v2_consensus",
         "voting": _WeightedVoting(
             voter_names=("alias", "comb", "correlation", "nnls"),
             default_weights={"alias": 0.30, "comb": 0.12, "correlation": 0.12, "nnls": 0.46},
@@ -1639,6 +1643,30 @@ def _alias_cocktail_strict_consensus(
 
 
 _ALIAS_COCKTAILS["strict_consensus"] = (_alias_cocktail_strict_consensus, None)
+
+
+def _alias_cocktail_v2_consensus(
+    config: Dict[str, Any],  # noqa: ARG001 - consensus config grid is [{}] / weight_threshold-only
+    candidate_elements: List[str],  # noqa: ARG001 - signature parity
+) -> Dict[str, Any]:
+    """V2 ALIAS cocktail with thresholds PINNED (used by 2-of-4 + weighted consensus).
+
+    Mirrors the pre-refactor ``_build_hybrid_consensus_2of4_with_nnls_predictor``
+    and ``_build_hybrid_consensus_weighted_predictor`` bodies -- they ignored
+    their (essentially empty) config grids and used the same hard-coded
+    ``chance_window_scale=0.4`` / ``max_lines_per_element=30`` values that
+    ``_alias_cocktail_v2`` pulls from a *populated* config in the
+    standalone ``alias_v2`` workflow's grid.
+    """
+    return {
+        "r2_gate_mode": "adaptive_t",
+        "relative_cl_per_ion_stage": True,
+        "chance_window_scale": 0.4,
+        "max_lines_per_element": 30,
+    }
+
+
+_ALIAS_COCKTAILS["v2_consensus"] = (_alias_cocktail_v2_consensus, "v2_ftp1_plus_dj6y")
 
 
 def _resolve_id_workflow_preset(
@@ -1810,9 +1838,7 @@ def _build_hybrid_consensus_2of3_predictor(
         ``comb`` alone at 0.014). Use the 2-of-4 variant
         (``hybrid_consensus_2of4_with_nnls``) instead.
     """
-    return _resolve_id_workflow_preset("hybrid_consensus_2of3")(
-        context, candidate_elements, config
-    )
+    return _resolve_id_workflow_preset("hybrid_consensus_2of3")(context, candidate_elements, config)
 
 
 def _build_hybrid_consensus_2of4_with_nnls_predictor(
