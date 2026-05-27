@@ -2679,6 +2679,64 @@ class ALIASIdentifier:
 
         return True
 
+    def _collect_boltzmann_observations(
+        self,
+        element: str,
+        fused_lines: List[dict],
+        matched_indices: np.ndarray,
+        matched_peak_idx: np.ndarray,
+        intensity: np.ndarray,
+        peaks: List[Tuple[int, float]],
+        candidate: Optional[dict],
+    ) -> List[LineObservation]:
+        """Build LineObservation list, optionally filtering resonance lines.
+
+        Pulled out of :meth:`_boltzmann_consistency_check` to drop that method's
+        cognitive complexity below Sonar's threshold. The resonance-filter
+        decision still lives behind :meth:`_apply_resonance_filter` (arch
+        candidate 5 seam) — this helper just consumes the boolean and applies
+        the per-line E_i guard.
+        """
+        resonance_cutoff = float(getattr(self, "self_absorption_e_i_cutoff_ev", 0.1))
+        apply_resonance_filter = self._apply_resonance_filter(
+            fused_lines,
+            candidate,
+            matched_indices,
+            matched_peak_idx,
+            intensity,
+            peaks,
+        )
+
+        observations: List[LineObservation] = []
+        for i in matched_indices:
+            trans = fused_lines[i]["transition"]
+            pidx = int(matched_peak_idx[i])
+            if pidx < 0 or pidx >= len(peaks):
+                continue
+            I_obs = intensity[peaks[pidx][0]]
+            if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
+                continue
+            # Drop resonance lines only when caller has NNLS-significance
+            # evidence AND the pre-scan confirmed enough non-resonance lines
+            # remain. n3rf.1 + n3rf.4.
+            if apply_resonance_filter:
+                e_i = float(getattr(trans, "E_i_ev", 1.0))
+                if e_i < resonance_cutoff:
+                    continue
+            observations.append(
+                LineObservation(
+                    element=element,
+                    ionization_stage=trans.ionization_stage,
+                    wavelength_nm=trans.wavelength_nm,
+                    E_k_ev=trans.E_k_ev,
+                    g_k=trans.g_k,
+                    A_ki=trans.A_ki,
+                    intensity=I_obs,
+                    intensity_uncertainty=max(abs(I_obs) * 0.1, 1e-12),
+                )
+            )
+        return observations
+
     def _boltzmann_consistency_check(
         self,
         element: str,
@@ -2716,51 +2774,15 @@ class ALIASIdentifier:
         if len(matched_indices) < 3:
             return 0.5, 0.0  # Penalize — not enough lines for Boltzmann check
 
-        resonance_cutoff = float(getattr(self, "self_absorption_e_i_cutoff_ev", 0.1))
-        # Internal seam (arch candidate 5): the decision to drop
-        # resonance lines lives behind _apply_resonance_filter, which
-        # owns the NNLS-significance gate AND the n3rf.4 pre-scan that
-        # avoids stranding all-resonance elements (e.g. Al I).
-        apply_resonance_filter = self._apply_resonance_filter(
-            fused_lines,
-            candidate,
-            matched_indices,
-            matched_peak_idx,
-            intensity,
-            peaks,
+        observations = self._collect_boltzmann_observations(
+            element=element,
+            fused_lines=fused_lines,
+            matched_indices=matched_indices,
+            matched_peak_idx=matched_peak_idx,
+            intensity=intensity,
+            peaks=peaks,
+            candidate=candidate,
         )
-
-        observations = []
-        for i in matched_indices:
-            trans = fused_lines[i]["transition"]
-            pidx = int(matched_peak_idx[i])
-            if pidx < 0 or pidx >= len(peaks):
-                continue
-            I_obs = intensity[peaks[pidx][0]]
-            if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
-                continue
-
-            # Drop resonance lines when caller has NNLS-significance evidence
-            # AND the pre-scan confirmed enough non-resonance lines remain.
-            # Self-absorption on these lines biases the slope; basis-spectrum
-            # NNLS independently confirms the candidate. n3rf.1 + n3rf.4.
-            if apply_resonance_filter:
-                e_i = float(getattr(trans, "E_i_ev", 1.0))
-                if e_i < resonance_cutoff:
-                    continue
-
-            observations.append(
-                LineObservation(
-                    element=element,
-                    ionization_stage=trans.ionization_stage,
-                    wavelength_nm=trans.wavelength_nm,
-                    E_k_ev=trans.E_k_ev,
-                    g_k=trans.g_k,
-                    A_ki=trans.A_ki,
-                    intensity=I_obs,
-                    intensity_uncertainty=max(abs(I_obs) * 0.1, 1e-12),
-                )
-            )
 
         if len(observations) < 3:
             return 0.5, 0.0
