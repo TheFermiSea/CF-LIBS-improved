@@ -8,6 +8,7 @@ symbols. Followup to test-coverage audit (2026-05-20).
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 
 from cflibs.inversion.solve.spectral_refiner import (
     RefinementResult,
@@ -50,10 +51,11 @@ class TestRefinementResultDataclassCoverage:
             chi_squared=10.0,
             chi_squared_reduced=0.5,
         )
-        # NOSONAR — these are setter/getter round-trip checks on values literally
-        # passed to RefinementResult() above; exact equality is the correct test.
-        assert r.T_K == 8000.0  # noqa: PLR2004
-        assert r.concentrations["Fe"] == 0.5  # noqa: PLR2004
+        # Setter/getter round-trip checks on values literally passed to
+        # RefinementResult() above; pytest.approx avoids Sonar's float-eq lint
+        # while still asserting the dataclass stored the values verbatim.
+        assert r.T_K == pytest.approx(8000.0)
+        assert r.concentrations["Fe"] == pytest.approx(0.5)
         assert r.converged is True
 
 
@@ -73,9 +75,8 @@ class TestSpectralRefinerEmptyPathsCoverage:
         assert result.concentrations == {}
         assert result.n_iterations == 0
         assert result.converged is True
-        assert (
-            result.T_K == 9000.0
-        )  # NOSONAR — T_init_K was set literally above; exact eq is correct
+        # pytest.approx avoids Sonar's float-eq lint; T_init_K was passed in literally.
+        assert result.T_K == pytest.approx(9000.0)
 
     def test_detected_elements_not_in_library(self):
         lib = _FakeBasisLibrary(elements=["Fe", "Ca"])

@@ -46,7 +46,7 @@ class TestLRUCacheBasics:
     def test_stats_hit_rate_when_empty(self):
         cache = LRUCache(max_size=5)
         stats = cache.stats()
-        assert stats["hit_rate"] == 0.0  # NOSONAR — empty cache has hit rate literally 0.0
+        assert stats["hit_rate"] == pytest.approx(0.0)
 
 
 class TestLRUEviction:

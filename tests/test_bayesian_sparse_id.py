@@ -1,5 +1,7 @@
 """Tests for cflibs.benchmark.bayesian_sparse_id config + helpers."""
 
+import pytest
+
 from cflibs.benchmark.bayesian_sparse_id import (
     _empty_result,
     bayesian_sparse_config_name,
@@ -71,7 +73,7 @@ class TestEmptyResult:
         assert len(result.all_elements) == 3
         for eid in result.all_elements:
             assert eid.detected is False
-            assert eid.score == 0.0  # NOSONAR — rejected elements get score literally 0.0
+            assert eid.score == pytest.approx(0.0)
             assert eid.metadata["error"] == "test error"
 
     def test_empty_result_algorithm_tag(self):
