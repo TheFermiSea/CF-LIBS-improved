@@ -895,62 +895,16 @@ def _build_alias_high_recall_predictor(
     candidate_elements: List[str],
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
-    """Predictor for ``alias_high_recall``.
+    """Thin wrapper over :func:`_make_predictor` for back-compat.
 
-    Constructs ``ALIASIdentifier(high_recall=True)`` *and* inherits the
-    two alias_v2 gating fixes (PR #175 + PR #176) so the looser peak
-    thresholds aren't immediately re-rejected by the strict downstream
-    gates:
-
-      r2_gate_mode='adaptive_t' (PR #175, fix γ ftp1) — relaxes the
-        Boltzmann R² floor on cold plasma so the lower-quality fits
-        produced by the extra peaks aren't auto-killed.
-      relative_cl_per_ion_stage=True (PR #176, fix ε dj6y) — gates
-        neutrals and ions independently so a high-CL dominant neutral
-        can't sweep out the otherwise-promising ionized candidates that
-        the looser detection_threshold/intensity_threshold_factor
-        surface.
-
-    Per CF-LIBS-improved-n3rf.2 (Phase 1b benchmark on n=24 spectra),
-    the *previous* construction — ``high_recall=True`` without these
-    fixes — underperformed strict ``alias`` on every metric
-    (macro_F1 0.083 vs 0.139, macro_recall 0.066 vs 0.099). The looser
-    thresholds surfaced more candidate lines (noise), but the strict
-    fixed-0.85 R² gate and global CL gate then rejected most of them
-    — including the legitimate cold-plasma elements that the recall
-    mode is designed to recover. Inheriting alias_v2's gates fixes the
-    structural mismatch; smoke test on Vrabel s019/s062/s089 shows
-    recall 0.000 → 0.589 and macro_F1 0.000 → 0.611.
-
-    Records the active mode in ``result.parameters['alias_mode']`` for
-    downstream audit-ability.
+    See ``ID_WORKFLOW_PRESETS["alias_high_recall"]`` -- ``high_recall=True``
+    plus the alias_v2 gating cocktail (bead n3rf.2): the looser peak
+    thresholds need ``r2_gate_mode='adaptive_t'`` and
+    ``relative_cl_per_ion_stage=True`` so the strict downstream gates
+    don't immediately re-reject the extra candidates. Records
+    ``parameters['alias_mode']='high_recall_v2_gates'``.
     """
-
-    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
-        from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
-
-        with AtomicDatabase(str(context.db_path)) as db:
-            identifier = ALIASIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=_estimate_rp_for_spectrum(spectrum),
-                high_recall=True,
-                # bead CF-LIBS-improved-n3rf.2: inherit alias_v2 gates so
-                # the looser peak/detection thresholds aren't re-rejected
-                # downstream. Mirrors the jbfg.2 hybrid_consensus fix.
-                r2_gate_mode="adaptive_t",
-                relative_cl_per_ion_stage=True,
-                chance_window_scale=float(config["chance_window_scale"]),
-                max_lines_per_element=int(config["max_lines_per_element"]),
-                **_jax_identifier_flags_for(ALIASIdentifier),
-            )
-            result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
-            result.parameters["candidate_elements"] = list(candidate_elements)
-            result.parameters["alias_mode"] = "high_recall_v2_gates"
-            return result
-
-    return predictor
+    return _resolve_id_workflow_preset("alias_high_recall")(context, candidate_elements, config)
 
 
 def _alias_v2_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
@@ -983,49 +937,15 @@ def _build_alias_v2_predictor(
     candidate_elements: List[str],
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
-    """Predictor for ``alias_v2`` — Phase D promotion of the ftp1+dj6y
-    sweep winner.
+    """Thin wrapper over :func:`_make_predictor` for back-compat.
 
-    Bakes in the two Phase B fix flags whose combination won the
-    Phase C sweep:
-      r2_gate_mode='adaptive_t' (PR #175, fix γ ftp1)
-      r2_gate_t_quality_threshold=5500.0  (PR #175 default)
-      relative_cl_per_ion_stage=True (PR #176, fix ε dj6y)
-
-    NOT baked in:
-      temperature_estimator_mode='legacy' (NOT 'robust' — PR #177 fix δ
-      762f cancels ftp1's gain because it warms T above the 5500K
-      relaxation threshold, eliminating the adaptive_t branch. See the
-      empirical 07 v2 sweep report for the mutual-exclusion analysis.)
-
-    Strict thresholds (intensity_threshold_factor=3.0, detection_threshold=0.02)
-    are preserved by NOT passing them through the constructor — same
-    pattern as alias_high_recall. ``alias_v2`` is additive: the existing
-    ``alias`` workflow is unchanged so the precision=1.000 baseline at
-    .swarm/identifier-f1-baseline.json continues to hold.
+    See ``ID_WORKFLOW_PRESETS["alias_v2"]`` -- the Phase D ftp1+dj6y
+    sweep winner. Bakes in ``r2_gate_mode='adaptive_t'`` and
+    ``relative_cl_per_ion_stage=True``; strict thresholds preserved by
+    not passing them through the constructor. Records
+    ``parameters['alias_mode']='v2_ftp1_plus_dj6y'``.
     """
-
-    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
-        from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
-
-        with AtomicDatabase(str(context.db_path)) as db:
-            identifier = ALIASIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=_estimate_rp_for_spectrum(spectrum),
-                r2_gate_mode="adaptive_t",
-                relative_cl_per_ion_stage=True,
-                chance_window_scale=float(config["chance_window_scale"]),
-                max_lines_per_element=int(config["max_lines_per_element"]),
-                **_jax_identifier_flags_for(ALIASIdentifier),
-            )
-            result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
-            result.parameters["candidate_elements"] = list(candidate_elements)
-            result.parameters["alias_mode"] = "v2_ftp1_plus_dj6y"
-            return result
-
-    return predictor
+    return _resolve_id_workflow_preset("alias_v2")(context, candidate_elements, config)
 
 
 # ---------------------------------------------------------------------------
@@ -1267,32 +1187,527 @@ def _estimate_rp_for_spectrum(spectrum: BenchmarkSpectrum) -> float:
     return _estimate_effective_rp_lazy(spectrum.wavelength_nm, spectrum.intensity)
 
 
+# ---------------------------------------------------------------------------
+# Predictor-builder factory (arch candidate 1).
+#
+# Six near-identical hand-rolled builders -- ``_build_alias_predictor``,
+# ``_build_alias_v2_predictor``, ``_build_alias_high_recall_predictor``, plus
+# the three ``_build_hybrid_consensus_*_predictor`` variants -- shared an
+# identical outer shell and differed only by:
+#   (a) the ALIAS cocktail (strict / v2 / high_recall_v2)
+#   (b) for consensus variants, which sibling identifiers join the vote
+#   (c) for consensus variants, the voting rule (min_agreeing or weights)
+#
+# Beads jbfg.2 + n3rf.2 + n3rf.4 had to apply the same v2 cocktail fix in
+# THREE different builder bodies. This factory + registry centralizes the
+# decision so future fixes touch one place.
+#
+# Cocktails live as kwargs-builder callables -- each takes ``(config,
+# candidate_elements)`` and returns the kwargs dict to pass to the
+# identifier's constructor (minus the boilerplate ``atomic_db`` /
+# ``resolving_power`` / JAX-flag plumbing handled by the factory itself).
+# ---------------------------------------------------------------------------
+
+
+def _alias_cocktail_strict(
+    config: Dict[str, Any],
+    candidate_elements: List[str],  # noqa: ARG001 - signature parity
+) -> Dict[str, Any]:
+    """Strict ALIAS cocktail (workflow ``alias``).
+
+    Pulls all 4 sweepable thresholds + ``boltzmann_r2_min`` from ``config``.
+    ``r2_gate_mode='fixed'`` is implicit (it is the constructor default), so
+    the precision-king baseline at ``.swarm/identifier-f1-baseline.json``
+    stays intact.
+    """
+    return {
+        "intensity_threshold_factor": float(config["intensity_threshold_factor"]),
+        "detection_threshold": float(config["detection_threshold"]),
+        "chance_window_scale": float(config["chance_window_scale"]),
+        "max_lines_per_element": int(config["max_lines_per_element"]),
+        "boltzmann_r2_min": float(config.get("boltzmann_r2_min", 0.85)),
+    }
+
+
+def _alias_cocktail_v2(
+    config: Dict[str, Any],
+    candidate_elements: List[str],  # noqa: ARG001 - signature parity
+) -> Dict[str, Any]:
+    """Phase D v2 cocktail -- the ftp1+dj6y sweep winner.
+
+    Bakes in ``r2_gate_mode='adaptive_t'`` (PR #175 fix gamma ftp1) and
+    ``relative_cl_per_ion_stage=True`` (PR #176 fix epsilon dj6y).
+    Threshold kwargs intentionally NOT passed so the constructor's strict
+    defaults (3.0 / 0.02) apply.
+    """
+    return {
+        "r2_gate_mode": "adaptive_t",
+        "relative_cl_per_ion_stage": True,
+        "chance_window_scale": float(config["chance_window_scale"]),
+        "max_lines_per_element": int(config["max_lines_per_element"]),
+    }
+
+
+def _alias_cocktail_high_recall_v2(
+    config: Dict[str, Any],
+    candidate_elements: List[str],
+) -> Dict[str, Any]:
+    """High-recall ALIAS with v2 gates (bead n3rf.2 fix).
+
+    Adds ``high_recall=True`` on top of the v2 cocktail so the looser peak
+    thresholds are not immediately re-rejected by the strict downstream
+    gates.
+    """
+    kwargs = _alias_cocktail_v2(config, candidate_elements)
+    kwargs["high_recall"] = True
+    return kwargs
+
+
+# ALIAS cocktail registry. Maps a stable preset name to (cocktail_fn,
+# parameters_tag). ``parameters_tag`` is recorded as
+# ``result.parameters['alias_mode']`` for downstream audit-ability; ``None``
+# means do not record the tag (preserves the strict ``alias`` workflow's
+# legacy behavior of not setting ``alias_mode``).
+_ALIAS_COCKTAILS: Dict[str, Tuple[Callable[..., Dict[str, Any]], Optional[str]]] = {
+    "strict": (_alias_cocktail_strict, None),
+    "v2": (_alias_cocktail_v2, "v2_ftp1_plus_dj6y"),
+    "high_recall_v2": (_alias_cocktail_high_recall_v2, "high_recall_v2_gates"),
+}
+
+
+@dataclass(frozen=True)
+class _BinaryVoting:
+    """Binary consensus rule: at least ``min_agreeing`` voters must fire."""
+
+    min_agreeing: int
+    voter_names: Tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _WeightedVoting:
+    """Confidence-weighted consensus rule.
+
+    Per-voter weight defaults live in ``default_weights``; the run-time
+    ``config`` dict may override each via ``w_<name>`` keys and the
+    threshold via ``weight_threshold`` (matching the existing
+    ``hybrid_consensus_weighted`` knob names).
+    """
+
+    voter_names: Tuple[str, ...]
+    default_weights: Dict[str, float]
+    default_threshold: float
+
+
+# Sibling-identifier preset signatures. Each entry is (sibling_kind, kwargs)
+# where ``sibling_kind`` selects how the factory constructs that voter.
+# kwargs are STATIC -- no per-call config plumbing -- mirroring the
+# hand-rolled hybrid_consensus builders verbatim.
+_SIBLING_COMB_STRICT: Tuple[str, Dict[str, Any]] = (
+    "comb",
+    {
+        "min_correlation": 0.08,
+        "tooth_activation_threshold": 0.35,
+        "relative_threshold_scale": 1.4,
+        "min_aki_gk": 3000.0,
+    },
+)
+_SIBLING_CORRELATION_STRICT: Tuple[str, Dict[str, Any]] = (
+    "correlation",
+    {
+        "min_confidence": 0.008,
+        "relative_threshold_scale": 1.2,
+        "min_line_strength": 1000.0,
+        "T_range_K": (5000, 15000),
+        "T_steps": 7,
+        "n_e_range_cm3": (1e15, 5e17),
+    },
+)
+_SIBLING_NNLS_DEFAULT: Tuple[str, Dict[str, Any]] = (
+    "nnls",
+    {
+        "detection_snr": 3.0,
+        "continuum_degree": 2,
+        "fallback_T_K": 10000.0,
+        "fallback_ne_cm3": 1e17,
+    },
+)
+
+
+def _build_alias_voter(
+    db,
+    candidate_elements: List[str],
+    rp: float,
+    cocktail_kwargs: Dict[str, Any],
+):
+    """Construct one ALIAS voter for a consensus workflow."""
+    from cflibs.inversion.alias_identifier import ALIASIdentifier
+
+    return ALIASIdentifier(
+        atomic_db=db,
+        elements=candidate_elements,
+        resolving_power=rp,
+        **cocktail_kwargs,
+        **_jax_identifier_flags_for(ALIASIdentifier),
+    )
+
+
+def _build_sibling_voter(
+    kind: str,
+    static_kwargs: Dict[str, Any],
+    *,
+    db,
+    candidate_elements: List[str],
+    rp: float,
+    nnls_basis,
+):
+    """Construct one non-ALIAS voter for a consensus workflow."""
+    if kind == "comb":
+        from cflibs.inversion.comb_identifier import CombIdentifier
+
+        return CombIdentifier(
+            atomic_db=db,
+            elements=candidate_elements,
+            resolving_power=rp,
+            **static_kwargs,
+            **_jax_identifier_flags_for(CombIdentifier),
+        )
+    if kind == "correlation":
+        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+
+        return CorrelationIdentifier(
+            atomic_db=db,
+            elements=candidate_elements,
+            resolving_power=rp,
+            **static_kwargs,
+            **_jax_identifier_flags_for(CorrelationIdentifier),
+        )
+    if kind == "nnls":
+        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+
+        return SpectralNNLSIdentifier(
+            basis_library=nnls_basis,
+            **static_kwargs,
+            **_jax_identifier_flags_for(SpectralNNLSIdentifier),
+        )
+    raise ValueError(f"Unknown sibling identifier kind: {kind!r}")
+
+
+def _identify_with_voter(kind: str, identifier, spectrum: BenchmarkSpectrum):
+    """Dispatch ``identifier.identify(...)`` honoring each voter's signature."""
+    if kind == "alias":
+        return identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
+    if kind == "comb":
+        return identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
+    if kind == "correlation":
+        return identifier.identify(spectrum.wavelength_nm, spectrum.intensity, mode="classic")
+    if kind == "nnls":
+        return identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
+    raise ValueError(f"Unknown voter kind: {kind!r}")
+
+
+def _make_predictor(
+    identifier_cls,
+    preset_name: str,
+    voting: Optional[Any] = None,
+    sibling_identifiers: Sequence[Tuple[str, Dict[str, Any]]] = (),
+) -> Callable[
+    ["UnifiedBenchmarkContext", List[str], Dict[str, Any]],
+    Callable[[BenchmarkSpectrum], ElementIdentificationResult],
+]:
+    """Parameterized predictor factory replacing the 6 hand-rolled builders.
+
+    Parameters
+    ----------
+    identifier_cls
+        The primary identifier class.  Currently always ``ALIASIdentifier``
+        (the only class the 6 collapsed builders use as their "main" voter).
+        Kept as an argument so future workflows (e.g. comb-led consensus)
+        can reuse the factory without further refactor.
+    preset_name
+        Key into ``_ALIAS_COCKTAILS`` -- one of ``"strict" | "v2" |
+        "high_recall_v2"``. Drives ``identifier_cls``'s constructor kwargs.
+    voting
+        ``None`` for a standalone predictor (workflows ``alias`` /
+        ``alias_v2`` / ``alias_high_recall``); ``_BinaryVoting`` or
+        ``_WeightedVoting`` for a consensus workflow.
+    sibling_identifiers
+        Sequence of ``(kind, static_kwargs)`` pairs describing each
+        non-main voter.  Empty for standalone predictors.
+
+    Notes
+    -----
+    The ``_jax_identifier_flags_for(cls)`` side effect (JAX x64 enablement
+    -- see bead jbfg.1) still fires for every voter the factory builds.
+    """
+    if preset_name not in _ALIAS_COCKTAILS:
+        raise KeyError(
+            f"Unknown ALIAS preset {preset_name!r}; expected one of " f"{sorted(_ALIAS_COCKTAILS)}"
+        )
+
+    cocktail_fn, alias_mode_tag = _ALIAS_COCKTAILS[preset_name]
+
+    def build_predictor(
+        context: UnifiedBenchmarkContext,
+        candidate_elements: List[str],
+        config: Dict[str, Any],
+    ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
+        def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
+            from cflibs.atomic.database import AtomicDatabase
+
+            rp = _estimate_rp_for_spectrum(spectrum)
+            cocktail_kwargs = cocktail_fn(config, candidate_elements)
+
+            with AtomicDatabase(str(context.db_path)) as db:
+                main_id = identifier_cls(
+                    atomic_db=db,
+                    elements=candidate_elements,
+                    resolving_power=rp,
+                    **cocktail_kwargs,
+                    **_jax_identifier_flags_for(identifier_cls),
+                )
+
+                if voting is None:
+                    # Standalone path -- run the main identifier alone.
+                    result = main_id.identify(spectrum.wavelength_nm, spectrum.intensity)
+                    result.parameters["candidate_elements"] = list(candidate_elements)
+                    if alias_mode_tag is not None:
+                        result.parameters["alias_mode"] = alias_mode_tag
+                    return result
+
+                # Consensus path -- build the siblings, run all voters, combine.
+                from cflibs.inversion.identify.hybrid_consensus import (
+                    HybridConsensusIdentifier,
+                )
+
+                # NNLS sibling needs a basis library; resolve once per call.
+                nnls_basis = None
+                basis_fwhm: Optional[float] = None
+                basis_mismatch: Optional[float] = None
+                if any(kind == "nnls" for kind, _ in sibling_identifiers):
+                    nnls_basis, basis_fwhm, basis_mismatch = context.basis_for_rp(
+                        spectrum.rp_estimate
+                    )
+
+                voter_kinds: List[str] = ["alias"]
+                voters: List[Any] = [main_id]
+                for kind, static_kwargs in sibling_identifiers:
+                    voters.append(
+                        _build_sibling_voter(
+                            kind,
+                            static_kwargs,
+                            db=db,
+                            candidate_elements=candidate_elements,
+                            rp=rp,
+                            nnls_basis=nnls_basis,
+                        )
+                    )
+                    voter_kinds.append(kind)
+
+                voter_results = [
+                    _identify_with_voter(kind, voter, spectrum)
+                    for kind, voter in zip(voter_kinds, voters)
+                ]
+
+                if isinstance(voting, _BinaryVoting):
+                    consensus = HybridConsensusIdentifier(
+                        identifiers=voters,
+                        elements=candidate_elements,
+                        min_agreeing=voting.min_agreeing,
+                        names=list(voting.voter_names),
+                    )
+                elif isinstance(voting, _WeightedVoting):
+                    weights = {
+                        name: float(config.get(f"w_{name}", voting.default_weights[name]))
+                        for name in voting.voter_names
+                    }
+                    consensus = HybridConsensusIdentifier(
+                        identifiers=voters,
+                        elements=candidate_elements,
+                        names=list(voting.voter_names),
+                        voter_weights=weights,
+                        weight_threshold=float(
+                            config.get("weight_threshold", voting.default_threshold)
+                        ),
+                    )
+                else:  # pragma: no cover - defensive
+                    raise TypeError(f"Unsupported voting rule: {type(voting).__name__}")
+
+                result = consensus.combine(voter_results)
+                result.parameters["candidate_elements"] = list(candidate_elements)
+                if basis_fwhm is not None:
+                    result.parameters["basis_fwhm_nm"] = basis_fwhm
+                    result.parameters["basis_fwhm_mismatch_nm"] = basis_mismatch
+                return result
+
+        return predictor
+
+    return build_predictor
+
+
+# Workflow-name -> factory-invocation-args registry. The shape mirrors the
+# arch-review doc: each entry is the kwargs that ``_make_predictor`` would
+# be called with for that workflow. Resolved into a real predictor builder
+# via ``_resolve_id_workflow_preset`` below (lazy import of identifier
+# classes keeps cflibs.benchmark.unified importable when those modules
+# would fail to load -- e.g. missing optional deps).
+ID_WORKFLOW_PRESETS: Dict[str, Dict[str, Any]] = {
+    "alias": {
+        "identifier": "ALIASIdentifier",
+        "preset_name": "strict",
+        "voting": None,
+        "sibling_identifiers": (),
+    },
+    "alias_v2": {
+        "identifier": "ALIASIdentifier",
+        "preset_name": "v2",
+        "voting": None,
+        "sibling_identifiers": (),
+    },
+    "alias_high_recall": {
+        "identifier": "ALIASIdentifier",
+        "preset_name": "high_recall_v2",
+        "voting": None,
+        "sibling_identifiers": (),
+    },
+    # bead jbfg.2 (and the docstring on _build_hybrid_consensus_2of3_predictor
+    # below) flag this 3-voter variant as empirically broken; it is retained
+    # for back-compat with the existing leaderboard. ALIAS here keeps the
+    # STRICT cocktail (NOT v2) -- matching the pre-refactor behavior verbatim.
+    "hybrid_consensus_2of3": {
+        "identifier": "ALIASIdentifier",
+        "preset_name": "strict_consensus",  # see _ALIAS_COCKTAILS extension below
+        "voting": _BinaryVoting(
+            min_agreeing=2,
+            voter_names=("alias", "comb", "correlation"),
+        ),
+        "sibling_identifiers": (_SIBLING_COMB_STRICT, _SIBLING_CORRELATION_STRICT),
+    },
+    "hybrid_consensus_2of4_with_nnls": {
+        "identifier": "ALIASIdentifier",
+        # ``v2_consensus`` pins ``chance_window_scale`` and
+        # ``max_lines_per_element`` — the consensus config grid is ``[{}]``
+        # and the pre-refactor hand-rolled builder hard-coded these values.
+        # Using ``"v2"`` here would raise KeyError at runtime.
+        "preset_name": "v2_consensus",
+        "voting": _BinaryVoting(
+            min_agreeing=2,
+            voter_names=("alias", "comb", "correlation", "nnls"),
+        ),
+        "sibling_identifiers": (
+            _SIBLING_COMB_STRICT,
+            _SIBLING_CORRELATION_STRICT,
+            _SIBLING_NNLS_DEFAULT,
+        ),
+    },
+    "hybrid_consensus_weighted": {
+        "identifier": "ALIASIdentifier",
+        # ``v2_consensus`` for the same reason as above — the weighted
+        # consensus config grid is ``[{"weight_threshold": ...}]``, no
+        # ALIAS thresholds, so the pinned cocktail is required.
+        "preset_name": "v2_consensus",
+        "voting": _WeightedVoting(
+            voter_names=("alias", "comb", "correlation", "nnls"),
+            default_weights={"alias": 0.30, "comb": 0.12, "correlation": 0.12, "nnls": 0.46},
+            default_threshold=0.40,
+        ),
+        "sibling_identifiers": (
+            _SIBLING_COMB_STRICT,
+            _SIBLING_CORRELATION_STRICT,
+            _SIBLING_NNLS_DEFAULT,
+        ),
+    },
+}
+
+
+# Consensus ALIAS uses the STRICT cocktail body but with the pinned strict
+# thresholds the hand-rolled hybrid_consensus_2of3 baked in (NOT pulled from
+# the empty config grid). Kept separate from ``_alias_cocktail_strict`` so
+# the standalone ``alias`` workflow (which DOES read from config) stays on
+# its own code path.
+def _alias_cocktail_strict_consensus(
+    config: Dict[str, Any],  # noqa: ARG001 - consensus config grid is [{}]
+    candidate_elements: List[str],  # noqa: ARG001 - signature parity
+) -> Dict[str, Any]:
+    """Strict ALIAS cocktail with thresholds PINNED (used by 2-of-3 consensus).
+
+    Mirrors the pre-refactor ``_build_hybrid_consensus_2of3_predictor`` body
+    -- it ignored the empty config grid and used the same hard-coded strict
+    thresholds the standalone ``alias`` workflow's defaults resolve to.
+    """
+    return {
+        "intensity_threshold_factor": 3.0,
+        "detection_threshold": 0.02,
+        "chance_window_scale": 0.4,
+        "max_lines_per_element": 30,
+    }
+
+
+_ALIAS_COCKTAILS["strict_consensus"] = (_alias_cocktail_strict_consensus, None)
+
+
+def _alias_cocktail_v2_consensus(
+    config: Dict[str, Any],  # noqa: ARG001 - consensus config grid is [{}] / weight_threshold-only
+    candidate_elements: List[str],  # noqa: ARG001 - signature parity
+) -> Dict[str, Any]:
+    """V2 ALIAS cocktail with thresholds PINNED (used by 2-of-4 + weighted consensus).
+
+    Mirrors the pre-refactor ``_build_hybrid_consensus_2of4_with_nnls_predictor``
+    and ``_build_hybrid_consensus_weighted_predictor`` bodies -- they ignored
+    their (essentially empty) config grids and used the same hard-coded
+    ``chance_window_scale=0.4`` / ``max_lines_per_element=30`` values that
+    ``_alias_cocktail_v2`` pulls from a *populated* config in the
+    standalone ``alias_v2`` workflow's grid.
+    """
+    return {
+        "r2_gate_mode": "adaptive_t",
+        "relative_cl_per_ion_stage": True,
+        "chance_window_scale": 0.4,
+        "max_lines_per_element": 30,
+    }
+
+
+_ALIAS_COCKTAILS["v2_consensus"] = (_alias_cocktail_v2_consensus, "v2_ftp1_plus_dj6y")
+
+
+def _resolve_id_workflow_preset(
+    preset_key: str,
+) -> Callable[
+    ["UnifiedBenchmarkContext", List[str], Dict[str, Any]],
+    Callable[[BenchmarkSpectrum], ElementIdentificationResult],
+]:
+    """Build the ``IDWorkflowSpec.build_predictor`` callable for *preset_key*.
+
+    Lazy-imports the identifier class so this resolver can sit at module
+    scope without forcing every importer of ``cflibs.benchmark.unified`` to
+    also import e.g. ``cflibs.inversion.alias_identifier`` (which pulls in
+    JAX-touching code paths).
+    """
+    spec = ID_WORKFLOW_PRESETS[preset_key]
+    if spec["identifier"] == "ALIASIdentifier":
+        from cflibs.inversion.alias_identifier import ALIASIdentifier as _cls
+    else:  # pragma: no cover - extension point
+        raise NotImplementedError(
+            f"Unknown identifier class for preset {preset_key!r}: {spec['identifier']!r}"
+        )
+    return _make_predictor(
+        _cls,
+        spec["preset_name"],
+        voting=spec["voting"],
+        sibling_identifiers=spec["sibling_identifiers"],
+    )
+
+
 def _build_alias_predictor(
     context: UnifiedBenchmarkContext,
     candidate_elements: List[str],
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
-    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
-        from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
+    """Thin wrapper over :func:`_make_predictor` for back-compat.
 
-        with AtomicDatabase(str(context.db_path)) as db:
-            identifier = ALIASIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=_estimate_rp_for_spectrum(spectrum),
-                intensity_threshold_factor=float(config["intensity_threshold_factor"]),
-                detection_threshold=float(config["detection_threshold"]),
-                chance_window_scale=float(config["chance_window_scale"]),
-                max_lines_per_element=int(config["max_lines_per_element"]),
-                boltzmann_r2_min=float(config.get("boltzmann_r2_min", 0.85)),
-                **_jax_identifier_flags_for(ALIASIdentifier),
-            )
-            result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
-            result.parameters["candidate_elements"] = list(candidate_elements)
-            return result
-
-    return predictor
+    See ``ID_WORKFLOW_PRESETS["alias"]`` for the underlying preset --
+    strict thresholds pulled from ``config`` (precision-king defaults).
+    """
+    return _resolve_id_workflow_preset("alias")(context, candidate_elements, config)
 
 
 def _build_comb_predictor(
@@ -1412,87 +1827,18 @@ def _build_hybrid_consensus_2of3_predictor(
     candidate_elements: List[str],
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
-    """Predictor for ``hybrid_consensus_2of3``.
+    """Thin wrapper over :func:`_make_predictor` for back-compat.
 
-    Constructs ALIAS, Comb, and Correlation identifiers, runs them on the
-    spectrum, then combines their outputs via a 2-of-3 majority vote using
-    :class:`cflibs.inversion.identify.hybrid_consensus.HybridConsensusIdentifier`.
+    See ``ID_WORKFLOW_PRESETS["hybrid_consensus_2of3"]`` -- ALIAS
+    (STRICT pinned cocktail, NOT v2), Comb, Correlation; 2-of-3 binary
+    majority vote.
 
-    .. warning:: bead ``CF-LIBS-improved-jbfg.2`` — this 3-voter design is
-        empirically broken (Phase 2 macro_F1=0.028, worse than ``comb``
-        alone at 0.014). The 2026-05-14 NNLS-exclusion policy in
-        :mod:`cflibs.inversion.identify.hybrid_consensus` removes the
-        strongest single identifier from the vote, so ALIAS becomes the
-        only reliable voter and the 2-of-3 rule almost never triggers.
-        Use :func:`_build_hybrid_consensus_2of4_with_nnls_predictor`
-        (workflow ``hybrid_consensus_2of4_with_nnls``) instead.
+    .. warning:: bead ``CF-LIBS-improved-jbfg.2`` -- this 3-voter design
+        is empirically broken (Phase 2 macro_F1=0.028, worse than
+        ``comb`` alone at 0.014). Use the 2-of-4 variant
+        (``hybrid_consensus_2of4_with_nnls``) instead.
     """
-
-    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
-        from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
-        from cflibs.inversion.comb_identifier import CombIdentifier
-        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
-        from cflibs.inversion.identify.hybrid_consensus import (
-            HybridConsensusIdentifier,
-        )
-
-        rp = _estimate_rp_for_spectrum(spectrum)
-
-        with AtomicDatabase(str(context.db_path)) as db:
-            # Build the three constituent identifiers with their default
-            # strict thresholds (matching the alias/comb/correlation workflows).
-            alias_id = ALIASIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=rp,
-                intensity_threshold_factor=3.0,
-                detection_threshold=0.02,
-                chance_window_scale=0.4,
-                max_lines_per_element=30,
-                **_jax_identifier_flags_for(ALIASIdentifier),
-            )
-            comb_id = CombIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=rp,
-                min_correlation=0.08,
-                tooth_activation_threshold=0.35,
-                relative_threshold_scale=1.4,
-                min_aki_gk=3000.0,
-                **_jax_identifier_flags_for(CombIdentifier),
-            )
-            correlation_id = CorrelationIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=rp,
-                min_confidence=0.008,
-                relative_threshold_scale=1.2,
-                min_line_strength=1000.0,
-                T_range_K=(5000, 15000),
-                T_steps=7,
-                n_e_range_cm3=(1e15, 5e17),
-                **_jax_identifier_flags_for(CorrelationIdentifier),
-            )
-
-            # Run all three identifiers.
-            alias_result = alias_id.identify(spectrum.wavelength_nm, spectrum.intensity)
-            comb_result = comb_id.identify(spectrum.wavelength_nm, spectrum.intensity)
-            correlation_result = correlation_id.identify(
-                spectrum.wavelength_nm, spectrum.intensity, mode="classic"
-            )
-
-            # Combine via 2-of-3 majority vote.
-            consensus = HybridConsensusIdentifier(
-                identifiers=[alias_id, comb_id, correlation_id],
-                elements=candidate_elements,
-                min_agreeing=2,
-            )
-            result = consensus.combine([alias_result, comb_result, correlation_result])
-            result.parameters["candidate_elements"] = list(candidate_elements)
-            return result
-
-    return predictor
+    return _resolve_id_workflow_preset("hybrid_consensus_2of3")(context, candidate_elements, config)
 
 
 def _build_hybrid_consensus_2of4_with_nnls_predictor(
@@ -1500,102 +1846,18 @@ def _build_hybrid_consensus_2of4_with_nnls_predictor(
     candidate_elements: List[str],
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
-    """Predictor for ``hybrid_consensus_2of4_with_nnls`` (bead jbfg.2 fix).
+    """Thin wrapper over :func:`_make_predictor` for back-compat.
 
-    Same 2-of-N majority voting as :func:`_build_hybrid_consensus_2of3_predictor`,
-    but with ``SpectralNNLSIdentifier`` added as a fourth voter. The 2026-05-14
-    NNLS-exclusion policy is overruled by the Phase 2 benchmark evidence —
-    NNLS at F1=0.399 is the strongest single identifier, and removing it from
-    the consensus pool drove the original 2-of-3 workflow to F1=0.028 (worse
-    than ``comb`` standalone). Reinstating NNLS as a voter lets the consensus
-    actually exceed any single inner identifier.
-
-    Inner thresholds match the leaderboard winners for the standalone
-    ``alias_v2`` / ``comb`` / ``correlation`` / ``spectral_nnls`` workflows on
-    Vrabel rp=30k (cf. ``output/post-alias-fix-d553-phase2/id_config_selections.json``).
+    See ``ID_WORKFLOW_PRESETS["hybrid_consensus_2of4_with_nnls"]`` --
+    ALIAS (v2 cocktail per bead jbfg.2), Comb, Correlation, NNLS;
+    2-of-4 binary majority vote. Reinstates NNLS as a voter: removing it
+    from the consensus pool drove the 2-of-3 variant to F1=0.028 (worse
+    than ``comb`` alone), since NNLS at F1=0.399 is the strongest single
+    identifier on Vrabel rp=30k.
     """
-
-    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
-        from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
-        from cflibs.inversion.comb_identifier import CombIdentifier
-        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
-        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
-        from cflibs.inversion.identify.hybrid_consensus import (
-            HybridConsensusIdentifier,
-        )
-
-        rp = _estimate_rp_for_spectrum(spectrum)
-        basis, basis_fwhm, mismatch = context.basis_for_rp(spectrum.rp_estimate)
-
-        with AtomicDatabase(str(context.db_path)) as db:
-            # bead jbfg.2: inherit alias_v2 config (r2_gate_mode='adaptive_t'
-            # + relative_cl_per_ion_stage=True). The previous "vanilla"
-            # ALIAS construction caused ALIAS to fire on only 0.9% of
-            # (spectrum, element) decisions in the audit at /tmp/vote_audit_
-            # results.json, starving the 2-of-4 rule of its strongest
-            # line-matching voter.
-            alias_id = ALIASIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=rp,
-                r2_gate_mode="adaptive_t",
-                relative_cl_per_ion_stage=True,
-                chance_window_scale=0.4,
-                max_lines_per_element=30,
-                **_jax_identifier_flags_for(ALIASIdentifier),
-            )
-            comb_id = CombIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=rp,
-                min_correlation=0.08,
-                tooth_activation_threshold=0.35,
-                relative_threshold_scale=1.4,
-                min_aki_gk=3000.0,
-                **_jax_identifier_flags_for(CombIdentifier),
-            )
-            correlation_id = CorrelationIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=rp,
-                min_confidence=0.008,
-                relative_threshold_scale=1.2,
-                min_line_strength=1000.0,
-                T_range_K=(5000, 15000),
-                T_steps=7,
-                n_e_range_cm3=(1e15, 5e17),
-                **_jax_identifier_flags_for(CorrelationIdentifier),
-            )
-            nnls_id = SpectralNNLSIdentifier(
-                basis_library=basis,
-                detection_snr=3.0,
-                continuum_degree=2,
-                fallback_T_K=10000.0,
-                fallback_ne_cm3=1e17,
-                **_jax_identifier_flags_for(SpectralNNLSIdentifier),
-            )
-
-            alias_result = alias_id.identify(spectrum.wavelength_nm, spectrum.intensity)
-            comb_result = comb_id.identify(spectrum.wavelength_nm, spectrum.intensity)
-            correlation_result = correlation_id.identify(
-                spectrum.wavelength_nm, spectrum.intensity, mode="classic"
-            )
-            nnls_result = nnls_id.identify(spectrum.wavelength_nm, spectrum.intensity)
-
-            consensus = HybridConsensusIdentifier(
-                identifiers=[alias_id, comb_id, correlation_id, nnls_id],
-                elements=candidate_elements,
-                min_agreeing=2,
-                names=["alias", "comb", "correlation", "nnls"],
-            )
-            result = consensus.combine([alias_result, comb_result, correlation_result, nnls_result])
-            result.parameters["candidate_elements"] = list(candidate_elements)
-            result.parameters["basis_fwhm_nm"] = basis_fwhm
-            result.parameters["basis_fwhm_mismatch_nm"] = mismatch
-            return result
-
-    return predictor
+    return _resolve_id_workflow_preset("hybrid_consensus_2of4_with_nnls")(
+        context, candidate_elements, config
+    )
 
 
 def _build_hybrid_consensus_weighted_predictor(
@@ -1603,104 +1865,20 @@ def _build_hybrid_consensus_weighted_predictor(
     candidate_elements: List[str],
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
-    """Predictor for ``hybrid_consensus_weighted`` — Detective B's structural fix.
+    """Thin wrapper over :func:`_make_predictor` for back-compat.
 
-    Same 4 voters as :func:`_build_hybrid_consensus_2of4_with_nnls_predictor`
-    (ALIAS-v2 + Comb + Correlation + NNLS) but with weighted-confidence
-    voting instead of the binary 2-of-4 rule. Per-voter weights are
-    proportional to each workflow's Phase 4 standalone macro_F1:
-
-    - nnls=0.46, alias=0.30, comb=0.12, correlation=0.12 (sums to 1.0)
-
-    At ``weight_threshold=0.40`` the rule permits NNLS alone to pass
-    (w=0.46 ≥ 0.40), preserving the NNLS-only-TPs that the binary 2-of-4
-    rule discards (Detective B's audit showed those drive most of the
-    hybrid_union F1 advantage). It still requires comb+correlation or
-    alias+anything from the line-matcher side to pass, which suppresses
-    the alkali-FP regression flagged in asta-12.
+    See ``ID_WORKFLOW_PRESETS["hybrid_consensus_weighted"]`` -- same 4
+    voters as the 2-of-4 binary variant (ALIAS-v2, Comb, Correlation,
+    NNLS) but with weighted-confidence voting. Default weights
+    (alias=0.30, comb=0.12, correlation=0.12, nnls=0.46) reflect Phase 4
+    standalone macro_F1; threshold defaults to 0.40 and is sweepable via
+    ``config['weight_threshold']``. At threshold=0.40 the rule permits
+    NNLS alone to pass (w=0.46 >= 0.40), preserving NNLS-only-TPs that
+    the binary rule discards.
     """
-
-    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
-        from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
-        from cflibs.inversion.comb_identifier import CombIdentifier
-        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
-        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
-        from cflibs.inversion.identify.hybrid_consensus import (
-            HybridConsensusIdentifier,
-        )
-
-        rp = _estimate_rp_for_spectrum(spectrum)
-        basis, basis_fwhm, mismatch = context.basis_for_rp(spectrum.rp_estimate)
-
-        with AtomicDatabase(str(context.db_path)) as db:
-            alias_id = ALIASIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=rp,
-                r2_gate_mode="adaptive_t",
-                relative_cl_per_ion_stage=True,
-                chance_window_scale=0.4,
-                max_lines_per_element=30,
-                **_jax_identifier_flags_for(ALIASIdentifier),
-            )
-            comb_id = CombIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=rp,
-                min_correlation=0.08,
-                tooth_activation_threshold=0.35,
-                relative_threshold_scale=1.4,
-                min_aki_gk=3000.0,
-                **_jax_identifier_flags_for(CombIdentifier),
-            )
-            correlation_id = CorrelationIdentifier(
-                atomic_db=db,
-                elements=candidate_elements,
-                resolving_power=rp,
-                min_confidence=0.008,
-                relative_threshold_scale=1.2,
-                min_line_strength=1000.0,
-                T_range_K=(5000, 15000),
-                T_steps=7,
-                n_e_range_cm3=(1e15, 5e17),
-                **_jax_identifier_flags_for(CorrelationIdentifier),
-            )
-            nnls_id = SpectralNNLSIdentifier(
-                basis_library=basis,
-                detection_snr=3.0,
-                continuum_degree=2,
-                fallback_T_K=10000.0,
-                fallback_ne_cm3=1e17,
-                **_jax_identifier_flags_for(SpectralNNLSIdentifier),
-            )
-
-            alias_result = alias_id.identify(spectrum.wavelength_nm, spectrum.intensity)
-            comb_result = comb_id.identify(spectrum.wavelength_nm, spectrum.intensity)
-            correlation_result = correlation_id.identify(
-                spectrum.wavelength_nm, spectrum.intensity, mode="classic"
-            )
-            nnls_result = nnls_id.identify(spectrum.wavelength_nm, spectrum.intensity)
-
-            consensus = HybridConsensusIdentifier(
-                identifiers=[alias_id, comb_id, correlation_id, nnls_id],
-                elements=candidate_elements,
-                names=["alias", "comb", "correlation", "nnls"],
-                voter_weights={
-                    "alias": float(config.get("w_alias", 0.30)),
-                    "comb": float(config.get("w_comb", 0.12)),
-                    "correlation": float(config.get("w_correlation", 0.12)),
-                    "nnls": float(config.get("w_nnls", 0.46)),
-                },
-                weight_threshold=float(config.get("weight_threshold", 0.40)),
-            )
-            result = consensus.combine([alias_result, comb_result, correlation_result, nnls_result])
-            result.parameters["candidate_elements"] = list(candidate_elements)
-            result.parameters["basis_fwhm_nm"] = basis_fwhm
-            result.parameters["basis_fwhm_mismatch_nm"] = mismatch
-            return result
-
-    return predictor
+    return _resolve_id_workflow_preset("hybrid_consensus_weighted")(
+        context, candidate_elements, config
+    )
 
 
 def _build_voigt_alias_predictor(
