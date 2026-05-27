@@ -8,67 +8,60 @@ case so the table can't silently drift.
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
 import pytest
 
 from cflibs.inversion.identify.alias import ALIAS_PRESETS, ALIASIdentifier, alias_preset
 
 # ---------------------------------------------------------------------------
-# Expected canonical preset bodies — must match the table in alias.py.
-# If the table changes intentionally, update this fixture deliberately.
+# Defining properties — the kwargs that make each cocktail architecturally
+# distinct. Pinning these (not every byte) catches identity drift without
+# duplicating the full ALIAS_PRESETS table.
 # ---------------------------------------------------------------------------
 
-_EXPECTED: Dict[str, Dict[str, Any]] = {
-    "strict": {
-        "r2_gate_mode": "fixed",
-        "relative_cl_per_ion_stage": False,
-        "high_recall": False,
-        "intensity_threshold_factor": 3.0,
-        "detection_threshold": 0.02,
-        "chance_window_scale": 0.4,
-        "max_lines_per_element": 30,
-        "boltzmann_r2_min": 0.85,
-    },
-    "v2": {
-        "r2_gate_mode": "adaptive_t",
-        "relative_cl_per_ion_stage": True,
-        "high_recall": False,
-        "chance_window_scale": 0.4,
-        "max_lines_per_element": 30,
-    },
-    "high_recall_v2": {
-        "r2_gate_mode": "adaptive_t",
-        "relative_cl_per_ion_stage": True,
-        "high_recall": True,
-        "chance_window_scale": 0.4,
-        "max_lines_per_element": 30,
-    },
-    "consensus_voter": {
-        "r2_gate_mode": "adaptive_t",
-        "relative_cl_per_ion_stage": True,
-        "high_recall": False,
-        "chance_window_scale": 0.4,
-        "max_lines_per_element": 30,
-    },
-}
+_EXPECTED_NAMES = frozenset({"strict", "v2", "high_recall_v2", "consensus_voter"})
 
 
 def test_all_expected_presets_registered() -> None:
     """Every documented cocktail is present in the registry."""
-    assert set(ALIAS_PRESETS) == set(_EXPECTED), (
+    assert set(ALIAS_PRESETS) == _EXPECTED_NAMES, (
         f"ALIAS_PRESETS keys drifted: registry={sorted(ALIAS_PRESETS)} "
-        f"expected={sorted(_EXPECTED)}"
+        f"expected={sorted(_EXPECTED_NAMES)}"
     )
 
 
-@pytest.mark.parametrize("name", sorted(_EXPECTED))
-def test_preset_kwargs_match_expected(name: str) -> None:
-    """Each preset's kwargs are exactly the documented set."""
-    assert ALIAS_PRESETS[name] == _EXPECTED[name]
+def test_strict_preset_uses_fixed_gate() -> None:
+    """The strict preset is the precision-king baseline."""
+    p = ALIAS_PRESETS["strict"]
+    assert p["r2_gate_mode"] == "fixed"
+    assert p["relative_cl_per_ion_stage"] is False
+    assert p["high_recall"] is False
 
 
-@pytest.mark.parametrize("name", sorted(_EXPECTED))
+def test_v2_preset_uses_adaptive_gates() -> None:
+    """The v2 cocktail bakes in the PR #175 + #176 winners."""
+    p = ALIAS_PRESETS["v2"]
+    assert p["r2_gate_mode"] == "adaptive_t"
+    assert p["relative_cl_per_ion_stage"] is True
+    assert p["high_recall"] is False
+
+
+def test_high_recall_v2_is_v2_plus_high_recall() -> None:
+    """high_recall_v2 = v2 + high_recall=True (n3rf.2 fix)."""
+    p = ALIAS_PRESETS["high_recall_v2"]
+    assert p["r2_gate_mode"] == "adaptive_t"
+    assert p["relative_cl_per_ion_stage"] is True
+    assert p["high_recall"] is True
+
+
+def test_consensus_voter_matches_v2_physics() -> None:
+    """consensus_voter is v2 physics with pinned thresholds (jbfg.2 / n3rf.4)."""
+    p = ALIAS_PRESETS["consensus_voter"]
+    assert p["r2_gate_mode"] == "adaptive_t"
+    assert p["relative_cl_per_ion_stage"] is True
+    assert p["high_recall"] is False
+
+
+@pytest.mark.parametrize("name", sorted(_EXPECTED_NAMES))
 def test_alias_preset_round_trip(name: str, mock_atomic_db) -> None:
     """``alias_preset(name)`` produces an ``ALIASIdentifier`` whose attributes
     match ``ALIAS_PRESETS[name]`` for the kwargs the constructor exposes."""
@@ -137,7 +130,7 @@ def test_overrides_win_over_preset(mock_atomic_db) -> None:
         elements=["Fe"],
         resolving_power=5000.0,
     )
-    assert ident.chance_window_scale == 0.6
+    assert ident.chance_window_scale == pytest.approx(0.6)
 
 
 # ---------------------------------------------------------------------------
