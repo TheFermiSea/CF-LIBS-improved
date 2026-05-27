@@ -6,7 +6,7 @@ in LIBS spectra through a 7-step process: peak detection, theoretical emissivity
 calculation, line fusion, matching, threshold determination, scoring, and decision.
 """
 
-from typing import List, Tuple, Optional, Set
+from typing import Any, Dict, List, Tuple, Optional, Set
 from collections import defaultdict
 import math
 import numpy as np
@@ -851,6 +851,10 @@ class ALIASIdentifier:
     ):
         """
         Initialize the ALIAS element identifier.
+
+        Named cocktails of these kwargs are defined in ``ALIAS_PRESETS``;
+        use ``alias_preset(name)`` for the common configurations
+        (``strict`` / ``v2`` / ``high_recall_v2`` / ``consensus_voter``).
 
         Parameters
         ----------
@@ -4033,3 +4037,108 @@ class ALIASIdentifier:
                 CL = 0.0
 
         return k_det, CL
+
+
+# ---------------------------------------------------------------------------
+# Named ALIAS configuration cocktails (arch candidate 2).
+#
+# ``ALIASIdentifier.__init__`` takes 30+ kwargs and the same coherent good
+# cocktails kept being rediscovered through bead-driven debugging
+# (jbfg.2, n3rf.2, n3rf.4). The presets below are the canonical, named
+# combinations — use ``alias_preset(name, **overrides)`` for the common
+# constructions.
+#
+# Each entry holds ONLY the cocktail-specific kwargs (the gates + relative-CL
+# behavior). Caller-supplied bindings (``atomic_db``, ``elements``,
+# ``resolving_power``) and the JAX-flag bundle (``use_jax_*``, auto-injected
+# by the benchmark factory) are kept out of the table so the presets stay
+# composable.
+# ---------------------------------------------------------------------------
+
+ALIAS_PRESETS: Dict[str, Dict[str, Any]] = {
+    # Strict / precision-king baseline.  ``r2_gate_mode="fixed"`` and
+    # ``relative_cl_per_ion_stage=False`` match the ``__init__`` defaults
+    # so this preset is byte-identical to ``ALIASIdentifier(atomic_db=...)``
+    # with the strict threshold knobs spelled out.  Used by the standalone
+    # ``alias`` workflow.
+    "strict": {
+        "r2_gate_mode": "fixed",
+        "relative_cl_per_ion_stage": False,
+        "high_recall": False,
+        "intensity_threshold_factor": 3.0,
+        "detection_threshold": 0.02,
+        "chance_window_scale": 0.4,
+        "max_lines_per_element": 30,
+        "boltzmann_r2_min": 0.85,
+    },
+    # Phase D v2 cocktail — the ftp1+dj6y sweep winner.  ``adaptive_t``
+    # R^2 gate (PR #175) + per-ion-stage relative-CL gate (PR #176).
+    # Threshold knobs intentionally absent so ``__init__``'s strict
+    # defaults (3.0 / 0.02) apply unless the caller overrides them.
+    "v2": {
+        "r2_gate_mode": "adaptive_t",
+        "relative_cl_per_ion_stage": True,
+        "high_recall": False,
+        "chance_window_scale": 0.4,
+        "max_lines_per_element": 30,
+    },
+    # High-recall ALIAS with v2 gates (bead n3rf.2 fix).  Adds
+    # ``high_recall=True`` on top of v2 so the looser peak thresholds
+    # are not immediately re-rejected by the strict downstream gates.
+    "high_recall_v2": {
+        "r2_gate_mode": "adaptive_t",
+        "relative_cl_per_ion_stage": True,
+        "high_recall": True,
+        "chance_window_scale": 0.4,
+        "max_lines_per_element": 30,
+    },
+    # Consensus voter — v2 cocktail with thresholds PINNED (no config
+    # plumbing).  Used by the 2-of-4 NNLS-augmented consensus and the
+    # weighted-consensus workflows.  Same physics as ``v2``; kept as a
+    # named cocktail so consensus call sites are explicit about intent
+    # (bead jbfg.2).
+    "consensus_voter": {
+        "r2_gate_mode": "adaptive_t",
+        "relative_cl_per_ion_stage": True,
+        "high_recall": False,
+        "chance_window_scale": 0.4,
+        "max_lines_per_element": 30,
+    },
+}
+
+
+def alias_preset(name: str, **overrides: Any) -> "ALIASIdentifier":
+    """Construct an :class:`ALIASIdentifier` from a named cocktail.
+
+    Parameters
+    ----------
+    name : str
+        Key into :data:`ALIAS_PRESETS`.  One of ``"strict"``, ``"v2"``,
+        ``"high_recall_v2"``, ``"consensus_voter"``.
+    **overrides
+        Extra kwargs forwarded to :class:`ALIASIdentifier`'s constructor.
+        Overrides win over the preset (so e.g. ``alias_preset("v2",
+        high_recall=True)`` upgrades a v2 cocktail to high-recall).
+        Caller-supplied bindings (``atomic_db``, ``elements``,
+        ``resolving_power``) are passed here.
+
+    Raises
+    ------
+    KeyError
+        If ``name`` is not a registered preset.
+
+    Examples
+    --------
+    >>> from cflibs.atomic.database import AtomicDatabase
+    >>> with AtomicDatabase("ASD_da/libs_production.db") as db:
+    ...     ident = alias_preset(
+    ...         "v2",
+    ...         atomic_db=db,
+    ...         elements=["Fe", "Cu"],
+    ...         resolving_power=5000.0,
+    ...     )
+    """
+    if name not in ALIAS_PRESETS:
+        raise KeyError(f"Unknown ALIAS preset {name!r}; expected one of {sorted(ALIAS_PRESETS)}")
+    cfg: Dict[str, Any] = {**ALIAS_PRESETS[name], **overrides}
+    return ALIASIdentifier(**cfg)

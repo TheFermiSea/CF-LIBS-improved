@@ -1209,24 +1209,39 @@ def _estimate_rp_for_spectrum(spectrum: BenchmarkSpectrum) -> float:
 # ---------------------------------------------------------------------------
 
 
+def _alias_preset_kwargs(name: str) -> Dict[str, Any]:
+    """Return a fresh copy of the named ALIAS preset from ``alias.ALIAS_PRESETS``.
+
+    Lazy import keeps ``cflibs.benchmark.unified`` importable without
+    eagerly pulling JAX-touching identifier code (mirrors the other
+    ``cflibs.inversion.alias_identifier`` lazy-imports in this file).
+    The copy means downstream mutation (e.g. layering config-pulled
+    overrides) cannot leak into the shared registry.
+    """
+    from cflibs.inversion.identify.alias import ALIAS_PRESETS
+
+    return dict(ALIAS_PRESETS[name])
+
+
 def _alias_cocktail_strict(
     config: Dict[str, Any],
     candidate_elements: List[str],  # noqa: ARG001 - signature parity
 ) -> Dict[str, Any]:
     """Strict ALIAS cocktail (workflow ``alias``).
 
-    Pulls all 4 sweepable thresholds + ``boltzmann_r2_min`` from ``config``.
-    ``r2_gate_mode='fixed'`` is implicit (it is the constructor default), so
-    the precision-king baseline at ``.swarm/identifier-f1-baseline.json``
-    stays intact.
+    Starts from ``ALIAS_PRESETS["strict"]`` and overrides the 4 sweepable
+    thresholds + ``boltzmann_r2_min`` from ``config`` so the standalone
+    ``alias`` workflow can sweep them.  ``r2_gate_mode='fixed'`` and the
+    other static kwargs come from the preset registry — keeping the
+    precision-king baseline at ``.swarm/identifier-f1-baseline.json`` intact.
     """
-    return {
-        "intensity_threshold_factor": float(config["intensity_threshold_factor"]),
-        "detection_threshold": float(config["detection_threshold"]),
-        "chance_window_scale": float(config["chance_window_scale"]),
-        "max_lines_per_element": int(config["max_lines_per_element"]),
-        "boltzmann_r2_min": float(config.get("boltzmann_r2_min", 0.85)),
-    }
+    kwargs = _alias_preset_kwargs("strict")
+    kwargs["intensity_threshold_factor"] = float(config["intensity_threshold_factor"])
+    kwargs["detection_threshold"] = float(config["detection_threshold"])
+    kwargs["chance_window_scale"] = float(config["chance_window_scale"])
+    kwargs["max_lines_per_element"] = int(config["max_lines_per_element"])
+    kwargs["boltzmann_r2_min"] = float(config.get("boltzmann_r2_min", 0.85))
+    return kwargs
 
 
 def _alias_cocktail_v2(
@@ -1235,31 +1250,33 @@ def _alias_cocktail_v2(
 ) -> Dict[str, Any]:
     """Phase D v2 cocktail -- the ftp1+dj6y sweep winner.
 
-    Bakes in ``r2_gate_mode='adaptive_t'`` (PR #175 fix gamma ftp1) and
-    ``relative_cl_per_ion_stage=True`` (PR #176 fix epsilon dj6y).
-    Threshold kwargs intentionally NOT passed so the constructor's strict
-    defaults (3.0 / 0.02) apply.
+    Starts from ``ALIAS_PRESETS["v2"]`` (which bakes in
+    ``r2_gate_mode='adaptive_t'`` from PR #175 gamma ftp1 and
+    ``relative_cl_per_ion_stage=True`` from PR #176 epsilon dj6y) and
+    overrides the two sweepable thresholds from ``config``.  Threshold
+    kwargs intentionally NOT in the preset so the constructor's strict
+    defaults (3.0 / 0.02) apply unless the caller pins them.
     """
-    return {
-        "r2_gate_mode": "adaptive_t",
-        "relative_cl_per_ion_stage": True,
-        "chance_window_scale": float(config["chance_window_scale"]),
-        "max_lines_per_element": int(config["max_lines_per_element"]),
-    }
+    kwargs = _alias_preset_kwargs("v2")
+    kwargs["chance_window_scale"] = float(config["chance_window_scale"])
+    kwargs["max_lines_per_element"] = int(config["max_lines_per_element"])
+    return kwargs
 
 
 def _alias_cocktail_high_recall_v2(
     config: Dict[str, Any],
-    candidate_elements: List[str],
+    candidate_elements: List[str],  # noqa: ARG001 - signature parity
 ) -> Dict[str, Any]:
     """High-recall ALIAS with v2 gates (bead n3rf.2 fix).
 
-    Adds ``high_recall=True`` on top of the v2 cocktail so the looser peak
-    thresholds are not immediately re-rejected by the strict downstream
-    gates.
+    Starts from ``ALIAS_PRESETS["high_recall_v2"]`` (which adds
+    ``high_recall=True`` on top of the v2 cocktail so the looser peak
+    thresholds are not immediately re-rejected) and overrides the two
+    sweepable thresholds from ``config``.
     """
-    kwargs = _alias_cocktail_v2(config, candidate_elements)
-    kwargs["high_recall"] = True
+    kwargs = _alias_preset_kwargs("high_recall_v2")
+    kwargs["chance_window_scale"] = float(config["chance_window_scale"])
+    kwargs["max_lines_per_element"] = int(config["max_lines_per_element"])
     return kwargs
 
 
@@ -1619,27 +1636,25 @@ ID_WORKFLOW_PRESETS: Dict[str, Dict[str, Any]] = {
 }
 
 
-# Consensus ALIAS uses the STRICT cocktail body but with the pinned strict
-# thresholds the hand-rolled hybrid_consensus_2of3 baked in (NOT pulled from
-# the empty config grid). Kept separate from ``_alias_cocktail_strict`` so
-# the standalone ``alias`` workflow (which DOES read from config) stays on
-# its own code path.
+# Consensus cocktails use the static ``ALIAS_PRESETS`` entries verbatim --
+# their config grids are empty (or weight_threshold-only for the weighted
+# variant), so no per-call overrides are needed.  Kept as separate
+# closure-style functions because ``_ALIAS_COCKTAILS`` dispatches to
+# callables (the standalone ``strict`` / ``v2`` / ``high_recall_v2`` paths
+# DO read from config; aligning the consensus paths to the same shape
+# keeps the factory body uniform).
 def _alias_cocktail_strict_consensus(
     config: Dict[str, Any],  # noqa: ARG001 - consensus config grid is [{}]
     candidate_elements: List[str],  # noqa: ARG001 - signature parity
 ) -> Dict[str, Any]:
     """Strict ALIAS cocktail with thresholds PINNED (used by 2-of-3 consensus).
 
-    Mirrors the pre-refactor ``_build_hybrid_consensus_2of3_predictor`` body
-    -- it ignored the empty config grid and used the same hard-coded strict
-    thresholds the standalone ``alias`` workflow's defaults resolve to.
+    Returns ``ALIAS_PRESETS["strict"]`` verbatim.  Mirrors the pre-refactor
+    ``_build_hybrid_consensus_2of3_predictor`` body which used the same
+    hard-coded strict thresholds the standalone ``alias`` workflow's
+    defaults resolve to.
     """
-    return {
-        "intensity_threshold_factor": 3.0,
-        "detection_threshold": 0.02,
-        "chance_window_scale": 0.4,
-        "max_lines_per_element": 30,
-    }
+    return _alias_preset_kwargs("strict")
 
 
 _ALIAS_COCKTAILS["strict_consensus"] = (_alias_cocktail_strict_consensus, None)
@@ -1651,19 +1666,12 @@ def _alias_cocktail_v2_consensus(
 ) -> Dict[str, Any]:
     """V2 ALIAS cocktail with thresholds PINNED (used by 2-of-4 + weighted consensus).
 
-    Mirrors the pre-refactor ``_build_hybrid_consensus_2of4_with_nnls_predictor``
-    and ``_build_hybrid_consensus_weighted_predictor`` bodies -- they ignored
-    their (essentially empty) config grids and used the same hard-coded
-    ``chance_window_scale=0.4`` / ``max_lines_per_element=30`` values that
-    ``_alias_cocktail_v2`` pulls from a *populated* config in the
-    standalone ``alias_v2`` workflow's grid.
+    Returns ``ALIAS_PRESETS["consensus_voter"]`` verbatim -- the
+    physics-equivalent of ``v2`` with the two sweepable thresholds pinned
+    to ``chance_window_scale=0.4`` / ``max_lines_per_element=30`` (matching
+    the pre-refactor ``_build_hybrid_consensus_*`` builders).
     """
-    return {
-        "r2_gate_mode": "adaptive_t",
-        "relative_cl_per_ion_stage": True,
-        "chance_window_scale": 0.4,
-        "max_lines_per_element": 30,
-    }
+    return _alias_preset_kwargs("consensus_voter")
 
 
 _ALIAS_COCKTAILS["v2_consensus"] = (_alias_cocktail_v2_consensus, "v2_ftp1_plus_dj6y")
