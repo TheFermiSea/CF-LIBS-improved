@@ -248,6 +248,7 @@ Short imperative summary (<=50 chars), optional body explaining what/why. Recent
 ## Beads Workflow (Native `bd`)
 
 - Use native `bd` commands for issue tracking and session context.
+- **Do NOT use `bdh`** (the BeadHub Go wrapper) or any `bash ./scripts/bdh` wrapper. BeadHub was removed from this project in commit `6b64e93`; the `bdh :notify` hook and `scripts/bdh` shims are gone. `bdh` only adds value if a BeadHub coordination server is configured, and this project does not run one.
 - Session start:
   - `bd prime`
   - `bd memories`
@@ -258,3 +259,5 @@ Short imperative summary (<=50 chars), optional body explaining what/why. Recent
   - `bd update <BEAD_ID> --status in_progress`
   - `bd comment <BEAD_ID> "Completed X, working on Y"`
   - `bd update <BEAD_ID> --status inreview`
+- Persistent context: `bd remember <key> "<note>"`, `bd memories <keyword>`, `bd forget <key>`.
+- Federation sync: `bd dolt push` after bead state changes (claim/complete/update) — replaces the old `bash ./scripts/bdh :force-sync`.
