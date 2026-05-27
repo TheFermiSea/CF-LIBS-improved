@@ -91,6 +91,15 @@ class AtomicDataJAX(NamedTuple):
     partition_coefficients : jnp.ndarray
         Shape (N_elements, max_species, 5).  Irwin polynomial coefficients
         for each species (neutral, singly ionized, ...).
+    partition_t_min, partition_t_max : jnp.ndarray
+        Shape (N_elements, max_species).  Per-species validity window for
+        the polynomial fit.  Used by the encapsulated provider to clamp
+        ``T`` to ``[t_min, t_max]`` before evaluating the quartic-in-ln-T
+        polynomial (arch candidate 4).  Default window 2000–25000 K when
+        no DB row is available.
+    partition_g0 : jnp.ndarray
+        Shape (N_elements, max_species).  Per-species ground-state
+        statistical weight (physical lower bound on U).
     n_stages : jnp.ndarray
         Shape (N_elements,).  Number of *species* per element (e.g., 3 means
         neutral + singly + doubly ionized).
@@ -99,6 +108,9 @@ class AtomicDataJAX(NamedTuple):
     ionization_potentials: jnp.ndarray
     partition_coefficients: jnp.ndarray
     n_stages: jnp.ndarray
+    partition_t_min: jnp.ndarray = None  # type: ignore[assignment]
+    partition_t_max: jnp.ndarray = None  # type: ignore[assignment]
+    partition_g0: jnp.ndarray = None  # type: ignore[assignment]
 
 
 def prepare_atomic_data_jax(
@@ -124,10 +136,18 @@ def prepare_atomic_data_jax(
     AtomicDataJAX
         Packed JAX arrays ready for the Anderson solver.
     """
+    from cflibs.plasma.partition import get_ground_state_g
+
     n_elem = len(elements)
     max_transitions = max_stages - 1
     ip_arr = np.zeros((n_elem, max_transitions), dtype=np.float64)
     pf_arr = np.zeros((n_elem, max_stages, 5), dtype=np.float64)
+    # Per-species validity window + g0.  Default window 2000–25000 K
+    # tracks the canonical CF-LIBS DB; default g0 = 1.0 is the
+    # conservative physical lower bound.
+    tmin_arr = np.full((n_elem, max_stages), 2000.0, dtype=np.float64)
+    tmax_arr = np.full((n_elem, max_stages), 25000.0, dtype=np.float64)
+    g0_arr = np.ones((n_elem, max_stages), dtype=np.float64)
     ns_arr = np.zeros(n_elem, dtype=np.int32)
 
     for i, elem in enumerate(elements):
@@ -142,9 +162,16 @@ def prepare_atomic_data_jax(
                 while len(coeffs) < 5:
                     coeffs.append(0.0)
                 pf_arr[i, stage - 1, :] = coeffs[:5]
+                tmin_arr[i, stage - 1] = float(pf.t_min)
+                tmax_arr[i, stage - 1] = float(pf.t_max)
             else:
                 # Default: log(U) ~ log(2) (ground state degeneracy ~ 2)
                 pf_arr[i, stage - 1, 0] = np.log(2.0)
+
+            try:
+                g0_arr[i, stage - 1] = float(get_ground_state_g(atomic_db, elem, stage))
+            except Exception:
+                g0_arr[i, stage - 1] = 1.0
 
             n_species = stage
 
@@ -162,6 +189,9 @@ def prepare_atomic_data_jax(
         ionization_potentials=jnp.array(ip_arr),
         partition_coefficients=jnp.array(pf_arr),
         n_stages=jnp.array(ns_arr),
+        partition_t_min=jnp.array(tmin_arr),
+        partition_t_max=jnp.array(tmax_arr),
+        partition_g0=jnp.array(g0_arr),
     )
 
 
@@ -209,9 +239,22 @@ def _compute_mean_charge(
     max_species = pf_coeffs.shape[1]
     max_transitions = ip.shape[1]
 
-    # Evaluate all partition functions at once
+    # Evaluate all partition functions at once.  Threading the per-species
+    # ``t_min``/``t_max``/``g0`` arrays through ``polynomial_partition_function_jax``
+    # picks up the arch-candidate-4 extrapolation guard: outside the fit
+    # window the polynomial would otherwise blow up (Ca I at 100 000 K gives
+    # U ≈ 1e5 unguarded vs ~200 from direct summation).
     pf_flat = pf_coeffs.reshape(-1, 5)
-    U_flat = polynomial_partition_function_jax(T_K, pf_flat)
+    tmin_flat = (
+        atomic_data.partition_t_min.reshape(-1) if atomic_data.partition_t_min is not None else None
+    )
+    tmax_flat = (
+        atomic_data.partition_t_max.reshape(-1) if atomic_data.partition_t_max is not None else None
+    )
+    g0_flat = atomic_data.partition_g0.reshape(-1) if atomic_data.partition_g0 is not None else None
+    U_flat = polynomial_partition_function_jax(
+        T_K, pf_flat, t_min=tmin_flat, t_max=tmax_flat, g0=g0_flat
+    )
     U_all = U_flat.reshape(n_elem, max_species)
 
     # Saha prefactor (same for all elements/transitions)

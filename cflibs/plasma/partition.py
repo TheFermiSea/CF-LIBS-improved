@@ -37,7 +37,14 @@ is what :mod:`scripts.populate_partition_functions` does — restores the
 consistency.
 """
 
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+try:  # Python 3.8+ — Protocol lives in typing on modern interpreters.
+    from typing import Protocol, runtime_checkable
+except ImportError:  # pragma: no cover - fallback for old runtimes
+    from typing_extensions import Protocol, runtime_checkable  # type: ignore
+
 import numpy as np
 
 from cflibs.core.constants import KB_EV
@@ -796,3 +803,223 @@ class PartitionFunctionEvaluator:
             for t in range(n_temps):
                 result[s, t] = polynomial_partition_function(float(temperatures[t]), coeffs_s)
         return result
+
+
+# ---------------------------------------------------------------------------
+# Provider protocol + concrete implementations  (arch candidate 4)
+# ---------------------------------------------------------------------------
+#
+# Motivation: the legacy contract was ``polynomial_partition_function(T, coeffs,
+# t_min=…, t_max=…, g0=…)``, but only half the call sites threaded the
+# ``t_min``/``t_max``/``g0`` kwargs through.  The remaining call sites
+# happily extrapolated the quartic-in-ln-T polynomial outside the fit window,
+# producing 560× errors at high T (Ca I, U(100 000 K) = 1.14e5 vs ~200) and
+# sub-unity values at low T (Nb I, U(500 K) = 0.31 vs g0 = 1).
+#
+# Encapsulating the bounds + floor inside a provider object centralises the
+# guard logic: the coefficients never leave the provider, and every caller
+# automatically picks up the validity-window clamp and the ground-state
+# floor.  See ``docs/architecture/2026-05-26-architecture-review.md``
+# § Candidate 4, ADR-0001 B-P7.
+
+
+@runtime_checkable
+class PartitionFunctionProvider(Protocol):
+    """Per-species partition function with encapsulated validity bounds.
+
+    The provider abstraction is the canonical contract for partition-function
+    evaluation throughout CF-LIBS.  Implementations encapsulate
+
+    * the polynomial coefficients (or whatever underlying form they use),
+    * the validity window ``[t_min, t_max]`` outside which the underlying
+      fit is unreliable, and
+    * the ground-state statistical weight ``g0`` which acts as a strict
+      physical lower bound on the returned value.
+
+    Callers obtain providers via :meth:`AtomicDatabase.partition_function_for`
+    and never touch the underlying coefficients.  This concentrates the
+    "clamp T to [t_min, t_max], floor at g0" logic in one place — previously
+    that logic was smeared across half the call sites and silently absent
+    from the other half (see arch candidate 4 § Problem).
+    """
+
+    def at(self, T_K: Any) -> Any:
+        """Evaluate U(T) with bounds clamping and g0 floor applied."""
+        ...
+
+    def valid_range(self) -> Tuple[float, float]:
+        """Return ``(t_min, t_max)`` for the underlying fit."""
+        ...
+
+    @property
+    def g0(self) -> float:
+        """Ground-state statistical weight (strict physical lower bound)."""
+        ...
+
+
+@dataclass(frozen=True)
+class PolynomialPartitionFunctionProvider:
+    """Provider backed by a 4th-order natural-log polynomial fit (Irwin form).
+
+    Concretely::
+
+        ln U(clamp(T, t_min, t_max)) = a0 + a1·ln T + a2·(ln T)² + …
+
+    with the result floored at ``g0``.  This is the production fallback used
+    by every CF-LIBS call site once :meth:`AtomicDatabase.partition_function_for`
+    is wired in.
+
+    Attributes
+    ----------
+    element : str
+        Element symbol — informational only.
+    ionization_stage : int
+        Ionization stage — informational only.
+    coefficients : tuple[float, ...]
+        Polynomial coefficients ``(a0, …, a4)`` in natural-log basis.
+        Stored as a tuple to keep the dataclass frozen/hashable.
+    t_min, t_max : float
+        Validity range of the fit.  Outside this interval :meth:`at`
+        evaluates the polynomial at the boundary.
+    _g0 : float
+        Ground-state statistical weight (lower bound on U).  Stored under
+        a private name so the public :attr:`g0` matches the Protocol
+        property contract.
+    source : str
+        Provenance string from the ``partition_functions`` table.
+    """
+
+    element: str
+    ionization_stage: int
+    coefficients: Tuple[float, ...]
+    t_min: float
+    t_max: float
+    _g0: float
+    source: str = ""
+
+    @property
+    def g0(self) -> float:
+        return float(self._g0)
+
+    def valid_range(self) -> Tuple[float, float]:
+        return float(self.t_min), float(self.t_max)
+
+    def at(self, T_K: Any) -> Any:
+        """Evaluate U(T) with clamp + g0 floor.
+
+        Accepts a Python float / numpy scalar / numpy ndarray.  Use
+        :func:`polynomial_partition_function_jax` directly (or wrap a
+        :class:`BatchedPartitionFunctionProvider`) for jit-traced array
+        inputs.
+        """
+        coeffs = list(self.coefficients)
+        if isinstance(T_K, np.ndarray) and T_K.ndim > 0:
+            T_arr = np.asarray(T_K, dtype=np.float64)
+            T_clamped = np.clip(T_arr, float(self.t_min), float(self.t_max))
+            ln_T = np.log(np.maximum(T_clamped, 1.0))
+            ln_U = np.zeros_like(ln_T)
+            for i, a in enumerate(coeffs):
+                ln_U = ln_U + a * (ln_T**i)
+            U = np.exp(ln_U)
+            U = np.maximum(U, float(self._g0))
+            # Match the scalar-path low-T sentinel.
+            U = np.where(T_arr <= 1.0, np.maximum(1.0, float(self._g0)), U)
+            return U
+        return polynomial_partition_function(
+            float(T_K),
+            coeffs,
+            t_min=float(self.t_min),
+            t_max=float(self.t_max),
+            g0=float(self._g0),
+        )
+
+
+@dataclass(frozen=True)
+class BatchedPartitionFunctionProvider:
+    """Vectorised provider for per-species batched evaluation under jit.
+
+    Holds parallel arrays carrying every species' polynomial coefficients
+    plus validity window and ground-state degeneracy.  Indexing by
+    ``species_indices`` returns the per-species U at the requested
+    temperature(s) with bounds clamping and g0 floor applied — all using
+    ``jnp`` operations, so the method is jit/vmap compatible.
+
+    This is the carrier the manifold path and the kernels' Saha-Boltzmann
+    populations needed: previously they unpacked
+    :class:`AtomicSnapshot.partition_coeffs` directly and called
+    :func:`polynomial_partition_function_jax` without bounds, silently
+    extrapolating the polynomial outside the fit window.
+
+    Attributes
+    ----------
+    coefficients : array, shape (N_species, 5) or (N_species, …, 5)
+        Polynomial coefficients (natural-log basis).
+    t_min, t_max : array, shape (N_species,)
+        Per-species validity bounds.
+    g0 : array, shape (N_species,)
+        Per-species ground-state degeneracies.
+    """
+
+    coefficients: Any
+    t_min: Any
+    t_max: Any
+    g0: Any  # type: ignore[assignment]
+
+    def valid_range(self) -> Tuple[Any, Any]:
+        return self.t_min, self.t_max
+
+    def at_all(self, T_K: Any) -> Any:
+        """Evaluate U(T_K) for every species row in parallel."""
+        if HAS_JAX:
+            return polynomial_partition_function_jax(
+                T_K,
+                self.coefficients,
+                t_min=self.t_min,
+                t_max=self.t_max,
+                g0=self.g0,
+            )
+        coeffs = np.asarray(self.coefficients, dtype=np.float64)
+        t_min = np.asarray(self.t_min, dtype=np.float64)
+        t_max = np.asarray(self.t_max, dtype=np.float64)
+        g0_arr = np.asarray(self.g0, dtype=np.float64)
+        T_clamped = np.clip(np.asarray(T_K, dtype=np.float64), t_min, t_max)
+        ln_T = np.log(np.maximum(T_clamped, 1.0))
+        powers = np.stack([np.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1)
+        ln_U = np.sum(coeffs * powers, axis=-1)
+        return np.maximum(np.exp(ln_U), g0_arr)
+
+    def at_batch(self, T_K: Any, species_indices: Any) -> Any:
+        """Gather-and-evaluate U(T) for a subset of species rows.
+
+        Parameters
+        ----------
+        T_K : scalar or array
+            Temperature(s) in Kelvin.
+        species_indices : array of int
+            Indices into the species axis.
+
+        Returns
+        -------
+        array
+            ``U`` evaluated for the selected species at ``T_K``.  Same
+            shape as ``species_indices``.
+        """
+        if HAS_JAX:
+            idx = jnp.asarray(species_indices, dtype=jnp.int32)
+            return polynomial_partition_function_jax(
+                T_K,
+                self.coefficients[idx],
+                t_min=self.t_min[idx],
+                t_max=self.t_max[idx],
+                g0=self.g0[idx],
+            )
+        idx = np.asarray(species_indices, dtype=np.int64)
+        coeffs = np.asarray(self.coefficients, dtype=np.float64)[idx]
+        t_min = np.asarray(self.t_min, dtype=np.float64)[idx]
+        t_max = np.asarray(self.t_max, dtype=np.float64)[idx]
+        g0_arr = np.asarray(self.g0, dtype=np.float64)[idx]
+        T_clamped = np.clip(np.asarray(T_K, dtype=np.float64), t_min, t_max)
+        ln_T = np.log(np.maximum(T_clamped, 1.0))
+        powers = np.stack([np.ones_like(ln_T), ln_T, ln_T**2, ln_T**3, ln_T**4], axis=-1)
+        ln_U = np.sum(coeffs * powers, axis=-1)
+        return np.maximum(np.exp(ln_U), g0_arr)
