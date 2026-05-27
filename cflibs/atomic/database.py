@@ -801,8 +801,15 @@ class AtomicDatabase(AtomicDataSource):
                     coeffs = list(pf.coefficients)
                     coeffs += [0.0] * (5 - len(coeffs))
                     partition_rows.append([float(c) for c in coeffs[:5]])
-                    partition_t_min_list.append(float(pf.t_min))
-                    partition_t_max_list.append(float(pf.t_max))
+                    # SQLite t_min/t_max columns can be NULL when only the
+                    # coefficients were imported. Fall back to the same
+                    # default window used in the no-partition-row branch so
+                    # the snapshot stays serializable and consumers always
+                    # receive concrete bounds.
+                    pf_t_min = pf.t_min if pf.t_min is not None else 2000.0
+                    pf_t_max = pf.t_max if pf.t_max is not None else 25000.0
+                    partition_t_min_list.append(float(pf_t_min))
+                    partition_t_max_list.append(float(pf_t_max))
                 partition_g0_list.append(float(get_ground_state_g(self, element, stage)))
                 if include_levels:
                     levels = self.get_energy_levels(element, stage)
