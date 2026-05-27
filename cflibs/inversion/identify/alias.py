@@ -1720,10 +1720,11 @@ class ALIASIdentifier:
             # on Vrabel Si-positive spectra the Boltzmann R² collapses to
             # 0.000–0.220 because the Si I 288.16 nm resonance line is
             # heavily self-absorbed, dragging its ln(I·λ/gA) off the
-            # linear fit. Pass nnls_significant down so the consistency
-            # check can drop resonance lines when there's independent
-            # NNLS evidence that the candidate is real — only then is it
-            # safe to suspect self-absorption rather than a false candidate.
+            # linear fit. The candidate dict carries ``nnls_significant``;
+            # the consistency check forwards it to the internal
+            # ``_apply_resonance_filter`` seam (arch candidate 5) so the
+            # resonance-line decision is no longer a public kwarg on the
+            # check's signature.
             boltz_factor, boltz_r2 = self._boltzmann_consistency_check(
                 element,
                 fused_lines,
@@ -1731,7 +1732,7 @@ class ALIASIdentifier:
                 matched_peak_idx,
                 corrected_intensity,
                 peaks,
-                nnls_significant=bool(cand.get("nnls_significant", False)),
+                candidate=cand,
             )
             CL *= boltz_factor
 
@@ -2595,72 +2596,73 @@ class ALIASIdentifier:
         # "fixed" mode — default, byte-identical to historical behavior.
         return boltz_r2 < self.boltzmann_r2_min
 
-    def _boltzmann_consistency_check(
+    def _apply_resonance_filter(
         self,
-        element: str,
         fused_lines: List[dict],
-        matched_mask: np.ndarray,
+        candidate: Optional[dict],
+        matched_indices: np.ndarray,
         matched_peak_idx: np.ndarray,
         intensity: np.ndarray,
         peaks: List[Tuple[int, float]],
-        nnls_significant: bool = False,
-    ) -> Tuple[float, float]:
-        """
-        Boltzmann consistency check for matched lines.
+    ) -> bool:
+        """Decide whether the resonance-line filter should be applied.
 
-        For elements with >=3 matched lines, fit ln(I*lambda/(g*A)) vs E_k.
-        Slope should give physical temperature (3000-50000K) with reasonable R^2.
+        Internal seam (arch candidate 5). The Boltzmann consistency
+        check delegates the decision-to-filter to this method so the
+        coupling between the NNLS-significance signal and the
+        Boltzmann regression no longer rides on a public kwarg.
+
+        The filter drops resonance lines (``E_i_ev < resonance_cutoff``)
+        when:
+
+        1. The caller's ``candidate`` dict carries
+           ``nnls_significant=True`` (independent basis-spectrum
+           evidence the element is real, so suspicion of
+           self-absorption is justified — n3rf.1).
+        2. ``self.self_absorption_aware`` is enabled.
+        3. The n3rf.4 pre-scan finds at least three non-resonance
+           lines that would survive the filter. This guard prevents
+           stranding all-resonance elements (Al I 396.15 + 308.21 are
+           both resonance lines; filtering them drops Al below the
+           three-line Boltzmann minimum and the R^2 gate then rejects
+           it — see commit 4794d04).
 
         Parameters
         ----------
-        nnls_significant : bool, optional
-            When True AND ``self.self_absorption_aware`` is enabled, drop
-            resonance lines (``E_i_ev < self.self_absorption_e_i_cutoff_ev``)
-            from the regression before fitting. Bead n3rf.1: on Vrabel
-            Si-positive spectra the Si I 288.16 nm + 244.34 nm resonance
-            lines at common E_k=5.082 eV give a 5-unit spread in
-            ln(I·λ/gA) — self-absorption, not statistical noise. Filtering
-            them is only safe when independent NNLS evidence supports the
-            candidate (otherwise the gate would let in genuine false
-            positives whose Boltzmann inconsistency IS the signal).
+        fused_lines : list of dict
+            Candidate transitions, each carrying a ``"transition"`` key.
+        candidate : dict, optional
+            The candidate-dict from the outer ``identify`` loop. When
+            ``None`` or missing ``nnls_significant``, the filter is
+            disabled (returns ``False``).
+        matched_indices : np.ndarray
+            Indices into ``fused_lines`` that survived peak matching.
+        matched_peak_idx : np.ndarray
+            Per-line peak indices (same length as ``fused_lines``).
+        intensity : np.ndarray
+            Intensity vector indexed by sample position from ``peaks``.
+        peaks : list of (sample_idx, wavelength_nm)
+            Peak descriptors used to look up observed intensity.
 
         Returns
         -------
-        Tuple[float, float]
-            (boltzmann_factor, r_squared)
-            boltzmann_factor is in [0.5, 1.0] to multiply into CL.
+        bool
+            ``True`` if resonance-line filtering should be applied to
+            the Boltzmann regression, ``False`` otherwise.
         """
-        matched_indices = np.nonzero(matched_mask)[0]
-        if len(matched_indices) < 3:
-            return 0.5, 0.0  # Penalize — not enough lines for Boltzmann check
+        if not candidate or not candidate.get("nnls_significant"):
+            return False
+        if not getattr(self, "self_absorption_aware", True):
+            return False
 
         resonance_cutoff = float(getattr(self, "self_absorption_e_i_cutoff_ev", 0.1))
-        apply_resonance_filter = bool(
-            nnls_significant and getattr(self, "self_absorption_aware", True)
-        )
 
         # Bead n3rf.4: pre-scan to decide whether filtering would leave
         # enough non-resonance lines for a Boltzmann fit. If not (e.g.,
         # Al I 396.15 + Al I 308.21 are both resonance lines), keep all
         # lines — falling back to the pre-filter behavior is better than
         # forcing the element to fail the R² gate via insufficient lines.
-        if apply_resonance_filter:
-            n_non_resonance_valid = 0
-            for i in matched_indices:
-                trans = fused_lines[i]["transition"]
-                pidx = int(matched_peak_idx[i])
-                if pidx < 0 or pidx >= len(peaks):
-                    continue
-                I_obs = intensity[peaks[pidx][0]]
-                if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
-                    continue
-                e_i = float(getattr(trans, "E_i_ev", 1.0))
-                if e_i >= resonance_cutoff:
-                    n_non_resonance_valid += 1
-            if n_non_resonance_valid < 3:
-                apply_resonance_filter = False  # not enough non-resonance lines
-
-        observations = []
+        n_non_resonance_valid = 0
         for i in matched_indices:
             trans = fused_lines[i]["transition"]
             pidx = int(matched_peak_idx[i])
@@ -2669,16 +2671,58 @@ class ALIASIdentifier:
             I_obs = intensity[peaks[pidx][0]]
             if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
                 continue
+            e_i = float(getattr(trans, "E_i_ev", 1.0))
+            if e_i >= resonance_cutoff:
+                n_non_resonance_valid += 1
+        if n_non_resonance_valid < 3:
+            return False  # not enough non-resonance lines — keep them all
 
-            # Drop resonance lines when caller has NNLS-significance evidence
-            # AND the pre-scan confirmed enough non-resonance lines remain.
-            # Self-absorption on these lines biases the slope; basis-spectrum
-            # NNLS independently confirms the candidate. n3rf.1 + n3rf.4.
+        return True
+
+    def _collect_boltzmann_observations(
+        self,
+        element: str,
+        fused_lines: List[dict],
+        matched_indices: np.ndarray,
+        matched_peak_idx: np.ndarray,
+        intensity: np.ndarray,
+        peaks: List[Tuple[int, float]],
+        candidate: Optional[dict],
+    ) -> List[LineObservation]:
+        """Build LineObservation list, optionally filtering resonance lines.
+
+        Pulled out of :meth:`_boltzmann_consistency_check` to drop that method's
+        cognitive complexity below Sonar's threshold. The resonance-filter
+        decision still lives behind :meth:`_apply_resonance_filter` (arch
+        candidate 5 seam) — this helper just consumes the boolean and applies
+        the per-line E_i guard.
+        """
+        resonance_cutoff = float(getattr(self, "self_absorption_e_i_cutoff_ev", 0.1))
+        apply_resonance_filter = self._apply_resonance_filter(
+            fused_lines,
+            candidate,
+            matched_indices,
+            matched_peak_idx,
+            intensity,
+            peaks,
+        )
+
+        observations: List[LineObservation] = []
+        for i in matched_indices:
+            trans = fused_lines[i]["transition"]
+            pidx = int(matched_peak_idx[i])
+            if pidx < 0 or pidx >= len(peaks):
+                continue
+            I_obs = intensity[peaks[pidx][0]]
+            if I_obs <= 0 or trans.A_ki <= 0 or trans.g_k <= 0:
+                continue
+            # Drop resonance lines only when caller has NNLS-significance
+            # evidence AND the pre-scan confirmed enough non-resonance lines
+            # remain. n3rf.1 + n3rf.4.
             if apply_resonance_filter:
                 e_i = float(getattr(trans, "E_i_ev", 1.0))
                 if e_i < resonance_cutoff:
                     continue
-
             observations.append(
                 LineObservation(
                     element=element,
@@ -2691,6 +2735,54 @@ class ALIASIdentifier:
                     intensity_uncertainty=max(abs(I_obs) * 0.1, 1e-12),
                 )
             )
+        return observations
+
+    def _boltzmann_consistency_check(
+        self,
+        element: str,
+        fused_lines: List[dict],
+        matched_mask: np.ndarray,
+        matched_peak_idx: np.ndarray,
+        intensity: np.ndarray,
+        peaks: List[Tuple[int, float]],
+        candidate: Optional[dict] = None,
+    ) -> Tuple[float, float]:
+        """
+        Boltzmann consistency check for matched lines.
+
+        For elements with >=3 matched lines, fit ln(I*lambda/(g*A)) vs E_k.
+        Slope should give physical temperature (3000-50000K) with reasonable R^2.
+
+        Parameters
+        ----------
+        candidate : dict, optional
+            Candidate-dict produced upstream in :meth:`identify`. When
+            provided, the method delegates the resonance-line filter
+            decision to :meth:`_apply_resonance_filter` (an internal seam
+            introduced by arch candidate 5). The seam reads
+            ``candidate["nnls_significant"]`` and applies the n3rf.4
+            pre-scan guard so all-resonance elements like Al I are not
+            stranded.
+
+        Returns
+        -------
+        Tuple[float, float]
+            (boltzmann_factor, r_squared)
+            boltzmann_factor is in [0.5, 1.0] to multiply into CL.
+        """
+        matched_indices = np.nonzero(matched_mask)[0]
+        if len(matched_indices) < 3:
+            return 0.5, 0.0  # Penalize — not enough lines for Boltzmann check
+
+        observations = self._collect_boltzmann_observations(
+            element=element,
+            fused_lines=fused_lines,
+            matched_indices=matched_indices,
+            matched_peak_idx=matched_peak_idx,
+            intensity=intensity,
+            peaks=peaks,
+            candidate=candidate,
+        )
 
         if len(observations) < 3:
             return 0.5, 0.0
