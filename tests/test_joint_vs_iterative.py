@@ -59,7 +59,7 @@ def wavelength_grid():
 @pytest.fixture
 def forward_model(synthetic_elements, line_data, wavelength_grid):
     """Create the simple forward model for testing."""
-    from cflibs.inversion.joint_optimizer import create_simple_forward_model
+    from cflibs.inversion.solve.joint_optimizer import create_simple_forward_model
 
     line_centers, line_strengths = line_data
     return create_simple_forward_model(synthetic_elements, line_centers, line_strengths)
@@ -87,7 +87,7 @@ def test_joint_optimizer_recovers_true_params(
     forward_model, synthetic_spectrum, true_params, synthetic_elements, wavelength_grid
 ):
     """Joint optimizer should recover true parameters from synthetic data."""
-    from cflibs.inversion.joint_optimizer import JointOptimizer
+    from cflibs.inversion.solve.joint_optimizer import JointOptimizer
 
     optimizer = JointOptimizer(forward_model, synthetic_elements, wavelength_grid)
 
@@ -114,7 +114,7 @@ def test_joint_optimizer_convergence(
     forward_model, synthetic_spectrum, synthetic_elements, wavelength_grid
 ):
     """Joint optimizer should converge within max_iterations."""
-    from cflibs.inversion.joint_optimizer import JointOptimizer
+    from cflibs.inversion.solve.joint_optimizer import JointOptimizer
 
     optimizer = JointOptimizer(
         forward_model, synthetic_elements, wavelength_grid, max_iterations=200
@@ -132,7 +132,7 @@ def test_softmax_guarantees_simplex(
     forward_model, synthetic_spectrum, synthetic_elements, wavelength_grid
 ):
     """Softmax parameterization must always produce valid concentrations."""
-    from cflibs.inversion.joint_optimizer import JointOptimizer
+    from cflibs.inversion.solve.joint_optimizer import JointOptimizer
 
     optimizer = JointOptimizer(forward_model, synthetic_elements, wavelength_grid)
 
@@ -152,7 +152,7 @@ def test_joint_optimizer_uncertainty_estimates(
     forward_model, synthetic_spectrum, synthetic_elements, wavelength_grid
 ):
     """Joint optimizer should provide parameter uncertainty estimates when Hessian is well-conditioned."""
-    from cflibs.inversion.joint_optimizer import JointOptimizer
+    from cflibs.inversion.solve.joint_optimizer import JointOptimizer
 
     optimizer = JointOptimizer(forward_model, synthetic_elements, wavelength_grid)
     result = optimizer.optimize(
@@ -176,7 +176,7 @@ def test_multi_start_avoids_local_minima(
     forward_model, synthetic_spectrum, true_params, synthetic_elements, wavelength_grid
 ):
     """Multi-start should find a better solution than single-start."""
-    from cflibs.inversion.joint_optimizer import JointOptimizer, MultiStartJointOptimizer
+    from cflibs.inversion.solve.joint_optimizer import JointOptimizer, MultiStartJointOptimizer
 
     base_opt = JointOptimizer(forward_model, synthetic_elements, wavelength_grid)
     multi_opt = MultiStartJointOptimizer(base_opt, n_starts=5, seed=42)

@@ -18,7 +18,7 @@ from cflibs.inversion.line_selection import (
     LineSelectionResult,
     identify_resonance_lines,
 )
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 # ==============================================================================
 # LineSelector Initialization Tests
@@ -939,7 +939,7 @@ class TestLineSelectorBoltzmannIntegration:
 
     def test_selected_lines_produce_valid_boltzmann_fit(self):
         """Verify auto-selected lines produce valid Boltzmann plot fit."""
-        from cflibs.inversion.boltzmann import BoltzmannPlotFitter
+        from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter
 
         # Create synthetic Fe lines following Boltzmann distribution at 8000 K
         T_K = 8000.0
@@ -998,7 +998,7 @@ class TestLineSelectorBoltzmannIntegration:
 
     def test_auto_selection_improves_fit_quality(self):
         """Verify auto-selection improves fit vs using all lines."""
-        from cflibs.inversion.boltzmann import BoltzmannPlotFitter
+        from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter
 
         T_K = 9000.0
         T_eV = T_K * 8.617e-5

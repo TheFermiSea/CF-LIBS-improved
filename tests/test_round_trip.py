@@ -23,7 +23,7 @@ from cflibs.validation.round_trip import (
     RoundTripResult,
     GoldenSpectrum,
 )
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 
 class TestGoldenSpectrumGenerator:
@@ -454,7 +454,7 @@ class TestSelfConsistentElectronDensity:
         assert len(golden.line_observations) > 0
 
         # Run solver with same pressure
-        from cflibs.inversion.solver import IterativeCFLIBSSolver
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
         from cflibs.core.constants import STP_PRESSURE
 
         solver = IterativeCFLIBSSolver(atomic_db, max_iterations=20, pressure_pa=STP_PRESSURE)

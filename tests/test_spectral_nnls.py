@@ -7,8 +7,8 @@ import pytest
 
 h5py = pytest.importorskip("h5py")
 
-from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier  # noqa: E402
-from cflibs.inversion.element_id import ElementIdentificationResult  # noqa: E402
+from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier  # noqa: E402
+from cflibs.inversion.common.element_id import ElementIdentificationResult  # noqa: E402
 
 pytestmark = [pytest.mark.requires_db, pytest.mark.integration]
 

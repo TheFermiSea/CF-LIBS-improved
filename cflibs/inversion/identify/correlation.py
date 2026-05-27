@@ -11,13 +11,13 @@ import math
 import numpy as np
 from scipy.stats import pearsonr
 
-from cflibs.inversion.element_id import (
+from cflibs.inversion.common.element_id import (
     IdentifiedLine,
     ElementIdentification,
     ElementIdentificationResult,
     get_wavelength_tolerance,
 )
-from cflibs.inversion.preprocessing import detect_peaks_auto
+from cflibs.inversion.preprocess.preprocessing import detect_peaks_auto
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.structures import Transition
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver

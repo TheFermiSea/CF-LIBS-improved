@@ -41,9 +41,9 @@ from cflibs.benchmark.composition_metrics import (  # noqa: E402
 )
 from cflibs.core.constants import EV_TO_K  # noqa: E402
 from cflibs.core.logging_config import get_logger  # noqa: E402
-from cflibs.inversion.boltzmann import BoltzmannPlotFitter, FitMethod, LineObservation  # noqa: E402
-from cflibs.inversion.closure import ClosureEquation  # noqa: E402
-from cflibs.inversion.solver import IterativeCFLIBSSolver  # noqa: E402
+from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, FitMethod, LineObservation  # noqa: E402
+from cflibs.inversion.physics.closure import ClosureEquation  # noqa: E402
+from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver  # noqa: E402
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver  # noqa: E402
 from cflibs.radiation.spectrum_model import SpectrumModel  # noqa: E402
 from cflibs.plasma.state import SingleZoneLTEPlasma  # noqa: E402

@@ -90,7 +90,7 @@ def run_inversion(
     use_jax: bool = True,
 ) -> Dict:
     """Run CF-LIBS inversion pipeline on a spectrum."""
-    from cflibs.inversion.solver import IterativeCFLIBSSolver
+    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
     from cflibs.instrument.model import InstrumentModel
 
     instrument = InstrumentModel(resolving_power=1000.0)

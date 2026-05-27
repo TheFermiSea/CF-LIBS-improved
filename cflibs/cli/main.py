@@ -168,7 +168,7 @@ def invert_cmd(args):
     from cflibs.core.config import load_config
     from cflibs.inversion.line_detection import detect_line_observations
     from cflibs.inversion.line_selection import LineSelector
-    from cflibs.inversion.solver import IterativeCFLIBSSolver
+    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
     from cflibs.io.exporters import create_exporter
     from cflibs.io.spectrum import load_spectrum
 
@@ -306,7 +306,7 @@ def analyze_cmd(args):
     from cflibs.atomic.database import AtomicDatabase
     from cflibs.inversion.line_detection import detect_line_observations
     from cflibs.inversion.line_selection import LineSelector
-    from cflibs.inversion.solver import IterativeCFLIBSSolver
+    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
     from cflibs.io.spectrum import load_spectrum
 
     db_path = _resolve_db_path(args.db_path)
@@ -350,7 +350,7 @@ def analyze_cmd(args):
             )
             result = solver.solve(observations)
     elif uncertainty_mode == "mc":
-        from cflibs.inversion.uncertainty import MonteCarloUQ
+        from cflibs.inversion.physics.uncertainty import MonteCarloUQ
 
         mc = MonteCarloUQ(solver, n_samples=200)
         mc_result = mc.run(observations)
@@ -422,7 +422,7 @@ def bayesian_cmd(args):
         sys.exit(1)
 
     import numpy as np
-    from cflibs.inversion.bayesian import BayesianForwardModel, MCMCSampler
+    from cflibs.inversion.solve.bayesian import BayesianForwardModel, MCMCSampler
     from cflibs.io.spectrum import load_spectrum
 
     db_path = _resolve_db_path(args.db_path)
@@ -474,7 +474,7 @@ def batch_cmd(args):
     from cflibs.atomic.database import AtomicDatabase
     from cflibs.inversion.line_detection import detect_line_observations
     from cflibs.inversion.line_selection import LineSelector
-    from cflibs.inversion.solver import IterativeCFLIBSSolver
+    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
     from cflibs.io.spectrum import load_spectrum
 
     directory = Path(args.directory)

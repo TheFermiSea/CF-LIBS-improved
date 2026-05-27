@@ -54,15 +54,15 @@ if str(_REPO_ROOT) not in sys.path:
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
 from cflibs.benchmark.datasets.usgs import USGSDataset  # noqa: E402
 from cflibs.core.logging_config import get_logger  # noqa: E402
-from cflibs.inversion.boltzmann import (  # noqa: E402
+from cflibs.inversion.physics.boltzmann import (  # noqa: E402
     BoltzmannPlotFitter,
     FitMethod,
     LineObservation,
 )
-from cflibs.inversion.cdsb import CDSBLineObservation, CDSBPlotter  # noqa: E402
-from cflibs.inversion.closure import ClosureEquation  # noqa: E402
+from cflibs.inversion.physics.cdsb import CDSBLineObservation, CDSBPlotter  # noqa: E402
+from cflibs.inversion.physics.closure import ClosureEquation  # noqa: E402
 from cflibs.inversion.line_detection import detect_line_observations  # noqa: E402
-from cflibs.inversion.solver import CFLIBSResult, IterativeCFLIBSSolver  # noqa: E402
+from cflibs.inversion.solve.iterative import CFLIBSResult, IterativeCFLIBSSolver  # noqa: E402
 
 logger = get_logger("accuracy_ablation")
 
@@ -687,7 +687,7 @@ def run_single_spectrum(
         # Step 1: Element identification (shared across configs)
         cache_key = spectrum_file
         if cache_key not in alias_result_cache:
-            from cflibs.inversion.alias_identifier import ALIASIdentifier
+            from cflibs.inversion.identify.alias import ALIASIdentifier
 
             identifier = ALIASIdentifier(db)
             alias_res = identifier.identify(wavelength, intensity)

@@ -36,8 +36,8 @@ jax = pytest.importorskip("jax")  # noqa: F401  -- skip whole module if absent
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
 from cflibs.atomic.structures import PartitionFunction  # noqa: E402
 from cflibs.core.constants import KB_EV  # noqa: E402
-from cflibs.inversion.boltzmann import BoltzmannPlotFitter, LineObservation  # noqa: E402
-from cflibs.inversion.solver import IterativeCFLIBSSolver  # noqa: E402
+from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, LineObservation  # noqa: E402
+from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver  # noqa: E402
 
 pytestmark = [pytest.mark.requires_jax, pytest.mark.unit]
 
@@ -354,7 +354,7 @@ class TestBehaviorContracts:
         """RANSAC and Huber methods always use the CPU path even when
         use_jax=True (the JAX kernel only implements WLS; outlier
         algorithms with different statistics are not in scope)."""
-        from cflibs.inversion.boltzmann import FitMethod
+        from cflibs.inversion.physics.boltzmann import FitMethod
 
         obs = _make_synthetic_obs(n=15, T_K=10_000.0, intercept=20.0, seed=3)
         # RANSAC + use_jax should not raise and should produce a finite result.

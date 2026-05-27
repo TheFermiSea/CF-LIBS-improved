@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 from unittest.mock import MagicMock
 
-from cflibs.inversion.closed_form_solver import ClosedFormILRSolver, ClosedFormConfig
-from cflibs.inversion.solver import IterativeCFLIBSSolver
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.solve.closed_form import ClosedFormILRSolver, ClosedFormConfig
+from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+from cflibs.inversion.physics.boltzmann import LineObservation
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.structures import PartitionFunction
 from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3

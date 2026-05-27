@@ -36,7 +36,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 
-from cflibs.inversion.element_id import (
+from cflibs.inversion.common.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
 )

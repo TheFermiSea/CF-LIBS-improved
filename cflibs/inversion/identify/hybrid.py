@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Dict, List, Set
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.element_id import (
+from cflibs.inversion.common.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
 )
@@ -33,7 +33,7 @@ from cflibs.inversion.identify._coverage import (
 )
 
 # Re-export the opt-in majority-vote combiner so callers can use either
-# ``cflibs.inversion.hybrid_identifier`` or ``cflibs.inversion.identify.hybrid``
+# ``cflibs.inversion.identify.hybrid`` or ``cflibs.inversion.identify.hybrid``
 # without learning a third module path. The existing HybridIdentifier
 # (NNLS+ALIAS two-stage) is unchanged; HybridConsensusIdentifier is a
 # *separate* class with majority-vote semantics across alias/comb/correlation.
@@ -137,8 +137,8 @@ class HybridIdentifier:
             Elements detected by both (or either) stage, with metadata
             recording per-stage decisions.
         """
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
-        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+        from cflibs.inversion.identify.alias import ALIASIdentifier
+        from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
 
         # Detection-coverage tracker -- additive telemetry only.  Hybrid
         # delegates per-element scoring to ALIAS, which records its own

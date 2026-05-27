@@ -37,7 +37,7 @@ from scripts.validate_real_data import (  # noqa: E402
     load_scipp_depth_scan,
     select_representative_spectrum,
 )
-from cflibs.inversion.preprocessing import detect_peaks_auto  # noqa: E402
+from cflibs.inversion.preprocess.preprocessing import detect_peaks_auto  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

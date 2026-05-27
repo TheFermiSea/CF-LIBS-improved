@@ -38,8 +38,8 @@ import numpy as np
 from cflibs.core.logging_config import get_logger
 
 # Import result types for ExportData alias (lazy to avoid circular imports)
-from cflibs.inversion.solver import CFLIBSResult
-from cflibs.inversion.bayesian import MCMCResult, NestedSamplingResult
+from cflibs.inversion.solve.iterative import CFLIBSResult
+from cflibs.inversion.solve.bayesian import MCMCResult, NestedSamplingResult
 
 logger = get_logger("io.exporters")
 

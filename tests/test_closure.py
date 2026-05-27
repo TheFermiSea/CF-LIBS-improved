@@ -4,7 +4,7 @@ Tests for closure equation.
 
 import math
 
-from cflibs.inversion.closure import ClosureEquation
+from cflibs.inversion.physics.closure import ClosureEquation
 
 
 def test_standard_closure():

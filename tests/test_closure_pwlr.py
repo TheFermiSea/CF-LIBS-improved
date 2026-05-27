@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from cflibs.inversion.closure import (
+from cflibs.inversion.physics.closure import (
     ClosureEquation,
     LOGRATIO_CLIP_FLOOR,
     plr_inverse,

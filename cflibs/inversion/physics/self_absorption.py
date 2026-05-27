@@ -75,7 +75,7 @@ from cflibs.core.constants import (
     M_PROTON,
 )
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 logger = get_logger("inversion.self_absorption")
 

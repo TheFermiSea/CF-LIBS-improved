@@ -18,7 +18,7 @@ import numpy as np
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.structures import Transition
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 logger = get_logger("inversion.line_detection")
 
@@ -735,7 +735,7 @@ def detect_line_observations(
             # Collect all peak wavelengths for deconvolution
             peak_wl_arr = np.array([pw for _, pw in peaks], dtype=float)
             if len(peak_wl_arr) > 0:
-                from cflibs.inversion.preprocessing import estimate_baseline
+                from cflibs.inversion.preprocess.preprocessing import estimate_baseline
 
                 baseline = estimate_baseline(wavelength, intensity)
                 baseline_subtracted = intensity - baseline

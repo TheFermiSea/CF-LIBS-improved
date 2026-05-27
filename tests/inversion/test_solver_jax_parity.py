@@ -34,7 +34,7 @@ jax.config.update("jax_enable_x64", True)
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
 from cflibs.atomic.structures import PartitionFunction  # noqa: E402
 from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3  # noqa: E402
-from cflibs.inversion.solver import (  # noqa: E402
+from cflibs.inversion.solve.iterative import (  # noqa: E402
     IterativeCFLIBSSolver,
     IterativeCFLIBSSolverJax,
     LineObservation,

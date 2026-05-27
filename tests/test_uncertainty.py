@@ -1,7 +1,7 @@
 """
 Tests for uncertainty propagation utilities.
 
-Tests the `cflibs.inversion.uncertainty` module which provides automatic
+Tests the `cflibs.inversion.physics.uncertainty` module which provides automatic
 correlation-aware uncertainty propagation using the `uncertainties` package.
 
 Requirements: uncertainties>=3.2.0
@@ -22,7 +22,7 @@ class TestCreateBoltzmannUncertainties:
 
     def test_with_covariance_matrix(self):
         """Test creating correlated uncertainties from covariance matrix."""
-        from cflibs.inversion.uncertainty import create_boltzmann_uncertainties
+        from cflibs.inversion.physics.uncertainty import create_boltzmann_uncertainties
 
         slope = -1.0
         intercept = 5.0
@@ -38,7 +38,7 @@ class TestCreateBoltzmannUncertainties:
 
     def test_without_covariance_matrix(self):
         """Test fallback to independent uncertainties."""
-        from cflibs.inversion.uncertainty import create_boltzmann_uncertainties
+        from cflibs.inversion.physics.uncertainty import create_boltzmann_uncertainties
 
         slope = -1.0
         intercept = 5.0
@@ -56,7 +56,7 @@ class TestCreateBoltzmannUncertainties:
 
     def test_correlation_preserved(self):
         """Test that correlations are preserved for correlated operations."""
-        from cflibs.inversion.uncertainty import create_boltzmann_uncertainties
+        from cflibs.inversion.physics.uncertainty import create_boltzmann_uncertainties
 
         slope = -1.0
         intercept = 5.0
@@ -76,7 +76,7 @@ class TestTemperatureFromSlope:
 
     def test_basic_conversion(self):
         """Test temperature calculation from slope."""
-        from cflibs.inversion.uncertainty import temperature_from_slope
+        from cflibs.inversion.physics.uncertainty import temperature_from_slope
         from uncertainties import ufloat
         from cflibs.core.constants import KB_EV
 
@@ -98,7 +98,7 @@ class TestClosurePropagation:
 
     def test_standard_closure_sum_to_one(self):
         """Test that concentrations sum to 1 regardless of uncertainties."""
-        from cflibs.inversion.uncertainty import propagate_through_closure_standard
+        from cflibs.inversion.physics.uncertainty import propagate_through_closure_standard
         from uncertainties import ufloat
 
         intercepts_u = {
@@ -116,7 +116,7 @@ class TestClosurePropagation:
 
     def test_standard_closure_propagates_uncertainty(self):
         """Test that uncertainties are propagated through closure."""
-        from cflibs.inversion.uncertainty import propagate_through_closure_standard
+        from cflibs.inversion.physics.uncertainty import propagate_through_closure_standard
         from uncertainties import ufloat
 
         intercepts_u = {
@@ -133,7 +133,7 @@ class TestClosurePropagation:
 
     def test_matrix_closure_fixed_element(self):
         """Test matrix mode closure with fixed element concentration."""
-        from cflibs.inversion.uncertainty import propagate_through_closure_matrix
+        from cflibs.inversion.physics.uncertainty import propagate_through_closure_matrix
         from uncertainties import ufloat
 
         intercepts_u = {
@@ -151,7 +151,7 @@ class TestClosurePropagation:
 
     def test_oxide_closure_normalizes_oxide_weighted_total(self):
         """Test oxide mode normalizes using the oxide-weighted closure sum."""
-        from cflibs.inversion.uncertainty import propagate_through_closure_oxide
+        from cflibs.inversion.physics.uncertainty import propagate_through_closure_oxide
         from uncertainties import ufloat
 
         intercepts_u = {
@@ -175,7 +175,7 @@ class TestClosurePropagation:
 
     def test_standard_closure_rejects_invalid_abundance_multiplier(self):
         """Test invalid abundance multipliers fail fast."""
-        from cflibs.inversion.uncertainty import propagate_through_closure_standard
+        from cflibs.inversion.physics.uncertainty import propagate_through_closure_standard
         from uncertainties import ufloat
 
         intercepts_u = {"Fe": ufloat(10.0, 0.5)}
@@ -195,7 +195,7 @@ class TestClosurePropagation:
         relative uncertainties in concentrations should be smaller than
         with independent errors.
         """
-        from cflibs.inversion.uncertainty import propagate_through_closure_standard
+        from cflibs.inversion.physics.uncertainty import propagate_through_closure_standard
         from uncertainties import ufloat, correlated_values
 
         # Case 1: Independent uncertainties
@@ -227,7 +227,7 @@ class TestExtractValuesAndUncertainties:
 
     def test_extraction(self):
         """Test extracting nominal values and uncertainties from dict."""
-        from cflibs.inversion.uncertainty import extract_values_and_uncertainties
+        from cflibs.inversion.physics.uncertainty import extract_values_and_uncertainties
         from uncertainties import ufloat
 
         data = {
@@ -251,7 +251,7 @@ class TestBoltzmannFitResultCovariance:
 
     def test_sigma_clip_produces_covariance(self):
         """Test that sigma_clip fitting produces covariance matrix."""
-        from cflibs.inversion.boltzmann import (
+        from cflibs.inversion.physics.boltzmann import (
             BoltzmannPlotFitter,
             LineObservation,
             FitMethod,
@@ -283,7 +283,7 @@ class TestBoltzmannFitResultCovariance:
 
     def test_ransac_produces_covariance(self):
         """Test that RANSAC fitting produces covariance matrix."""
-        from cflibs.inversion.boltzmann import (
+        from cflibs.inversion.physics.boltzmann import (
             BoltzmannPlotFitter,
             LineObservation,
             FitMethod,
@@ -311,7 +311,7 @@ class TestBoltzmannFitResultCovariance:
 
     def test_huber_produces_covariance(self):
         """Test that Huber fitting produces covariance matrix."""
-        from cflibs.inversion.boltzmann import (
+        from cflibs.inversion.physics.boltzmann import (
             BoltzmannPlotFitter,
             LineObservation,
             FitMethod,
@@ -343,7 +343,7 @@ class TestCFLIBSResultFields:
 
     def test_result_has_new_fields(self):
         """Test that CFLIBSResult has the new uncertainty fields."""
-        from cflibs.inversion.solver import CFLIBSResult
+        from cflibs.inversion.solve.iterative import CFLIBSResult
 
         result = CFLIBSResult(
             temperature_K=10000.0,
@@ -364,7 +364,7 @@ class TestCFLIBSResultFields:
 
     def test_result_default_values(self):
         """Test that new fields have sensible defaults."""
-        from cflibs.inversion.solver import CFLIBSResult
+        from cflibs.inversion.solve.iterative import CFLIBSResult
 
         result = CFLIBSResult(
             temperature_K=10000.0,
@@ -390,7 +390,7 @@ class TestMonteCarloResult:
 
     def test_result_creation(self):
         """Test creating a MonteCarloResult with valid data."""
-        from cflibs.inversion.uncertainty import MonteCarloResult, PerturbationType
+        from cflibs.inversion.physics.uncertainty import MonteCarloResult, PerturbationType
 
         result = MonteCarloResult(
             n_samples=100,
@@ -421,7 +421,7 @@ class TestMonteCarloResult:
 
     def test_summary_table(self):
         """Test that summary_table returns a formatted string."""
-        from cflibs.inversion.uncertainty import MonteCarloResult, PerturbationType
+        from cflibs.inversion.physics.uncertainty import MonteCarloResult, PerturbationType
 
         result = MonteCarloResult(
             n_samples=100,
@@ -454,7 +454,7 @@ class TestMonteCarloResult:
 
     def test_correlation_matrix(self):
         """Test correlation matrix computation."""
-        from cflibs.inversion.uncertainty import MonteCarloResult, PerturbationType
+        from cflibs.inversion.physics.uncertainty import MonteCarloResult, PerturbationType
 
         # Create correlated data
         np.random.seed(42)
@@ -500,7 +500,7 @@ class TestAtomicDataUncertainty:
 
     def test_default_uncertainty(self):
         """Test default atomic data uncertainty."""
-        from cflibs.inversion.uncertainty import AtomicDataUncertainty
+        from cflibs.inversion.physics.uncertainty import AtomicDataUncertainty
 
         adu = AtomicDataUncertainty()
         assert adu.default_A_uncertainty == 0.10  # 10%
@@ -511,7 +511,7 @@ class TestAtomicDataUncertainty:
 
     def test_per_line_uncertainties(self):
         """Test per-line atomic data uncertainties."""
-        from cflibs.inversion.uncertainty import AtomicDataUncertainty
+        from cflibs.inversion.physics.uncertainty import AtomicDataUncertainty
 
         adu = AtomicDataUncertainty(
             default_A_uncertainty=0.10,
@@ -531,7 +531,7 @@ class TestPerturbationType:
 
     def test_perturbation_types(self):
         """Test that all perturbation types are defined."""
-        from cflibs.inversion.uncertainty import PerturbationType
+        from cflibs.inversion.physics.uncertainty import PerturbationType
 
         assert PerturbationType.SPECTRAL_NOISE.value == "spectral_noise"
         assert PerturbationType.ATOMIC_DATA.value == "atomic_data"
@@ -543,7 +543,7 @@ class TestMonteCarloUQUnit:
 
     def test_initialization(self):
         """Test MonteCarloUQ initialization."""
-        from cflibs.inversion.uncertainty import MonteCarloUQ
+        from cflibs.inversion.physics.uncertainty import MonteCarloUQ
         from unittest.mock import MagicMock
 
         mock_solver = MagicMock()
@@ -555,8 +555,8 @@ class TestMonteCarloUQUnit:
 
     def test_perturbation_spectral_noise(self):
         """Test that spectral noise perturbation modifies intensities."""
-        from cflibs.inversion.uncertainty import MonteCarloUQ, PerturbationType
-        from cflibs.inversion.boltzmann import LineObservation
+        from cflibs.inversion.physics.uncertainty import MonteCarloUQ, PerturbationType
+        from cflibs.inversion.physics.boltzmann import LineObservation
         from unittest.mock import MagicMock
 
         mock_solver = MagicMock()
@@ -591,12 +591,12 @@ class TestMonteCarloUQUnit:
 
     def test_perturbation_atomic_data(self):
         """Test that atomic data perturbation modifies A_ki values."""
-        from cflibs.inversion.uncertainty import (
+        from cflibs.inversion.physics.uncertainty import (
             MonteCarloUQ,
             PerturbationType,
             AtomicDataUncertainty,
         )
-        from cflibs.inversion.boltzmann import LineObservation
+        from cflibs.inversion.physics.boltzmann import LineObservation
         from unittest.mock import MagicMock
 
         mock_solver = MagicMock()
@@ -633,12 +633,12 @@ class TestMonteCarloUQUnit:
 
     def test_perturbation_combined(self):
         """Test that combined perturbation modifies both intensity and A_ki."""
-        from cflibs.inversion.uncertainty import (
+        from cflibs.inversion.physics.uncertainty import (
             MonteCarloUQ,
             PerturbationType,
             AtomicDataUncertainty,
         )
-        from cflibs.inversion.boltzmann import LineObservation
+        from cflibs.inversion.physics.boltzmann import LineObservation
         from unittest.mock import MagicMock
 
         mock_solver = MagicMock()
@@ -674,8 +674,8 @@ class TestMonteCarloUQUnit:
 
     def test_process_results_statistics(self):
         """Test that process_results computes correct statistics."""
-        from cflibs.inversion.uncertainty import MonteCarloUQ, PerturbationType
-        from cflibs.inversion.solver import CFLIBSResult
+        from cflibs.inversion.physics.uncertainty import MonteCarloUQ, PerturbationType
+        from cflibs.inversion.solve.iterative import CFLIBSResult
         from unittest.mock import MagicMock
 
         mock_solver = MagicMock()
@@ -710,8 +710,8 @@ class TestMonteCarloUQUnit:
 
     def test_process_results_handles_failures(self):
         """Test that process_results handles failed runs correctly."""
-        from cflibs.inversion.uncertainty import MonteCarloUQ, PerturbationType
-        from cflibs.inversion.solver import CFLIBSResult
+        from cflibs.inversion.physics.uncertainty import MonteCarloUQ, PerturbationType
+        from cflibs.inversion.solve.iterative import CFLIBSResult
         from unittest.mock import MagicMock
 
         mock_solver = MagicMock()
@@ -763,7 +763,7 @@ class TestRunMonteCarloUQFunction:
 
     def test_convenience_function_exists(self):
         """Test that run_monte_carlo_uq function is importable."""
-        from cflibs.inversion.uncertainty import run_monte_carlo_uq
+        from cflibs.inversion.physics.uncertainty import run_monte_carlo_uq
 
         assert callable(run_monte_carlo_uq)
 
@@ -773,7 +773,7 @@ class TestMonteCarloResultCompareWithBayesian:
 
     def test_agreement_when_results_match(self):
         """Test that comparison shows agreement for matching results."""
-        from cflibs.inversion.uncertainty import MonteCarloResult, PerturbationType
+        from cflibs.inversion.physics.uncertainty import MonteCarloResult, PerturbationType
         from cflibs.core.constants import EV_TO_K
 
         # Create MC result
@@ -817,7 +817,7 @@ class TestMonteCarloResultCompareWithBayesian:
 
     def test_disagreement_when_results_differ(self):
         """Test that comparison shows disagreement for different results."""
-        from cflibs.inversion.uncertainty import MonteCarloResult, PerturbationType
+        from cflibs.inversion.physics.uncertainty import MonteCarloResult, PerturbationType
         from cflibs.core.constants import EV_TO_K
 
         # Create MC result with T=10000 K
@@ -883,7 +883,7 @@ class TestSolveWithUncertaintyConsistency:
 
     def test_nominal_concentrations_agree_neutral_only(self, mock_db):
         """solve() and solve_with_uncertainty() concentrations agree for neutral-only obs."""
-        from cflibs.inversion.solver import IterativeCFLIBSSolver, LineObservation
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver, LineObservation
 
         T_eV = 1.0
         solver = IterativeCFLIBSSolver(mock_db, max_iterations=15)
@@ -908,7 +908,7 @@ class TestSolveWithUncertaintyConsistency:
 
     def test_nominal_concentrations_agree_mixed_stage(self, mock_db):
         """solve() and solve_with_uncertainty() agree for mixed neutral+ionic observations."""
-        from cflibs.inversion.solver import IterativeCFLIBSSolver, LineObservation
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver, LineObservation
         from cflibs.core.constants import SAHA_CONST_CM3
 
         T_eV = 1.0
@@ -951,7 +951,7 @@ class TestSolveWithUncertaintyConsistency:
 
     def test_temperature_uncertainty_is_positive(self, mock_db):
         """solve_with_uncertainty() should propagate a non-zero temperature uncertainty."""
-        from cflibs.inversion.solver import IterativeCFLIBSSolver, LineObservation
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver, LineObservation
 
         T_eV = 1.0
         solver = IterativeCFLIBSSolver(mock_db, max_iterations=15)
@@ -972,7 +972,7 @@ class TestSolveWithUncertaintyConsistency:
 
     def test_mixed_stage_multi_element_uncertainty_is_bounded(self, mock_db):
         """solve_with_uncertainty() should keep mixed-stage T uncertainty bounded."""
-        from cflibs.inversion.solver import IterativeCFLIBSSolver, LineObservation
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver, LineObservation
         from cflibs.core.constants import SAHA_CONST_CM3
 
         rng = np.random.default_rng(123)

@@ -49,7 +49,7 @@ from cflibs.benchmark.composition_metrics import (
 from cflibs.benchmark.dataset import BenchmarkSpectrum, TruthType
 
 if TYPE_CHECKING:
-    from cflibs.inversion.element_id import ElementIdentificationResult
+    from cflibs.inversion.common.element_id import ElementIdentificationResult
 
 
 # ---------------------------------------------------------------------------

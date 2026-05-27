@@ -13,7 +13,7 @@ Covers:
 
 import numpy as np
 from cflibs.core.constants import KB_EV
-from cflibs.inversion.cdsb import (
+from cflibs.inversion.physics.cdsb import (
     CDSBPlotter,
     CDSBLineObservation,
     CDSBConvergenceStatus,
@@ -21,7 +21,7 @@ from cflibs.inversion.cdsb import (
     create_cdsb_observation,
     from_transition,
 )
-from cflibs.inversion.boltzmann import FitMethod
+from cflibs.inversion.physics.boltzmann import FitMethod
 from cflibs.atomic.structures import Transition
 
 # =============================================================================

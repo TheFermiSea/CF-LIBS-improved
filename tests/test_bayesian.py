@@ -27,7 +27,7 @@ pytestmark = [
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp  # noqa: E402
 
-from cflibs.inversion.bayesian import (  # noqa: E402
+from cflibs.inversion.solve.bayesian import (  # noqa: E402
     BayesianForwardModel,
     AtomicDataArrays,
     NoiseParameters,
@@ -548,7 +548,7 @@ class TestPriorCreation:
     def test_temperature_prior_import(self):
         """Test temperature prior can be created (if NumPyro available)."""
         try:
-            from cflibs.inversion.bayesian import create_temperature_prior
+            from cflibs.inversion.solve.bayesian import create_temperature_prior
 
             prior = create_temperature_prior(0.5, 3.0, "uniform")
             assert prior is not None
@@ -558,7 +558,7 @@ class TestPriorCreation:
     def test_density_prior_import(self):
         """Test density prior can be created (if NumPyro available)."""
         try:
-            from cflibs.inversion.bayesian import create_density_prior
+            from cflibs.inversion.solve.bayesian import create_density_prior
 
             prior = create_density_prior(15.0, 19.0, "uniform")
             assert prior is not None
@@ -568,7 +568,7 @@ class TestPriorCreation:
     def test_concentration_prior_import(self):
         """Test concentration prior can be created (if NumPyro available)."""
         try:
-            from cflibs.inversion.bayesian import create_concentration_prior
+            from cflibs.inversion.solve.bayesian import create_concentration_prior
 
             prior = create_concentration_prior(n_elements=3, alpha=1.0)
             assert prior is not None
@@ -664,7 +664,7 @@ class TestMCMCSampling:
     def test_run_mcmc_smoke(self, bayesian_db):
         """Smoke test for MCMC sampling."""
         pytest.importorskip("numpyro")
-        from cflibs.inversion.bayesian import run_mcmc
+        from cflibs.inversion.solve.bayesian import run_mcmc
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -705,7 +705,7 @@ class TestMCMCSampling:
     def test_mcmc_result_correlation_matrix(self, bayesian_db):
         """Test correlation matrix computation from MCMCResult."""
         pytest.importorskip("numpyro")
-        from cflibs.inversion.bayesian import MCMCSampler
+        from cflibs.inversion.solve.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -747,7 +747,7 @@ class TestMCMCSampling:
     def test_mcmc_result_correlation_table(self, bayesian_db):
         """Test correlation table string formatting."""
         pytest.importorskip("numpyro")
-        from cflibs.inversion.bayesian import MCMCSampler
+        from cflibs.inversion.solve.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -775,7 +775,7 @@ class TestMCMCSampling:
     def test_mcmc_sampler_plot_corner(self, bayesian_db):
         """Test corner plot method (returns None if matplotlib unavailable)."""
         pytest.importorskip("numpyro")
-        from cflibs.inversion.bayesian import MCMCSampler
+        from cflibs.inversion.solve.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -805,7 +805,7 @@ class TestMCMCSampling:
     def test_mcmc_sampler_plot_forest(self, bayesian_db):
         """Test forest plot method."""
         pytest.importorskip("numpyro")
-        from cflibs.inversion.bayesian import MCMCSampler
+        from cflibs.inversion.solve.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -839,7 +839,7 @@ class TestNestedSampling:
 
     def test_nested_sampling_result_dataclass(self):
         """Test NestedSamplingResult dataclass creation and properties."""
-        from cflibs.inversion.bayesian import NestedSamplingResult
+        from cflibs.inversion.solve.bayesian import NestedSamplingResult
 
         # Create minimal result
         result = NestedSamplingResult(
@@ -875,7 +875,7 @@ class TestNestedSampling:
 
     def test_nested_sampling_result_summary_table(self):
         """Test summary table generation."""
-        from cflibs.inversion.bayesian import NestedSamplingResult
+        from cflibs.inversion.solve.bayesian import NestedSamplingResult
 
         result = NestedSamplingResult(
             samples={"T_eV": np.array([1.0]), "log_ne": np.array([17.0])},
@@ -904,7 +904,7 @@ class TestNestedSampling:
 
     def test_nested_sampling_result_model_comparison(self):
         """Test Bayes factor model comparison."""
-        from cflibs.inversion.bayesian import NestedSamplingResult
+        from cflibs.inversion.solve.bayesian import NestedSamplingResult
 
         # Create two mock results with different evidences
         result_a = NestedSamplingResult(
@@ -946,7 +946,7 @@ class TestNestedSampling:
     def test_nested_sampler_import(self):
         """Test NestedSampler can be imported."""
         pytest.importorskip("dynesty")
-        from cflibs.inversion.bayesian import NestedSampler, HAS_DYNESTY
+        from cflibs.inversion.solve.bayesian import NestedSampler, HAS_DYNESTY
 
         assert HAS_DYNESTY is True
         assert NestedSampler is not None
@@ -954,7 +954,7 @@ class TestNestedSampling:
     def test_nested_sampler_init(self, bayesian_db):
         """Test NestedSampler initialization."""
         pytest.importorskip("dynesty")
-        from cflibs.inversion.bayesian import NestedSampler
+        from cflibs.inversion.solve.bayesian import NestedSampler
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -972,7 +972,7 @@ class TestNestedSampling:
     def test_nested_sampler_prior_transform(self, bayesian_db):
         """Test prior transform from unit cube to physical space."""
         pytest.importorskip("dynesty")
-        from cflibs.inversion.bayesian import NestedSampler, PriorConfig
+        from cflibs.inversion.solve.bayesian import NestedSampler, PriorConfig
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -1006,7 +1006,7 @@ class TestNestedSampling:
     def test_nested_sampler_params_to_concentrations(self, bayesian_db):
         """Test parameter to concentration conversion."""
         pytest.importorskip("dynesty")
-        from cflibs.inversion.bayesian import NestedSampler
+        from cflibs.inversion.solve.bayesian import NestedSampler
 
         # Single element case
         model_single = BayesianForwardModel(
@@ -1039,7 +1039,7 @@ class TestNestedSampling:
     def test_nested_sampler_run_smoke(self, bayesian_db):
         """Smoke test for nested sampling run (minimal iterations)."""
         pytest.importorskip("dynesty")
-        from cflibs.inversion.bayesian import NestedSampler, NestedSamplingResult
+        from cflibs.inversion.solve.bayesian import NestedSampler, NestedSamplingResult
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -1094,7 +1094,7 @@ class TestPosteriorPredictiveCheck:
         pytest.importorskip("jax")
         pytest.importorskip("numpyro")
         import jax.numpy as jnp
-        from cflibs.inversion.bayesian import MCMCSampler
+        from cflibs.inversion.solve.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -1151,7 +1151,7 @@ class TestPosteriorPredictiveCheck:
         pytest.importorskip("jax")
         pytest.importorskip("numpyro")
         import jax.numpy as jnp
-        from cflibs.inversion.bayesian import MCMCSampler
+        from cflibs.inversion.solve.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -1189,7 +1189,7 @@ class TestPosteriorPredictiveCheck:
         pytest.importorskip("jax")
         pytest.importorskip("numpyro")
         import jax.numpy as jnp
-        from cflibs.inversion.bayesian import MCMCSampler
+        from cflibs.inversion.solve.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -1228,7 +1228,7 @@ class TestPosteriorPredictiveCheck:
         pytest.importorskip("jax")
         pytest.importorskip("numpyro")
         import jax.numpy as jnp
-        from cflibs.inversion.bayesian import MCMCSampler
+        from cflibs.inversion.solve.bayesian import MCMCSampler
 
         model = BayesianForwardModel(
             db_path=bayesian_db,
@@ -1265,7 +1265,7 @@ class TestMcWhirterPenalty:
 
     def test_penalty_zero_when_satisfied(self):
         """Penalty is zero when n_e is well above the threshold."""
-        from cflibs.inversion.bayesian import mcwhirter_log_penalty
+        from cflibs.inversion.solve.bayesian import mcwhirter_log_penalty
 
         # T=1 eV, log_ne=18 → well above threshold for ΔE=3 eV
         penalty = mcwhirter_log_penalty(T_eV=1.0, log_ne=18.0, max_delta_E_eV=3.0)
@@ -1273,7 +1273,7 @@ class TestMcWhirterPenalty:
 
     def test_penalty_negative_when_violated(self):
         """Penalty is negative when n_e is below the threshold."""
-        from cflibs.inversion.bayesian import mcwhirter_log_penalty
+        from cflibs.inversion.solve.bayesian import mcwhirter_log_penalty
 
         # T=1 eV, log_ne=14 → well below threshold
         penalty = mcwhirter_log_penalty(T_eV=1.0, log_ne=14.0, max_delta_E_eV=3.0)
@@ -1281,7 +1281,7 @@ class TestMcWhirterPenalty:
 
     def test_penalty_monotonically_decreases_with_deficit(self):
         """Larger density deficit → more negative penalty."""
-        from cflibs.inversion.bayesian import mcwhirter_log_penalty
+        from cflibs.inversion.solve.bayesian import mcwhirter_log_penalty
 
         p1 = mcwhirter_log_penalty(T_eV=1.0, log_ne=15.0)
         p2 = mcwhirter_log_penalty(T_eV=1.0, log_ne=14.0)
@@ -1290,7 +1290,7 @@ class TestMcWhirterPenalty:
 
     def test_penalty_smoothness_and_gradient(self):
         """Penalty is smooth and has finite JAX gradient."""
-        from cflibs.inversion.bayesian import mcwhirter_log_penalty
+        from cflibs.inversion.solve.bayesian import mcwhirter_log_penalty
 
         import jax
         import jax.numpy as jnp
@@ -1309,7 +1309,7 @@ class TestMcWhirterPenalty:
 
     def test_scale_parameter(self):
         """Scale parameter controls penalty magnitude."""
-        from cflibs.inversion.bayesian import mcwhirter_log_penalty
+        from cflibs.inversion.solve.bayesian import mcwhirter_log_penalty
 
         p_low = mcwhirter_log_penalty(T_eV=1.0, log_ne=14.0, scale=1.0)
         p_high = mcwhirter_log_penalty(T_eV=1.0, log_ne=14.0, scale=100.0)
@@ -1321,7 +1321,7 @@ class TestSharedUtilities:
 
     def test_load_atomic_data(self, bayesian_db):
         """Module-level load_atomic_data returns valid AtomicDataArrays."""
-        from cflibs.inversion.bayesian import load_atomic_data, AtomicDataArrays
+        from cflibs.inversion.solve.bayesian import load_atomic_data, AtomicDataArrays
 
         data = load_atomic_data(bayesian_db, ["Fe", "Cu"], (200.0, 600.0))
         assert isinstance(data, AtomicDataArrays)
@@ -1330,7 +1330,7 @@ class TestSharedUtilities:
 
     def test_load_atomic_data_has_new_fields(self, bayesian_db):
         """Loaded data includes ei_ev and f_osc fields."""
-        from cflibs.inversion.bayesian import load_atomic_data
+        from cflibs.inversion.solve.bayesian import load_atomic_data
 
         data = load_atomic_data(bayesian_db, ["Fe"], (200.0, 600.0))
         assert data.ei_ev is not None
@@ -1340,7 +1340,7 @@ class TestSharedUtilities:
 
     def test_partition_function_module_level(self):
         """Module-level partition_function matches static method."""
-        from cflibs.inversion.bayesian import partition_function
+        from cflibs.inversion.solve.bayesian import partition_function
 
         coeffs = jnp.array([3.22, 0.0, 0.0, 0.0, 0.0])
         result = partition_function(10000.0, coeffs)
@@ -1361,7 +1361,7 @@ class TestTwoZoneBayesianForwardModel:
 
     def test_init(self, bayesian_db):
         """Two-zone model initialises without error."""
-        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
 
         model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
         assert len(model.elements) == 2
@@ -1370,7 +1370,7 @@ class TestTwoZoneBayesianForwardModel:
 
     def test_forward_returns_valid_spectrum(self, bayesian_db):
         """Forward model returns a positive spectrum of correct shape."""
-        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
 
         model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
         conc = jnp.array([0.7, 0.3])
@@ -1388,7 +1388,7 @@ class TestTwoZoneBayesianForwardModel:
 
     def test_self_reversal_with_high_optical_depth(self, bayesian_db):
         """High optical depth should reduce peak intensity (self-reversal)."""
-        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
 
         model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=200)
         conc = jnp.array([0.7, 0.3])
@@ -1403,7 +1403,7 @@ class TestTwoZoneBayesianForwardModel:
 
     def test_reduces_to_single_zone_when_shell_transparent(self, bayesian_db):
         """With zero optical depth, shell is transparent → only core emission."""
-        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel, BayesianForwardModel
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel, BayesianForwardModel
 
         model_2z = TwoZoneBayesianForwardModel(
             bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100
@@ -1423,7 +1423,7 @@ class TestTwoZoneBayesianForwardModel:
 
     def test_two_zone_explicit_total_species_density_preserves_legacy_default(self, bayesian_db):
         """Explicitly passing n_e-equivalent heavy density should match legacy behavior."""
-        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
 
         model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
         conc = jnp.array([0.7, 0.3])
@@ -1444,7 +1444,7 @@ class TestTwoZoneBayesianForwardModel:
 
     def test_two_zone_allows_decoupled_total_species_density(self, bayesian_db):
         """Changing heavy-particle density at fixed n_e should change the two-zone spectrum."""
-        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
 
         model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100)
         conc = jnp.array([0.7, 0.3])
@@ -1474,7 +1474,7 @@ class TestTwoZoneBayesianForwardModel:
         """Forward model is JIT-compatible (no errors under JIT)."""
         import jax
 
-        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
 
         model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=50)
         conc = jnp.array([0.7, 0.3])
@@ -1490,7 +1490,7 @@ class TestTwoZoneBayesianForwardModel:
         """Gradients through the forward model are finite."""
         import jax
 
-        from cflibs.inversion.bayesian import TwoZoneBayesianForwardModel
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
 
         model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=50)
         conc = jnp.array([0.7, 0.3])
@@ -1507,7 +1507,7 @@ class TestTwoZonePriorConfig:
     """Tests for TwoZonePriorConfig dataclass."""
 
     def test_default_values(self):
-        from cflibs.inversion.bayesian import TwoZonePriorConfig
+        from cflibs.inversion.solve.bayesian import TwoZonePriorConfig
 
         cfg = TwoZonePriorConfig()
         assert cfg.T_core_eV_range == (0.8, 3.0)
@@ -1517,7 +1517,7 @@ class TestTwoZonePriorConfig:
         assert cfg.mcwhirter_penalty_scale == 10.0
 
     def test_custom_values(self):
-        from cflibs.inversion.bayesian import TwoZonePriorConfig
+        from cflibs.inversion.solve.bayesian import TwoZonePriorConfig
 
         cfg = TwoZonePriorConfig(
             T_core_eV_range=(1.0, 2.5),
@@ -1533,7 +1533,7 @@ class TestTwoZoneMCMCResult:
     """Tests for TwoZoneMCMCResult dataclass."""
 
     def test_creation(self):
-        from cflibs.inversion.bayesian import TwoZoneMCMCResult
+        from cflibs.inversion.solve.bayesian import TwoZoneMCMCResult
 
         result = TwoZoneMCMCResult(
             samples={},
@@ -1561,7 +1561,7 @@ class TestTwoZoneMCMCResult:
         assert abs(result.n_e_mean - 1e17) < 1e16
 
     def test_summary_table(self):
-        from cflibs.inversion.bayesian import TwoZoneMCMCResult
+        from cflibs.inversion.solve.bayesian import TwoZoneMCMCResult
 
         result = TwoZoneMCMCResult(
             samples={},
@@ -1597,7 +1597,7 @@ class TestTwoZoneMCMCSampler:
     @pytest.mark.slow
     def test_smoke_run(self, bayesian_db):
         """Two-zone MCMC runs without error on synthetic data."""
-        from cflibs.inversion.bayesian import (
+        from cflibs.inversion.solve.bayesian import (
             TwoZoneBayesianForwardModel,
             TwoZoneMCMCSampler,
             TwoZonePriorConfig,

@@ -5,8 +5,8 @@ Tests for CorrelationIdentifier.
 import pytest
 import numpy as np
 
-from cflibs.inversion.correlation_identifier import CorrelationIdentifier
-from cflibs.inversion.element_id import ElementIdentificationResult
+from cflibs.inversion.identify.correlation import CorrelationIdentifier
+from cflibs.inversion.common.element_id import ElementIdentificationResult
 
 pytestmark = pytest.mark.requires_db
 

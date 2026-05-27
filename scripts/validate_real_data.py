@@ -36,10 +36,10 @@ import xarray as xr
 import h5py
 
 from cflibs.atomic.database import AtomicDatabase
-from cflibs.inversion.alias_identifier import ALIASIdentifier
-from cflibs.inversion.comb_identifier import CombIdentifier
-from cflibs.inversion.correlation_identifier import CorrelationIdentifier
-from cflibs.inversion.element_id import ElementIdentificationResult
+from cflibs.inversion.identify.alias import ALIASIdentifier
+from cflibs.inversion.identify.comb import CombIdentifier
+from cflibs.inversion.identify.correlation import CorrelationIdentifier
+from cflibs.inversion.common.element_id import ElementIdentificationResult
 from cflibs.inversion.wavelength_calibration import calibrate_wavelength_axis
 
 

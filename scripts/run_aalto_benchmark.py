@@ -295,7 +295,7 @@ def _get_nnls_identifier(db: AtomicDatabase, cache: dict):
         except ImportError:
             idx = None
 
-        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+        from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
 
         cache["nnls_identifier"] = SpectralNNLSIdentifier(
             basis_library=lib,
@@ -326,7 +326,7 @@ def run_element_identification(
 
     try:
         if method == "alias":
-            from cflibs.inversion.alias_identifier import ALIASIdentifier
+            from cflibs.inversion.identify.alias import ALIASIdentifier
 
             identifier = ALIASIdentifier(db)
             result = identifier.identify(wavelength, intensity)
@@ -334,7 +334,7 @@ def run_element_identification(
                 return {d.element for d in result.detected_elements}
 
         elif method == "comb":
-            from cflibs.inversion.comb_identifier import CombIdentifier
+            from cflibs.inversion.identify.comb import CombIdentifier
 
             identifier = CombIdentifier(db)
             result = identifier.identify(wavelength, intensity)
@@ -342,7 +342,7 @@ def run_element_identification(
                 return {d.element for d in result.detected_elements}
 
         elif method == "correlation":
-            from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+            from cflibs.inversion.identify.correlation import CorrelationIdentifier
 
             identifier = CorrelationIdentifier(db)
             result = identifier.identify(wavelength, intensity)
@@ -373,17 +373,17 @@ def run_element_identification_full(
     """
     try:
         if method == "alias":
-            from cflibs.inversion.alias_identifier import ALIASIdentifier
+            from cflibs.inversion.identify.alias import ALIASIdentifier
 
             identifier = ALIASIdentifier(db)
             result = identifier.identify(wavelength, intensity)
         elif method == "comb":
-            from cflibs.inversion.comb_identifier import CombIdentifier
+            from cflibs.inversion.identify.comb import CombIdentifier
 
             identifier = CombIdentifier(db)
             result = identifier.identify(wavelength, intensity)
         elif method == "correlation":
-            from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+            from cflibs.inversion.identify.correlation import CorrelationIdentifier
 
             identifier = CorrelationIdentifier(db)
             result = identifier.identify(wavelength, intensity)

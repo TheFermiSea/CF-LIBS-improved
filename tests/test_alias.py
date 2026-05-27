@@ -4,8 +4,8 @@ Tests for ALIAS element identification algorithm.
 
 import pytest
 import numpy as np
-from cflibs.inversion.alias_identifier import ALIASIdentifier
-from cflibs.inversion.element_id import ElementIdentificationResult
+from cflibs.inversion.identify.alias import ALIASIdentifier
+from cflibs.inversion.common.element_id import ElementIdentificationResult
 
 pytestmark = pytest.mark.requires_db
 
@@ -1522,7 +1522,7 @@ def test_p_mix_with_dominant_element(atomic_db):
 def test_ratio_consistency(atomic_db):
     """R_rat should be high for consistent ratios, low for random ratios."""
     from cflibs.atomic.structures import Transition
-    from cflibs.inversion.alias_identifier import ALIASIdentifier
+    from cflibs.inversion.identify.alias import ALIASIdentifier
 
     # CF-LIBS-improved-self-abs-audit: _compute_ratio_consistency was
     # promoted from @staticmethod to instance method so it can read the

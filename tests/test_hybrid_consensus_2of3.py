@@ -26,7 +26,7 @@ from typing import List
 
 import pytest
 
-from cflibs.inversion.element_id import (
+from cflibs.inversion.common.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
 )

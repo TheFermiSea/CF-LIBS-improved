@@ -631,7 +631,7 @@ def generate_distributed_mcmc_script(
             "# Run distributed MCMC",
             f'mpirun -n {ntasks} python -c "',
             "import numpy as np",
-            "from cflibs.inversion.bayesian import BayesianForwardModel, bayesian_model",
+            "from cflibs.inversion.solve.bayesian import BayesianForwardModel, bayesian_model",
             "from cflibs.hpc.distributed_mcmc import DistributedMCMCSampler, DistributedMCMCConfig",
             "",
             f"model = BayesianForwardModel({db_path_repr}, {elements!r}, ({wl_min}, {wl_max}))",

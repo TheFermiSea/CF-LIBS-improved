@@ -29,7 +29,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
-from cflibs.inversion.alias_identifier import ALIASIdentifier  # noqa: E402
+from cflibs.inversion.identify.alias import ALIASIdentifier  # noqa: E402
 
 from scripts.validate_real_data import (  # noqa: E402
     DATASETS,

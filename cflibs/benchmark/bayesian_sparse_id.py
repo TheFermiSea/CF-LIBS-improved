@@ -105,17 +105,17 @@ def build_bayesian_sparse_predictor(
     """
 
     def predictor(spectrum) -> Any:
-        from cflibs.inversion.bayesian import (
+        from cflibs.inversion.solve.bayesian import (
             BayesianForwardModel,
             MCMCSampler,
             PriorConfig,
         )
         from cflibs.inversion.candidate_prefilter import select_candidate_elements
-        from cflibs.inversion.element_id import (
+        from cflibs.inversion.common.element_id import (
             ElementIdentification,
             ElementIdentificationResult,
         )
-        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+        from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
 
         t_start = time.perf_counter()
 
@@ -319,7 +319,7 @@ def _empty_result(
     error_msg: str,
 ) -> Any:
     """Return an all-rejected result when the Bayesian pipeline fails."""
-    from cflibs.inversion.element_id import (
+    from cflibs.inversion.common.element_id import (
         ElementIdentification,
         ElementIdentificationResult,
     )

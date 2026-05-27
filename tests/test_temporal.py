@@ -27,7 +27,7 @@ from cflibs.inversion.temporal import (
     create_default_evolution_model,
     recommend_gate_timing,
 )
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 # =============================================================================
 # Fixtures
@@ -903,7 +903,7 @@ class TestJointMultiGateFit:
     ):
         """Build a list of LineObservation matching the joint-fit forward model."""
         from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3
-        from cflibs.inversion.boltzmann import LineObservation
+        from cflibs.inversion.physics.boltzmann import LineObservation
 
         rng = np.random.default_rng(seed)
         T_eV = T_K / EV_TO_K

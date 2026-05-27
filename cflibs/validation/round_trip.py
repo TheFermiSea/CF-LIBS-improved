@@ -18,7 +18,7 @@ import numpy as np
 
 from cflibs.core.constants import KB, KB_EV, EV_TO_K, SAHA_CONST_CM3
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 logger = get_logger("validation.round_trip")
 
@@ -747,7 +747,7 @@ class RoundTripValidator:
             golden = self.noise_model.apply(golden)
 
         # Run inversion
-        from cflibs.inversion.solver import IterativeCFLIBSSolver
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
 
         solver = IterativeCFLIBSSolver(self.atomic_db, **solver_kwargs)
 

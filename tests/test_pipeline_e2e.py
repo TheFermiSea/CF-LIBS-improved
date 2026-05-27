@@ -12,10 +12,10 @@ import pytest
 
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.instrument.model import InstrumentModel
-from cflibs.inversion.alias_identifier import ALIASIdentifier
-from cflibs.inversion.element_id import to_line_observations
+from cflibs.inversion.identify.alias import ALIASIdentifier
+from cflibs.inversion.common.element_id import to_line_observations
 from cflibs.inversion.line_detection import detect_line_observations
-from cflibs.inversion.solver import IterativeCFLIBSSolver
+from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
 from cflibs.plasma.state import SingleZoneLTEPlasma, mass_fractions_to_number_fractions
 from cflibs.radiation.spectrum_model import SpectrumModel
 

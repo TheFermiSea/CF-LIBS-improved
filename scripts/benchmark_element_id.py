@@ -55,8 +55,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
-from cflibs.inversion.alias_identifier import ALIASIdentifier  # noqa: E402
-from cflibs.inversion.element_id import ElementIdentificationResult  # noqa: E402
+from cflibs.inversion.identify.alias import ALIASIdentifier  # noqa: E402
+from cflibs.inversion.common.element_id import ElementIdentificationResult  # noqa: E402
 
 # Reuse Aalto benchmark infrastructure from calibrate_alias
 from scripts.calibrate_alias import (  # noqa: E402
@@ -278,7 +278,7 @@ def make_nnls_configs(
         return []
 
     from cflibs.manifold.basis_library import BasisLibrary
-    from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+    from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
 
     basis = BasisLibrary(str(basis_lib_path))
     configs = []
@@ -321,7 +321,7 @@ def make_hybrid_configs(
         return []
 
     from cflibs.manifold.basis_library import BasisLibrary
-    from cflibs.inversion.hybrid_identifier import HybridIdentifier
+    from cflibs.inversion.identify.hybrid import HybridIdentifier
 
     basis = BasisLibrary(str(basis_lib_path))
     configs = []
@@ -362,7 +362,7 @@ def make_voigt_alias_configs(
 ) -> List[Tuple[str, Dict, Callable]]:
     """Generate Voigt deconvolution + ALIAS pathway configurations."""
     from cflibs.inversion.deconvolution import deconvolve_peaks
-    from cflibs.inversion.preprocessing import estimate_baseline
+    from cflibs.inversion.preprocess.preprocessing import estimate_baseline
     from scipy.signal import find_peaks
 
     configs = []
@@ -454,7 +454,7 @@ def make_nnls_concentration_configs(
         return []
 
     from cflibs.manifold.basis_library import BasisLibrary
-    from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+    from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
 
     basis = BasisLibrary(str(basis_lib_path))
     configs = []

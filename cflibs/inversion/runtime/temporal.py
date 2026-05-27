@@ -55,7 +55,7 @@ import numpy as np
 
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 __all__ = [
     "GateOptimizationResult",
@@ -1286,7 +1286,7 @@ class TimeResolvedCFLIBSSolver:
         self.base_solver = base_solver
 
         # Import here to avoid circular imports
-        from cflibs.inversion.solver import IterativeCFLIBSSolver
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
 
         if self.base_solver is None:
             self.base_solver = IterativeCFLIBSSolver(atomic_db)

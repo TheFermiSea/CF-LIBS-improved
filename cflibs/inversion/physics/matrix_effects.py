@@ -37,7 +37,7 @@ import json
 from pathlib import Path
 
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.solver import CFLIBSResult
+from cflibs.inversion.solve.iterative import CFLIBSResult
 
 logger = get_logger("inversion.matrix_effects")
 

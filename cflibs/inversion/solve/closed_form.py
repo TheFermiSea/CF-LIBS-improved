@@ -25,9 +25,9 @@ from collections import defaultdict
 
 from cflibs.core.constants import KB, KB_EV, SAHA_CONST_CM3, STP_PRESSURE, EV_TO_K
 from cflibs.atomic.database import AtomicDatabase
-from cflibs.inversion.boltzmann import LineObservation
-from cflibs.inversion.closure import _helmert_basis, ilr_inverse
-from cflibs.inversion.solver import CFLIBSResult
+from cflibs.inversion.physics.boltzmann import LineObservation
+from cflibs.inversion.physics.closure import _helmert_basis, ilr_inverse
+from cflibs.inversion.solve.iterative import CFLIBSResult
 from cflibs.plasma.partition import PartitionFunctionEvaluator
 from cflibs.core.logging_config import get_logger
 

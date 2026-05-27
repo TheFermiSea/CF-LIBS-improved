@@ -9,7 +9,7 @@ import numpy as np
 from pathlib import Path
 
 from cflibs.atomic.database import AtomicDatabase
-from cflibs.inversion.alias_identifier import ALIASIdentifier
+from cflibs.inversion.identify.alias import ALIASIdentifier
 
 # Import loaders from validate script
 sys.path.insert(0, str(Path(__file__).parent))
