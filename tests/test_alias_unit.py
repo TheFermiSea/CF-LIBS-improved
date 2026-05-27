@@ -34,9 +34,26 @@ def _transition(wavelength_nm: float, energy_ev: float) -> Transition:
     )
 
 
-def _identified_line(
-    element: str, ion_stage: int, intensity: float
-) -> IdentifiedLine:
+def _transition_with_e_i(wavelength_nm: float, energy_ev: float, e_i_ev: float) -> Transition:
+    """Build a transition with an explicit lower-level energy ``E_i``.
+
+    Used by the resonance-filter tests to mark lines as either
+    "resonance" (``E_i ~ 0``) or "non-resonance" (``E_i`` above the
+    cutoff used by :meth:`ALIASIdentifier._apply_resonance_filter`).
+    """
+    return Transition(
+        element="Fe",
+        ionization_stage=1,
+        wavelength_nm=wavelength_nm,
+        A_ki=1.0,
+        E_k_ev=energy_ev,
+        E_i_ev=e_i_ev,
+        g_k=1,
+        g_i=1,
+    )
+
+
+def _identified_line(element: str, ion_stage: int, intensity: float) -> IdentifiedLine:
     """Minimal ``IdentifiedLine`` sufficient for the relative-CL gate.
 
     The gate inspects ``intensity_exp`` and ``ionization_stage`` only; the
@@ -80,9 +97,7 @@ def _element_id(
         confidence=confidence,
         n_matched_lines=1,
         n_total_lines=1,
-        matched_lines=[
-            _identified_line(element, dominant_ion_stage, intensity=1.0)
-        ],
+        matched_lines=[_identified_line(element, dominant_ion_stage, intensity=1.0)],
         unmatched_lines=[],
         metadata={},
     )
@@ -140,6 +155,124 @@ def test_boltzmann_consistency_uses_canonical_line_observation():
 
     assert np.isfinite(factor)
     assert np.isfinite(r_squared)
+
+
+# ---------------------------------------------------------------------------
+# Resonance-filter seam (arch candidate 5)
+# ---------------------------------------------------------------------------
+# These tests exercise ``_apply_resonance_filter`` directly so the
+# decision logic can be verified without going through the full
+# ``identify()`` pipeline. The four covered branches are:
+#
+#   1. NNLS does not support the candidate -> filter OFF.
+#   2. ``self_absorption_aware`` is disabled -> filter OFF.
+#   3. NNLS supports + enough non-resonance lines -> filter ON.
+#   4. NNLS supports but ALL matched lines are resonance lines
+#      (the n3rf.4 Al-I case) -> filter OFF (do not strand element).
+
+
+def _resonance_filter_inputs(transitions):
+    """Build the matched_indices/peak_idx/intensity/peaks tuple used by
+    :meth:`ALIASIdentifier._apply_resonance_filter` from a list of
+    transitions. One peak per line, all with positive intensity."""
+    fused_lines = [{"transition": t} for t in transitions]
+    n = len(transitions)
+    matched_indices = np.arange(n)
+    matched_peak_idx = np.arange(n)
+    intensity = np.full(n, 10.0)
+    peaks = [(idx, float(t.wavelength_nm)) for idx, t in enumerate(transitions)]
+    return fused_lines, matched_indices, matched_peak_idx, intensity, peaks
+
+
+def test_apply_resonance_filter_returns_false_when_nnls_not_significant():
+    """Without independent NNLS evidence the filter must stay off."""
+    identifier = ALIASIdentifier(_DummyAtomicDB())
+    transitions = [
+        _transition_with_e_i(500.0, 1.0, e_i_ev=2.0),
+        _transition_with_e_i(501.0, 2.5, e_i_ev=2.0),
+        _transition_with_e_i(502.0, 4.0, e_i_ev=2.0),
+    ]
+    fused_lines, mi, mpi, intensity, peaks = _resonance_filter_inputs(transitions)
+    candidate = {"nnls_significant": False}
+
+    assert (
+        identifier._apply_resonance_filter(fused_lines, candidate, mi, mpi, intensity, peaks)
+        is False
+    )
+
+
+def test_apply_resonance_filter_returns_false_when_self_absorption_aware_disabled():
+    """Operator-disabled self-absorption awareness must short-circuit the seam."""
+    identifier = ALIASIdentifier(_DummyAtomicDB())
+    identifier.self_absorption_aware = False
+    transitions = [
+        _transition_with_e_i(500.0, 1.0, e_i_ev=2.0),
+        _transition_with_e_i(501.0, 2.5, e_i_ev=2.0),
+        _transition_with_e_i(502.0, 4.0, e_i_ev=2.0),
+    ]
+    fused_lines, mi, mpi, intensity, peaks = _resonance_filter_inputs(transitions)
+    candidate = {"nnls_significant": True}
+
+    assert (
+        identifier._apply_resonance_filter(fused_lines, candidate, mi, mpi, intensity, peaks)
+        is False
+    )
+
+
+def test_apply_resonance_filter_returns_true_when_enough_non_resonance_lines():
+    """NNLS-significant + enough non-resonance survivors -> apply the filter."""
+    identifier = ALIASIdentifier(_DummyAtomicDB())
+    # Mix: one resonance line (E_i=0) and three non-resonance lines (E_i=2 eV).
+    transitions = [
+        _transition_with_e_i(500.0, 1.0, e_i_ev=0.0),  # resonance — gets dropped
+        _transition_with_e_i(501.0, 2.5, e_i_ev=2.0),
+        _transition_with_e_i(502.0, 4.0, e_i_ev=2.0),
+        _transition_with_e_i(503.0, 5.5, e_i_ev=2.0),
+    ]
+    fused_lines, mi, mpi, intensity, peaks = _resonance_filter_inputs(transitions)
+    candidate = {"nnls_significant": True}
+
+    assert (
+        identifier._apply_resonance_filter(fused_lines, candidate, mi, mpi, intensity, peaks)
+        is True
+    )
+
+
+def test_apply_resonance_filter_preserves_all_resonance_element_n3rf4_guard():
+    """n3rf.4 guard: an all-resonance element (like Al I) must NOT be stranded.
+
+    Al I 396.15 + Al I 308.21 are both resonance lines (``E_i ~ 0``).
+    Filtering them would drop Al below the three-line Boltzmann minimum
+    and the R^2 gate would then reject it — which is what regressed Al
+    recall 0.500 -> 0.000 in Phase 5 (commit 4794d04). The pre-scan
+    must detect this and disable the filter for the candidate.
+    """
+    identifier = ALIASIdentifier(_DummyAtomicDB())
+    transitions = [
+        _transition_with_e_i(396.15, 3.14, e_i_ev=0.0),
+        _transition_with_e_i(308.21, 4.02, e_i_ev=0.0),
+        _transition_with_e_i(309.27, 4.02, e_i_ev=0.0),
+    ]
+    fused_lines, mi, mpi, intensity, peaks = _resonance_filter_inputs(transitions)
+    candidate = {"nnls_significant": True}
+
+    assert (
+        identifier._apply_resonance_filter(fused_lines, candidate, mi, mpi, intensity, peaks)
+        is False
+    )
+
+
+def test_apply_resonance_filter_handles_missing_candidate():
+    """A ``None`` candidate must be treated as "no NNLS evidence" -> filter off."""
+    identifier = ALIASIdentifier(_DummyAtomicDB())
+    transitions = [
+        _transition_with_e_i(500.0, 1.0, e_i_ev=2.0),
+        _transition_with_e_i(501.0, 2.5, e_i_ev=2.0),
+        _transition_with_e_i(502.0, 4.0, e_i_ev=2.0),
+    ]
+    fused_lines, mi, mpi, intensity, peaks = _resonance_filter_inputs(transitions)
+
+    assert identifier._apply_resonance_filter(fused_lines, None, mi, mpi, intensity, peaks) is False
 
 
 # ---------------------------------------------------------------------------
@@ -228,9 +361,9 @@ def test_per_ion_stage_default_off_byte_identical():
     ALIASIdentifier(_DummyAtomicDB())._apply_relative_cl_gate(default_ids)
 
     explicit_off_ids = copy.deepcopy(fixture)
-    ALIASIdentifier(
-        _DummyAtomicDB(), relative_cl_per_ion_stage=False
-    )._apply_relative_cl_gate(explicit_off_ids)
+    ALIASIdentifier(_DummyAtomicDB(), relative_cl_per_ion_stage=False)._apply_relative_cl_gate(
+        explicit_off_ids
+    )
 
     assert _detected_elements(default_ids) == _detected_elements(explicit_off_ids)
 
@@ -343,6 +476,8 @@ def test_per_ion_stage_handles_only_neutrals_no_crash():
     # With max_neutral=0.9 and threshold=0.1 → cutoff=0.09:
     # A and B survive, C (0.02) dies. No crash from an empty ionized subset.
     assert detected == {"A", "B"}
+
+
 # Opt-in robust/weighted temperature estimator (CF-LIBS-improved-762f)
 # ---------------------------------------------------------------------------
 # Background: the docs/research/vrabel-universal-miss-root-cause-2026-05-14
@@ -611,6 +746,7 @@ def test_temperature_estimator_weighted_drops_bottom_quartile(monkeypatch):
         f"weighted mode passed {n_weighted} lines to linregress but legacy "
         f"passed {n_legacy}; weighted mode must drop the bottom quartile."
     )
+
 
 # Opt-in adaptive Boltzmann R^2 gate (CF-LIBS-improved-ftp1)
 # ---------------------------------------------------------------------------
