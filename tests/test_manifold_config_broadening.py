@@ -242,11 +242,13 @@ class TestGeneratorDispatch:
         # tests because ``batch_spectrum`` is a fresh closure each call.
         calls = {"ldm": 0, "voigt": 0}
 
-        def fake_ldm_time_int(wl_grid, p, ad, sigma_grid, gate_width_s, time_steps):
+        # Signatures updated for D3 fix: time-integrated paths now accept
+        # ``sigma_inst`` so ``ManifoldConfig.instrument_fwhm_nm`` is honored.
+        def fake_ldm_time_int(wl_grid, p, ad, sigma_grid, gate_width_s, time_steps, sigma_inst):
             calls["ldm"] += 1
             return jnp.zeros_like(wl_grid)
 
-        def fake_voigt_time_int(wl_grid, p, ad, gate_width_s, time_steps):
+        def fake_voigt_time_int(wl_grid, p, ad, gate_width_s, time_steps, sigma_inst):
             calls["voigt"] += 1
             return jnp.zeros_like(wl_grid)
 
@@ -327,11 +329,13 @@ class TestGeneratorDispatch:
 
         calls = {"ldm": 0, "voigt": 0}
 
-        def fake_ldm_time_int(wl_grid, p, ad, sigma_grid, gate_width_s, time_steps):
+        # Signatures updated for D3 fix: time-integrated paths now accept
+        # ``sigma_inst`` so ``ManifoldConfig.instrument_fwhm_nm`` is honored.
+        def fake_ldm_time_int(wl_grid, p, ad, sigma_grid, gate_width_s, time_steps, sigma_inst):
             calls["ldm"] += 1
             return jnp.zeros_like(wl_grid)
 
-        def fake_voigt_time_int(wl_grid, p, ad, gate_width_s, time_steps):
+        def fake_voigt_time_int(wl_grid, p, ad, gate_width_s, time_steps, sigma_inst):
             calls["voigt"] += 1
             return jnp.zeros_like(wl_grid)
 

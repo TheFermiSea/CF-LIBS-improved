@@ -383,7 +383,7 @@ class ManifoldGenerator:
             partition_g0,
         )
 
-    def _build_ldm_sigma_grid(self) -> np.ndarray:
+    def _build_ldm_sigma_grid(self, sigma_inst: float) -> np.ndarray:
         """Build the LDM σ-layer grid that brackets the manifold sweep.
 
         The Line Distribution Method projects each line onto a fixed log-σ
@@ -393,6 +393,13 @@ class ManifoldGenerator:
         hottest plasma + lightest line (largest σ_doppler) — then convolve
         with the instrument floor and let :func:`build_sigma_grid` apply its
         standard ``[0.5×, 2×]`` bracket factors on top.
+
+        Parameters
+        ----------
+        sigma_inst : float
+            Instrument Gaussian σ in nm. Threaded in from
+            ``ManifoldConfig.instrument_fwhm_nm`` by ``generate_manifold``
+            (D3 fix; previously hardcoded 0.05/2.355).
 
         Returns
         -------
@@ -424,9 +431,10 @@ class ManifoldGenerator:
         sigma_dop_min = _doppler_sigma_nm(wl_lo, m_hi, T_lo)
         sigma_dop_max = _doppler_sigma_nm(wl_hi, m_lo, T_hi)
 
-        # Instrument floor adds in quadrature (FWHM 0.05 nm, fixed in the
-        # JAX kernel). Match the floor used in ``_compute_spectrum_snapshot``.
-        sigma_inst = 0.05 / 2.355
+        # Instrument floor adds in quadrature. ``sigma_inst`` is threaded
+        # in from ``ManifoldConfig.instrument_fwhm_nm`` via
+        # ``generate_manifold`` (D3 fix; matches the floor used in
+        # ``_compute_spectrum_snapshot`` / ``_compute_spectrum_snapshot_ldm``).
         sigma_min_total = float(np.sqrt(sigma_dop_min**2 + sigma_inst**2))
         sigma_max_total = float(np.sqrt(sigma_dop_max**2 + sigma_inst**2))
 
@@ -560,6 +568,7 @@ class ManifoldGenerator:
         n_e: float,
         concentrations: jnp.ndarray,
         atomic_data: Tuple,
+        sigma_inst: float,
     ) -> jnp.ndarray:
         """
 
@@ -638,10 +647,10 @@ class ManifoldGenerator:
         mass_kg = l_mass_amu * M_PROTON
         sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
 
-        # Instrument broadening (Gaussian sigma)
-        # Uses default 0.05 nm FWHM; configurable via ManifoldConfig.instrument_fwhm_nm
-        sigma_inst = 0.05 / 2.355  # FWHM -> sigma
-
+        # Instrument broadening (Gaussian sigma). Threaded in from
+        # ``ManifoldConfig.instrument_fwhm_nm`` via ``generate_manifold``
+        # (D3 fix; previously hardcoded 0.05/2.355 silently dropped the
+        # configured value).
         # Total Gaussian width
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
@@ -743,6 +752,7 @@ class ManifoldGenerator:
         concentrations: jnp.ndarray,
         atomic_data: Tuple,
         sigma_grid: jnp.ndarray,
+        sigma_inst: float,
     ) -> jnp.ndarray:
         """Compute a single-snapshot spectrum via the LDM Gaussian path.
 
@@ -803,10 +813,11 @@ class ManifoldGenerator:
         # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
         epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
 
-        # Doppler sigma + instrument floor (FWHM 0.05 nm; matches legacy path)
+        # Doppler sigma + instrument floor. ``sigma_inst`` is threaded in
+        # from ``ManifoldConfig.instrument_fwhm_nm`` (D3 fix; previously the
+        # FWHM 0.05 nm was hardcoded and silently dropped configured values).
         mass_kg = l_mass_amu * M_PROTON
         sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
-        sigma_inst = 0.05 / 2.355
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
         return ldm_broaden(
@@ -826,6 +837,7 @@ class ManifoldGenerator:
         sigma_grid: jnp.ndarray,
         gate_width_s: float,
         time_steps: int,
+        sigma_inst: float,
     ) -> jnp.ndarray:
         """Time-integrated spectrum via the LDM Gaussian broadening path.
 
@@ -851,7 +863,7 @@ class ManifoldGenerator:
             intensity = jnp.where(
                 T > 0.4,
                 ManifoldGenerator._compute_spectrum_snapshot_ldm(
-                    wl_grid, T, ne, concs, atomic_data, sigma_grid
+                    wl_grid, T, ne, concs, atomic_data, sigma_grid, sigma_inst
                 ),
                 jnp.zeros_like(wl_grid),
             )
@@ -870,6 +882,7 @@ class ManifoldGenerator:
         atomic_data: Tuple,
         gate_width_s: float,
         time_steps: int,
+        sigma_inst: float,
     ) -> jnp.ndarray:
         """
         Compute time-integrated spectrum for cooling plasma.
@@ -910,7 +923,9 @@ class ManifoldGenerator:
             T, ne = inputs
             intensity = jnp.where(
                 T > 0.4,  # Only if T > 0.4 eV
-                ManifoldGenerator._compute_spectrum_snapshot(wl_grid, T, ne, concs, atomic_data),
+                ManifoldGenerator._compute_spectrum_snapshot(
+                    wl_grid, T, ne, concs, atomic_data, sigma_inst
+                ),
                 jnp.zeros_like(wl_grid),
             )
             return carry + intensity * dt, None
@@ -997,13 +1012,31 @@ class ManifoldGenerator:
         # endpoints; LDM clips out-of-grid lines to the boundary layers.
         broadening_mode = self.config.broadening_mode
 
+        # Instrument Gaussian σ from configured FWHM (D3 fix). Use the exact
+        # 2*sqrt(2 ln 2) factor instead of the legacy 2.355 approximation.
+        # Fall back to the historical 0.05 nm FWHM with a one-time WARN if
+        # the field is None or non-positive, so the silent-drop bug stays
+        # visible to anyone running with malformed configs.
+        fwhm_nm = self.config.instrument_fwhm_nm
+        if fwhm_nm is None or not (fwhm_nm > 0):
+            logger.warning(
+                "ManifoldConfig.instrument_fwhm_nm is missing or non-positive "
+                "(got %r); falling back to 0.05 nm FWHM. This used to be the "
+                "silent hardcoded default — set instrument_fwhm_nm explicitly "
+                "to silence this warning.",
+                fwhm_nm,
+            )
+            fwhm_nm = 0.05
+        sigma_inst = float(fwhm_nm / (2.0 * np.sqrt(2.0 * np.log(2.0))))
+
         if broadening_mode is BroadeningMode.LDM_GAUSSIAN:
-            sigma_grid_arr = self._build_ldm_sigma_grid()
+            sigma_grid_arr = self._build_ldm_sigma_grid(sigma_inst)
             sigma_grid_device = jax.device_put(sigma_grid_arr)
             logger.info(
                 "Manifold broadening: LDM_GAUSSIAN "
                 f"(N_sigma={sigma_grid_arr.shape[0]}, "
-                f"sigma=[{sigma_grid_arr.min():.4g}, {sigma_grid_arr.max():.4g}] nm)"
+                f"sigma=[{sigma_grid_arr.min():.4g}, {sigma_grid_arr.max():.4g}] nm, "
+                f"instrument_fwhm={fwhm_nm:.4g} nm)"
             )
 
             @jit
@@ -1016,18 +1049,27 @@ class ManifoldGenerator:
                         sigma_grid_device,
                         self.config.gate_width_s,
                         self.config.time_steps,
+                        sigma_inst,
                     ),
                     in_axes=0,
                 )(batch_params)
 
         else:
-            logger.info(f"Manifold broadening: {broadening_mode.value} (per-line Voigt with Stark)")
+            logger.info(
+                f"Manifold broadening: {broadening_mode.value} "
+                f"(per-line Voigt with Stark, instrument_fwhm={fwhm_nm:.4g} nm)"
+            )
 
             @jit
             def batch_spectrum(batch_params):
                 return vmap(
                     lambda p: ManifoldGenerator._time_integrated_spectrum(
-                        wl_grid, p, atomic_data, self.config.gate_width_s, self.config.time_steps
+                        wl_grid,
+                        p,
+                        atomic_data,
+                        self.config.gate_width_s,
+                        self.config.time_steps,
+                        sigma_inst,
                     ),
                     in_axes=0,
                 )(batch_params)

@@ -152,6 +152,34 @@ class ManifoldLoader:
             f"{len(self.wavelength)} wavelength points"
         )
 
+        # Nyquist-sampling sanity check (Wave 1 D1 fix). Warn (don't error) if
+        # the loaded manifold was generated below the ≥3 px/FWHM threshold the
+        # current ManifoldConfig.validate() enforces — consumers need to
+        # regenerate such manifolds to avoid line-shape and pixel-integrated
+        # flux bias (Robertson 2017; Magnier 2025; Demidov 2022).
+        instrument_fwhm = attrs.get("instrument_fwhm_nm", None)
+        try:
+            instrument_fwhm = float(instrument_fwhm) if instrument_fwhm is not None else None
+        except (TypeError, ValueError):
+            instrument_fwhm = None
+        if instrument_fwhm is not None and instrument_fwhm > 0 and len(self.wavelength) >= 2:
+            wl_arr = np.asarray(self.wavelength, dtype=np.float64)
+            delta_lambda = float((wl_arr[-1] - wl_arr[0]) / (len(wl_arr) - 1))
+            if delta_lambda > 0:
+                px_per_fwhm = instrument_fwhm / delta_lambda
+                if px_per_fwhm < 3.0:
+                    logger.warning(
+                        "Loaded manifold is sub-Nyquist: %.2f px/FWHM "
+                        "(Δλ=%.4g nm/pixel, instrument_fwhm_nm=%.4g nm). "
+                        "Required minimum is 3 px/FWHM (Robertson 2017; "
+                        "van den Bekerom & Pannier 2021). Regenerate this "
+                        "manifold with more pixels before relying on its "
+                        "line shapes or pixel-integrated fluxes.",
+                        px_per_fwhm,
+                        delta_lambda,
+                        instrument_fwhm,
+                    )
+
     def _default_chunk_size(self) -> int:
         chunks = getattr(self.spectra, "chunks", None)
         if chunks and len(chunks) > 0 and chunks[0]:
