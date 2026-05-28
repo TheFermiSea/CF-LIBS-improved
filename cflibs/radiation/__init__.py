@@ -28,11 +28,6 @@ from cflibs.radiation.spectrum_model import (
     planck_radiance,
     planck_radiance_jax,
 )
-from cflibs.radiation.batch import (
-    compute_spectrum_batch,
-    compute_spectrum_grid,
-    compute_spectrum_ensemble,
-)
 
 __all__ = [
     "BroadeningMode",
@@ -51,7 +46,4 @@ __all__ = [
     "SpectrumModelJax",
     "planck_radiance",
     "planck_radiance_jax",
-    "compute_spectrum_batch",
-    "compute_spectrum_grid",
-    "compute_spectrum_ensemble",
 ]
