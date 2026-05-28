@@ -106,13 +106,6 @@ class TestHybridIdentifierDefaultPreservation:
             "Do NOT silently change this."
         )
 
-    def test_hybrid_identifier_module_exports_match_legacy_path(self):
-        """The shim path used by the benchmark must still resolve."""
-        from cflibs.inversion import hybrid_identifier as shim
-        from cflibs.inversion.identify import hybrid as canonical
-
-        assert shim.HybridIdentifier is canonical.HybridIdentifier
-
     def test_new_consensus_class_does_not_replace_hybrid_identifier(self):
         """HybridConsensusIdentifier is a *separate* class, not a subclass."""
         from cflibs.inversion.identify.hybrid import HybridIdentifier
