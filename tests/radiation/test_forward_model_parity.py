@@ -90,6 +90,11 @@ def test_spectrum_model_kernel_thin_wrapper_parity(atomic_db, mode, instrument_b
         E_k_ev = float(snapshot.line_E_k_ev[li])
         n_upper[li] = populations.get((el, stage, round(E_k_ev, 8)), 0.0)
     wl_grid = np.arange(lambda_min, lambda_max + delta_lambda, delta_lambda)
+    # ``apply_stark`` only takes effect under ``PHYSICAL_DOPPLER`` (see
+    # ``cflibs/radiation/kernels.py:forward_model``). Mirror the
+    # ``SpectrumModel`` wrapper's default (``True``) so the reference
+    # matches the post-Wave-1 Stark-broadened default. Fix A2,
+    # ``docs/architecture/2026-05-27-physics-audit.md``.
     expected = forward_model(
         plasma,
         snapshot,
@@ -99,7 +104,7 @@ def test_spectrum_model_kernel_thin_wrapper_parity(atomic_db, mode, instrument_b
         path_length_m=0.01,
         apply_self_absorption=True,
         fold_instrument_sigma=(mode == BroadeningMode.NIST_PARITY),
-        apply_stark=False,
+        apply_stark=True,
         _precomputed_n_upper_per_line=n_upper,
     )
     expected = np.asarray(expected)

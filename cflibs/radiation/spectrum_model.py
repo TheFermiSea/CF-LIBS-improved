@@ -85,6 +85,7 @@ class SpectrumModel:
         path_length_m: float = 0.01,  # 1 cm default
         use_jax: bool = False,
         broadening_mode: BroadeningMode = BroadeningMode.LEGACY,
+        apply_stark: bool = True,
     ):
         """
         Initialize spectrum model.
@@ -113,6 +114,18 @@ class SpectrumModel:
             sigma from resolving power (no downstream convolution).
             PHYSICAL_DOPPLER uses per-line physical Doppler width plus
             downstream instrument convolution.
+        apply_stark : bool, default True
+            If True, include the per-line Lorentzian Stark width on the
+            Voigt path (``PHYSICAL_DOPPLER`` only — ignored by LEGACY,
+            NIST_PARITY, LDM_GAUSSIAN). Matches the default used by the
+            manifold (``forward_from_snapshot``) and Bayesian
+            (``BayesianForwardModel._compute_spectrum``) paths, which
+            both default to True. Set False to reproduce the pre-Wave-1
+            Doppler-only template behaviour (e.g. for parity tests).
+            Physics rationale: at n_e ~ 10^17 cm^-3 the Lorentzian Stark
+            width is comparable to or exceeds the Gaussian (Doppler +
+            instrument) width — Aragón & Aguilera 2008,
+            *Spectrochim. Acta B* 63, 893.
         """
         if broadening_mode == BroadeningMode.NIST_PARITY and not instrument.is_resolving_power_mode:
             raise ValueError(
@@ -129,6 +142,7 @@ class SpectrumModel:
         self.path_length_m = path_length_m
         self.use_jax = use_jax
         self.broadening_mode = broadening_mode
+        self.apply_stark = apply_stark
 
         # Create wavelength grid
         self.wavelength = np.arange(lambda_min, lambda_max + delta_lambda, delta_lambda)
@@ -310,7 +324,7 @@ class SpectrumModel:
                 path_length_m=self.path_length_m,
                 apply_self_absorption=True,
                 fold_instrument_sigma=(self.broadening_mode == BroadeningMode.NIST_PARITY),
-                apply_stark=False,
+                apply_stark=self.apply_stark,
                 _precomputed_n_upper_per_line=n_upper_per_line,
             )
             intensity = np.asarray(intensity)
@@ -484,6 +498,7 @@ class SpectrumModelJax(SpectrumModel):
         delta_lambda: float,
         path_length_m: float = 0.01,
         broadening_mode: BroadeningMode = BroadeningMode.LEGACY,
+        apply_stark: bool = True,
     ):
         if not HAS_JAX:  # pragma: no cover - defensive
             raise ImportError("SpectrumModelJax requires JAX. Install with `pip install jax`.")
@@ -499,6 +514,7 @@ class SpectrumModelJax(SpectrumModel):
             path_length_m=path_length_m,
             use_jax=True,  # informational; we own the JAX path
             broadening_mode=broadening_mode,
+            apply_stark=apply_stark,
         )
         # Replace the NumPy solver with the JAX one — public surface is the
         # same so downstream code (acceptance tests, benchmark harness)
