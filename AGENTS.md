@@ -81,6 +81,7 @@ Full guidance: see [`CLAUDE.md` § Code Intelligence](CLAUDE.md#code-intelligenc
 - Coverage target for new code: >80% (see `CONTRIBUTING.md`).
 - Use markers to scope runs (e.g., `requires_db`, `requires_jax`, `requires_bayesian`, `requires_uncertainty`, `requires_rust`, `slow`, `unit`, `integration`, `physics`, `nist_parity`).
 - Coverage report: `pytest tests/ --cov=cflibs --cov-report=html`.
+- **The full suite takes ~6m 44s.** That exceeds the Claude Agent stream-idle watchdog (~600s) when pytest is invoked from inside a sub-agent's own tool call — the watchdog sees a quiet stream and kills the agent mid-task. **Sub-agents must NOT run `pytest tests/`** end-to-end inside their own session. Use a narrow subset (`pytest tests/<file>.py -q --timeout=60`), or commit + push and let CI run the full suite, or have the parent session run the full suite via tracked-background `Bash`. Always commit after each logical step *before* the test step so watchdog kills don't lose work. Full guidance: [`CLAUDE.md` § Running tests inside Claude Agent sub-tasks](CLAUDE.md#running-tests-inside-claude-agent-sub-tasks).
 
 ## CLI & Data Workflows
 - `cflibs generate-manifold examples/manifold_config_example.yaml --progress` builds a spectral manifold.

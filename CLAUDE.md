@@ -67,6 +67,19 @@ pytest tests/ --cov=cflibs --cov-report=html    # coverage report
 
 Test markers: `requires_db`, `requires_jax`, `requires_bayesian`, `requires_uncertainty`, `requires_rust`, `slow`, `unit`, `integration`, `physics`, `nist_parity`.
 
+### Running tests inside Claude Agent sub-tasks
+
+**The full suite (`pytest tests/`) takes ~6m 44s** on this codebase — mostly JAX warm-up + the inversion suites. The Claude Agent stream-idle watchdog kills sub-agents after **~600s (10 min)** of no observable stream output, and a quiet pytest run is invisible to the watchdog. Multiple sub-agent failures in 2026-05 were traced to this race, not to model issues.
+
+Rules for any task that spawns sub-agents:
+
+- **Never** instruct a sub-agent to run `pytest tests/` (the whole suite) inside its own tool calls. Either:
+  1. Specify a **narrow subset** that finishes in well under 60s, e.g. `pytest tests/inversion/identify/test_alias_presets.py -q --timeout=60`.
+  2. Have the sub-agent **commit and push**, and let CI run the full suite.
+  3. In the **parent session** (not the sub-agent), run the full suite via `Bash(run_in_background=True)` after the sub-agent's PR is up. Tracked background tasks complete-notify the parent independently of any agent's stream.
+- **Commit after each logical step** in sub-agent prompts, *before* the test step — so if a watchdog kill happens, the work isn't lost. The Wave-1 and Wave-2 architecture-review work recovered partial diffs from killed agents precisely because commits had landed on the branch first.
+- Symptoms that point to this issue: `Agent stalled: no progress for 600s (stream watchdog did not recover)` or `API Error: Stream idle timeout - partial response received`. Root cause is the long quiet tool result, not the agent's logic.
+
 JAX is forced to CPU in `conftest.py` with `jax_enable_x64=True`.
 
 ## CLI Workflows
