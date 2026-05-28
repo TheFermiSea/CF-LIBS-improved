@@ -10,6 +10,15 @@ import math
 from typing import List, Dict, Tuple, Any, Optional
 from cflibs.atomic.structures import Transition
 from cflibs.inversion.physics.boltzmann import LineObservation
+from cflibs.radiation.stark import stark_hwhm
+
+# Konjević reference conditions for typical LIBS plasma (Konjević et al. 2002,
+# J. Phys. Chem. Ref. Data 31, 819). These match the conditions under which
+# the benchmark Stark parameters in the atomic database tabulate non-trivial
+# FWHM (4-40 pm) for workhorse lines — comparable to or exceeding instrument
+# FWHM at R~10^4. Used as the default when callers cannot supply live (n_e, T).
+_KONJEVIC_REF_NE_CM3 = 1.0e17
+_KONJEVIC_REF_T_K = 10000.0
 
 
 @dataclass
@@ -137,23 +146,55 @@ def get_wavelength_tolerance(
     transition: Optional[Transition],
     resolving_power: float,
     fallback: float = 0.05,
+    n_e_cm3: Optional[float] = None,
+    T_K: Optional[float] = None,
 ) -> float:
     """
     Calculate Stark-aware wavelength tolerance per protocol.yaml §identification.wavelength_tolerance.
 
     Formula: sqrt(fwhm_inst**2 + omega_stark**2)
-    where fwhm_inst = wavelength_nm / resolving_power.
+    where fwhm_inst = wavelength_nm / resolving_power and omega_stark is the
+    Stark FWHM (2 × HWHM) scaled to the live plasma conditions when ``n_e_cm3``
+    and ``T_K`` are supplied, or to Konjević reference conditions
+    (n_e = 1e17 cm^-3, T = 10000 K — see Konjević et al. 2002, J. Phys. Chem.
+    Ref. Data 31, 819) when they are not.
+
+    The transition's ``stark_w`` attribute is interpreted as HWHM at
+    REF_NE = 1e16 cm^-3, T = 10000 K (the convention used throughout
+    ``cflibs/radiation/stark.py``). Scaling to the requested (n_e, T) follows
+    the analytic power-law w_e = w_ref * (n_e/1e16) * (T/T_ref)^(-alpha) from
+    :func:`cflibs.radiation.stark.stark_hwhm`. The HWHM is doubled to FWHM
+    before quadrature combination with the instrument FWHM, matching the
+    protocol formula.
+
+    Bug history: this helper previously read ``stark_width_nm`` via
+    ``getattr``, but the ``Transition`` dataclass exposes the attribute as
+    ``stark_w``. As a result ``omega_stark`` collapsed to 0 for every line,
+    silently degrading the protocol-prescribed Stark-aware tolerance to the
+    pure-instrument FWHM. Aragón, Pellé & Aguilera 2011 (Anal. Bioanal. Chem.
+    400, 3331) document Stark shifts up to 130 pm that cause Al II 281.6 nm
+    overlap — the missing Stark term would let those near-coincidences slip
+    through identification.
 
     Parameters
     ----------
     wavelength_nm : float
         Theoretical (database) wavelength in nm.
     transition : Transition, optional
-        Transition object which may contain stark_width_nm (omega_stark).
+        Transition object which may carry ``stark_w`` (HWHM at REF_NE=1e16,
+        T_ref=10000 K) and ``stark_alpha`` (scaling exponent).
     resolving_power : float
         Instrumental resolving power (R = lambda/delta_lambda).
     fallback : float, optional
-        Fixed tolerance used when Stark width is unavailable (default: 0.05 nm).
+        Fixed tolerance used when neither Stark width nor a meaningful
+        instrument FWHM is available (default: 0.05 nm, per
+        protocol.yaml §identification.wavelength_tolerance.fallback_fixed).
+    n_e_cm3 : float, optional
+        Electron density in cm^-3 for dynamic Stark scaling. Defaults to the
+        Konjević reference (1e17 cm^-3) when not supplied.
+    T_K : float, optional
+        Temperature in K for dynamic Stark scaling. Defaults to the Konjević
+        reference (10000 K) when not supplied.
 
     Returns
     -------
@@ -163,13 +204,26 @@ def get_wavelength_tolerance(
     # fwhm_inst = lambda / R
     fwhm_inst = wavelength_nm / max(resolving_power, 1e-6)
 
-    # omega_stark (Stark broadening width) from transition metadata
+    # omega_stark (Stark broadening FWHM) from transition metadata
     omega_stark = 0.0
     if transition is not None:
-        # Check for stark_width_nm attribute if available in the database
-        omega_stark = getattr(transition, "stark_width_nm", 0.0)
-        if omega_stark is None:
-            omega_stark = 0.0
+        # The Transition dataclass exposes Stark HWHM-at-reference as ``stark_w``;
+        # the historical getattr key ``stark_width_nm`` was a typo (see bug history
+        # in the docstring).
+        stark_w_ref = getattr(transition, "stark_w", None)
+        if stark_w_ref is not None and stark_w_ref > 0:
+            stark_alpha = getattr(transition, "stark_alpha", None)
+            # Use live (n_e, T) when supplied, otherwise Konjević reference.
+            n_e_eff = n_e_cm3 if n_e_cm3 is not None else _KONJEVIC_REF_NE_CM3
+            T_eff = T_K if T_K is not None else _KONJEVIC_REF_T_K
+            # stark_hwhm returns HWHM in nm; double for FWHM to match the
+            # protocol formula (Lorentzian sqrt-sum-square of FWHMs).
+            omega_stark = 2.0 * stark_hwhm(
+                n_e_eff,
+                T_eff,
+                stark_w_ref,
+                stark_alpha,
+            )
 
     # Apply formula if Stark width is available and positive
     if omega_stark > 0:
