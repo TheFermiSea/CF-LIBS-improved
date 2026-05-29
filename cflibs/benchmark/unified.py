@@ -40,14 +40,13 @@ def _jax_identifier_flags_for(cls) -> Dict[str, bool]:
     ``--jax-identifier``.  See PR #118, #119, #120, #121, #122 for the
     identifier-side opt-in flags this targets.
 
-    Side effect (bead ``CF-LIBS-improved-jbfg.1``): enable JAX x64 mode
-    before returning a non-empty dict. Every identifier's JAX helpers
-    explicitly request ``jnp.float64`` but without this flag JAX silently
-    demotes to float32, which biases ``compute_p_snr_jax``, Boltzmann
-    fits, and FISTA NNLS enough to flip per-element gate decisions and
-    lose ~0.07 macro_recall vs the CPU path. The composition-side
-    pipelines (``_fit_iterative_pipeline``, ``_fit_bayesian_pipeline``)
-    already enable x64 locally; the identifier path was the gap.
+    **Pure function.** The previous version of this helper had a hidden
+    side effect that mutated ``jax.config`` (bead
+    ``CF-LIBS-improved-jbfg.1``).  That contract has been lifted to
+    :func:`cflibs.core.jax_runtime.configure_for_identifiers` (called
+    once by :class:`UnifiedBenchmarkRunner.__init__`) and is verified at
+    each identifier constructor via :func:`check_jax64bit`.  Arch review
+    #2 candidate 2.
     """
     if os.environ.get("CFLIBS_USE_JAX_IDENTIFIER", "0") != "1":
         return {}
@@ -55,15 +54,7 @@ def _jax_identifier_flags_for(cls) -> Dict[str, bool]:
         sig = inspect.signature(cls.__init__)
     except (TypeError, ValueError):
         return {}
-    flags = {name: True for name in sig.parameters if name.startswith("use_jax_")}
-    if flags:
-        try:
-            import jax
-
-            jax.config.update("jax_enable_x64", True)
-        except ImportError:
-            pass
-    return flags
+    return {name: True for name in sig.parameters if name.startswith("use_jax_")}
 
 
 # These imports sit AFTER the `_jax_param_keys` helper above to keep that
@@ -3588,6 +3579,14 @@ class UnifiedBenchmarkRunner:
         quick: bool = False,
         bayesian_mcmc_override: Optional[Dict[str, int]] = None,
     ):
+        # Session-level seam for JAX-x64 enablement (arch review #2 candidate 2,
+        # bead CF-LIBS-improved-jbfg.1).  Idempotent and gated on
+        # ``CFLIBS_USE_JAX_IDENTIFIER`` inside the helper.  Replaces the prior
+        # hidden side effect that lived inside ``_jax_identifier_flags_for``.
+        if os.environ.get("CFLIBS_USE_JAX_IDENTIFIER", "0") == "1":
+            from cflibs.core.jax_runtime import configure_for_identifiers
+
+            configure_for_identifiers()
         self.context = UnifiedBenchmarkContext(db_path=db_path, basis_dir=basis_dir)
         self.id_registry = build_id_workflow_registry(quick=quick)
         self.composition_registry = build_composition_workflow_registry(

@@ -331,6 +331,32 @@ def set_jax_policy(policy: JaxMemoryPolicy) -> None:
     _PROCESS_POLICY = policy
 
 
+def configure_for_identifiers() -> None:
+    """Enable JAX ``float64`` mode for the JAX-backed identifier path.
+
+    Architectural seam for the contract documented in bead
+    ``CF-LIBS-improved-jbfg.1``: every identifier's JAX helpers
+    explicitly request ``jnp.float64`` (FISTA NNLS, Boltzmann fit,
+    ``compute_p_snr_jax``) but without ``jax_enable_x64=True`` JAX
+    silently demotes to ``float32`` and FISTA produces ~95% coefficient
+    error on column-correlated spectra.
+
+    This used to live as a hidden side effect of
+    ``cflibs.benchmark.unified._jax_identifier_flags_for``; arch review
+    #2 candidate 2 lifted it to this named function. Call once at
+    session start — :class:`cflibs.benchmark.unified.UnifiedBenchmarkRunner`
+    does this automatically; ad-hoc scripts constructing
+    ``ALIASIdentifier(use_jax_nnls=True)`` directly should call this
+    explicitly. Each identifier's ``__init__`` then verifies the contract
+    via :func:`check_jax64bit` and fails fast if it was missed.
+
+    Idempotent and a no-op when JAX is not installed.
+    """
+    if not HAS_JAX:
+        return
+    jax.config.update("jax_enable_x64", True)
+
+
 def check_jax64bit(allow_fp32_on_metal: bool = False, raise_on_violation: bool = True) -> None:
     """Runtime guard for ``float64`` consumers.
 
@@ -633,6 +659,7 @@ __all__ = [
     "_ensure_pytrees_registered",
     "_refresh_runtime_state",
     "check_jax64bit",
+    "configure_for_identifiers",
     "jax",
     "jax_active_backend",
     "jax_backend_supports_complex",
