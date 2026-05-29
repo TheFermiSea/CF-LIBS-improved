@@ -2300,12 +2300,6 @@ def _fit_bayesian_pipeline(
             # Explicitly pin to GPU if requested; avoids CPU-bound NUTS on heavy tier
             if os.environ.get("JAX_PLATFORMS") == "cuda":
                 numpyro.set_platform("gpu")
-            # NOTE: ``numpyro.set_host_device_count`` previously lived here but
-            # took effect only when called before JAX initialization, which is
-            # never true by this point in the runner. The downstream
-            # ``MCMCSampler`` now defaults to ``chain_method='vectorized'``,
-            # which batches every chain into a single JIT'd kernel on the
-            # current device -- no multi-device requirement.
         except Exception as e:
             logger.debug("bayesian: failed to set NumPyro platform: %s", e)
 
@@ -2332,6 +2326,46 @@ def _fit_bayesian_pipeline(
     # Keyed by (tuple(elements), pixels, wl_min, wl_max).
     sampler_cache: Dict[Tuple[Any, ...], Any] = {}
 
+    # Per-spectrum progress + checkpoint state. We capture the wall-clock
+    # start of the loop the first time the predictor is invoked so the
+    # ``elapsed_s`` reported by ``logger.info`` reflects time-on-task for
+    # the bayesian workflow specifically (independent of any outer
+    # benchmark setup costs).  ``checkpoint_records`` accumulates a
+    # ``CompositionEvaluationRecord`` per call and is flushed every 10
+    # spectra (and on interpreter shutdown via ``atexit``) to
+    # ``<cwd>/composition_records_checkpoint.parquet``.  The flush uses
+    # ``cflibs.benchmark.results.write_parquet`` with a tmpfile +
+    # ``os.replace`` shim so the checkpoint is atomic at this call site
+    # without modifying ``results.write_parquet`` itself (which the
+    # Phase 2 audit confirmed is not crash-safe on its own).
+    progress_state: Dict[str, Any] = {
+        "loop_start": None,
+        "spectrum_index": 0,
+    }
+    checkpoint_records: List[CompositionEvaluationRecord] = []
+    checkpoint_path = Path("composition_records_checkpoint.parquet")
+    composition_workflow_name = "bayesian"
+    composition_config_name_str = _config_name(config)
+
+    def _write_checkpoint_atomic() -> None:
+        if not checkpoint_records:
+            return
+        try:
+            from cflibs.benchmark import results as results_module  # noqa: PLC0415
+
+            tmp_path = checkpoint_path.parent / f".{checkpoint_path.name}.tmp"
+            results_module.write_parquet(
+                tmp_path,
+                composition_records=list(checkpoint_records),
+            )
+            os.replace(tmp_path, checkpoint_path)
+        except Exception as exc:  # noqa: BLE001 - checkpoint is best-effort
+            logger.warning("bayesian: checkpoint write failed: %s", exc)
+
+    import atexit  # noqa: PLC0415
+
+    atexit.register(_write_checkpoint_atomic)
+
     def predictor(
         spectrum: BenchmarkSpectrum,
         candidate_elements: Sequence[str],
@@ -2345,6 +2379,20 @@ def _fit_bayesian_pipeline(
         elements = list(candidate_elements)
         if not elements:
             raise ValueError("No candidate elements available for bayesian composition workflow")
+
+        # Per-spectrum progress log (Phase 1 change 2). ``loop_start`` is
+        # captured BEFORE the first iteration so ``elapsed_s`` measures
+        # total time since the bayesian loop began, not just the current
+        # spectrum's MCMC wall time.
+        if progress_state["loop_start"] is None:
+            progress_state["loop_start"] = time.monotonic()
+        progress_state["spectrum_index"] += 1
+        spectrum_index = int(progress_state["spectrum_index"])
+        elapsed_s = time.monotonic() - float(progress_state["loop_start"])
+        dataset_name = getattr(spectrum, "dataset_id", None) or "unknown"
+        logger.info(
+            f"[bayesian] {dataset_name}: spectrum {spectrum_index} " f"(elapsed {elapsed_s:.1f}s)"
+        )
 
         from cflibs.inversion.solve.bayesian import (
             BayesianForwardModel,
@@ -2494,6 +2542,47 @@ def _fit_bayesian_pipeline(
             "n_warmup": int(result.n_warmup),
             "solver_backend": "numpyro_jax",
         }
+
+        # Phase 1 change 3: build a per-spectrum CompositionEvaluationRecord
+        # proxy and append it to the rolling checkpoint buffer. The buffer is
+        # flushed atomically every 10 spectra via tmpfile + os.replace. The
+        # final flush (for spectra that did not land on a 10-boundary) is
+        # registered as an ``atexit`` handler above so a SIGTERM or normal
+        # interpreter exit still leaves a complete checkpoint on disk.
+        truth_type_val = getattr(spectrum, "truth_type", None)
+        truth_type_str = (
+            truth_type_val.value if hasattr(truth_type_val, "value") else str(truth_type_val)
+        )
+        checkpoint_record = CompositionEvaluationRecord(
+            dataset_id=str(getattr(spectrum, "dataset_id", "") or ""),
+            spectrum_id=str(getattr(spectrum, "spectrum_id", "") or ""),
+            group_id=getattr(spectrum, "group_id", None),
+            specimen_id=getattr(spectrum, "specimen_id", None),
+            instrument_id=getattr(spectrum, "instrument_id", None),
+            truth_type=truth_type_str,
+            rp_estimate=getattr(spectrum, "rp_estimate", None),
+            label_cardinality=None,
+            spectrum_kind=None,
+            id_workflow_name="",
+            composition_workflow_name=composition_workflow_name,
+            outer_split_id="",
+            tuning_split_id=None,
+            id_config_name="",
+            composition_config_name=composition_config_name_str,
+            elapsed_seconds=float(elapsed_s),
+            candidate_elements=list(elements),
+            true_composition=dict(getattr(spectrum, "true_composition", {}) or {}),
+            predicted_composition=dict(concentrations),
+            aitchison=aitchison,
+            rmse=None,
+            temperature_error_frac=None,
+            ne_error_frac=None,
+            closure_residual=None,
+        )
+        checkpoint_records.append(checkpoint_record)
+        if spectrum_index % 10 == 0:
+            _write_checkpoint_atomic()
+
         return payload
 
     return predictor
