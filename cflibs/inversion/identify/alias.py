@@ -1154,6 +1154,20 @@ class ALIASIdentifier:
         self.use_jax_nnls = bool(use_jax_nnls)
         self.use_jax_p_snr = bool(use_jax_p_snr)
         self.use_jax_template_build = bool(use_jax_template_build)
+        # Fail fast when a JAX path is requested without x64 (bead jbfg.1 /
+        # arch review #2 candidate 2). Replaces the prior hidden side effect
+        # in cflibs.benchmark.unified._jax_identifier_flags_for; ad-hoc
+        # callers should run cflibs.core.jax_runtime.configure_for_identifiers()
+        # at session start (UnifiedBenchmarkRunner already does this).
+        if (
+            self.use_jax_boltzmann_fit
+            or self.use_jax_nnls
+            or self.use_jax_p_snr
+            or self.use_jax_template_build
+        ):
+            from cflibs.core.jax_runtime import check_jax64bit
+
+            check_jax64bit()
         # Self-absorption scoring knobs (CF-LIBS-improved-self-abs-audit).
         # Defaults preserve the historical behavior — see the docstring.
         self.self_absorption_aware = bool(self_absorption_aware)

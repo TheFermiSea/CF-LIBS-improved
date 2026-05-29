@@ -340,6 +340,12 @@ class SpectralNNLSIdentifier:
             raise ImportError(
                 "use_jax_nnls=True requires JAX. " "Install with: pip install jax jaxlib"
             )
+        # Fail fast when a JAX path is requested without x64 (bead jbfg.1 /
+        # arch review #2 candidate 2). See cflibs.core.jax_runtime.
+        if self.use_jax_nnls:
+            from cflibs.core.jax_runtime import check_jax64bit
+
+            check_jax64bit()
 
         # Warn if basis library includes ionization stages > II
         if hasattr(basis_library, "config") and hasattr(basis_library.config, "ionization_stages"):

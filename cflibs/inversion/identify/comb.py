@@ -306,6 +306,12 @@ class CombIdentifier:
             raise ImportError(
                 "use_jax_correlate=True requires JAX. " "Install with: pip install jax jaxlib"
             )
+        # Fail fast when a JAX path is requested without x64 (bead jbfg.1 /
+        # arch review #2 candidate 2). See cflibs.core.jax_runtime.
+        if self.use_jax_correlate:
+            from cflibs.core.jax_runtime import check_jax64bit
+
+            check_jax64bit()
         # Cache built templates by width so we don't rebuild per call.
         self._template_cache: Dict[int, np.ndarray] = {}
         self.atomic_db = atomic_db

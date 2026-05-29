@@ -262,6 +262,12 @@ class CorrelationIdentifier:
             raise ImportError(
                 "use_jax_classic=True requires JAX. " "Install with: pip install jax jaxlib"
             )
+        # Fail fast when a JAX path is requested without x64 (bead jbfg.1 /
+        # arch review #2 candidate 2). See cflibs.core.jax_runtime.
+        if self.use_jax_classic:
+            from cflibs.core.jax_runtime import check_jax64bit
+
+            check_jax64bit()
         self.atomic_db = atomic_db
         self.resolving_power = resolving_power
         self.vector_index = vector_index
