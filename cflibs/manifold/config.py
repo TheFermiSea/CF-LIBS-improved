@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import List, Tuple
 from pathlib import Path
 
+import numpy as np
+
 from cflibs.core.logging_config import get_logger
 from cflibs.radiation.profiles import BroadeningMode
 
@@ -85,7 +87,11 @@ class ManifoldConfig:
     density_range: Tuple[float, float] = (1e16, 1e19)
     density_steps: int = 20
     concentration_steps: int = 20
-    pixels: int = 4096
+    # Default pixels chosen for Nyquist-safe sampling over the default 250-550 nm
+    # window at instrument FWHM = 0.05 nm: Δλ = 300/18432 ≈ 0.01628 nm/pixel gives
+    # ~3.07 px/FWHM, just above the Robertson 2017 / Magnier 2025 / Demidov 2022
+    # standard of ≥3 px/FWHM. Bumped from 4096 (~0.68 px/FWHM, severely undersampled).
+    pixels: int = 18432
     gate_delay_s: float = 300e-9
     gate_width_s: float = 5e-6
     time_steps: int = 20
@@ -154,7 +160,7 @@ class ManifoldConfig:
             density_range=_float_pair(manifold_config.get("density_range"), [1e16, 1e19]),
             density_steps=manifold_config.get("density_steps", 20),
             concentration_steps=manifold_config.get("concentration_steps", 20),
-            pixels=manifold_config.get("pixels", 4096),
+            pixels=manifold_config.get("pixels", 18432),
             gate_delay_s=float(manifold_config.get("gate_delay_s", 300e-9)),
             gate_width_s=float(manifold_config.get("gate_width_s", 5e-6)),
             time_steps=manifold_config.get("time_steps", 20),
@@ -203,5 +209,29 @@ class ManifoldConfig:
 
         if self.pixels < 10:
             raise ValueError("pixels must be >= 10")
+
+        # Nyquist / instrument-FWHM sampling guard.
+        # The Robertson 2017 (arXiv:1707.06455) / Magnier 2025 (arXiv:2501.17163)
+        # / Demidov 2022 (PMC9573556) literature consensus is that line-shape
+        # fitting and pixel-integrated flux measurement degrade rapidly below
+        # ~3 px/FWHM. Below 2 px/FWHM, position bias grows as (px/FWHM)^-2 and
+        # point-sampled Gaussian flux is biased >>1%. We require px/FWHM >= 3
+        # so that grid Δλ <= instrument_fwhm_nm / 3 (van den Bekerom & Pannier
+        # 2021 JQSRT 261 also recommends this minimum for spectral synthesis).
+        if self.instrument_fwhm_nm is not None and self.instrument_fwhm_nm > 0:
+            delta_lambda = (self.wavelength_range[1] - self.wavelength_range[0]) / self.pixels
+            px_per_fwhm = self.instrument_fwhm_nm / delta_lambda
+            if delta_lambda > self.instrument_fwhm_nm / 3.0:
+                raise ValueError(
+                    f"Sub-Nyquist manifold sampling: "
+                    f"Δλ = {delta_lambda:.4g} nm/pixel gives "
+                    f"{px_per_fwhm:.2f} px/FWHM at instrument_fwhm_nm="
+                    f"{self.instrument_fwhm_nm:.4g} nm. "
+                    f"Required minimum is 3 px/FWHM (Robertson 2017; "
+                    f"van den Bekerom & Pannier 2021). "
+                    f"Increase `pixels` to at least "
+                    f"{int(np.ceil(3.0 * (self.wavelength_range[1] - self.wavelength_range[0]) / self.instrument_fwhm_nm))} "
+                    f"or widen `instrument_fwhm_nm`."
+                )
 
         return True

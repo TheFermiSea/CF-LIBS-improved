@@ -22,6 +22,11 @@ manifold:
 
   pixels: 256
 
+  # Wide instrument FWHM keeps this minimal smoke config Nyquist-safe at
+  # only 256 pixels (Δλ ≈ 0.39 nm/pixel needs FWHM >= 3·Δλ ≈ 1.17 nm).
+  # Production sweeps use manifold_config_example.yaml at 18432 px / 0.05 nm.
+  instrument_fwhm_nm: 1.5
+
   gate_delay_s: 3.0e-7
   gate_width_s: 5.0e-6
   time_steps: 4

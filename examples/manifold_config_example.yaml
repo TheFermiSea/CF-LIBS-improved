@@ -28,7 +28,11 @@ manifold:
   concentration_steps: 20
   
   # Output spectrum resolution
-  pixels: 4096
+  # 18432 pixels over the 250-550 nm window gives Δλ ≈ 0.0163 nm/pixel,
+  # i.e. ~3.07 px/FWHM at instrument_fwhm_nm = 0.05 nm. This meets the
+  # Robertson 2017 / Demidov 2022 ≥3 px/FWHM standard for line-shape and
+  # pixel-integrated flux accuracy. ManifoldConfig.validate() enforces this.
+  pixels: 18432
   
   # Time integration parameters (for ultrafast plasmas)
   gate_delay_s: 3.0e-7    # 300 ns

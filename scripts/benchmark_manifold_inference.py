@@ -36,7 +36,10 @@ def main():
         density_steps=15,
         concentration_steps=5, # Generates roughly 10k-20k spectra total for reasonable build times
         wavelength_range=(200.0, 800.0),
-        pixels=4096,
+        # 36864 pixels over the 200-800 nm window keeps Δλ ≈ 0.0163 nm,
+        # i.e. ~3.07 px/FWHM at the default 0.05 nm instrument FWHM —
+        # required by the post-D1-fix ManifoldConfig.validate() guard.
+        pixels=36864,
         output_path=str(manifold_path),
         db_path=db_path,
         batch_size=1000

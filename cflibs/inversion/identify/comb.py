@@ -843,17 +843,21 @@ class CombIdentifier:
         # Estimate resolution element from wavelength spacing
         dwl = np.median(np.diff(wavelength))
         # Stark-aware tolerance — sqrt(fwhm_inst**2 + omega_stark**2) when a
-        # transition with stark_width_nm metadata is supplied; otherwise the
-        # helper falls back to lambda/R (no Stark). PR #151 wired the same
-        # helper into alias._match_lines (per-line tolerance instead of a
-        # global mean_wl/eff_R); this is the comb-side counterpart for the
-        # triangular-template width. See CF-LIBS-improved-5ozw.
+        # transition with stark_w metadata is supplied; otherwise the helper
+        # falls back to lambda/R (no Stark). PR #151 wired the same helper
+        # into alias._match_lines (per-line tolerance instead of a global
+        # mean_wl/eff_R); this is the comb-side counterpart for the
+        # triangular-template width. See CF-LIBS-improved-5ozw. Wave-1 fix
+        # A1 also threads self.reference_temperature so the Stark FWHM is
+        # evaluated at the comb's working T (defaults to 10000 K — Konjević
+        # reference — when the caller did not override).
         if self.resolving_power:
             resolution_nm = get_wavelength_tolerance(
                 center_nm,
                 transition=transition,
                 resolving_power=self.resolving_power,
                 fallback=center_nm / self.resolving_power,
+                T_K=self.reference_temperature,
             )
         else:
             resolution_nm = 0.1

@@ -801,8 +801,20 @@ class SelfAbsorptionCorrector:
                 )
 
             elif tau > self.optical_depth_threshold:
-                # Apply correction
-                result = self._apply_recursive_correction(obs, tau)
+                # Apply correction — pass plasma state so _apply_recursive_correction
+                # can recompute τ from physics each iteration (Bulajic 2002 §3) rather
+                # than rescaling it from the observed intensity (which would be a
+                # dimensionally-wrong feedback hack). See B4 in the 2026-05-27 physics
+                # audit for the bug being fixed here.
+                result = self._apply_recursive_correction(
+                    obs,
+                    tau,
+                    temperature_K,
+                    concentrations,
+                    total_number_density_cm3,
+                    partition_funcs,
+                    E_i_ev,
+                )
                 corrected_obs.append(self._create_corrected_observation(obs, result))
                 corrections[obs.wavelength_nm] = result
 
@@ -1071,46 +1083,120 @@ class SelfAbsorptionCorrector:
         self,
         obs: LineObservation,
         tau_initial: float,
+        temperature_K: float,
+        concentrations: Dict[str, float],
+        total_n_cm3: float,
+        partition_funcs: Dict[str, float],
+        E_i_ev: float,
     ) -> AbsorptionCorrectionResult:
         """
-        Apply recursive self-absorption correction.
+        Apply recursive self-absorption correction (Bulajic 2002).
 
-        The correction factor for a Gaussian line profile is:
-        f(τ) = (1 - exp(-τ)) / τ
+        For each iteration:
 
-        I_true = I_measured / f(τ)
+        1. ``τ_n`` is the line-center optical depth at iteration *n* (the
+           seed value ``tau_initial`` is the τ computed from the current
+           plasma state by ``_estimate_optical_depth``).
+        2. The escape factor for a Gaussian (Doppler) line profile is
+           ``f(τ) = (1 - exp(-τ)) / τ``.
+        3. The corrected intensity is ``I_true = I_obs / f(τ_n)``.
+        4. ``τ_{n+1}`` is **recomputed from the plasma state** via
+           ``_estimate_optical_depth`` using the same (T, n_e,
+           concentrations, partition functions) inputs. τ is a property of
+           the plasma column (Cowan 1981 Eq. 14.39 + Hutchinson Eq. 5.13;
+           Bulajic, Corsi, Cristoforetti, Legnaioli, Palleschi, Salvetti,
+           Tognoni 2002 *Spectrochim. Acta B* 57 339,
+           doi:10.1016/S0584-8547(01)00398-6, §3) — it is NOT a function
+           of the observed line intensity.
+        5. Convergence test: ``|τ_{n+1} - τ_n| / τ_n < convergence_tolerance``.
+
+        Historical bug
+        --------------
+        The pre-Wave-1 implementation updated τ via
+        ``tau *= I_new / obs.intensity`` (≡ ``tau /= f(τ)``). That formula
+        has no physics support (it implicitly assumed τ is a function of
+        the observed intensity), and because the factor 1/f(τ) > 1 for
+        any τ > 0, the iteration was monotonically divergent in the
+        optically-thick regime — only bounded by ``max_iterations=5``.
+        The Bulajic 2002 prescription instead recomputes τ from the
+        updated *plasma state* (T, n_e, concentrations) — which is what
+        this method now does. Within a single call with frozen plasma
+        state τ is therefore a constant of motion: the loop converges in
+        one iteration, and the meaningful "recursion" lives in the outer
+        CF-LIBS solver which re-invokes `correct()` after each plasma
+        update. See ``docs/architecture/2026-05-27-physics-audit.md`` (B4).
+
+        Parameters
+        ----------
+        obs : LineObservation
+            Emission line with observed intensity to correct.
+        tau_initial : float
+            Initial optical depth from ``_estimate_optical_depth`` at the
+            current plasma state. Used both as the first correction
+            factor and the convergence reference.
+        temperature_K, concentrations, total_n_cm3, partition_funcs, E_i_ev
+            Same arguments as ``_estimate_optical_depth`` — required so
+            τ can be recomputed each iteration. They are taken from the
+            current iteration of the outer CF-LIBS solver and are
+            constant within this call.
+
+        Returns
+        -------
+        AbsorptionCorrectionResult
+            With ``optical_depth`` set to the FINAL τ (not the seed), so
+            downstream consumers see the converged value. The seed value
+            is recoverable from the caller's ``max_tau`` bookkeeping.
         """
         tau = tau_initial
         I_corrected = obs.intensity
         iteration = 0
 
         for iteration in range(self.max_iterations):
-            # Correction factor
+            # Correction factor at this iteration's tau
             f_tau = _escape_factor(tau)
 
-            # Corrected intensity
-            I_new = obs.intensity / f_tau
+            # Corrected intensity = observed / escape factor
+            I_corrected = obs.intensity / f_tau if f_tau > 0 else obs.intensity
 
-            # Check convergence
-            if I_corrected > 0:
-                rel_change = abs(I_new - I_corrected) / I_corrected
+            # Recompute tau from the CURRENT plasma state — never from
+            # the observed intensity. This is the Bulajic 2002 step that
+            # the buggy version skipped. Within a single call the plasma
+            # state inputs are constant, so tau_new == tau and the loop
+            # converges immediately. The meaningful feedback lives in the
+            # outer CF-LIBS solver which re-invokes correct() after each
+            # plasma-state update.
+            tau_new = self._estimate_optical_depth(
+                obs,
+                temperature_K,
+                concentrations,
+                total_n_cm3,
+                partition_funcs,
+                E_i_ev,
+            )
+
+            # Convergence test on tau itself (not on intensity). The
+            # tolerance threshold is the same convergence_tolerance
+            # attribute, reinterpreted as a relative-change criterion on
+            # tau: |Δτ| / τ < tol.
+            if tau > 0:
+                rel_change = abs(tau_new - tau) / tau
+                tau = tau_new
                 if rel_change < self.convergence_tolerance:
-                    I_corrected = I_new
+                    # Recompute I_corrected with the converged tau for
+                    # internal consistency before returning.
+                    f_tau = _escape_factor(tau)
+                    I_corrected = obs.intensity / f_tau if f_tau > 0 else obs.intensity
                     break
-
-            I_corrected = I_new
-
-            # Update tau for next iteration (intensity affects population estimate)
-            # This is a simplification - full iteration would recalculate τ
-            # based on updated concentrations from the solver
-            tau = tau * (I_new / obs.intensity) if obs.intensity > 0 else tau
+            else:
+                tau = tau_new
+                break
 
         return AbsorptionCorrectionResult(
             original_intensity=obs.intensity,
             corrected_intensity=I_corrected,
-            optical_depth=tau_initial,
+            optical_depth=tau,
             correction_factor=obs.intensity / I_corrected if I_corrected > 0 else 0.0,
-            is_optically_thick=tau_initial > 1.0,
+            is_optically_thick=tau > 1.0,
             iterations=iteration + 1,
         )
 

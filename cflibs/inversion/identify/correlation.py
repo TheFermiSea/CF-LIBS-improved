@@ -954,6 +954,7 @@ class CorrelationIdentifier:
                         transition=trans,
                         resolving_power=self.resolving_power,
                         fallback=self.wavelength_tolerance_nm,
+                        T_K=self.reference_temperature,
                     ),
                 )
             else:
