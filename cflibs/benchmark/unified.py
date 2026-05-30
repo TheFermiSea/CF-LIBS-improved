@@ -75,6 +75,8 @@ from cflibs.benchmark.dataset import (  # noqa: E402
 from cflibs.benchmark.loaders import load_benchmark  # noqa: E402
 from cflibs.benchmark.checkpoint import (  # noqa: E402
     emit_checkpoint_part,
+    make_worker_slug,
+    new_run_id,
 )
 from cflibs.benchmark.composition_eval import (  # noqa: E402,F401
     # Public surface
@@ -91,6 +93,7 @@ from cflibs.benchmark.composition_eval import (  # noqa: E402,F401
     _composition_error_tier,
     _compute_fractional_error,
     _maybe_compute_posterior_diagnostics,
+    _spectrum_metadata_fields,
 )
 from cflibs.benchmark.composition_metrics import (  # noqa: E402
     aitchison_distance,
@@ -2259,6 +2262,258 @@ def _fit_iterative_jax_pipeline(
     return predictor
 
 
+def _build_checkpoint_record(
+    spectrum: BenchmarkSpectrum,
+    payload: Dict[str, Any],
+    elapsed_s: float,
+    workflow_name: str,
+    config_name: str,
+) -> CompositionEvaluationRecord:
+    """Build a CompositionEvaluationRecord from per-spectrum data.
+
+    Extracted helper for the bayesian predictor closure so it lives next
+    to its only call site without expanding the cognitive complexity of
+    that closure.
+
+    Parameters
+    ----------
+    spectrum : BenchmarkSpectrum
+        Input spectrum with metadata.
+    payload : Dict[str, Any]
+        Result dict from the predictor containing concentrations, etc.
+    elapsed_s : float
+        Per-spectrum elapsed time (seconds).
+    workflow_name : str
+        Name of the composition workflow (e.g. "bayesian").
+    config_name : str
+        Configuration name string.
+
+    Returns
+    -------
+    CompositionEvaluationRecord
+        Checkpoint record ready for emission.
+    """
+    return CompositionEvaluationRecord(
+        **_spectrum_metadata_fields(spectrum),
+        id_workflow_name="",
+        composition_workflow_name=workflow_name,
+        outer_split_id="",
+        tuning_split_id=None,
+        id_config_name="",
+        composition_config_name=config_name,
+        elapsed_seconds=float(elapsed_s),
+        candidate_elements=list(payload.get("candidate_elements", [])),
+        true_composition=dict(getattr(spectrum, "true_composition", {}) or {}),
+        predicted_composition=dict(payload.get("concentrations", {})),
+        aitchison=payload.get("aitchison", None),
+        rmse=None,
+        temperature_error_frac=None,
+        ne_error_frac=None,
+        closure_residual=None,
+    )
+
+
+def _bayesian_configure_jax_numpyro() -> None:
+    """Pin JAX float64 + GPU platform, and NumPyro platform, when available.
+
+    Pulled out of ``_fit_bayesian_pipeline`` to keep that factory's cognitive
+    complexity below the SonarCloud threshold.
+    """
+    if HAS_JAX:
+        import jax  # noqa: PLC0415
+
+        jax.config.update("jax_enable_x64", True)
+        if os.environ.get("JAX_PLATFORMS") == "cuda":
+            jax.config.update("jax_platform_name", "gpu")
+    if HAS_NUMPYRO:
+        import numpyro  # noqa: PLC0415
+
+        try:
+            if os.environ.get("JAX_PLATFORMS") == "cuda":
+                numpyro.set_platform("gpu")
+        except Exception as exc:  # noqa: BLE001 - non-fatal platform pin
+            logger.debug("bayesian: failed to set NumPyro platform: %s", exc)
+
+
+def _bayesian_warn_missing_deps() -> None:
+    """Emit a single warning at factory-build time listing missing deps."""
+    if HAS_JAX and HAS_NUMPYRO:
+        return
+    missing = []
+    if not HAS_JAX:
+        missing.append("jax")
+    if not HAS_NUMPYRO:
+        missing.append("numpyro")
+    logger.warning(
+        "bayesian composition workflow: missing dependencies %s — "
+        "predictor will raise on first invocation",
+        ", ".join(missing),
+    )
+
+
+def _bayesian_get_or_build_sampler(
+    cache: Dict[Tuple[Any, ...], Any],
+    db_path: Any,
+    elements: List[str],
+    wl_min: float,
+    wl_max: float,
+    pixels: int,
+    rp_estimate: Optional[float],
+) -> Tuple[Any, Any]:
+    """Cache-aware ``(BayesianForwardModel, MCMCSampler)`` factory.
+
+    Key is ``(sorted elements, pixels, rounded wl bounds)`` so tiny float
+    drift on the wavelength axis does not blow the JIT cache.
+    """
+    elements_key = tuple(sorted(elements))
+    cache_key = (elements_key, pixels, round(wl_min, 3), round(wl_max, 3))
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    from cflibs.inversion.solve.bayesian import (  # noqa: PLC0415
+        BayesianForwardModel,
+        MCMCSampler,
+        NoiseParameters,
+        PriorConfig,
+    )
+
+    resolving_power = float(rp_estimate) if rp_estimate is not None and rp_estimate > 0 else None
+    forward_model = BayesianForwardModel(
+        db_path=str(db_path),
+        elements=elements,
+        wavelength_range=(wl_min, wl_max),
+        wavelength_grid=None,
+        pixels=pixels,
+        resolving_power=resolving_power,
+    )
+    sampler = MCMCSampler(
+        forward_model,
+        prior_config=PriorConfig(),
+        noise_params=NoiseParameters(),
+    )
+    cache[cache_key] = (forward_model, sampler)
+    return forward_model, sampler
+
+
+def _bayesian_run_mcmc(
+    sampler: Any,
+    obs: Any,
+    *,
+    num_warmup: int,
+    num_samples: int,
+    num_chains: int,
+    seed: int,
+    target_accept_prob: float,
+) -> Any:
+    """Run NUTS on ``sampler``, optionally pinning to a GPU device.
+
+    The GPU pin is best-effort: if jax + a GPU are available and the
+    ``JAX_PLATFORMS=cuda`` hint is set, we ``with jax.default_device(...)``
+    so the kernel doesn't sporadically fall back to CPU on cluster nodes.
+    """
+    run_kwargs = {
+        "num_warmup": num_warmup,
+        "num_samples": num_samples,
+        "num_chains": num_chains,
+        "seed": seed,
+        "target_accept_prob": target_accept_prob,
+        "progress_bar": False,
+    }
+    gpu_device = None
+    try:
+        import jax  # noqa: PLC0415
+
+        if os.environ.get("JAX_PLATFORMS") == "cuda":
+            gpu_device = jax.devices("gpu")[0]
+    except (ImportError, RuntimeError, IndexError):
+        gpu_device = None
+
+    if gpu_device is not None:
+        import jax  # noqa: PLC0415
+
+        with jax.default_device(gpu_device):
+            return sampler.run(obs, **run_kwargs)
+    return sampler.run(obs, **run_kwargs)
+
+
+def _bayesian_extract_concentrations(result: Any, elements: List[str]) -> Dict[str, float]:
+    """Posterior-mean concentrations on the (renormalised) simplex.
+
+    Handles both the rank-2 ``(samples, elements)`` and rank-3
+    ``(chains, samples, elements)`` shapes that NumPyro produces under the
+    ``chain_method='vectorized'`` configuration.
+    """
+    samples = result.samples
+    if "concentrations" in samples:
+        conc_samples = np.asarray(samples["concentrations"])
+        mean_concs = np.mean(conc_samples, axis=tuple(range(conc_samples.ndim - 1)))
+        concentrations = {el: float(mean_concs[i]) for i, el in enumerate(elements)}
+    else:
+        concentrations = {el: float(result.concentrations_mean.get(el, 0.0)) for el in elements}
+    concentrations = {el: max(1e-9, v) for el, v in concentrations.items()}
+    total = sum(concentrations.values())
+    if total > 0:
+        concentrations = {el: v / total for el, v in concentrations.items()}
+    return concentrations
+
+
+def _bayesian_extract_posterior(result: Any) -> Tuple[Dict[str, Any], int]:
+    """Best-effort ``(posterior_samples, divergent_count)`` from MCMCResult.
+
+    Both extractions are wrapped in broad excepts because the optional
+    ArviZ inference_data path is not always present, and the benchmark
+    gate must never block on diagnostic prep.
+    """
+    posterior_samples: Dict[str, Any] = {}
+    try:
+        posterior_samples = {k: np.asarray(v) for k, v in result.samples.items()}
+    except Exception:  # noqa: BLE001 - never block the gate on diag prep
+        posterior_samples = {}
+
+    divergent_count = 0
+    try:
+        inference_data = getattr(result, "inference_data", None)
+        if inference_data is not None and hasattr(inference_data, "sample_stats"):
+            stats = inference_data.sample_stats
+            if "diverging" in stats:
+                divergent_count = int(np.asarray(stats["diverging"].values).sum())
+    except Exception:  # noqa: BLE001
+        divergent_count = 0
+    return posterior_samples, divergent_count
+
+
+def _bayesian_build_payload(
+    result: Any,
+    concentrations: Dict[str, float],
+    aitchison: Optional[float],
+    posterior_samples: Dict[str, Any],
+    divergent_count: int,
+) -> Dict[str, Any]:
+    """Assemble the predictor return dict consumed by composition_eval."""
+    convergence_status = (
+        result.convergence_status.value
+        if hasattr(result.convergence_status, "value")
+        else str(result.convergence_status)
+    )
+    return {
+        "concentrations": concentrations,
+        "predicted_composition": concentrations,
+        "aitchison": aitchison,
+        "posterior_samples": posterior_samples,
+        "divergent_count": divergent_count,
+        "temperature_K": float(result.T_K_mean) if result.T_K_mean else None,
+        "electron_density_cm3": (
+            float(result.n_e_mean) if getattr(result, "n_e_mean", None) else None
+        ),
+        "convergence_status": convergence_status,
+        "n_samples": int(result.n_samples),
+        "n_chains": int(result.n_chains),
+        "n_warmup": int(result.n_warmup),
+        "solver_backend": "numpyro_jax",
+    }
+
+
 def _fit_bayesian_pipeline(
     _context: UnifiedBenchmarkContext,
     _train_spectra: Sequence[BenchmarkSpectrum],
@@ -2285,41 +2540,8 @@ def _fit_bayesian_pipeline(
     at predictor build time so the benchmark report shows an explicit
     failure for that workflow rather than silently regressing.
     """
-    if HAS_JAX:
-        import jax
-
-        # Ensure 64-bit precision for NumPyro stability; matches PR #269
-        jax.config.update("jax_enable_x64", True)
-        if os.environ.get("JAX_PLATFORMS") == "cuda":
-            jax.config.update("jax_platform_name", "gpu")
-
-    if HAS_NUMPYRO:
-        import numpyro
-
-        try:
-            # Explicitly pin to GPU if requested; avoids CPU-bound NUTS on heavy tier
-            if os.environ.get("JAX_PLATFORMS") == "cuda":
-                numpyro.set_platform("gpu")
-            # NOTE: ``numpyro.set_host_device_count`` previously lived here but
-            # took effect only when called before JAX initialization, which is
-            # never true by this point in the runner. The downstream
-            # ``MCMCSampler`` now defaults to ``chain_method='vectorized'``,
-            # which batches every chain into a single JIT'd kernel on the
-            # current device -- no multi-device requirement.
-        except Exception as e:
-            logger.debug("bayesian: failed to set NumPyro platform: %s", e)
-
-    if not HAS_JAX or not HAS_NUMPYRO:
-        missing = []
-        if not HAS_JAX:
-            missing.append("jax")
-        if not HAS_NUMPYRO:
-            missing.append("numpyro")
-        logger.warning(
-            "bayesian composition workflow: missing dependencies %s — "
-            "predictor will raise on first invocation",
-            ", ".join(missing),
-        )
+    _bayesian_configure_jax_numpyro()
+    _bayesian_warn_missing_deps()
 
     num_warmup = int(config.get("num_warmup", 200))
     num_samples = int(config.get("num_samples", 400))
@@ -2332,11 +2554,36 @@ def _fit_bayesian_pipeline(
     # Keyed by (tuple(elements), pixels, wl_min, wl_max).
     sampler_cache: Dict[Tuple[Any, ...], Any] = {}
 
+    # Per-spectrum progress + checkpoint state. We capture the wall-clock
+    # start of the loop the first time the predictor is invoked so the
+    # ``elapsed_s`` reported by ``logger.info`` reflects time-on-task for
+    # the bayesian workflow specifically (independent of any outer
+    # benchmark setup costs). Checkpoints are written atomically via
+    # ``emit_checkpoint_part`` into a parts directory, with one part-file
+    # per 10 spectra. Each part-file is named via worker_slug + sequence_id
+    # and written atomically (staged into .tmp, then rename), so multiple
+    # closures (e.g. from concurrent folds) do not collide on disk.
+    progress_state: Dict[str, Any] = {
+        "loop_start": None,
+        "spectrum_index": 0,
+    }
+    # Atomic checkpoint via emit_checkpoint_part (Phase 2 pattern).
+    checkpoint_parts_dir = Path("composition_records_checkpoint.parts")
+    checkpoint_run_id = new_run_id()
+    checkpoint_worker_slug = make_worker_slug(checkpoint_run_id)
+    checkpoint_seq = 0
+    checkpoint_batch: List[CompositionEvaluationRecord] = []
+    composition_workflow_name = "bayesian"
+    composition_config_name_str = _config_name(config)
+
     def predictor(
         spectrum: BenchmarkSpectrum,
         candidate_elements: Sequence[str],
         _id_result: Optional[ElementIdentificationResult],
     ) -> Dict[str, Any]:
+        # ``checkpoint_seq`` lives in the enclosing scope so it persists
+        # across calls (each emit advances the sequence counter).
+        nonlocal checkpoint_seq
         if not HAS_JAX or not HAS_NUMPYRO:
             raise RuntimeError(
                 "bayesian composition workflow requires jax + numpyro "
@@ -2346,13 +2593,24 @@ def _fit_bayesian_pipeline(
         if not elements:
             raise ValueError("No candidate elements available for bayesian composition workflow")
 
-        from cflibs.inversion.solve.bayesian import (
-            BayesianForwardModel,
-            MCMCSampler,
-            NoiseParameters,
-            PriorConfig,
+        # Per-spectrum progress log. ``loop_start`` is captured BEFORE the
+        # first iteration so the logged ``elapsed_cumulative`` measures time
+        # since the bayesian loop began. ``spectrum_start`` (below) gives
+        # the per-spectrum wall time for the checkpoint record.
+        if progress_state["loop_start"] is None:
+            progress_state["loop_start"] = time.monotonic()
+        progress_state["spectrum_index"] += 1
+        spectrum_index = int(progress_state["spectrum_index"])
+        elapsed_cumulative = time.monotonic() - float(progress_state["loop_start"])
+        dataset_name = getattr(spectrum, "dataset_id", None) or "unknown"
+        logger.info(
+            f"[bayesian] {dataset_name}: spectrum {spectrum_index} "
+            f"(elapsed {elapsed_cumulative:.1f}s)"
         )
+        spectrum_start = time.monotonic()
 
+        # Spectrum prep + sampler get + MCMC run, all delegated to module-
+        # level helpers to keep this closure's cognitive complexity low.
         wl = np.asarray(spectrum.wavelength_nm, dtype=float)
         intensity = np.asarray(spectrum.intensity, dtype=float)
         if wl.size == 0 or intensity.size == 0:
@@ -2360,140 +2618,66 @@ def _fit_bayesian_pipeline(
         wl_min = float(wl.min())
         wl_max = float(wl.max())
 
-        # Amortize JIT by using a fixed-size grid (pixels) and caching the sampler.
-        # JIT triggers whenever the model structure or input shapes change.
-        elements_key = tuple(sorted(elements))
-        # Round wl boundaries to avoid cache misses on tiny float drift
-        cache_key = (elements_key, pixels, round(wl_min, 3), round(wl_max, 3))
+        forward_model, sampler = _bayesian_get_or_build_sampler(
+            sampler_cache,
+            _context.db_path,
+            elements,
+            wl_min,
+            wl_max,
+            pixels,
+            spectrum.rp_estimate,
+        )
+        obs = np.interp(np.asarray(forward_model.wavelength), wl, intensity)
+        result = _bayesian_run_mcmc(
+            sampler,
+            obs,
+            num_warmup=num_warmup,
+            num_samples=num_samples,
+            num_chains=num_chains,
+            seed=seed,
+            target_accept_prob=target_accept_prob,
+        )
 
-        if cache_key in sampler_cache:
-            forward_model, sampler = sampler_cache[cache_key]
-        else:
-            # Use fixed pixel count to keep JIT signatures stable across spectra.
-            # We interpolate the observed intensity onto this grid below.
-            forward_model = BayesianForwardModel(
-                db_path=str(_context.db_path),
-                elements=elements,
-                wavelength_range=(wl_min, wl_max),
-                wavelength_grid=None,  # Force uniform grid of 'pixels' size
-                pixels=pixels,
-                resolving_power=(
-                    float(spectrum.rp_estimate)
-                    if spectrum.rp_estimate is not None and spectrum.rp_estimate > 0
-                    else None
-                ),
+        concentrations = _bayesian_extract_concentrations(result, elements)
+        aitchison = (
+            aitchison_distance(spectrum.true_composition, concentrations)
+            if spectrum.true_composition
+            else None
+        )
+        posterior_samples, divergent_count = _bayesian_extract_posterior(result)
+        payload = _bayesian_build_payload(
+            result, concentrations, aitchison, posterior_samples, divergent_count
+        )
+
+        # Per-spectrum elapsed_seconds is just the MCMC wall time, not the
+        # cumulative loop time logged above. Atomic checkpoint via
+        # emit_checkpoint_part — each closure (one per dataset/fold/config)
+        # writes its own part file via worker_slug + sequence_id.
+        elapsed_spectrum = time.monotonic() - spectrum_start
+        checkpoint_batch.append(
+            _build_checkpoint_record(
+                spectrum=spectrum,
+                payload={
+                    "concentrations": concentrations,
+                    "aitchison": aitchison,
+                    "candidate_elements": elements,
+                },
+                elapsed_s=elapsed_spectrum,
+                workflow_name=composition_workflow_name,
+                config_name=composition_config_name_str,
             )
-            sampler = MCMCSampler(
-                forward_model,
-                prior_config=PriorConfig(),
-                noise_params=NoiseParameters(),
+        )
+        if spectrum_index % 10 == 0:
+            checkpoint_seq = emit_checkpoint_part(
+                parts_dir=checkpoint_parts_dir,
+                run_id=checkpoint_run_id,
+                worker_slug=checkpoint_worker_slug,
+                seq=checkpoint_seq,
+                records=checkpoint_batch,
+                processed=spectrum_index,
             )
-            sampler_cache[cache_key] = (forward_model, sampler)
+            checkpoint_batch.clear()
 
-        # Interp the observed intensity onto the fixed forward-model grid.
-        grid = np.asarray(forward_model.wavelength)
-        obs = np.interp(grid, wl, intensity)
-
-        # Ensure GPU context if available. JAX_PLATFORMS=cuda should handle this,
-        # but explicit pinning prevents sporadic CPU-only fallback observed on vasp-03.
-        try:
-            import jax
-
-            gpu_device = (
-                jax.devices("gpu")[0] if os.environ.get("JAX_PLATFORMS") == "cuda" else None
-            )
-        except (ImportError, RuntimeError, IndexError):
-            gpu_device = None
-
-        if gpu_device:
-            with jax.default_device(gpu_device):
-                result = sampler.run(
-                    obs,
-                    num_warmup=num_warmup,
-                    num_samples=num_samples,
-                    num_chains=num_chains,
-                    seed=seed,
-                    target_accept_prob=target_accept_prob,
-                    progress_bar=False,
-                )
-        else:
-            result = sampler.run(
-                obs,
-                num_warmup=num_warmup,
-                num_samples=num_samples,
-                num_chains=num_chains,
-                seed=seed,
-                target_accept_prob=target_accept_prob,
-                progress_bar=False,
-            )
-
-        # Posterior mean concentrations -> point-estimate composition.
-        # We compute this from the raw samples to ensure we have the mean
-        # even if the result object's summary is unpopulated.
-        samples = result.samples
-        if "concentrations" in samples:
-            conc_samples = np.asarray(samples["concentrations"])
-            # Handle both (samples, elements) and (chains, samples, elements)
-            mean_concs = np.mean(conc_samples, axis=tuple(range(conc_samples.ndim - 1)))
-            concentrations = {element: float(mean_concs[i]) for i, element in enumerate(elements)}
-        else:
-            concentrations = {
-                element: float(result.concentrations_mean.get(element, 0.0)) for element in elements
-            }
-
-        # Renormalize so the closure residual stays small even if MCMC
-        # didn't perfectly hit the simplex constraint.
-        # Ensure all values are positive for Aitchison distance calculation.
-        concentrations = {el: max(1e-9, v) for el, v in concentrations.items()}
-        total = sum(concentrations.values())
-        if total > 0:
-            concentrations = {el: v / total for el, v in concentrations.items()}
-
-        # Compute Aitchison distance if truth is available
-        aitchison = None
-        if spectrum.true_composition:
-            aitchison = aitchison_distance(spectrum.true_composition, concentrations)
-
-        # Pull the posterior sample dict off the MCMCResult so the
-        # benchmark's _maybe_compute_posterior_diagnostics path lights up.
-        posterior_samples: Dict[str, Any] = {}
-        try:
-            posterior_samples = {k: np.asarray(v) for k, v in result.samples.items()}
-        except Exception:  # noqa: BLE001 - never block the gate on diag prep
-            posterior_samples = {}
-
-        divergent_count = 0
-        try:
-            # NumPyro stores divergent transitions in mcmc.get_extra_fields(),
-            # but MCMCResult doesn't surface them directly — best-effort fetch.
-            inference_data = getattr(result, "inference_data", None)
-            if inference_data is not None and hasattr(inference_data, "sample_stats"):
-                stats = inference_data.sample_stats
-                if "diverging" in stats:
-                    divergent_count = int(np.asarray(stats["diverging"].values).sum())
-        except Exception:  # noqa: BLE001
-            divergent_count = 0
-
-        payload: Dict[str, Any] = {
-            "concentrations": concentrations,
-            "predicted_composition": concentrations,
-            "aitchison": aitchison,
-            "posterior_samples": posterior_samples,
-            "divergent_count": divergent_count,
-            "temperature_K": float(result.T_K_mean) if result.T_K_mean else None,
-            "electron_density_cm3": (
-                float(result.n_e_mean) if getattr(result, "n_e_mean", None) else None
-            ),
-            "convergence_status": (
-                result.convergence_status.value
-                if hasattr(result.convergence_status, "value")
-                else str(result.convergence_status)
-            ),
-            "n_samples": int(result.n_samples),
-            "n_chains": int(result.n_chains),
-            "n_warmup": int(result.n_warmup),
-            "solver_backend": "numpyro_jax",
-        }
         return payload
 
     return predictor

@@ -222,6 +222,33 @@ def _compose_annotations(
 # ---------------------------------------------------------------------------
 
 
+def _spectrum_metadata_fields(spectrum: BenchmarkSpectrum) -> Dict[str, Any]:
+    """Per-spectrum metadata fields shared by every CompositionEvaluationRecord builder.
+
+    Pulled out so the success / failure / bayesian-checkpoint builders do not
+    each carry their own copy of the 9-line spectrum-attribute dump. Returns
+    a kwargs dict suitable for ``**``-spreading into the dataclass constructor.
+    """
+    truth_type_attr = getattr(spectrum, "truth_type", None)
+    if truth_type_attr is None:
+        truth_type_value = ""
+    elif hasattr(truth_type_attr, "value"):
+        truth_type_value = truth_type_attr.value
+    else:
+        truth_type_value = str(truth_type_attr)
+    return {
+        "dataset_id": getattr(spectrum, "dataset_id", None) or "unknown",
+        "spectrum_id": getattr(spectrum, "spectrum_id", ""),
+        "group_id": getattr(spectrum, "group_id", None),
+        "specimen_id": getattr(spectrum, "specimen_id", None),
+        "instrument_id": getattr(spectrum, "instrument_id", None),
+        "truth_type": truth_type_value,
+        "rp_estimate": getattr(spectrum, "rp_estimate", None),
+        "label_cardinality": getattr(spectrum, "label_cardinality", None),
+        "spectrum_kind": getattr(spectrum, "spectrum_kind", None),
+    }
+
+
 def _build_composition_success_record(
     spectrum: BenchmarkSpectrum,
     id_workflow_name: str,
@@ -242,15 +269,7 @@ def _build_composition_success_record(
     ratio_errors = subcompositional_ratio_errors(concentrations, true_comp)
     posterior_diag = _maybe_compute_posterior_diagnostics(prediction, candidate_elements, true_comp)
     return CompositionEvaluationRecord(
-        dataset_id=spectrum.dataset_id or "unknown",
-        spectrum_id=spectrum.spectrum_id,
-        group_id=spectrum.group_id,
-        specimen_id=spectrum.specimen_id,
-        instrument_id=spectrum.instrument_id,
-        truth_type=spectrum.truth_type.value,
-        rp_estimate=spectrum.rp_estimate,
-        label_cardinality=spectrum.label_cardinality,
-        spectrum_kind=spectrum.spectrum_kind,
+        **_spectrum_metadata_fields(spectrum),
         id_workflow_name=id_workflow_name,
         composition_workflow_name=composition_workflow_name,
         outer_split_id=outer_split_id,
@@ -294,15 +313,7 @@ def _build_composition_failure_record(
     failure_reason: str,
 ) -> CompositionEvaluationRecord:
     return CompositionEvaluationRecord(
-        dataset_id=spectrum.dataset_id or "unknown",
-        spectrum_id=spectrum.spectrum_id,
-        group_id=spectrum.group_id,
-        specimen_id=spectrum.specimen_id,
-        instrument_id=spectrum.instrument_id,
-        truth_type=spectrum.truth_type.value,
-        rp_estimate=spectrum.rp_estimate,
-        label_cardinality=spectrum.label_cardinality,
-        spectrum_kind=spectrum.spectrum_kind,
+        **_spectrum_metadata_fields(spectrum),
         id_workflow_name=id_workflow_name,
         composition_workflow_name=composition_workflow_name,
         outer_split_id=outer_split_id,
