@@ -55,9 +55,7 @@ def test_nonzero_stark_w_widens_tolerance_above_fwhm_inst():
     fwhm_inst = wl_nm / R  # 0.05 nm
     transition = _MockTransition(stark_w=0.05)
 
-    tol = get_wavelength_tolerance(
-        wavelength_nm=wl_nm, transition=transition, resolving_power=R
-    )
+    tol = get_wavelength_tolerance(wavelength_nm=wl_nm, transition=transition, resolving_power=R)
 
     assert tol > fwhm_inst, (
         f"Tolerance must include the Stark contribution, "
@@ -143,8 +141,7 @@ def test_stark_term_scales_linearly_with_electron_density():
         f"got s(1e17)={s_1e17:.6f}, s(2e17)={s_2e17:.6f}"
     )
     assert math.isclose(s_1e18, 10.0 * s_1e17, rel_tol=1e-6), (
-        f"Stark FWHM should be 10x at 10x n_e, "
-        f"got s(1e17)={s_1e17:.6f}, s(1e18)={s_1e18:.6f}"
+        f"Stark FWHM should be 10x at 10x n_e, " f"got s(1e17)={s_1e17:.6f}, s(1e18)={s_1e18:.6f}"
     )
 
 
@@ -189,25 +186,19 @@ def test_missing_or_nonpositive_stark_w_falls_back(stark_w):
     tol = get_wavelength_tolerance(
         wavelength_nm=500.0, transition=transition, resolving_power=5000.0
     )
-    assert tol == 0.05
+    assert tol == pytest.approx(0.05)
 
 
 def test_no_transition_returns_fallback():
-    assert (
-        get_wavelength_tolerance(
-            wavelength_nm=500.0, transition=None, resolving_power=5000.0
-        )
-        == 0.05
-    )
+    assert get_wavelength_tolerance(
+        wavelength_nm=500.0, transition=None, resolving_power=5000.0
+    ) == pytest.approx(0.05)
 
 
 def test_custom_fallback_honored_when_no_stark_data():
-    assert (
-        get_wavelength_tolerance(
-            wavelength_nm=500.0,
-            transition=None,
-            resolving_power=5000.0,
-            fallback=0.02,
-        )
-        == 0.02
-    )
+    assert get_wavelength_tolerance(
+        wavelength_nm=500.0,
+        transition=None,
+        resolving_power=5000.0,
+        fallback=0.02,
+    ) == pytest.approx(0.02)
