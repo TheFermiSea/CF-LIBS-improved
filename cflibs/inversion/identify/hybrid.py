@@ -33,7 +33,7 @@ from cflibs.inversion.identify._coverage import (
 )
 
 # Re-export the opt-in majority-vote combiner so callers can use either
-# ``cflibs.inversion.identify.hybrid`` or ``cflibs.inversion.identify.hybrid``
+# ``cflibs.inversion.identify.hybrid`` or ``cflibs.inversion.identify.hybrid_consensus``
 # without learning a third module path. The existing HybridIdentifier
 # (NNLS+ALIAS two-stage) is unchanged; HybridConsensusIdentifier is a
 # *separate* class with majority-vote semantics across alias/comb/correlation.
