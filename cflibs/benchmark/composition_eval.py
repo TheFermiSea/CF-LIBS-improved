@@ -230,11 +230,12 @@ def _spectrum_metadata_fields(spectrum: BenchmarkSpectrum) -> Dict[str, Any]:
     a kwargs dict suitable for ``**``-spreading into the dataclass constructor.
     """
     truth_type_attr = getattr(spectrum, "truth_type", None)
-    truth_type_value = (
-        truth_type_attr.value
-        if truth_type_attr is not None and hasattr(truth_type_attr, "value")
-        else str(truth_type_attr) if truth_type_attr is not None else ""
-    )
+    if truth_type_attr is None:
+        truth_type_value = ""
+    elif hasattr(truth_type_attr, "value"):
+        truth_type_value = truth_type_attr.value
+    else:
+        truth_type_value = str(truth_type_attr)
     return {
         "dataset_id": getattr(spectrum, "dataset_id", None) or "unknown",
         "spectrum_id": getattr(spectrum, "spectrum_id", ""),
