@@ -9,7 +9,7 @@ import math
 
 import pytest
 
-from cflibs.inversion.closure import (
+from cflibs.inversion.physics.closure import (
     ClosureEquation,
     ClosureMode,
     DirichletResidualResult,

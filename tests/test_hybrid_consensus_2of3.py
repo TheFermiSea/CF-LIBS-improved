@@ -26,7 +26,7 @@ from typing import List
 
 import pytest
 
-from cflibs.inversion.element_id import (
+from cflibs.inversion.common.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
 )
@@ -105,13 +105,6 @@ class TestHybridIdentifierDefaultPreservation:
             "(F1=0.6880 for hybrid_union) is keyed off the existing default. "
             "Do NOT silently change this."
         )
-
-    def test_hybrid_identifier_module_exports_match_legacy_path(self):
-        """The shim path used by the benchmark must still resolve."""
-        from cflibs.inversion import hybrid_identifier as shim
-        from cflibs.inversion.identify import hybrid as canonical
-
-        assert shim.HybridIdentifier is canonical.HybridIdentifier
 
     def test_new_consensus_class_does_not_replace_hybrid_identifier(self):
         """HybridConsensusIdentifier is a *separate* class, not a subclass."""

@@ -74,8 +74,8 @@ import time
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import LineObservation, BoltzmannPlotFitter
-from cflibs.inversion.solver import CFLIBSResult, IterativeCFLIBSSolver
+from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
+from cflibs.inversion.solve.iterative import CFLIBSResult, IterativeCFLIBSSolver
 from cflibs.inversion.line_selection import LineSelector
 
 __all__ = [

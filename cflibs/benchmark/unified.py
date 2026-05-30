@@ -100,7 +100,7 @@ from cflibs.benchmark.composition_metrics import (  # noqa: E402
 from cflibs.core.logging_config import get_logger  # noqa: E402
 
 if TYPE_CHECKING:
-    from cflibs.inversion.element_id import ElementIdentificationResult
+    from cflibs.inversion.common.element_id import ElementIdentificationResult
 
 logger = get_logger("benchmark.unified")
 
@@ -145,7 +145,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 try:  # The JAX iterative solver is being built in parallel by Agent B; the
     # benchmark gate must keep working even when it lands later.
-    from cflibs.inversion.solver import IterativeCFLIBSSolverJax  # type: ignore
+    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolverJax  # type: ignore
 
     HAS_JAX_ITERATIVE_SOLVER = True
 except (ImportError, AttributeError):  # pragma: no cover - exercised when absent
@@ -717,7 +717,7 @@ def _empty_identification_result(
     algorithm: str,
     warnings: Optional[List[str]] = None,
 ) -> ElementIdentificationResult:
-    from cflibs.inversion.element_id import ElementIdentificationResult
+    from cflibs.inversion.common.element_id import ElementIdentificationResult
 
     return ElementIdentificationResult(
         detected_elements=[],
@@ -793,7 +793,7 @@ def _class_default_config(cls: Any, keys: Sequence[str]) -> Dict[str, Any]:
 
 
 def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
-    from cflibs.inversion.alias_identifier import ALIASIdentifier
+    from cflibs.inversion.identify.alias import ALIASIdentifier
 
     arch_defaults = _class_default_config(
         ALIASIdentifier,
@@ -1025,7 +1025,7 @@ def _build_alias_sweep_predictor_factory(
     ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
         def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
             from cflibs.atomic.database import AtomicDatabase
-            from cflibs.inversion.alias_identifier import ALIASIdentifier
+            from cflibs.inversion.identify.alias import ALIASIdentifier
 
             with AtomicDatabase(str(context.db_path)) as db:
                 identifier = ALIASIdentifier(
@@ -1053,7 +1053,7 @@ def _build_alias_sweep_predictor_factory(
 
 
 def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
-    from cflibs.inversion.comb_identifier import CombIdentifier
+    from cflibs.inversion.identify.comb import CombIdentifier
 
     arch_defaults = _class_default_config(
         CombIdentifier,
@@ -1083,7 +1083,7 @@ def _comb_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
 
 
 def _correlation_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
-    from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+    from cflibs.inversion.identify.correlation import CorrelationIdentifier
 
     arch_defaults = _class_default_config(
         CorrelationIdentifier,
@@ -1205,7 +1205,7 @@ def _alias_preset_kwargs(name: str) -> Dict[str, Any]:
 
     Lazy import keeps ``cflibs.benchmark.unified`` importable without
     eagerly pulling JAX-touching identifier code (mirrors the other
-    ``cflibs.inversion.alias_identifier`` lazy-imports in this file).
+    ``cflibs.inversion.identify.alias`` lazy-imports in this file).
     The copy means downstream mutation (e.g. layering config-pulled
     overrides) cannot leak into the shared registry.
     """
@@ -1348,7 +1348,7 @@ def _build_alias_voter(
     cocktail_kwargs: Dict[str, Any],
 ):
     """Construct one ALIAS voter for a consensus workflow."""
-    from cflibs.inversion.alias_identifier import ALIASIdentifier
+    from cflibs.inversion.identify.alias import ALIASIdentifier
 
     return ALIASIdentifier(
         atomic_db=db,
@@ -1370,7 +1370,7 @@ def _build_sibling_voter(
 ):
     """Construct one non-ALIAS voter for a consensus workflow."""
     if kind == "comb":
-        from cflibs.inversion.comb_identifier import CombIdentifier
+        from cflibs.inversion.identify.comb import CombIdentifier
 
         return CombIdentifier(
             atomic_db=db,
@@ -1380,7 +1380,7 @@ def _build_sibling_voter(
             **_jax_identifier_flags_for(CombIdentifier),
         )
     if kind == "correlation":
-        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+        from cflibs.inversion.identify.correlation import CorrelationIdentifier
 
         return CorrelationIdentifier(
             atomic_db=db,
@@ -1390,7 +1390,7 @@ def _build_sibling_voter(
             **_jax_identifier_flags_for(CorrelationIdentifier),
         )
     if kind == "nnls":
-        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+        from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
 
         return SpectralNNLSIdentifier(
             basis_library=nnls_basis,
@@ -1678,12 +1678,12 @@ def _resolve_id_workflow_preset(
 
     Lazy-imports the identifier class so this resolver can sit at module
     scope without forcing every importer of ``cflibs.benchmark.unified`` to
-    also import e.g. ``cflibs.inversion.alias_identifier`` (which pulls in
+    also import e.g. ``cflibs.inversion.identify.alias`` (which pulls in
     JAX-touching code paths).
     """
     spec = ID_WORKFLOW_PRESETS[preset_key]
     if spec["identifier"] == "ALIASIdentifier":
-        from cflibs.inversion.alias_identifier import ALIASIdentifier as _cls
+        from cflibs.inversion.identify.alias import ALIASIdentifier as _cls
     else:  # pragma: no cover - extension point
         raise NotImplementedError(
             f"Unknown identifier class for preset {preset_key!r}: {spec['identifier']!r}"
@@ -1716,7 +1716,7 @@ def _build_comb_predictor(
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
         from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.comb_identifier import CombIdentifier
+        from cflibs.inversion.identify.comb import CombIdentifier
 
         with AtomicDatabase(str(context.db_path)) as db:
             identifier = CombIdentifier(
@@ -1743,7 +1743,7 @@ def _build_correlation_predictor(
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
         from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.correlation_identifier import CorrelationIdentifier
+        from cflibs.inversion.identify.correlation import CorrelationIdentifier
 
         with AtomicDatabase(str(context.db_path)) as db:
             identifier = CorrelationIdentifier(
@@ -1772,7 +1772,7 @@ def _build_nnls_predictor(
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
-        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+        from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
 
         basis, basis_fwhm, mismatch = context.basis_for_rp(spectrum.rp_estimate)
         identifier = SpectralNNLSIdentifier(
@@ -1799,7 +1799,7 @@ def _build_hybrid_predictor(
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
         from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.hybrid_identifier import HybridIdentifier
+        from cflibs.inversion.identify.hybrid import HybridIdentifier
 
         with AtomicDatabase(str(context.db_path)) as db:
             basis, basis_fwhm, mismatch = context.basis_for_rp(spectrum.rp_estimate)
@@ -1886,11 +1886,11 @@ def _build_voigt_alias_predictor(
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
     from cflibs.inversion.deconvolution import deconvolve_peaks
-    from cflibs.inversion.preprocessing import estimate_baseline
+    from cflibs.inversion.preprocess.preprocessing import estimate_baseline
 
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
         from cflibs.atomic.database import AtomicDatabase
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
+        from cflibs.inversion.identify.alias import ALIASIdentifier
 
         with AtomicDatabase(str(context.db_path)) as db:
             baseline = estimate_baseline(spectrum.wavelength_nm, spectrum.intensity)
@@ -1949,7 +1949,7 @@ def _build_nnls_concentration_predictor(
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
-        from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+        from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
 
         basis, basis_fwhm, mismatch = context.basis_for_rp(spectrum.rp_estimate)
         identifier = SpectralNNLSIdentifier(
@@ -2543,7 +2543,7 @@ def build_composition_workflow_registry(
     quick: bool = False,
     bayesian_mcmc_override: Optional[Dict[str, int]] = None,
 ) -> Dict[str, CompositionWorkflowSpec]:
-    from cflibs.inversion.boltzmann import FitMethod
+    from cflibs.inversion.physics.boltzmann import FitMethod
 
     weighting = _validate_boltzmann_weighting("aki_inverse_variance")
     iterative_configs = [

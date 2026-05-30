@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from cflibs.inversion.preprocessing import (
+from cflibs.inversion.preprocess.preprocessing import (
     estimate_baseline,
     estimate_baseline_snip,
     estimate_baseline_als,

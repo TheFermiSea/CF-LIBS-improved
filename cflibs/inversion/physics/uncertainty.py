@@ -20,7 +20,7 @@ Why uncertainties over alternatives?
 Monte Carlo UQ Usage
 --------------------
 ```python
-from cflibs.inversion.uncertainty import MonteCarloUQ
+from cflibs.inversion.physics.uncertainty import MonteCarloUQ
 
 # Create Monte Carlo sampler
 mc = MonteCarloUQ(solver, n_samples=500, seed=42)
@@ -783,8 +783,8 @@ class MonteCarloUQ:
 
     Example
     -------
-    >>> from cflibs.inversion.solver import IterativeCFLIBSSolver
-    >>> from cflibs.inversion.uncertainty import MonteCarloUQ
+    >>> from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+    >>> from cflibs.inversion.physics.uncertainty import MonteCarloUQ
     >>>
     >>> solver = IterativeCFLIBSSolver(atomic_db)
     >>> mc = MonteCarloUQ(solver, n_samples=500)
@@ -913,7 +913,7 @@ class MonteCarloUQ:
         List[LineObservation]
             Perturbed observations
         """
-        from cflibs.inversion.boltzmann import LineObservation
+        from cflibs.inversion.physics.boltzmann import LineObservation
 
         perturbed = []
         for obs in observations:

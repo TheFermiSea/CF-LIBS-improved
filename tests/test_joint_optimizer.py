@@ -18,7 +18,7 @@ jax = pytest.importorskip("jax")
 import jax.numpy as jnp  # noqa: E402
 
 
-from cflibs.inversion.joint_optimizer import (  # noqa: E402
+from cflibs.inversion.solve.joint_optimizer import (  # noqa: E402
     JointOptimizer,
     JointOptimizationResult,
     MultiStartJointOptimizer,

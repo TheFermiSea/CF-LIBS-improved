@@ -1,7 +1,7 @@
 """Back-compat smoke for the T1-6 Bayesian decomposition.
 
 Ensures every name previously exported from the legacy
-``cflibs.inversion.bayesian`` flat shim resolves identically after the
+``cflibs.inversion.solve.bayesian`` flat shim resolves identically after the
 ``cflibs/inversion/solve/bayesian.py`` -> ``bayesian/`` package split.
 """
 
@@ -49,8 +49,8 @@ LEGACY_NAMES = [
 
 
 def test_legacy_names_resolve_through_flat_shim():
-    """``from cflibs.inversion.bayesian import X`` works for every legacy name."""
-    mod = importlib.import_module("cflibs.inversion.bayesian")
+    """``from cflibs.inversion.solve.bayesian import X`` works for every legacy name."""
+    mod = importlib.import_module("cflibs.inversion.solve.bayesian")
     missing = [name for name in LEGACY_NAMES if not hasattr(mod, name)]
     assert not missing, f"Missing legacy names on flat shim: {missing}"
 
@@ -64,17 +64,17 @@ def test_legacy_names_resolve_through_package():
 
 def test_flat_and_package_paths_agree():
     """Same object identity between flat shim and package re-export."""
-    flat = importlib.import_module("cflibs.inversion.bayesian")
+    flat = importlib.import_module("cflibs.inversion.solve.bayesian")
     pkg = importlib.import_module("cflibs.inversion.solve.bayesian")
     for name in LEGACY_NAMES:
         assert getattr(flat, name) is getattr(pkg, name), f"Identity mismatch for {name!r}"
 
 
 def test_star_import_succeeds():
-    """``from cflibs.inversion.bayesian import *`` exposes a representative set."""
+    """``from cflibs.inversion.solve.bayesian import *`` exposes a representative set."""
     ns: dict[str, object] = {}
     exec(  # noqa: S102 - intentional: test star-import surface
-        "from cflibs.inversion.bayesian import *", ns
+        "from cflibs.inversion.solve.bayesian import *", ns
     )
     sample = {"BayesianForwardModel", "MCMCResult", "NoiseParameters"}
     assert sample.issubset(ns.keys()), f"Star import missing: {sample - ns.keys()}"

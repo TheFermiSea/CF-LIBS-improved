@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 from cflibs.atomic.database import AtomicDatabase
-from cflibs.inversion.alias_identifier import ALIASIdentifier
+from cflibs.inversion.identify.alias import ALIASIdentifier
 
 # Reuse data loading from validate_real_data
 try:

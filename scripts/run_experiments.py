@@ -34,12 +34,12 @@ if str(_REPO_ROOT) not in sys.path:
 
 from cflibs.benchmark import BenchmarkCorpus, BenchmarkHarness  # noqa: E402
 from cflibs.benchmark.corpus import _REFERENCE_LINES  # noqa: E402
-from cflibs.inversion.boltzmann import (  # noqa: E402
+from cflibs.inversion.physics.boltzmann import (  # noqa: E402
     BoltzmannPlotFitter,
     FitMethod,
     LineObservation,
 )
-from cflibs.inversion.cdsb import CDSBLineObservation, CDSBPlotter  # noqa: E402
+from cflibs.inversion.physics.cdsb import CDSBLineObservation, CDSBPlotter  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers: peak detection on Gaussian-fallback spectra

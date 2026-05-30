@@ -19,7 +19,7 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
 from cflibs.core.logging_config import get_logger as _get_alias_logger
-from cflibs.inversion.element_id import (
+from cflibs.inversion.common.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
     IdentifiedLine,
@@ -30,7 +30,7 @@ from cflibs.inversion.identify._coverage import (
     merge_coverage_into_parameters,
 )
 from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, LineObservation
-from cflibs.inversion.preprocessing import estimate_baseline, estimate_noise
+from cflibs.inversion.preprocess.preprocessing import estimate_baseline, estimate_noise
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 
 logger = get_logger("inversion.identify.alias")

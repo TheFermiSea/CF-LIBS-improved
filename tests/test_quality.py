@@ -15,7 +15,7 @@ from cflibs.inversion.quality import (
     QualityAssessor,
     compute_reconstruction_chi_squared,
 )
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 # ==============================================================================
 # QualityMetrics Dataclass Tests

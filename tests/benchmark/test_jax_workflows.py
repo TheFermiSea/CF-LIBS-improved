@@ -180,7 +180,7 @@ def test_iterative_jax_predictor_runs_end_to_end(synthetic_spectrum, context):
     """Build the iterative_jax predictor and run it on a synthetic
     spectrum.  The predictor must always return a concentrations dict
     (either from the JAX path or the numpy fallback)."""
-    from cflibs.inversion.boltzmann import FitMethod
+    from cflibs.inversion.physics.boltzmann import FitMethod
 
     config = {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard"}
     predictor = _fit_iterative_jax_pipeline(context, [], config)
@@ -205,7 +205,7 @@ def test_iterative_jax_predictor_runs_end_to_end(synthetic_spectrum, context):
 def test_iterative_jax_uses_jax_path_when_available(synthetic_spectrum, context):
     """When the JAX solver and JAX itself are present, the predictor must
     pick the JAX path (not the numpy fallback)."""
-    from cflibs.inversion.boltzmann import FitMethod
+    from cflibs.inversion.physics.boltzmann import FitMethod
 
     config = {"fit_method": FitMethod.SIGMA_CLIP, "closure_mode": "standard"}
     predictor = _fit_iterative_jax_pipeline(context, [], config)

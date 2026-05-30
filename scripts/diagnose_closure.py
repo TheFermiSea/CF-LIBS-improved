@@ -373,7 +373,7 @@ def compare_closure_methods(
         
         # Run with standard closure
         try:
-            from cflibs.inversion.closure import ClosureMethod
+            from cflibs.inversion.physics.closure import ClosureMethod
             
             intercepts = {el: 0.0 for el in elements}  # Placeholder
             partition_funcs = {el: 1.0 for el in elements}  # Placeholder

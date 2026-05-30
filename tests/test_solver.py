@@ -5,7 +5,7 @@ Tests for iterative solver.
 import pytest
 from unittest.mock import MagicMock
 import numpy as np
-from cflibs.inversion.solver import IterativeCFLIBSSolver, LineObservation
+from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver, LineObservation
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.structures import PartitionFunction
 from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3

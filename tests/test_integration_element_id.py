@@ -8,14 +8,14 @@ Compares all three identifiers (ALIAS, Comb, Correlation) on the same spectrum.
 import pytest
 import numpy as np
 
-from cflibs.inversion.alias_identifier import ALIASIdentifier
-from cflibs.inversion.comb_identifier import CombIdentifier
-from cflibs.inversion.correlation_identifier import CorrelationIdentifier
-from cflibs.inversion.element_id import (
+from cflibs.inversion.identify.alias import ALIASIdentifier
+from cflibs.inversion.identify.comb import CombIdentifier
+from cflibs.inversion.identify.correlation import CorrelationIdentifier
+from cflibs.inversion.common.element_id import (
     ElementIdentificationResult,
     to_line_observations,
 )
-from cflibs.inversion.boltzmann import BoltzmannPlotFitter, LineObservation
+from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, LineObservation
 from cflibs.validation.round_trip import GoldenSpectrumGenerator
 
 

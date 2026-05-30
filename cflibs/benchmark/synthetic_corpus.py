@@ -314,7 +314,7 @@ def build_synthetic_id_corpus(
         Summary dictionary with generated paths and counts.
     """
     # Import here to keep module lightweight for helper-only unit tests.
-    from cflibs.inversion.bayesian import BayesianForwardModel
+    from cflibs.inversion.solve.bayesian import BayesianForwardModel
 
     rng = np.random.default_rng(seed)
     if recipes is None:

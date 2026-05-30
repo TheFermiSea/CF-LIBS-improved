@@ -72,7 +72,7 @@ from typing import List, Dict, Optional, Tuple, Set
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 logger = get_logger("inversion.line_selection")
 

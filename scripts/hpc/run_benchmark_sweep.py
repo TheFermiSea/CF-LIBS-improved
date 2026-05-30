@@ -359,7 +359,7 @@ def _run_alias(
 ) -> Dict[str, Any]:
     """Run ALIAS identifier on one spectrum."""
     from cflibs.atomic.database import AtomicDatabase
-    from cflibs.inversion.alias_identifier import ALIASIdentifier
+    from cflibs.inversion.identify.alias import ALIASIdentifier
 
     with AtomicDatabase(db_path) as db:
         identifier = ALIASIdentifier(
@@ -382,7 +382,7 @@ def _run_spectral_nnls(
     basis_lib_path: str,
 ) -> Dict[str, Any]:
     """Run SpectralNNLS identifier on one spectrum."""
-    from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+    from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
     from cflibs.manifold.basis_library import BasisLibrary
 
     with BasisLibrary(basis_lib_path) as basis:
@@ -408,7 +408,7 @@ def _run_hybrid(
 ) -> Dict[str, Any]:
     """Run HybridIdentifier on one spectrum."""
     from cflibs.atomic.database import AtomicDatabase
-    from cflibs.inversion.hybrid_identifier import HybridIdentifier
+    from cflibs.inversion.identify.hybrid import HybridIdentifier
     from cflibs.manifold.basis_library import BasisLibrary
 
     with AtomicDatabase(db_path) as db, BasisLibrary(basis_lib_path) as basis:
@@ -432,7 +432,7 @@ def _run_forward_model(
     basis_lib_path: str,
 ) -> Dict[str, Any]:
     """Run forward-model (NNLS + concentration thresholding) on one spectrum."""
-    from cflibs.inversion.spectral_nnls_identifier import SpectralNNLSIdentifier
+    from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
     from cflibs.manifold.basis_library import BasisLibrary
 
     with BasisLibrary(basis_lib_path) as basis:
@@ -466,9 +466,9 @@ def _run_voigt_alias(
     from scipy.signal import find_peaks
 
     from cflibs.atomic.database import AtomicDatabase
-    from cflibs.inversion.alias_identifier import ALIASIdentifier
+    from cflibs.inversion.identify.alias import ALIASIdentifier
     from cflibs.inversion.deconvolution import deconvolve_peaks
-    from cflibs.inversion.preprocessing import estimate_baseline
+    from cflibs.inversion.preprocess.preprocessing import estimate_baseline
 
     baseline = estimate_baseline(wavelength, spectrum)
     corrected = np.maximum(spectrum - baseline, 0.0)

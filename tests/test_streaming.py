@@ -27,8 +27,8 @@ from cflibs.inversion.streaming import (
     EdgeOptimizedModel,
     create_streaming_pipeline,
 )
-from cflibs.inversion.solver import CFLIBSResult
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.solve.iterative import CFLIBSResult
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 # =============================================================================
 # Fixtures

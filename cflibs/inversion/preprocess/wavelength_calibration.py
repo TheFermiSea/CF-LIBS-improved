@@ -18,7 +18,7 @@ import numpy as np
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.preprocessing import detect_peaks_auto
+from cflibs.inversion.preprocess.preprocessing import detect_peaks_auto
 
 logger = get_logger("inversion.wavelength_calibration")
 

@@ -23,7 +23,7 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock
 
-from cflibs.inversion.solver import IterativeCFLIBSSolver, LineObservation
+from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver, LineObservation
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.structures import PartitionFunction
 from cflibs.core.constants import SAHA_CONST_CM3

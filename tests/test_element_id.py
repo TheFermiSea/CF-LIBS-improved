@@ -3,14 +3,14 @@ Unit tests for shared element identification data structures.
 """
 
 import pytest
-from cflibs.inversion.element_id import (
+from cflibs.inversion.common.element_id import (
     IdentifiedLine,
     ElementIdentification,
     ElementIdentificationResult,
     to_line_observations,
 )
 from cflibs.atomic.structures import Transition
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 pytestmark = pytest.mark.unit
 

@@ -15,14 +15,14 @@ from scipy.stats import pearsonr
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.core.constants import KB_EV
 from cflibs.atomic.structures import Transition
-from cflibs.inversion.element_id import (
+from cflibs.inversion.common.element_id import (
     IdentifiedLine,
     ElementIdentification,
     ElementIdentificationResult,
     is_element_detected,
     get_wavelength_tolerance,
 )
-from cflibs.inversion.preprocessing import detect_peaks_auto
+from cflibs.inversion.preprocess.preprocessing import detect_peaks_auto
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.identify._coverage import (
     CoverageTracker,

@@ -11,8 +11,8 @@ from collections import defaultdict
 
 from cflibs.core.constants import KB, KB_EV, SAHA_CONST_CM3, STP_PRESSURE, EV_TO_K
 from cflibs.atomic.database import AtomicDatabase
-from cflibs.inversion.boltzmann import LineObservation, BoltzmannPlotFitter
-from cflibs.inversion.closure import ClosureEquation
+from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
+from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy
 from cflibs.plasma.partition import PartitionFunctionEvaluator
 from cflibs.core.logging_config import get_logger
@@ -1413,7 +1413,7 @@ class IterativeCFLIBSSolver:
         result = self.solve(observations, closure_mode, **closure_kwargs)
 
         # Import uncertainty utilities (will raise ImportError if not available)
-        from cflibs.inversion.uncertainty import (
+        from cflibs.inversion.physics.uncertainty import (
             propagate_through_closure_oxide,
             propagate_through_closure_standard,
             propagate_through_closure_matrix,
@@ -1523,7 +1523,7 @@ class IterativeCFLIBSSolver:
         conc_nominal, conc_uncert = extract_values_and_uncertainties(concentrations_u)
 
         # Temperature uncertainty from pooled slope estimate
-        from cflibs.inversion.uncertainty import temperature_from_slope
+        from cflibs.inversion.physics.uncertainty import temperature_from_slope
 
         T_err = 0.0
         if slope_err > 0.0:

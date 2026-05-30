@@ -35,7 +35,7 @@ from cflibs.atomic.database import AtomicDatabase  # noqa: E402
 from cflibs.atomic.structures import PartitionFunction  # noqa: E402
 from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3  # noqa: E402
 from cflibs.inversion.solve import iterative as iterative_mod  # noqa: E402
-from cflibs.inversion.solver import (  # noqa: E402
+from cflibs.inversion.solve.iterative import (  # noqa: E402
     IterativeCFLIBSSolver,
     LineObservation,
 )

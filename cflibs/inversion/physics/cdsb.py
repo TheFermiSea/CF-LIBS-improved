@@ -52,7 +52,7 @@ import numpy as np
 
 from cflibs.core.constants import EV_TO_K
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import (
+from cflibs.inversion.physics.boltzmann import (
     LineObservation,
     BoltzmannFitResult,
     BoltzmannPlotFitter,

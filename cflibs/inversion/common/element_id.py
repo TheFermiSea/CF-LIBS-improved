@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import math
 from typing import List, Dict, Tuple, Any, Optional
 from cflibs.atomic.structures import Transition
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 
 @dataclass
@@ -189,6 +189,15 @@ def is_element_detected(
     """
     Decision rule for element detection with Tier-2 FP protection.
 
+    Raises the effective score floor to 0.15 and the effective line floor
+    to 2 for Mn, Na, K so low-confidence detections of those Tier-2
+    elements don't slip past the global gates. This is the production
+    rule used by the comb identifier prior to the inversion sub-package
+    reorganization; the prior canonical body in this module diverged from
+    it (forced n>=2 only, did not lift the score floor) and was
+    unreachable because production imports routed through the flat-path
+    shim. Reconciled 2026-05-27.
+
     Parameters
     ----------
     element : str
@@ -207,19 +216,14 @@ def is_element_detected(
     bool
         True if element should be considered detected
     """
-    if score < min_score:
-        return False
+    effective_min_score = min_score
+    effective_min_lines = min_lines
 
-    # Enforce global minimum lines
-    if n_matched_lines < min_lines:
-        return False
+    if element in ("Mn", "Na", "K"):
+        effective_min_score = max(min_score, 0.15)
+        effective_min_lines = max(min_lines, 2)
 
-    # Tier-2 FP reduction: Mn, Na, K always require at least 2 lines
-    # per validation/protocol.yaml §tier2_alarms.fp_rate_track_elements
-    if element in ("Mn", "Na", "K") and n_matched_lines < 2:
-        return False
-
-    return True
+    return score >= effective_min_score and n_matched_lines >= effective_min_lines
 
 
 def to_line_observations(result: ElementIdentificationResult) -> List[LineObservation]:

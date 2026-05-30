@@ -26,8 +26,8 @@ import numpy as np
 from cflibs.benchmark.corpus import BenchmarkCorpus, BenchmarkSpectrum, _REFERENCE_LINES, _KB_EV
 from cflibs.benchmark.harness import BenchmarkHarness, BenchmarkReport
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import BoltzmannPlotFitter, LineObservation
-from cflibs.inversion.closure import ClosureEquation
+from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, LineObservation
+from cflibs.inversion.physics.closure import ClosureEquation
 
 logger = get_logger("experiments_advanced")
 
@@ -195,7 +195,7 @@ def _pipeline_joint_softmax(
 ) -> Dict[str, Any]:
     """Joint-Softmax solver using JointOptimizer (falls back to simplified)."""
     try:
-        from cflibs.inversion.joint_optimizer import (
+        from cflibs.inversion.solve.joint_optimizer import (
             JointOptimizer,
             create_simple_forward_model,
         )
@@ -241,7 +241,7 @@ def _pipeline_hybrid_manifold(
     """Hybrid solver: manifold NN + L-BFGS refinement (falls back to SpectralFitter)."""
     try:
         from cflibs.inversion.hybrid import SpectralFitter
-        from cflibs.inversion.joint_optimizer import create_simple_forward_model
+        from cflibs.inversion.solve.joint_optimizer import create_simple_forward_model
 
         line_centers: Dict[str, List[float]] = {}
         line_strengths: Dict[str, List[float]] = {}

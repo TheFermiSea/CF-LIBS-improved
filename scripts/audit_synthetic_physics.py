@@ -24,7 +24,7 @@ import numpy as np
 # Keep runtime stable on macOS and CI where GPU JAX can be fragile.
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from cflibs.inversion.bayesian import BayesianForwardModel
+from cflibs.inversion.solve.bayesian import BayesianForwardModel
 
 
 def _line_peak_intensity(

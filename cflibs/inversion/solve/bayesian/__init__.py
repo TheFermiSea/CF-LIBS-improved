@@ -17,7 +17,7 @@ along Bayesian-inference axes:
   ``NumPyroNUTSSampler`` / ``DynestyNestedSampler`` aliases.
 
 This ``__init__`` re-exports every name that used to live in the monolith so
-``from cflibs.inversion.bayesian import *`` and every concrete import path
+``from cflibs.inversion.solve.bayesian import *`` and every concrete import path
 recorded in tests + downstream packages keeps working unchanged.
 """
 

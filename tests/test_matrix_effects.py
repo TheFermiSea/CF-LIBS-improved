@@ -23,7 +23,7 @@ from cflibs.inversion.matrix_effects import (
     InternalStandardizer,
     combine_corrections,
 )
-from cflibs.inversion.solver import CFLIBSResult
+from cflibs.inversion.solve.iterative import CFLIBSResult
 
 # ============================================================================
 # MatrixType Enum Tests

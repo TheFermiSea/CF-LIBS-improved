@@ -128,7 +128,7 @@ def test_transition_default_uncertainty_is_none():
 
 def test_atomic_data_uncertainty_from_transitions():
     """AtomicDataUncertainty.from_transitions() wires database values."""
-    from cflibs.inversion.uncertainty import AtomicDataUncertainty
+    from cflibs.inversion.physics.uncertainty import AtomicDataUncertainty
 
     t1 = MagicMock(wavelength_nm=404.581, aki_uncertainty=0.10)
     t2 = MagicMock(wavelength_nm=438.354, aki_uncertainty=0.25)
@@ -145,7 +145,7 @@ def test_atomic_data_uncertainty_from_transitions():
 
 def test_atomic_data_uncertainty_empty_transitions():
     """from_transitions with no uncertainties uses fallback."""
-    from cflibs.inversion.uncertainty import AtomicDataUncertainty
+    from cflibs.inversion.physics.uncertainty import AtomicDataUncertainty
 
     import types
 

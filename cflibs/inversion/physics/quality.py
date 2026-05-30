@@ -11,7 +11,7 @@ from collections import defaultdict
 
 from cflibs.core.constants import KB_EV, EV_TO_K, SAHA_CONST_CM3
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.boltzmann import LineObservation, BoltzmannPlotFitter
+from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
 
 logger = get_logger("inversion.quality")
 

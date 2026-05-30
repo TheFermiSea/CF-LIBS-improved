@@ -16,11 +16,11 @@ import numpy as np
 from scipy.optimize import nnls
 
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.element_id import (
+from cflibs.inversion.common.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
 )
-from cflibs.inversion.preprocessing import estimate_baseline
+from cflibs.inversion.preprocess.preprocessing import estimate_baseline
 
 if TYPE_CHECKING:
     from cflibs.manifold.basis_index import BasisIndex

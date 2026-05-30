@@ -27,7 +27,7 @@ from cflibs.inversion.self_absorption import (
     correct_via_doublet_ratio,
     find_doublet_pairs,
 )
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 # ==============================================================================
 # Helper Functions
@@ -2066,7 +2066,7 @@ class TestALIASSelfAbsorptionLogging:
 
     def test_identifier_has_self_absorption_knobs(self, atomic_db):
         """Constructor exposes the new self-absorption knobs with safe defaults."""
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
+        from cflibs.inversion.identify.alias import ALIASIdentifier
 
         identifier = ALIASIdentifier(atomic_db)
         assert identifier.self_absorption_aware is True
@@ -2077,7 +2077,7 @@ class TestALIASSelfAbsorptionLogging:
 
     def test_identifier_rejects_invalid_damping(self, atomic_db):
         """Damping factor must be in (0, 1]; out-of-range values raise."""
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
+        from cflibs.inversion.identify.alias import ALIASIdentifier
 
         with pytest.raises(ValueError, match="damping"):
             ALIASIdentifier(atomic_db, self_absorption_damping=0.0)
@@ -2088,7 +2088,7 @@ class TestALIASSelfAbsorptionLogging:
 
     def test_identifier_rejects_invalid_e_i_cutoff(self, atomic_db):
         """E_i cutoff must be finite and >= 0."""
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
+        from cflibs.inversion.identify.alias import ALIASIdentifier
 
         with pytest.raises(ValueError, match="e_i_cutoff"):
             ALIASIdentifier(atomic_db, self_absorption_e_i_cutoff_ev=-0.5)
@@ -2102,7 +2102,7 @@ class TestALIASSelfAbsorptionLogging:
         glance whether the run used SA damping or not.
         """
         import logging
-        from cflibs.inversion.alias_identifier import ALIASIdentifier
+        from cflibs.inversion.identify.alias import ALIASIdentifier
 
         identifier = ALIASIdentifier(atomic_db, self_absorption_aware=False)
         wavelength = np.linspace(200.0, 800.0, 6000)

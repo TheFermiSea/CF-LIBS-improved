@@ -61,6 +61,7 @@ nist_*_cache/
 .uv-cache/
 uv.lock
 .claude/cache/
+.claude/worktrees/
 
 # OS
 .DS_Store

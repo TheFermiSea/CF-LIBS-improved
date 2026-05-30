@@ -10,7 +10,7 @@ Covers:
 
 import numpy as np
 import pytest
-from cflibs.inversion.boltzmann import (
+from cflibs.inversion.physics.boltzmann import (
     LineObservation,
     BoltzmannPlotFitter,
     FitMethod,
