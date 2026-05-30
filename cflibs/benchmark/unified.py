@@ -93,6 +93,7 @@ from cflibs.benchmark.composition_eval import (  # noqa: E402,F401
     _composition_error_tier,
     _compute_fractional_error,
     _maybe_compute_posterior_diagnostics,
+    _spectrum_metadata_fields,
 )
 from cflibs.benchmark.composition_metrics import (  # noqa: E402
     aitchison_distance,
@@ -2292,25 +2293,8 @@ def _build_checkpoint_record(
     CompositionEvaluationRecord
         Checkpoint record ready for emission.
     """
-    concentrations = payload.get("concentrations", {})
-    aitchison = payload.get("aitchison", None)
-    truth_type_val = getattr(spectrum, "truth_type", None)
-    if truth_type_val is None:
-        truth_type_str = str(None)
-    elif hasattr(truth_type_val, "value"):
-        truth_type_str = truth_type_val.value
-    else:
-        truth_type_str = str(truth_type_val)
     return CompositionEvaluationRecord(
-        dataset_id=str(getattr(spectrum, "dataset_id", "") or ""),
-        spectrum_id=str(getattr(spectrum, "spectrum_id", "") or ""),
-        group_id=getattr(spectrum, "group_id", None),
-        specimen_id=getattr(spectrum, "specimen_id", None),
-        instrument_id=getattr(spectrum, "instrument_id", None),
-        truth_type=truth_type_str,
-        rp_estimate=getattr(spectrum, "rp_estimate", None),
-        label_cardinality=None,
-        spectrum_kind=None,
+        **_spectrum_metadata_fields(spectrum),
         id_workflow_name="",
         composition_workflow_name=workflow_name,
         outer_split_id="",
@@ -2320,8 +2304,8 @@ def _build_checkpoint_record(
         elapsed_seconds=float(elapsed_s),
         candidate_elements=list(payload.get("candidate_elements", [])),
         true_composition=dict(getattr(spectrum, "true_composition", {}) or {}),
-        predicted_composition=dict(concentrations),
-        aitchison=aitchison,
+        predicted_composition=dict(payload.get("concentrations", {})),
+        aitchison=payload.get("aitchison", None),
         rmse=None,
         temperature_error_frac=None,
         ne_error_frac=None,
@@ -2428,14 +2412,14 @@ def _bayesian_run_mcmc(
     ``JAX_PLATFORMS=cuda`` hint is set, we ``with jax.default_device(...)``
     so the kernel doesn't sporadically fall back to CPU on cluster nodes.
     """
-    run_kwargs = dict(
-        num_warmup=num_warmup,
-        num_samples=num_samples,
-        num_chains=num_chains,
-        seed=seed,
-        target_accept_prob=target_accept_prob,
-        progress_bar=False,
-    )
+    run_kwargs = {
+        "num_warmup": num_warmup,
+        "num_samples": num_samples,
+        "num_chains": num_chains,
+        "seed": seed,
+        "target_accept_prob": target_accept_prob,
+        "progress_bar": False,
+    }
     gpu_device = None
     try:
         import jax  # noqa: PLC0415
