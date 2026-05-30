@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import pytest
 
-from cflibs.inversion.boltzmann import LineObservation
+from cflibs.inversion.physics.boltzmann import LineObservation
 from cflibs.inversion.physics.self_absorption import (
     SelfAbsorptionCorrector,
     _escape_factor,
