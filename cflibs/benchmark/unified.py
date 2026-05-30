@@ -75,6 +75,8 @@ from cflibs.benchmark.dataset import (  # noqa: E402
 from cflibs.benchmark.loaders import load_benchmark  # noqa: E402
 from cflibs.benchmark.checkpoint import (  # noqa: E402
     emit_checkpoint_part,
+    make_worker_slug,
+    new_run_id,
 )
 from cflibs.benchmark.composition_eval import (  # noqa: E402,F401
     # Public surface
@@ -2259,6 +2261,74 @@ def _fit_iterative_jax_pipeline(
     return predictor
 
 
+def _build_checkpoint_record(
+    spectrum: BenchmarkSpectrum,
+    payload: Dict[str, Any],
+    elapsed_s: float,
+    workflow_name: str,
+    config_name: str,
+) -> CompositionEvaluationRecord:
+    """Build a CompositionEvaluationRecord from per-spectrum data.
+
+    Extracted helper for the bayesian predictor closure so it lives next
+    to its only call site without expanding the cognitive complexity of
+    that closure.
+
+    Parameters
+    ----------
+    spectrum : BenchmarkSpectrum
+        Input spectrum with metadata.
+    payload : Dict[str, Any]
+        Result dict from the predictor containing concentrations, etc.
+    elapsed_s : float
+        Per-spectrum elapsed time (seconds).
+    workflow_name : str
+        Name of the composition workflow (e.g. "bayesian").
+    config_name : str
+        Configuration name string.
+
+    Returns
+    -------
+    CompositionEvaluationRecord
+        Checkpoint record ready for emission.
+    """
+    concentrations = payload.get("concentrations", {})
+    aitchison = payload.get("aitchison", None)
+    truth_type_val = getattr(spectrum, "truth_type", None)
+    if truth_type_val is None:
+        truth_type_str = str(None)
+    elif hasattr(truth_type_val, "value"):
+        truth_type_str = truth_type_val.value
+    else:
+        truth_type_str = str(truth_type_val)
+    return CompositionEvaluationRecord(
+        dataset_id=str(getattr(spectrum, "dataset_id", "") or ""),
+        spectrum_id=str(getattr(spectrum, "spectrum_id", "") or ""),
+        group_id=getattr(spectrum, "group_id", None),
+        specimen_id=getattr(spectrum, "specimen_id", None),
+        instrument_id=getattr(spectrum, "instrument_id", None),
+        truth_type=truth_type_str,
+        rp_estimate=getattr(spectrum, "rp_estimate", None),
+        label_cardinality=None,
+        spectrum_kind=None,
+        id_workflow_name="",
+        composition_workflow_name=workflow_name,
+        outer_split_id="",
+        tuning_split_id=None,
+        id_config_name="",
+        composition_config_name=config_name,
+        elapsed_seconds=float(elapsed_s),
+        candidate_elements=list(payload.get("candidate_elements", [])),
+        true_composition=dict(getattr(spectrum, "true_composition", {}) or {}),
+        predicted_composition=dict(concentrations),
+        aitchison=aitchison,
+        rmse=None,
+        temperature_error_frac=None,
+        ne_error_frac=None,
+        closure_residual=None,
+    )
+
+
 def _fit_bayesian_pipeline(
     _context: UnifiedBenchmarkContext,
     _train_spectra: Sequence[BenchmarkSpectrum],
@@ -2330,47 +2400,32 @@ def _fit_bayesian_pipeline(
     # start of the loop the first time the predictor is invoked so the
     # ``elapsed_s`` reported by ``logger.info`` reflects time-on-task for
     # the bayesian workflow specifically (independent of any outer
-    # benchmark setup costs).  ``checkpoint_records`` accumulates a
-    # ``CompositionEvaluationRecord`` per call and is flushed every 10
-    # spectra (and on interpreter shutdown via ``atexit``) to
-    # ``<cwd>/composition_records_checkpoint.parquet``.  The flush uses
-    # ``cflibs.benchmark.results.write_parquet`` with a tmpfile +
-    # ``os.replace`` shim so the checkpoint is atomic at this call site
-    # without modifying ``results.write_parquet`` itself (which the
-    # Phase 2 audit confirmed is not crash-safe on its own).
+    # benchmark setup costs). Checkpoints are written atomically via
+    # ``emit_checkpoint_part`` into a parts directory, with one part-file
+    # per 10 spectra. Each part-file is named via worker_slug + sequence_id
+    # and written atomically (staged into .tmp, then rename), so multiple
+    # closures (e.g. from concurrent folds) do not collide on disk.
     progress_state: Dict[str, Any] = {
         "loop_start": None,
         "spectrum_index": 0,
     }
-    checkpoint_records: List[CompositionEvaluationRecord] = []
-    checkpoint_path = Path("composition_records_checkpoint.parquet")
+    # Atomic checkpoint via emit_checkpoint_part (Phase 2 pattern).
+    checkpoint_parts_dir = Path("composition_records_checkpoint.parts")
+    checkpoint_run_id = new_run_id()
+    checkpoint_worker_slug = make_worker_slug(checkpoint_run_id)
+    checkpoint_seq = 0
+    checkpoint_batch: List[CompositionEvaluationRecord] = []
     composition_workflow_name = "bayesian"
     composition_config_name_str = _config_name(config)
-
-    def _write_checkpoint_atomic() -> None:
-        if not checkpoint_records:
-            return
-        try:
-            from cflibs.benchmark import results as results_module  # noqa: PLC0415
-
-            tmp_path = checkpoint_path.parent / f".{checkpoint_path.name}.tmp"
-            results_module.write_parquet(
-                tmp_path,
-                composition_records=list(checkpoint_records),
-            )
-            os.replace(tmp_path, checkpoint_path)
-        except Exception as exc:  # noqa: BLE001 - checkpoint is best-effort
-            logger.warning("bayesian: checkpoint write failed: %s", exc)
-
-    import atexit  # noqa: PLC0415
-
-    atexit.register(_write_checkpoint_atomic)
 
     def predictor(
         spectrum: BenchmarkSpectrum,
         candidate_elements: Sequence[str],
         _id_result: Optional[ElementIdentificationResult],
     ) -> Dict[str, Any]:
+        # ``checkpoint_seq`` lives in the enclosing scope so it persists
+        # across calls (each emit advances the sequence counter).
+        nonlocal checkpoint_seq
         if not HAS_JAX or not HAS_NUMPYRO:
             raise RuntimeError(
                 "bayesian composition workflow requires jax + numpyro "
@@ -2380,19 +2435,23 @@ def _fit_bayesian_pipeline(
         if not elements:
             raise ValueError("No candidate elements available for bayesian composition workflow")
 
-        # Per-spectrum progress log (Phase 1 change 2). ``loop_start`` is
-        # captured BEFORE the first iteration so ``elapsed_s`` measures
-        # total time since the bayesian loop began, not just the current
-        # spectrum's MCMC wall time.
+        # Per-spectrum progress log + timing. ``loop_start`` is captured
+        # BEFORE the first iteration so the cumulative ``elapsed_s`` measures
+        # total time since the bayesian loop began. Per-spectrum timing is
+        # captured after the log so elapsed_seconds in the checkpoint record
+        # reflects the per-spectrum wall time (not cumulative).
         if progress_state["loop_start"] is None:
             progress_state["loop_start"] = time.monotonic()
         progress_state["spectrum_index"] += 1
         spectrum_index = int(progress_state["spectrum_index"])
-        elapsed_s = time.monotonic() - float(progress_state["loop_start"])
+        elapsed_cumulative = time.monotonic() - float(progress_state["loop_start"])
         dataset_name = getattr(spectrum, "dataset_id", None) or "unknown"
         logger.info(
-            f"[bayesian] {dataset_name}: spectrum {spectrum_index} " f"(elapsed {elapsed_s:.1f}s)"
+            f"[bayesian] {dataset_name}: spectrum {spectrum_index} "
+            f"(elapsed {elapsed_cumulative:.1f}s)"
         )
+        # Capture spectrum start time for per-spectrum elapsed_seconds in checkpoint.
+        spectrum_start = time.monotonic()
 
         from cflibs.inversion.solve.bayesian import (
             BayesianForwardModel,
@@ -2543,45 +2602,35 @@ def _fit_bayesian_pipeline(
             "solver_backend": "numpyro_jax",
         }
 
-        # Phase 1 change 3: build a per-spectrum CompositionEvaluationRecord
-        # proxy and append it to the rolling checkpoint buffer. The buffer is
-        # flushed atomically every 10 spectra via tmpfile + os.replace. The
-        # final flush (for spectra that did not land on a 10-boundary) is
-        # registered as an ``atexit`` handler above so a SIGTERM or normal
-        # interpreter exit still leaves a complete checkpoint on disk.
-        truth_type_val = getattr(spectrum, "truth_type", None)
-        truth_type_str = (
-            truth_type_val.value if hasattr(truth_type_val, "value") else str(truth_type_val)
+        # Build per-spectrum checkpoint record and emit every 10 spectra
+        # using atomic emit_checkpoint_part. Per-spectrum elapsed_seconds is
+        # time.monotonic() - spectrum_start (just the MCMC wall time), not
+        # cumulative loop time. Record construction is delegated to the
+        # module-level _build_checkpoint_record helper to keep this closure's
+        # cognitive complexity manageable.
+        elapsed_spectrum = time.monotonic() - spectrum_start
+        checkpoint_record = _build_checkpoint_record(
+            spectrum=spectrum,
+            payload={
+                "concentrations": concentrations,
+                "aitchison": aitchison,
+                "candidate_elements": elements,
+            },
+            elapsed_s=elapsed_spectrum,
+            workflow_name=composition_workflow_name,
+            config_name=composition_config_name_str,
         )
-        checkpoint_record = CompositionEvaluationRecord(
-            dataset_id=str(getattr(spectrum, "dataset_id", "") or ""),
-            spectrum_id=str(getattr(spectrum, "spectrum_id", "") or ""),
-            group_id=getattr(spectrum, "group_id", None),
-            specimen_id=getattr(spectrum, "specimen_id", None),
-            instrument_id=getattr(spectrum, "instrument_id", None),
-            truth_type=truth_type_str,
-            rp_estimate=getattr(spectrum, "rp_estimate", None),
-            label_cardinality=None,
-            spectrum_kind=None,
-            id_workflow_name="",
-            composition_workflow_name=composition_workflow_name,
-            outer_split_id="",
-            tuning_split_id=None,
-            id_config_name="",
-            composition_config_name=composition_config_name_str,
-            elapsed_seconds=float(elapsed_s),
-            candidate_elements=list(elements),
-            true_composition=dict(getattr(spectrum, "true_composition", {}) or {}),
-            predicted_composition=dict(concentrations),
-            aitchison=aitchison,
-            rmse=None,
-            temperature_error_frac=None,
-            ne_error_frac=None,
-            closure_residual=None,
-        )
-        checkpoint_records.append(checkpoint_record)
+        checkpoint_batch.append(checkpoint_record)
         if spectrum_index % 10 == 0:
-            _write_checkpoint_atomic()
+            checkpoint_seq = emit_checkpoint_part(
+                parts_dir=checkpoint_parts_dir,
+                run_id=checkpoint_run_id,
+                worker_slug=checkpoint_worker_slug,
+                seq=checkpoint_seq,
+                records=checkpoint_batch,
+                processed=spectrum_index,
+            )
+            checkpoint_batch.clear()
 
         return payload
 

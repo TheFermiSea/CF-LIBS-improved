@@ -168,13 +168,13 @@ def test_compute_spectrum_vmap_safe(bayesian_db):
         instrument_fwhm_nm=0.1,
     )
 
-    T_eV = 1.0
+    t_ev = 1.0  # noqa: N806
     n_e = 1.0e17
     concentrations_batched = jnp.array([[0.7, 0.3], [0.4, 0.6]])
     num_chains = concentrations_batched.shape[0]
 
     batched_compute = jax.vmap(model._compute_spectrum, in_axes=(None, None, 0))
-    spectra_vmap = batched_compute(T_eV, n_e, concentrations_batched)
+    spectra_vmap = batched_compute(t_ev, n_e, concentrations_batched)
 
     spectra_vmap_np = np.asarray(spectra_vmap)
     assert spectra_vmap_np.shape == (num_chains, pixels), (
@@ -188,7 +188,7 @@ def test_compute_spectrum_vmap_safe(bayesian_db):
     # unbatched ``_compute_spectrum`` call for the same composition.
     for i in range(num_chains):
         spectrum_unbatched = np.asarray(
-            model._compute_spectrum(T_eV, n_e, concentrations_batched[i])
+            model._compute_spectrum(t_ev, n_e, concentrations_batched[i])
         )
         np.testing.assert_allclose(
             spectra_vmap_np[i],
