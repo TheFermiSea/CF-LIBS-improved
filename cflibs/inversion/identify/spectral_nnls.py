@@ -329,6 +329,16 @@ class SpectralNNLSIdentifier:
         structured residual leaks tiny coefficients onto absent-element
         basis vectors (blocker NNLS-GAUSS-BASIS-4). Tune in the 0.03--0.07
         range. Set to 0.0 to disable and recover the legacy SNR-only rule.
+
+        Note this floor is measured against the *total* coefficient mass, so
+        it scales with the candidate count: it is calibrated for *precision*
+        on the standalone identifier over a small near-orthogonal basis. On a
+        large real-data candidate set each legitimate element holds only a few
+        percent of the total mass, so the floor will drop true elements. The
+        :class:`~cflibs.inversion.identify.hybrid.HybridIdentifier` union arm
+        therefore defaults this to ``0.0`` (recall-favoring); the union's
+        precision comes from the SNR gate + ALIAS agreement instead. See the
+        PR fixing the #215 hybrid_union recall regression.
     continuum_degree : int
         Degree of polynomial continuum added to basis matrix (default: 3).
         Set to -1 to disable continuum fitting.
