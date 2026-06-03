@@ -783,7 +783,7 @@ class AtomicDatabase(AtomicDataSource):
         level_g_rows: list[list[float]] = []
         level_E_rows: list[list[float]] = []
 
-        from cflibs.plasma.partition import get_ground_state_g
+        from cflibs.plasma.partition import direct_sum_fit_coeffs, get_ground_state_g
 
         for element in elements:
             for stage in (1, 2):
@@ -792,8 +792,31 @@ class AtomicDatabase(AtomicDataSource):
                     continue
                 species_keys.append((element, stage))
                 ip_list.append(float(ip))
+
+                # Direct-sum-preferred partition coefficients (PF-3/PF-4 fix).
+                # The default CPU solver prefers direct summation over the
+                # ``energy_levels`` table; the JAX manifold / Bayesian kernels
+                # can only consume a polynomial.  When energy levels exist we
+                # refit the polynomial to the direct-sum here (same recipe as
+                # ``scripts/regenerate_partition_functions.py``) so all four
+                # solver paths agree, and only fall back to the stored
+                # polynomial when the level table is missing rows for the
+                # species.  The kernel still evaluates the same polynomial
+                # form, so jit / vmap are unaffected.
+                ds_coeffs = None
+                stage_levels = self.get_energy_levels(element, stage)
+                if stage_levels:
+                    g_arr = np.array([lev.g for lev in stage_levels], dtype=np.float64)
+                    e_arr = np.array([lev.energy_ev for lev in stage_levels], dtype=np.float64)
+                    ds_coeffs = direct_sum_fit_coeffs(g_arr, e_arr, float(ip))
+
                 pf = self.get_partition_coefficients(element, stage)
-                if pf is None:
+                if ds_coeffs is not None:
+                    coeffs, ds_t_min, ds_t_max = ds_coeffs
+                    partition_rows.append([float(c) for c in coeffs])
+                    partition_t_min_list.append(ds_t_min)
+                    partition_t_max_list.append(ds_t_max)
+                elif pf is None:
                     partition_rows.append([float(np.log(2.0)), 0.0, 0.0, 0.0, 0.0])
                     partition_t_min_list.append(2000.0)
                     partition_t_max_list.append(25000.0)
@@ -812,9 +835,8 @@ class AtomicDatabase(AtomicDataSource):
                     partition_t_max_list.append(float(pf_t_max))
                 partition_g0_list.append(float(get_ground_state_g(self, element, stage)))
                 if include_levels:
-                    levels = self.get_energy_levels(element, stage)
-                    level_g_rows.append([float(lev.g) for lev in levels])
-                    level_E_rows.append([float(lev.energy_ev) for lev in levels])
+                    level_g_rows.append([float(lev.g) for lev in stage_levels])
+                    level_E_rows.append([float(lev.energy_ev) for lev in stage_levels])
 
         if pad_to_n_elements is not None and pad_to_n_elements > len(species_keys):
             pad = pad_to_n_elements - len(species_keys)

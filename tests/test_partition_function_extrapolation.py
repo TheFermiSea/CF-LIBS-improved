@@ -114,12 +114,20 @@ def test_ca_i_high_temperature_does_not_explode(production_db):
     ip = production_db.get_ionization_potential("Ca", 1)
     U_truth_at_tmax = direct_sum_partition_function(pf.t_max, g_arr, E_arr, ip)
 
-    # WITHOUT guards: extrapolation explodes.
+    # WITHOUT guards: the legacy Irwin1981 Ca I coefficients exploded to
+    # U(100 000 K) = 1.14e5 (560× the direct-sum truth).  After the PF-1/PF-2
+    # regeneration (2026-06-03) Ca I uses well-behaved direct-sum-fit
+    # coefficients whose unguarded extrapolation no longer screams off to
+    # >=1e4 (it now decays).  Either way the *guarded* path below is what
+    # production uses; this sanity line only documents that the unguarded
+    # extrapolation is unsafe to rely on (it must differ wildly from the
+    # boundary value), regardless of fit vintage.
     U_legacy = polynomial_partition_function(100_000.0, pf.coefficients)
-    assert U_legacy > 1.0e4, (
-        f"Sanity: expected unguarded legacy extrapolation > 1e4; got {U_legacy}. "
-        "If this assertion fails, the DB coefficients have been re-fit and the "
-        "regression no longer reproduces — update the bound or remove the test."
+    U_at_tmax_unguarded = polynomial_partition_function(pf.t_max, pf.coefficients)
+    assert abs(U_legacy - U_at_tmax_unguarded) > 1.0, (
+        f"Sanity: unguarded extrapolation to 100 000 K ({U_legacy}) should differ "
+        f"materially from poly(t_max) ({U_at_tmax_unguarded}); the clamp guard is "
+        "what keeps the value physical."
     )
 
     # WITH guards: T is clamped to t_max so evaluation occurs at the boundary.

@@ -316,6 +316,112 @@ else:
 
 
 # ---------------------------------------------------------------------------
+# Direct-sum-preferred polynomial coefficient fit (manifold/Bayesian fallback)
+# ---------------------------------------------------------------------------
+
+# Fit grid + LIBS validation band for :func:`direct_sum_fit_coeffs`.  These
+# mirror the standalone regeneration recipe in
+# ``scripts/regenerate_partition_functions.py`` so the load-time fallback and
+# the persisted DB rows agree by construction.
+_DSFIT_T_MIN = 2000.0
+_DSFIT_T_MAX = 25000.0
+_DSFIT_N_POINTS = 60
+_DSFIT_KEY_TEMPS = (5000.0, 10000.0, 15000.0, 20000.0)
+_DSFIT_BAND_LO = 6000.0
+_DSFIT_BAND_HI = 12000.0
+
+
+def direct_sum_fit_coeffs(
+    g_levels: np.ndarray,
+    E_levels_ev: np.ndarray,
+    ip_ev: float,
+) -> Optional[Tuple[List[float], float, float]]:
+    """Fit ``ln U = Σ aₙ (ln T)ⁿ`` to the direct-sum U(T) over energy levels.
+
+    This is the *direct-sum-preferred* partition-function provider used by the
+    JAX manifold / Bayesian batch paths.  The default CPU solver already
+    prefers direct summation (``saha_boltzmann.py``); the JAX kernels can only
+    consume a polynomial (they ``vmap`` over plasma parameters and cannot hold
+    a per-species variable-length level sum), so this helper converts the
+    direct-sum into an equivalent polynomial at snapshot-construction time.
+    The kernel then evaluates the *same* polynomial form it always has — only
+    the coefficients change — so jit / vmap are completely unaffected.
+
+    The fit is constrained so the resulting polynomial does not undershoot the
+    direct-sum (a physically-impossible regime) across the ps-LIBS band
+    (6000–12000 K): a small positive ln-offset is added to ``a0`` to lift the
+    minimum band ratio to 1.0.  When the fit turns over inside the default
+    ``[2000, 25000] K`` window the validity bounds are tightened past the
+    cold/hot turnover (the evaluator clamps to ``[t_min, t_max]``), but the
+    LIBS band is never clipped.
+
+    Parameters
+    ----------
+    g_levels, E_levels_ev : np.ndarray
+        Statistical weights and level energies (eV) from ``energy_levels``.
+    ip_ev : float
+        Ionization potential (eV) — direct-sum cutoff.
+
+    Returns
+    -------
+    tuple[list[float], float, float] or None
+        ``(coeffs[0..4], t_min, t_max)`` in the natural-log basis, or ``None``
+        when there are too few levels to fit (caller keeps the stored
+        polynomial — never fabricate).
+    """
+    g = np.asarray(g_levels, dtype=np.float64)
+    e = np.asarray(E_levels_ev, dtype=np.float64)
+    if g.size < 2:
+        return None
+
+    def _ds(T_K: float) -> float:
+        mask = e < ip_ev
+        if not np.any(mask):
+            return 1.0
+        return max(float(np.sum(g[mask] * np.exp(-e[mask] / (KB_EV * T_K)))), 1.0)
+
+    def _poly(coeffs: List[float], T_K: float) -> float:
+        ln_T = np.log(T_K)
+        return float(np.exp(sum(a * ln_T**i for i, a in enumerate(coeffs))))
+
+    T_grid = np.unique(
+        np.concatenate(
+            [np.linspace(_DSFIT_T_MIN, _DSFIT_T_MAX, _DSFIT_N_POINTS), np.array(_DSFIT_KEY_TEMPS)]
+        )
+    )
+    Q_grid = np.array([_ds(T) for T in T_grid])
+    ln_T = np.log(T_grid)
+    ln_Q = np.log(np.maximum(Q_grid, 1e-12))
+    w = np.ones_like(T_grid)
+    for kt in _DSFIT_KEY_TEMPS:
+        w[np.isclose(T_grid, kt)] = 10.0
+    coeffs = list(np.polynomial.polynomial.polyfit(ln_T, ln_Q, 4, w=w))
+    coeffs = (coeffs + [0.0] * 5)[:5]
+
+    # Monotonicity guard: tighten the validity window past any turnover so the
+    # evaluator's clamp holds U flat in the (physically-flat) tails.
+    t_min, t_max = _DSFIT_T_MIN, _DSFIT_T_MAX
+    Tm = np.linspace(t_min, t_max, 600)
+    Um = np.array([_poly(coeffs, T) for T in Tm])
+    dec = np.where(np.diff(Um) < 0)[0]
+    if dec.size:
+        mid = len(Tm) // 2
+        cold = [i for i in dec if i < mid]
+        hot = [i for i in dec if i >= mid]
+        if cold:
+            t_min = min(float(Tm[max(cold) + 1]), _DSFIT_BAND_LO)
+        if hot:
+            t_max = max(float(Tm[min(hot)]), _DSFIT_BAND_HI)
+
+    # Lift so U_poly >= U_directsum across the LIBS band (a pure ln-offset on
+    # a0 preserves shape + monotonicity).
+    T_band = np.linspace(_DSFIT_BAND_LO, _DSFIT_BAND_HI, 25)
+    ratios = np.array([_poly(coeffs, T) / _ds(T) for T in T_band])
+    coeffs[0] += max(0.0, float(np.log(1.0 / float(ratios.min()))))
+    return [float(c) for c in coeffs], float(t_min), float(t_max)
+
+
+# ---------------------------------------------------------------------------
 # Energy level cache for partition function evaluation
 # ---------------------------------------------------------------------------
 
