@@ -987,6 +987,14 @@ _ALIAS_SWEEP_BASE_KWARGS: Dict[str, Any] = {
     "detection_threshold": 0.02,
     "chance_window_scale": 0.4,
     "max_lines_per_element": 30,
+    # Pin the strict R2 gate as the sweep baseline. The ALIASIdentifier
+    # constructor default flipped from 'fixed' -> 'adaptive_t' (recall fix,
+    # commit 763a330); without this pin the empty 'baseline' cell would
+    # inherit 'adaptive_t' and become byte-identical to the 'ftp1' cell,
+    # collapsing the baseline-vs-ftp1 contrast this sweep exists to measure.
+    # Cells that test the adaptive gate set r2_gate_mode in their cell_kwargs,
+    # which override this base value via the trailing ``**cell_kwargs``.
+    "r2_gate_mode": "fixed",
 }
 
 
@@ -1030,18 +1038,27 @@ def _build_alias_sweep_predictor_factory(
             from cflibs.atomic.database import AtomicDatabase
             from cflibs.inversion.identify.alias import ALIASIdentifier
 
+            # Base pins the strict R2 gate as the sweep baseline; per-cell
+            # fix-flag kwargs override it (e.g. the 'ftp1' cell sets
+            # r2_gate_mode='adaptive_t'). Merging into one dict avoids a
+            # duplicate-keyword TypeError when a cell also sets r2_gate_mode.
+            knobs: Dict[str, Any] = {
+                "intensity_threshold_factor": float(
+                    _ALIAS_SWEEP_BASE_KWARGS["intensity_threshold_factor"]
+                ),
+                "detection_threshold": float(_ALIAS_SWEEP_BASE_KWARGS["detection_threshold"]),
+                "chance_window_scale": float(_ALIAS_SWEEP_BASE_KWARGS["chance_window_scale"]),
+                "max_lines_per_element": int(_ALIAS_SWEEP_BASE_KWARGS["max_lines_per_element"]),
+                "r2_gate_mode": str(_ALIAS_SWEEP_BASE_KWARGS["r2_gate_mode"]),
+            }
+            knobs.update(cell_kwargs)
+
             with AtomicDatabase(str(context.db_path)) as db:
                 identifier = ALIASIdentifier(
                     atomic_db=db,
                     elements=candidate_elements,
                     resolving_power=_estimate_rp_for_spectrum(spectrum),
-                    intensity_threshold_factor=float(
-                        _ALIAS_SWEEP_BASE_KWARGS["intensity_threshold_factor"]
-                    ),
-                    detection_threshold=float(_ALIAS_SWEEP_BASE_KWARGS["detection_threshold"]),
-                    chance_window_scale=float(_ALIAS_SWEEP_BASE_KWARGS["chance_window_scale"]),
-                    max_lines_per_element=int(_ALIAS_SWEEP_BASE_KWARGS["max_lines_per_element"]),
-                    **cell_kwargs,
+                    **knobs,
                     **_jax_identifier_flags_for(ALIASIdentifier),
                 )
                 result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)

@@ -461,7 +461,12 @@ class TwoZoneBayesianForwardModel:
         )
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
-        REF_NE = 1.0e16
+        # ``data.stark_w`` (and the w_est fallback) is the stored electron-impact
+        # FWHM at REF_NE = 1e17 cm^-3, T = 10000 K (single source of truth:
+        # cflibs/radiation/stark.py). The Voigt kernel wants a Lorentzian HWHM,
+        # so scale to live n_e and halve. The earlier (n_e/1e16) with no 0.5
+        # over-broadened every Stark line by x20 at ps-LIBS densities (A4-CONV-2).
+        REF_NE = 1.0e17
         REF_T_EV = 0.86173
         binding_energy = jnp.maximum(data.ip_ev - data.ek_ev, 0.1)
         n_eff = (ion_stage + 1) * jnp.sqrt(13.605 / binding_energy)
@@ -470,7 +475,7 @@ class TwoZoneBayesianForwardModel:
         w_ref = jnp.where(jnp.isnan(data.stark_w), w_est, data.stark_w)
         factor_ne = n_e / REF_NE
         factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -data.stark_alpha)
-        gamma_stark = w_ref * factor_ne * factor_T
+        gamma_stark = 0.5 * w_ref * factor_ne * factor_T
 
         diff = self.wavelength[:, None] - data.wavelength_nm[None, :]
         profile = _voigt_profile_kernel_jax(diff, sigma_total[None, :], gamma_stark[None, :])

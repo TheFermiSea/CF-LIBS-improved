@@ -13,9 +13,31 @@ jit = jit_if_available
 
 logger = get_logger("radiation.stark")
 
-# Reference conditions for Stark parameters
-REF_NE = 1.0e16  # cm^-3
-REF_T_K = 10000.0  # K
+# Reference conditions for Stark parameters.
+#
+# SINGLE SOURCE OF TRUTH for the project-wide Stark-width convention.
+# The atomic database stores ``lines.stark_w`` as the electron-impact
+# **FWHM** at ``n_e = 1e17 cm^-3``, ``T = 10000 K`` — see
+# ``scripts/ingest_stark_b.py`` ("T_e = 10000 K, n_e = 1.0e17 cm^-3")
+# and the published-value anchors in ``tests/test_stark_provenance.py``.
+#
+# Historically the runtime treated the column as **HWHM at 1e16**, which
+# over-broadened every Stark line by a factor of 20 at ps-LIBS densities:
+#   x10 from the wrong reference density (1e16 vs 1e17)
+#   x2  from an extra HWHM->FWHM doubling on an already-FWHM value.
+# Verified end-to-end (A4-CONV-2): Al I 396.15 stored 4.5 pm produced an
+# omega_stark of 90.0 pm at 1e17/10000 K; the convention-correct value is
+# exactly the stored 4.5 pm (the data is *defined* as the FWHM at those
+# reference conditions). This module now keeps data + every consumer in
+# agreement on FWHM@1e17.
+REF_NE = 1.0e17  # cm^-3 — reference density the stored stark_w is tabulated at
+REF_T_K = 10000.0  # K — reference temperature the stored stark_w is tabulated at
+REF_T_EV = 0.86173  # REF_T_K in eV (10000 K / 11604.5); used by the JAX twins
+
+# The stored ``stark_w`` is a FULL width (FWHM). ``stark_hwhm`` therefore
+# returns half of it; ``stark_width`` doubles back to recover the FWHM,
+# so at the reference conditions ``stark_width == stored stark_w`` exactly.
+_STARK_W_IS_FWHM = True
 
 
 def stark_hwhm(
@@ -23,15 +45,24 @@ def stark_hwhm(
     T_K: float,
     stark_w_ref: Optional[float],
     stark_alpha: Optional[float] = None,
-    ref_T_K: float = 10000.0,
+    ref_T_K: float = REF_T_K,
     stark_A_ref: Optional[float] = None,
 ) -> float:
     """
     Calculate Stark Half-Width at Half-Maximum (HWHM).
     Includes optional quasi-static ion-broadening correction based on Griem's theory.
 
-    w_electron = w_ref * (n_e / 10^16) * (T / T_ref)^(-alpha)
-    w_total = w_electron * (1 + 1.75 * A_ion * (1 - 0.75 * R_D))
+    ``stark_w_ref`` is the stored database value: the electron-impact
+    **FWHM** at ``n_e = REF_NE = 1e17 cm^-3``, ``T = REF_T_K = 10000 K``.
+    This function returns the corresponding **HWHM** scaled to the
+    requested (n_e, T)::
+
+        w_fwhm   = stark_w_ref * (n_e / REF_NE) * (T / T_ref)^(-alpha)
+        w_hwhm   = 0.5 * w_fwhm
+        w_total  = w_hwhm * (1 + 1.75 * A_ion * (1 - 0.75 * R_D))
+
+    At the reference conditions ``stark_width`` (= 2 * stark_hwhm) returns
+    exactly the stored ``stark_w``; see the module-level convention note.
 
     .. note:: Bead ``CF-LIBS-improved-s1qr.3`` (2026-05-25). Periodic
        cross-exams have suggested this function does linear interpolation
@@ -52,13 +83,14 @@ def stark_hwhm(
     T_K : float
         Temperature in K
     stark_w_ref : float
-        Stark width parameter (HWHM) at 10^16 cm^-3
+        Stored Stark width: electron-impact FWHM at REF_NE = 1e17 cm^-3,
+        T = REF_T_K = 10000 K (nm).
     stark_alpha : float
         Scaling exponent (default 0.5 if None, represents T^(-1/2))
     ref_T_K : float
-        Reference temperature
+        Reference temperature (default REF_T_K = 10000 K)
     stark_A_ref : float, optional
-        Ion-broadening parameter at 10^16 cm^-3
+        Ion-broadening parameter at REF_NE = 1e17 cm^-3
 
     Returns
     -------
@@ -73,8 +105,10 @@ def stark_hwhm(
     # Use max(T, 1000) to avoid division by zero or extreme scaling
     T_eff = max(T_K, 1000.0)
 
-    # Electron impact width
-    w_e = stark_w_ref * (n_e_cm3 / REF_NE) * (T_eff / ref_T_K) ** (-alpha)
+    # Electron-impact width. ``stark_w_ref`` is a FWHM at REF_NE; halve it
+    # to obtain the HWHM (stark_width doubles it back to FWHM).
+    w_fwhm = stark_w_ref * (n_e_cm3 / REF_NE) * (T_eff / ref_T_K) ** (-alpha)
+    w_e = 0.5 * w_fwhm
 
     if stark_A_ref is None or stark_A_ref <= 0:
         return w_e
@@ -94,10 +128,14 @@ def stark_width(
     T_K: float,
     stark_w_ref: Optional[float],
     stark_alpha: Optional[float] = None,
-    ref_T_K: float = 10000.0,
+    ref_T_K: float = REF_T_K,
     stark_A_ref: Optional[float] = None,
 ) -> float:
-    """Calculate Stark Full-Width at Half-Maximum (FWHM)."""
+    """Calculate Stark Full-Width at Half-Maximum (FWHM).
+
+    ``stark_w_ref`` is the stored FWHM at REF_NE = 1e17 cm^-3; at the
+    reference conditions this returns exactly that value.
+    """
     hwhm = stark_hwhm(n_e_cm3, T_K, stark_w_ref, stark_alpha, ref_T_K, stark_A_ref)
     return 2.0 * hwhm
 
@@ -106,7 +144,9 @@ def stark_shift(n_e_cm3: float, stark_d_ref: Optional[float]) -> float:
     """
     Calculate Stark shift.
 
-    d = d_ref * (n_e / 10^16)
+    ``stark_d_ref`` is the stored signed shift at REF_NE = 1e17 cm^-3.
+
+    d = d_ref * (n_e / REF_NE)
     """
     if stark_d_ref is None:
         return 0.0
@@ -120,13 +160,14 @@ def estimate_stark_parameter(
     ionization_stage: int,
 ) -> float:
     """
-    Estimate Stark broadening parameter w_ref (HWHM at 1e16 cm^-3).
-    Based on semi-empirical trends if data is missing.
+    Estimate Stark broadening parameter w_ref (FWHM at REF_NE = 1e17 cm^-3),
+    matching the stored ``lines.stark_w`` convention. Based on semi-empirical
+    trends, used only when literature/database data is missing.
 
     Returns
     -------
     float
-        Estimated Stark w_ref in nm
+        Estimated Stark w_ref (FWHM at REF_NE) in nm
     """
     # Fallback if critical data missing
     if ionization_potential_ev is None or upper_energy_ev >= ionization_potential_ev:
@@ -242,29 +283,28 @@ if HAS_JAX:
         T_eV : float
             Temperature in eV
         stark_w_ref : float
-            Ref HWHM at 1e16 cm^-3
+            Stored Stark width: FWHM at REF_NE = 1e17 cm^-3
         stark_alpha : float
             Scaling exponent
         stark_A_ref : float
-            Ion-broadening parameter at 10^16 cm^-3
+            Ion-broadening parameter at REF_NE = 1e17 cm^-3
 
         Returns
         -------
         float
-            Stark HWHM in nm
+            Stark HWHM in nm (half of the FWHM scaled to live n_e, T)
         """
-        # REF_T in eV = 10000 / 11604.5 ~ 0.8617 eV
-        REF_T_EV = 0.86173
-
         # Safe defaults
         w_ref = jnp.nan_to_num(stark_w_ref, nan=0.0)
         alpha = jnp.nan_to_num(stark_alpha, nan=0.5)
         A_ref = jnp.nan_to_num(stark_A_ref, nan=0.0)
 
-        factor_ne = n_e_cm3 / 1.0e16
+        factor_ne = n_e_cm3 / REF_NE
         factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -alpha)
 
-        w_e = w_ref * factor_ne * factor_T
+        # ``w_ref`` is a FWHM at REF_NE; halve it to return a HWHM, mirroring
+        # the float ``stark_hwhm`` above.
+        w_e = 0.5 * w_ref * factor_ne * factor_T
 
         A_ion = A_ref * jnp.power(factor_ne, 0.25)
         R_D = 0.5
@@ -298,7 +338,7 @@ if HAS_JAX:
         Returns
         -------
         float
-            Estimated Stark w_ref (HWHM at 1e16 cm^-3) in nm
+            Estimated Stark w_ref (FWHM at REF_NE = 1e17 cm^-3) in nm
         """
         # Binding energy with safety floor
         binding_energy = jnp.maximum(ionization_potential_ev - upper_energy_ev, 0.1)

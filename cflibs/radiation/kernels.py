@@ -57,6 +57,7 @@ from cflibs.core.constants import (
 from cflibs.core.jax_runtime import HAS_JAX, jnp
 from cflibs.core.logging_config import get_logger
 from cflibs.radiation.profiles import BroadeningMode
+from cflibs.radiation.stark import REF_NE as _STARK_REF_NE
 
 logger = get_logger("radiation.kernels")
 
@@ -372,15 +373,22 @@ def _per_line_instrument_sigma(snapshot, instrument):
 def _per_line_stark_gamma(snapshot, n_e, T_eV):
     """Per-line Lorentzian Stark HWHM (nm).
 
-    Reference scaling::
+    ``snapshot.line_stark_w`` is the stored electron-impact **FWHM** at
+    ``REF_NE = 1e17 cm^-3``, ``T_ref = 10000 K`` (see the convention note in
+    ``cflibs/radiation/stark.py``). The Voigt profile wants a Lorentzian
+    **HWHM**, so scale and halve::
 
-        gamma_S(n_e, T) = stark_w * (n_e / 1e16) * (T_eV / 0.86173) ** (-alpha)
+        gamma_S(n_e, T) = 0.5 * stark_w * (n_e / 1e17) * (T_eV / 0.86173) ** (-alpha)
 
     ``T_ref = 0.86173 eV = 10000 K`` matches the Griem / NIST tabulation
     convention. Lines without catalogued temperature dependence carry
     ``alpha = 0.0`` in the snapshot (the :meth:`AtomicDatabase.snapshot`
     default for missing DB entries), which collapses ``factor_T`` to 1.0
     automatically — so this kernel needs no special-case for them.
+
+    The earlier ``(n_e / 1e16)`` with no 0.5 over-broadened every Stark line
+    by x20 at ps-LIBS densities (A4-CONV-2): x10 wrong reference density and
+    x2 from treating an already-FWHM value as a HWHM.
 
     Bug history (CF-LIBS-improved-vjbh): the original T1-2 kernel omitted
     the temperature factor entirely, which silently dropped the
@@ -394,12 +402,14 @@ def _per_line_stark_gamma(snapshot, n_e, T_eV):
     runtime cost is zero in either branch.
     """
     stark_w = jnp.asarray(snapshot.line_stark_w)
+    # stark_w is FWHM at REF_NE=1e17; 0.5 * (n_e/1e17) converts to a HWHM at
+    # the live density (single source of truth: cflibs.radiation.stark.REF_NE).
     if os.environ.get("CFLIBS_DISABLE_STARK_T_FACTOR", "0") == "1":
-        return stark_w * (n_e / 1.0e16)
+        return 0.5 * stark_w * (n_e / _STARK_REF_NE)
     alpha = jnp.asarray(snapshot.line_stark_alpha)
     REF_T_EV = 0.86173  # 10000 K — Griem / NIST reference temperature.
     factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -alpha)
-    return stark_w * (n_e / 1.0e16) * factor_T
+    return 0.5 * stark_w * (n_e / _STARK_REF_NE) * factor_T
 
 
 # ---------------------------------------------------------------------------

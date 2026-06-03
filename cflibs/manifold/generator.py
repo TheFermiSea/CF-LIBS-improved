@@ -344,6 +344,50 @@ class ManifoldGenerator:
                                 count += 1
                     logger.info(f"Loaded partition coefficients for {count} species")
 
+                # Direct-sum-preferred coefficients (PF-3/PF-4 fix).  The
+                # default CPU solver prefers direct summation over the
+                # ``energy_levels`` table; this JAX manifold path historically
+                # consumed the stored polynomial with NO direct-sum fallback,
+                # so a bad stored fit (e.g. the Irwin1981 / NIST_ASD_fit rows
+                # that ran below the direct-sum floor) silently biased every
+                # manifold spectrum.  When energy levels exist we refit the
+                # polynomial to the direct-sum here (same recipe as
+                # ``scripts/regenerate_partition_functions.py``), overriding
+                # the stored coefficients; species without levels keep the
+                # stored polynomial.  The kernel still evaluates the same
+                # polynomial form, so jit / vmap are unaffected.
+                try:
+                    from cflibs.plasma.partition import direct_sum_fit_coeffs
+
+                    n_ds = 0
+                    for el, el_idx in el_map.items():
+                        for stage in range(1, max_stages + 1):
+                            stage_idx = stage - 1
+                            if stage_idx >= max_stages:
+                                continue
+                            ip_ev = float(ips[el_idx, stage_idx])
+                            if ip_ev <= 0.0:
+                                continue
+                            levels = self.atomic_db.get_energy_levels(el, stage)
+                            if not levels:
+                                continue
+                            g_arr = np.array([lev.g for lev in levels], dtype=np.float64)
+                            e_arr = np.array([lev.energy_ev for lev in levels], dtype=np.float64)
+                            fit = direct_sum_fit_coeffs(g_arr, e_arr, ip_ev)
+                            if fit is None:
+                                continue
+                            ds_coeffs, ds_t_min, ds_t_max = fit
+                            coeffs[el_idx, stage_idx] = ds_coeffs
+                            tmin[el_idx, stage_idx] = ds_t_min
+                            tmax[el_idx, stage_idx] = ds_t_max
+                            n_ds += 1
+                    if n_ds:
+                        logger.info(
+                            f"Applied direct-sum-preferred partition coeffs for {n_ds} species"
+                        )
+                except Exception as exc:  # pragma: no cover - DB shape fallback
+                    logger.debug(f"Direct-sum partition override skipped: {exc}")
+
                 # Per-species g0 from energy_levels lowest-E row.
                 try:
                     from cflibs.plasma.partition import get_ground_state_g
@@ -654,10 +698,14 @@ class ManifoldGenerator:
         # Total Gaussian width
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
-        # Stark broadening: HWHM (Lorentzian gamma)
-        # Use estimate_stark_parameter_jax for missing values (NaN)
-        # w_stark = w_ref * (n_e / 1e16) * (T / T_ref)^(-alpha)
-        REF_NE = 1.0e16
+        # Stark broadening: Lorentzian gamma (HWHM).
+        # ``l_stark_w`` (and the w_est fallback) is the stored electron-impact
+        # FWHM at REF_NE = 1e17 cm^-3, T = 10000 K (see the convention note in
+        # cflibs/radiation/stark.py). The Voigt profile needs a HWHM, so scale
+        # to live n_e and halve:
+        #   gamma_hwhm = 0.5 * w_fwhm * (n_e / 1e17) * (T / T_ref)^(-alpha)
+        # The earlier (n_e/1e16) with no 0.5 over-broadened by x20 (A4-CONV-2).
+        REF_NE = 1.0e17
         REF_T_EV = 0.86173  # 10000 K in eV
 
         # Estimate Stark w_ref for lines without database values
@@ -670,10 +718,10 @@ class ManifoldGenerator:
         # Use database value if available, else estimate
         w_ref = jnp.where(jnp.isnan(l_stark_w), w_est, l_stark_w)
 
-        # Stark HWHM calculation
+        # Stark HWHM calculation (w_ref is a FWHM at REF_NE; 0.5 -> HWHM)
         factor_ne = n_e / REF_NE
         factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -l_stark_alpha)
-        gamma_stark = w_ref * factor_ne * factor_T
+        gamma_stark = 0.5 * w_ref * factor_ne * factor_T
 
         # --- Voigt Profile Rendering (Humlicek W4 approximation) ---
         # For each wavelength point, compute Voigt profile contribution from all lines

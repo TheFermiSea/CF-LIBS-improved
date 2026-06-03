@@ -35,7 +35,7 @@ from cflibs.radiation.stark import stark_hwhm
 class _MockTransition:
     """Minimal stand-in matching the real Transition Stark API."""
 
-    stark_w: Optional[float] = None  # HWHM at REF_NE=1e16 cm^-3, T=10000 K (nm)
+    stark_w: Optional[float] = None  # electron-impact FWHM at REF_NE=1e17 cm^-3, T=10000 K (nm)
     stark_alpha: Optional[float] = None
 
 
@@ -45,7 +45,7 @@ class _MockTransition:
 
 
 def test_nonzero_stark_w_widens_tolerance_above_fwhm_inst():
-    """With ``stark_w = 0.05`` (5 pm HWHM at reference), the returned
+    """With ``stark_w = 0.05`` (50 pm FWHM at reference), the returned
     tolerance must exceed the pure instrument FWHM. This is the canary the
     original ``getattr(transition, "stark_width_nm", 0.0)`` typo would fail:
     it returned ``fwhm_inst`` exactly for every line with non-zero stark_w.
@@ -65,19 +65,20 @@ def test_nonzero_stark_w_widens_tolerance_above_fwhm_inst():
 
 
 def test_tolerance_matches_protocol_quadrature_formula():
-    """Spot-check the literal sqrt(fwhm_inst**2 + (2*HWHM)**2) formula.
+    """Spot-check the literal sqrt(fwhm_inst**2 + omega_stark**2) formula.
 
-    At the Konjević reference defaults (n_e=1e17, T=10000K) the stark_w
-    value 0.05 nm HWHM at REF_NE=1e16 scales linearly with n_e to
-    0.5 nm HWHM -> 1.0 nm FWHM (alpha-only T scaling is unity here since
-    T == T_ref). fwhm_inst = 500/10000 = 0.05 nm. Expected:
-    sqrt(0.05^2 + 1.0^2) ≈ 1.00125.
+    At the Konjević reference defaults (n_e=1e17, T=10000K) the stark_w value
+    0.05 nm is the stored electron-impact FWHM at exactly those conditions, so
+    omega_stark == 0.05 nm (alpha-only T scaling is unity here since
+    T == T_ref). This is the A4-CONV-2 fix: the pre-fix runtime treated
+    stark_w as HWHM@1e16 and produced the x20-inflated 1.0 nm. fwhm_inst =
+    500/10000 = 0.05 nm. Expected: sqrt(0.05^2 + 0.05^2).
     """
     transition = _MockTransition(stark_w=0.05)
     tol = get_wavelength_tolerance(
         wavelength_nm=500.0, transition=transition, resolving_power=10000.0
     )
-    expected = math.sqrt(0.05**2 + 1.0**2)
+    expected = math.sqrt(0.05**2 + 0.05**2)
     assert math.isclose(tol, expected, rel_tol=1e-6)
 
 

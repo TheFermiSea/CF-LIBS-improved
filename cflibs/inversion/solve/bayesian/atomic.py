@@ -250,6 +250,43 @@ def _query_atomic_data(
                         stage_idx = sp_num - 1
                         if 0 <= stage_idx < max_stages:
                             coeffs[el_idx, stage_idx] = [a0, a1, a2, a3, a4]
+
+            # Direct-sum-preferred coefficients (PF-3/PF-4 fix).  The default
+            # CPU solver prefers direct summation over the ``energy_levels``
+            # table; this Bayesian JAX loader historically consumed the stored
+            # polynomial with no direct-sum fallback.  When energy levels exist
+            # we refit the polynomial to the direct-sum here (same recipe as
+            # ``scripts/regenerate_partition_functions.py``), overriding the
+            # stored coefficients; species without levels keep the stored
+            # polynomial.  The forward model still evaluates the same
+            # polynomial form, so jit / vmap are unaffected.
+            try:
+                from cflibs.plasma.partition import direct_sum_fit_coeffs
+
+                for el, el_idx in el_map.items():
+                    for stage in (1, 2, 3):
+                        stage_idx = stage - 1
+                        if stage_idx >= max_stages:
+                            continue
+                        ip_ev = float(ips[el_idx, stage_idx])
+                        if ip_ev <= 0.0:
+                            continue
+                        level_rows = cursor.execute(
+                            "SELECT g_level, energy_ev FROM energy_levels "
+                            "WHERE element=? AND sp_num=? ORDER BY energy_ev",
+                            (el, stage),
+                        ).fetchall()
+                        if not level_rows:
+                            continue
+                        g_arr = np.array([r[0] for r in level_rows], dtype=np.float64)
+                        e_arr = np.array([r[1] for r in level_rows], dtype=np.float64)
+                        fit = direct_sum_fit_coeffs(g_arr, e_arr, ip_ev)
+                        if fit is None:
+                            continue
+                        ds_coeffs, _t_min, _t_max = fit
+                        coeffs[el_idx, stage_idx] = ds_coeffs
+            except Exception as exc:  # pragma: no cover - DB shape fallback
+                logger.debug(f"Direct-sum partition override skipped: {exc}")
         except Exception as e:
             logger.warning(f"Failed to load physics data: {e}")
 

@@ -17,6 +17,7 @@ These tests guard:
      workflow for its baseline cell (i.e., applying NO fix flags reduces
      to the precision-king default behavior).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -77,13 +78,21 @@ def test_sweep_cell_names_match_plan_order() -> None:
 
 def test_sweep_base_kwargs_pin_strict_precision_defaults() -> None:
     """Sweep cells share the strict precision-king threshold defaults
-    (3.0 / 0.02 / 0.4 / 30). A silent change to these would invalidate
-    every cell's baseline — the diff would no longer be "fix flags only"."""
+    (3.0 / 0.02 / 0.4 / 30) AND the strict R2 gate. A silent change to
+    these would invalidate every cell's baseline — the diff would no
+    longer be "fix flags only".
+
+    ``r2_gate_mode="fixed"`` is pinned explicitly: the ALIASIdentifier
+    constructor default flipped to ``"adaptive_t"`` (recall fix, commit
+    763a330), so without this pin the empty ``baseline`` cell would
+    inherit ``adaptive_t`` and collapse into the ``ftp1`` cell, destroying
+    the baseline-vs-ftp1 contrast the sweep exists to measure."""
     assert _ALIAS_SWEEP_BASE_KWARGS == {
         "intensity_threshold_factor": 3.0,
         "detection_threshold": 0.02,
         "chance_window_scale": 0.4,
         "max_lines_per_element": 30,
+        "r2_gate_mode": "fixed",
     }
 
 
@@ -177,6 +186,38 @@ def test_baseline_cell_produces_strict_alias_equivalent_config() -> None:
     )
 
 
+def test_sweep_base_pins_strict_r2_gate_so_baseline_differs_from_ftp1() -> None:
+    """Measurement-integrity guard. The ALIASIdentifier constructor default
+    for ``r2_gate_mode`` is ``"adaptive_t"``; the sweep base must therefore
+    pin ``"fixed"`` so the empty ``baseline`` cell's effective gate differs
+    from the ``ftp1`` cell's ``"adaptive_t"`` gate. Without the pin the two
+    cells would be byte-identical and the baseline-vs-ftp1 lift would read
+    as exactly zero by construction."""
+    from cflibs.inversion.identify.alias import ALIASIdentifier
+
+    # Constructor default is the adaptive gate (recall fix).
+    init_default = ALIASIdentifier.__init__.__defaults__
+    assert "adaptive_t" in (init_default or ()), (
+        "expected ALIASIdentifier default r2_gate_mode='adaptive_t'; if this "
+        "changed, revisit the sweep-base pin rationale"
+    )
+
+    # Base must pin the strict gate.
+    assert _ALIAS_SWEEP_BASE_KWARGS["r2_gate_mode"] == "fixed"
+
+    # Resolve each cell's EFFECTIVE r2_gate_mode the same way the predictor
+    # factory does (base, overridden by cell_kwargs).
+    cells = dict(_ALIAS_SWEEP_CELLS)
+    baseline_gate = {**_ALIAS_SWEEP_BASE_KWARGS, **cells["baseline"]}["r2_gate_mode"]
+    ftp1_gate = {**_ALIAS_SWEEP_BASE_KWARGS, **cells["ftp1"]}["r2_gate_mode"]
+    assert baseline_gate == "fixed"
+    assert ftp1_gate == "adaptive_t"
+    assert baseline_gate != ftp1_gate, (
+        "baseline and ftp1 sweep cells resolve to the same R2 gate — the "
+        "controlled contrast has collapsed"
+    )
+
+
 def test_distinct_predictor_per_cell() -> None:
     """Each registered sweep cell must use a DISTINCT predictor factory
     closure; collapsing two cells into one would silently double-count
@@ -189,8 +230,7 @@ def test_distinct_predictor_per_cell() -> None:
     seen_ids = set()
     for name, fn in builders.items():
         assert id(fn) not in seen_ids, (
-            f"sweep workflow {name!r} reuses a predictor factory shared "
-            "with another cell"
+            f"sweep workflow {name!r} reuses a predictor factory shared " "with another cell"
         )
         seen_ids.add(id(fn))
 

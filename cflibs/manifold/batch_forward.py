@@ -41,6 +41,7 @@ from cflibs.core.constants import (
     SAHA_CONST_CM3,
 )
 from cflibs.core.jax_runtime import HAS_JAX
+from cflibs.radiation.stark import REF_NE as _STARK_REF_NE
 
 if HAS_JAX:
     import jax
@@ -84,7 +85,8 @@ class BatchAtomicData(NamedTuple):
     line_ion_stage : array, shape (N_lines,)
         Ionization stage of each line (0 = neutral I, 1 = singly ionized II).
     line_stark_w : array, shape (N_lines,)
-        Stark HWHM at reference n_e = 1e16 cm^-3 [nm].
+        Stored electron-impact Stark FWHM at reference n_e = 1e17 cm^-3,
+        T = 10000 K [nm] (see cflibs.radiation.stark convention note).
     line_mass_amu : array, shape (N_lines,)
         Atomic mass of the element for each line [amu].
     ionization_potentials : array, shape (N_elements, max_stages-1)
@@ -160,7 +162,7 @@ def pack_atomic_data(
         Element symbols in order (defines the element index mapping).
     line_data : list of dict
         Each dict has keys: 'wavelength_nm', 'A_ki', 'g_k', 'E_k_eV',
-        'element', 'ion_stage' (0=I, 1=II), 'stark_w_nm' (HWHM at 1e16),
+        'element', 'ion_stage' (0=I, 1=II), 'stark_w_nm' (FWHM at 1e17),
         'mass_amu'.
     max_stages : int
         Maximum ionization stages per element (default 3: I, II, III).
@@ -438,9 +440,11 @@ if HAS_JAX:
         mass_kg = line_mass * _M_PROTON
         sigma_D = line_wl * jnp.sqrt(T_eV * _EV_TO_J / (mass_kg * _C_LIGHT**2))
 
-        # Lorentzian gamma: Stark HWHM
-        # gamma_S = stark_w * (n_e / 1e16) [nm]
-        gamma_S = line_stark * (n_e / 1e16)
+        # Lorentzian gamma: Stark HWHM. ``line_stark`` is the stored FWHM at
+        # REF_NE=1e17; scale to live n_e and halve to a HWHM (A4-CONV-2 fix —
+        # the old ``(n_e/1e16)`` with no 0.5 over-broadened by x20).
+        # gamma_S = 0.5 * stark_w * (n_e / 1e17) [nm]
+        gamma_S = 0.5 * line_stark * (n_e / _STARK_REF_NE)
 
         # Ensure positive widths
         sigma_D = jnp.maximum(sigma_D, 1e-6)  # minimum 1e-6 nm
@@ -712,7 +716,8 @@ else:
         # Stage 4: broadening
         mass_kg = line_mass * _M_PROTON
         sigma_D = line_wl * np.sqrt(T_eV * _EV_TO_J / (mass_kg * _C_LIGHT**2))
-        gamma_S = line_stark * (n_e / 1e16)
+        # line_stark is FWHM at REF_NE=1e17; 0.5*(n_e/1e17) -> HWHM (A4-CONV-2).
+        gamma_S = 0.5 * line_stark * (n_e / _STARK_REF_NE)
         sigma_D = np.maximum(sigma_D, 1e-6)
         gamma_S = np.maximum(gamma_S, 1e-6)
 
