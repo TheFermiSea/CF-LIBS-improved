@@ -166,11 +166,12 @@ class TestSpectralNNLSIdentifier:
         assert "min_relative_coeff" in result.parameters
 
     def test_relative_gate_never_passes_sub_floor_elements(self, small_basis_library):
-        """No detected element may carry less than min_relative_coeff of the mass.
+        """No detected element may carry less than min_relative_coeff of the MAX.
 
-        This is the load-bearing precision gate (NNLS-GAUSS-BASIS-4): an
-        element is detected only if its NNLS coefficient is at least
-        ``min_relative_coeff`` of the total element coefficient mass.
+        The relative floor is now measured against the **maximum** element
+        coefficient (count-invariant), not the sum (the #216 count-scaling
+        bug). An element is detected only if its coefficient is at least
+        ``min_relative_coeff`` of the largest element coefficient.
         """
         ident = SpectralNNLSIdentifier(
             basis_library=small_basis_library,
@@ -182,9 +183,9 @@ class TestSpectralNNLSIdentifier:
         wl, spec = _make_synthetic_spectrum(small_basis_library, {"Fe": 0.7, "Cr": 0.3})
         result = ident.identify(wl, spec)
         for el in result.detected_elements:
-            assert el.metadata["concentration_estimate"] >= 0.05 - 1e-12, (
-                f"{el.element} detected with relative coeff "
-                f"{el.metadata['concentration_estimate']:.4f} below the 5% floor"
+            assert el.metadata["relative_to_max"] >= 0.05 - 1e-12, (
+                f"{el.element} detected with max-relative coeff "
+                f"{el.metadata['relative_to_max']:.4f} below the 5%-of-max floor"
             )
 
     def test_relative_gate_is_monotone_in_floor(self, small_basis_library):
@@ -292,9 +293,15 @@ class TestHybridUnionRecallFloor:
     its 0.05 precision floor.
     """
 
-    def test_standalone_default_keeps_precision_floor(self):
-        """Standalone SpectralNNLSIdentifier keeps the W2 0.05 floor by default."""
+    def test_standalone_default_is_count_invariant(self):
+        """Standalone SpectralNNLSIdentifier defaults to a count-invariant gate.
+
+        Post-#216-followup the sum-normalized 0.05 floor (which tightened
+        ~1/n with candidate count — the #216 bug) is replaced by a default-off
+        max-relative floor plus a strengthened absolute-SNR precision gate.
+        """
         from cflibs.inversion.identify.spectral_nnls import (
+            DEFAULT_DETECTION_SNR,
             DEFAULT_MIN_RELATIVE_COEFF,
             SpectralNNLSIdentifier,
         )
@@ -302,8 +309,13 @@ class TestHybridUnionRecallFloor:
         import inspect
 
         sig = inspect.signature(SpectralNNLSIdentifier.__init__)
+        # Relative floor defaults OFF (no candidate-count-scaling bar).
         assert sig.parameters["min_relative_coeff"].default == DEFAULT_MIN_RELATIVE_COEFF
-        assert DEFAULT_MIN_RELATIVE_COEFF == pytest.approx(0.05)
+        assert DEFAULT_MIN_RELATIVE_COEFF == pytest.approx(0.0)
+        # SNR is the precision lever, strengthened to 4.0 to reject the
+        # NNLS-GAUSS-BASIS-4 leakage FP (SNR just above 3).
+        assert sig.parameters["detection_snr"].default == DEFAULT_DETECTION_SNR
+        assert DEFAULT_DETECTION_SNR == pytest.approx(4.0)
 
     def test_hybrid_union_arm_defaults_to_recall_favoring_floor(self):
         """HybridIdentifier defaults the NNLS arm floor to 0.0 (recall-favoring)."""

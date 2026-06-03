@@ -1353,6 +1353,14 @@ _SIBLING_CORRELATION_STRICT: Tuple[str, Dict[str, Any]] = (
 _SIBLING_NNLS_DEFAULT: Tuple[str, Dict[str, Any]] = (
     "nnls",
     {
+        # detection_snr 3.0 reproduces the operator-managed F1 regression
+        # baseline (.swarm/identifier-f1-baseline.json, captured 2026-05-13
+        # with the snr-only rule, no relative floor). The standalone
+        # identifier's default ``min_relative_coeff`` is now 0.0 (the #215
+        # sum-normalized 0.05 floor — the #216 count-scaling bug — is removed),
+        # so this benchmark path matches the baseline's snr-only behavior
+        # again. Do NOT raise this without an operator re-baseline; see the
+        # candidate-count-fragility audit (F1) and spectral_nnls.py.
         "detection_snr": 3.0,
         "continuum_degree": 2,
         "fallback_T_K": 10000.0,

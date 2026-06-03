@@ -29,19 +29,42 @@ if TYPE_CHECKING:
 logger = get_logger("inversion.spectral_nnls")
 
 
-# Relative-magnitude detection floor (blocker NNLS-GAUSS-BASIS-4).
+# Relative-magnitude detection floor (blocker NNLS-GAUSS-BASIS-4 /
+# count-invariance fix #216-followup).
 #
-# The raw ``element_snr >= detection_snr`` rule fires on tiny NNLS
-# coefficients (~2.6% of the total coefficient mass) produced by
-# matched-filter projection of a structured residual onto *absent*-element
-# basis vectors --- the dominant false-positive mechanism (5.67 FP/spectrum,
-# precision 0.42). The Gaussian basis itself is near-orthogonal (cond ~38,
-# full rank), so the fix is NOT a Voigt-basis rewrite (gated Wave-5
-# follow-up) but a floor on each element's coefficient mass relative to the
-# total. In the diagnosis repro a >=5% relative gate cut FP 2->0 while
-# retaining both true elements. Tunable in the 3-7% range via the
-# ``min_relative_coeff`` constructor kwarg.
-DEFAULT_MIN_RELATIVE_COEFF: float = 0.05
+# History: the raw ``element_snr >= detection_snr`` rule (snr=3.0) fired on
+# tiny NNLS coefficients (~2.6% of the total coefficient mass, ~8.15% of the
+# max coefficient, SNR just above 3) produced by matched-filter projection of
+# a structured residual onto *absent*-element basis vectors --- the dominant
+# false-positive mechanism (5.67 FP/spectrum, precision 0.42). #215 added a
+# floor of ``coeff / sum(all_candidate_coeffs) >= 0.05`` to suppress it.
+#
+# That SUM-normalized floor is the exact #216 count-scaling bug: the
+# denominator grows with the candidate count, so the per-element bar tightens
+# ~1/n. On real BHVO-2 (83-element basis) it silently cut strong true majors
+# (Si SNR 9.4, Al 8.1, Na 5.0) as candidates were added, dropping standalone
+# recall 0.70 -> 0.40. See docs/architecture/2026-06-03-candidate-count-
+# fragility-audit.md (F1).
+#
+# Fix: (1) the relative floor is now measured against the MAX coefficient
+# (count-invariant: adding distractors does not change the max), and (2) it
+# defaults OFF (0.0). The precision lever is instead the absolute coefficient
+# SNR gate (count-invariant by construction), strengthened to 4.0.
+#
+# Why not keep a max-relative floor on by default? On real BHVO-2 the leakage
+# FP sits at 8.15% of max while the weakest true major (Na) sits at only 5.6%
+# of max --- so NO max-floor can both admit Na and reject the FP. The SNR gate
+# separates them cleanly (Na SNR 5.05 vs FP SNR ~3), so SNR is the precision
+# lever and the relative floor stays a tunable, count-invariant opt-in.
+DEFAULT_MIN_RELATIVE_COEFF: float = 0.0
+
+# Absolute coefficient-SNR detection floor. Count-invariant (the SNR of a
+# given element's coefficient does not change as distractor candidates are
+# added; verified on real BHVO-2: Si SNR 9.43/9.37/9.10 at n=10/20/38).
+# Raised from the legacy 3.0 to 4.0 so it rejects the NNLS-GAUSS-BASIS-4
+# leakage false positive (SNR just above 3) while retaining every true major
+# detectable on real data (lowest passing true major Na has SNR ~5.0).
+DEFAULT_DETECTION_SNR: float = 4.0
 
 
 # ---------------------------------------------------------------------------
@@ -318,27 +341,31 @@ class SpectralNNLSIdentifier:
         FAISS index for fast (T, ne) estimation.  If None, uses
         ``fallback_T_K`` and ``fallback_ne_cm3`` directly.
     detection_snr : float
-        Minimum coefficient SNR for element detection (default: 3.0).
-        Secondary condition; the relative-magnitude floor below is the
-        precision lever.
+        Minimum absolute coefficient SNR for element detection (default:
+        4.0). This is the **primary precision lever** and is count-invariant:
+        an element's coefficient SNR does not change as distractor candidates
+        are added (verified on real BHVO-2). 4.0 rejects the
+        NNLS-GAUSS-BASIS-4 leakage false positive (SNR just above 3) while
+        retaining every true major detectable on real data.
     min_relative_coeff : float
-        Relative-magnitude detection floor: an element is detected only if
-        its NNLS coefficient is at least this fraction of the total element
-        coefficient mass (default: 0.05, i.e. 5%). This suppresses the
-        false positives produced when matched-filter projection of a
-        structured residual leaks tiny coefficients onto absent-element
-        basis vectors (blocker NNLS-GAUSS-BASIS-4). Tune in the 0.03--0.07
-        range. Set to 0.0 to disable and recover the legacy SNR-only rule.
+        Optional relative-magnitude detection floor, measured against the
+        **maximum** element coefficient (default: 0.0, i.e. disabled). When
+        > 0, an element is detected only if its NNLS coefficient is at least
+        this fraction of the largest element coefficient. Unlike the legacy
+        #215 floor (which normalized by the *sum* of all candidate
+        coefficients and therefore tightened ~1/n as the candidate count
+        grew — the #216 count-scaling bug), the MAX denominator is
+        count-invariant: adding distractor candidates does not move the bar.
 
-        Note this floor is measured against the *total* coefficient mass, so
-        it scales with the candidate count: it is calibrated for *precision*
-        on the standalone identifier over a small near-orthogonal basis. On a
-        large real-data candidate set each legitimate element holds only a few
-        percent of the total mass, so the floor will drop true elements. The
-        :class:`~cflibs.inversion.identify.hybrid.HybridIdentifier` union arm
-        therefore defaults this to ``0.0`` (recall-favoring); the union's
-        precision comes from the SNR gate + ALIAS agreement instead. See the
-        PR fixing the #215 hybrid_union recall regression.
+        It defaults OFF because on real data no max-relative floor can both
+        admit the weakest true major and reject the leakage FP: on real
+        BHVO-2 the leakage FP sits at ~8.15% of the max coefficient while the
+        weakest detectable true major (Na) sits at only ~5.6% of max. The SNR
+        gate separates them cleanly, so SNR carries precision and this floor
+        is a count-invariant opt-in only. Set in the 0.10--0.20 range (above
+        the FP's 8.15%-of-max) if you must trade real-data recall for tighter
+        precision on a known-clean candidate set. See
+        docs/architecture/2026-06-03-candidate-count-fragility-audit.md (F1).
     continuum_degree : int
         Degree of polynomial continuum added to basis matrix (default: 3).
         Set to -1 to disable continuum fitting.
@@ -356,7 +383,7 @@ class SpectralNNLSIdentifier:
         self,
         basis_library: BasisLibrary,
         basis_index: Optional[BasisIndex] = None,
-        detection_snr: float = 3.0,
+        detection_snr: float = DEFAULT_DETECTION_SNR,
         min_relative_coeff: float = DEFAULT_MIN_RELATIVE_COEFF,
         continuum_degree: int = 3,
         fallback_T_K: float = 8000.0,
@@ -512,27 +539,38 @@ class SpectralNNLSIdentifier:
         # Step 8: Build results
         all_element_ids: List[ElementIdentification] = []
 
-        # Total element coefficient mass: denominator for the
-        # relative-magnitude detection gate (blocker NNLS-GAUSS-BASIS-4).
+        # Total element coefficient mass: reported as ``concentration_estimate``
+        # (a diagnostic share of the total), NOT used for the detection gate.
         total_element_signal = float(np.sum(element_coeffs))
+        # Maximum element coefficient: count-invariant denominator for the
+        # optional relative-magnitude floor. Adding distractor candidates
+        # leaves the max coefficient unchanged, so the bar does not tighten
+        # with candidate count (closes the #216 count-scaling bug; see
+        # DEFAULT_MIN_RELATIVE_COEFF docstring above).
+        max_element_signal = float(np.max(element_coeffs)) if len(element_coeffs) else 0.0
 
         for i, element in enumerate(elements):
             coeff = float(element_coeffs[i])
             element_snr = float(snr[i])
 
-            # Compute concentration estimate (fraction of total element signal)
+            # Reported concentration: fraction of total element signal. Kept
+            # for downstream consumers (e.g. the NNLS sweep in unified.py);
+            # this is a *diagnostic*, deliberately not the detection gate.
             concentration = coeff / total_element_signal if total_element_signal > 0 else 0.0
+            # Count-invariant relative magnitude: fraction of the MAX
+            # coefficient. This is what the (default-off) relative floor gates.
+            relative_to_max = coeff / max_element_signal if max_element_signal > 0 else 0.0
 
-            # Detection gate: a positive coefficient with sufficient SNR
-            # (secondary condition) AND carrying at least ``min_relative_coeff``
-            # of the total coefficient mass. The relative-magnitude floor is
-            # the precision lever: it rejects the ~2.6%-signal coefficients
-            # that matched-filter projection of a structured residual leaks
-            # onto absent-element basis vectors (NNLS-GAUSS-BASIS-4).
+            # Detection gate. The primary, count-invariant precision lever is
+            # the absolute coefficient SNR (``detection_snr``, default 4.0),
+            # which rejects the NNLS-GAUSS-BASIS-4 leakage FP (SNR just above
+            # 3). The optional ``min_relative_coeff`` floor (default 0.0)
+            # gates on the MAX-relative magnitude, NOT the sum-relative one,
+            # so it does not tighten as candidate count grows (the #216 bug).
             detected = (
                 coeff > 1e-10
                 and element_snr >= self.detection_snr
-                and concentration >= self.min_relative_coeff
+                and relative_to_max >= self.min_relative_coeff
             )
 
             element_id = ElementIdentification(
@@ -549,6 +587,7 @@ class SpectralNNLSIdentifier:
                     "nnls_snr": element_snr,
                     "sigma_coeff": float(sigma_coeffs[i]),
                     "concentration_estimate": concentration,
+                    "relative_to_max": relative_to_max,
                     "estimated_T_K": T_est,
                     "estimated_ne_cm3": ne_est,
                 },
