@@ -3,6 +3,10 @@
 import pytest
 
 from cflibs.benchmark.synthetic_eval import (
+    ALGO_HYBRID_UNION,
+    ALGO_SPECTRAL_NNLS,
+    _BASE_ALGORITHMS,
+    build_identifier_runners,
     compute_binary_metrics,
     confusion_counts,
     derive_truth_elements,
@@ -118,3 +122,39 @@ def test_summarize_by_group_groups_by_perturbation_axis():
     assert record["algorithm"] == "Comb"
     assert record["n_rows"] == 2
     assert abs(record["mean_peak_match_rate"] - 0.6) < 1e-12
+
+
+def test_identifier_runners_default_is_trio():
+    """Without a basis library the suite is exactly ALIAS/Comb/Correlation."""
+    runners = build_identifier_runners(
+        wavelength=None,
+        intensity=None,
+        db=None,
+        elements=["Fe", "Ni"],
+        resolving_power=1000.0,
+        basis_library=None,
+    )
+    names = [name for name, _runner in runners]
+    assert names == list(_BASE_ALGORITHMS)
+    assert ALGO_SPECTRAL_NNLS not in names
+    assert ALGO_HYBRID_UNION not in names
+
+
+def test_identifier_runners_with_basis_appends_full_stack():
+    """A basis library appends spectral_nnls and hybrid_union to the suite."""
+
+    class _FakeBasis:
+        elements = ["Fe", "Ni"]
+
+    runners = build_identifier_runners(
+        wavelength=None,
+        intensity=None,
+        db=None,
+        elements=["Fe", "Ni"],
+        resolving_power=1000.0,
+        basis_library=_FakeBasis(),
+    )
+    names = [name for name, _runner in runners]
+    # Trio first, then the two basis-dependent identifiers (order preserved).
+    assert names[:3] == list(_BASE_ALGORITHMS)
+    assert names[3:] == [ALGO_SPECTRAL_NNLS, ALGO_HYBRID_UNION]

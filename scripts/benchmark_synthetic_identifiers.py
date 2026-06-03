@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 """
-Run ALIAS/Comb/Correlation benchmark on synthetic corpus.
+Run the identifier benchmark on a synthetic corpus.
+
+By default the peak-matching trio (ALIAS/Comb/Correlation) is run. Pass
+``--with-nnls`` and/or ``--with-hybrid`` to additionally run the
+basis-dependent ``spectral_nnls`` and ``hybrid_union`` identifiers. Either of
+those flags enables basis-library construction; a small per-corpus basis
+library is built once at ``--basis-library-path`` (or supply an existing
+one). If the basis library can't be built, those identifiers are skipped and
+the run continues with the trio.
 """
 
 from __future__ import annotations
@@ -50,6 +58,33 @@ def main() -> None:
     parser.add_argument("--presence-threshold", type=float, default=1e-4)
     parser.add_argument("--max-spectra", type=int, default=None)
 
+    # Full-stack identifiers (basis-dependent; opt-in).
+    parser.add_argument(
+        "--with-nnls",
+        action="store_true",
+        help="Also run the spectral_nnls identifier (requires a basis library).",
+    )
+    parser.add_argument(
+        "--with-hybrid",
+        action="store_true",
+        help="Also run the hybrid_union identifier (requires a basis library).",
+    )
+    parser.add_argument(
+        "--basis-library-path",
+        type=str,
+        default=None,
+        help=(
+            "HDF5 path to build (if missing) or load the per-corpus basis "
+            "library from. Defaults to <output-dir>/basis_fwhm_<fwhm>nm.h5."
+        ),
+    )
+    parser.add_argument(
+        "--basis-fwhm-nm",
+        type=float,
+        default=0.3,
+        help="Instrument FWHM (nm) for the built basis library (default: 0.3).",
+    )
+
     # Optional calibration pass before identification
     parser.add_argument(
         "--wavelength-calibration-mode",
@@ -90,6 +125,11 @@ def main() -> None:
         quality_max_abs_correction_nm=args.wavelength_calibration_gate_max_abs_correction,
     )
 
+    include_nnls = bool(args.with_nnls or args.with_hybrid)
+    basis_library_path = args.basis_library_path
+    if include_nnls and basis_library_path is None:
+        basis_library_path = str(output_dir / f"basis_fwhm_{args.basis_fwhm_nm:g}nm.h5")
+
     result = run_synthetic_benchmark(
         dataset_path=args.dataset_path,
         db_path=args.db_path,
@@ -99,6 +139,9 @@ def main() -> None:
         presence_threshold=args.presence_threshold,
         max_spectra=args.max_spectra,
         calibration=calibration,
+        include_nnls=include_nnls,
+        basis_library_path=basis_library_path,
+        basis_instrument_fwhm_nm=args.basis_fwhm_nm,
     )
 
     summary = result["summary"]

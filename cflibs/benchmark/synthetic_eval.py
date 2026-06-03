@@ -1,15 +1,32 @@
 """
 Synthetic corpus identifier benchmark utilities.
 
-Runs ALIAS, Comb, and Correlation on synthetic benchmark spectra and produces
+Runs the full identifier stack on synthetic benchmark spectra and produces
 element-level + peak-level diagnostics suitable for regression tracking.
+
+The default suite is the three peak-matching identifiers (ALIAS, Comb,
+Correlation), which share the ``cls(db, elements=..., **kwargs)`` constructor
+shape. Two full-spectrum / composite identifiers are *opt-in* because they
+need a pre-computed :class:`~cflibs.manifold.basis_library.BasisLibrary`:
+
+* ``spectral_nnls`` — NNLS decomposition into single-element basis spectra
+  (:class:`~cflibs.inversion.identify.spectral_nnls.SpectralNNLSIdentifier`).
+* ``hybrid_union`` — the NNLS ∪ ALIAS union
+  (:class:`~cflibs.inversion.identify.hybrid.HybridIdentifier` with
+  ``require_both=False``), reusing the existing two-stage building block
+  rather than reinventing the union logic.
+
+Pass ``include_nnls=True`` and a ``basis_library`` to :func:`evaluate_dataset`
+/ :func:`run_synthetic_benchmark` to enable them. When the basis library is
+unavailable the two extra identifiers are silently skipped, so the historical
+three-identifier behavior (and the unit tests) are unaffected by default.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 import csv
 import json
 import logging
@@ -25,7 +42,21 @@ from cflibs.inversion.identify.correlation import CorrelationIdentifier
 from cflibs.inversion.common.element_id import ElementIdentification, ElementIdentificationResult
 from cflibs.inversion.wavelength_calibration import calibrate_wavelength_axis
 
+if TYPE_CHECKING:
+    from cflibs.manifold.basis_library import BasisLibrary
+
 logger = logging.getLogger(__name__)
+
+# Identifier name constants. The peak-matching trio is always run; the two
+# basis-dependent identifiers are appended only when a basis library is built.
+ALGO_ALIAS = "ALIAS"
+ALGO_COMB = "Comb"
+ALGO_CORRELATION = "Correlation"
+ALGO_SPECTRAL_NNLS = "spectral_nnls"
+ALGO_HYBRID_UNION = "hybrid_union"
+
+_BASE_ALGORITHMS: Tuple[str, ...] = (ALGO_ALIAS, ALGO_COMB, ALGO_CORRELATION)
+_BASIS_ALGORITHMS: Tuple[str, ...] = (ALGO_SPECTRAL_NNLS, ALGO_HYBRID_UNION)
 
 
 def derive_truth_elements(
@@ -90,8 +121,224 @@ def resolving_power_from_spectrum(spec: BenchmarkSpectrum, fallback: float = 900
     return float(np.clip(rp, 100.0, 20000.0))
 
 
+def build_corpus_basis_library(
+    db_path: str,
+    output_path: str,
+    elements: Sequence[str],
+    wavelength_range: Tuple[float, float] = (222.0, 267.0),
+    pixels: int = 2560,
+    temperature_range: Tuple[float, float] = (9000.0, 21000.0),
+    temperature_steps: int = 8,
+    density_range: Tuple[float, float] = (1e16, 1e18),
+    density_steps: int = 5,
+    ionization_stages: Tuple[int, ...] = (1, 2),
+    instrument_fwhm_nm: float = 0.3,
+    overwrite: bool = False,
+) -> Optional["BasisLibrary"]:
+    """Build a small single-element basis library for a synthetic corpus.
+
+    Mirrors :class:`cflibs.manifold.basis_library.BasisLibraryGenerator` but
+    restricts the element set (and grid) to *exactly* the corpus candidates,
+    keeping the file tiny and the build deterministic & fast (seconds, not
+    minutes). The full :meth:`BasisLibraryGenerator.generate` builds every
+    element present in the atomic DB, which is unnecessary here.
+
+    The defaults span the ps-LIBS regime of the workhorse synthetic corpora
+    (T ~ 0.8-1.8 eV, n_e ~ 1e16-1e18 cm^-3) over the deep-UV iron-group
+    window. The element order is sorted for determinism so repeat builds are
+    byte-stable, which is what a controlled before/after measurement needs.
+
+    Parameters
+    ----------
+    db_path : str
+        Atomic database path.
+    output_path : str
+        HDF5 destination. Reused if it already exists (unless ``overwrite``).
+    elements : sequence of str
+        Candidate elements to include as basis vectors.
+    wavelength_range, pixels, temperature_range, temperature_steps,
+    density_range, density_steps, ionization_stages, instrument_fwhm_nm
+        Grid knobs (see :class:`BasisLibraryConfig`).
+    overwrite : bool
+        Rebuild even if ``output_path`` already exists.
+
+    Returns
+    -------
+    BasisLibrary or None
+        Loaded basis library, or ``None`` if generation is impossible
+        (e.g. ``h5py`` unavailable). Callers treat ``None`` as "skip the
+        basis-dependent identifiers".
+    """
+    try:
+        import h5py  # noqa: F401
+
+        from cflibs.manifold.basis_library import (
+            BasisLibrary,
+            BasisLibraryConfig,
+            BasisLibraryGenerator,
+        )
+    except Exception:  # noqa: BLE001 - h5py / basis module unavailable
+        logger.warning(
+            "Cannot build basis library (h5py or basis module unavailable); "
+            "spectral_nnls / hybrid_union will be skipped.",
+            exc_info=True,
+        )
+        return None
+
+    out = Path(output_path)
+    sorted_elements = sorted({str(e) for e in elements})
+
+    if out.exists() and not overwrite:
+        logger.info("Reusing existing basis library at %s", out)
+        return BasisLibrary(str(out))
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    cfg = BasisLibraryConfig(
+        db_path=str(db_path),
+        output_path=str(out),
+        wavelength_range=wavelength_range,
+        pixels=pixels,
+        temperature_range=temperature_range,
+        temperature_steps=temperature_steps,
+        density_range=density_range,
+        density_steps=density_steps,
+        ionization_stages=tuple(ionization_stages),
+        instrument_fwhm_nm=instrument_fwhm_nm,
+    )
+    cfg.validate()
+
+    generator = BasisLibraryGenerator(cfg)
+    wl_grid, sigma, params = BasisLibraryGenerator._build_grids(cfg)
+    n_grid = params.shape[0]
+    spectra = np.zeros((len(sorted_elements), n_grid, cfg.pixels), dtype=np.float32)
+    for idx, element in enumerate(sorted_elements):
+        spectra[idx, :, :] = generator._compute_element_spectra(element, wl_grid, sigma, params)
+
+    with h5py.File(str(out), "w") as f:
+        f.create_dataset("spectra", data=spectra, compression="gzip", compression_opts=4)
+        f.create_dataset("params", data=params)
+        f.create_dataset("wavelength", data=wl_grid)
+        dt = h5py.string_dtype(encoding="utf-8")
+        f.create_dataset("elements", data=np.array(sorted_elements, dtype=object), dtype=dt)
+
+    logger.info(
+        "Built corpus basis library: %s (%d elements, %d grid points)",
+        out,
+        len(sorted_elements),
+        n_grid,
+    )
+    return BasisLibrary(str(out))
+
+
 def _element_by_name(result: ElementIdentificationResult) -> Dict[str, ElementIdentification]:
     return {e.element: e for e in result.all_elements}
+
+
+# A "runner" is a zero-argument callable that constructs an identifier and
+# returns its ElementIdentificationResult for the current spectrum. Using a
+# per-entry factory (instead of the old (name, cls, kwargs) tuple) lets the
+# basis-dependent identifiers — whose constructor (basis_library=...) and
+# identify() signatures differ from the cls(db, elements, **kwargs) trio —
+# slot in without special-casing the dispatch loop.
+IdentifierRunner = Callable[[], ElementIdentificationResult]
+
+
+def build_identifier_runners(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    db: AtomicDatabase,
+    elements: List[str],
+    resolving_power: float,
+    basis_library: Optional["BasisLibrary"] = None,
+) -> List[Tuple[str, IdentifierRunner]]:
+    """Build the ordered list of (name, runner) identifier factories.
+
+    The peak-matching trio (ALIAS/Comb/Correlation) is always present. When
+    ``basis_library`` is provided, ``spectral_nnls`` and ``hybrid_union`` are
+    appended; otherwise they are omitted entirely (graceful skip).
+    """
+
+    def _run_alias() -> ElementIdentificationResult:
+        identifier = ALIASIdentifier(
+            db,
+            elements=elements,
+            resolving_power=resolving_power,
+            intensity_threshold_factor=3.0,
+            detection_threshold=0.01,
+            chance_window_scale=0.3,
+        )
+        return identifier.identify(wavelength, intensity)
+
+    def _run_comb() -> ElementIdentificationResult:
+        identifier = CombIdentifier(
+            db,
+            elements=elements,
+            resolving_power=resolving_power,
+            min_correlation=0.08,
+            tooth_activation_threshold=0.35,
+            relative_threshold_scale=1.4,
+            min_aki_gk=3000.0,
+        )
+        return identifier.identify(wavelength, intensity)
+
+    def _run_correlation() -> ElementIdentificationResult:
+        identifier = CorrelationIdentifier(
+            db,
+            elements=elements,
+            resolving_power=resolving_power,
+            min_confidence=0.008,
+            relative_threshold_scale=1.2,
+            min_line_strength=1000.0,
+            T_range_K=(5000, 15000),
+            T_steps=7,
+            n_e_range_cm3=(1e15, 5e17),
+            n_e_steps=4,
+        )
+        return identifier.identify(wavelength, intensity, mode="classic")
+
+    runners: List[Tuple[str, IdentifierRunner]] = [
+        (ALGO_ALIAS, _run_alias),
+        (ALGO_COMB, _run_comb),
+        (ALGO_CORRELATION, _run_correlation),
+    ]
+
+    if basis_library is not None:
+        # NNLS decomposes against the basis library's own element set; pass
+        # the corpus candidates as the fallback grid so they line up. Mirror
+        # the production kwargs from cflibs/benchmark/unified.py.
+        def _run_nnls() -> ElementIdentificationResult:
+            from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
+
+            identifier = SpectralNNLSIdentifier(
+                basis_library=basis_library,
+                detection_snr=3.0,
+                continuum_degree=3,
+            )
+            return identifier.identify(wavelength, intensity)
+
+        # hybrid_union == HybridIdentifier(require_both=False), i.e. the
+        # NNLS ∪ ALIAS union. Reuses the two-stage building block rather than
+        # reinventing the union; lenient NNLS screen + ALIAS confirmation,
+        # then the union of the two detection sets.
+        def _run_hybrid_union() -> ElementIdentificationResult:
+            from cflibs.inversion.identify.hybrid import HybridIdentifier
+
+            identifier = HybridIdentifier(
+                atomic_db=db,
+                basis_library=basis_library,
+                elements=elements,
+                resolving_power=resolving_power,
+                nnls_detection_snr=1.5,
+                alias_detection_threshold=0.05,
+                require_both=False,
+            )
+            return identifier.identify(wavelength, intensity)
+
+        runners.append((ALGO_SPECTRAL_NNLS, _run_nnls))
+        runners.append((ALGO_HYBRID_UNION, _run_hybrid_union))
+
+    return runners
 
 
 def _identifier_suite(
@@ -100,52 +347,20 @@ def _identifier_suite(
     db: AtomicDatabase,
     elements: List[str],
     resolving_power: float,
+    basis_library: Optional["BasisLibrary"] = None,
 ) -> Dict[str, Optional[ElementIdentificationResult]]:
     results: Dict[str, Optional[ElementIdentificationResult]] = {}
-    algorithms: List[Tuple[str, Any, Dict[str, Any]]] = [
-        (
-            "ALIAS",
-            ALIASIdentifier,
-            {
-                "resolving_power": resolving_power,
-                "intensity_threshold_factor": 3.0,
-                "detection_threshold": 0.01,
-                "chance_window_scale": 0.3,
-            },
-        ),
-        (
-            "Comb",
-            CombIdentifier,
-            {
-                "resolving_power": resolving_power,
-                "min_correlation": 0.08,
-                "tooth_activation_threshold": 0.35,
-                "relative_threshold_scale": 1.4,
-                "min_aki_gk": 3000.0,
-            },
-        ),
-        (
-            "Correlation",
-            CorrelationIdentifier,
-            {
-                "resolving_power": resolving_power,
-                "min_confidence": 0.008,
-                "relative_threshold_scale": 1.2,
-                "min_line_strength": 1000.0,
-                "T_range_K": (5000, 15000),
-                "T_steps": 7,
-                "n_e_range_cm3": (1e15, 5e17),
-                "n_e_steps": 4,
-            },
-        ),
-    ]
-    for name, cls, kwargs in algorithms:
+    runners = build_identifier_runners(
+        wavelength=wavelength,
+        intensity=intensity,
+        db=db,
+        elements=elements,
+        resolving_power=resolving_power,
+        basis_library=basis_library,
+    )
+    for name, runner in runners:
         try:
-            identifier = cls(db, elements=elements, **kwargs)
-            if name == "Correlation":
-                results[name] = identifier.identify(wavelength, intensity, mode="classic")
-            else:
-                results[name] = identifier.identify(wavelength, intensity)
+            results[name] = runner()
         except Exception:  # noqa: BLE001
             logger.warning(
                 "Identifier %s failed during synthetic benchmark run", name, exc_info=True
@@ -177,6 +392,7 @@ def evaluate_dataset(
     presence_threshold: float = 1e-4,
     max_spectra: Optional[int] = None,
     calibration: Optional[CalibrationOptions] = None,
+    basis_library: Optional["BasisLibrary"] = None,
 ) -> Dict[str, Any]:
     """
     Evaluate all identifiers on synthetic benchmark dataset.
@@ -197,6 +413,10 @@ def evaluate_dataset(
         Optional cap on number of spectra evaluated.
     calibration : CalibrationOptions, optional
         Optional wavelength calibration settings.
+    basis_library : BasisLibrary, optional
+        When provided, the basis-dependent identifiers ``spectral_nnls`` and
+        ``hybrid_union`` are added to the suite. When ``None`` (default) only
+        the peak-matching trio runs.
 
     Returns
     -------
@@ -211,7 +431,9 @@ def evaluate_dataset(
         spectra = spectra[: int(max_spectra)]
 
     rows: List[Dict[str, Any]] = []
-    algorithms = ["ALIAS", "Comb", "Correlation"]
+    algorithms: List[str] = list(_BASE_ALGORITHMS)
+    if basis_library is not None:
+        algorithms.extend(_BASIS_ALGORITHMS)
 
     for idx, spec in enumerate(spectra, start=1):
         true_elements = derive_truth_elements(
@@ -267,6 +489,7 @@ def evaluate_dataset(
             db=db,
             elements=candidate_elements,
             resolving_power=resolving_power,
+            basis_library=basis_library,
         )
 
         manifest_meta = (manifest_by_sample or {}).get(spec.spectrum_id, {})
@@ -528,12 +751,56 @@ def run_synthetic_benchmark(
     presence_threshold: float = 1e-4,
     max_spectra: Optional[int] = None,
     calibration: Optional[CalibrationOptions] = None,
+    include_nnls: bool = False,
+    basis_library: Optional["BasisLibrary"] = None,
+    basis_library_path: Optional[str] = None,
+    basis_instrument_fwhm_nm: float = 0.3,
 ) -> Dict[str, Any]:
-    """Load data, run identifier benchmark, and write artifacts."""
+    """Load data, run identifier benchmark, and write artifacts.
+
+    Parameters
+    ----------
+    include_nnls : bool
+        Opt-in switch for the basis-dependent identifiers ``spectral_nnls``
+        and ``hybrid_union``. When ``True``, a basis library is used (taken
+        from ``basis_library`` if given, else built/loaded at
+        ``basis_library_path``). If a basis library cannot be obtained, the
+        two extra identifiers are silently skipped and the run proceeds with
+        the peak-matching trio only.
+    basis_library : BasisLibrary, optional
+        A pre-built basis library. Takes precedence over
+        ``basis_library_path`` so a controlled before/after can reuse one
+        deterministically-built library across runs.
+    basis_library_path : str, optional
+        HDF5 path to build (if missing) or load the corpus basis library
+        from. Only consulted when ``include_nnls`` is True and
+        ``basis_library`` is None.
+    basis_instrument_fwhm_nm : float
+        Instrument FWHM (nm) for the built basis library.
+    """
     dataset = load_benchmark(dataset_path)
     elements = candidate_elements if candidate_elements else list(dataset.elements)
     manifest_index = _load_manifest_index(manifest_path)
     db = AtomicDatabase(db_path)
+
+    active_basis: Optional["BasisLibrary"] = None
+    if include_nnls:
+        if basis_library is not None:
+            active_basis = basis_library
+        elif basis_library_path is not None:
+            active_basis = build_corpus_basis_library(
+                db_path=db_path,
+                output_path=basis_library_path,
+                elements=elements,
+                instrument_fwhm_nm=basis_instrument_fwhm_nm,
+            )
+        else:
+            logger.warning(
+                "include_nnls=True but no basis_library or basis_library_path "
+                "given; spectral_nnls / hybrid_union will be skipped."
+            )
+        if active_basis is None:
+            logger.warning("Basis library unavailable; running peak-matching trio only.")
 
     evaluated = evaluate_dataset(
         dataset=dataset,
@@ -543,6 +810,7 @@ def run_synthetic_benchmark(
         presence_threshold=presence_threshold,
         max_spectra=max_spectra,
         calibration=calibration,
+        basis_library=active_basis,
     )
 
     out_dir = Path(output_dir).resolve()
@@ -562,6 +830,8 @@ def run_synthetic_benchmark(
         "candidate_elements": elements,
         "presence_threshold": float(presence_threshold),
         "max_spectra": int(max_spectra) if max_spectra is not None else None,
+        "include_nnls": bool(include_nnls),
+        "basis_library_active": active_basis is not None,
         "calibration": (
             calibration.__dict__ if calibration is not None else CalibrationOptions().__dict__
         ),
