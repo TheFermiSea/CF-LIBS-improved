@@ -277,3 +277,108 @@ class TestSpectralNNLSIdentifier:
         assert isinstance(result, ElementIdentificationResult)
         detected_els = {e.element for e in result.detected_elements}
         assert "Fe" in detected_els
+
+
+class TestHybridUnionRecallFloor:
+    """Regression guard for the #215 hybrid_union recall regression.
+
+    The standalone NNLS relative-coeff floor (5% of *total* mass) is a
+    precision lever calibrated on a small near-orthogonal basis. On a large
+    real-data candidate set, each legitimate element holds only a few percent
+    of the total coefficient mass, so the same floor silently drops true
+    elements (Si, Mg, Na, K on real BHVO-2 spectra). The fix routes the
+    hybrid_union NNLS arm through ``HybridIdentifier.nnls_min_relative_coeff``
+    which defaults to ``0.0`` (recall-favoring) while standalone NNLS keeps
+    its 0.05 precision floor.
+    """
+
+    def test_standalone_default_keeps_precision_floor(self):
+        """Standalone SpectralNNLSIdentifier keeps the W2 0.05 floor by default."""
+        from cflibs.inversion.identify.spectral_nnls import (
+            DEFAULT_MIN_RELATIVE_COEFF,
+            SpectralNNLSIdentifier,
+        )
+
+        import inspect
+
+        sig = inspect.signature(SpectralNNLSIdentifier.__init__)
+        assert sig.parameters["min_relative_coeff"].default == DEFAULT_MIN_RELATIVE_COEFF
+        assert DEFAULT_MIN_RELATIVE_COEFF == pytest.approx(0.05)
+
+    def test_hybrid_union_arm_defaults_to_recall_favoring_floor(self):
+        """HybridIdentifier defaults the NNLS arm floor to 0.0 (recall-favoring)."""
+        import inspect
+
+        from cflibs.inversion.identify.hybrid import HybridIdentifier
+
+        sig = inspect.signature(HybridIdentifier.__init__)
+        assert "nnls_min_relative_coeff" in sig.parameters
+        assert sig.parameters["nnls_min_relative_coeff"].default == pytest.approx(0.0)
+
+    def test_hybrid_forwards_floor_to_nnls_stage(self, small_basis_library, monkeypatch):
+        """The hybrid arm must forward nnls_min_relative_coeff to Stage-1 NNLS."""
+        from cflibs.inversion.identify import spectral_nnls as snnls_mod
+        from cflibs.inversion.identify.hybrid import HybridIdentifier
+
+        captured = {}
+        real_cls = snnls_mod.SpectralNNLSIdentifier
+
+        def _spy(*args, **kwargs):
+            captured["min_relative_coeff"] = kwargs.get("min_relative_coeff")
+            return real_cls(*args, **kwargs)
+
+        monkeypatch.setattr(snnls_mod, "SpectralNNLSIdentifier", _spy)
+
+        from pathlib import Path
+
+        from cflibs.atomic.database import AtomicDatabase
+
+        candidates = [
+            Path("libs_production.db"),
+            Path("ASD_da/libs_production.db"),
+            Path(__file__).parent.parent / "libs_production.db",
+            Path(__file__).parent.parent / "ASD_da" / "libs_production.db",
+        ]
+        db_path = next((str(p) for p in candidates if p.exists()), None)
+        if db_path is None:
+            pytest.skip("Production database not found")
+
+        with AtomicDatabase(db_path) as db:
+            ident = HybridIdentifier(
+                atomic_db=db,
+                basis_library=small_basis_library,
+                elements=list(small_basis_library.elements),
+                require_both=False,
+            )
+            wl, spec = _make_synthetic_spectrum(small_basis_library, {"Fe": 0.7, "Cr": 0.3})
+            ident.identify(wl, spec)
+
+        # Default hybrid_union arm must run the NNLS screen with the floor off.
+        assert captured["min_relative_coeff"] == pytest.approx(0.0)
+
+    def test_disabling_floor_is_recall_favoring(self, small_basis_library):
+        """Disabling the relative floor can only add detections, never remove
+        them — the recall-favoring property the hybrid_union arm relies on.
+        """
+        from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
+
+        wl, spec = _make_synthetic_spectrum(
+            small_basis_library, {"Fe": 0.7, "Cr": 0.3}, noise=0.001
+        )
+        floor_on = SpectralNNLSIdentifier(
+            basis_library=small_basis_library,
+            detection_snr=2.0,
+            min_relative_coeff=0.05,
+            fallback_T_K=8000.0,
+            fallback_ne_cm3=5e16,
+        )
+        floor_off = SpectralNNLSIdentifier(
+            basis_library=small_basis_library,
+            detection_snr=2.0,
+            min_relative_coeff=0.0,
+            fallback_T_K=8000.0,
+            fallback_ne_cm3=5e16,
+        )
+        det_on = {e.element for e in floor_on.identify(wl, spec).detected_elements}
+        det_off = {e.element for e in floor_off.identify(wl, spec).detected_elements}
+        assert det_on <= det_off

@@ -67,6 +67,20 @@ class HybridIdentifier:
         NNLS SNR threshold for Stage 1 screening (lenient, default 1.5).
     nnls_continuum_degree : int
         Polynomial continuum degree for NNLS (default 3).
+    nnls_min_relative_coeff : float
+        Relative-magnitude detection floor forwarded to the Stage-1
+        :class:`SpectralNNLSIdentifier`. Defaults to ``0.0`` (recall-favoring)
+        rather than the standalone NNLS default of ``0.05``. The standalone
+        5%-of-total-mass floor is calibrated for *precision* on a near-orthogonal
+        small-candidate basis (blocker NNLS-GAUSS-BASIS-4); applied here it
+        scales with the candidate count and silently drops legitimate
+        minor/major elements (Si, Mg, Na, K) on real multi-element spectra
+        where each true element holds only a few percent of the total
+        coefficient mass. The hybrid_union arm's job is recall — its precision
+        comes from the SNR gate plus ALIAS agreement (require_both) — so the
+        floor is disabled here by default. See the PR fixing the #215
+        hybrid_union recall regression. Standalone ``SpectralNNLSIdentifier``
+        is unaffected and keeps its precision floor.
     alias_detection_threshold : float
         ALIAS detection threshold for Stage 2 confirmation (default 0.05).
     alias_intensity_factor : float
@@ -92,6 +106,7 @@ class HybridIdentifier:
         resolving_power: float = 1000.0,
         nnls_detection_snr: float = 1.5,
         nnls_continuum_degree: int = 3,
+        nnls_min_relative_coeff: float = 0.0,
         alias_detection_threshold: float = 0.05,
         alias_intensity_factor: float = 3.0,
         alias_chance_window_scale: float = 0.4,
@@ -106,6 +121,7 @@ class HybridIdentifier:
         self.resolving_power = resolving_power
         self.nnls_detection_snr = nnls_detection_snr
         self.nnls_continuum_degree = nnls_continuum_degree
+        self.nnls_min_relative_coeff = float(nnls_min_relative_coeff)
         self.alias_detection_threshold = alias_detection_threshold
         self.alias_intensity_factor = alias_intensity_factor
         self.alias_chance_window_scale = alias_chance_window_scale
@@ -154,6 +170,7 @@ class HybridIdentifier:
         nnls_id = SpectralNNLSIdentifier(
             basis_library=self.basis_library,
             detection_snr=self.nnls_detection_snr,
+            min_relative_coeff=self.nnls_min_relative_coeff,
             continuum_degree=self.nnls_continuum_degree,
             fallback_T_K=self.fallback_T_K,
             fallback_ne_cm3=self.fallback_ne_cm3,
