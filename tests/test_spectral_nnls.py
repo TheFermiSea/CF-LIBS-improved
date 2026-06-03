@@ -159,6 +159,56 @@ class TestSpectralNNLSIdentifier:
         assert "detection_snr" in result.parameters
         assert result.parameters["estimated_T_K"] == 8000.0
 
+    def test_min_relative_coeff_in_parameters(self, identifier_no_index, small_basis_library):
+        """The relative-magnitude floor must be reported for tunability."""
+        wl, spec = _make_synthetic_spectrum(small_basis_library, {"Fe": 1.0})
+        result = identifier_no_index.identify(wl, spec)
+        assert "min_relative_coeff" in result.parameters
+
+    def test_relative_gate_never_passes_sub_floor_elements(self, small_basis_library):
+        """No detected element may carry less than min_relative_coeff of the mass.
+
+        This is the load-bearing precision gate (NNLS-GAUSS-BASIS-4): an
+        element is detected only if its NNLS coefficient is at least
+        ``min_relative_coeff`` of the total element coefficient mass.
+        """
+        ident = SpectralNNLSIdentifier(
+            basis_library=small_basis_library,
+            detection_snr=2.0,
+            min_relative_coeff=0.05,
+            fallback_T_K=8000.0,
+            fallback_ne_cm3=5e16,
+        )
+        wl, spec = _make_synthetic_spectrum(small_basis_library, {"Fe": 0.7, "Cr": 0.3})
+        result = ident.identify(wl, spec)
+        for el in result.detected_elements:
+            assert el.metadata["concentration_estimate"] >= 0.05 - 1e-12, (
+                f"{el.element} detected with relative coeff "
+                f"{el.metadata['concentration_estimate']:.4f} below the 5% floor"
+            )
+
+    def test_relative_gate_is_monotone_in_floor(self, small_basis_library):
+        """Raising the relative floor can only remove detections, never add them."""
+        wl, spec = _make_synthetic_spectrum(small_basis_library, {"Fe": 0.7, "Cr": 0.3})
+
+        ident_off = SpectralNNLSIdentifier(
+            basis_library=small_basis_library,
+            detection_snr=2.0,
+            min_relative_coeff=0.0,
+            fallback_T_K=8000.0,
+            fallback_ne_cm3=5e16,
+        )
+        ident_on = SpectralNNLSIdentifier(
+            basis_library=small_basis_library,
+            detection_snr=2.0,
+            min_relative_coeff=0.05,
+            fallback_T_K=8000.0,
+            fallback_ne_cm3=5e16,
+        )
+        det_off = {e.element for e in ident_off.identify(wl, spec).detected_elements}
+        det_on = {e.element for e in ident_on.identify(wl, spec).detected_elements}
+        assert det_on <= det_off, "Relative gate added a detection (must be subtractive)"
+
     def test_continuum_degree_minus_one_disables(self, small_basis_library):
         """continuum_degree=-1 should not add polynomial columns."""
         ident = SpectralNNLSIdentifier(

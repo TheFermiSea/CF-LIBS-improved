@@ -29,6 +29,21 @@ if TYPE_CHECKING:
 logger = get_logger("inversion.spectral_nnls")
 
 
+# Relative-magnitude detection floor (blocker NNLS-GAUSS-BASIS-4).
+#
+# The raw ``element_snr >= detection_snr`` rule fires on tiny NNLS
+# coefficients (~2.6% of the total coefficient mass) produced by
+# matched-filter projection of a structured residual onto *absent*-element
+# basis vectors --- the dominant false-positive mechanism (5.67 FP/spectrum,
+# precision 0.42). The Gaussian basis itself is near-orthogonal (cond ~38,
+# full rank), so the fix is NOT a Voigt-basis rewrite (gated Wave-5
+# follow-up) but a floor on each element's coefficient mass relative to the
+# total. In the diagnosis repro a >=5% relative gate cut FP 2->0 while
+# retaining both true elements. Tunable in the 3-7% range via the
+# ``min_relative_coeff`` constructor kwarg.
+DEFAULT_MIN_RELATIVE_COEFF: float = 0.05
+
+
 # ---------------------------------------------------------------------------
 # JAX NNLS kernel (opt-in fast path for GPU batching)
 #
@@ -304,6 +319,16 @@ class SpectralNNLSIdentifier:
         ``fallback_T_K`` and ``fallback_ne_cm3`` directly.
     detection_snr : float
         Minimum coefficient SNR for element detection (default: 3.0).
+        Secondary condition; the relative-magnitude floor below is the
+        precision lever.
+    min_relative_coeff : float
+        Relative-magnitude detection floor: an element is detected only if
+        its NNLS coefficient is at least this fraction of the total element
+        coefficient mass (default: 0.05, i.e. 5%). This suppresses the
+        false positives produced when matched-filter projection of a
+        structured residual leaks tiny coefficients onto absent-element
+        basis vectors (blocker NNLS-GAUSS-BASIS-4). Tune in the 0.03--0.07
+        range. Set to 0.0 to disable and recover the legacy SNR-only rule.
     continuum_degree : int
         Degree of polynomial continuum added to basis matrix (default: 3).
         Set to -1 to disable continuum fitting.
@@ -322,6 +347,7 @@ class SpectralNNLSIdentifier:
         basis_library: BasisLibrary,
         basis_index: Optional[BasisIndex] = None,
         detection_snr: float = 3.0,
+        min_relative_coeff: float = DEFAULT_MIN_RELATIVE_COEFF,
         continuum_degree: int = 3,
         fallback_T_K: float = 8000.0,
         fallback_ne_cm3: float = 1e17,
@@ -331,6 +357,7 @@ class SpectralNNLSIdentifier:
         self.basis_library = basis_library
         self.basis_index = basis_index
         self.detection_snr = detection_snr
+        self.min_relative_coeff = float(min_relative_coeff)
         self.continuum_degree = continuum_degree
         self.fallback_T_K = fallback_T_K
         self.fallback_ne_cm3 = fallback_ne_cm3
@@ -475,14 +502,28 @@ class SpectralNNLSIdentifier:
         # Step 8: Build results
         all_element_ids: List[ElementIdentification] = []
 
+        # Total element coefficient mass: denominator for the
+        # relative-magnitude detection gate (blocker NNLS-GAUSS-BASIS-4).
+        total_element_signal = float(np.sum(element_coeffs))
+
         for i, element in enumerate(elements):
             coeff = float(element_coeffs[i])
             element_snr = float(snr[i])
-            detected = element_snr >= self.detection_snr and coeff > 1e-10
 
             # Compute concentration estimate (fraction of total element signal)
-            total_element_signal = float(np.sum(element_coeffs))
             concentration = coeff / total_element_signal if total_element_signal > 0 else 0.0
+
+            # Detection gate: a positive coefficient with sufficient SNR
+            # (secondary condition) AND carrying at least ``min_relative_coeff``
+            # of the total coefficient mass. The relative-magnitude floor is
+            # the precision lever: it rejects the ~2.6%-signal coefficients
+            # that matched-filter projection of a structured residual leaks
+            # onto absent-element basis vectors (NNLS-GAUSS-BASIS-4).
+            detected = (
+                coeff > 1e-10
+                and element_snr >= self.detection_snr
+                and concentration >= self.min_relative_coeff
+            )
 
             element_id = ElementIdentification(
                 element=element,
@@ -519,6 +560,7 @@ class SpectralNNLSIdentifier:
             algorithm="spectral_nnls",
             parameters={
                 "detection_snr": self.detection_snr,
+                "min_relative_coeff": self.min_relative_coeff,
                 "continuum_degree": self.continuum_degree,
                 "estimated_T_K": T_est,
                 "estimated_ne_cm3": ne_est,
