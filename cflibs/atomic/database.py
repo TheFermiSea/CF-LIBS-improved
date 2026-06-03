@@ -581,6 +581,32 @@ class AtomicDatabase(AtomicDataSource):
             source=res[7],
         )
 
+    def partition_spec_for(self, element: str, ionization_stage: int):
+        """Return the single :class:`PartitionFunctionSpec` for a species.
+
+        THE one source of partition-function coefficients + bounds + ``g0`` for
+        this codebase.  Applies the locked policy in one place — *prefer the
+        direct-sum FIT over energy levels when the species has tabulated levels;
+        otherwise the stored polynomial fallback; always carry ``[t_min,
+        t_max]`` and ``g0``* — and caches the (expensive) per-species fit so it
+        runs compute-once (see
+        :func:`cflibs.plasma.partition.derive_partition_spec`).
+
+        Both adapters are built from this spec:
+
+        * the CPU scalar adapter via :meth:`partition_function_for` (which calls
+          ``spec.to_provider()``), and
+        * the JAX batched adapter, whose static snapshot arrays bake the spec's
+          ``coefficients`` / ``t_min`` / ``t_max`` / ``g0`` as plain floats (see
+          :meth:`snapshot`).
+
+        Returns ``None`` when the species has neither energy levels nor a stored
+        polynomial row; callers decide the default.
+        """
+        from cflibs.plasma.partition import derive_partition_spec
+
+        return derive_partition_spec(self, element, ionization_stage)
+
     def partition_function_for(self, element: str, ionization_stage: int):
         """Return an encapsulated :class:`PartitionFunctionProvider` for a species.
 
@@ -592,30 +618,23 @@ class AtomicDatabase(AtomicDataSource):
         ``t_min``/``t_max``/``g0`` through :func:`polynomial_partition_function`
         and half of them silently didn't.
 
-        Returns ``None`` when no row exists for ``(element, stage)``; callers
-        should fall back to direct-summation or a default provider in that
-        case.  See ``docs/architecture/2026-05-26-architecture-review.md``
-        § Candidate 4 and ADR-0001 § B-P7.
-        """
-        from cflibs.plasma.partition import (
-            PolynomialPartitionFunctionProvider,
-            get_ground_state_g,
-        )
+        The coefficients now come from :meth:`partition_spec_for`, i.e. the
+        DIRECT-SUM FIT over energy levels when the species has tabulated levels
+        (the reference the validation gate trusts), falling back to the stored
+        polynomial only when levels are absent.  This makes the CPU scalar path
+        consume the *same* coefficients the JAX batched adapter bakes into its
+        snapshot (the PF-3/PF-4 unification, diagnosis § 2.1).
 
-        pf = self.get_partition_coefficients(element, ionization_stage)
-        if pf is None:
+        Returns ``None`` when no levels and no stored row exist for
+        ``(element, stage)``; callers should fall back to a default provider in
+        that case.  See ``docs/architecture/2026-06-03-composition-pipeline-
+        diagnosis.md`` § 2.1, ``2026-05-26-architecture-review.md`` § Candidate 4
+        and ADR-0001 § B-P7.
+        """
+        spec = self.partition_spec_for(element, ionization_stage)
+        if spec is None:
             return None
-        coeffs = list(pf.coefficients)
-        coeffs += [0.0] * (5 - len(coeffs))
-        return PolynomialPartitionFunctionProvider(
-            element=element,
-            ionization_stage=ionization_stage,
-            coefficients=tuple(float(c) for c in coeffs[:5]),
-            t_min=float(pf.t_min),
-            t_max=float(pf.t_max),
-            _g0=float(get_ground_state_g(self, element, ionization_stage)),
-            source=str(pf.source or ""),
-        )
+        return spec.to_provider()
 
     def get_species_physics(self, element: str, ionization_stage: int) -> SpeciesPhysics | None:
         """
@@ -783,8 +802,6 @@ class AtomicDatabase(AtomicDataSource):
         level_g_rows: list[list[float]] = []
         level_E_rows: list[list[float]] = []
 
-        from cflibs.plasma.partition import direct_sum_fit_coeffs, get_ground_state_g
-
         for element in elements:
             for stage in (1, 2):
                 ip = self.get_ionization_potential(element, stage)
@@ -793,48 +810,36 @@ class AtomicDatabase(AtomicDataSource):
                 species_keys.append((element, stage))
                 ip_list.append(float(ip))
 
-                # Direct-sum-preferred partition coefficients (PF-3/PF-4 fix).
-                # The default CPU solver prefers direct summation over the
-                # ``energy_levels`` table; the JAX manifold / Bayesian kernels
-                # can only consume a polynomial.  When energy levels exist we
-                # refit the polynomial to the direct-sum here (same recipe as
-                # ``scripts/regenerate_partition_functions.py``) so all four
-                # solver paths agree, and only fall back to the stored
-                # polynomial when the level table is missing rows for the
-                # species.  The kernel still evaluates the same polynomial
-                # form, so jit / vmap are unaffected.
-                ds_coeffs = None
-                stage_levels = self.get_energy_levels(element, stage)
-                if stage_levels:
-                    g_arr = np.array([lev.g for lev in stage_levels], dtype=np.float64)
-                    e_arr = np.array([lev.energy_ev for lev in stage_levels], dtype=np.float64)
-                    ds_coeffs = direct_sum_fit_coeffs(g_arr, e_arr, float(ip))
-
-                pf = self.get_partition_coefficients(element, stage)
-                if ds_coeffs is not None:
-                    coeffs, ds_t_min, ds_t_max = ds_coeffs
-                    partition_rows.append([float(c) for c in coeffs])
-                    partition_t_min_list.append(ds_t_min)
-                    partition_t_max_list.append(ds_t_max)
-                elif pf is None:
+                # Direct-sum-preferred partition coefficients (PF-3/PF-4 fix),
+                # via the SINGLE factory `partition_spec_for`.  The JAX manifold
+                # / Bayesian kernels can only consume a polynomial (they vmap
+                # over plasma parameters and cannot hold a per-species
+                # variable-length level sum), so "prefer direct-sum" is a
+                # BUILD-TIME choice here: the factory fits the direct-sum to an
+                # ln-polynomial when energy levels exist (cached, compute-once),
+                # and only falls back to the stored polynomial when the level
+                # table is missing rows.  Baking the SAME spec the CPU scalar
+                # adapter uses (`partition_function_for`) into these static
+                # arrays is what makes the two adapters provably agree.  The
+                # kernel still evaluates the same guarded polynomial form, so
+                # jit / vmap are unaffected.
+                spec = self.partition_spec_for(element, stage)
+                if spec is not None:
+                    partition_rows.append([float(c) for c in spec.coefficients])
+                    partition_t_min_list.append(float(spec.t_min))
+                    partition_t_max_list.append(float(spec.t_max))
+                    partition_g0_list.append(float(spec.g0))
+                else:
+                    # Neither energy levels nor a stored polynomial row: use the
+                    # conservative U = 2 placeholder and default window so the
+                    # snapshot stays serializable and consumers always receive
+                    # concrete bounds.
                     partition_rows.append([float(np.log(2.0)), 0.0, 0.0, 0.0, 0.0])
                     partition_t_min_list.append(2000.0)
                     partition_t_max_list.append(25000.0)
-                else:
-                    coeffs = list(pf.coefficients)
-                    coeffs += [0.0] * (5 - len(coeffs))
-                    partition_rows.append([float(c) for c in coeffs[:5]])
-                    # SQLite t_min/t_max columns can be NULL when only the
-                    # coefficients were imported. Fall back to the same
-                    # default window used in the no-partition-row branch so
-                    # the snapshot stays serializable and consumers always
-                    # receive concrete bounds.
-                    pf_t_min = pf.t_min if pf.t_min is not None else 2000.0
-                    pf_t_max = pf.t_max if pf.t_max is not None else 25000.0
-                    partition_t_min_list.append(float(pf_t_min))
-                    partition_t_max_list.append(float(pf_t_max))
-                partition_g0_list.append(float(get_ground_state_g(self, element, stage)))
+                    partition_g0_list.append(1.0)
                 if include_levels:
+                    stage_levels = self.get_energy_levels(element, stage)
                     level_g_rows.append([float(lev.g) for lev in stage_levels])
                     level_E_rows.append([float(lev.energy_ev) for lev in stage_levels])
 
