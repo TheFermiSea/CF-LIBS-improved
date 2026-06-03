@@ -4133,10 +4133,12 @@ class ALIASIdentifier:
 # ---------------------------------------------------------------------------
 
 ALIAS_PRESETS: Dict[str, Dict[str, Any]] = {
-    # Strict / precision-king baseline.  ``r2_gate_mode="fixed"`` and
-    # ``relative_cl_per_ion_stage=False`` match the ``__init__`` defaults
-    # so this preset is byte-identical to ``ALIASIdentifier(atomic_db=...)``
-    # with the strict threshold knobs spelled out.  Used by the standalone
+    # Strict / precision-king baseline.  Explicitly pins
+    # ``r2_gate_mode="fixed"`` and ``relative_cl_per_ion_stage=False``.
+    # NOTE: the ``__init__`` default for ``r2_gate_mode`` is now
+    # ``"adaptive_t"`` (recall fix, commit 763a330), so this preset is NO
+    # LONGER byte-identical to a bare ``ALIASIdentifier(atomic_db=...)`` — the
+    # strict gate must be spelled out here.  Used by the standalone
     # ``alias`` workflow.
     "strict": {
         "r2_gate_mode": "fixed",
