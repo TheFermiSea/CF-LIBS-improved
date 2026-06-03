@@ -14,7 +14,6 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy
-from cflibs.plasma.partition import PartitionFunctionEvaluator
 from cflibs.core.logging_config import get_logger
 
 
@@ -743,31 +742,21 @@ class IterativeCFLIBSSolver:
     def _evaluate_partition_function(
         self, element: str, ionization_stage: int, T_K: float
     ) -> float:
-        """Evaluate a partition function via direct summation, with fallbacks.
+        """Evaluate a partition function through the single provider factory.
 
-        Preferred path: direct sum over energy levels from the database.
-        Fallback 1: polynomial coefficients from partition_functions table.
-        Fallback 2: hardcoded statistical weight estimates.
+        Routes U(T) through :meth:`AtomicDatabase.partition_function_for` — THE
+        single source of the partition-function policy (direct-sum preferred,
+        always clamped + ``g0``-floored).  For species with energy levels the
+        CPU scalar provider sums the levels directly, so this path stays
+        bit-for-bit identical to the historical ``evaluate_direct`` call it
+        replaces; for level-less species it applies the guarded stored
+        polynomial.  The hardcoded estimates remain only for species the
+        factory cannot resolve at all (no levels, no stored row).
         """
-        from cflibs.plasma.partition import get_levels_for_species
+        provider = self.atomic_db.partition_function_for(element, ionization_stage)
+        if provider is not None:
+            return float(provider.at(T_K))
 
-        levels = get_levels_for_species(self.atomic_db, element, ionization_stage)
-        if levels is not None:
-            g_arr, E_arr, ip_ev = levels
-            return PartitionFunctionEvaluator.evaluate_direct(T_K, g_arr, E_arr, ip_ev)
-
-        pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
-        if pf:
-            from cflibs.plasma.partition import get_ground_state_g
-
-            g0 = get_ground_state_g(self.atomic_db, element, ionization_stage)
-            return PartitionFunctionEvaluator.evaluate(
-                T_K,
-                pf.coefficients,
-                t_min=pf.t_min,
-                t_max=pf.t_max,
-                g0=g0,
-            )
         if ionization_stage == 1:
             return 25.0
         if ionization_stage == 2:
