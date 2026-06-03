@@ -53,14 +53,16 @@ def test_toggle_off_default_applies_t_factor(stark_snapshot, monkeypatch):
     T_eV = 1.5  # away from REF_T_EV so factor_T != 1
     gamma = np.asarray(_per_line_stark_gamma(stark_snapshot, n_e, T_eV))
 
-    # Reference: gamma = stark_w * (n_e/1e16) * (T/T_ref)^(-alpha)
+    # Reference (A4-CONV-2): stark_w is the stored FWHM at REF_NE=1e17; the
+    # kernel returns the Lorentzian HWHM = 0.5 * stark_w * (n_e/1e17) *
+    # (T/T_ref)^(-alpha).
     stark_w = np.asarray(stark_snapshot.line_stark_w)
     alpha = np.asarray(stark_snapshot.line_stark_alpha)
     REF_T_EV = 0.86173
-    expected = stark_w * (n_e / 1.0e16) * np.power(T_eV / REF_T_EV, -alpha)
+    expected = 0.5 * stark_w * (n_e / 1.0e17) * np.power(T_eV / REF_T_EV, -alpha)
     np.testing.assert_allclose(gamma, expected, rtol=1e-6, atol=0.0)
     # Confirm the factor really did do something.
-    legacy = stark_w * (n_e / 1.0e16)
+    legacy = 0.5 * stark_w * (n_e / 1.0e17)
     assert not np.allclose(gamma, legacy)
 
 
@@ -70,7 +72,8 @@ def test_toggle_on_disables_t_factor(stark_snapshot, monkeypatch):
 
     n_e = 1.0e17
     stark_w = np.asarray(stark_snapshot.line_stark_w)
-    expected_legacy = stark_w * (n_e / 1.0e16)
+    # Toggle off the T-factor only: gamma = 0.5 * stark_w * (n_e/1e17).
+    expected_legacy = 0.5 * stark_w * (n_e / 1.0e17)
 
     # Vary T_eV across the LIBS range — the toggled formula has zero T-dependence.
     for T_eV in (0.5, 0.86173, 1.0, 1.5, 2.0):

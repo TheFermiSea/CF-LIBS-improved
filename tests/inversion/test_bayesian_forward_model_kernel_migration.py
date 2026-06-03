@@ -176,8 +176,10 @@ def test_stark_gamma_applies_temperature_power_law(bayesian_db):
     gamma_cold = np.asarray(_per_line_stark_gamma(snapshot, n_e, T_cold))
     gamma_hot = np.asarray(_per_line_stark_gamma(snapshot, n_e, T_hot))
 
-    # Direct formula reference: gamma_S = stark_w * (n_e / 1e16) * (T/T_ref)^(-alpha)
-    base = stark_w * (n_e / 1.0e16)
+    # Direct formula reference (A4-CONV-2): stark_w is the stored FWHM at
+    # REF_NE=1e17; the kernel returns the Lorentzian HWHM, so
+    #   gamma_S = 0.5 * stark_w * (n_e / 1e17) * (T/T_ref)^(-alpha)
+    base = 0.5 * stark_w * (n_e / 1.0e17)
     expected_cold = base * np.power(T_cold / REF_T_EV, -alpha)
     expected_hot = base * np.power(T_hot / REF_T_EV, -alpha)
 
@@ -214,8 +216,9 @@ def test_stark_gamma_t_clamped_at_low_temperature(bayesian_db):
 
 
 def test_stark_gamma_alpha_zero_collapses_to_legacy_formula(bayesian_db):
-    """When ``line_stark_alpha == 0`` the kernel must reduce to the legacy
-    temperature-independent formula ``gamma = stark_w * (n_e / 1e16)``.
+    """When ``line_stark_alpha == 0`` the kernel must reduce to the
+    temperature-independent form ``gamma = 0.5 * stark_w * (n_e / 1e17)``
+    (A4-CONV-2: stark_w is the stored FWHM at REF_NE=1e17, kernel returns HWHM).
 
     The :meth:`AtomicDatabase.snapshot` builder defaults ``stark_alpha = 0``
     for any DB row without catalogued temperature dependence, so this is
@@ -241,7 +244,7 @@ def test_stark_gamma_alpha_zero_collapses_to_legacy_formula(bayesian_db):
     gamma_T20 = np.asarray(_per_line_stark_gamma(snap, n_e, 2.0))
     # Equal across temperature because alpha=0.
     np.testing.assert_allclose(gamma_T05, gamma_T20, rtol=1e-12, atol=0.0)
-    expected = np.asarray(snap.line_stark_w) * (n_e / 1.0e16)
+    expected = 0.5 * np.asarray(snap.line_stark_w) * (n_e / 1.0e17)
     np.testing.assert_allclose(gamma_T05, expected, rtol=1e-12, atol=0.0)
 
 

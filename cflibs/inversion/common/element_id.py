@@ -159,13 +159,15 @@ def get_wavelength_tolerance(
     (n_e = 1e17 cm^-3, T = 10000 K — see Konjević et al. 2002, J. Phys. Chem.
     Ref. Data 31, 819) when they are not.
 
-    The transition's ``stark_w`` attribute is interpreted as HWHM at
-    REF_NE = 1e16 cm^-3, T = 10000 K (the convention used throughout
-    ``cflibs/radiation/stark.py``). Scaling to the requested (n_e, T) follows
-    the analytic power-law w_e = w_ref * (n_e/1e16) * (T/T_ref)^(-alpha) from
-    :func:`cflibs.radiation.stark.stark_hwhm`. The HWHM is doubled to FWHM
-    before quadrature combination with the instrument FWHM, matching the
-    protocol formula.
+    The transition's ``stark_w`` attribute is the stored electron-impact
+    **FWHM** at REF_NE = 1e17 cm^-3, T = 10000 K (the single-source-of-truth
+    convention defined in ``cflibs/radiation/stark.py``). Scaling to the
+    requested (n_e, T) follows the analytic power-law
+    w_fwhm = stark_w * (n_e/1e17) * (T/T_ref)^(-alpha). Internally
+    :func:`cflibs.radiation.stark.stark_hwhm` returns the HWHM (half of that
+    FWHM); the ``2.0 *`` below doubles it back to the FWHM for quadrature
+    combination with the instrument FWHM, matching the protocol formula. At
+    the reference conditions the FWHM equals the stored ``stark_w`` exactly.
 
     Bug history: this helper previously read ``stark_width_nm`` via
     ``getattr``, but the ``Transition`` dataclass exposes the attribute as
@@ -181,8 +183,8 @@ def get_wavelength_tolerance(
     wavelength_nm : float
         Theoretical (database) wavelength in nm.
     transition : Transition, optional
-        Transition object which may carry ``stark_w`` (HWHM at REF_NE=1e16,
-        T_ref=10000 K) and ``stark_alpha`` (scaling exponent).
+        Transition object which may carry ``stark_w`` (electron-impact FWHM
+        at REF_NE=1e17, T_ref=10000 K) and ``stark_alpha`` (scaling exponent).
     resolving_power : float
         Instrumental resolving power (R = lambda/delta_lambda).
     fallback : float, optional
@@ -216,7 +218,8 @@ def get_wavelength_tolerance(
             # Use live (n_e, T) when supplied, otherwise Konjević reference.
             n_e_eff = n_e_cm3 if n_e_cm3 is not None else _KONJEVIC_REF_NE_CM3
             T_eff = T_K if T_K is not None else _KONJEVIC_REF_T_K
-            # stark_hwhm returns HWHM in nm; double for FWHM to match the
+            # ``stark_w`` is the stored FWHM at REF_NE=1e17; stark_hwhm returns
+            # the corresponding HWHM (half), so 2.0 * recovers the FWHM for the
             # protocol formula (Lorentzian sqrt-sum-square of FWHMs).
             omega_stark = 2.0 * stark_hwhm(
                 n_e_eff,

@@ -654,10 +654,14 @@ class ManifoldGenerator:
         # Total Gaussian width
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
-        # Stark broadening: HWHM (Lorentzian gamma)
-        # Use estimate_stark_parameter_jax for missing values (NaN)
-        # w_stark = w_ref * (n_e / 1e16) * (T / T_ref)^(-alpha)
-        REF_NE = 1.0e16
+        # Stark broadening: Lorentzian gamma (HWHM).
+        # ``l_stark_w`` (and the w_est fallback) is the stored electron-impact
+        # FWHM at REF_NE = 1e17 cm^-3, T = 10000 K (see the convention note in
+        # cflibs/radiation/stark.py). The Voigt profile needs a HWHM, so scale
+        # to live n_e and halve:
+        #   gamma_hwhm = 0.5 * w_fwhm * (n_e / 1e17) * (T / T_ref)^(-alpha)
+        # The earlier (n_e/1e16) with no 0.5 over-broadened by x20 (A4-CONV-2).
+        REF_NE = 1.0e17
         REF_T_EV = 0.86173  # 10000 K in eV
 
         # Estimate Stark w_ref for lines without database values
@@ -670,10 +674,10 @@ class ManifoldGenerator:
         # Use database value if available, else estimate
         w_ref = jnp.where(jnp.isnan(l_stark_w), w_est, l_stark_w)
 
-        # Stark HWHM calculation
+        # Stark HWHM calculation (w_ref is a FWHM at REF_NE; 0.5 -> HWHM)
         factor_ne = n_e / REF_NE
         factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -l_stark_alpha)
-        gamma_stark = w_ref * factor_ne * factor_T
+        gamma_stark = 0.5 * w_ref * factor_ne * factor_T
 
         # --- Voigt Profile Rendering (Humlicek W4 approximation) ---
         # For each wavelength point, compute Voigt profile contribution from all lines
