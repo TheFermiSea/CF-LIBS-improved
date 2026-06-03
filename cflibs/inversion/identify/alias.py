@@ -837,8 +837,8 @@ class ALIASIdentifier:
         relative_cl_threshold_neutral: Optional[float] = None,
         relative_cl_threshold_ionized: Optional[float] = None,
         boltzmann_r2_min: float = 0.85,
-        r2_gate_mode: str = "fixed",
-        r2_gate_t_quality_threshold: float = 5500.0,
+        r2_gate_mode: str = "adaptive_t",
+        r2_gate_t_quality_threshold: float = 15000.0,
         high_recall: bool = False,
         use_jax_boltzmann_fit: bool = False,
         use_jax_nnls: bool = False,
@@ -939,31 +939,36 @@ class ALIASIdentifier:
             How the ``boltzmann_r2_min`` gate is applied to candidates with
             ``N_matched >= 3``. One of:
 
-            - ``"fixed"`` (default, byte-identical to historical behavior):
-              candidates are rejected when ``boltz_r2 < self.boltzmann_r2_min``
-              (the static 0.85 default). Preserves the precision-king
-              baseline (precision=1.000, FP/spec=0 on n=33 cross-shard).
-            - ``"adaptive_t"``: temperature-aware relaxation. For cold
-              plasma (``self._estimated_T < r2_gate_t_quality_threshold``),
-              the gate floor is relaxed to ``0.3`` so otherwise-valid
-              candidates whose Boltzmann fit is degraded by short
-              effective E_k spans (a known cold-T pathology surfaced by
-              the Vrabel diagnosis, PR #172) still clear. For warm plasma
-              (``T >= threshold``) the gate keeps the strict
-              ``boltzmann_r2_min`` floor.
+            - ``"adaptive_t"`` (default since blocker ALIAS-R2GATE-2):
+              temperature-aware relaxation. For plasma below
+              ``r2_gate_t_quality_threshold`` (defaulted to the ps-LIBS
+              warm edge, 15000 K), the gate floor is relaxed to ``0.3`` so
+              otherwise-valid ps-LIBS candidates are not hard-rejected by a
+              static 0.85 floor. Paired with per-ionization-stage Boltzmann
+              fitting (ALIAS-BOLTZ-IONMIX-1) this recovers iron-group recall
+              without disabling the gate. For warm plasma above the
+              threshold the gate keeps the strict ``boltzmann_r2_min`` floor.
+            - ``"fixed"`` (byte-identical to historical behavior, used by
+              the ``strict`` preset): candidates are rejected when
+              ``boltz_r2 < self.boltzmann_r2_min`` (the static 0.85
+              default). Preserves the precision-king baseline
+              (precision=1.000, FP/spec=0 on n=33 cross-shard).
             - ``"disabled"``: bypass the R^2 gate entirely. Intended as a
               control-cell measurement for sweep analysis; NOT a sensible
               production default — disables one of the strongest false-
               positive suppressors.
 
-            (default: ``"fixed"``)
+            (default: ``"adaptive_t"``)
         r2_gate_t_quality_threshold : float, optional
             Temperature in kelvin below which ``r2_gate_mode="adaptive_t"``
             switches to the relaxed R^2 floor. Must be finite and > 0.
             Ignored when ``r2_gate_mode != "adaptive_t"``. The default of
-            ``5500.0`` K was chosen from the Vrabel-style cold-plasma
-            regime identified in PR #172's universal-miss diagnosis.
-            (default: 5500.0)
+            ``15000.0`` K spans the full ps-LIBS regime (T ~ 0.5-1.3 eV,
+            5800-15000 K). This is the cold-T guard for ALIAS-TEST-EST-6:
+            the unweighted ALIAS slope estimator reads ~2.3x too cold on
+            pure Fe (5863 vs 13774 K), so a threshold tuned to the warm
+            edge ensures a cold-biased ``est_T`` still triggers relaxation
+            rather than defeating it. (default: 15000.0)
         use_jax_boltzmann_fit : bool, optional
             If True, use the JAX-vectorized closed-form least-squares
             Boltzmann fit (:func:`boltzmann_temperature_jax`) inside
@@ -1132,10 +1137,16 @@ class ALIASIdentifier:
                 f"boltzmann_r2_min must be finite and in [0, 1], got {boltzmann_r2_min!r}"
             )
         self.boltzmann_r2_min = float(boltzmann_r2_min)
-        # Adaptive R^2 gate (CF-LIBS-improved-ftp1).
-        # Default mode "fixed" preserves the historical static-0.85 gate
-        # byte-identically, which keeps the alias precision-king
-        # invariant (precision=1.000, FP/spec=0 on n=33 cross-shard).
+        # Adaptive R^2 gate (CF-LIBS-improved-ftp1; default flipped to
+        # "adaptive_t" for blocker ALIAS-R2GATE-2). The historical "fixed"
+        # static-0.85 gate hard-rejected valid ps-LIBS fits; "adaptive_t"
+        # relaxes the gate to the cold-plasma floor whenever the estimated
+        # plasma temperature falls below ``r2_gate_t_quality_threshold``
+        # (now defaulted to 15000 K, the ps-LIBS warm edge, so the
+        # cold-biased ALIAS T-estimator cannot push est_T above the
+        # threshold and silently re-impose the strict floor — the cold-T
+        # guard, ALIAS-TEST-EST-6). Pass ``r2_gate_mode="fixed"`` (or use
+        # the ``strict`` preset) to restore the precision-king static gate.
         # See the docstring for the rationale on adaptive_t / disabled.
         _R2_GATE_MODES = ("fixed", "adaptive_t", "disabled")
         if r2_gate_mode not in _R2_GATE_MODES:
@@ -2611,7 +2622,8 @@ class ALIASIdentifier:
             ):
                 return boltz_r2 < self._r2_gate_cold_floor
             return boltz_r2 < self.boltzmann_r2_min
-        # "fixed" mode — default, byte-identical to historical behavior.
+        # "fixed" mode — byte-identical to historical behavior (now opt-in
+        # via the ``strict`` preset; the default is "adaptive_t").
         return boltz_r2 < self.boltzmann_r2_min
 
     def _apply_resonance_filter(
@@ -2805,6 +2817,57 @@ class ALIASIdentifier:
         if len(observations) < 3:
             return 0.5, 0.0
 
+        # ION-STAGE GROUPING (blocker ALIAS-BOLTZ-IONMIX-1).
+        #
+        # A single ln(I*lambda/gA)-vs-E_k regression over ALL ionization
+        # stages pooled is physically wrong: the Saha equation offsets the
+        # Boltzmann-plot *intercept* between stages (the neutral and ionic
+        # populations sit on parallel lines with different y-offsets), so
+        # pooling collapses the pooled R^2 to ~0.01 even when each stage is
+        # individually an excellent fit (Fe I R^2=0.997 / Fe II R^2=0.999 in
+        # the verified pure-Fe repro). The fixed R^2>=0.85 gate then hard-
+        # rejects iron-group elements (Fe/Cr/Ti/Mn/Ni) whose UV lines span
+        # stages — even the only true element in a pure spectrum.
+        #
+        # Fix: fit each ionization stage separately (require >=3 lines per
+        # stage) and report the best-qualifying stage's fit for the
+        # detection decision. We select the dominant stage by line count
+        # (tie-broken by higher R^2) so a single well-sampled stage drives
+        # the gate rather than the meaningless cross-stage slope. If no
+        # stage has >=3 lines we fall back to the legacy pooled fit so
+        # sparse multi-stage cases do not crash or silently penalize.
+        by_stage: Dict[int, List[LineObservation]] = {}
+        for obs in observations:
+            by_stage.setdefault(int(obs.ionization_stage), []).append(obs)
+
+        fittable_stages = [stage_obs for stage_obs in by_stage.values() if len(stage_obs) >= 3]
+
+        if fittable_stages:
+            # Rank candidate stages by line count, then by per-stage R^2,
+            # and take the best one's (factor, r_sq) as the decision.
+            stage_results: List[Tuple[int, float, float]] = []
+            for stage_obs in fittable_stages:
+                factor, r_sq = self._fit_single_stage_boltzmann(stage_obs)
+                stage_results.append((len(stage_obs), factor, r_sq))
+            # Dominant stage by line count; ties resolved by max R^2.
+            _best_n, best_factor, best_r_sq = max(stage_results, key=lambda t: (t[0], t[2]))
+            return best_factor, best_r_sq
+
+        # Fallback: no stage individually has >=3 lines — keep the legacy
+        # pooled behavior so sparse cases are unchanged.
+        return self._fit_single_stage_boltzmann(observations)
+
+    def _fit_single_stage_boltzmann(
+        self, observations: List[LineObservation]
+    ) -> Tuple[float, float]:
+        """Boltzmann regression + physical-validity check for ONE line set.
+
+        Extracted from :meth:`_boltzmann_consistency_check` so the same
+        slope/temperature/R^2 logic can be applied per ionization stage
+        (blocker ALIAS-BOLTZ-IONMIX-1) and to the pooled fallback. Returns
+        ``(factor, r_squared)`` with ``factor`` in ``[0.5, 1.0]``, matching
+        the historical return contract of the consistency check.
+        """
         # Need some spread in E_k for meaningful fit
         E_k_arr = np.array([obs.E_k_ev for obs in observations])
         if np.ptp(E_k_arr) < 0.5:

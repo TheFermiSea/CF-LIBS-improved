@@ -764,34 +764,65 @@ def test_temperature_estimator_weighted_drops_bottom_quartile(monkeypatch):
 
 
 def test_r2_gate_fixed_mode_byte_identical():
-    """Default ``r2_gate_mode="fixed"`` MUST be byte-identical to the
+    """Explicit ``r2_gate_mode="fixed"`` MUST be byte-identical to the
     historical static-0.85 gate.
 
     Guards the precision-king baseline (precision=1.000, FP/spec=0 on
-    n=33 cross-shard): default construction and explicit ``"fixed"``
+    n=33 cross-shard): the ``strict`` preset and an explicit ``"fixed"``
     must produce the same rejection decision on the same inputs.
+
+    NOTE: the *default* ``r2_gate_mode`` was flipped to ``"adaptive_t"``
+    in blocker ALIAS-R2GATE-2 to recover ps-LIBS recall, so this test now
+    pins the fixed gate via the explicit kwarg rather than the default
+    constructor. See ``test_default_r2_gate_mode_is_adaptive_t``.
     """
-    default_id = ALIASIdentifier(_DummyAtomicDB())
+    # Both spell out fixed; one via the kwarg, one via the strict preset's
+    # threshold (5500 K) to confirm the threshold is irrelevant in fixed mode.
+    strict_id = ALIASIdentifier(
+        _DummyAtomicDB(), r2_gate_mode="fixed", r2_gate_t_quality_threshold=5500.0
+    )
     explicit_id = ALIASIdentifier(_DummyAtomicDB(), r2_gate_mode="fixed")
 
     # Mode attribute exposed for downstream inspection.
-    assert default_id.r2_gate_mode == "fixed"
+    assert strict_id.r2_gate_mode == "fixed"
     assert explicit_id.r2_gate_mode == "fixed"
 
     # Below the 0.85 floor: both reject.
     for boltz_r2 in (0.0, 0.3, 0.5, 0.84):
-        assert default_id._r2_gate_rejects(boltz_r2, N_matched=5) is True
+        assert strict_id._r2_gate_rejects(boltz_r2, N_matched=5) is True
         assert explicit_id._r2_gate_rejects(boltz_r2, N_matched=5) is True
 
     # At/above the floor: both accept.
     for boltz_r2 in (0.85, 0.9, 1.0):
-        assert default_id._r2_gate_rejects(boltz_r2, N_matched=5) is False
+        assert strict_id._r2_gate_rejects(boltz_r2, N_matched=5) is False
         assert explicit_id._r2_gate_rejects(boltz_r2, N_matched=5) is False
 
     # N_matched < 3 short-circuits in both modes (the upstream
     # "min 3 matches" gate handles that case; this gate is a no-op).
-    assert default_id._r2_gate_rejects(0.0, N_matched=2) is False
+    assert strict_id._r2_gate_rejects(0.0, N_matched=2) is False
     assert explicit_id._r2_gate_rejects(0.0, N_matched=2) is False
+
+
+def test_default_r2_gate_mode_is_adaptive_t():
+    """The default gate is ``adaptive_t`` with a ps-LIBS-wide cold-T
+    threshold (blocker ALIAS-R2GATE-2 + cold-T guard ALIAS-TEST-EST-6).
+
+    The historical default was ``"fixed"`` at a 5500 K threshold, which
+    silently re-imposed the strict 0.85 floor on ps-LIBS plasmas whose
+    cold-biased ALIAS T-estimate sat above 5500 K. The new default relaxes
+    across the full ps-LIBS warm edge (15000 K).
+    """
+    default_id = ALIASIdentifier(_DummyAtomicDB())
+    assert default_id.r2_gate_mode == "adaptive_t"
+    assert default_id.r2_gate_t_quality_threshold == pytest.approx(15000.0)
+
+    # A typical ps-LIBS plasma whose cold-biased est_T (~5863 K) would have
+    # cleared the old 5500 K threshold and been hard-rejected at 0.85 now
+    # gets the relaxed 0.3 cold floor instead.
+    default_id._estimated_T = 5863.0
+    assert default_id._r2_gate_rejects(0.4, N_matched=5) is False
+    # Still rejects a genuinely degenerate fit below the cold floor.
+    assert default_id._r2_gate_rejects(0.2, N_matched=5) is True
 
 
 def test_r2_gate_adaptive_t_admits_cold_plasma_with_moderate_r2():
@@ -802,7 +833,7 @@ def test_r2_gate_adaptive_t_admits_cold_plasma_with_moderate_r2():
     ``"fixed"`` mode the same R^2 is rejected. The element is
     constructed with N_matched=5 and ``boltz_r2 = 0.4`` per the plan.
     """
-    fixed_id = ALIASIdentifier(_DummyAtomicDB())
+    fixed_id = ALIASIdentifier(_DummyAtomicDB(), r2_gate_mode="fixed")
     adaptive_id = ALIASIdentifier(
         _DummyAtomicDB(),
         r2_gate_mode="adaptive_t",
@@ -828,7 +859,7 @@ def test_r2_gate_adaptive_t_rejects_warm_plasma_with_low_r2():
     both modes apply the strict 0.85 floor. Guards against the gate
     silently degrading warm-plasma precision.
     """
-    fixed_id = ALIASIdentifier(_DummyAtomicDB())
+    fixed_id = ALIASIdentifier(_DummyAtomicDB(), r2_gate_mode="fixed")
     adaptive_id = ALIASIdentifier(
         _DummyAtomicDB(),
         r2_gate_mode="adaptive_t",
