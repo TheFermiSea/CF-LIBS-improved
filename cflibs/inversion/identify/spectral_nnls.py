@@ -67,6 +67,21 @@ DEFAULT_MIN_RELATIVE_COEFF: float = 0.0
 DEFAULT_DETECTION_SNR: float = 4.0
 
 
+def _passes_detection_gate(
+    coeff: float,
+    element_snr: float,
+    relative_to_max: float,
+    *,
+    detection_snr: float,
+    min_relative_coeff: float,
+) -> bool:
+    """Element detection gate: positive coefficient, SNR above the
+    count-invariant ``detection_snr`` floor, and (optionally) at least
+    ``min_relative_coeff`` of the MAX element coefficient. See
+    DEFAULT_DETECTION_SNR / DEFAULT_MIN_RELATIVE_COEFF for the rationale."""
+    return coeff > 1e-10 and element_snr >= detection_snr and relative_to_max >= min_relative_coeff
+
+
 # ---------------------------------------------------------------------------
 # JAX NNLS kernel (opt-in fast path for GPU batching)
 #
@@ -348,23 +363,15 @@ class SpectralNNLSIdentifier:
         NNLS-GAUSS-BASIS-4 leakage false positive (SNR just above 3) while
         retaining every true major detectable on real data.
     min_relative_coeff : float
-        Optional relative-magnitude detection floor, measured against the
-        **maximum** element coefficient (default: 0.0, i.e. disabled). When
-        > 0, an element is detected only if its NNLS coefficient is at least
-        this fraction of the largest element coefficient. Unlike the legacy
-        #215 floor (which normalized by the *sum* of all candidate
-        coefficients and therefore tightened ~1/n as the candidate count
-        grew — the #216 count-scaling bug), the MAX denominator is
-        count-invariant: adding distractor candidates does not move the bar.
-
-        It defaults OFF because on real data no max-relative floor can both
-        admit the weakest true major and reject the leakage FP: on real
-        BHVO-2 the leakage FP sits at ~8.15% of the max coefficient while the
-        weakest detectable true major (Na) sits at only ~5.6% of max. The SNR
-        gate separates them cleanly, so SNR carries precision and this floor
-        is a count-invariant opt-in only. Set in the 0.10--0.20 range (above
-        the FP's 8.15%-of-max) if you must trade real-data recall for tighter
-        precision on a known-clean candidate set. See
+        Optional MAX-relative detection floor: when > 0, an element is detected
+        only if its NNLS coefficient is at least this fraction of the largest
+        element coefficient (default: 0.0, i.e. disabled). The MAX denominator
+        is count-invariant — adding distractor candidates does not move the bar.
+        It defaults OFF because the absolute coefficient SNR is the precision
+        lever (no max-relative floor can both admit the weakest true major and
+        reject the leakage FP). If you must trade real-data recall for tighter
+        precision on a known-clean candidate set, set it in the 0.10--0.20
+        range. See DEFAULT_MIN_RELATIVE_COEFF and
         docs/architecture/2026-06-03-candidate-count-fragility-audit.md (F1).
     continuum_degree : int
         Degree of polynomial continuum added to basis matrix (default: 3).
@@ -567,10 +574,12 @@ class SpectralNNLSIdentifier:
             # 3). The optional ``min_relative_coeff`` floor (default 0.0)
             # gates on the MAX-relative magnitude, NOT the sum-relative one,
             # so it does not tighten as candidate count grows (the #216 bug).
-            detected = (
-                coeff > 1e-10
-                and element_snr >= self.detection_snr
-                and relative_to_max >= self.min_relative_coeff
+            detected = _passes_detection_gate(
+                coeff,
+                element_snr,
+                relative_to_max,
+                detection_snr=self.detection_snr,
+                min_relative_coeff=self.min_relative_coeff,
             )
 
             element_id = ElementIdentification(

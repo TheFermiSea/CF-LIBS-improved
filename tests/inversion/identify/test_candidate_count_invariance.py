@@ -26,13 +26,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 h5py = pytest.importorskip("h5py")
 
 from cflibs.benchmark.synthetic_eval import build_corpus_basis_library  # noqa: E402
 from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier  # noqa: E402
+from cflibs.io.spectrum import load_spectrum  # noqa: E402
 
 pytestmark = [pytest.mark.requires_db, pytest.mark.integration]
 
@@ -82,7 +82,9 @@ def _db_path() -> str:
     return p
 
 
-def _bhvo2_spectrum():
+@pytest.fixture(scope="module")
+def bhvo2_spectrum():
+    """Load the real BHVO-2 spectrum once per module via the canonical loader."""
     candidates = [
         Path("data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv"),
         Path(__file__).parents[3] / "data" / "bhvo2_usgs" / "chemcam_bhvo2_loc1_spectrum.csv",
@@ -90,12 +92,23 @@ def _bhvo2_spectrum():
     p = next((c for c in candidates if c.exists()), None)
     if p is None:
         pytest.skip("Real BHVO-2 spectrum not found")
-    data = np.loadtxt(str(p), delimiter=",", skiprows=1)
-    return data[:, 0], data[:, 1]
+    return load_spectrum(str(p))
 
 
 def _recall(detected: set[str]) -> float:
     return sum(1 for t in TRUE_ELEMENTS if t in detected) / len(TRUE_ELEMENTS)
+
+
+def _assert_recall_non_decreasing(recalls: list[float], label: str) -> None:
+    """Recall must not degrade as candidate count grows (the #216 invariant)."""
+    counts = [n for n, _ in CANDIDATE_SETS]
+    series = list(zip(counts, recalls))
+    for (n_prev, r_prev), (n_cur, r_cur) in zip(series, series[1:]):
+        assert r_cur >= r_prev - 1e-9, (
+            f"{label} recall degraded with candidate count: "
+            f"n={n_prev}->{n_cur} recall {r_prev:.3f}->{r_cur:.3f}. "
+            f"This is the #216 count-scaling bug."
+        )
 
 
 @pytest.fixture(scope="module")
@@ -134,8 +147,8 @@ class TestStandaloneNNLSCountInvariance:
     (count-invariant SNR gate, MAX-relative floor default-off) recall is flat.
     """
 
-    def test_standalone_recall_non_decreasing_with_count(self, count_bases):
-        wl, intensity = _bhvo2_spectrum()
+    def test_standalone_recall_non_decreasing_with_count(self, count_bases, bhvo2_spectrum):
+        wl, intensity = bhvo2_spectrum
         recalls = []
         for n, _elements in CANDIDATE_SETS:
             ident = SpectralNNLSIdentifier(
@@ -148,16 +161,9 @@ class TestStandaloneNNLSCountInvariance:
             recalls.append(_recall(detected))
 
         # The guard: recall must not degrade as candidates grow.
-        counts = [n for n, _ in CANDIDATE_SETS]
-        series = list(zip(counts, recalls))
-        for (n_prev, r_prev), (n_cur, r_cur) in zip(series, series[1:]):
-            assert r_cur >= r_prev - 1e-9, (
-                f"Standalone NNLS recall degraded with candidate count: "
-                f"n={n_prev}->{n_cur} recall {r_prev:.3f}->{r_cur:.3f}. "
-                f"This is the #216 count-scaling bug."
-            )
+        _assert_recall_non_decreasing(recalls, "Standalone NNLS")
 
-    def test_sum_normalized_floor_mechanism_is_count_scaling(self, count_bases):
+    def test_sum_normalized_floor_mechanism_is_count_scaling(self, count_bases, bhvo2_spectrum):
         """Demonstrate the #216 mechanism the fix removes, grid-independently.
 
         The legacy #215 gate compared the fraction-of-SUM
@@ -173,7 +179,7 @@ class TestStandaloneNNLSCountInvariance:
         ever stops shrinking, the sum-normalized denominator is gone and the
         rig has lost the #216 mechanism it is meant to pin.
         """
-        wl, intensity = _bhvo2_spectrum()
+        wl, intensity = bhvo2_spectrum
         si_conc_sum = []
         si_snr = []
         for n, _elements in CANDIDATE_SETS:
@@ -202,11 +208,11 @@ class TestStandaloneNNLSCountInvariance:
 class TestHybridUnionCountInvariance:
     """The #216 production arm: hybrid_union must stay count-flat."""
 
-    def test_hybrid_union_recall_non_decreasing_with_count(self, count_bases):
+    def test_hybrid_union_recall_non_decreasing_with_count(self, count_bases, bhvo2_spectrum):
         from cflibs.atomic.database import AtomicDatabase
         from cflibs.inversion.identify.hybrid import HybridIdentifier
 
-        wl, intensity = _bhvo2_spectrum()
+        wl, intensity = bhvo2_spectrum
         db = _db_path()
         recalls = []
         with AtomicDatabase(db) as adb:
@@ -221,15 +227,7 @@ class TestHybridUnionCountInvariance:
                 detected = {e.element for e in res.detected_elements}
                 recalls.append(_recall(detected))
 
-        counts = [n for n, _ in CANDIDATE_SETS]
-        for (n_prev, r_prev), (n_cur, r_cur) in zip(
-            list(zip(counts, recalls)), list(zip(counts, recalls))[1:]
-        ):
-            assert r_cur >= r_prev - 1e-9, (
-                f"hybrid_union recall degraded with candidate count: "
-                f"n={n_prev}->{n_cur} recall {r_prev:.3f}->{r_cur:.3f}. "
-                f"This is the #216 count-scaling bug."
-            )
+        _assert_recall_non_decreasing(recalls, "hybrid_union")
 
 
 class TestSNRGateSuppressesLeakageFP:
@@ -256,25 +254,26 @@ class TestSNRGateSuppressesLeakageFP:
         from cflibs.inversion.identify.spectral_nnls import (
             DEFAULT_DETECTION_SNR,
             DEFAULT_MIN_RELATIVE_COEFF,
+            _passes_detection_gate,
         )
 
-        # Reproduce the shipped default gate logic exactly.
-        coeff = 1.0  # positive
-        detected = (
-            coeff > 1e-10
-            and snr >= DEFAULT_DETECTION_SNR
-            and frac_max >= DEFAULT_MIN_RELATIVE_COEFF
+        detected = _passes_detection_gate(
+            1.0,
+            snr,
+            frac_max,
+            detection_snr=DEFAULT_DETECTION_SNR,
+            min_relative_coeff=DEFAULT_MIN_RELATIVE_COEFF,
         )
         assert detected is expect_detected
 
-    def test_max_floor_is_count_invariant_vs_legacy_sum_floor(self, count_bases):
+    def test_max_floor_is_count_invariant_vs_legacy_sum_floor(self, count_bases, bhvo2_spectrum):
         """The relative gate metadata is now MAX-relative (count-invariant).
 
         ``relative_to_max`` for a given element must be ~stable as distractor
         candidates are added (the max coefficient does not change), unlike the
         legacy ``concentration_estimate`` (fraction-of-sum) which shrinks.
         """
-        wl, intensity = _bhvo2_spectrum()
+        wl, intensity = bhvo2_spectrum
         rel_max = {}
         conc_sum = {}
         for n, _elements in CANDIDATE_SETS:
