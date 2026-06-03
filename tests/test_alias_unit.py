@@ -110,9 +110,29 @@ def test_alias_rejects_invalid_boltzmann_r2_min():
             ALIASIdentifier(_DummyAtomicDB(), boltzmann_r2_min=value)
 
 
-def test_boltzmann_consistency_low_energy_spread_flags_no_fit():
-    """Matched lines with too little E_k spread should not report a perfect R^2."""
+def test_boltzmann_consistency_low_energy_spread_is_deweighted_not_zeroed():
+    """A genuinely linear but low-E_k-leverage stage keeps its real R^2.
+
+    Regression guard for the W1 multistage fix (commit fixing
+    ALIAS-R2GATE-2 / ALIAS-BOLTZ-IONMIX-1 interaction). Per-ionization-stage
+    Boltzmann fitting (W1) naturally narrows the E_k span of each stage: a
+    stage's matched UV lines often cluster within a few tenths of an eV.
+
+    The historical ``ptp < 0.5`` guard returned ``(0.5, 0.0)`` — it ZEROED
+    the R^2 of a perfectly linear short-span stage, which the adaptive_t gate
+    then hard-rejected (``0.0 < 0.3``). That dropped Fe from the Fe/Cu
+    multistage e2e spectrum even though both Fe stages fit R^2 ~= 1.0.
+
+    Corrected contract: a short E_k span makes the *temperature* untrustworthy
+    (small lever arm) but does NOT make a high R^2 a false consistency signal.
+    So the fit still reports its TRUE R^2, with the confidence ``factor``
+    *capped below the full-span reward* (low-leverage stages stay slightly
+    de-weighted). A genuinely non-linear short-span stage still earns a low
+    R^2 and is still gated — see the FP-control assertion below.
+    """
     identifier = ALIASIdentifier(_DummyAtomicDB())
+    # Intensities decreasing monotonically with E_k -> clean negative
+    # (Boltzmann-consistent) slope despite the 0.20 eV span.
     fused_lines = [
         {"transition": _transition(500.0, 1.00)},
         {"transition": _transition(501.0, 1.10)},
@@ -127,8 +147,20 @@ def test_boltzmann_consistency_low_energy_spread_flags_no_fit():
         "Fe", fused_lines, matched_mask, matched_peak_idx, intensity, peaks
     )
 
-    assert factor == pytest.approx(0.5)
-    assert r_squared == pytest.approx(0.0)
+    # R^2 is NOT zeroed: a real linear relation reports its real (high) R^2.
+    assert r_squared > 0.85
+    # Factor is in the capped low-leverage band [0.7, 0.9], strictly below
+    # the full-span max reward of 1.0 — so low-leverage fits stay de-weighted.
+    assert 0.7 <= factor <= 0.9 + 1e-9
+    assert factor < 1.0
+
+    # FP control: scrambling the intensities destroys linearity, so even a
+    # short-span stage must earn a low R^2 (the gate's FP suppressor is intact).
+    intensity_nonlinear = np.array([1.0, 20.0, 3.0])
+    _, r_squared_bad = identifier._boltzmann_consistency_check(
+        "Fe", fused_lines, matched_mask, matched_peak_idx, intensity_nonlinear, peaks
+    )
+    assert r_squared_bad < r_squared
 
 
 def test_boltzmann_consistency_uses_canonical_line_observation():

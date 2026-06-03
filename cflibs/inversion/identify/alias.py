@@ -2868,11 +2868,31 @@ class ALIASIdentifier:
         ``(factor, r_squared)`` with ``factor`` in ``[0.5, 1.0]``, matching
         the historical return contract of the consistency check.
         """
-        # Need some spread in E_k for meaningful fit
+        # E_k leverage check (W1 regression fix, blocker ALIAS-R2GATE-2 /
+        # ALIAS-BOLTZ-IONMIX-1 interaction).
+        #
+        # The pooled fit always saw a wide E_k span, but per-ionization-stage
+        # fitting (W1) naturally narrows the span: a single stage's matched
+        # UV lines often cluster within a few tenths of an eV. The historical
+        # ``ptp < 0.5`` guard was tuned for the *pooled* span and returned
+        # ``(0.5, 0.0)`` — i.e. it ZEROED the R^2. Feeding R^2=0.0 into the
+        # adaptive_t gate then hard-rejected genuinely-excellent per-stage
+        # fits (the Fe/Cu multistage e2e fixture: Fe I raw R^2=0.998 over a
+        # 0.23 eV span, Fe II raw R^2=1.000 over 0.33 eV — both real linear
+        # relations, both nuked to 0.0 and rejected by ``0.0 < 0.3``).
+        #
+        # The correct semantics: a short E_k span makes the *temperature
+        # estimate* high-variance (small lever arm), but it does NOT make a
+        # high R^2 a false signal of Boltzmann consistency. So for a
+        # low-leverage stage we still run the regression and report its TRUE
+        # R^2 to the gate; we only (a) skip the unphysical-T rejection (the T
+        # is untrustworthy off a tiny lever arm, so it must not veto a good
+        # fit) and (b) cap the confidence ``factor`` so a low-leverage fit is
+        # not over-rewarded. A stage whose lines are genuinely non-linear in
+        # E_k still earns a low R^2 and is still rejected — no false-positive
+        # suppression is lost.
         E_k_arr = np.array([obs.E_k_ev for obs in observations])
-        if np.ptp(E_k_arr) < 0.5:
-            # No meaningful Boltzmann regression is possible.
-            return 0.5, 0.0
+        low_leverage = float(np.ptp(E_k_arr)) < 0.5
 
         try:
             fitter = BoltzmannPlotFitter()
@@ -2882,10 +2902,17 @@ class ALIASIdentifier:
         except (ValueError, ZeroDivisionError):
             return 1.0, 0.0
 
-        # Check physical validity
+        # Check physical validity (slope sign is leverage-independent).
         if slope >= 0:
             # Positive slope = anti-Boltzmann → likely false positive
             return 0.5, r_sq
+
+        if low_leverage:
+            # Trust the R^2 (real linear consistency) but not the T (high
+            # variance off a short span). Cap the factor below the full-span
+            # reward so low-leverage stages stay slightly de-weighted.
+            factor = float(0.7 + 0.2 * min(r_sq, 1.0))
+            return factor, r_sq
 
         T_K = result.temperature_K
         if T_K < self._T_CONSISTENCY_MIN_K or T_K > self._T_CONSISTENCY_MAX_K:
