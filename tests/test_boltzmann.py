@@ -78,14 +78,15 @@ def create_synthetic_lines(
 def test_boltzmann_fit_perfect():
     """Test fitting on perfect data."""
     T_target = 10000.0
-    # Very low noise
-    lines = create_synthetic_lines(T_target, n_points=20, noise_level=0.0001)
+    # Very low noise. Seeded so the sigma-clipping fitter is deterministic:
+    # without a fixed seed it occasionally rejects an extra point at this
+    # noise level on some Python/NumPy/SciPy combinations (a CI flake, e.g.
+    # 18/20 on 3.11) even though the fit is perfect. seed=0 retains all 20.
+    lines = create_synthetic_lines(T_target, n_points=20, noise_level=0.0001, seed=0)
 
     fitter = BoltzmannPlotFitter()
     result = fitter.fit(lines)
 
-    # The default sigma-clipping fitter can occasionally reject one point at
-    # very low noise on some Python/NumPy/SciPy combinations.
     assert result.n_points >= 19
     # Tolerance 1%
     assert abs(result.temperature_K - T_target) < 100.0
@@ -676,9 +677,7 @@ class TestMultipletGroupsFit:
         """rejected_points and inlier_mask must index into the original observations list."""
         # Build 8 clean lines + 1 obvious outlier; put the outlier in a singleton group
         target_temperature = 9000.0
-        lines = create_synthetic_lines(
-            target_temperature, n_points=8, noise_level=0.005, seed=7
-        )
+        lines = create_synthetic_lines(target_temperature, n_points=8, noise_level=0.005, seed=7)
 
         # Add an outlier at index 8 with a dramatically wrong intensity
         outlier = LineObservation(
