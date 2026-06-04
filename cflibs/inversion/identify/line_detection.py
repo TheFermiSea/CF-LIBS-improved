@@ -297,10 +297,46 @@ def _find_peaks_jax_fallback(
     return [(int(idx), float(wavelength[idx])) for idx in peak_indices]
 
 
+def _poisson_area_floor(line_area: float, wl_step: float, scale: float) -> float:
+    """Shot-noise-equivalent 1-sigma floor for an integrated line area.
+
+    The trapezoid (Poisson) line-building path floors its uncertainty at the
+    shot-noise level ``sqrt(sum counts) * wl_step``. For an integrated area
+    ``A ~ (sum counts) * wl_step`` this is equivalent to ``sqrt(A * wl_step)``
+    (i.e. ``sum counts ~ A / wl_step`` so ``sqrt(A / wl_step) * wl_step
+    = sqrt(A * wl_step)``). Applying the same floor to the Voigt-fit path makes
+    the two physically-distinct line builders produce commensurate
+    inverse-variance weights, instead of letting an over-confident Voigt fit
+    report a sigma arbitrarily far below the shot-noise limit.
+
+    Parameters
+    ----------
+    line_area : float
+        Fitted (integrated) line area in the same intensity*wavelength units
+        used by the trapezoid path.
+    wl_step : float
+        Local wavelength step (nm) of the spectrum grid.
+    scale : float
+        Multiplicative scale on the floor. ``1.0`` reproduces the Poisson floor
+        exactly; ``0.0`` disables the floor (legacy behaviour). Values in
+        between soften it for deconvolution-heavy spectra.
+
+    Returns
+    -------
+    float
+        Shot-noise-equivalent 1-sigma floor (>= 0).
+    """
+    if scale <= 0.0 or wl_step <= 0.0:
+        return 0.0
+    return float(scale * math.sqrt(max(line_area, 0.0) * wl_step))
+
+
 def _build_observation_from_fit(
     transition: Transition,
     fit_result: VoigtFitResult,
     ground_state_threshold_ev: float,
+    wl_step: float = 0.0,
+    poisson_floor_scale: float = 1.0,
 ) -> Optional[Tuple[LineObservation, bool]]:
     """Build a LineObservation from a VoigtFitResult.
 
@@ -312,6 +348,16 @@ def _build_observation_from_fit(
         Voigt deconvolution result for this peak.
     ground_state_threshold_ev : float
         Lower-level energy threshold for resonance detection.
+    wl_step : float
+        Local wavelength step (nm) used to compute the shot-noise-equivalent
+        floor on the fitted-area uncertainty. ``0.0`` disables the floor (the
+        function then reproduces legacy behaviour with only the ``1e-6`` guard).
+    poisson_floor_scale : float
+        Scale on the Poisson-equivalent floor (see :func:`_poisson_area_floor`).
+        Default ``1.0`` matches the trapezoid path's shot-noise floor; ``0.0``
+        disables it. The floor only ever *raises* the reported uncertainty, so
+        optically-thin synthetic spectra with honest covariance-based
+        uncertainties are unaffected at the limit.
 
     Returns
     -------
@@ -322,10 +368,13 @@ def _build_observation_from_fit(
     if line_area <= 0:
         return None
 
+    poisson_floor = _poisson_area_floor(line_area, wl_step, poisson_floor_scale)
+    intensity_uncertainty = max(fit_result.area_uncertainty, poisson_floor, 1e-6)
+
     obs = LineObservation(
         wavelength_nm=float(transition.wavelength_nm),
         intensity=line_area,
-        intensity_uncertainty=max(fit_result.area_uncertainty, 1e-6),
+        intensity_uncertainty=intensity_uncertainty,
         element=transition.element,
         ionization_stage=transition.ionization_stage,
         E_k_ev=transition.E_k_ev,
@@ -467,6 +516,7 @@ def detect_line_observations(
     coherence_min_lines: int = 2,
     coherence_min_fraction: float = 0.5,
     use_deconvolution: bool = False,
+    poisson_floor_scale: float = 1.0,
     use_jax_kdet: bool = False,
     use_jax_peak_fallback: bool = False,
     resolving_power: Optional[float] = None,
@@ -554,6 +604,17 @@ def detect_line_observations(
     use_deconvolution : bool
         If True, apply Voigt deconvolution to resolve overlapping peaks
         before building line observations (default: False).
+    poisson_floor_scale : float
+        Scale on the shot-noise-equivalent floor applied to the
+        *Voigt-fit* line-building path's area uncertainty
+        (:func:`_build_observation_from_fit`). The trapezoid path is already
+        shot-noise floored at ``sqrt(sum counts) * wl_step``; a confident Voigt
+        fit could otherwise report a covariance-based sigma far below that
+        floor, producing an over-weighted Boltzmann-plot point. ``1.0``
+        (default) reproduces the trapezoid path's Poisson floor so the two
+        builders yield commensurate inverse-variance weights; ``0.0`` disables
+        the floor (legacy behaviour). Has no effect when ``use_deconvolution``
+        is False (the Voigt path is never taken).
     use_jax_kdet : bool
         If True, run the kdet shift-scan inner loop through the JAX
         backend (:func:`_kdet_candidate_counts_jax`). Default is False so
@@ -843,6 +904,8 @@ def detect_line_observations(
                         transition,
                         deconv_results_by_wl[rounded_wl],
                         ground_state_threshold_ev,
+                        wl_step=wl_step,
+                        poisson_floor_scale=poisson_floor_scale,
                     )
                 else:
                     result = _build_observation(
@@ -880,6 +943,8 @@ def detect_line_observations(
                         transition,
                         deconv_results_by_wl[rounded_wl],
                         ground_state_threshold_ev,
+                        wl_step=wl_step,
+                        poisson_floor_scale=poisson_floor_scale,
                     )
                 else:
                     result = _build_observation(
