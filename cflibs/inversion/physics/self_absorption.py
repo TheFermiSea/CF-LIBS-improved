@@ -654,6 +654,7 @@ class SelfAbsorptionCorrector:
         max_iterations: int = 5,
         convergence_tolerance: float = 0.01,
         plasma_length_cm: float = 0.1,
+        correction_tau_cap: Optional[float] = None,
     ):
         """
         Initialize corrector.
@@ -670,12 +671,28 @@ class SelfAbsorptionCorrector:
             Relative change threshold for convergence
         plasma_length_cm : float
             Estimated plasma depth (path length) in cm
+        correction_tau_cap : float, optional
+            If set, the τ used to compute the curve-of-growth *correction
+            factor* is clamped to this ceiling (the τ reported in the result
+            is still the true value). The Gaussian escape factor correction
+            ``I/f(τ) ≈ τ`` grows without bound as ``τ → ∞`` and the underlying
+            Doppler-core model loses validity beyond τ ~ 5-10 (El Sherbini
+            2005), so an uncapped correction is both physically unjustified
+            and numerically unstable when the absorbing column density (n·L)
+            is only known to an order of magnitude — exactly the situation
+            inside the iterative CF-LIBS solver. Capping the correction factor
+            at ``≈ τ_cap`` bounds the maximum intensity boost to the literature
+            ``~10×`` regime (Bulajic 2002) while still correcting the dominant
+            self-absorbed major lines. ``None`` (default) preserves the
+            historical uncapped behaviour for callers that supply a
+            well-constrained column density.
         """
         self.optical_depth_threshold = optical_depth_threshold
         self.mask_threshold = mask_threshold
         self.max_iterations = max_iterations
         self.convergence_tolerance = convergence_tolerance
         self.plasma_length_cm = plasma_length_cm
+        self.correction_tau_cap = correction_tau_cap
 
     def correct(
         self,
@@ -1079,6 +1096,18 @@ class SelfAbsorptionCorrector:
 
         return max(0.0, tau)
 
+    def _capped_tau(self, tau: float) -> float:
+        """Clamp τ to ``correction_tau_cap`` for correction-factor purposes.
+
+        Returns τ unchanged when no cap is configured. The cap bounds the
+        intensity boost ``I/f(τ) ≈ τ`` to the literature ~10× regime and keeps
+        the correction stable when the absorbing column density is uncertain
+        (see :meth:`__init__`). The true τ is still reported in the result.
+        """
+        if self.correction_tau_cap is not None and tau > self.correction_tau_cap:
+            return self.correction_tau_cap
+        return tau
+
     def _apply_recursive_correction(
         self,
         obs: LineObservation,
@@ -1152,8 +1181,12 @@ class SelfAbsorptionCorrector:
         iteration = 0
 
         for iteration in range(self.max_iterations):
-            # Correction factor at this iteration's tau
-            f_tau = _escape_factor(tau)
+            # Correction factor at this iteration's tau. When a correction cap
+            # is configured, the *correction* uses the clamped tau (bounding the
+            # intensity boost to ~tau_cap, the literature ~10x regime); the
+            # reported tau below remains the true plasma value.
+            tau_corr = self._capped_tau(tau)
+            f_tau = _escape_factor(tau_corr)
 
             # Corrected intensity = observed / escape factor
             I_corrected = obs.intensity / f_tau if f_tau > 0 else obs.intensity
@@ -1182,9 +1215,9 @@ class SelfAbsorptionCorrector:
                 rel_change = abs(tau_new - tau) / tau
                 tau = tau_new
                 if rel_change < self.convergence_tolerance:
-                    # Recompute I_corrected with the converged tau for
+                    # Recompute I_corrected with the converged (capped) tau for
                     # internal consistency before returning.
-                    f_tau = _escape_factor(tau)
+                    f_tau = _escape_factor(self._capped_tau(tau))
                     I_corrected = obs.intensity / f_tau if f_tau > 0 else obs.intensity
                     break
             else:
