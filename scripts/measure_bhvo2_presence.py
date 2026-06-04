@@ -48,7 +48,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--spectrum", default="data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv")
     ap.add_argument("--min-relative-intensity", type=lambda s: None if s == "none" else float(s),
-                    default=100.0)
+                    default=None)
     ap.add_argument("--exclude-resonance", choices=["auto", "true", "false"], default="auto")
     ap.add_argument("--apply-self-absorption", action="store_true")
     ap.add_argument("--label", default="baseline")

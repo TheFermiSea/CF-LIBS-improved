@@ -351,7 +351,14 @@ class AtomicDatabase(AtomicDataSource):
         wavelength_max : float, optional
             Maximum wavelength in nm
         min_relative_intensity : float, optional
-            Minimum relative intensity threshold
+            Minimum relative intensity (``rel_int``) threshold. WARNING: this is
+            an *absolute* SQL floor on the NIST ``rel_int`` column, which is
+            incomparable across elements/ion stages and NULL for many lines —
+            a fixed floor silently deletes whole real elements whose tabulated
+            rel_int is small or absent. For line detection prefer the
+            element-relative top-K selection in
+            ``cflibs.inversion.identify.line_detection._load_transitions``
+            (``top_k_per_element``) and leave this ``None``.
 
         Returns
         -------

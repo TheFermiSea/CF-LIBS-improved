@@ -164,7 +164,8 @@ def _detect_and_select_lines(
     atomic_db,
     elements,
     *,
-    min_relative_intensity: float | None = 100.0,
+    min_relative_intensity: float | None = None,
+    top_k_per_element: int | None = 60,
     resolving_power: float | None = None,
     wavelength_tolerance_nm: float = 0.1,
     min_peak_height: float = 0.01,
@@ -190,13 +191,17 @@ def _detect_and_select_lines(
     composition (RMSE 33.69 wt%, Na ~98 % on BHVO-2). Both paths now resolve
     to identical detection-floor + selector behaviour for the same inputs.
 
-    The defaults here are the *good* defaults established for the ``invert``
-    path (relative-intensity floor 100.0, the tuned ``LineSelector`` gates,
-    self-absorption off). When ``exclude_resonance`` is ``None`` it is tied to
-    ``not apply_self_absorption``: with self-absorption off we exclude the
-    strong low-E_i resonance lines (uncorrected, they are self-absorbed and
-    bias the Boltzmann plot); with it on we retain them because the solver
-    now *corrects* them (Aragón & Aguilera 2008 §7).
+    The defaults here are the *good* defaults for the ``invert``/``analyze``
+    paths: no absolute relative-intensity floor (replaced by element-relative
+    top-K + a shift-coherence veto in ``detect_line_observations``), the tuned
+    ``LineSelector`` gates, self-absorption off. ``exclude_resonance`` now
+    defaults (``None``) to ``False`` — resonance lines are the brightest,
+    most persistent LIBS lines and the only detectable lines for some majors
+    (Al I 394.4/396.2 nm), so they are kept; the gA-Boltzmann comb strength and
+    coherence veto guard against the spurious weak-line matches that resonance
+    exclusion + the rel_int floor used to protect against. With
+    self-absorption on the solver *corrects* resonance lines (Aragón &
+    Aguilera 2008 §7).
 
     Parameters
     ----------
@@ -207,8 +212,15 @@ def _detect_and_select_lines(
     elements : list[str]
         Elements to match against.
     min_relative_intensity : float or None
-        Relative-intensity floor for database lines. ``None`` disables it
-        (the old catastrophic behaviour); default 100.0.
+        Absolute relative-intensity floor for database lines. Default ``None``
+        (disabled): the floor deletes whole real elements whose tabulated
+        rel_int is small or NULL, so detection now bounds richness with
+        ``top_k_per_element`` instead. Pass a number to re-enable the legacy
+        floor.
+    top_k_per_element : int or None
+        Keep only each element's ``K`` strongest in-band lines (by gA-Boltzmann
+        strength) instead of an absolute rel_int floor (default 60). ``None``
+        keeps all in-band lines.
     resolving_power : float or None
         Instrument resolving power; enables adaptive tolerance/width when set.
     apply_self_absorption : bool
@@ -297,14 +309,23 @@ def _detect_and_select_lines(
         min_peak_height=min_peak_height,
         peak_width_nm=peak_width_nm,
         min_relative_intensity=min_relative_intensity,
+        top_k_per_element=top_k_per_element,
         shift_scan_nm=shift_scan_nm,
     )
 
     for warning in detection.warnings:
         logger.warning(f"Line detection warning: {warning}")
 
+    # Resonance lines are the brightest, most persistent lines in a LIBS
+    # plasma (low E_k, large gA) and are the *only* detectable lines for some
+    # majors (e.g. the Al I 394.4/396.2 nm doublet). Keep them by default so
+    # those elements reach the solver. The legacy tie to
+    # ``not apply_self_absorption`` dropped them whenever self-absorption
+    # correction was off, deleting whole elements at the selection gate; the
+    # gA-Boltzmann comb strength + shift-coherence veto now guard against the
+    # spurious weak-line matches that exclusion was protecting against.
     if exclude_resonance is None:
-        exclude_resonance = not apply_self_absorption
+        exclude_resonance = False
 
     selector = LineSelector(
         min_snr=min_snr,
@@ -387,10 +408,15 @@ def invert_cmd(args):
     # plasma) are matched to bright wrong-element peaks and, because the
     # Boltzmann ordinate divides by their tiny A_ki, extrapolate the closure to
     # a huge spurious abundance (Na ~ 77-98 wt% vs certified 1.65 on BHVO-2).
-    # The shipped example config uses 100.0; adopt it as the default so the
-    # bare `cflibs invert` path is not catastrophically wrong. Set
-    # ``min_relative_intensity: null`` in the analysis config to disable.
-    min_relative_intensity = analysis_cfg.get("min_relative_intensity", 100.0)
+    # As of the detection-cascade fix the default floor is OFF (None): an
+    # absolute rel_int floor deletes whole real elements (Mg/K and the Al I
+    # resonance doublet all sit below 100), so it is replaced by an
+    # element-relative top-K (gA-Boltzmann strength) plus a shift-coherence
+    # veto, which suppress the weak-Rydberg false matches the floor was
+    # guarding against without deleting real majors. Set a numeric
+    # ``min_relative_intensity`` in the analysis config to re-enable the
+    # legacy floor.
+    min_relative_intensity = analysis_cfg.get("min_relative_intensity", None)
     resolving_power = (
         args.resolving_power
         if args.resolving_power is not None
@@ -408,7 +434,10 @@ def invert_cmd(args):
     # excluding resonance lines (uncorrected resonance lines are self-absorbed
     # and bias the Boltzmann plot). Both are config-overridable.
     apply_self_absorption = bool(analysis_cfg.get("apply_self_absorption", False))
-    exclude_resonance = analysis_cfg.get("exclude_resonance", not apply_self_absorption)
+    # Default ``None`` -> ``_detect_and_select_lines`` keeps resonance lines
+    # (the brightest persistent LIBS lines, sole detectable lines for some
+    # majors). Set ``exclude_resonance`` in the analysis config to override.
+    exclude_resonance = analysis_cfg.get("exclude_resonance", None)
 
     # Shared detection + selection path (identical to ``analyze``; see
     # ``_detect_and_select_lines``). Keeping both CLI entry points on one
@@ -506,7 +535,7 @@ def analyze_cmd(args):
     # default-path blowup. ``--min-relative-intensity`` / ``--resolving-power``
     # / ``--apply-self-absorption`` opt-in flags override the defaults.
     apply_self_absorption = bool(getattr(args, "apply_self_absorption", False))
-    min_relative_intensity = getattr(args, "min_relative_intensity", 100.0)
+    min_relative_intensity = getattr(args, "min_relative_intensity", None)
     resolving_power = getattr(args, "resolving_power", None)
 
     observations = _detect_and_select_lines(
@@ -973,11 +1002,15 @@ def main():
     )
     analyze_parser.add_argument(
         "--min-relative-intensity",
-        type=float,
-        default=100.0,
+        type=lambda s: None if str(s).lower() == "none" else float(s),
+        default=None,
         help=(
-            "Relative-intensity floor for database lines; prunes spurious weak "
-            "high-E_k (Rydberg) transitions (default: 100.0)"
+            "Absolute relative-intensity floor for database lines. Default None: "
+            "the detection path instead bounds catalog richness with an "
+            "element-relative top-K (by gA-Boltzmann strength) plus a "
+            "shift-coherence veto, which restores real majors (Al/Mg/Ca/Na/K) "
+            "that an absolute floor silently deletes. Pass a number to re-enable "
+            "the legacy floor, or 'none' to keep it disabled."
         ),
     )
     analyze_parser.add_argument(

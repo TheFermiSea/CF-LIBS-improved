@@ -7,6 +7,7 @@ raw spectra into LineObservation objects for classic CF-LIBS solvers.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple, TypedDict, TYPE_CHECKING
 
@@ -446,6 +447,7 @@ def detect_line_observations(
     min_peak_height: float = 0.01,
     peak_width_nm: Optional[float] = None,
     min_relative_intensity: Optional[float] = None,
+    top_k_per_element: Optional[int] = None,
     ground_state_threshold_ev: float = 0.1,
     shift_scan_nm: float = 0.5,
     shift_step_nm: Optional[float] = None,
@@ -461,6 +463,9 @@ def detect_line_observations(
     kdet_min_candidates: int = 2,
     kdet_rarity_power: float = 0.5,
     kdet_weight_clip: Tuple[float, float] = (0.25, 4.0),
+    shift_coherence_veto: bool = True,
+    coherence_min_lines: int = 2,
+    coherence_min_fraction: float = 0.5,
     use_deconvolution: bool = False,
     use_jax_kdet: bool = False,
     use_jax_peak_fallback: bool = False,
@@ -495,7 +500,15 @@ def detect_line_observations(
         high-R; the adaptive form tracks the actual instrumental FWHM
         (see CF-LIBS-improved-s1qr.2).
     min_relative_intensity : float, optional
-        Minimum relative intensity threshold for database lines
+        Minimum relative intensity threshold for database lines. Prefer
+        ``top_k_per_element`` (element-relative) over this absolute floor:
+        the latter silently deletes whole elements whose tabulated rel_int is
+        small or NULL (see :func:`_load_transitions`).
+    top_k_per_element : int, optional
+        Keep only each element's ``K`` strongest in-band lines (by the
+        gA-Boltzmann :func:`_transition_strength`) instead of an absolute
+        rel_int floor. Bounds catalog richness without deleting elements.
+        ``None`` keeps all in-band lines. Default 60.
     ground_state_threshold_ev : float
         Lower-level energy threshold for resonance detection
     shift_scan_nm : float
@@ -526,6 +539,18 @@ def detect_line_observations(
         Exponent for rarity (line-density) weighting
     kdet_weight_clip : Tuple[float, float]
         Clamp for rarity weighting factor (min, max)
+    shift_coherence_veto : bool
+        If True (default), reject accepted elements whose matched lines do not
+        agree on the single instrument residual shift (see
+        :func:`_shift_coherence_veto`). This suppresses dense-catalog
+        false-positive confounders that accrue matches by random wavelength
+        coincidence, without re-tuning the comb gates.
+    coherence_min_lines : int
+        Minimum number of coherent (consensus-aligned) matched lines an element
+        must have to survive the shift-coherence veto.
+    coherence_min_fraction : float
+        Minimum fraction of an element's matched lines that must be coherent
+        with the consensus residual shift to survive the veto.
     use_deconvolution : bool
         If True, apply Voigt deconvolution to resolve overlapping peaks
         before building line observations (default: False).
@@ -611,6 +636,7 @@ def detect_line_observations(
         wavelength_min=wl_min,
         wavelength_max=wl_max,
         min_relative_intensity=min_relative_intensity,
+        top_k_per_element=top_k_per_element,
     )
 
     if not transitions:
@@ -668,6 +694,9 @@ def detect_line_observations(
             kdet_rarity_power=kdet_rarity_power,
             kdet_weight_clip=kdet_weight_clip,
             use_jax=use_jax_kdet,
+            shift_coherence=shift_coherence_veto,
+            coherence_min_lines=coherence_min_lines,
+            coherence_min_fraction=coherence_min_fraction,
         )
         warnings.extend(kdet_warnings)
         if filtered_elements:
@@ -723,6 +752,25 @@ def detect_line_observations(
                 ]
         else:
             warnings.append("comb_fallback_disabled")
+
+    # Shift-coherence veto: drop accepted elements whose matched comb lines do
+    # not agree on the single instrument residual shift (random-coincidence
+    # confounders), applied uniformly to both the comb-pass and comb-fallback
+    # selections. Runs after the (Rust or Python) comb scan so it gates both
+    # backends identically.
+    if shift_coherence_veto and accepted_elements:
+        kept, vetoed = _shift_coherence_veto(
+            elements=accepted_elements,
+            peaks=peaks,
+            transitions_by_element=comb_transitions_by_element,
+            applied_shift_nm=applied_shift_nm,
+            tolerance_nm=wavelength_tolerance_nm,
+            min_coherent_lines=coherence_min_lines,
+            min_coherent_fraction=coherence_min_fraction,
+        )
+        if vetoed:
+            accepted_elements = kept
+            warnings.append("shift_coherence_vetoed_elements")
 
     matched_peak_indices: Set[int] = set()
 
@@ -873,40 +921,114 @@ def _load_transitions(
     wavelength_min: float,
     wavelength_max: float,
     min_relative_intensity: Optional[float],
+    top_k_per_element: Optional[int] = None,
 ) -> List[Transition]:
+    """Load in-band transitions per element, optionally capped to the K strongest.
+
+    The legacy ``min_relative_intensity`` SQL floor is an *absolute* cut on
+    NIST ``rel_int``: because that column is incomparable across elements and
+    NULL for ~4500 DB lines, a fixed floor silently deletes whole real elements
+    whose lines simply happen to have small (or absent) tabulated rel_int —
+    e.g. on BHVO-2 every Mg/K line and all 4 Al I resonance lines (rel_int
+    24-26) fall below a floor of 100, so those elements never reach the solver.
+
+    ``top_k_per_element`` replaces that with an element-*relative* bound: keep
+    each element's ``K`` strongest in-band lines by the gA-Boltzmann
+    :func:`_transition_strength` (a single consistent scale), with no absolute
+    threshold. Every requested element therefore contributes its best lines,
+    and the per-element cap keeps dense catalogs (e.g. Fe, Ti) from swamping
+    the comb/kdet stages. ``None`` keeps all in-band lines.
+    """
     transitions: List[Transition] = []
     for element in elements:
-        transitions.extend(
-            atomic_db.get_transitions(
-                element,
-                wavelength_min=wavelength_min,
-                wavelength_max=wavelength_max,
-                min_relative_intensity=min_relative_intensity,
-            )
+        element_transitions = atomic_db.get_transitions(
+            element,
+            wavelength_min=wavelength_min,
+            wavelength_max=wavelength_max,
+            min_relative_intensity=min_relative_intensity,
         )
+        if top_k_per_element is not None and len(element_transitions) > top_k_per_element:
+            element_transitions = _rank_transitions_by_strength(element_transitions)[
+                :top_k_per_element
+            ]
+        transitions.extend(element_transitions)
     return transitions
 
 
+# Reference excitation temperature (eV) for the gA-Boltzmann line-strength
+# proxy used to rank database transitions for the comb / top-K selection.
+# ~1 eV (~11600 K) is a typical LIBS plasma excitation temperature; the
+# ranking is only weakly sensitive to its exact value over the 0.7-1.2 eV
+# range (verified on BHVO-2: the same low-E_k resonance lines top the comb).
+_COMB_STRENGTH_T_REF_EV = 1.0
+
+
+def _ga_boltzmann_weight(transition: Transition) -> float:
+    """gA-Boltzmann emission weight ``g_k * A_ki * exp(-E_k / kT_ref)``.
+
+    The population-weighted emissivity proxy the forward model itself uses
+    (``epsilon proportional to A_ki * n_k``, ``n_k proportional to
+    g_k * exp(-E_k/kT)``). A single internally-consistent scale across every
+    transition, including the ~4500 DB lines that have no NIST ``rel_int``.
+    """
+    a_ki = transition.A_ki
+    if a_ki is None or a_ki <= 0:
+        return 0.0
+    g_k = transition.g_k if transition.g_k else 1
+    e_k = transition.E_k_ev if transition.E_k_ev is not None else 0.0
+    return float(g_k) * float(a_ki) * math.exp(-max(e_k, 0.0) / _COMB_STRENGTH_T_REF_EV)
+
+
 def _transition_strength(transition: Transition) -> float:
-    if transition.relative_intensity is not None and transition.relative_intensity > 0:
-        return float(transition.relative_intensity)
-    if transition.A_ki is not None and transition.A_ki > 0:
-        return float(transition.A_ki)
-    return 0.0
+    """Single-transition line-strength proxy (gA-Boltzmann weight).
+
+    Kept for callers that need a per-line scalar. The comb / top-K *ranking*
+    uses :func:`_rank_transitions_by_strength`, which combines this with the
+    tabulated ``relative_intensity`` on a shared normalized scale (see there).
+    """
+    return _ga_boltzmann_weight(transition)
+
+
+def _rank_transitions_by_strength(transitions: List[Transition]) -> List[Transition]:
+    """Rank an element's transitions strongest-first for comb / top-K selection.
+
+    The previous ranking returned NIST ``relative_intensity`` when present ELSE
+    ``A_ki`` from a single ``key`` — mixing two scales 6-9 orders of magnitude
+    apart, so the ~4500 NULL-rel_int lines (ranked by raw ``A_ki ~ 1e8``)
+    spuriously outranked real lines (``rel_int ~ tens``) and crowded genuine
+    transitions out of the comb. Worse, NIST ``rel_int`` is *not comparable
+    across ion stages*: an element's hot ion lines carry rel_int in the
+    thousands while its bright neutral resonance lines (the persistent lines
+    that dominate a LIBS plasma) carry rel_int ~ tens, so any rel_int-led
+    ranking buries the resonance lines (e.g. the Al I 394.4/396.2 nm doublet
+    drops out of the top-30 entirely).
+
+    Fix: rank by the gA-Boltzmann emission weight
+    (:func:`_ga_boltzmann_weight`) — ``g_k * A_ki * exp(-E_k / kT_ref)`` — the
+    same stage-consistent, population-weighted emissivity proxy the forward
+    model uses. This is a single internally-consistent scale across every
+    transition (no unit-mixing), ranks low-E_k resonance lines above high-E_k
+    ones (restoring the Al doublet to the comb) and suppresses Boltzmann-faint
+    high-E_k Rydberg lines (e.g. the Na 413-421 nm series) that are a known
+    false-match source. Ties broken by shorter wavelength (deterministic).
+    """
+    if not transitions:
+        return []
+    return sorted(
+        transitions,
+        key=lambda t: (_ga_boltzmann_weight(t), -t.wavelength_nm),
+        reverse=True,
+    )
 
 
 def _select_comb_transitions(
     transitions: List[Transition],
     max_lines: int,
 ) -> List[Transition]:
-    sorted_t = sorted(
-        transitions,
-        key=lambda t: (_transition_strength(t), -t.wavelength_nm),
-        reverse=True,
-    )
-    if max_lines > 0 and len(sorted_t) > max_lines:
-        return sorted_t[:max_lines]
-    return sorted_t
+    ranked = _rank_transitions_by_strength(transitions)
+    if max_lines > 0 and len(ranked) > max_lines:
+        return ranked[:max_lines]
+    return ranked
 
 
 def _build_shift_grid(
@@ -1235,6 +1357,9 @@ def _kdet_filter_elements(
     kdet_rarity_power: float,
     kdet_weight_clip: Tuple[float, float],
     use_jax: bool = False,
+    shift_coherence: bool = False,
+    coherence_min_lines: int = 2,
+    coherence_min_fraction: float = 0.5,
 ) -> Tuple[Dict[str, List[Transition]], List[str]]:
     warnings: List[str] = []
     if not peaks or not transitions_by_element:
@@ -1247,10 +1372,17 @@ def _kdet_filter_elements(
 
     shift_grid = _build_shift_grid(shift_scan_nm, shift_step_nm, wl_step, wavelength_tolerance_nm)
 
-    # The Rust extension is always preferred when available (fastest path).
-    # JAX is the next tier when Rust is unavailable AND the caller opted in.
-    # The pure-NumPy loop is the unconditional fallback.
-    if HAS_RUST_CORE:
+    # The kdet density-scaled fraction (best_candidates / total_peaks * rarity)
+    # scales with spectrum density, so on a rich multi-element spectrum it drops
+    # sparse-but-real majors (e.g. Al at 0.042 < the 0.05 floor) while admitting
+    # dense confounders that coincide by chance. When ``shift_coherence`` is on
+    # we instead keep elements whose candidate matches *agree on one shift* (the
+    # shared instrument residual) and drop the incoherent ones — a
+    # catalog-density-invariant discriminator. The Rust fast path computes only
+    # the legacy density score (it receives wavelengths, not the per-line
+    # residuals coherence needs), so we route through the pure-NumPy path when
+    # coherence is requested to keep both backends behaviourally identical.
+    if HAS_RUST_CORE and not shift_coherence:
         try:
             element_names = list(transitions_by_element.keys())
             transition_wls = [
@@ -1316,13 +1448,131 @@ def _kdet_filter_elements(
         rarity_weight = (median_density / max(density, 1e-6)) ** kdet_rarity_power
         rarity_weight = float(np.clip(rarity_weight, kdet_weight_clip[0], kdet_weight_clip[1]))
         kdet_score = kdet_fraction * rarity_weight
-        if best_candidates >= kdet_min_candidates and kdet_score >= kdet_min_score:
+        if shift_coherence:
+            # Coherence mode: keep any element with enough candidate matches and
+            # do NOT apply the density-scaled score (which wrongly drops sparse
+            # real majors). The authoritative shift-coherence veto downstream
+            # rejects the incoherent confounders this admits.
+            if best_candidates >= max(kdet_min_candidates, coherence_min_lines):
+                filtered[element] = transitions
+        elif best_candidates >= kdet_min_candidates and kdet_score >= kdet_min_score:
             filtered[element] = transitions
 
     if filtered and len(filtered) < len(transitions_by_element):
         warnings.append("kdet_filtered_elements")
 
     return filtered, warnings
+
+
+def _element_match_residuals(
+    peak_wavelengths: np.ndarray,
+    transitions: List[Transition],
+    shift_nm: float,
+    tolerance_nm: float,
+) -> np.ndarray:
+    """Per-line nearest-peak residual offsets (signed nm) within tolerance.
+
+    For each transition, the signed offset ``(peak + shift) - line`` of its
+    nearest detected peak, kept only if within ``tolerance_nm``. The spread of
+    these residuals measures whether the element's matches *agree on one
+    shift*: a real element's true lines cluster at the single instrument
+    residual offset, whereas a confounder matching peaks by coincidence
+    scatters across the whole tolerance window.
+    """
+    if peak_wavelengths.size == 0 or not transitions:
+        return np.empty(0, dtype=float)
+    shifted = peak_wavelengths + shift_nm
+    residuals: List[float] = []
+    for t in transitions:
+        deltas = shifted - t.wavelength_nm
+        abs_deltas = np.abs(deltas)
+        j = int(np.argmin(abs_deltas))
+        if abs_deltas[j] <= tolerance_nm:
+            residuals.append(float(deltas[j]))
+    return np.asarray(residuals, dtype=float)
+
+
+def _shift_coherence_veto(
+    elements: List[str],
+    peaks: List[Tuple[int, float]],
+    transitions_by_element: Dict[str, List[Transition]],
+    applied_shift_nm: float,
+    tolerance_nm: float,
+    min_coherent_lines: int = 2,
+    min_coherent_fraction: float = 0.5,
+) -> Tuple[List[str], List[str]]:
+    """Reject elements whose matched lines do not agree on one shift.
+
+    A genuinely-present element's lines all match at the *same* sub-tolerance
+    residual offset (the instrument's residual dispersion error, shared by
+    every real species). A false-positive confounder — typically a dense
+    catalog (Ag, Sn, W, Bi) — accrues matches by random wavelength coincidence,
+    so its residual offsets scatter across the full ``+/- tolerance`` window.
+
+    The veto computes the consensus residual (median of all candidate elements'
+    pooled match residuals — the instrument offset) and keeps an element only
+    if at least ``min_coherent_fraction`` of its matched lines (and at least
+    ``min_coherent_lines``) fall within one resolution element
+    (``tolerance_nm / 3``) of that consensus. This is intentionally a coarse,
+    catalog-agnostic rule (no per-element or per-spectrum tuning): it rejects
+    incoherent confounders while admitting real majors that share the offset.
+
+    Returns ``(kept_elements, vetoed_elements)``.
+    """
+    if not elements:
+        return elements, []
+    peak_wavelengths = np.array([p[1] for p in peaks], dtype=float)
+    if peak_wavelengths.size == 0:
+        return elements, []
+
+    residuals_by_element: Dict[str, np.ndarray] = {}
+    pooled: List[float] = []
+    for element in elements:
+        res = _element_match_residuals(
+            peak_wavelengths,
+            transitions_by_element.get(element, []),
+            applied_shift_nm,
+            tolerance_nm,
+        )
+        residuals_by_element[element] = res
+        pooled.extend(res.tolist())
+
+    if not pooled:
+        return elements, []
+
+    consensus = float(np.median(pooled))
+    band = tolerance_nm / 3.0
+
+    kept: List[str] = []
+    vetoed: List[str] = []
+    for element in elements:
+        res = residuals_by_element[element]
+        n = res.size
+        if n == 0:
+            # No in-tolerance matches at the applied shift; leave the element
+            # to the downstream matcher rather than vetoing on no evidence.
+            kept.append(element)
+            continue
+        coherent = int(np.sum(np.abs(res - consensus) <= band))
+        fraction = coherent / n
+        # An element survives if a majority of its matches cohere with the
+        # consensus shift. The dominant FP mode is a dense catalog whose many
+        # matches are random coincidences (low coherent fraction); a genuine
+        # element's matches concentrate at the shared instrument residual
+        # (high fraction) even when there are few of them. We therefore gate
+        # primarily on the coherent *fraction* (catalog-density-invariant) and
+        # only additionally require ``min_coherent_lines`` when the element has
+        # enough matches to make that count meaningful — so a sparse real
+        # element (e.g. one dominant line on a thin synthetic) is not vetoed
+        # for want of a second line.
+        enough_evidence = n >= min_coherent_lines
+        passes_fraction = fraction >= min_coherent_fraction
+        passes_count = coherent >= min_coherent_lines or not enough_evidence
+        if passes_fraction and passes_count:
+            kept.append(element)
+        else:
+            vetoed.append(element)
+    return kept, vetoed
 
 
 def _peaks_within_tolerance(

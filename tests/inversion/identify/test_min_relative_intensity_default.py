@@ -1,21 +1,25 @@
 """
-Regression test for the relative-intensity floor on the production `invert`
-path (physics-audit / composition-pipeline-diagnosis: IDENT-RYDBERG).
+Regression test for Na-Rydberg suppression on the production detection path
+(physics-audit / composition-pipeline-diagnosis: IDENT-RYDBERG).
 
-With no relative-intensity floor (the old ``cflibs invert`` default of
-``min_relative_intensity=None``), weak high-lying (Rydberg) transitions with
-``relative_intensity ~ 0`` — e.g. the Na I 413-421 nm lines at E_k ~ 5 eV,
-unobservable in a ~1 eV ps-LIBS plasma — are matched to bright wrong-element
-peaks. Because the Boltzmann ordinate ``ln(I λ / gA)`` divides by their tiny
-A_ki, those points extrapolate the closure intercept to a huge spurious
-abundance (Na ~ 77-98 wt% vs the BHVO-2 certified 1.65 wt%), crushing every
-other major element.
+Weak high-lying (Rydberg) transitions with ``relative_intensity ~ 0`` — e.g.
+the Na I 413-421 nm lines at E_k ~ 5 eV, unobservable in a ~1 eV ps-LIBS
+plasma — used to be matched to bright wrong-element peaks when no
+relative-intensity floor was set. Because the Boltzmann ordinate
+``ln(I λ / gA)`` divides by their tiny A_ki, those points extrapolated the
+closure intercept to a huge spurious abundance (Na ~ 77-98 wt% vs the BHVO-2
+certified 1.65 wt%), crushing every other major element. The historical guard
+was an absolute ``min_relative_intensity`` floor — but that also deleted whole
+real elements whose tabulated rel_int is small or NULL.
 
-Setting a sane non-None floor (the shipped example config uses 100.0) prunes
-the Rydberg lines and removes this catastrophic per-element failure mode.
+The detection-cascade fix replaces the floor with a gA-Boltzmann comb-strength
+ranking (which Boltzmann-suppresses these high-E_k lines out of the comb) plus
+a shift-coherence veto. Na Rydberg lines are therefore pruned *even with no
+floor*. These tests assert both: the no-floor path no longer admits the
+Rydberg lines, and the legacy floor still prunes them when explicitly set.
 
-This test reproduces the pruning on the real BHVO-2 ChemCam spectrum, so it
-requires the production atomic database.
+These run on the real BHVO-2 ChemCam spectrum, so they require the production
+atomic database.
 """
 
 from __future__ import annotations
@@ -49,15 +53,23 @@ def _detect(db, min_relative_intensity):
     )
 
 
-def test_no_floor_admits_na_rydberg_lines(production_db):
-    """Without a floor, the spurious Na Rydberg lines reach the solver."""
+def test_no_floor_excludes_na_rydberg_lines(production_db):
+    """The no-floor path no longer admits the spurious Na Rydberg lines.
+
+    With the gA-Boltzmann comb-strength ranking + shift-coherence veto, the
+    high-E_k Na 413-421 nm lines are Boltzmann-suppressed out of the comb, so
+    ``min_relative_intensity=None`` no longer re-detonates the Na blowup that
+    the absolute floor used to guard against — but without the floor's
+    collateral deletion of real majors.
+    """
     if not _BHVO2_SPECTRUM.exists():
         pytest.skip("BHVO-2 spectrum not available")
     det = _detect(production_db, None)
     na_nm = {round(o.wavelength_nm, 1) for o in det.observations if o.element == "Na"}
-    # At least one of the known spurious Rydberg lines is present with no floor.
-    assert na_nm & _NA_RYDBERG_NM, (
-        "Expected the no-floor path to admit Na Rydberg lines; got Na lines " f"{sorted(na_nm)}."
+    assert not (na_nm & _NA_RYDBERG_NM), (
+        "The no-floor detection path must not admit the weak high-E_k Na "
+        f"Rydberg lines (gA-comb suppression); survivors: "
+        f"{sorted(na_nm & _NA_RYDBERG_NM)}."
     )
 
 
