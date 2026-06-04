@@ -199,6 +199,15 @@ class ClosureEquation:
     """
 
     @staticmethod
+    def validate_degeneracy(
+        concentrations: Dict[str, float],
+        threshold: float = 0.8,
+    ) -> bool:
+        if len(concentrations) <= 1:
+            return False
+        return any(c > threshold for c in concentrations.values())
+
+    @staticmethod
     def apply_standard(
         intercepts: Dict[str, float],
         partition_funcs: Dict[str, float],

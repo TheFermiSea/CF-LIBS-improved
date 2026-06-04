@@ -543,7 +543,10 @@ class IterativeCFLIBSSolver:
             observations=observations,
         )
         quality_metrics = {
-            "r_squared_last": last_common_fit.r_squared if last_common_fit is not None else 0.0
+            "r_squared_last": last_common_fit.r_squared if last_common_fit is not None else 0.0,
+            "boltzmann_r_squared": last_common_fit.r_squared if last_common_fit is not None else 0.0,
+            "n_elements_fit": len(concentrations),
+            "closure_degenerate": ClosureEquation.validate_degeneracy(concentrations),
         }
         quality_metrics.update(lte_report.quality_metrics)
 
