@@ -12,8 +12,11 @@ NumPyro graph builders that wire them up with priors:
   :mod:`cflibs.inversion.solve.bayesian.priors`.
 
 Atomic-data carriers (:class:`AtomicDataArrays`, :func:`load_atomic_data`,
-:func:`partition_function`, :func:`mcwhirter_log_penalty`, and a few JAX-real
-helpers) live in the sibling :mod:`atomic` module.
+the guarded :func:`partition_function` delegator, :func:`mcwhirter_log_penalty`,
+and a few JAX-real helpers) live in the sibling :mod:`atomic` module.  The
+two-zone forward model threads each species' ``[t_min, t_max]`` window + ``g0``
+floor (carried on :class:`AtomicDataArrays`) into that delegator so every
+Bayesian ``U(T)`` is clamped/floored by the ONE shared guarded evaluator.
 
 Notes
 -----
@@ -85,6 +88,19 @@ if HAS_NUMPYRO:
 else:  # pragma: no cover
     numpyro = None  # type: ignore[assignment]
     dist = None  # type: ignore[assignment]
+
+
+def _stage_bound(bound: Any, stage_idx: int) -> Any:
+    """Slice a ``(n_elements, n_stages)`` partition-guard array at ``stage_idx``.
+
+    Returns ``None`` when the bound array is absent (legacy
+    :class:`AtomicDataArrays` built without guard arrays), in which case the
+    guarded evaluator falls back to its unbounded form for that stage.  The
+    slice is a static array operation, so it is jit / vmap safe.
+    """
+    if bound is None:
+        return None
+    return bound[:, stage_idx]
 
 
 # ---------------------------------------------------------------------------
@@ -236,11 +252,6 @@ class BayesianForwardModel:
             total_species_density_cm3=total_species_density_cm3,
         )
         return np.array(result)
-
-    @staticmethod
-    def _partition_function(T_K: float, coeffs: Any) -> Any:
-        """Evaluate polynomial partition function (delegates to module helper)."""
-        return partition_function(T_K, coeffs)
 
     def _compute_spectrum(
         self,
@@ -420,8 +431,25 @@ class TwoZoneBayesianForwardModel:
         T_K = T_eV * _JAX_EV_TO_K
         total_species_density = _resolve_total_species_density_cm3(n_e, total_species_density_cm3)
 
-        U0 = partition_function(T_K, data.partition_coeffs[:, 0])
-        U1 = partition_function(T_K, data.partition_coeffs[:, 1])
+        # Guarded U(T): clamp T to the per-species [t_min, t_max] fit window
+        # and floor at g0 (the SAME guard + coefficients the manifold snapshot
+        # bakes; routed through the ONE shared evaluator).  The bounds arrive as
+        # static (n_elements, n_stages) arrays on ``AtomicDataArrays`` so no
+        # Python provider call enters the NUTS jit trace.
+        U0 = partition_function(
+            T_K,
+            data.partition_coeffs[:, 0],
+            t_min=_stage_bound(data.partition_t_min, 0),
+            t_max=_stage_bound(data.partition_t_max, 0),
+            g0=_stage_bound(data.partition_g0, 0),
+        )
+        U1 = partition_function(
+            T_K,
+            data.partition_coeffs[:, 1],
+            t_min=_stage_bound(data.partition_t_min, 1),
+            t_max=_stage_bound(data.partition_t_max, 1),
+            g0=_stage_bound(data.partition_g0, 1),
+        )
         IP_I = data.ionization_potentials[:, 0]
 
         saha_factor = (_JAX_SAHA_CONST_CM3 / n_e) * (T_eV**1.5)

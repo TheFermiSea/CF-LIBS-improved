@@ -177,29 +177,20 @@ class SahaBoltzmannSolver(SolverStrategy):
         float
             Partition function
         """
-        # Preferred: direct summation from cached energy-level arrays with IP cutoff
-        from cflibs.plasma.partition import get_levels_for_species
-
+        # Preferred + polynomial fallback through the single provider factory:
+        # `partition_function_for` applies the one direct-sum-preferred,
+        # always-guarded policy.  For species with levels the CPU scalar
+        # provider sums them directly (bit-for-bit identical to the prior
+        # `evaluate_direct` branch); otherwise it returns the guarded stored
+        # polynomial.  Fallback 2 below covers only species the factory cannot
+        # resolve at all but for which `get_energy_levels` still yields rows
+        # (direct-sum fit failed and no stored polynomial) — that branch keeps
+        # the `max_energy_ev` cutoff behaviour.
         T_K = T_e_eV * EV_TO_K
-        level_data = get_levels_for_species(self.atomic_db, element, ionization_stage)
-        if level_data is not None:
-            g_arr, E_arr, ip_ev = level_data
-            return PartitionFunctionEvaluator.evaluate_direct(T_K, g_arr, E_arr, ip_ev)
-
-        # Fallback 1: polynomial coefficients
-        if hasattr(self.atomic_db, "get_partition_coefficients"):
-            pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
-            if pf is not None:
-                from cflibs.plasma.partition import get_ground_state_g
-
-                g0 = get_ground_state_g(self.atomic_db, element, ionization_stage)
-                return PartitionFunctionEvaluator.evaluate(
-                    T_K,
-                    pf.coefficients,
-                    t_min=pf.t_min,
-                    t_max=pf.t_max,
-                    g0=g0,
-                )
+        if hasattr(self.atomic_db, "partition_function_for"):
+            provider = self.atomic_db.partition_function_for(element, ionization_stage)
+            if provider is not None:
+                return float(provider.at(T_K))
 
         # Fallback 2: manual summation over EnergyLevel objects
         levels = self.atomic_db.get_energy_levels(element, ionization_stage)
