@@ -42,7 +42,12 @@ class SahaBoltzmannSolver(SolverStrategy):
     2. Boltzmann distribution for level populations
     """
 
-    def __init__(self, atomic_db: AtomicDataSource, ipd_model: Optional[IPDModel] = None):
+    def __init__(
+        self,
+        atomic_db: AtomicDataSource,
+        ipd_model: Optional[IPDModel] = None,
+        enforce_charge_balance: bool = False,
+    ):
         """
         Initialize solver.
 
@@ -56,6 +61,7 @@ class SahaBoltzmannSolver(SolverStrategy):
         """
         self.atomic_db = atomic_db
         self.ipd_model = ipd_model if ipd_model is not None else DebyeHuckelIPD()
+        self.enforce_charge_balance = enforce_charge_balance
 
     def solve_ionization_balance(
         self, element: str, T_e_eV: float, n_e_cm3: float, total_density_cm3: float
@@ -344,6 +350,30 @@ class SahaBoltzmannSolver(SolverStrategy):
         """
         T_e_eV = plasma.T_e_eV
         n_e_cm3 = plasma.n_e
+
+        if self.enforce_charge_balance:
+            from cflibs.plasma.anderson_solver import anderson_solve, prepare_atomic_data_jax
+
+            elements = list(plasma.species.keys())
+            total_species_density = sum(plasma.species.values())
+
+            if total_species_density > 0:
+                compositions = [plasma.species[el] / total_species_density for el in elements]
+                atomic_data = prepare_atomic_data_jax(elements, self.atomic_db)
+
+                result = anderson_solve(
+                    T_eV=T_e_eV,
+                    compositions=compositions,
+                    atomic_data=atomic_data,
+                    n_e_init=n_e_cm3,
+                    n_total_ion=total_species_density,
+                )
+                if not bool(result.converged):
+                    logger.warning(
+                        "Anderson solver failed to converge for charge balance. "
+                        f"Residual: {float(result.residual):.2e}. Proceeding with n_e={float(result.n_e):.2e}"
+                    )
+                n_e_cm3 = float(result.n_e)
 
         all_populations = {}
 
