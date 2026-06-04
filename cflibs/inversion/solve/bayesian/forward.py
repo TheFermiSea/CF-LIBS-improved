@@ -253,11 +253,6 @@ class BayesianForwardModel:
         )
         return np.array(result)
 
-    @staticmethod
-    def _partition_function(T_K: float, coeffs: Any) -> Any:
-        """Evaluate polynomial partition function (delegates to module helper)."""
-        return partition_function(T_K, coeffs)
-
     def _compute_spectrum(
         self,
         T_eV: float,

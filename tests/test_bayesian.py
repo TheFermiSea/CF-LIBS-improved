@@ -458,20 +458,20 @@ class TestBayesianForwardModel:
         assert not jnp.allclose(spectrum_fe, spectrum_cu)
         assert not jnp.allclose(spectrum_fe, spectrum_mix)
 
-    def test_partition_function(self, bayesian_db):
-        """Test partition function evaluation."""
-        model = BayesianForwardModel(
-            db_path=bayesian_db,
-            elements=["Fe"],
-            wavelength_range=(350, 450),
-            pixels=100,
-        )
+    def test_partition_function(self):
+        """Test partition function evaluation via the canonical module helper.
+
+        The dead ``BayesianForwardModel._partition_function`` wrapper was
+        removed in the U(T)-unification epic; U(T) is evaluated through the
+        single guarded module helper.
+        """
+        from cflibs.inversion.solve.bayesian.atomic import partition_function
 
         # Test partition function at 10000 K
         T_K = 10000.0
         coeffs = jnp.array([3.22, 0.0, 0.0, 0.0, 0.0])  # Fe I approx
 
-        U = model._partition_function(T_K, coeffs)
+        U = partition_function(T_K, coeffs)
 
         # Should be positive
         assert U > 0
@@ -1403,7 +1403,10 @@ class TestTwoZoneBayesianForwardModel:
 
     def test_reduces_to_single_zone_when_shell_transparent(self, bayesian_db):
         """With zero optical depth, shell is transparent → only core emission."""
-        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel, BayesianForwardModel
+        from cflibs.inversion.solve.bayesian import (
+            TwoZoneBayesianForwardModel,
+            BayesianForwardModel,
+        )
 
         model_2z = TwoZoneBayesianForwardModel(
             bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=100
