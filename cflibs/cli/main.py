@@ -158,6 +158,106 @@ def forward_model_cmd(args):
     logger.info("Forward modeling complete")
 
 
+def _detect_and_select_lines(
+    wavelength,
+    intensity,
+    atomic_db,
+    elements,
+    *,
+    min_relative_intensity: float | None = 100.0,
+    resolving_power: float | None = None,
+    wavelength_tolerance_nm: float = 0.1,
+    min_peak_height: float = 0.01,
+    peak_width_nm: float = 0.2,
+    apply_self_absorption: bool = False,
+    exclude_resonance: bool | None = None,
+    min_snr: float = 10.0,
+    min_energy_spread_ev: float = 2.0,
+    min_lines_per_element: int = 3,
+    isolation_wavelength_nm: float = 0.1,
+    max_lines_per_element: int = 20,
+):
+    """
+    Detect spectral lines and apply the line-selection quality gate.
+
+    This is the single shared detection+selection path for both the
+    ``invert`` and ``analyze`` CLI entry points. Keeping it in one helper
+    prevents the two paths from drifting: a prior drift left ``analyze`` with
+    no relative-intensity floor and a bare ``LineSelector()``, which admitted
+    spurious weak Na Rydberg lines and produced a catastrophic Na-dominated
+    composition (RMSE 33.69 wt%, Na ~98 % on BHVO-2). Both paths now resolve
+    to identical detection-floor + selector behaviour for the same inputs.
+
+    The defaults here are the *good* defaults established for the ``invert``
+    path (relative-intensity floor 100.0, the tuned ``LineSelector`` gates,
+    self-absorption off). When ``exclude_resonance`` is ``None`` it is tied to
+    ``not apply_self_absorption``: with self-absorption off we exclude the
+    strong low-E_i resonance lines (uncorrected, they are self-absorbed and
+    bias the Boltzmann plot); with it on we retain them because the solver
+    now *corrects* them (Aragón & Aguilera 2008 §7).
+
+    Parameters
+    ----------
+    wavelength, intensity : np.ndarray
+        Spectrum axes (nm, intensity).
+    atomic_db : AtomicDatabase
+        Atomic database instance.
+    elements : list[str]
+        Elements to match against.
+    min_relative_intensity : float or None
+        Relative-intensity floor for database lines. ``None`` disables it
+        (the old catastrophic behaviour); default 100.0.
+    resolving_power : float or None
+        Instrument resolving power; enables adaptive tolerance/width when set.
+    apply_self_absorption : bool
+        Whether the downstream solver applies the curve-of-growth correction.
+        Controls the default ``exclude_resonance`` tie.
+    exclude_resonance : bool or None
+        Override the resonance-exclusion policy. ``None`` ties it to
+        ``not apply_self_absorption``.
+
+    Returns
+    -------
+    list
+        The selected ``LineObservation`` list (``selection.selected_lines``).
+    """
+    from cflibs.inversion.line_detection import detect_line_observations
+    from cflibs.inversion.line_selection import LineSelector
+
+    detection = detect_line_observations(
+        wavelength=wavelength,
+        intensity=intensity,
+        atomic_db=atomic_db,
+        elements=elements,
+        wavelength_tolerance_nm=wavelength_tolerance_nm,
+        resolving_power=resolving_power,
+        min_peak_height=min_peak_height,
+        peak_width_nm=peak_width_nm,
+        min_relative_intensity=min_relative_intensity,
+    )
+
+    for warning in detection.warnings:
+        logger.warning(f"Line detection warning: {warning}")
+
+    if exclude_resonance is None:
+        exclude_resonance = not apply_self_absorption
+
+    selector = LineSelector(
+        min_snr=min_snr,
+        min_energy_spread_ev=min_energy_spread_ev,
+        min_lines_per_element=min_lines_per_element,
+        exclude_resonance=exclude_resonance,
+        isolation_wavelength_nm=isolation_wavelength_nm,
+        max_lines_per_element=max_lines_per_element,
+    )
+
+    selection = selector.select(
+        detection.observations,
+        resonance_lines=detection.resonance_lines,
+    )
+    return selection.selected_lines
+
+
 def invert_cmd(args):
     """
     Inversion command.
@@ -166,8 +266,6 @@ def invert_cmd(args):
     """
     from cflibs.atomic.database import AtomicDatabase
     from cflibs.core.config import load_config
-    from cflibs.inversion.line_detection import detect_line_observations
-    from cflibs.inversion.line_selection import LineSelector
     from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
     from cflibs.io.exporters import create_exporter
     from cflibs.io.spectrum import load_spectrum
@@ -235,21 +333,6 @@ def invert_cmd(args):
         else analysis_cfg.get("resolving_power")
     )
 
-    detection = detect_line_observations(
-        wavelength=wavelength,
-        intensity=intensity,
-        atomic_db=atomic_db,
-        elements=elements,
-        wavelength_tolerance_nm=wavelength_tolerance,
-        resolving_power=resolving_power,
-        min_peak_height=min_peak_height,
-        peak_width_nm=peak_width_nm,
-        min_relative_intensity=min_relative_intensity,
-    )
-
-    for warning in detection.warnings:
-        logger.warning(f"Line detection warning: {warning}")
-
     # Self-absorption correction (physics-audit 2026-05-27 defects B1/B2).
     # ``apply_self_absorption`` (default False) wires the curve-of-growth
     # correction into the iterative solver for known optically-thick samples
@@ -262,20 +345,28 @@ def invert_cmd(args):
     # and bias the Boltzmann plot). Both are config-overridable.
     apply_self_absorption = bool(analysis_cfg.get("apply_self_absorption", False))
     exclude_resonance = analysis_cfg.get("exclude_resonance", not apply_self_absorption)
-    selector = LineSelector(
+
+    # Shared detection + selection path (identical to ``analyze``; see
+    # ``_detect_and_select_lines``). Keeping both CLI entry points on one
+    # helper prevents the default-path Na-blowup regression from re-emerging.
+    observations = _detect_and_select_lines(
+        wavelength,
+        intensity,
+        atomic_db,
+        elements,
+        min_relative_intensity=min_relative_intensity,
+        resolving_power=resolving_power,
+        wavelength_tolerance_nm=wavelength_tolerance,
+        min_peak_height=min_peak_height,
+        peak_width_nm=peak_width_nm,
+        apply_self_absorption=apply_self_absorption,
+        exclude_resonance=exclude_resonance,
         min_snr=analysis_cfg.get("min_snr", 10.0),
         min_energy_spread_ev=analysis_cfg.get("min_energy_spread_ev", 2.0),
         min_lines_per_element=analysis_cfg.get("min_lines_per_element", 3),
-        exclude_resonance=exclude_resonance,
         isolation_wavelength_nm=analysis_cfg.get("isolation_wavelength_nm", 0.1),
         max_lines_per_element=analysis_cfg.get("max_lines_per_element", 20),
     )
-
-    selection = selector.select(
-        detection.observations,
-        resonance_lines=detection.resonance_lines,
-    )
-    observations = selection.selected_lines
 
     if len(observations) == 0:
         raise ValueError("No usable spectral lines detected for inversion.")
@@ -331,8 +422,6 @@ def analyze_cmd(args):
     and outputs results in the requested format.
     """
     from cflibs.atomic.database import AtomicDatabase
-    from cflibs.inversion.line_detection import detect_line_observations
-    from cflibs.inversion.line_selection import LineSelector
     from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
     from cflibs.io.spectrum import load_spectrum
 
@@ -344,27 +433,35 @@ def analyze_cmd(args):
     wavelength, intensity = load_spectrum(args.spectrum)
     atomic_db = AtomicDatabase(db_path)
 
-    detection = detect_line_observations(
-        wavelength=wavelength,
-        intensity=intensity,
-        atomic_db=atomic_db,
-        elements=elements,
-    )
+    # Shared detection + selection path — identical to ``invert`` (see
+    # ``_detect_and_select_lines``). Previously ``analyze`` called
+    # ``detect_line_observations(...)`` with no relative-intensity floor and a
+    # bare ``LineSelector()``, which admitted spurious weak Na Rydberg lines
+    # and produced a catastrophic Na-dominated composition (RMSE 33.69 wt%, Na
+    # ~98 % on BHVO-2). Using the same helper with the good defaults kills that
+    # default-path blowup. ``--min-relative-intensity`` / ``--resolving-power``
+    # / ``--apply-self-absorption`` opt-in flags override the defaults.
+    apply_self_absorption = bool(getattr(args, "apply_self_absorption", False))
+    min_relative_intensity = getattr(args, "min_relative_intensity", 100.0)
+    resolving_power = getattr(args, "resolving_power", None)
 
-    for warning in detection.warnings:
-        logger.warning(f"Line detection: {warning}")
-
-    selector = LineSelector()
-    selection = selector.select(
-        detection.observations,
-        resonance_lines=detection.resonance_lines,
+    observations = _detect_and_select_lines(
+        wavelength,
+        intensity,
+        atomic_db,
+        elements,
+        min_relative_intensity=min_relative_intensity,
+        resolving_power=resolving_power,
+        apply_self_absorption=apply_self_absorption,
     )
-    observations = selection.selected_lines
 
     if len(observations) == 0:
         raise ValueError("No usable spectral lines detected.")
 
-    solver = IterativeCFLIBSSolver(atomic_db=atomic_db)
+    solver = IterativeCFLIBSSolver(
+        atomic_db=atomic_db,
+        apply_self_absorption=apply_self_absorption,
+    )
 
     uncertainty_mode = getattr(args, "uncertainty", "none")
     if uncertainty_mode == "analytical":
@@ -803,6 +900,29 @@ def main():
         choices=["analytical", "mc", "none"],
         default="none",
         help="Uncertainty quantification method (default: none)",
+    )
+    analyze_parser.add_argument(
+        "--resolving-power",
+        type=float,
+        default=None,
+        help="Instrument resolving power lambda/delta_lambda (default: None)",
+    )
+    analyze_parser.add_argument(
+        "--min-relative-intensity",
+        type=float,
+        default=100.0,
+        help=(
+            "Relative-intensity floor for database lines; prunes spurious weak "
+            "high-E_k (Rydberg) transitions (default: 100.0)"
+        ),
+    )
+    analyze_parser.add_argument(
+        "--apply-self-absorption",
+        action="store_true",
+        help=(
+            "Apply the curve-of-growth self-absorption correction in the solver "
+            "and retain strong resonance lines (default: off)"
+        ),
     )
     analyze_parser.set_defaults(func=analyze_cmd)
 
