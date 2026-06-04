@@ -393,7 +393,7 @@ def calibrate_wavelength_axis(
     random_seed: int = 42,
     apply_quality_gate: bool = True,
     quality_min_inliers: int = 12,
-    quality_min_peak_match_fraction: float = 0.35,
+    quality_min_peak_match_fraction: float = 0.0,
     quality_max_rmse_nm: float = 0.10,
     quality_min_inlier_span_fraction: float = 0.25,
     quality_max_abs_correction_nm: float = 2.5,
@@ -434,7 +434,14 @@ def calibrate_wavelength_axis(
     quality_min_inliers : int
         Minimum robust inlier pairs required.
     quality_min_peak_match_fraction : float
-        Minimum fraction of detected peaks that must be matched.
+        Minimum fraction of detected peaks that must be matched. Defaults to
+        ``0.0`` (disabled): in a dense real LIBS spectrum the large majority of
+        detected peaks are legitimately unmatched (continuum ripple, molecular
+        bands, weak/absent reference lines, off-list elements), so requiring a
+        high matched fraction rejects perfectly good calibrations (it killed the
+        CSA BHVO-2 fit at 0.35 and forced a no-op). Robust confidence is instead
+        governed by ``quality_min_inliers`` + ``quality_max_rmse_nm``. Raise this
+        only for clean synthetic spectra where a high match fraction is expected.
     quality_max_rmse_nm : float
         Maximum inlier RMSE allowed for accepted calibration.
     quality_min_inlier_span_fraction : float
@@ -663,5 +670,373 @@ def calibrate_wavelength_axis(
         matched_peak_fraction=float(best.matched_peak_fraction),
         quality_passed=quality_passed,
         quality_reason=quality_reason,
+        details=details,
+    )
+
+
+def detect_ccd_seams(
+    wavelength: np.ndarray,
+    ratio_threshold: float = 3.0,
+    window: int = 51,
+    min_local_window: int = 5,
+) -> np.ndarray:
+    """
+    Detect CCD/spectrometer seam indices in a stitched wavelength axis.
+
+    Many real LIBS instruments stitch several detectors (or spectrometer
+    channels) into one wavelength axis. Each channel can carry an independent
+    dispersion error, so a single global calibration model cannot represent the
+    piecewise mapping. Seams appear as a sample-to-sample gap ``wl[i+1]-wl[i]``
+    that is large *relative to the local dispersion*, distinct from a gradual
+    within-channel dispersion change.
+
+    A simple ``diff > k * median(diff)`` test fails on instruments whose
+    dispersion varies across the axis (e.g. a red channel with much coarser
+    sampling than the blue): the global median is dominated by the dense channel
+    and the coarse channel is shattered into thousands of false seams. This
+    detector instead compares each gap to a *local* rolling median of the
+    neighbouring gaps, so a smoothly varying dispersion produces ratio ~1 and
+    only true discontinuities exceed ``ratio_threshold``.
+
+    Parameters
+    ----------
+    wavelength : np.ndarray
+        Monotonic wavelength axis (nm).
+    ratio_threshold : float
+        A gap is a seam when ``gap / local_median_gap > ratio_threshold``.
+    window : int
+        Half-width (in samples) of the local rolling-median window over gaps.
+    min_local_window : int
+        Minimum number of neighbouring gaps required to estimate a local median.
+
+    Returns
+    -------
+    np.ndarray
+        Sorted array of integer seam indices ``i`` such that a discontinuity
+        occurs between samples ``i`` and ``i+1`` (empty if none / too short).
+    """
+    wavelength = np.asarray(wavelength, dtype=float)
+    if wavelength.size < max(3, 2 * min_local_window):
+        return np.array([], dtype=int)
+
+    dl = np.diff(wavelength)
+    if dl.size == 0:
+        return np.array([], dtype=int)
+
+    n = dl.size
+    local_med = np.empty(n, dtype=float)
+    w = max(int(window), int(min_local_window))
+    for i in range(n):
+        lo = max(0, i - w)
+        hi = min(n, i + w + 1)
+        local_med[i] = np.median(dl[lo:hi])
+
+    local_med = np.maximum(local_med, 1e-12)
+    ratio = dl / local_med
+    seams = np.where(ratio > float(ratio_threshold))[0]
+    return np.asarray(seams, dtype=int)
+
+
+def _no_op_result(wavelength: np.ndarray, reason: str) -> WavelengthCalibrationResult:
+    return WavelengthCalibrationResult(
+        success=False,
+        model="none",
+        coefficients=(),
+        corrected_wavelength=np.asarray(wavelength, dtype=float).copy(),
+        bic=float("inf"),
+        rmse_nm=float("inf"),
+        n_inliers=0,
+        n_peaks=0,
+        n_candidates=0,
+        matched_peak_fraction=0.0,
+        quality_passed=False,
+        quality_reason=reason,
+        details={"reason": reason},
+    )
+
+
+def calibrate_wavelength_axis_segmented(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    atomic_db: AtomicDatabase,
+    elements: Sequence[str],
+    *,
+    seam_ratio_threshold: float = 3.0,
+    seam_window: int = 51,
+    min_segment_points: int = 16,
+    segment_min_inliers: int = 10,
+    segment_max_rmse_nm: float = 0.06,
+    inlier_tolerance_nm: float = 0.08,
+    max_pair_window_nm: float = 2.0,
+    candidate_models: Sequence[CalibrationModel] = ("shift", "affine"),
+    sparse_segment_max_models: Sequence[CalibrationModel] = ("shift",),
+    sparse_segment_points: int = 400,
+    random_seed: int = 42,
+    fallback_to_global: bool = True,
+    **calibrate_kwargs: Any,
+) -> WavelengthCalibrationResult:
+    """
+    Per-segment robust wavelength calibration for stitched multi-channel axes.
+
+    Detects CCD seams (:func:`detect_ccd_seams`) and calibrates each segment
+    independently with the existing RANSAC calibrator. Each segment's fit is
+    accepted only when it clears per-segment confidence gates
+    (``segment_min_inliers`` inliers AND inlier RMSE ``<= segment_max_rmse_nm``);
+    otherwise the segment falls back, in order, to (1) the global single-model
+    fit over the whole axis, and (2) the median per-sample correction of the
+    nearest accepted neighbour segment. This guarantees no segment is left
+    *worse* than the global model and that under-populated channels are never
+    corrupted by an overfit local model.
+
+    A single-segment axis (no seams) degrades to the ordinary global
+    :func:`calibrate_wavelength_axis` (auto mode), so this is safe to call on
+    instruments that do not need segmentation.
+
+    Parameters
+    ----------
+    wavelength, intensity
+        Spectrum axis and intensity.
+    atomic_db : AtomicDatabase
+        Atomic transition database.
+    elements : sequence of str
+        Candidate elements for the reference line pool.
+    seam_ratio_threshold, seam_window
+        Seam-detector parameters (see :func:`detect_ccd_seams`).
+    min_segment_points : int
+        Segments shorter than this are not fit independently; they take the
+        fallback correction directly.
+    segment_min_inliers : int
+        Minimum robust inlier pairs for a segment fit to be trusted.
+    segment_max_rmse_nm : float
+        Maximum inlier RMSE for a segment fit to be trusted.
+    inlier_tolerance_nm, max_pair_window_nm
+        Robust-fit tolerances passed through to the per-segment calibrator.
+    candidate_models : sequence
+        Models tried for well-populated segments. Quadratic is intentionally
+        excluded by default: a free quadratic over a short channel overfits and
+        produces wild corrections at the band edges.
+    sparse_segment_max_models : sequence
+        Models tried for sparse segments (``< sparse_segment_points``). Kept to
+        ``shift`` only to avoid slope/curvature overfitting on few points.
+    sparse_segment_points : int
+        Point-count threshold separating sparse from well-populated segments.
+    fallback_to_global : bool
+        If True, low-confidence segments use the global single-axis fit before
+        falling back to a neighbour offset.
+    **calibrate_kwargs
+        Extra keyword args forwarded to :func:`calibrate_wavelength_axis`.
+
+    Returns
+    -------
+    WavelengthCalibrationResult
+        Aggregate result. ``corrected_wavelength`` is the piecewise-corrected
+        axis; ``model`` is ``"segmented"`` when more than one segment was
+        present, else the single global model. ``details["segments"]`` carries
+        per-segment diagnostics.
+    """
+    wavelength = np.asarray(wavelength, dtype=float)
+    intensity = np.asarray(intensity, dtype=float)
+    if wavelength.size < 4 or intensity.size < 4:
+        return _no_op_result(wavelength, "spectrum_too_short")
+
+    seams = detect_ccd_seams(
+        wavelength, ratio_threshold=seam_ratio_threshold, window=seam_window
+    )
+
+    # Always compute a global single-axis fit. For single-segment axes this IS
+    # the answer; for multi-segment axes it is the per-segment fallback.
+    global_result = calibrate_wavelength_axis(
+        wavelength=wavelength,
+        intensity=intensity,
+        atomic_db=atomic_db,
+        elements=elements,
+        mode="auto",
+        candidate_models=tuple(candidate_models),
+        inlier_tolerance_nm=inlier_tolerance_nm,
+        max_pair_window_nm=max_pair_window_nm,
+        random_seed=random_seed,
+        **calibrate_kwargs,
+    )
+
+    if seams.size == 0:
+        # No seams: degrade to the ordinary global calibration (safe path).
+        global_result.details["segments"] = 1
+        global_result.details["seam_count"] = 0
+        return global_result
+
+    bounds = [0] + [int(s) + 1 for s in seams] + [int(wavelength.size)]
+    corrected = wavelength.copy()
+    global_corrected = (
+        global_result.corrected_wavelength
+        if (global_result.success and fallback_to_global)
+        else wavelength
+    )
+    global_offset = global_corrected - wavelength
+
+    seg_diag: List[Dict[str, Any]] = []
+    seg_status: List[str] = []  # "fit" | "global" | "neighbor" per segment
+    total_inliers = 0
+    rmse_accum: List[float] = []
+
+    for i in range(len(bounds) - 1):
+        a, b = bounds[i], bounds[i + 1]
+        seg_wl = wavelength[a:b]
+        seg_in = intensity[a:b]
+        n_pts = int(seg_wl.size)
+        status = "global"
+        seg_model = "none"
+        seg_n_in = 0
+        seg_rmse = float("inf")
+
+        if n_pts >= min_segment_points:
+            models = (
+                sparse_segment_max_models
+                if n_pts < sparse_segment_points
+                else candidate_models
+            )
+            seg_cal = calibrate_wavelength_axis(
+                wavelength=seg_wl,
+                intensity=seg_in,
+                atomic_db=atomic_db,
+                elements=elements,
+                mode="auto",
+                candidate_models=tuple(models),
+                inlier_tolerance_nm=inlier_tolerance_nm,
+                max_pair_window_nm=max_pair_window_nm,
+                apply_quality_gate=False,
+                random_seed=random_seed + i,
+                **calibrate_kwargs,
+            )
+            seg_model = seg_cal.model
+            seg_n_in = int(seg_cal.n_inliers)
+            seg_rmse = float(seg_cal.rmse_nm)
+            trusted = (
+                seg_cal.success
+                and seg_cal.model != "none"
+                and seg_n_in >= segment_min_inliers
+                and seg_rmse <= segment_max_rmse_nm
+            )
+            if trusted:
+                corrected[a:b] = seg_cal.corrected_wavelength
+                status = "fit"
+                total_inliers += seg_n_in
+                rmse_accum.append(seg_rmse)
+
+        if status != "fit":
+            # Fallback 1: global single-axis correction over this segment.
+            corrected[a:b] = seg_wl + global_offset[a:b]
+
+        seg_diag.append(
+            {
+                "index": i,
+                "wl_min": float(seg_wl.min()) if n_pts else 0.0,
+                "wl_max": float(seg_wl.max()) if n_pts else 0.0,
+                "n_points": n_pts,
+                "model": seg_model,
+                "n_inliers": seg_n_in,
+                "rmse_nm": seg_rmse,
+                "status": status,
+            }
+        )
+        seg_status.append(status)
+
+    # Fallback 2: if the global fit was unavailable (offset all zero) for a
+    # segment that also failed its own fit, borrow the median per-sample offset
+    # of the nearest accepted-fit neighbour so no channel is left uncorrected
+    # while its neighbours are shifted (which would tear lines across the seam).
+    if not (global_result.success and fallback_to_global):
+        fit_idx = [i for i, s in enumerate(seg_status) if s == "fit"]
+        if fit_idx:
+            for i, s in enumerate(seg_status):
+                if s == "fit":
+                    continue
+                nearest = min(fit_idx, key=lambda j: abs(j - i))
+                a, b = bounds[i], bounds[i + 1]
+                na, nb = bounds[nearest], bounds[nearest + 1]
+                neighbor_offset = float(
+                    np.median(corrected[na:nb] - wavelength[na:nb])
+                )
+                corrected[a:b] = wavelength[a:b] + neighbor_offset
+                seg_diag[i]["status"] = "neighbor"
+                seg_status[i] = "neighbor"
+
+    # Each accepted per-segment model is monotonic on its own grid (the
+    # underlying calibrator rejects non-monotonic fits), so within a segment the
+    # corrected axis is strictly increasing. The only way the stitched axis can
+    # go non-monotonic is a boundary overlap *at a seam* when two adjacent
+    # channels are corrected by different offsets. A seam is a genuine detector
+    # gap, not real spectral data, so we restore monotonicity by shifting the
+    # *entire* offending downstream segment up by a constant deficit (which
+    # preserves its internal sample spacing exactly) rather than discarding the
+    # per-channel correction or reordering samples. The shift cascades forward.
+    n_clamped = 0
+    max_clamp_nm = 0.0
+    cumulative_shift = 0.0
+    for k in range(1, len(bounds) - 1):
+        prev_end = bounds[k] - 1  # last sample of previous segment
+        cur_start = bounds[k]  # first sample of this segment
+        deficit = corrected[prev_end] - corrected[cur_start]
+        if deficit >= 0:
+            shift = deficit + 1e-6
+            cumulative_shift += shift
+            corrected[bounds[k] : bounds[k + 1]] += shift
+            max_clamp_nm = max(max_clamp_nm, shift)
+            n_clamped += 1
+
+    # If restoring monotonicity required a large cumulative shift, the segments
+    # genuinely disagree (not just touch at seams) and the segmentation is
+    # untrustworthy -> revert to the safe global single-model fit.
+    if cumulative_shift > 0.5:
+        logger.warning(
+            "Segmented calibration required a large cumulative seam shift "
+            "(%.3f nm); reverting to global single-model fit.",
+            cumulative_shift,
+        )
+        global_result.details["segments"] = len(bounds) - 1
+        global_result.details["seam_count"] = int(seams.size)
+        global_result.details["segmented_reverted"] = "large_seam_shift"
+        return global_result
+
+    # Sanity: a residual intra-segment non-monotonicity should be impossible.
+    if not bool(np.all(np.diff(corrected) > 0)):
+        logger.warning(
+            "Segmented calibration left a non-monotonic axis after seam "
+            "alignment; reverting to global single-model fit."
+        )
+        global_result.details["segments"] = len(bounds) - 1
+        global_result.details["seam_count"] = int(seams.size)
+        global_result.details["segmented_reverted"] = "residual_non_monotonic"
+        return global_result
+
+    n_fit = sum(1 for s in seg_status if s == "fit")
+    n_seg = len(bounds) - 1
+    agg_rmse = float(np.mean(rmse_accum)) if rmse_accum else global_result.rmse_nm
+    details = {
+        "segments": n_seg,
+        "seam_count": int(seams.size),
+        "n_segments_fit": n_fit,
+        "n_segments_fallback": n_seg - n_fit,
+        "global_model": global_result.model,
+        "global_rmse_nm": float(global_result.rmse_nm),
+        "segment_min_inliers": float(segment_min_inliers),
+        "segment_max_rmse_nm": float(segment_max_rmse_nm),
+        "seam_boundary_clamps": int(n_clamped),
+        "max_seam_clamp_nm": float(max_clamp_nm),
+        "segment_diagnostics": seg_diag,
+    }
+
+    return WavelengthCalibrationResult(
+        success=True,
+        model="segmented",
+        coefficients=(),
+        corrected_wavelength=corrected,
+        bic=float(global_result.bic),
+        rmse_nm=agg_rmse,
+        n_inliers=int(total_inliers),
+        n_peaks=int(global_result.n_peaks),
+        n_candidates=int(global_result.n_candidates),
+        matched_peak_fraction=float(global_result.matched_peak_fraction),
+        quality_passed=(n_fit > 0),
+        quality_reason="segmented_passed" if n_fit > 0 else "segmented_all_fallback",
         details=details,
     )
