@@ -297,7 +297,27 @@ class ManifoldGenerator:
         coeffs[:, 1, 0] = np.log(15.0)
         coeffs[:, 2, 0] = np.log(10.0)
 
-        # Load Physics Data (IPs and Coeffs)
+        # Load Physics Data (IPs and partition coeffs).
+        #
+        # Ionization potentials are read directly (they feed the Saha factor at
+        # index 8).  Partition coefficients + ``[t_min, t_max]`` + ``g0`` come
+        # from the SINGLE factory ``AtomicDatabase.partition_spec_for`` — the
+        # one place the partition-function policy lives (*prefer the direct-sum
+        # FIT over energy levels when the species has tabulated levels; else the
+        # stored polynomial; always carry the bounds + g0*).  This is the JAX
+        # batched adapter from the locked design: the manifold's static snapshot
+        # arrays bake the SAME spec the CPU scalar adapter
+        # (``partition_function_for``) consumes, so the two paths provably agree
+        # (the PF-3/PF-4 unification, diagnosis § 2.1; CONTEXT.md § "The
+        # partition-function provider").
+        #
+        # "Prefer direct-sum" is a BUILD-TIME choice here: vmap needs static,
+        # fixed-shape arrays and cannot hold a per-species variable-length level
+        # sum, so the factory fits the direct-sum to an ln-polynomial once
+        # (cached in ``partition._spec_cache``, compute-once per (db, element,
+        # stage) — invariant 5) and we bake those coefficients.  The kernel then
+        # evaluates the same guarded ``polynomial_partition_function_jax`` form,
+        # so jit / vmap are unaffected.
         try:
             with self.atomic_db._get_connection() as conn:
                 cursor = conn.cursor()
@@ -317,88 +337,39 @@ class ManifoldGenerator:
                         if 0 <= stage_idx < max_stages:
                             ips[el_idx, stage_idx] = ip_ev
 
-                # Load Partition Coeffs
-                cursor.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' "
-                    "AND name='partition_functions'"
-                )
-                if cursor.fetchone():
-                    pf_query = f"""
-                        SELECT element, sp_num, a0, a1, a2, a3, a4, t_min, t_max
-                        FROM partition_functions
-                        WHERE element IN ({placeholders})
-                    """
-                    cursor.execute(pf_query, self.config.elements)
-                    count = 0
-                    for row in cursor.fetchall():
-                        el, sp_num, a0, a1, a2, a3, a4, t_min_row, t_max_row = row
-                        if el in el_map:
-                            el_idx = el_map[el]
-                            stage_idx = sp_num - 1
-                            if 0 <= stage_idx < max_stages:
-                                coeffs[el_idx, stage_idx] = [a0, a1, a2, a3, a4]
-                                if t_min_row is not None:
-                                    tmin[el_idx, stage_idx] = float(t_min_row)
-                                if t_max_row is not None:
-                                    tmax[el_idx, stage_idx] = float(t_max_row)
-                                count += 1
-                    logger.info(f"Loaded partition coefficients for {count} species")
-
-                # Direct-sum-preferred coefficients (PF-3/PF-4 fix).  The
-                # default CPU solver prefers direct summation over the
-                # ``energy_levels`` table; this JAX manifold path historically
-                # consumed the stored polynomial with NO direct-sum fallback,
-                # so a bad stored fit (e.g. the Irwin1981 / NIST_ASD_fit rows
-                # that ran below the direct-sum floor) silently biased every
-                # manifold spectrum.  When energy levels exist we refit the
-                # polynomial to the direct-sum here (same recipe as
-                # ``scripts/regenerate_partition_functions.py``), overriding
-                # the stored coefficients; species without levels keep the
-                # stored polynomial.  The kernel still evaluates the same
-                # polynomial form, so jit / vmap are unaffected.
-                try:
-                    from cflibs.plasma.partition import direct_sum_fit_coeffs
-
-                    n_ds = 0
-                    for el, el_idx in el_map.items():
-                        for stage in range(1, max_stages + 1):
-                            stage_idx = stage - 1
-                            if stage_idx >= max_stages:
-                                continue
-                            ip_ev = float(ips[el_idx, stage_idx])
-                            if ip_ev <= 0.0:
-                                continue
-                            levels = self.atomic_db.get_energy_levels(el, stage)
-                            if not levels:
-                                continue
-                            g_arr = np.array([lev.g for lev in levels], dtype=np.float64)
-                            e_arr = np.array([lev.energy_ev for lev in levels], dtype=np.float64)
-                            fit = direct_sum_fit_coeffs(g_arr, e_arr, ip_ev)
-                            if fit is None:
-                                continue
-                            ds_coeffs, ds_t_min, ds_t_max = fit
-                            coeffs[el_idx, stage_idx] = ds_coeffs
-                            tmin[el_idx, stage_idx] = ds_t_min
-                            tmax[el_idx, stage_idx] = ds_t_max
-                            n_ds += 1
-                    if n_ds:
-                        logger.info(
-                            f"Applied direct-sum-preferred partition coeffs for {n_ds} species"
-                        )
-                except Exception as exc:  # pragma: no cover - DB shape fallback
-                    logger.debug(f"Direct-sum partition override skipped: {exc}")
-
-                # Per-species g0 from energy_levels lowest-E row.
-                try:
-                    from cflibs.plasma.partition import get_ground_state_g
-
-                    for el, el_idx in el_map.items():
-                        for stage in range(1, max_stages + 1):
-                            g0[el_idx, stage - 1] = float(
-                                get_ground_state_g(self.atomic_db, el, stage)
-                            )
-                except Exception as exc:  # pragma: no cover - DB shape fallback
-                    logger.debug(f"g0 lookup failed, using defaults: {exc}")
+            # Partition coefficients + bounds + g0 from the single factory.
+            n_ds = 0
+            n_poly = 0
+            for el, el_idx in el_map.items():
+                for stage in range(1, max_stages + 1):
+                    stage_idx = stage - 1
+                    if stage_idx >= max_stages:
+                        continue
+                    spec = self.atomic_db.partition_spec_for(el, stage)
+                    if spec is None:
+                        # Neither energy levels nor a stored polynomial row:
+                        # keep the conservative ln(U) defaults / [2000, 25000] K
+                        # window / g0 = 1.0 already filled above so the static
+                        # arrays stay well-formed and the guarded evaluator
+                        # always receives concrete bounds.
+                        continue
+                    spec_coeffs = list(spec.coefficients)
+                    spec_coeffs += [0.0] * (5 - len(spec_coeffs))
+                    coeffs[el_idx, stage_idx] = spec_coeffs[:5]
+                    tmin[el_idx, stage_idx] = float(spec.t_min)
+                    tmax[el_idx, stage_idx] = float(spec.t_max)
+                    g0[el_idx, stage_idx] = float(spec.g0)
+                    if spec.from_direct_sum:
+                        n_ds += 1
+                    else:
+                        n_poly += 1
+            logger.info(
+                "Loaded partition specs via factory for %d species "
+                "(%d direct-sum-fit, %d stored-polynomial)",
+                n_ds + n_poly,
+                n_ds,
+                n_poly,
+            )
 
         except Exception as e:
             logger.warning(f"Failed to load physics data: {e}")
@@ -492,38 +463,40 @@ class ManifoldGenerator:
     def _calculate_partition_functions(t_k, atomic_data):
         """Calculates neutral and ion partition functions for all lines' elements.
 
-        Threads the per-species ``t_min`` / ``t_max`` / ``g0`` arrays
-        (atomic_data indices 12/13/14) through
-        :func:`polynomial_partition_function_jax` so the polynomial is
-        clamped to its fit window and floored at the ground-state
-        degeneracy — the arch-candidate-4 extrapolation guard.  Without
-        this clamp, manifold grids that sweep T outside the polynomial
-        fit window silently produced 100×+ partition-function errors
-        (the Ca I @ 100 000 K, 560× regression case).
+        Every manifold U(T) evaluation goes through the ONE shared *guarded*
+        :func:`polynomial_partition_function_jax`: the per-species
+        ``t_min`` / ``t_max`` / ``g0`` arrays (atomic_data indices 12/13/14,
+        always present — :meth:`_load_atomic_data` returns the full 15-tuple)
+        are threaded through so the polynomial is clamped to its fit window and
+        floored at the ground-state degeneracy.  This is the JAX batched adapter
+        of the partition-function provider (CONTEXT.md § "The
+        partition-function provider"); the coefficients themselves are the
+        direct-sum-preferred spec baked at snapshot-build time by the single
+        factory ``partition_spec_for`` (see :meth:`_load_atomic_data`).
+
+        There is deliberately NO unguarded fallback: clamping prevents the
+        extrapolation defect (manifold grids sweeping T outside the fit window
+        previously produced 100×+ partition-function errors — the Ca I @
+        100 000 K, 560× regression case), and the direct-sum-preferred
+        coefficients fix the bias defect (the stored polynomial running below
+        the direct-sum floor for iron-group workhorse species at LIBS T —
+        diagnosis § 2.1).
         """
         lines_el_idx = atomic_data[6]
         partition_coeffs = atomic_data[7]
         coeffs_0 = partition_coeffs[lines_el_idx, 0]
         coeffs_1 = partition_coeffs[lines_el_idx, 1]
-        if len(atomic_data) > 12:
-            partition_t_min = atomic_data[12]
-            partition_t_max = atomic_data[13]
-            partition_g0 = atomic_data[14]
-            tmin_0 = partition_t_min[lines_el_idx, 0]
-            tmin_1 = partition_t_min[lines_el_idx, 1]
-            tmax_0 = partition_t_max[lines_el_idx, 0]
-            tmax_1 = partition_t_max[lines_el_idx, 1]
-            g0_0 = partition_g0[lines_el_idx, 0]
-            g0_1 = partition_g0[lines_el_idx, 1]
-            u0 = polynomial_partition_function_jax(
-                t_k, coeffs_0, t_min=tmin_0, t_max=tmax_0, g0=g0_0
-            )
-            u1 = polynomial_partition_function_jax(
-                t_k, coeffs_1, t_min=tmin_1, t_max=tmax_1, g0=g0_1
-            )
-        else:
-            u0 = polynomial_partition_function_jax(t_k, coeffs_0)
-            u1 = polynomial_partition_function_jax(t_k, coeffs_1)
+        partition_t_min = atomic_data[12]
+        partition_t_max = atomic_data[13]
+        partition_g0 = atomic_data[14]
+        tmin_0 = partition_t_min[lines_el_idx, 0]
+        tmin_1 = partition_t_min[lines_el_idx, 1]
+        tmax_0 = partition_t_max[lines_el_idx, 0]
+        tmax_1 = partition_t_max[lines_el_idx, 1]
+        g0_0 = partition_g0[lines_el_idx, 0]
+        g0_1 = partition_g0[lines_el_idx, 1]
+        u0 = polynomial_partition_function_jax(t_k, coeffs_0, t_min=tmin_0, t_max=tmax_0, g0=g0_0)
+        u1 = polynomial_partition_function_jax(t_k, coeffs_1, t_min=tmin_1, t_max=tmax_1, g0=g0_1)
         return u0, u1
 
     @staticmethod
@@ -656,6 +629,11 @@ class ManifoldGenerator:
 
         """
 
+        # ``atomic_data`` is the full 15-tuple from :meth:`_load_atomic_data`;
+        # the trailing partition ``t_min`` / ``t_max`` / ``g0`` arrays (indices
+        # 12-14) are consumed inside :meth:`_calculate_partition_functions` via
+        # the full tuple, so we only name the per-line arrays this kernel uses
+        # directly and absorb the rest with ``*_partition_arrays``.
         (
             l_wl,
             l_aki,
@@ -669,6 +647,7 @@ class ManifoldGenerator:
             l_stark_w,
             l_stark_alpha,
             l_mass_amu,
+            *_partition_arrays,
         ) = atomic_data
 
         # Solve populations
@@ -836,6 +815,11 @@ class ManifoldGenerator:
         """
         from cflibs.radiation.ldm import ldm_broaden
 
+        # ``atomic_data`` is the full 15-tuple from :meth:`_load_atomic_data`;
+        # the partition arrays (indices 7-8, 12-14) are consumed inside
+        # :meth:`_calculate_partition_functions` via the full tuple, so we only
+        # name the per-line arrays this kernel uses directly and absorb the
+        # rest with ``*_partition_arrays``.
         (
             l_wl,
             l_aki,
@@ -849,6 +833,7 @@ class ManifoldGenerator:
             _l_stark_w,
             _l_stark_alpha,
             l_mass_amu,
+            *_partition_arrays,
         ) = atomic_data
 
         n_upper = ManifoldGenerator._saha_eggert_solver(
