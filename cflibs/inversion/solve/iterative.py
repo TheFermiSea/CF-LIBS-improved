@@ -23,7 +23,6 @@ from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFit
 from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy
 from cflibs.inversion.physics.self_absorption import SelfAbsorptionCorrector
-from cflibs.plasma.partition import PartitionFunctionEvaluator
 from cflibs.core.logging_config import get_logger
 
 
@@ -824,31 +823,47 @@ class IterativeCFLIBSSolver:
     def _evaluate_partition_function(
         self, element: str, ionization_stage: int, T_K: float
     ) -> float:
-        """Evaluate a partition function via direct summation, with fallbacks.
+        """Evaluate a partition function through the single provider factory.
 
-        Preferred path: direct sum over energy levels from the database.
-        Fallback 1: polynomial coefficients from partition_functions table.
-        Fallback 2: hardcoded statistical weight estimates.
+        Routes U(T) through :meth:`AtomicDatabase.partition_function_for` — THE
+        single source of the partition-function policy (direct-sum preferred,
+        always clamped + ``g0``-floored).  For species with energy levels the
+        CPU scalar provider sums the levels directly, so this path stays
+        bit-for-bit identical to the historical ``evaluate_direct`` call it
+        replaces; for level-less species it applies the guarded stored
+        polynomial.  The hardcoded estimates remain only for species the
+        factory cannot resolve at all (no levels, no stored row).
+
+        ``partition_function_for`` is a convenience method on the concrete
+        :class:`AtomicDatabase`, NOT part of the :class:`AtomicDataSource` ABC.
+        Pluggable backends (the documented Key Abstraction) need only satisfy
+        the ABC, so we ``hasattr``-guard the factory call and fall back to the
+        ABC-level accessors (``get_energy_levels`` direct sum, then the stored
+        polynomial) — the same fallback ladder this method used before the
+        provider unification, and mirroring the guard in
+        :meth:`SahaBoltzmannSolver.calculate_partition_function`.
         """
-        from cflibs.plasma.partition import get_levels_for_species
-
-        levels = get_levels_for_species(self.atomic_db, element, ionization_stage)
-        if levels is not None:
-            g_arr, E_arr, ip_ev = levels
-            return PartitionFunctionEvaluator.evaluate_direct(T_K, g_arr, E_arr, ip_ev)
-
-        pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
-        if pf:
-            from cflibs.plasma.partition import get_ground_state_g
-
-            g0 = get_ground_state_g(self.atomic_db, element, ionization_stage)
-            return PartitionFunctionEvaluator.evaluate(
-                T_K,
-                pf.coefficients,
-                t_min=pf.t_min,
-                t_max=pf.t_max,
-                g0=g0,
+        if hasattr(self.atomic_db, "partition_function_for"):
+            provider = self.atomic_db.partition_function_for(element, ionization_stage)
+            if provider is not None:
+                return float(provider.at(T_K))
+        else:
+            # ABC-only backend: reproduce the pre-unification fallback ladder
+            # (direct sum over energy levels, then the stored polynomial).
+            from cflibs.plasma.partition import (
+                PartitionFunctionEvaluator,
+                get_levels_for_species,
             )
+
+            levels = get_levels_for_species(self.atomic_db, element, ionization_stage)
+            if levels is not None:
+                g_arr, E_arr, ip_ev = levels
+                return PartitionFunctionEvaluator.evaluate_direct(T_K, g_arr, E_arr, ip_ev)
+
+            pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
+            if pf:
+                return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
+
         if ionization_stage == 1:
             return 25.0
         if ionization_stage == 2:

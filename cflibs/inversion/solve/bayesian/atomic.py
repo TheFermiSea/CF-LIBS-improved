@@ -3,9 +3,18 @@
 Hosts the JAX-array carrier :class:`AtomicDataArrays` (with the
 ``from_snapshot`` bridge to T1-1 :class:`AtomicSnapshot`), the SQLite query
 helpers (:func:`_query_atomic_data`, :func:`_format_atomic_data_arrays`,
-:func:`load_atomic_data`), the polynomial :func:`partition_function`, the
+:func:`load_atomic_data`), the guarded :func:`partition_function` delegator
+(routes to the ONE shared ``polynomial_partition_function_jax``), the
 :func:`mcwhirter_log_penalty` soft LTE penalty, and a handful of JAX-real
 casting helpers shared across the Bayesian sub-package.
+
+The ``[t_min, t_max]`` validity window and ground-state ``g0`` floor for every
+species' partition function are loaded from the ONE factory
+(:meth:`cflibs.atomic.AtomicDatabase.partition_spec_for`) and baked into
+:class:`AtomicDataArrays` as static ``(n_elements, n_stages)`` guard arrays, so
+the guarded evaluator clamps/floors ``U(T)`` inside the NUTS jit trace without
+any Python provider call (PF-3/PF-4 / the 2026-06-03 partition-provider
+unification).
 
 Separating this from :mod:`forward` keeps each file under the 800-LOC limit
 required by ADR-0001 / T1-6 spec section 6.
@@ -173,8 +182,22 @@ def _query_atomic_data(
     db_path: str,
     elements: List[str],
     wavelength_range: Tuple[float, float],
-) -> Tuple[Any, np.ndarray, np.ndarray]:
-    """Query the database to retrieve atomic lines and species physics."""
+) -> Tuple[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Query the database to retrieve atomic lines and species physics.
+
+    Returns
+    -------
+    df, coeffs, ips, t_min, t_max, g0
+        ``df`` carries the per-line atomic data; ``coeffs`` is the
+        ``(n_elements, n_stages, 5)`` partition-function polynomial table; and
+        ``t_min`` / ``t_max`` / ``g0`` are the ``(n_elements, n_stages)`` guard
+        arrays (validity window + ground-state floor) that the guarded JAX
+        evaluator clamps/floors with.  Coefficients + bounds come from the ONE
+        factory (:meth:`AtomicDatabase.partition_spec_for`) so the Bayesian JAX
+        adapter consumes the *same* direct-sum-fit-preferred, guarded source as
+        the manifold snapshot and the CPU scalar provider (PF-3/PF-4 / the
+        2026-06-03 partition-provider unification).
+    """
     import sqlite3
 
     import pandas as pd
@@ -218,6 +241,15 @@ def _query_atomic_data(
         coeffs[:, 1, 0] = np.log(15.0)
         coeffs[:, 2, 0] = np.log(10.0)
 
+        # Default guard arrays.  The validity window matches the canonical
+        # ``[2000, 25000] K`` fit band; ``g0`` defaults to the stage's
+        # placeholder ground-state weight above.  These are the *static*
+        # ``[t_min, t_max]`` + ``g0`` arrays the guarded JAX evaluator clamps /
+        # floors with, so no Python provider call is needed inside the trace.
+        t_min = np.full((n_elements, max_stages), 2000.0, dtype=np.float32)
+        t_max = np.full((n_elements, max_stages), 25000.0, dtype=np.float32)
+        g0 = np.exp(coeffs[:, :, 0]).astype(np.float32)
+
         try:
             cursor = conn.cursor()
 
@@ -234,69 +266,59 @@ def _query_atomic_data(
                     if 0 <= stage_idx < max_stages:
                         ips[el_idx, stage_idx] = ip_ev
 
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='partition_functions'"
-            )
-            if cursor.fetchone():
-                cursor.execute(
-                    f"SELECT element, sp_num, a0, a1, a2, a3, a4 "
-                    f"FROM partition_functions WHERE element IN ({placeholders})",
-                    elements,
-                )
-                for row in cursor.fetchall():
-                    el, sp_num, a0, a1, a2, a3, a4 = row
-                    if el in el_map:
-                        el_idx = el_map[el]
-                        stage_idx = sp_num - 1
-                        if 0 <= stage_idx < max_stages:
-                            coeffs[el_idx, stage_idx] = [a0, a1, a2, a3, a4]
+            # Coefficients + bounds + g0 from the ONE partition-function factory
+            # (PF-3/PF-4 unification).  ``partition_spec_for`` applies the locked
+            # policy in a single place — *prefer the direct-sum FIT over energy
+            # levels when present; otherwise the stored polynomial fallback; and
+            # always carry ``[t_min, t_max]`` + ``g0``* — and caches the
+            # (expensive) per-species fit so it is compute-once (Invariant #5).
+            # The Bayesian JAX adapter therefore bakes the SAME static arrays the
+            # manifold snapshot bakes; the guarded JAX evaluator in the forward
+            # model clamps/floors with the bounds, so jit / vmap are unaffected
+            # (the fit is a build-time concern).
+            from cflibs.atomic.database import AtomicDatabase
 
-            # Direct-sum-preferred coefficients (PF-3/PF-4 fix).  The default
-            # CPU solver prefers direct summation over the ``energy_levels``
-            # table; this Bayesian JAX loader historically consumed the stored
-            # polynomial with no direct-sum fallback.  When energy levels exist
-            # we refit the polynomial to the direct-sum here (same recipe as
-            # ``scripts/regenerate_partition_functions.py``), overriding the
-            # stored coefficients; species without levels keep the stored
-            # polynomial.  The forward model still evaluates the same
-            # polynomial form, so jit / vmap are unaffected.
             try:
-                from cflibs.plasma.partition import direct_sum_fit_coeffs
-
+                factory_db = AtomicDatabase(db_path)
                 for el, el_idx in el_map.items():
                     for stage in (1, 2, 3):
                         stage_idx = stage - 1
                         if stage_idx >= max_stages:
                             continue
-                        ip_ev = float(ips[el_idx, stage_idx])
-                        if ip_ev <= 0.0:
+                        spec = factory_db.partition_spec_for(el, stage)
+                        if spec is None:
                             continue
-                        level_rows = cursor.execute(
-                            "SELECT g_level, energy_ev FROM energy_levels "
-                            "WHERE element=? AND sp_num=? ORDER BY energy_ev",
-                            (el, stage),
-                        ).fetchall()
-                        if not level_rows:
-                            continue
-                        g_arr = np.array([r[0] for r in level_rows], dtype=np.float64)
-                        e_arr = np.array([r[1] for r in level_rows], dtype=np.float64)
-                        fit = direct_sum_fit_coeffs(g_arr, e_arr, ip_ev)
-                        if fit is None:
-                            continue
-                        ds_coeffs, _t_min, _t_max = fit
-                        coeffs[el_idx, stage_idx] = ds_coeffs
+                        spec_coeffs = (list(spec.coefficients) + [0.0] * 5)[:5]
+                        coeffs[el_idx, stage_idx] = spec_coeffs
+                        t_min[el_idx, stage_idx] = spec.t_min
+                        t_max[el_idx, stage_idx] = spec.t_max
+                        g0[el_idx, stage_idx] = spec.g0
             except Exception as exc:  # pragma: no cover - DB shape fallback
-                logger.debug(f"Direct-sum partition override skipped: {exc}")
+                logger.debug(f"Partition factory override skipped: {exc}")
         except Exception as e:
             logger.warning(f"Failed to load physics data: {e}")
 
-    return df, coeffs, ips
+    return df, coeffs, ips, t_min, t_max, g0
 
 
 def _format_atomic_data_arrays(
-    df: Any, coeffs: np.ndarray, ips: np.ndarray, elements: List[str]
+    df: Any,
+    coeffs: np.ndarray,
+    ips: np.ndarray,
+    elements: List[str],
+    t_min: Optional[np.ndarray] = None,
+    t_max: Optional[np.ndarray] = None,
+    g0: Optional[np.ndarray] = None,
 ) -> "AtomicDataArrays":
-    """Format dataframe and physics arrays into JAX :class:`AtomicDataArrays`."""
+    """Format dataframe and physics arrays into JAX :class:`AtomicDataArrays`.
+
+    The ``t_min`` / ``t_max`` / ``g0`` guard arrays (shape
+    ``(n_elements, n_stages)``) are baked into the carrier so the guarded JAX
+    partition evaluator can clamp ``T`` to ``[t_min, t_max]`` and floor at
+    ``g0`` inside the NUTS jit trace without any Python provider call.  When
+    omitted (legacy callers) they default to the canonical
+    ``[2000, 25000] K`` window and a ``g0`` of 1.
+    """
     stark_w_raw = df["stark_w"].fillna(float("nan")).values
     stark_alpha_raw = df["stark_alpha"].fillna(0.5).values
 
@@ -327,6 +349,14 @@ def _format_atomic_data_arrays(
     f_osc_raw = 1.499e-16 * df["wavelength_nm"].values ** 2 * aki_vals
     f_osc = np.clip(f_osc_raw, 1e-6, 2.0)
 
+    n_stages = coeffs.shape[1]
+    if t_min is None:
+        t_min = np.full((len(elements), n_stages), 2000.0, dtype=np.float32)
+    if t_max is None:
+        t_max = np.full((len(elements), n_stages), 25000.0, dtype=np.float32)
+    if g0 is None:
+        g0 = np.ones((len(elements), n_stages), dtype=np.float32)
+
     return AtomicDataArrays(
         wavelength_nm=jnp.array(df["wavelength_nm"].values, dtype=jnp.float32),
         aki=jnp.array(aki_vals, dtype=jnp.float32),
@@ -339,6 +369,9 @@ def _format_atomic_data_arrays(
         stark_alpha=jnp.array(stark_alpha_raw, dtype=jnp.float32),
         mass_amu=jnp.array(df["mass_amu"].values, dtype=jnp.float32),
         partition_coeffs=jnp.array(coeffs, dtype=jnp.float32),
+        partition_t_min=jnp.array(t_min, dtype=jnp.float32),
+        partition_t_max=jnp.array(t_max, dtype=jnp.float32),
+        partition_g0=jnp.array(g0, dtype=jnp.float32),
         ionization_potentials=jnp.array(ips, dtype=jnp.float32),
         elements=list(elements),
         ei_ev=jnp.array(ei_ev_vals, dtype=jnp.float32),
@@ -355,25 +388,54 @@ def load_atomic_data(
     if not HAS_JAX:
         raise ImportError("JAX required. Install with: pip install jax jaxlib")
 
-    df, coeffs, ips = _query_atomic_data(db_path, elements, wavelength_range)
-    return _format_atomic_data_arrays(df, coeffs, ips, elements)
+    df, coeffs, ips, t_min, t_max, g0 = _query_atomic_data(db_path, elements, wavelength_range)
+    return _format_atomic_data_arrays(df, coeffs, ips, elements, t_min, t_max, g0)
 
 
-def partition_function(T_K: float, coeffs: Any) -> Any:
-    """Evaluate polynomial partition function (JAX-compatible).
+def partition_function(
+    T_K: Any,
+    coeffs: Any,
+    *,
+    t_min: Any = None,
+    t_max: Any = None,
+    g0: Any = None,
+) -> Any:
+    """Evaluate the polynomial partition function ``U(T)`` (JAX-compatible).
 
-    ``log(U) = sum_i a_i (log T)^i`` (Irwin form).
+    Thin guarded delegator to the ONE shared evaluator
+    :func:`cflibs.plasma.partition.polynomial_partition_function_jax` — the
+    SAME one the manifold batch forward model uses.  This is no longer a
+    standalone re-implementation of ``ln U = Σ aₙ (ln T)ⁿ``: the duplicate that
+    lived here (no clamp, no ``g0`` floor, no ``[t_min, t_max]`` window,
+    consumed raw in the NUTS jit trace) is deleted in favour of routing every
+    Bayesian ``U(T)`` through the guarded evaluator.
+
+    When ``t_min`` / ``t_max`` / ``g0`` are supplied (the production path threads
+    them from :class:`AtomicDataArrays`), ``T`` is clamped to ``[t_min, t_max]``
+    and the result floored at ``g0`` before return.  Omitting them preserves the
+    legacy bounds-free behaviour for callers that still want a raw evaluation.
     """
     if HAS_JAX:
-        log_T = jnp.log(T_K)
-        one = jnp.ones_like(log_T)
-        powers = jnp.stack([one, log_T, log_T**2, log_T**3, log_T**4])
-        log_U = jnp.sum(coeffs * powers, axis=-1)
-        return jnp.exp(log_U)
-    log_T = np.log(T_K)
-    powers = np.array([1.0, log_T, log_T**2, log_T**3, log_T**4])
-    log_U = np.sum(np.asarray(coeffs) * powers, axis=-1)
-    return np.exp(log_U)
+        from cflibs.plasma.partition import polynomial_partition_function_jax
+
+        return polynomial_partition_function_jax(T_K, coeffs, t_min=t_min, t_max=t_max, g0=g0)
+
+    # JAX-free fallback: same guard (clamp T to [t_min, t_max], floor at g0)
+    # applied with NumPy, supporting both a single (5,) coefficient vector and a
+    # stacked (N, 5) table.  This mirrors the shared guarded evaluator's policy;
+    # it is NOT a second polynomial implementation of the unclamped form.
+    T_eval = np.asarray(T_K, dtype=np.float64)
+    if t_min is not None:
+        T_eval = np.maximum(T_eval, np.asarray(t_min, dtype=np.float64))
+    if t_max is not None:
+        T_eval = np.minimum(T_eval, np.asarray(t_max, dtype=np.float64))
+    log_T = np.log(np.maximum(T_eval, 1.0))
+    powers = np.stack([np.ones_like(log_T), log_T, log_T**2, log_T**3, log_T**4], axis=-1)
+    log_U = np.sum(np.asarray(coeffs, dtype=np.float64) * powers, axis=-1)
+    U = np.exp(log_U)
+    if g0 is not None:
+        U = np.maximum(U, np.asarray(g0, dtype=np.float64))
+    return U
 
 
 def mcwhirter_log_penalty(
@@ -443,6 +505,14 @@ class AtomicDataArrays:
     elements: List[str] = field(default_factory=list)
     ei_ev: Any = None  # Lower level energy [eV]
     f_osc: Any = None  # Oscillator strength
+    # Partition-function guard arrays (n_elements, n_stages): the static
+    # [t_min, t_max] validity window + ground-state floor g0 the guarded JAX
+    # evaluator clamps/floors with inside the NUTS jit trace.  ``None`` only on
+    # the legacy ``from_snapshot`` bridge (whose snapshot already bakes guarded
+    # coeffs); ``load_atomic_data`` always populates them from the factory.
+    partition_t_min: Any = None
+    partition_t_max: Any = None
+    partition_g0: Any = None
 
     @classmethod
     def from_snapshot(cls, snapshot, elements: List[str]) -> "AtomicDataArrays":

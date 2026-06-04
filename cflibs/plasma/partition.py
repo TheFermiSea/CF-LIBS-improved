@@ -422,6 +422,218 @@ def direct_sum_fit_coeffs(
 
 
 # ---------------------------------------------------------------------------
+# The single derived partition-function spec (one policy, two adapters)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PartitionFunctionSpec:
+    """Coefficients + bounds + g0 for ONE species, derived by the single policy.
+
+    This is the load-bearing seam between the policy (*prefer the direct-sum
+    fit over energy levels when present; otherwise the stored polynomial; always
+    carry ``[t_min, t_max]`` and ``g0``*) and the two adapters that consume it:
+
+    * the **CPU scalar adapter** — :class:`PolynomialPartitionFunctionProvider`,
+      built from this spec via :meth:`to_provider`, whose ``.at()`` applies the
+      clamp + ``g0`` floor at Python runtime; and
+    * the **JAX batched adapter** — the same ``coefficients`` / ``t_min`` /
+      ``t_max`` / ``g0`` baked as plain floats into the static snapshot arrays
+      and evaluated by the guarded ``polynomial_partition_function_jax``.
+
+    Producing both adapters from the *same* :class:`PartitionFunctionSpec`
+    instance is what makes "direct-sum-preferred, always guarded" provable in a
+    single place rather than re-implemented at the ~9 historical call sites
+    (see ``docs/architecture/2026-06-03-composition-pipeline-diagnosis.md`` § 2.1
+    and ``CONTEXT.md`` § "The partition-function provider").
+
+    Attributes
+    ----------
+    element : str
+        Element symbol — informational only.
+    ionization_stage : int
+        Ionization stage — informational only.
+    coefficients : tuple[float, ...]
+        Natural-log polynomial coefficients ``(a0, …, a4)``.
+    t_min, t_max : float
+        Validity window; both adapters clamp ``T`` into this interval.
+    g0 : float
+        Ground-state statistical weight (strict physical lower bound on U).
+    source : str
+        Provenance: ``"direct_sum_fit"`` when fit live from energy levels,
+        otherwise the stored ``partition_functions.source`` (or ``"default"``).
+    from_direct_sum : bool
+        ``True`` when ``coefficients`` were fit from the species' energy
+        levels; ``False`` when they came from the stored polynomial fallback.
+    """
+
+    element: str
+    ionization_stage: int
+    coefficients: Tuple[float, ...]
+    t_min: float
+    t_max: float
+    g0: float
+    source: str
+    from_direct_sum: bool
+    # The IP-filtered, energy-sorted ``(g, E_ev, ip_ev)`` level arrays the
+    # direct-sum FIT was derived from, retained ONLY so the CPU scalar adapter
+    # can evaluate the EXACT direct sum (not the fit) at Python runtime — see
+    # :meth:`to_provider`.  ``None`` when ``from_direct_sum`` is False (the
+    # stored-polynomial fallback has no levels).  These arrays are NOT used by
+    # the JAX batched adapter, which bakes ``coefficients`` (the fit) into its
+    # static snapshot because ``vmap`` needs fixed-shape arrays.
+    levels: Optional[Tuple[np.ndarray, np.ndarray, float]] = None
+
+    def to_provider(self) -> "PartitionFunctionProvider":
+        """Build the CPU scalar adapter.
+
+        When the species has tabulated energy levels (``from_direct_sum``) the
+        provider evaluates the **exact** direct sum ``U(T) = Σ gᵢ exp(-Eᵢ/kT)``
+        at runtime — *not* the ln-poly fit.  This is what keeps the default
+        CPU ``invert`` / ``analyze`` / iterative path bit-for-bit unchanged
+        (Invariant #2): the fit is a build-time concern for the JAX snapshot,
+        where ``vmap`` needs static fixed-shape arrays, but a Python-runtime
+        scalar caller can afford the full sum and the diagnosis's "prefer the
+        direct sum over energy levels" is taken literally for it.
+
+        When no levels exist the provider falls back to the guarded stored
+        polynomial (clamp ``T`` to ``[t_min, t_max]``, floor at ``g0``).
+        """
+        if self.from_direct_sum and self.levels is not None:
+            g_arr, e_arr, ip_ev = self.levels
+            return DirectSumPartitionFunctionProvider(
+                element=self.element,
+                ionization_stage=self.ionization_stage,
+                _g_levels=tuple(float(g) for g in np.asarray(g_arr, dtype=np.float64)),
+                _e_levels_ev=tuple(float(e) for e in np.asarray(e_arr, dtype=np.float64)),
+                ip_ev=float(ip_ev),
+                t_min=self.t_min,
+                t_max=self.t_max,
+                _g0=self.g0,
+                source=self.source,
+            )
+        return PolynomialPartitionFunctionProvider(
+            element=self.element,
+            ionization_stage=self.ionization_stage,
+            coefficients=self.coefficients,
+            t_min=self.t_min,
+            t_max=self.t_max,
+            _g0=self.g0,
+            source=self.source,
+        )
+
+
+# Module-level spec cache so the per-species direct-sum FIT (the expensive part
+# — a 4th-order ln-poly regression over hundreds of energy levels) runs
+# compute-once per (db, element, stage). The snapshot builder fits ~83 elements
+# × 2-3 stages at build time; without this cache it would refit on every
+# snapshot/spectrum. Keyed on the same (db_path, element, stage) tuple as
+# ``_level_cache``.
+_spec_cache: Dict[Tuple[str, str, int], "PartitionFunctionSpec"] = {}
+
+
+def derive_partition_spec(
+    atomic_db: Any,
+    element: str,
+    ionization_stage: int,
+) -> Optional["PartitionFunctionSpec"]:
+    """Derive the single :class:`PartitionFunctionSpec` for a species.
+
+    This is THE one place the partition-function policy lives:
+
+    1. If the species has tabulated ``energy_levels`` *and* a fittable
+       (``>= 2``) level count, fit the direct-sum to a guarded ln-polynomial
+       via :func:`direct_sum_fit_coeffs` (``source="direct_sum_fit"``).
+    2. Otherwise fall back to the stored ``partition_functions`` polynomial
+       (its own ``t_min``/``t_max``, defaulting to ``[2000, 25000] K`` when the
+       columns are NULL).
+    3. If neither exists, return ``None`` — the caller decides the default
+       (e.g. ``ln U = ln 2`` placeholder for the snapshot pad rows); this
+       helper never fabricates coefficients.
+
+    The ground-state ``g0`` is always taken from :func:`get_ground_state_g`
+    (lowest-energy level's degeneracy, default 1.0).
+
+    The result is cached per ``(db_path, element, stage)`` so the fit is
+    compute-once (invariant 5).
+
+    Returns
+    -------
+    PartitionFunctionSpec or None
+    """
+    cache_key = (
+        str(getattr(atomic_db, "db_path", id(atomic_db))),
+        element,
+        int(ionization_stage),
+    )
+    cached = _spec_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    g0 = float(get_ground_state_g(atomic_db, element, ionization_stage))
+
+    # (1) Prefer the direct-sum fit when energy levels are present.
+    ip_ev: Optional[float] = None
+    try:
+        levels = atomic_db.get_energy_levels(element, ionization_stage)
+    except Exception:  # pragma: no cover - defensive DB-shape guard
+        levels = None
+    if levels:
+        try:
+            ip_ev = atomic_db.get_ionization_potential(element, ionization_stage)
+        except Exception:  # pragma: no cover - defensive
+            ip_ev = None
+        if ip_ev is None:
+            ip_ev = max((lev.energy_ev for lev in levels), default=0.0) + 1.0
+        g_arr = np.array([lev.g for lev in levels], dtype=np.float64)
+        e_arr = np.array([lev.energy_ev for lev in levels], dtype=np.float64)
+        fit = direct_sum_fit_coeffs(g_arr, e_arr, float(ip_ev))
+        if fit is not None:
+            coeffs, t_min, t_max = fit
+            # Retain the IP-filtered, energy-sorted level arrays the CPU scalar
+            # adapter sums directly — the SAME arrays ``evaluate_direct`` would
+            # consume via ``get_levels_for_species`` — so the CPU path stays
+            # bit-for-bit on the exact direct sum (Invariant #2).  The JAX
+            # snapshot still bakes ``coefficients`` (the fit) below.
+            provider_levels = get_levels_for_species(atomic_db, element, ionization_stage)
+            spec = PartitionFunctionSpec(
+                element=element,
+                ionization_stage=int(ionization_stage),
+                coefficients=tuple(float(c) for c in coeffs),
+                t_min=float(t_min),
+                t_max=float(t_max),
+                g0=g0,
+                source="direct_sum_fit",
+                from_direct_sum=True,
+                levels=provider_levels,
+            )
+            _spec_cache[cache_key] = spec
+            return spec
+
+    # (2) Fall back to the stored polynomial.
+    try:
+        pf = atomic_db.get_partition_coefficients(element, ionization_stage)
+    except Exception:  # pragma: no cover - defensive
+        pf = None
+    if pf is None:
+        return None
+    coeffs_list = list(pf.coefficients)
+    coeffs_list += [0.0] * (5 - len(coeffs_list))
+    spec = PartitionFunctionSpec(
+        element=element,
+        ionization_stage=int(ionization_stage),
+        coefficients=tuple(float(c) for c in coeffs_list[:5]),
+        t_min=float(pf.t_min) if pf.t_min is not None else 2000.0,
+        t_max=float(pf.t_max) if pf.t_max is not None else 25000.0,
+        g0=g0,
+        source=str(pf.source or ""),
+        from_direct_sum=False,
+    )
+    _spec_cache[cache_key] = spec
+    return spec
+
+
+# ---------------------------------------------------------------------------
 # Energy level cache for partition function evaluation
 # ---------------------------------------------------------------------------
 
@@ -961,6 +1173,93 @@ class PartitionFunctionProvider(Protocol):
     def g0(self) -> float:
         """Ground-state statistical weight (strict physical lower bound)."""
         ...
+
+
+@dataclass(frozen=True)
+class DirectSumPartitionFunctionProvider:
+    """CPU scalar adapter that evaluates the EXACT direct sum over energy levels.
+
+    ``U(T) = Σ gᵢ exp(-Eᵢ / kT)`` over the species' IP-filtered, energy-sorted
+    levels — i.e. the same computation :func:`direct_sum_partition_function`
+    (via :meth:`PartitionFunctionEvaluator.evaluate_direct`) performed at the
+    historical CPU call sites, now behind the single provider seam.
+
+    This is the provider :meth:`AtomicDatabase.partition_function_for` vends for
+    species that HAVE tabulated energy levels.  It deliberately does NOT use the
+    ln-poly fit: the fit (``PartitionFunctionSpec.coefficients``) is a build-time
+    artefact for the JAX batched adapter (``vmap`` needs static fixed-shape
+    arrays), whereas a Python-runtime scalar caller can afford the full sum.
+    Keeping the CPU path on the exact direct sum is what makes the default
+    ``invert`` / ``analyze`` / iterative U(T) bit-for-bit unchanged after the
+    provider unification (composition-pipeline diagnosis 2026-06-03 §2.1,
+    Invariant #2).
+
+    Like :class:`PolynomialPartitionFunctionProvider` it honours the provider
+    contract: ``T`` is clamped to ``[t_min, t_max]`` (so a temperature above the
+    fit window evaluates the sum at ``t_max`` rather than runaway) and the
+    result is floored at ``g0``.  In the LIBS band (8000-12000 K) the clamp is a
+    no-op for every workhorse species, so ``.at(T)`` reproduces ``evaluate_direct``
+    to floating-point precision there.
+
+    Attributes
+    ----------
+    element, ionization_stage : informational only.
+    _g_levels, _e_levels_ev : tuple[float, ...]
+        IP-filtered, energy-sorted statistical weights and level energies (eV).
+        Stored as tuples to keep the dataclass frozen/hashable.
+    ip_ev : float
+        Ionization potential (eV) — the sum cutoff (already applied to the
+        stored level arrays, but retained for parity with ``evaluate_direct``).
+    t_min, t_max : float
+        Validity window inherited from the direct-sum fit; used only for the
+        clamp guard.
+    _g0 : float
+        Ground-state statistical weight (lower bound on U).
+    source : str
+        Provenance (``"direct_sum_fit"``).
+    """
+
+    element: str
+    ionization_stage: int
+    _g_levels: Tuple[float, ...]
+    _e_levels_ev: Tuple[float, ...]
+    ip_ev: float
+    t_min: float
+    t_max: float
+    _g0: float
+    source: str = ""
+
+    @property
+    def g0(self) -> float:
+        return float(self._g0)
+
+    def valid_range(self) -> Tuple[float, float]:
+        return float(self.t_min), float(self.t_max)
+
+    def at(self, T_K: Any) -> Any:
+        """Evaluate the exact direct sum with clamp + g0 floor.
+
+        Accepts a Python float / numpy scalar / numpy ndarray.  For a scalar
+        this delegates to :func:`direct_sum_partition_function`, reproducing the
+        historical ``evaluate_direct`` call bit-for-bit inside the clamp window.
+        """
+        g_arr = np.asarray(self._g_levels, dtype=np.float64)
+        e_arr = np.asarray(self._e_levels_ev, dtype=np.float64)
+        if isinstance(T_K, np.ndarray) and T_K.ndim > 0:
+            T_clamped = np.clip(
+                np.asarray(T_K, dtype=np.float64), float(self.t_min), float(self.t_max)
+            )
+            out = np.array(
+                [
+                    direct_sum_partition_function(float(t), g_arr, e_arr, float(self.ip_ev))
+                    for t in T_clamped.ravel()
+                ],
+                dtype=np.float64,
+            ).reshape(T_clamped.shape)
+            return np.maximum(out, float(self._g0))
+        T_clamped = float(np.clip(float(T_K), float(self.t_min), float(self.t_max)))
+        u = direct_sum_partition_function(T_clamped, g_arr, e_arr, float(self.ip_ev))
+        return max(float(u), float(self._g0))
 
 
 @dataclass(frozen=True)

@@ -355,20 +355,21 @@ class GoldenSpectrumGenerator:
         return transitions
 
     def _get_partition_function(self, element: str, ion_stage: int, temperature_K: float) -> float:
-        """Get partition function via direct summation, with fallbacks."""
-        from cflibs.plasma.partition import PartitionFunctionEvaluator, get_levels_for_species
+        """Get partition function through the single provider factory.
 
+        Routes U(T) through :meth:`AtomicDatabase.partition_function_for`, which
+        applies the one direct-sum-preferred, always-guarded policy.  This
+        replaces a previously UNGUARDED stored-polynomial fallback that called
+        ``PartitionFunctionEvaluator.evaluate(T, coeffs)`` without ``t_min`` /
+        ``t_max`` / ``g0`` — i.e. raw extrapolation, the exact defect class the
+        2026-06-03 composition-pipeline audit flagged.  The provider now clamps
+        ``T`` to the fit window and floors at ``g0`` on that fallback, while the
+        with-levels path remains an exact direct sum.
+        """
         try:
-            levels = get_levels_for_species(self.atomic_db, element, ion_stage)
-            if levels is not None:
-                g_arr, E_arr, ip_ev = levels
-                return PartitionFunctionEvaluator.evaluate_direct(
-                    temperature_K, g_arr, E_arr, ip_ev
-                )
-
-            coeffs = self.atomic_db.get_partition_coefficients(element, ion_stage)
-            if coeffs:
-                return PartitionFunctionEvaluator.evaluate(temperature_K, coeffs.coefficients)
+            provider = self.atomic_db.partition_function_for(element, ion_stage)
+            if provider is not None:
+                return float(provider.at(temperature_K))
         except Exception:
             pass
 
