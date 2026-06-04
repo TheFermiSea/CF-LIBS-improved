@@ -136,11 +136,21 @@ def _solve(observations, *, apply_self_absorption: bool):
     return solver.solve(observations)
 
 
-def test_self_absorption_default_on():
-    """The default solver configuration enables the self-absorption correction."""
-    solver = IterativeCFLIBSSolver(_make_mock_db())
-    assert solver.apply_self_absorption is True
-    assert solver.self_absorption_corrector is not None
+def test_self_absorption_opt_in_default_off():
+    """Self-absorption is opt-in (default off) and builds no corrector when off.
+
+    The plasma-state optical-depth estimate cannot distinguish a thick line
+    from a thin one, so on an optically-thin spectrum a default-on correction
+    would over-boost the low-E_k lines (a false positive). It therefore stays
+    opt-in; callers enable it explicitly for known optically-thick samples.
+    """
+    solver_default = IterativeCFLIBSSolver(_make_mock_db())
+    assert solver_default.apply_self_absorption is False
+    assert solver_default.self_absorption_corrector is None
+
+    solver_on = IterativeCFLIBSSolver(_make_mock_db(), apply_self_absorption=True)
+    assert solver_on.apply_self_absorption is True
+    assert solver_on.self_absorption_corrector is not None
 
 
 def test_self_absorption_correction_fires(self_absorbed_observations):

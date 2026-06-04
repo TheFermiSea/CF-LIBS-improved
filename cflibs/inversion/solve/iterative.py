@@ -715,7 +715,7 @@ class IterativeCFLIBSSolver:
         aki_uncertainty_weighting: bool = True,
         two_region: bool = False,
         closure: Optional[ClosureStrategy] = None,
-        apply_self_absorption: bool = True,
+        apply_self_absorption: bool = False,
         self_absorption_plasma_length_cm: float = 0.1,
         self_absorption_mask_threshold: float = 1.0e6,
         self_absorption_tau_cap: float = 10.0,
@@ -730,13 +730,28 @@ class IterativeCFLIBSSolver:
         self.aki_uncertainty_weighting = aki_uncertainty_weighting
         self.two_region = two_region
         # Self-absorption correction (Bulajic 2002; physics-audit defect B1).
-        # When enabled (default), the iterative solver applies a curve-of-growth
+        # When enabled, the iterative solver applies a curve-of-growth
         # escape-factor correction to the observed line intensities *before* the
         # Boltzmann/closure fit on every iteration after the first, recomputing the
         # optical depth tau from the current plasma state (T, n_e, concentrations,
         # partition functions) each pass. This is the outer recursion that the
         # corrector's per-line :meth:`_apply_recursive_correction` (B4) is designed
         # to be driven by — without it the corrector is a no-op (dead code).
+        #
+        # OPT-IN (default False). The correction is grounded and reduces error on
+        # genuinely self-absorbed spectra (see the Mg/Ca regression in
+        # tests/inversion/solve/test_self_absorption_wiring.py), but the
+        # plasma-state optical-depth estimate cannot by itself tell a thick line
+        # from a thin one: it computes tau from the recovered density/composition
+        # and corrects unconditionally. On an *optically thin* spectrum (e.g. a
+        # synthetic forward model with no self-absorption) a high recovered
+        # density makes tau look large and the correction over-boosts the
+        # low-E_k lines — a false positive. Until the correction is gated on an
+        # observed self-absorption signature (El Sherbini 2005 line-width ratio,
+        # or a Boltzmann-residual / doublet-ratio test), it stays opt-in so the
+        # default analyze/invert path is never harmed on thin data. Enable it via
+        # ``apply_self_absorption=True`` (or the analysis-config key) for known
+        # optically-thick samples such as the BHVO-2 basalt majors.
         #
         # Two safety levers keep the correction bounded and stable inside the
         # solver, where the absorbing column density (n_e * L) is only known to
