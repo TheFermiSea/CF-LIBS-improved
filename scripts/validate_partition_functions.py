@@ -284,12 +284,14 @@ def compute_our_partition_functions(db_path: str):
 
 
 def compute_stored_polynomial(db_path: str):
-    """Evaluate the STORED polynomial via ``partition_function_for(...).at(T)``.
+    """Evaluate the CPU SCALAR adapter via ``partition_function_for(...).at(T)``.
 
-    This is the artifact the production JAX manifold / Bayesian / forward paths
-    actually consume (a polynomial), as opposed to the direct-sum path the rest
-    of this validator exercises.  Returns a mapping ``label -> [U(T) ...]`` with
-    ``np.nan`` where no ``partition_functions`` row exists for the species.
+    This is the U(T) the default ``invert`` / ``analyze`` / iterative / closed-form
+    CPU path consumes.  For a species WITH energy levels the provider returns the
+    EXACT direct sum (the ``DirectSumPartitionFunctionProvider``), so this column
+    is the Invariant-#2 regression guard (it must stay bit-for-bit direct-sum);
+    only level-less species fall back to the stored polynomial.  Returns a mapping
+    ``label -> [U(T) ...]`` with ``np.nan`` where the factory has no source row.
     """
     db = AtomicDatabase(db_path)
     result = {}
@@ -302,85 +304,228 @@ def compute_stored_polynomial(db_path: str):
     return result
 
 
-def check_polynomial_gate(poly_data, ref_data, our_data):
-    """CI gate on the STORED polynomial for workhorse species.
+def compute_manifold_jax_polynomial(db_path: str):
+    """Evaluate the MANIFOLD / JAX batched adapter over the real snapshot arrays.
 
-    This closes the gate gap from the 2026-06-03 diagnosis (§ 2.6): the legacy
-    validator computed only the direct-sum (the correct path), never the stored
-    polynomial that production JAX / Bayesian / manifold paths actually consume.
+    Builds the actual :class:`AtomicSnapshot` the manifold / JAX forward models
+    consume and evaluates the ONE shared guarded
+    :func:`polynomial_partition_function_jax` over the per-species
+    direct-sum-FIT coefficients + ``[t_min, t_max]`` + ``g0`` baked into it.
+    This is the production path the original PF-1..PF-4 defect lived on and that
+    the legacy validator never exercised (it only computed the direct-sum / CPU
+    path — diagnosis § 2.6).  ``np.nan`` for species absent from the snapshot or
+    when JAX is unavailable.
+    """
+    try:
+        import jax  # noqa: F401
+    except Exception:
+        print("  (JAX unavailable — skipping manifold/JAX snapshot column)")
+        return {label: [np.nan] * len(TEMPERATURES) for _, _, label in SPECIES}
 
-    The gate fails when the stored polynomial is more than POLY_GATE_TOL off the
-    DB **direct-sum** (the achievable fit target — the regenerated rows track it
-    to within ~1 %).  Comparing poly-vs-direct-sum isolates the *fit* defect
-    (the PF-1/PF-2 undershoot we fixed) from the separate *level-table
-    completeness* gap (direct-sum vs B&C16): the latter is reported as an
-    informational WARNING (e.g. Cr II / hot-edge Ti I, diagnosis open Q #3) and
-    does NOT fail CI, because no re-fit can beat the underlying NIST level set.
+    from cflibs.plasma.partition import polynomial_partition_function_jax
+
+    db = AtomicDatabase(db_path)
+    elements = sorted({element for element, _, _ in SPECIES})
+    snap = db.snapshot(elements=elements, wavelength_range=(200.0, 900.0))
+    species_to_idx = {key: i for i, key in enumerate(snap.species)}
+    coeffs_all = np.asarray(snap.partition_coeffs)
+    tmin_all = np.asarray(snap.partition_t_min)
+    tmax_all = np.asarray(snap.partition_t_max)
+    g0_all = np.asarray(snap.partition_g0)
+
+    result = {}
+    for element, stage, label in SPECIES:
+        i = species_to_idx.get((element, stage))
+        if i is None:
+            result[label] = [np.nan] * len(TEMPERATURES)
+            continue
+        result[label] = [
+            float(
+                polynomial_partition_function_jax(
+                    float(T),
+                    coeffs_all[i],
+                    t_min=float(tmin_all[i]),
+                    t_max=float(tmax_all[i]),
+                    g0=float(g0_all[i]),
+                )
+            )
+            for T in TEMPERATURES
+        ]
+    return result
+
+
+def compute_bayesian_polynomial(db_path: str):
+    """Evaluate the BAYESIAN adapter via the now-shared guarded evaluator.
+
+    Loads the :class:`AtomicDataArrays` the NUTS forward model consumes (whose
+    partition coefficients+bounds come from the SAME factory) and evaluates them
+    through :func:`cflibs.inversion.solve.bayesian.atomic.partition_function`,
+    the thin guarded delegator that replaced the deleted unguarded duplicate.
+    ``np.nan`` for species the loader does not populate or when JAX is missing.
+    """
+    try:
+        import jax  # noqa: F401
+    except Exception:
+        print("  (JAX unavailable — skipping Bayesian column)")
+        return {label: [np.nan] * len(TEMPERATURES) for _, _, label in SPECIES}
+
+    from cflibs.inversion.solve.bayesian.atomic import (
+        _query_atomic_data,
+        partition_function,
+    )
+
+    elements = sorted({element for element, _, _ in SPECIES})
+    el_idx = {el: i for i, el in enumerate(elements)}
+    _df, coeffs, _ips, t_min, t_max, g0 = _query_atomic_data(db_path, elements, (200.0, 900.0))
+
+    result = {}
+    n_stages = coeffs.shape[1]
+    for element, stage, label in SPECIES:
+        ei = el_idx[element]
+        si = stage - 1
+        if si >= n_stages:
+            result[label] = [np.nan] * len(TEMPERATURES)
+            continue
+        result[label] = [
+            float(
+                partition_function(
+                    float(T),
+                    coeffs[ei, si],
+                    t_min=float(t_min[ei, si]),
+                    t_max=float(t_max[ei, si]),
+                    g0=float(g0[ei, si]),
+                )
+            )
+            for T in TEMPERATURES
+        ]
+    return result
+
+
+# Per-path CI tolerance.  The CPU scalar adapter evaluates the EXACT direct sum
+# for species-with-levels, so it must match to floating-point precision (the
+# Invariant-#2 regression guard).  The JAX/manifold and Bayesian adapters
+# evaluate the direct-sum-FIT polynomial (vmap needs static fixed-shape arrays),
+# so they are gated at the looser ``POLY_GATE_TOL`` fit tolerance.
+CPU_GATE_TOL = 1e-6
+
+
+def check_polynomial_gate(poly_data, ref_data, our_data, jax_data=None, bayes_data=None):
+    """CI gate: EVERY consumer path's U(T) vs the DB direct-sum (workhorse species).
+
+    This is the Wave-5 per-path VALUE gate (diagnosis § 2.6): the legacy
+    validator computed only the direct-sum (the correct path) and never the
+    polynomial the production JAX / Bayesian / manifold paths actually consume —
+    which is exactly why the PF-1..PF-4 defect shipped silently.  The gate now
+    exercises all three consumer adapters against the direct-sum reference:
+
+    * **CPU scalar** (``partition_function_for(...).at(T)``) — exact direct sum
+      for species-with-levels; gated tight (``CPU_GATE_TOL``).
+    * **Manifold / JAX** snapshot polynomial — gated at ``POLY_GATE_TOL``.
+    * **Bayesian** ``AtomicDataArrays`` via the shared guarded evaluator — gated
+      at ``POLY_GATE_TOL``.
+
+    Each adapter is failed when it is more than its tolerance off the DB
+    **direct-sum** (the achievable fit target — the regenerated rows track it to
+    within ~1 %, the fit to ≤ ~7 %).  Comparing path-vs-direct-sum isolates the
+    *fit* defect (the PF-1/PF-2 undershoot we fixed) from the separate
+    *level-table completeness* gap (direct-sum vs B&C16): the latter is reported
+    as an informational WARNING (e.g. Cr II / hot-edge Ti I, diagnosis open
+    Q #3) and does NOT fail CI, because no re-fit can beat the underlying NIST
+    level set.
 
     Returns
     -------
     list[tuple]
-        ``(label, T, U_poly, U_directsum, rel_err)`` for each gate failure.
+        ``(path, label, T, U_path, U_directsum, rel_err)`` for each gate failure.
     """
+    jax_data = jax_data or {}
+    bayes_data = bayes_data or {}
     failures = []
     completeness_warnings = []
-    print("\n" + "=" * 84)
+    print("\n" + "=" * 100)
     print(
-        f"CI GATE: STORED polynomial vs DB direct-sum (workhorse species, "
-        f"|err| > {POLY_GATE_TOL:.0%})"
+        "CI GATE: per-consumer-path U(T) vs DB direct-sum (workhorse species) — "
+        f"CPU |err|>{CPU_GATE_TOL:.0e}, JAX/Bayes |err|>{POLY_GATE_TOL:.0%}"
     )
-    print("=" * 84)
+    print("=" * 100)
     print(
-        f"{'Species':<8s} {'T (K)':>7s} {'U_poly':>10s} {'U_dsum':>10s} "
-        f"{'poly/dsum':>10s} {'B&C16':>10s} {'dsum/BC':>9s} {'status':>8s}"
+        f"{'Species':<8s} {'T (K)':>7s} {'U_dsum':>9s} {'U_cpu':>9s} {'cpu/ds':>8s} "
+        f"{'U_jax':>9s} {'jax/ds':>8s} {'U_bayes':>9s} {'bay/ds':>8s} {'dsum/BC':>8s} {'status':>7s}"
     )
-    print("-" * 84)
+    print("-" * 100)
+
+    def _rel(u, ds):
+        if u is None or np.isnan(u) or np.isnan(ds) or ds == 0:
+            return np.nan
+        return (u - ds) / ds
+
+    def _fmt(rel):
+        return f"{rel:>+7.2%}" if not np.isnan(rel) else f"{'N/A':>8s}"
 
     for element, stage, label in SPECIES:
         if (element, stage) not in POLY_GATE_SPECIES:
             continue
-        poly_vals = poly_data.get(label, [np.nan] * len(TEMPERATURES))
+        cpu_vals = poly_data.get(label, [np.nan] * len(TEMPERATURES))
         ref_vals = ref_data.get(label, [np.nan] * len(TEMPERATURES))
         ds_vals = our_data.get(label, [np.nan] * len(TEMPERATURES))
+        jax_vals = jax_data.get(label, [np.nan] * len(TEMPERATURES))
+        bay_vals = bayes_data.get(label, [np.nan] * len(TEMPERATURES))
         for T in POLY_GATE_TEMPS:
             idx = TEMPERATURES.index(T)
-            U_poly = poly_vals[idx]
             U_dsum = ds_vals[idx]
+            U_cpu = cpu_vals[idx]
+            U_jax = jax_vals[idx]
+            U_bay = bay_vals[idx]
             U_bc = ref_vals[idx]
-            if np.isnan(U_poly) or np.isnan(U_dsum) or U_dsum == 0:
+            if np.isnan(U_dsum) or U_dsum == 0:
                 continue
-            rel = (U_poly - U_dsum) / U_dsum
-            failed = abs(rel) > POLY_GATE_TOL
-            status = "FAIL *" if failed else "PASS"
-            bc_str = f"{U_bc:10.4f}" if not np.isnan(U_bc) else f"{'N/A':>10s}"
+            rel_cpu = _rel(U_cpu, U_dsum)
+            rel_jax = _rel(U_jax, U_dsum)
+            rel_bay = _rel(U_bay, U_dsum)
+
+            row_failed = False
+            if not np.isnan(rel_cpu) and abs(rel_cpu) > CPU_GATE_TOL:
+                failures.append(("cpu", label, T, U_cpu, U_dsum, rel_cpu))
+                row_failed = True
+            if not np.isnan(rel_jax) and abs(rel_jax) > POLY_GATE_TOL:
+                failures.append(("jax", label, T, U_jax, U_dsum, rel_jax))
+                row_failed = True
+            if not np.isnan(rel_bay) and abs(rel_bay) > POLY_GATE_TOL:
+                failures.append(("bayes", label, T, U_bay, U_dsum, rel_bay))
+                row_failed = True
+            status = "FAIL *" if row_failed else "PASS"
+
             ds_bc = (U_dsum - U_bc) / U_bc if (not np.isnan(U_bc) and U_bc != 0) else np.nan
-            ds_bc_str = f"{ds_bc:>+8.1%}" if not np.isnan(ds_bc) else f"{'N/A':>9s}"
+            ds_bc_str = f"{ds_bc:>+7.1%}" if not np.isnan(ds_bc) else f"{'N/A':>8s}"
+            cpu_str = f"{U_cpu:>9.4f}" if not np.isnan(U_cpu) else f"{'N/A':>9s}"
+            jax_str = f"{U_jax:>9.4f}" if not np.isnan(U_jax) else f"{'N/A':>9s}"
+            bay_str = f"{U_bay:>9.4f}" if not np.isnan(U_bay) else f"{'N/A':>9s}"
             print(
-                f"{label:<8s} {T:>7d} {U_poly:>10.4f} {U_dsum:>10.4f} "
-                f"{rel:>+9.2%} {bc_str} {ds_bc_str} {status:>8s}"
+                f"{label:<8s} {T:>7d} {U_dsum:>9.4f} {cpu_str} {_fmt(rel_cpu)} "
+                f"{jax_str} {_fmt(rel_jax)} {bay_str} {_fmt(rel_bay)} {ds_bc_str} {status:>7s}"
             )
-            if failed:
-                failures.append((label, T, U_poly, U_dsum, rel))
             # Separate completeness warning: direct-sum far below B&C16 => the
             # NIST level table is missing high-lying levels (not a fit defect).
             if not np.isnan(ds_bc) and ds_bc < -POLY_GATE_TOL:
                 completeness_warnings.append((label, T, U_dsum, U_bc, ds_bc))
-    print("-" * 84)
+    print("-" * 100)
 
     if failures:
+        print(f"\nFAIL: {len(failures)} per-path U(T) value(s) diverged from the DB direct-sum:")
+        for path, label, T, U_path, U_dsum, rel in failures:
+            print(
+                f"  [{path}] {label} @ {T} K: U={U_path:.4f} vs direct-sum={U_dsum:.4f} ({rel:+.1%})"
+            )
         print(
-            f"\nFAIL: {len(failures)} workhorse polynomial value(s) exceed {POLY_GATE_TOL:.0%} "
-            "vs DB direct-sum:"
-        )
-        for label, T, U_poly, U_dsum, rel in failures:
-            print(f"  {label} @ {T} K: U_poly={U_poly:.3f} vs direct-sum={U_dsum:.3f} ({rel:+.1%})")
-        print(
-            "\nThe STORED polynomial is the artifact the JAX manifold / Bayesian /\n"
-            "forward paths consume.  Regenerate with\n"
+            "\nThe JAX manifold / Bayesian adapters consume the direct-sum-FIT\n"
+            "polynomial baked into the snapshot.  Regenerate with\n"
             "  python scripts/regenerate_partition_functions.py --db-path <db>\n"
         )
     else:
-        print("\nGATE PASS: all workhorse polynomials track the DB direct-sum within tolerance.")
+        print(
+            "\nGATE PASS: CPU / manifold-JAX / Bayesian U(T) all track the DB "
+            "direct-sum within tolerance."
+        )
 
     if completeness_warnings:
         print(
@@ -543,9 +688,13 @@ def main():
     print(f"Computing direct summation U(T) from {args.db_path} ...")
     our_data, n_levels = compute_our_partition_functions(args.db_path)
 
-    # Compute the STORED polynomial (the artifact production JAX paths consume).
-    print(f"Evaluating stored polynomial U(T) from {args.db_path} ...")
+    # Evaluate EVERY consumer adapter's U(T) (the Wave-5 per-path value gate).
+    print(f"Evaluating CPU scalar adapter U(T) from {args.db_path} ...")
     poly_data = compute_stored_polynomial(args.db_path)
+    print(f"Evaluating manifold / JAX snapshot adapter U(T) from {args.db_path} ...")
+    jax_data = compute_manifold_jax_polynomial(args.db_path)
+    print(f"Evaluating Bayesian adapter U(T) from {args.db_path} ...")
+    bayes_data = compute_bayesian_polynomial(args.db_path)
 
     # Compare
     print("\n" + "=" * 72)
@@ -574,7 +723,9 @@ def main():
     # workhorse species' polynomial is >POLY_GATE_TOL off the DB direct-sum
     # (the achievable fit target).  This is the gate the diagnosis § 2.6 asked
     # for and the defect-C-closing check.
-    poly_failures = check_polynomial_gate(poly_data, ref_data, our_data)
+    poly_failures = check_polynomial_gate(
+        poly_data, ref_data, our_data, jax_data=jax_data, bayes_data=bayes_data
+    )
 
     # NOTE on exit-code semantics: the legacy direct-sum-vs-B&C16 summary
     # (``n_species_flagged``) is INFORMATIONAL and intentionally does NOT drive
