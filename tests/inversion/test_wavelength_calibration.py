@@ -12,6 +12,7 @@ from cflibs.inversion.preprocess.wavelength_calibration import (
     _is_monotonic_on_grid,
     _model_min_points,
     _model_param_count,
+    detect_ccd_seams,
 )
 
 
@@ -183,16 +184,82 @@ class TestCalibrationResultDataclass:
     def test_details_default_factory_independent(self):
         wl = np.empty(0)
         r1 = WavelengthCalibrationResult(
-            success=False, model="none", coefficients=(),
-            corrected_wavelength=wl, bic=float("inf"), rmse_nm=float("inf"),
-            n_inliers=0, n_peaks=0, n_candidates=0,
-            matched_peak_fraction=0.0, quality_passed=False, quality_reason="x",
+            success=False,
+            model="none",
+            coefficients=(),
+            corrected_wavelength=wl,
+            bic=float("inf"),
+            rmse_nm=float("inf"),
+            n_inliers=0,
+            n_peaks=0,
+            n_candidates=0,
+            matched_peak_fraction=0.0,
+            quality_passed=False,
+            quality_reason="x",
         )
         r2 = WavelengthCalibrationResult(
-            success=False, model="none", coefficients=(),
-            corrected_wavelength=wl, bic=float("inf"), rmse_nm=float("inf"),
-            n_inliers=0, n_peaks=0, n_candidates=0,
-            matched_peak_fraction=0.0, quality_passed=False, quality_reason="x",
+            success=False,
+            model="none",
+            coefficients=(),
+            corrected_wavelength=wl,
+            bic=float("inf"),
+            rmse_nm=float("inf"),
+            n_inliers=0,
+            n_peaks=0,
+            n_candidates=0,
+            matched_peak_fraction=0.0,
+            quality_passed=False,
+            quality_reason="x",
         )
         r1.details["foo"] = "bar"
         assert "foo" not in r2.details
+
+
+class TestDetectCcdSeams:
+    def test_uniform_axis_has_no_seams(self):
+        wl = np.linspace(200.0, 900.0, 5000)
+        seams = detect_ccd_seams(wl)
+        assert seams.size == 0
+
+    def test_single_real_seam_detected(self):
+        # Two contiguous channels with a clear gap between them.
+        left = np.arange(200.0, 300.0, 0.05)
+        right = np.arange(305.0, 400.0, 0.05)  # 5 nm gap >> 0.05 nm step
+        wl = np.concatenate([left, right])
+        seams = detect_ccd_seams(wl)
+        assert seams.size == 1
+        # Seam index points at the last sample of the left channel.
+        assert seams[0] == left.size - 1
+
+    def test_gradual_dispersion_change_is_not_a_seam(self):
+        # A within-axis dispersion change (blue dense, red coarse) must NOT be
+        # shattered into thousands of false seams the way diff > k*median would.
+        blue = np.arange(200.0, 400.0, 0.05)
+        # Red channel sampled 5x coarser but still contiguous (no gap).
+        red = np.arange(blue[-1] + 0.25, 700.0, 0.25)
+        wl = np.concatenate([blue, red])
+        seams = detect_ccd_seams(wl)
+        # At most the single dispersion-change boundary, never thousands.
+        assert seams.size <= 1
+
+    def test_multiple_seams_detected(self):
+        segs = []
+        start = 200.0
+        for _ in range(4):
+            seg = np.arange(start, start + 50.0, 0.05)
+            segs.append(seg)
+            start = seg[-1] + 3.0  # 3 nm inter-channel gap
+        wl = np.concatenate(segs)
+        seams = detect_ccd_seams(wl)
+        assert seams.size == 3
+
+    def test_too_short_axis_returns_empty(self):
+        assert detect_ccd_seams(np.array([200.0, 200.1])).size == 0
+
+    def test_seam_indices_are_sorted_and_in_range(self):
+        segs = [np.arange(200.0, 250.0, 0.05), np.arange(253.0, 300.0, 0.05)]
+        wl = np.concatenate(segs)
+        seams = detect_ccd_seams(wl)
+        assert np.all(np.diff(seams) > 0) if seams.size > 1 else True
+        assert np.all(seams >= 0)
+        assert np.all(seams < wl.size - 1)
