@@ -22,7 +22,7 @@ try:
     HAS_FAISS = True
 except ImportError:
     HAS_FAISS = False
-    faiss = None
+    faiss = None  # type: ignore
 
 # Check for HDF5 availability
 try:
