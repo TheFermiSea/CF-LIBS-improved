@@ -264,6 +264,7 @@ class CDSBPlotter:
         initial_T_K: Optional[float] = None,
         partition_funcs: Optional[Dict[str, float]] = None,
         stark_widths_nm: Optional[Dict[float, float]] = None,
+        number_densities: Optional[Dict[str, float]] = None,
     ) -> CDSBResult:
         """
         Perform CD-SB fitting with iterative self-absorption correction.
@@ -280,6 +281,13 @@ class CDSBPlotter:
             Partition functions U(T) by element. If None, uses default U=25.
         stark_widths_nm : Dict[float, float], optional
             Stark widths by wavelength (nm). If None, estimates from n_e.
+        number_densities : Dict[str, float], optional
+            Absorbing-species number densities by element (cm^-3). When provided
+            these drive the initial optical-depth scaling (physics-audit defect
+            B3); the optical depth scales with the species column density
+            ``n_species * (g_i/U) * exp(-E_i/kT) * L``, NOT with ``n_e``. Absent
+            them, the legacy ``n_e`` proxy is used (under-estimates tau for
+            major matrix elements).
 
         Returns
         -------
@@ -317,7 +325,12 @@ class CDSBPlotter:
         # Initialize tau estimates
         current_T_K = initial_T_K
         tau_values = self._estimate_initial_tau(
-            observations, current_T_K, n_e, partition_funcs, stark_widths_nm
+            observations,
+            current_T_K,
+            n_e,
+            partition_funcs,
+            stark_widths_nm,
+            number_densities=number_densities,
         )
 
         # Track convergence history
@@ -433,6 +446,7 @@ class CDSBPlotter:
         n_e: float,
         partition_funcs: Dict[str, float],
         stark_widths_nm: Optional[Dict[float, float]],
+        number_densities: Optional[Dict[str, float]] = None,
     ) -> Dict[float, float]:
         """
         Estimate initial optical depths for all lines.
@@ -440,12 +454,26 @@ class CDSBPlotter:
         Uses a simplified empirical formula that scales tau based on:
         - Line strength (gA product)
         - Lower level population
-        - Electron density
+        - Absorbing-species number density (NOT electron density)
         - Plasma path length
 
         The actual optical depth calculation is complex and depends on
         detailed atomic physics. This provides a reasonable order-of-magnitude
         estimate suitable for iterative correction.
+
+        Density scaling (physics-audit defect **B3**)
+        ---------------------------------------------
+        Optical depth scales with the *absorbing-species* lower-level column
+        density ``n_lower * L = n_species * (g_i/U) * exp(-E_i/kT) * L``
+        (Aragón & Aguilera 2008 Eq. 7; El Sherbini 2005), where ``n_species``
+        is the number density of the emitting element — NOT the electron
+        density ``n_e``. For a major matrix element (e.g. 25 wt% Si:
+        ``n_Si ~ 7e18`` vs ``n_e ~ 1e17``) using ``n_e`` under-estimates τ by
+        ~40-70×, so the CD-SB iteration converges to "everything thin" before
+        correcting anything. When per-element ``number_densities`` are supplied
+        (the physically-correct input) they drive the density factor; absent
+        them we fall back to the legacy ``n_e`` proxy and emit a warning so the
+        under-estimate is at least visible.
 
         Typical tau values in LIBS plasmas:
         - Optically thin: tau < 0.1
@@ -457,9 +485,19 @@ class CDSBPlotter:
         T_eV = T_K / EV_TO_K
 
         # Reference values for scaling
-        n_e_ref = 1e17  # Reference electron density (cm^-3)
+        n_ref = 1e17  # Reference number density (cm^-3)
         L_ref = 0.1  # Reference path length (cm)
         gA_ref = 1e8  # Reference gA value (strong line)
+
+        use_species_density = bool(number_densities)
+        if not use_species_density:
+            logger.warning(
+                "CD-SB initial-tau falling back to n_e=%.2e as the absorbing-"
+                "species density proxy (defect B3): pass number_densities for "
+                "physically-correct tau scaling — n_e under-estimates tau for "
+                "major matrix elements by ~40-70x.",
+                n_e,
+            )
 
         for obs in observations:
             # Lower level population (Boltzmann)
@@ -478,8 +516,13 @@ class CDSBPlotter:
             gA_product = obs.g_i * obs.A_ki  # Use g_i for absorption
             line_strength = gA_product / gA_ref
 
-            # Density scaling (linear with n_e at moderate densities)
-            density_factor = n_e / n_e_ref
+            # Density scaling: use the absorbing-SPECIES number density when
+            # available (B3 fix), else fall back to the legacy n_e proxy.
+            if number_densities:
+                n_species = number_densities.get(obs.element, 0.0)
+                density_factor = n_species / n_ref
+            else:
+                density_factor = n_e / n_ref
 
             # Path length scaling (linear)
             length_factor = self.plasma_length_cm / L_ref

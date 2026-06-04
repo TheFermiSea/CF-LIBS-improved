@@ -9,11 +9,20 @@ from typing import List, Dict, Optional, Tuple, NamedTuple, Any
 import numpy as np
 from collections import defaultdict
 
-from cflibs.core.constants import KB, KB_EV, SAHA_CONST_CM3, STP_PRESSURE, EV_TO_K
+from cflibs.core.constants import (
+    KB,
+    KB_EV,
+    SAHA_CONST_CM3,
+    STP_PRESSURE,
+    EV_TO_K,
+    H_PLANCK_EV,
+    C_LIGHT,
+)
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy
+from cflibs.inversion.physics.self_absorption import SelfAbsorptionCorrector
 from cflibs.core.logging_config import get_logger
 
 
@@ -705,6 +714,11 @@ class IterativeCFLIBSSolver:
         aki_uncertainty_weighting: bool = True,
         two_region: bool = False,
         closure: Optional[ClosureStrategy] = None,
+        apply_self_absorption: bool = False,
+        self_absorption_plasma_length_cm: float = 0.1,
+        self_absorption_mask_threshold: float = 1.0e6,
+        self_absorption_tau_cap: float = 10.0,
+        self_absorption_column_density_cm3: float = 1.0e16,
     ):
         self.atomic_db = atomic_db
         self.max_iterations = max_iterations
@@ -714,6 +728,73 @@ class IterativeCFLIBSSolver:
         self.apply_ipd = apply_ipd
         self.aki_uncertainty_weighting = aki_uncertainty_weighting
         self.two_region = two_region
+        # Self-absorption correction (Bulajic 2002; physics-audit defect B1).
+        # When enabled, the iterative solver applies a curve-of-growth
+        # escape-factor correction to the observed line intensities *before* the
+        # Boltzmann/closure fit on every iteration after the first, recomputing the
+        # optical depth tau from the current plasma state (T, n_e, concentrations,
+        # partition functions) each pass. This is the outer recursion that the
+        # corrector's per-line :meth:`_apply_recursive_correction` (B4) is designed
+        # to be driven by — without it the corrector is a no-op (dead code).
+        #
+        # OPT-IN (default False). The correction is grounded and reduces error on
+        # genuinely self-absorbed spectra (see the Mg/Ca regression in
+        # tests/inversion/solve/test_self_absorption_wiring.py), but the
+        # plasma-state optical-depth estimate cannot by itself tell a thick line
+        # from a thin one: it computes tau from the recovered density/composition
+        # and corrects unconditionally. On an *optically thin* spectrum (e.g. a
+        # synthetic forward model with no self-absorption) a high recovered
+        # density makes tau look large and the correction over-boosts the
+        # low-E_k lines — a false positive. Until the correction is gated on an
+        # observed self-absorption signature (El Sherbini 2005 line-width ratio,
+        # or a Boltzmann-residual / doublet-ratio test), it stays opt-in so the
+        # default analyze/invert path is never harmed on thin data. Enable it via
+        # ``apply_self_absorption=True`` (or the analysis-config key) for known
+        # optically-thick samples such as the BHVO-2 basalt majors.
+        #
+        # Two safety levers keep the correction bounded and stable inside the
+        # solver, where the absorbing column density (n_e * L) is only known to
+        # ~an order of magnitude:
+        #
+        #   * ``self_absorption_tau_cap`` (default 10) clamps the τ used for the
+        #     *correction factor*. The escape-factor boost ``I/f(τ) ≈ τ`` grows
+        #     without bound and the Doppler-core curve-of-growth model loses
+        #     validity beyond τ ~ 5-10 (El Sherbini 2005), so an uncapped 1/f(τ)
+        #     would amplify a strong resonance line by 100-1000× off a possibly
+        #     over-estimated density — wrong and destabilising. Capping at ≈ 10
+        #     bounds the boost to the literature "~one order of magnitude"
+        #     accuracy gain (Bulajic 2002) and corrects the dominant
+        #     self-absorbed majors without deleting them.
+        #   * ``self_absorption_mask_threshold`` is therefore set very high
+        #     (default 1e6) so that with the cap in place NO line is ever
+        #     dropped — even a saturated resonance line keeps its (bounded)
+        #     correction and its Boltzmann lever-arm, rather than being masked
+        #     out of the fit. Masking strong major lines was the failure mode
+        #     that made naive wiring collapse the fit ("insufficient points").
+        # Effective absorbing heavy-particle density (cm^-3) used for the τ
+        # estimate. The iterative solver's own n_e comes from an STP (1 atm)
+        # pressure balance and is ~1e18 — far above the ~1e16-1e17 heavy-
+        # particle density of a *gated* ps-LIBS plasma at the analysis delay.
+        # Feeding 1e18 puts every strong major line deep in saturation (τ ≫
+        # τ_cap), where the correction is a flat ~τ_cap boost that cannot
+        # discriminate self-absorbed lines from thin ones — so it has no effect
+        # on composition. We instead anchor the column density to a LIBS-
+        # realistic reference (default 1e16, calibrated so the audit's Si I
+        # 251.611 reference line lands at τ ≈ 5, the El Sherbini correctable
+        # regime). Number fractions from closure then modulate this per element.
+        self.self_absorption_column_density_cm3 = self_absorption_column_density_cm3
+        self.apply_self_absorption = apply_self_absorption
+        self.self_absorption_corrector: Optional[SelfAbsorptionCorrector] = None
+        self._last_sa_max_tau: float = 0.0
+        if apply_self_absorption:
+            self.self_absorption_corrector = SelfAbsorptionCorrector(
+                optical_depth_threshold=0.1,
+                mask_threshold=self_absorption_mask_threshold,
+                max_iterations=5,
+                convergence_tolerance=0.01,
+                plasma_length_cm=self_absorption_plasma_length_cm,
+                correction_tau_cap=self_absorption_tau_cap,
+            )
         # Closure strategy — defaults to ILR per architecture-review
         # Candidate 3 (ILR has well-conditioned gradients down to the
         # trace-element regime).  The per-call ``closure_mode`` argument
@@ -920,6 +1001,89 @@ class IterativeCFLIBSSolver:
 
         return dict(corrected)
 
+    @staticmethod
+    def _lower_level_energy_ev(obs: LineObservation) -> float:
+        """Lower-level energy ``E_i`` of a line, in eV.
+
+        ``LineObservation`` carries only the upper-level energy ``E_k`` and the
+        wavelength, but the curve-of-growth optical-depth estimate needs the
+        *lower*-level energy (the absorbing level). Energy conservation for the
+        transition gives ``E_i = E_k - hc/lambda`` exactly, so we recover it
+        rather than defaulting every line to the ground state (which would make
+        every line look like a maximally self-absorbed resonance line).
+
+        Clamped to be non-negative to absorb small wavelength/energy rounding in
+        the atomic data.
+        """
+        photon_ev = (H_PLANCK_EV * C_LIGHT) / (obs.wavelength_nm * 1e-9)
+        return max(0.0, obs.E_k_ev - photon_ev)
+
+    def _apply_self_absorption_correction(
+        self,
+        obs_by_element: Dict[str, List[LineObservation]],
+        T_K: float,
+        concentrations: Dict[str, float],
+        total_n_cm3: float,
+        partition_funcs: Dict[str, float],
+    ) -> Dict[str, List[LineObservation]]:
+        """Curve-of-growth self-absorption correction of observed intensities.
+
+        Implements the outer recursion of the Bulajic et al. (2002,
+        *Spectrochim. Acta B* 57, 339, doi:10.1016/S0584-8547(01)00398-6)
+        self-absorption algorithm (physics-audit defect **B1**). For each line
+        the optical depth ``tau_0`` is recomputed from the *current* plasma
+        state (T, concentrations, total number density, partition functions) and
+        the observed integrated intensity is divided by the Gaussian escape
+        factor ``f(tau) = (1 - e^-tau) / tau`` to recover the optically-thin
+        intensity that the Boltzmann/closure fit assumes.
+
+        This is applied to the *raw per-element observations* (before the Saha
+        ion->neutral remap) so that the corrected intensities feed the existing
+        ``_apply_saha_correction`` -> ``_fit_common_boltzmann_plane`` -> closure
+        chain unchanged. ``concentrations`` are the number fractions from the
+        previous iteration's closure; on the first iteration they are empty, so
+        every ``tau`` is zero and this is a transparent no-op — the correction
+        bootstraps once the loop has a composition estimate, exactly as in the
+        reference recursive algorithm.
+
+        Lines whose ``tau`` exceeds ``mask_threshold`` are dropped (they are
+        black at line centre and carry no recoverable column-density info);
+        every other line is returned with its corrected intensity. The
+        ``LineObservation`` identity (element, stage, E_k, g_k, A_ki, wavelength)
+        is preserved so downstream Saha mapping and Boltzmann ``y`` values stay
+        consistent.
+
+        Returns the corrected ``obs_by_element`` mapping (same structure as the
+        input). Elements with no surviving lines are omitted.
+        """
+        self._last_sa_max_tau = 0.0
+        if self.self_absorption_corrector is None:
+            return obs_by_element
+        if not concentrations or total_n_cm3 <= 0 or T_K <= 0:
+            return obs_by_element
+
+        flat_obs: List[LineObservation] = []
+        lower_level_energies: Dict[float, float] = {}
+        for obs_list in obs_by_element.values():
+            for obs in obs_list:
+                flat_obs.append(obs)
+                lower_level_energies[obs.wavelength_nm] = self._lower_level_energy_ev(obs)
+
+        result = self.self_absorption_corrector.correct(
+            flat_obs,
+            temperature_K=T_K,
+            concentrations=concentrations,
+            total_number_density_cm3=total_n_cm3,
+            partition_funcs=partition_funcs,
+            lower_level_energies=lower_level_energies,
+        )
+        self._last_sa_max_tau = result.max_optical_depth
+
+        corrected_by_element: Dict[str, List[LineObservation]] = defaultdict(list)
+        for obs in result.corrected_observations:
+            corrected_by_element[obs.element].append(obs)
+        return dict(corrected_by_element)
+
     def _fit_common_boltzmann_plane(
         self,
         corrected_obs_map: Dict[str, List[LineObservation]],
@@ -1045,7 +1209,11 @@ class IterativeCFLIBSSolver:
                 - electron_density_uncertainty_cm3: Set to 0.0 here.
                 - boltzmann_covariance: None in this routine; covariance information is produced by solve_with_uncertainty.
         """
-        if HAS_JAX and _lax_while_loop_enabled():
+        # The self-absorption correction (B1) applies a per-line curve-of-growth
+        # correction whose escape factor is not part of the traced lax body, so
+        # when it is enabled we run the reference Python loop (which is the
+        # default production path anyway). Disable SA to opt back into lax.
+        if HAS_JAX and _lax_while_loop_enabled() and not self.apply_self_absorption:
             try:
                 return self._solve_lax(observations, closure_mode, **closure_kwargs)
             except _LaxFallback as exc:
@@ -1090,6 +1258,7 @@ class IterativeCFLIBSSolver:
         history = []
         concentrations: Dict[str, float] = {}  # Initialize before loop
         last_common_fit: Optional[_CommonSlopeFit] = None
+        last_max_tau = 0.0
 
         for _ in range(1, self.max_iterations + 1):
             T_prev = T_K
@@ -1109,8 +1278,34 @@ class IterativeCFLIBSSolver:
 
             effective_ips = self._compute_effective_ips(ips, n_e, T_K)
 
+            # 2b. Self-absorption correction (Bulajic 2002; physics-audit B1).
+            # Recompute tau from the *current* plasma state and divide observed
+            # intensities by the curve-of-growth escape factor before the
+            # Boltzmann/closure fit. No-op on iteration 1 (concentrations empty).
+            #
+            # Column density: the optical depth scales with the absorbing heavy-
+            # particle column n_heavy * L. We anchor it to a LIBS-realistic
+            # reference (``self_absorption_column_density_cm3``, default 1e16)
+            # rather than the solver's STP pressure-balance n_e (~1e18), which
+            # would push every strong major line into uniform saturation and
+            # erase the per-line discrimination the correction needs. See the
+            # extended note in ``__init__``. Per-element number fractions
+            # (``concentrations``) still modulate τ inside the corrector.
+            sa_obs_by_element = obs_by_element
+            if self.apply_self_absorption:
+                sa_obs_by_element = self._apply_self_absorption_correction(
+                    obs_by_element,
+                    T_K,
+                    concentrations,
+                    self.self_absorption_column_density_cm3,
+                    partition_funcs,
+                )
+                last_max_tau = self._last_sa_max_tau
+
             # Map ionic lines to the neutral energy plane
-            corrected_obs_map = self._apply_saha_correction(obs_by_element, T_K, n_e, effective_ips)
+            corrected_obs_map = self._apply_saha_correction(
+                sa_obs_by_element, T_K, n_e, effective_ips
+            )
 
             # 3. Multi-species Boltzmann Fit
             common_fit = self._fit_common_boltzmann_plane(corrected_obs_map)
@@ -1248,6 +1443,10 @@ class IterativeCFLIBSSolver:
             "r_squared_last": last_common_fit.r_squared if last_common_fit is not None else 0.0
         }
         quality_metrics.update(lte_report.quality_metrics)
+        # Self-absorption diagnostics: max optical depth seen on the final
+        # correction pass (0.0 when SA is disabled or never fired).
+        quality_metrics["self_absorption_applied"] = float(self.apply_self_absorption)
+        quality_metrics["self_absorption_max_tau"] = float(last_max_tau)
 
         if self.two_region and T_corona is None:
             T_corona = 0.8 * T_K

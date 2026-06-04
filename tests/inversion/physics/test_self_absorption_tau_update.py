@@ -281,3 +281,91 @@ def test_tau_invariant_under_intensity_rescaling(corrector, thick_line, plasma_s
         "is a property of the plasma column (Bulajic 2002 §3); it "
         "must be invariant under intensity rescaling."
     )
+
+
+# -----------------------------------------------------------------------------
+# (e) Correction-factor cap bounds the intensity boost without changing τ
+# -----------------------------------------------------------------------------
+
+
+def test_correction_tau_cap_bounds_correction_factor(thick_line, plasma_state):
+    """With ``correction_tau_cap`` set, the *correction factor* is clamped.
+
+    The escape-factor boost ``I/f(τ) ≈ τ`` grows without bound as ``τ → ∞`` and
+    the Doppler-core curve-of-growth model loses validity beyond τ ~ 5-10
+    (El Sherbini 2005). A configured cap must bound the intensity boost to
+    ``≈ τ_cap`` while still *reporting* the true (uncapped) optical depth — this
+    is what keeps the iterative-solver wiring stable when the absorbing column
+    density is only known to an order of magnitude.
+    """
+    cap = 10.0
+    capped = SelfAbsorptionCorrector(
+        optical_depth_threshold=0.1,
+        mask_threshold=1.0e9,
+        max_iterations=5,
+        convergence_tolerance=1.0e-3,
+        plasma_length_cm=0.1,
+        correction_tau_cap=cap,
+    )
+    tau = capped._estimate_optical_depth(
+        thick_line,
+        plasma_state["temperature_K"],
+        plasma_state["concentrations"],
+        plasma_state["total_n_cm3"],
+        plasma_state["partition_funcs"],
+        plasma_state["E_i_ev"],
+    )
+    assert tau > cap, "Test setup error: need τ above the cap to exercise it."
+
+    result = capped._apply_recursive_correction(
+        thick_line,
+        tau,
+        plasma_state["temperature_K"],
+        plasma_state["concentrations"],
+        plasma_state["total_n_cm3"],
+        plasma_state["partition_funcs"],
+        plasma_state["E_i_ev"],
+    )
+
+    # Reported τ is the TRUE plasma value, not the cap.
+    assert result.optical_depth == pytest.approx(tau, rel=1.0e-9)
+    # But the applied correction factor is bounded by the capped escape factor.
+    expected_factor = _escape_factor(cap)
+    assert result.corrected_intensity == pytest.approx(
+        thick_line.intensity / expected_factor, rel=1.0e-9
+    )
+    # And it is far below the unbounded ``I/f(τ_true)`` the uncapped path gives.
+    unbounded = thick_line.intensity / _escape_factor(tau)
+    assert result.corrected_intensity < 0.5 * unbounded
+
+
+def test_no_cap_preserves_uncapped_correction(thick_line, plasma_state):
+    """``correction_tau_cap=None`` (default) leaves the historical behaviour."""
+    uncapped = SelfAbsorptionCorrector(
+        optical_depth_threshold=0.1,
+        mask_threshold=1.0e9,
+        max_iterations=5,
+        convergence_tolerance=1.0e-3,
+        plasma_length_cm=0.1,
+        correction_tau_cap=None,
+    )
+    tau = uncapped._estimate_optical_depth(
+        thick_line,
+        plasma_state["temperature_K"],
+        plasma_state["concentrations"],
+        plasma_state["total_n_cm3"],
+        plasma_state["partition_funcs"],
+        plasma_state["E_i_ev"],
+    )
+    result = uncapped._apply_recursive_correction(
+        thick_line,
+        tau,
+        plasma_state["temperature_K"],
+        plasma_state["concentrations"],
+        plasma_state["total_n_cm3"],
+        plasma_state["partition_funcs"],
+        plasma_state["E_i_ev"],
+    )
+    assert result.corrected_intensity == pytest.approx(
+        thick_line.intensity / _escape_factor(tau), rel=1.0e-9
+    )

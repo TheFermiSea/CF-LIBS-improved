@@ -40,7 +40,6 @@ from cflibs.inversion.solve.iterative import (  # noqa: E402
     LineObservation,
 )
 
-
 pytestmark = [pytest.mark.requires_jax, pytest.mark.unit]
 
 
@@ -191,7 +190,11 @@ def test_jax_solver_quality_metrics_reports_backend(mock_db):
 
 
 def _solve_pair(mock_db, observations):
-    solver_np = IterativeCFLIBSSolver(mock_db, max_iterations=20)
+    # The lax/JAX backend does not run the self-absorption correction (B1),
+    # so the numpy reference must disable it too for an apples-to-apples
+    # iteration-backend parity comparison. (SA is exercised separately in
+    # tests/inversion/solve/test_self_absorption_wiring.py.)
+    solver_np = IterativeCFLIBSSolver(mock_db, max_iterations=20, apply_self_absorption=False)
     solver_jax = IterativeCFLIBSSolverJax(mock_db, max_iterations=20)
     res_np = solver_np.solve(observations)
     res_jax = solver_jax.solve(observations)
@@ -220,9 +223,7 @@ def test_parity_two_element_equal_concentration(mock_db):
     res_np, res_jax = _solve_pair(mock_db, obs)
     assert sorted(res_np.concentrations.keys()) == sorted(res_jax.concentrations.keys())
     np.testing.assert_allclose(res_jax.temperature_K, res_np.temperature_K, rtol=1e-3, atol=2.0)
-    np.testing.assert_allclose(
-        res_jax.electron_density_cm3, res_np.electron_density_cm3, rtol=1e-3
-    )
+    np.testing.assert_allclose(res_jax.electron_density_cm3, res_np.electron_density_cm3, rtol=1e-3)
     for el in res_np.concentrations:
         np.testing.assert_allclose(
             res_jax.concentrations[el],
@@ -245,12 +246,8 @@ def test_parity_aalto_multi_element(mock_db):
     assert sorted(res_np.concentrations.keys()) == sorted(res_jax.concentrations.keys())
     # Allow a slightly looser temperature tolerance because the iteration
     # trajectory can differ by 1 step.
-    np.testing.assert_allclose(
-        res_jax.temperature_K, res_np.temperature_K, rtol=2e-3, atol=10.0
-    )
-    np.testing.assert_allclose(
-        res_jax.electron_density_cm3, res_np.electron_density_cm3, rtol=2e-3
-    )
+    np.testing.assert_allclose(res_jax.temperature_K, res_np.temperature_K, rtol=2e-3, atol=10.0)
+    np.testing.assert_allclose(res_jax.electron_density_cm3, res_np.electron_density_cm3, rtol=2e-3)
     for el in res_np.concentrations:
         np.testing.assert_allclose(
             res_jax.concentrations[el],
@@ -266,9 +263,7 @@ def test_parity_matrix_closure(mock_db):
     solver_np = IterativeCFLIBSSolver(mock_db, max_iterations=20)
     solver_jax = IterativeCFLIBSSolverJax(mock_db, max_iterations=20)
     res_np = solver_np.solve(obs, closure_mode="matrix", matrix_element="A", matrix_fraction=0.5)
-    res_jax = solver_jax.solve(
-        obs, closure_mode="matrix", matrix_element="A", matrix_fraction=0.5
-    )
+    res_jax = solver_jax.solve(obs, closure_mode="matrix", matrix_element="A", matrix_fraction=0.5)
     for el in res_np.concentrations:
         np.testing.assert_allclose(
             res_jax.concentrations[el],
