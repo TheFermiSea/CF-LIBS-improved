@@ -555,7 +555,7 @@ def _select_comb_transitions(
 ) -> List[Transition]:
     sorted_t = sorted(
         transitions,
-        key=lambda t: (_transition_strength(t), -t.wavelength_nm),
+        key=lambda t: (-t.ionization_stage, _transition_strength(t), -t.wavelength_nm),
         reverse=True,
     )
     if max_lines > 0 and len(sorted_t) > max_lines:
