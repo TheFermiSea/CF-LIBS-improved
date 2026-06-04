@@ -156,7 +156,7 @@ def test_self_absorption_opt_in_default_off():
 def test_self_absorption_correction_fires(self_absorbed_observations):
     """With self-absorbed input the correction records a non-trivial tau."""
     result = _solve(self_absorbed_observations, apply_self_absorption=True)
-    assert result.quality_metrics["self_absorption_applied"] == 1.0
+    assert result.quality_metrics["self_absorption_applied"] == pytest.approx(1.0)
     # A strong low-E_i line in this fixture is genuinely thick (tau > 1).
     assert result.quality_metrics["self_absorption_max_tau"] > 1.0
 

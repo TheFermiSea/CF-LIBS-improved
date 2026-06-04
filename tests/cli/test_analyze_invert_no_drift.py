@@ -71,10 +71,10 @@ def test_helper_and_analyze_default_floor_agree():
     helper_default = (
         inspect.signature(_detect_and_select_lines).parameters["min_relative_intensity"].default
     )
-    assert helper_default == 100.0
+    assert helper_default == pytest.approx(100.0)
 
     ns = _analyze_parser_defaults()
-    assert ns["min_relative_intensity"] == 100.0
+    assert ns["min_relative_intensity"] == pytest.approx(100.0)
     assert ns["resolving_power"] is None
     assert ns["apply_self_absorption"] is False
 
