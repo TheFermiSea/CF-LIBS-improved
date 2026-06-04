@@ -353,12 +353,18 @@ class SahaBoltzmannSolver(SolverStrategy):
 
         if self.enforce_charge_balance:
             from cflibs.plasma.anderson_solver import anderson_solve, prepare_atomic_data_jax
+            from cflibs.core.jax_runtime import HAS_JAX
+
+            if HAS_JAX:
+                import jax.numpy as jnp
+            else:
+                raise ImportError("JAX is required for enforce_charge_balance=True")
 
             elements = list(plasma.species.keys())
             total_species_density = sum(plasma.species.values())
 
             if total_species_density > 0:
-                compositions = [plasma.species[el] / total_species_density for el in elements]
+                compositions = jnp.array([plasma.species[el] / total_species_density for el in elements])
                 atomic_data = prepare_atomic_data_jax(elements, self.atomic_db)
 
                 result = anderson_solve(
