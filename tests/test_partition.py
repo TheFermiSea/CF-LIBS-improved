@@ -6,13 +6,14 @@ the Saha-Boltzmann solver for computing ionization equilibrium.
 """
 
 import json
+import sqlite3
 from pathlib import Path
 
 import numpy as np
 import pytest
+from cflibs.atomic.database import AtomicDatabase
 from cflibs.plasma.partition import polynomial_partition_function
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
-from unittest.mock import MagicMock
 
 
 def test_polynomial_evaluator():
@@ -26,47 +27,114 @@ def test_polynomial_evaluator():
     assert np.isclose(polynomial_partition_function(100, coeffs), 100.0)
 
 
-def test_solver_integration():
-    # Mock database
-    db = MagicMock()
-    # Mock partition coefficients
-    pf_mock = MagicMock()
-    pf_mock.coefficients = [np.log(100), 0, 0, 0, 0]
-    # Ensure get_partition_coefficients exists on the mock
-    db.get_partition_coefficients.return_value = pf_mock
+def _build_partition_db(path: Path) -> None:
+    """Create a minimal *real* SQLite DB exercising the U(T) provider factory.
 
-    # Mock energy levels (should NOT be called if coeffs exist)
-    db.get_energy_levels.return_value = []
+    These tests previously used a ``MagicMock`` database, but after the
+    partition-provider unification (PR #218) the solver obtains U(T) through
+    :meth:`AtomicDatabase.partition_function_for` rather than calling
+    ``get_partition_coefficients`` / ``get_energy_levels`` directly.  A
+    ``MagicMock`` auto-creates ``partition_function_for`` and ``float(...)`` of
+    the resulting auto-mock collapses to ``1.0``, so the real fallback policy
+    was never exercised — the assertions silently stopped testing anything.
 
-    solver = SahaBoltzmannSolver(db)
+    Driving the real :class:`AtomicDatabase` keeps the original physical
+    contracts intact while routing through the production factory + provider:
 
-    # Test using __wrapped__ to bypass caching decorator (which fails with mocks)
-    # T = 1 eV ~ 11604 K
-    # U should be 100 regardless of T because only a0 is set
-    U = solver.calculate_partition_function.__wrapped__(solver, "H", 1, 1.0)
+    * species ``XA`` — a stored polynomial ``ln U = ln 100`` but ZERO energy
+      levels, so the factory must fall back to the polynomial (U == 100).
+    * species ``XB`` — two energy levels and NO stored polynomial, so the
+      factory must prefer the direct sum (U == 1 + 3·e⁻¹ ≈ 2.1036).
+    """
+    conn = sqlite3.connect(str(path))
+    # `lines` carries the columns AtomicDatabase's startup migration expects so
+    # the migration is a no-op for this fixture DB.
+    conn.executescript("""
+        CREATE TABLE lines (
+            element TEXT, sp_num INTEGER, wavelength_nm REAL, aki REAL,
+            ei_ev REAL, ek_ev REAL, gi INTEGER, gk INTEGER,
+            stark_w REAL, stark_alpha REAL, stark_shift REAL,
+            is_resonance INTEGER, aki_uncertainty REAL, accuracy_grade TEXT
+        );
+        CREATE TABLE energy_levels (
+            element TEXT, sp_num INTEGER, g_level INTEGER, energy_ev REAL
+        );
+        CREATE TABLE partition_functions (
+            element TEXT, sp_num INTEGER,
+            a0 REAL, a1 REAL, a2 REAL, a3 REAL, a4 REAL,
+            t_min REAL, t_max REAL, source TEXT
+        );
+        CREATE TABLE species_physics (
+            element TEXT, sp_num INTEGER, ip_ev REAL, atomic_mass REAL
+        );
+        """)
+    # XA: poly ln U = ln(100), no energy levels -> polynomial fallback.
+    conn.execute(
+        "INSERT INTO partition_functions VALUES ('XA', 1, ?, 0, 0, 0, 0, 2000, 25000, 'test')",
+        (float(np.log(100)),),
+    )
+    conn.execute("INSERT INTO species_physics VALUES ('XA', 1, 13.6, 1.0)")
+    # XB: two levels, no poly -> direct-sum-preferred path.
+    conn.execute("INSERT INTO energy_levels VALUES ('XB', 1, 1, 0.0)")
+    conn.execute("INSERT INTO energy_levels VALUES ('XB', 1, 3, 1.0)")
+    conn.execute("INSERT INTO species_physics VALUES ('XB', 1, 13.6, 1.0)")
+    conn.commit()
+    conn.close()
+
+
+@pytest.fixture()
+def partition_db(tmp_path):
+    """Real :class:`AtomicDatabase` over a minimal fixture DB (clean PF caches)."""
+    from cflibs.plasma import partition as _P
+
+    # The provider factory caches per (db_path, element, stage); clear so the
+    # fresh fixture DB is resolved (and leave a clean cache for other tests).
+    _P._spec_cache.clear()
+    _P._level_cache.clear()
+    db_path = tmp_path / "partition_fixture.db"
+    _build_partition_db(db_path)
+    db = AtomicDatabase(str(db_path))
+    yield db
+    _P._spec_cache.clear()
+    _P._level_cache.clear()
+
+
+def test_solver_integration(partition_db):
+    """Level-less species with a stored polynomial -> polynomial fallback (U == 100).
+
+    Encodes #218's fallback contract: prefer direct-sum WHEN the species has
+    energy levels, ELSE the stored polynomial.  XA has zero levels, so the
+    factory must return the polynomial value (ln U = ln 100 => U == 100),
+    NOT the g0 floor.
+    """
+    # Sanity: XA genuinely has no energy levels but does have a stored poly.
+    assert partition_db.get_energy_levels("XA", 1) == []
+    spec = partition_db.partition_spec_for("XA", 1)
+    assert spec is not None and spec.from_direct_sum is False
+
+    solver = SahaBoltzmannSolver(partition_db)
+
+    # T = 1 eV ~ 11604 K. U should be 100 regardless of T because only a0 is set.
+    # Use __wrapped__ to bypass the caching decorator deterministically.
+    U = solver.calculate_partition_function.__wrapped__(solver, "XA", 1, 1.0)
     assert np.isclose(U, 100.0)
 
-    # Verify get_partition_coefficients was called
-    db.get_partition_coefficients.assert_called_with("H", 1)
 
+def test_solver_fallback(partition_db):
+    """Species with energy levels and no stored poly -> direct sum (U == 1 + 3·e⁻¹).
 
-def test_solver_fallback():
-    db = MagicMock()
-    # No coefficients
-    db.get_partition_coefficients.return_value = None
-    # Ionization potential for the IP-based energy cutoff
-    db.get_ionization_potential.return_value = 13.6
+    XB has two levels (g=1 @ 0 eV, g=3 @ 1 eV) and no polynomial row, so the
+    factory must prefer the exact direct sum.
+    """
+    assert partition_db.get_partition_coefficients("XB", 1) is None
+    spec = partition_db.partition_spec_for("XB", 1)
+    assert spec is not None and spec.from_direct_sum is True
 
-    # Levels: g=1, E=0; g=3, E=1.0
-    level1 = MagicMock(g=1, energy_ev=0.0)
-    level2 = MagicMock(g=3, energy_ev=1.0)
-    db.get_energy_levels.return_value = [level1, level2]
-
-    solver = SahaBoltzmannSolver(db)
+    solver = SahaBoltzmannSolver(partition_db)
 
     T_eV = 1.0
     # U = 1*exp(0) + 3*exp(-1/1) = 1 + 3*0.3678 = 2.103
-    U = solver.calculate_partition_function.__wrapped__(solver, "H", 1, T_eV)
+    U = solver.calculate_partition_function.__wrapped__(solver, "XB", 1, T_eV)
 
     expected = 1.0 + 3.0 * np.exp(-1.0)
     assert np.isclose(U, expected)

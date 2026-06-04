@@ -752,10 +752,36 @@ class IterativeCFLIBSSolver:
         replaces; for level-less species it applies the guarded stored
         polynomial.  The hardcoded estimates remain only for species the
         factory cannot resolve at all (no levels, no stored row).
+
+        ``partition_function_for`` is a convenience method on the concrete
+        :class:`AtomicDatabase`, NOT part of the :class:`AtomicDataSource` ABC.
+        Pluggable backends (the documented Key Abstraction) need only satisfy
+        the ABC, so we ``hasattr``-guard the factory call and fall back to the
+        ABC-level accessors (``get_energy_levels`` direct sum, then the stored
+        polynomial) — the same fallback ladder this method used before the
+        provider unification, and mirroring the guard in
+        :meth:`SahaBoltzmannSolver.calculate_partition_function`.
         """
-        provider = self.atomic_db.partition_function_for(element, ionization_stage)
-        if provider is not None:
-            return float(provider.at(T_K))
+        if hasattr(self.atomic_db, "partition_function_for"):
+            provider = self.atomic_db.partition_function_for(element, ionization_stage)
+            if provider is not None:
+                return float(provider.at(T_K))
+        else:
+            # ABC-only backend: reproduce the pre-unification fallback ladder
+            # (direct sum over energy levels, then the stored polynomial).
+            from cflibs.plasma.partition import (
+                PartitionFunctionEvaluator,
+                get_levels_for_species,
+            )
+
+            levels = get_levels_for_species(self.atomic_db, element, ionization_stage)
+            if levels is not None:
+                g_arr, E_arr, ip_ev = levels
+                return PartitionFunctionEvaluator.evaluate_direct(T_K, g_arr, E_arr, ip_ev)
+
+            pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
+            if pf:
+                return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
 
         if ionization_stage == 1:
             return 25.0
