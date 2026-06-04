@@ -218,7 +218,17 @@ def invert_cmd(args):
         if cli_peak_width_nm is not None
         else analysis_cfg.get("peak_width_nm", 0.2)
     )
-    min_relative_intensity = analysis_cfg.get("min_relative_intensity")
+    # Default to a non-None relative-intensity floor (physics-audit /
+    # composition-pipeline-diagnosis: IDENT-RYDBERG). With no floor, weak
+    # high-lying (Rydberg) transitions with relative_intensity ~ 0 (e.g. the
+    # Na I 413-421 nm lines, E_k ~ 5 eV, unobservable in a ~1 eV ps-LIBS
+    # plasma) are matched to bright wrong-element peaks and, because the
+    # Boltzmann ordinate divides by their tiny A_ki, extrapolate the closure to
+    # a huge spurious abundance (Na ~ 77-98 wt% vs certified 1.65 on BHVO-2).
+    # The shipped example config uses 100.0; adopt it as the default so the
+    # bare `cflibs invert` path is not catastrophically wrong. Set
+    # ``min_relative_intensity: null`` in the analysis config to disable.
+    min_relative_intensity = analysis_cfg.get("min_relative_intensity", 100.0)
     resolving_power = (
         args.resolving_power
         if args.resolving_power is not None
