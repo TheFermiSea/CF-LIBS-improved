@@ -731,6 +731,7 @@ class IterativeCFLIBSSolver:
         self_absorption_tau_cap: float = 10.0,
         self_absorption_column_density_cm3: float = 1.0e16,
         min_boltzmann_r2: float = 0.3,
+        boltzmann_weight_cap: float = 5.0,
     ):
         self.atomic_db = atomic_db
         self.max_iterations = max_iterations
@@ -761,6 +762,35 @@ class IterativeCFLIBSSolver:
         # a permissive floor: a clean optically-thin Boltzmann plane sits at
         # R^2 > 0.95, while the collapse cases sit at R^2 ~ 1e-3.
         self.min_boltzmann_r2 = float(min_boltzmann_r2)
+        # Per-element Boltzmann-weight dynamic-range cap.
+        #
+        # The pooled common-slope fit weights each line by inverse variance,
+        # w = 1/sigma_y^2. Under the Poisson intensity model sigma_I ~ sqrt(I),
+        # so in fit space (y = ln(I/gA)) sigma_y ~ 1/sqrt(I) and w ~ I — the WLS
+        # becomes intensity-weighted, and an element's fitted intercept q_s is
+        # set almost entirely by its single brightest line. On real ChemCam
+        # BHVO-2 the Fe I 382.0 nm line carries ~133x the weight of the next Fe
+        # line and sits HIGH in the Boltzmann plane, lifting Fe's weighted
+        # intercept from an honest unweighted ~18.3 to ~20.5 (+2.2) while Si
+        # stays near its ensemble mean; this collapses the physical
+        # q_Si - q_Fe ~ +3 spread to ~+0.2, and the closure
+        # C_s ∝ U_s·exp(q_s)·mult then lets the large U_Fe drive Fe to ~72%
+        # (cert 8.6%). Capping each element's weights at
+        # ``boltzmann_weight_cap`` × median(valid weights) neutralizes the
+        # single-bright-line concentration while preserving inverse-variance
+        # weighting in the well-behaved regime (lines within K× of the median
+        # are untouched). The cap is applied identically on the numpy host path
+        # (``_fit_common_boltzmann_plane``) and the JAX padded-array path
+        # (``_build_padded_arrays_from_obs``), so the CPU and lax kernels
+        # consume bit-for-bit identical weights.
+        #
+        # Anti-overfit / generality guard: the cap is dataset-agnostic (no
+        # element list, no certified value enters it) and its effect is
+        # CSA-invariant — on the CSA BHVO-2 spectrum, whose per-element weight
+        # spreads are already narrow, the cap is a near no-op (RMSE flat across
+        # K), while it monotonically corrects the ChemCam over-attribution.
+        # Set to 0 (or any non-positive value) to disable.
+        self.boltzmann_weight_cap = float(boltzmann_weight_cap)
         # Self-absorption correction (Bulajic 2002; physics-audit defect B1).
         # When enabled, the iterative solver applies a curve-of-growth
         # escape-factor correction to the observed line intensities *before* the
@@ -1160,6 +1190,14 @@ class IterativeCFLIBSSolver:
             if xs.size < 2:
                 continue
 
+            # Bound the per-element weight dynamic range so the pooled intercept
+            # is not dominated by a single bright line (see
+            # ``self.boltzmann_weight_cap``). Applied here on the numpy host path
+            # and identically in ``_build_padded_arrays_from_obs`` for the JAX
+            # path, on the same post-valid-mask weights, so both kernels consume
+            # bit-for-bit identical weights.
+            ws = _cap_boltzmann_weights(ws, self.boltzmann_weight_cap)
+
             x_mean = float(np.average(xs, weights=ws))
             y_mean = float(np.average(ys, weights=ws))
 
@@ -1554,7 +1592,7 @@ class IterativeCFLIBSSolver:
 
         # 3. Build padded observation arrays
         elements_ord, x_raw, y_raw, w_raw, stage_arr, mask_arr = _build_padded_arrays_from_obs(
-            dict(obs_by_element)
+            dict(obs_by_element), weight_cap=self.boltzmann_weight_cap
         )
         if x_raw is None:
             raise _LaxFallback("no usable observations after padding")
@@ -1933,8 +1971,45 @@ if HAS_JAX:
         }
 
 
+def _cap_boltzmann_weights(weights: np.ndarray, cap: float) -> np.ndarray:
+    """Clip a single element's inverse-variance weights to ``cap`` × their median.
+
+    Bounds the per-element Boltzmann-weight dynamic range so the pooled
+    common-slope intercept is no longer dominated by a single bright line (see
+    ``IterativeCFLIBSSolver.boltzmann_weight_cap``). The median is taken over the
+    finite, strictly-positive entries only; entries at or below the cap (the
+    well-behaved regime) are left untouched, preserving inverse-variance
+    weighting there. A non-positive ``cap`` disables the clip and returns the
+    input unchanged.
+
+    Parameters
+    ----------
+    weights:
+        1-D array of weights for one element's lines (only the valid entries
+        should be passed in; padded/zero entries do not affect the median but
+        would skew it if included as positive values, so callers must mask first).
+    cap:
+        Multiplier ``K`` such that no weight exceeds ``K × median(valid weights)``.
+
+    Returns
+    -------
+    np.ndarray
+        A clipped copy of ``weights`` (or ``weights`` itself when disabled).
+    """
+    if cap <= 0.0:
+        return weights
+    finite_pos = weights[np.isfinite(weights) & (weights > 0.0)]
+    if finite_pos.size == 0:
+        return weights
+    med = float(np.median(finite_pos))
+    if not np.isfinite(med) or med <= 0.0:
+        return weights
+    return np.minimum(weights, cap * med)
+
+
 def _build_padded_arrays_from_obs(
     obs_by_element: Dict[str, List[LineObservation]],
+    weight_cap: float = 0.0,
 ):
     """
     Build padded (E, N_max) numpy arrays from per-element observation lists.
@@ -1973,6 +2048,14 @@ def _build_padded_arrays_from_obs(
                 and np.isfinite(w[i, j])
                 and w[i, j] > 0.0
             )
+        # Bound the per-element weight dynamic range using ONLY this row's valid
+        # weights for the median (padded zeros excluded by the mask), matching
+        # the numpy host path in _fit_common_boltzmann_plane so the lax kernel
+        # receives identically-capped weights.
+        if weight_cap > 0.0:
+            row_mask = mask[i]
+            if row_mask.any():
+                w[i, row_mask] = _cap_boltzmann_weights(w[i, row_mask], weight_cap)
     # Zero-out invalid entries in x/y/w so masked sums are clean
     x = np.where(mask, x, 0.0)
     y = np.where(mask, y, 0.0)
@@ -2011,6 +2094,7 @@ class IterativeCFLIBSSolverJax(IterativeCFLIBSSolver):
         ne_tolerance_frac: float = 0.1,
         pressure_pa: float = STP_PRESSURE,
         apply_ipd: bool = False,
+        boltzmann_weight_cap: float = 5.0,
     ):
         super().__init__(
             atomic_db=atomic_db,
@@ -2019,6 +2103,7 @@ class IterativeCFLIBSSolverJax(IterativeCFLIBSSolver):
             ne_tolerance_frac=ne_tolerance_frac,
             pressure_pa=pressure_pa,
             apply_ipd=apply_ipd,
+            boltzmann_weight_cap=boltzmann_weight_cap,
         )
         if HAS_JAX:
             try:
