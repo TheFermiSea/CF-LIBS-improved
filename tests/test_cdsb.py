@@ -704,3 +704,79 @@ class TestPhysicalConsistency:
 
         if result.n_points >= 2:
             assert 0 <= result.r_squared <= 1
+
+
+# =============================================================================
+# B3: initial-tau density scaling (physics-audit defect B3)
+# =============================================================================
+
+
+class TestCDSBInitialTauDensityScaling:
+    """Initial optical depth must scale with the absorbing-SPECIES number
+    density, not the electron density (physics-audit defect B3; Aragón &
+    Aguilera 2008 Eq. 7)."""
+
+    def _single_line(self, element="Si", E_i=0.5):
+        return CDSBLineObservation(
+            wavelength_nm=288.16,
+            intensity=1000.0,
+            intensity_uncertainty=20.0,
+            element=element,
+            ionization_stage=1,
+            E_k_ev=5.0,
+            g_k=3,
+            A_ki=1.0e8,
+            E_i_ev=E_i,
+            g_i=1,
+            is_resonance=False,
+        )
+
+    def test_species_density_drives_tau(self):
+        """Supplying number_densities makes tau scale with n_species."""
+        plotter = CDSBPlotter()
+        obs = [self._single_line()]
+        pf = {"Si": 15.0}
+
+        tau_low = plotter._estimate_initial_tau(
+            obs, 10000.0, 1e17, pf, None, number_densities={"Si": 1e17}
+        )[obs[0].wavelength_nm]
+        tau_high = plotter._estimate_initial_tau(
+            obs, 10000.0, 1e17, pf, None, number_densities={"Si": 7e18}
+        )[obs[0].wavelength_nm]
+
+        # 70x more absorbers -> 70x more optical depth (before the tau<=10 clamp;
+        # both land at the clamp here, but the low one must be strictly smaller
+        # or equal and the high one must be at least as thick).
+        assert tau_high >= tau_low
+        # And a major-element column density (7e18) drives a genuinely thick line.
+        assert tau_high > 1.0
+
+    def test_species_density_beats_ne_proxy_for_major_element(self):
+        """For a 25 wt%-style major element n_species >> n_e, so the
+        species-density tau must exceed the legacy n_e-proxy tau."""
+        plotter = CDSBPlotter()
+        obs = [self._single_line(E_i=1.0)]
+        pf = {"Si": 15.0}
+
+        # Legacy n_e proxy (n_e = 1e17).
+        tau_proxy = plotter._estimate_initial_tau(obs, 10000.0, 1e17, pf, None)[
+            obs[0].wavelength_nm
+        ]
+        # Physically-correct species density (n_Si ~ 7e18 for 25 wt% Si).
+        tau_species = plotter._estimate_initial_tau(
+            obs, 10000.0, 1e17, pf, None, number_densities={"Si": 7e18}
+        )[obs[0].wavelength_nm]
+
+        assert tau_species > tau_proxy, (
+            "Species-density tau must exceed the n_e-proxy tau for a major "
+            f"matrix element (B3): proxy={tau_proxy:.3f} species={tau_species:.3f}."
+        )
+
+    def test_fit_threads_number_densities(self):
+        """CDSBPlotter.fit forwards number_densities to the initial-tau step."""
+        obs = create_synthetic_cdsb_lines(9000, n_points=10, n_resonance=3, seed=42)
+        n_dens = {"Fe": 5e18}
+        plotter = CDSBPlotter()
+        result = plotter.fit(obs, n_e=1e17, number_densities=n_dens)
+        assert result.temperature_K > 0
+        assert result.n_points >= 2

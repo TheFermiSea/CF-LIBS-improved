@@ -240,11 +240,21 @@ def invert_cmd(args):
     for warning in detection.warnings:
         logger.warning(f"Line detection warning: {warning}")
 
+    # B2 (physics-audit 2026-05-27): retain resonance lines by default rather
+    # than dropping them. The strong low-E_i resonance lines (Ca II H/K, Na D,
+    # Mg I 285, Al I 396) dominate the basalt majors and carry the most
+    # composition information; with the self-absorption correction now wired
+    # into the iterative solver (defect B1, default-on) these lines are
+    # *corrected* via the curve-of-growth escape factor rather than discarded
+    # for "self-absorption risk" (Aragón & Aguilera 2008 §7: lines with
+    # E_i < ~1 eV should be corrected, not dropped). Override with
+    # ``exclude_resonance: true`` in the analysis config to restore the old
+    # drop-resonance behaviour.
     selector = LineSelector(
         min_snr=analysis_cfg.get("min_snr", 10.0),
         min_energy_spread_ev=analysis_cfg.get("min_energy_spread_ev", 2.0),
         min_lines_per_element=analysis_cfg.get("min_lines_per_element", 3),
-        exclude_resonance=analysis_cfg.get("exclude_resonance", True),
+        exclude_resonance=analysis_cfg.get("exclude_resonance", False),
         isolation_wavelength_nm=analysis_cfg.get("isolation_wavelength_nm", 0.1),
         max_lines_per_element=analysis_cfg.get("max_lines_per_element", 20),
     )
