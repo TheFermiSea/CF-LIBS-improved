@@ -176,6 +176,8 @@ def _detect_and_select_lines(
     min_lines_per_element: int = 3,
     isolation_wavelength_nm: float = 0.1,
     max_lines_per_element: int = 20,
+    wavelength_calibration: bool = True,
+    residual_shift_scan_nm: float = 0.05,
 ):
     """
     Detect spectral lines and apply the line-selection quality gate.
@@ -215,14 +217,75 @@ def _detect_and_select_lines(
     exclude_resonance : bool or None
         Override the resonance-exclusion policy. ``None`` ties it to
         ``not apply_self_absorption``.
+    wavelength_calibration : bool
+        If True (default), run robust per-spectrum/per-segment wavelength
+        calibration (:func:`calibrate_wavelength_axis_segmented`) before
+        detection. This replaces the single-constant global comb shift-scan's
+        job for instruments with a per-spectrum or piecewise dispersion error;
+        the global scan is reduced to a small residual mop-up. When calibration
+        cannot be confidently estimated, it is skipped and the full global
+        shift-scan is used (legacy behaviour preserved).
+    residual_shift_scan_nm : float
+        Half-width (nm) of the residual comb shift-scan applied *after* a
+        successful wavelength calibration. Small by design (default 0.05 nm):
+        the calibration has already aligned the axis, so only sub-tolerance
+        jitter remains.
 
     Returns
     -------
     list
         The selected ``LineObservation`` list (``selection.selected_lines``).
     """
+    import numpy as np
+
     from cflibs.inversion.line_detection import detect_line_observations
     from cflibs.inversion.line_selection import LineSelector
+    from cflibs.inversion.preprocess.wavelength_calibration import (
+        calibrate_wavelength_axis_segmented,
+    )
+
+    # Robust per-spectrum wavelength calibration BEFORE detection. Real LIBS
+    # instruments carry a per-spectrum (and, for stitched multi-channel
+    # spectrometers, per-channel) dispersion error that the single global comb
+    # shift-scan inside ``detect_line_observations`` cannot represent: it can
+    # only apply one constant offset, so on a piecewise-dispersion instrument it
+    # compromises and leaves real majors mis-aligned beyond tolerance (measured
+    # on BHVO-2: ChemCam Al 396.152 misses by 0.109 nm; CSA abandons Si vs Mg).
+    # ``calibrate_wavelength_axis_segmented`` detects detector seams and fits each
+    # channel independently (degrading to a single global affine when there are
+    # no seams), aligning the axis robustly. After calibration only a small
+    # residual ``shift_scan_nm`` is needed to mop up sub-tolerance jitter.
+    shift_scan_nm = 0.5  # legacy global scan (used when calibration disabled)
+    if wavelength_calibration:
+        try:
+            cal = calibrate_wavelength_axis_segmented(
+                wavelength=np.asarray(wavelength, dtype=float),
+                intensity=np.asarray(intensity, dtype=float),
+                atomic_db=atomic_db,
+                elements=elements,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(f"Wavelength calibration failed ({exc!r}); using raw axis.")
+            cal = None
+        if cal is not None and cal.success and cal.quality_passed:
+            wavelength = cal.corrected_wavelength
+            shift_scan_nm = residual_shift_scan_nm
+            logger.info(
+                "Applied wavelength calibration: model=%s segments=%s "
+                "n_inliers=%d rmse=%.4f nm (residual shift-scan +/-%.3f nm)",
+                cal.model,
+                cal.details.get("segments", 1),
+                cal.n_inliers,
+                cal.rmse_nm,
+                residual_shift_scan_nm,
+            )
+        else:
+            reason = cal.quality_reason if cal is not None else "exception"
+            logger.info(
+                "Wavelength calibration not applied (%s); "
+                "falling back to global comb shift-scan.",
+                reason,
+            )
 
     detection = detect_line_observations(
         wavelength=wavelength,
@@ -234,6 +297,7 @@ def _detect_and_select_lines(
         min_peak_height=min_peak_height,
         peak_width_nm=peak_width_nm,
         min_relative_intensity=min_relative_intensity,
+        shift_scan_nm=shift_scan_nm,
     )
 
     for warning in detection.warnings:

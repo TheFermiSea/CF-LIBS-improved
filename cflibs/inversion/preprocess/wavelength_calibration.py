@@ -839,9 +839,7 @@ def calibrate_wavelength_axis_segmented(
     if wavelength.size < 4 or intensity.size < 4:
         return _no_op_result(wavelength, "spectrum_too_short")
 
-    seams = detect_ccd_seams(
-        wavelength, ratio_threshold=seam_ratio_threshold, window=seam_window
-    )
+    seams = detect_ccd_seams(wavelength, ratio_threshold=seam_ratio_threshold, window=seam_window)
 
     # Always compute a global single-axis fit. For single-segment axes this IS
     # the answer; for multi-segment axes it is the per-segment fallback.
@@ -890,9 +888,7 @@ def calibrate_wavelength_axis_segmented(
 
         if n_pts >= min_segment_points:
             models = (
-                sparse_segment_max_models
-                if n_pts < sparse_segment_points
-                else candidate_models
+                sparse_segment_max_models if n_pts < sparse_segment_points else candidate_models
             )
             seg_cal = calibrate_wavelength_axis(
                 wavelength=seg_wl,
@@ -953,9 +949,7 @@ def calibrate_wavelength_axis_segmented(
                 nearest = min(fit_idx, key=lambda j: abs(j - i))
                 a, b = bounds[i], bounds[i + 1]
                 na, nb = bounds[nearest], bounds[nearest + 1]
-                neighbor_offset = float(
-                    np.median(corrected[na:nb] - wavelength[na:nb])
-                )
+                neighbor_offset = float(np.median(corrected[na:nb] - wavelength[na:nb]))
                 corrected[a:b] = wavelength[a:b] + neighbor_offset
                 seg_diag[i]["status"] = "neighbor"
                 seg_status[i] = "neighbor"
