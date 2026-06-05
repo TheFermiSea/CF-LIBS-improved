@@ -573,6 +573,7 @@ def _run_lax_while_loop(
     t_tol_k: float,
     ne_tol_frac: float,
     pressure_pa: float,
+    min_r2: float = 0.3,
 ) -> LoopState:
     """Drive the iteration through ``jax.lax.while_loop`` (spec §4).
 
@@ -634,8 +635,13 @@ def _run_lax_while_loop(
         intercepts = fit["intercepts"]
         r_squared = fit["r_squared"]
 
-        # T update (50/50 damping, clamped)
-        T_new = jnp.where(slope >= 0.0, 50000.0, -1.0 / (slope * KB_EV))
+        # T update (50/50 damping), gated on Boltzmann-plot quality to mirror
+        # the Python path (see IterativeCFLIBSSolver.__init__): on a degenerate
+        # fit (non-negative slope or R^2 < min_r2) hold T at the prior value
+        # instead of running it to the legacy 50000 K clamp, which collapses the
+        # closure into a raw-intensity softmax.
+        degenerate = jnp.logical_or(slope >= 0.0, r_squared < min_r2)
+        T_new = jnp.where(degenerate, T_prev, -1.0 / (slope * KB_EV))
         T_K = 0.5 * T_prev + 0.5 * T_new
 
         # Two-region corona: weighted T for Saha scaling matches the Python
@@ -667,10 +673,15 @@ def _run_lax_while_loop(
         ne_new = avg_Z * n_tot_cm3
         n_e = 0.5 * ne_prev + 0.5 * ne_new
 
-        # Convergence (matches Python path: |ΔT|<tol and |Δne|/ne_prev<frac)
+        # Convergence (matches Python path: |ΔT|<tol and |Δne|/ne_prev<frac).
+        # A degenerate fit holds T at the prior, which would satisfy |ΔT|<tol
+        # spuriously, so it can never count as converged.
         converged = jnp.logical_and(
-            jnp.abs(T_K - T_prev) < t_tol_k,
-            jnp.abs(n_e - ne_prev) / jnp.maximum(ne_prev, 1e-30) < ne_tol_frac,
+            jnp.logical_not(degenerate),
+            jnp.logical_and(
+                jnp.abs(T_K - T_prev) < t_tol_k,
+                jnp.abs(n_e - ne_prev) / jnp.maximum(ne_prev, 1e-30) < ne_tol_frac,
+            ),
         )
 
         return LoopState(
@@ -719,6 +730,8 @@ class IterativeCFLIBSSolver:
         self_absorption_mask_threshold: float = 1.0e6,
         self_absorption_tau_cap: float = 10.0,
         self_absorption_column_density_cm3: float = 1.0e16,
+        min_boltzmann_r2: float = 0.3,
+        boltzmann_weight_cap: float = 5.0,
     ):
         self.atomic_db = atomic_db
         self.max_iterations = max_iterations
@@ -728,6 +741,56 @@ class IterativeCFLIBSSolver:
         self.apply_ipd = apply_ipd
         self.aki_uncertainty_weighting = aki_uncertainty_weighting
         self.two_region = two_region
+        # Boltzmann-plot quality gate for the slope -> temperature update.
+        #
+        # The temperature is recovered from the (negative) slope of the common
+        # Boltzmann plane: T = -1/(slope * k_B). When the fit is *degenerate*
+        # — a near-zero or positive slope, or a poor R^2 — the slope carries no
+        # reliable temperature information. The legacy code ran T to a 50000 K
+        # clamp on a non-negative slope; on real, noisy LIBS data this collapses
+        # the inversion: at T ~ 10^5 K the Boltzmann factor exp(-E_k/kT) -> 1 for
+        # every line, so the per-element intercept q_s degenerates to
+        # ln(<intensity>/gA) and the closure becomes a raw-intensity softmax in
+        # which the largest-U low-ionization alkali/alkaline-earth element soaks
+        # all the mass (the BHVO-2 "keystone collapse": 9 correct Mg + 9 correct
+        # Fe lines -> Na/Ca dominate). We therefore *gate* the slope->T update:
+        # on a degenerate fit (slope >= 0 or R^2 < ``min_boltzmann_r2``) we hold
+        # T at the previous (prior) value instead of running it to the clamp, and
+        # mark the solve non-converged so downstream consumers know the
+        # temperature — and hence the composition — is untrustworthy. Set to 0.0
+        # to disable the R^2 gate (slope-sign gate still applies). Default 0.3 is
+        # a permissive floor: a clean optically-thin Boltzmann plane sits at
+        # R^2 > 0.95, while the collapse cases sit at R^2 ~ 1e-3.
+        self.min_boltzmann_r2 = float(min_boltzmann_r2)
+        # Per-element Boltzmann-weight dynamic-range cap.
+        #
+        # The pooled common-slope fit weights each line by inverse variance,
+        # w = 1/sigma_y^2. Under the Poisson intensity model sigma_I ~ sqrt(I),
+        # so in fit space (y = ln(I/gA)) sigma_y ~ 1/sqrt(I) and w ~ I — the WLS
+        # becomes intensity-weighted, and an element's fitted intercept q_s is
+        # set almost entirely by its single brightest line. On real ChemCam
+        # BHVO-2 the Fe I 382.0 nm line carries ~133x the weight of the next Fe
+        # line and sits HIGH in the Boltzmann plane, lifting Fe's weighted
+        # intercept from an honest unweighted ~18.3 to ~20.5 (+2.2) while Si
+        # stays near its ensemble mean; this collapses the physical
+        # q_Si - q_Fe ~ +3 spread to ~+0.2, and the closure
+        # C_s ∝ U_s·exp(q_s)·mult then lets the large U_Fe drive Fe to ~72%
+        # (cert 8.6%). Capping each element's weights at
+        # ``boltzmann_weight_cap`` × median(valid weights) neutralizes the
+        # single-bright-line concentration while preserving inverse-variance
+        # weighting in the well-behaved regime (lines within K× of the median
+        # are untouched). The cap is applied identically on the numpy host path
+        # (``_fit_common_boltzmann_plane``) and the JAX padded-array path
+        # (``_build_padded_arrays_from_obs``), so the CPU and lax kernels
+        # consume bit-for-bit identical weights.
+        #
+        # Anti-overfit / generality guard: the cap is dataset-agnostic (no
+        # element list, no certified value enters it) and its effect is
+        # CSA-invariant — on the CSA BHVO-2 spectrum, whose per-element weight
+        # spreads are already narrow, the cap is a near no-op (RMSE flat across
+        # K), while it monotonically corrects the ChemCam over-attribution.
+        # Set to 0 (or any non-positive value) to disable.
+        self.boltzmann_weight_cap = float(boltzmann_weight_cap)
         # Self-absorption correction (Bulajic 2002; physics-audit defect B1).
         # When enabled, the iterative solver applies a curve-of-growth
         # escape-factor correction to the observed line intensities *before* the
@@ -1127,6 +1190,14 @@ class IterativeCFLIBSSolver:
             if xs.size < 2:
                 continue
 
+            # Bound the per-element weight dynamic range so the pooled intercept
+            # is not dominated by a single bright line (see
+            # ``self.boltzmann_weight_cap``). Applied here on the numpy host path
+            # and identically in ``_build_padded_arrays_from_obs`` for the JAX
+            # path, on the same post-valid-mask weights, so both kernels consume
+            # bit-for-bit identical weights.
+            ws = _cap_boltzmann_weights(ws, self.boltzmann_weight_cap)
+
             x_mean = float(np.average(xs, weights=ws))
             y_mean = float(np.average(ys, weights=ws))
 
@@ -1315,10 +1386,20 @@ class IterativeCFLIBSSolver:
 
             last_common_fit = common_fit
             slope = common_fit.slope
+            fit_r2 = float(getattr(common_fit, "r_squared", 0.0))
 
-            # Update T
-            if slope >= 0:
-                T_new = 50000.0  # Clamp max
+            # Update T — gated on Boltzmann-plot quality (see __init__ note).
+            #
+            # A non-negative slope is unphysical (the populations would *rise*
+            # with E_k) and a low-R^2 fit means the slope is not estimable. In
+            # either case the legacy "T_new = 50000" clamp is what triggers the
+            # keystone collapse, so instead we hold T at the prior value and flag
+            # the fit as degenerate. Holding T (rather than clamping high) keeps
+            # the Boltzmann factor exp(-E_k/kT) discriminating between lines so
+            # the intercepts stay physically meaningful for the closure step.
+            boltzmann_degenerate = slope >= 0 or fit_r2 < self.min_boltzmann_r2
+            if boltzmann_degenerate:
+                T_new = T_prev  # hold at prior; slope carries no usable T
             else:
                 T_new = -1.0 / (slope * KB_EV)
 
@@ -1422,13 +1503,19 @@ class IterativeCFLIBSSolver:
 
             history.append((T_K, n_e))
 
-            # Check convergence
+            # Check convergence. A degenerate Boltzmann fit holds T at the prior,
+            # which would otherwise satisfy |ΔT| < tol spuriously — so a
+            # degenerate fit can never be reported as converged. The composition
+            # from such a fit is untrustworthy and the False flag tells callers
+            # (and round-trip/NIST tooling) to treat T and C as unconstrained.
             if (
-                abs(T_K - T_prev) < self.t_tolerance_k
+                not boltzmann_degenerate
+                and abs(T_K - T_prev) < self.t_tolerance_k
                 and abs(n_e - ne_prev) / ne_prev < self.ne_tolerance_frac
             ):
                 converged = True
                 break
+            converged = False
 
         # LTE validity check
         from cflibs.plasma.lte_validator import LTEValidator
@@ -1505,7 +1592,7 @@ class IterativeCFLIBSSolver:
 
         # 3. Build padded observation arrays
         elements_ord, x_raw, y_raw, w_raw, stage_arr, mask_arr = _build_padded_arrays_from_obs(
-            dict(obs_by_element)
+            dict(obs_by_element), weight_cap=self.boltzmann_weight_cap
         )
         if x_raw is None:
             raise _LaxFallback("no usable observations after padding")
@@ -1555,6 +1642,7 @@ class IterativeCFLIBSSolver:
             t_tol_k=self.t_tolerance_k,
             ne_tol_frac=self.ne_tolerance_frac,
             pressure_pa=self.pressure_pa,
+            min_r2=self.min_boltzmann_r2,
         )
 
         # 8. Host-side assembly
@@ -1883,8 +1971,45 @@ if HAS_JAX:
         }
 
 
+def _cap_boltzmann_weights(weights: np.ndarray, cap: float) -> np.ndarray:
+    """Clip a single element's inverse-variance weights to ``cap`` × their median.
+
+    Bounds the per-element Boltzmann-weight dynamic range so the pooled
+    common-slope intercept is no longer dominated by a single bright line (see
+    ``IterativeCFLIBSSolver.boltzmann_weight_cap``). The median is taken over the
+    finite, strictly-positive entries only; entries at or below the cap (the
+    well-behaved regime) are left untouched, preserving inverse-variance
+    weighting there. A non-positive ``cap`` disables the clip and returns the
+    input unchanged.
+
+    Parameters
+    ----------
+    weights:
+        1-D array of weights for one element's lines (only the valid entries
+        should be passed in; padded/zero entries do not affect the median but
+        would skew it if included as positive values, so callers must mask first).
+    cap:
+        Multiplier ``K`` such that no weight exceeds ``K × median(valid weights)``.
+
+    Returns
+    -------
+    np.ndarray
+        A clipped copy of ``weights`` (or ``weights`` itself when disabled).
+    """
+    if cap <= 0.0:
+        return weights
+    finite_pos = weights[np.isfinite(weights) & (weights > 0.0)]
+    if finite_pos.size == 0:
+        return weights
+    med = float(np.median(finite_pos))
+    if not np.isfinite(med) or med <= 0.0:
+        return weights
+    return np.minimum(weights, cap * med)
+
+
 def _build_padded_arrays_from_obs(
     obs_by_element: Dict[str, List[LineObservation]],
+    weight_cap: float = 0.0,
 ):
     """
     Build padded (E, N_max) numpy arrays from per-element observation lists.
@@ -1923,6 +2048,14 @@ def _build_padded_arrays_from_obs(
                 and np.isfinite(w[i, j])
                 and w[i, j] > 0.0
             )
+        # Bound the per-element weight dynamic range using ONLY this row's valid
+        # weights for the median (padded zeros excluded by the mask), matching
+        # the numpy host path in _fit_common_boltzmann_plane so the lax kernel
+        # receives identically-capped weights.
+        if weight_cap > 0.0:
+            row_mask = mask[i]
+            if row_mask.any():
+                w[i, row_mask] = _cap_boltzmann_weights(w[i, row_mask], weight_cap)
     # Zero-out invalid entries in x/y/w so masked sums are clean
     x = np.where(mask, x, 0.0)
     y = np.where(mask, y, 0.0)
@@ -1961,6 +2094,7 @@ class IterativeCFLIBSSolverJax(IterativeCFLIBSSolver):
         ne_tolerance_frac: float = 0.1,
         pressure_pa: float = STP_PRESSURE,
         apply_ipd: bool = False,
+        boltzmann_weight_cap: float = 5.0,
     ):
         super().__init__(
             atomic_db=atomic_db,
@@ -1969,6 +2103,7 @@ class IterativeCFLIBSSolverJax(IterativeCFLIBSSolver):
             ne_tolerance_frac=ne_tolerance_frac,
             pressure_pa=pressure_pa,
             apply_ipd=apply_ipd,
+            boltzmann_weight_cap=boltzmann_weight_cap,
         )
         if HAS_JAX:
             try:

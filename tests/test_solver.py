@@ -93,6 +93,65 @@ def test_solver_multielement(mock_db):
     assert abs(res.concentrations["B"] - 0.5) < 0.05
 
 
+def test_clean_boltzmann_fit_is_not_gated(mock_db):
+    """A clean (high-R^2, negative-slope) fit must update T normally and converge.
+
+    Regression guard for the slope-R^2 conditioning gate: it must be a no-op on
+    well-conditioned data so the round-trip/NIST-parity behaviour is preserved.
+    """
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=10)
+    T_eV = 1.0  # ~11604 K
+    obs = []
+    for E in [1.0, 2.0, 3.0, 4.0, 5.0]:
+        y = -E / T_eV + 10.0
+        obs.append(LineObservation(500.0, np.exp(y), 0.1, "A", 1, E, 1, 1e8))
+
+    res = solver.solve(obs)
+    assert res.converged is True
+    assert res.quality_metrics["r_squared_last"] > 0.99
+    assert abs(res.temperature_K - 11604.0) < 600.0
+
+
+def test_degenerate_boltzmann_fit_holds_T_and_reports_unconverged(mock_db):
+    """A flat / near-zero-slope Boltzmann plane must NOT run T to the 50000 K
+    clamp and must NOT be reported as converged.
+
+    This is the conditioning that prevents the closure-degeneracy collapse: at a
+    runaway temperature exp(-E_k/kT) -> 1 for every line and the closure becomes
+    a raw-intensity softmax that the brightest element wins. The gate holds T at
+    the prior (initial 10000 K) and marks the solve non-converged so the garbage
+    composition is flagged rather than trusted.
+    """
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=10)
+    obs = []
+    # Flat intensities (no E_k dependence) => zero/non-negative slope: an
+    # unphysical Boltzmann plane the slope-sign gate must reject regardless of
+    # R^2. Higher-E_k lines even *rise* slightly so the fitted slope is >= 0.
+    for el in ("A", "B"):
+        for E in (1.0, 2.0, 3.0, 4.0, 5.0):
+            y = 10.0 + 0.05 * E  # populations rise with E_k: unphysical
+            obs.append(LineObservation(500.0, np.exp(y), 0.1, el, 1, E, 1, 1e8))
+
+    res = solver.solve(obs)
+    assert res.converged is False
+    # T held near the 10000 K prior, NOT the legacy 50000 K clamp.
+    assert res.temperature_K < 30000.0
+
+
+def test_min_boltzmann_r2_gate_is_configurable(mock_db):
+    """Setting min_boltzmann_r2=0.0 with a negative slope disables the R^2 gate
+    (slope-sign gate still applies)."""
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=5, min_boltzmann_r2=0.0)
+    assert solver.min_boltzmann_r2 == pytest.approx(0.0, abs=1e-12)
+    T_eV = 1.0
+    obs = []
+    for E in [1.0, 2.0, 3.0]:
+        y = -E / T_eV + 10.0
+        obs.append(LineObservation(500.0, np.exp(y), 0.1, "A", 1, E, 1, 1e8))
+    res = solver.solve(obs)
+    assert res.converged is True
+
+
 def test_saha_correction_maps_mixed_stage_lines_to_common_boltzmann_plane(mock_db):
     solver = IterativeCFLIBSSolver(mock_db, max_iterations=10)
 
