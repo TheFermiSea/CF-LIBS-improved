@@ -252,8 +252,14 @@ def test_apply_resonance_filter_returns_false_when_self_absorption_aware_disable
 
 
 def test_apply_resonance_filter_returns_true_when_enough_non_resonance_lines():
-    """NNLS-significant + enough non-resonance survivors -> apply the filter."""
-    identifier = ALIASIdentifier(_DummyAtomicDB())
+    """NNLS-significant + enough non-resonance survivors -> apply the filter.
+
+    Audit Family 5 flipped ``self_absorption_aware`` to default ``False``, so
+    the filter must be opted into explicitly here. This test verifies the
+    "filter ON" branch (NNLS evidence + >=3 non-resonance survivors), which
+    is reachable only when the operator enables self-absorption awareness.
+    """
+    identifier = ALIASIdentifier(_DummyAtomicDB(), self_absorption_aware=True)
     # Mix: one resonance line (E_i=0) and three non-resonance lines (E_i=2 eV).
     transitions = [
         _transition_with_e_i(500.0, 1.0, e_i_ev=0.0),  # resonance — gets dropped
@@ -278,8 +284,12 @@ def test_apply_resonance_filter_preserves_all_resonance_element_n3rf4_guard():
     and the R^2 gate would then reject it — which is what regressed Al
     recall 0.500 -> 0.000 in Phase 5 (commit 4794d04). The pre-scan
     must detect this and disable the filter for the candidate.
+
+    Audit Family 5 flipped ``self_absorption_aware`` to default ``False``;
+    we opt in explicitly so this test exercises the n3rf.4 all-resonance
+    guard rather than short-circuiting on the disabled-awareness branch.
     """
-    identifier = ALIASIdentifier(_DummyAtomicDB())
+    identifier = ALIASIdentifier(_DummyAtomicDB(), self_absorption_aware=True)
     transitions = [
         _transition_with_e_i(396.15, 3.14, e_i_ev=0.0),
         _transition_with_e_i(308.21, 4.02, e_i_ev=0.0),

@@ -844,7 +844,7 @@ class ALIASIdentifier:
         use_jax_nnls: bool = False,
         use_jax_p_snr: bool = False,
         use_jax_template_build: bool = False,
-        self_absorption_aware: bool = True,
+        self_absorption_aware: bool = False,
         self_absorption_damping: float = 0.3,
         self_absorption_e_i_cutoff_ev: float = 0.1,
         temperature_estimator_mode: str = "legacy",
@@ -1005,31 +1005,35 @@ class ALIASIdentifier:
             (same arithmetic, just reordered). Opt-in (default False).
             Requires JAX (default: False).
         self_absorption_aware : bool, optional
-            When True (default), down-weight the theoretical emissivity of
-            resonance lines (``E_i_ev < self_absorption_e_i_cutoff_ev``) by
+            Opt-in self-absorption correction (default ``False``). When
+            ``True``, down-weight the theoretical emissivity of resonance
+            lines (``E_i_ev < self_absorption_e_i_cutoff_ev``) by
             ``self_absorption_damping`` inside the k_sim cosine-similarity
             and the log-ratio consistency score (R_rat). This compensates
             for the fact that strong resonance lines are systematically
             weaker than the optically-thin Saha-Boltzmann prediction in
             high-concentration matrices (e.g. Si in soil at 60% SiO2,
             where the Si I 251.6 nm / 288.2 nm lines become optically
-            thick and line-reverse). When False, the score uses the raw
-            emissivity values from the Saha-Boltzmann solver — this is the
-            mathematically pure optically-thin assumption and matches the
-            paper-faithful ALIAS behavior, but it penalizes the cosine
-            similarity of high-concentration major elements. The default
-            ``True`` preserves the pre-CF-LIBS-improved-fix behavior — the
-            historical code had ``SA_DAMPING = 0.3`` hardcoded inline at
-            two call sites without any documentation, flag, or logging.
-            (default: True)
+            thick and line-reverse). When ``False`` (the default), the
+            score uses the raw emissivity values from the Saha-Boltzmann
+            solver — this is the mathematically pure optically-thin
+            assumption and matches the paper-faithful ALIAS behavior.
+            The default was flipped to ``False`` (audit Family 5): the
+            ad-hoc ``SA_DAMPING = 0.3`` correction (historically hardcoded
+            inline at two call sites without flag or logging, then promoted
+            to a default-on knob) must not silently damp emissivities by
+            default. Set ``self_absorption_aware=True`` to opt back in for
+            high-concentration matrices. (default: False)
         self_absorption_damping : float, optional
             Multiplicative damping factor applied to theoretical emissivity
-            of resonance lines when ``self_absorption_aware`` is True.
+            of resonance lines when ``self_absorption_aware`` is True (it is
+            a no-op when ``self_absorption_aware`` is False, the default).
             Must be in (0, 1]. 1.0 means "no damping" and is equivalent to
-            ``self_absorption_aware=False``. The historical default of 0.3
-            says "resonance lines arrive ~3x weaker than the optically-
-            thin prediction"; tune this only if you have evidence the
-            value should differ for your dataset (default: 0.3).
+            ``self_absorption_aware=False``. The default of 0.3 says
+            "resonance lines arrive ~3x weaker than the optically-thin
+            prediction"; tune this only if you opt into the correction
+            (``self_absorption_aware=True``) and have evidence the value
+            should differ for your dataset (default: 0.3).
         self_absorption_e_i_cutoff_ev : float, optional
             Lower-level energy threshold (in eV) below which a line is
             treated as a "resonance line" for self-absorption damping.
@@ -3444,7 +3448,7 @@ class ALIASIdentifier:
         # Coverage is handled exclusively by k_rate.
         #
         # Self-absorption correction (gated by self.self_absorption_aware,
-        # default True): resonance lines below
+        # default False — opt-in, audit Family 5): resonance lines below
         # ``self.self_absorption_e_i_cutoff_ev`` are systematically weaker
         # than optically-thin predictions in high-concentration matrices
         # (Si in soil at 60% SiO2 is the canonical example). Damping the
@@ -3900,8 +3904,9 @@ class ALIASIdentifier:
 
         # Apply self-absorption damping to resonance lines so theoretical
         # log-ratios better match observed ratios for strong transitions.
-        # Gated by self.self_absorption_aware (default True); previously
-        # this used a hardcoded ``SA_DAMPING = 0.3``. The counters mutated
+        # Gated by self.self_absorption_aware (default False — opt-in,
+        # audit Family 5); previously this used a hardcoded
+        # ``SA_DAMPING = 0.3``. The counters mutated
         # below feed the post-identify summary log line for transparency.
         sa_aware = self.self_absorption_aware
         sa_damping_value = self.self_absorption_damping if sa_aware else 1.0
@@ -4070,7 +4075,9 @@ class ALIASIdentifier:
         k_shift : float
             Wavelength shift score
         N_expected : int
-            Number of above-threshold theoretical lines (for gates/penalties)
+            Number of above-threshold theoretical lines. This is ``N_X`` in
+            the Noel-2025 k_det blend (the element's expected line count) as
+            well as the value driving the gates/penalties.
         intensity : np.ndarray
             Experimental intensity array
         peaks : List[Tuple[int, float]]
@@ -4083,29 +4090,38 @@ class ALIASIdentifier:
         P_sig : float
             Statistical significance factor against random coincidence
         N_matched : int
-            Number of matched above-threshold lines (used in k_det blend)
+            Number of matched above-threshold lines. Used only for the hard
+            gates below; the Noel-2025 k_det blend weights by ``N_expected``
+            (``N_X``), not ``N_matched``.
         P_cov : float
-            Emissivity-weighted coverage penalty (0–1)
+            Emissivity-weighted coverage penalty (0–1). Diagnostic only — it
+            is no longer blended into k_det (the paper formula has no P_cov
+            term).
 
         Returns
         -------
         Tuple[float, float]
             (k_det, CL) detection score and confidence level.
         """
-        # k_det formula — uses N_matched (paper: N_X = matched count)
-        # for the blend weighting.  Single-line elements (N_X=1) naturally
-        # reduce to k_rate × k_shift via the blend formula.
+        # k_det formula — paper-faithful Noel et al. (2025):
         #
-        # Modified from original: blend P_cov (emissivity-weighted coverage)
-        # into k_det so that elements with many weak undetected lines are
-        # not excessively penalized.  P_cov weights by emissivity, so missing
-        # a weak line (emissivity 1% of total) only reduces P_cov by 1%.
-        if N_matched > 0:
-            N_X = N_matched
-            k_det_raw = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
-            # Blend: use geometric mean of raw k_det and P_cov to soften
-            # the penalty for many unmatched weak lines
-            k_det = math.sqrt(k_det_raw * max(P_cov, 0.01))
+        #     k_det = k_rate · [ (1/N_X)·k_shift + ((N_X-1)/N_X)·k_sim ]
+        #
+        # where N_X is the number of *theoretical* (expected, above-threshold)
+        # lines of element X — i.e. ``N_expected`` here, NOT ``N_matched``.
+        # The paper weights the shift score by 1/N_X and the similarity score
+        # by (N_X-1)/N_X, so multi-line elements are dominated by k_sim and
+        # single-line elements (N_X=1) reduce exactly to k_rate·k_shift (k_sim
+        # is undefined for a single line). Using N_matched here (the prior,
+        # non-paper code) inflated single-match candidates and distorted the
+        # similarity/shift weighting; using N_expected restores the canonical
+        # formula. The earlier ``sqrt(k_det_raw · max(P_cov, 0.01))``
+        # geometric-mean blend is also dropped — it is not in Noel 2025;
+        # emissivity-weighted coverage is already captured by k_rate, and
+        # P_cov remains available as a diagnostic only.
+        N_X = N_expected
+        if N_matched > 0 and N_X > 0:
+            k_det = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
         else:
             k_det = 0.0
 

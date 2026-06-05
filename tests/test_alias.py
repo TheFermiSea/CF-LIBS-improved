@@ -419,8 +419,16 @@ def test_P_maj_soft_coverage(atomic_db):
     assert P_maj_miss >= 0.5, f"P_maj should be at least 0.5: {P_maj_miss}"
 
 
-def test_N_matched_in_k_det_blend(atomic_db):
-    """N_matched should be used in k_det blend, N_expected for metadata."""
+def test_N_expected_drives_k_det_blend(atomic_db):
+    """N_expected (N_X) drives the Noel-2025 k_det blend; N_matched only gates.
+
+    Audit Family 5: the paper formula weights the blend by the element's
+    theoretical line count (N_X = N_expected), NOT by N_matched. With 10
+    expected lines but only 1 matched, k_sim is undefined (0.0), so
+    k_det = k_rate · ((1/10)·k_shift + (9/10)·0) · N_penalty — still nonzero
+    because k_rate and k_shift are nonzero, but the single match is no
+    longer inflated to the old N_X=N_matched=1 → k_rate·k_shift value.
+    """
     from cflibs.atomic.structures import Transition
 
     identifier = ALIASIdentifier(atomic_db, resolving_power=500.0)
@@ -472,12 +480,13 @@ def test_N_matched_in_k_det_blend(atomic_db):
         N_matched=N_matched,
         P_cov=P_cov,
     )
-    # N_X=1 → k_det = k_rate × k_shift (pure shift quality)
+    # Paper-faithful: N_X = N_expected = 10. Only 1 line matched so k_sim=0,
+    # giving k_det = k_rate · (1/10)·k_shift · N_penalty > 0.
     assert k_det > 0.0, f"k_det should be nonzero (raw score): {k_det}"
-    # Hard gate: N_matched=1 < 2 with N_expected=10 → CL=0.0
+    # Hard gate: N_matched=1 < 3 with N_expected>4 → CL=0.0
     assert CL == pytest.approx(
         0.0, abs=1e-12
-    ), f"CL should be 0.0 due to hard gate (N_matched<2, N_expected>=2): {CL}"
+    ), f"CL should be 0.0 due to hard gate (N_matched<3, N_expected>4): {CL}"
 
 
 def test_P_ab_tiers(atomic_db):
@@ -1007,7 +1016,8 @@ def test_triple_counting_eliminated(atomic_db):
     # P_cov should also be 0.6 (still computed for diagnostics)
     assert abs(P_cov - 0.6) < 0.01, f"P_cov should be ~0.6: {P_cov}"
 
-    # N_matched used in blend, not N_expected
+    # N_expected (5) drives the Noel-2025 k_det blend; N_matched (3) only
+    # gates (audit Family 5 — was the reverse before the fix).
     assert N_matched == 3
     assert N_expected == 5
 
@@ -1187,12 +1197,18 @@ def test_CL_paper_formula(atomic_db):
         P_cov=P_cov,
     )
 
-    # Manually compute expected CL using modified formula:
-    # k_det = sqrt(k_det_raw * max(P_cov, 0.01)) * N_penalty
-    N_X = max(N_matched, 1)
+    # Manually compute expected CL using the paper-faithful Noel-2025
+    # formula (audit Family 5):
+    #   k_det = k_rate · [ (1/N_X)·k_shift + ((N_X-1)/N_X)·k_sim ]
+    # with N_X = N_expected (the element's theoretical line count), NOT
+    # N_matched. There is NO sqrt(... · P_cov) geometric-mean blend — that
+    # was a non-paper deviation that has been removed. N_penalty is a
+    # separate non-paper guard kept (not flagged by the audit) and applied
+    # multiplicatively after k_det.
+    N_X = N_expected
     k_det_raw = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
     N_penalty = min(1.0, math.sqrt(N_expected / 5.0))
-    expected_k_det = math.sqrt(k_det_raw * max(P_cov, 0.01)) * N_penalty
+    expected_k_det = k_det_raw * N_penalty
 
     # P_SNR from the spectrum
     peak_intensities_local = [intensity[p[0]] for p in peaks]
@@ -1208,6 +1224,85 @@ def test_CL_paper_formula(atomic_db):
     assert abs(k_det - expected_k_det) < 1e-10, f"k_det mismatch: {k_det} vs {expected_k_det}"
     assert abs(CL - expected_CL) < 1e-10, (
         f"CL should be exactly k_det × P_SNR × P_maj × P_ab: " f"got {CL}, expected {expected_CL}"
+    )
+
+
+def test_k_det_matches_noel2025_formula_not_old_blend(atomic_db):
+    """k_det matches the Noel-2025 paper formula, NOT the old N_matched/P_cov blend.
+
+    Audit Family 5 validation gate. This calls ``_decide`` directly with
+    fully controlled, hand-chosen scores so the oracle is INDEPENDENT of the
+    implementation under test:
+
+        k_det = k_rate · [ (1/N_X)·k_shift + ((N_X-1)/N_X)·k_sim ] · N_penalty
+
+    with N_X = N_expected (theoretical line count). We then assert the
+    implementation does NOT reproduce either of the two prior non-paper
+    deviations:
+      (a) N_X = N_matched   (the old blend weighting), and
+      (b) sqrt(k_det_raw · max(P_cov, 0.01))  (the old geometric-mean blend).
+
+    The case is chosen so all three values are numerically distinct.
+    """
+    import math
+
+    identifier = ALIASIdentifier(atomic_db, resolving_power=5000.0)
+
+    # Hand-chosen scores. N_expected=5 makes N_penalty = min(1, sqrt(5/5)) = 1
+    # so the paper formula is the bare blend (no penalty obfuscation), while
+    # the two non-paper variants below use N_matched=3 / P_cov=0.5 and so
+    # land on clearly different numbers.
+    k_sim = 0.80
+    k_rate = 0.90
+    k_shift = 0.40
+    N_expected = 5  # N_X for the paper formula
+    N_matched = 3  # only gates; must NOT enter the blend
+    P_cov = 0.50  # diagnostic only; must NOT enter k_det
+
+    # Synthetic spectrum so P_SNR / gates are well-defined and N_matched>=3
+    # passes the hard gate (so CL is exercised too, but we only assert k_det).
+    intensity = np.full(400, 10.0)
+    for idx in (50, 150, 250):
+        intensity[idx] = 600.0
+    peaks = [(50, 372.0), (150, 374.0), (250, 376.0)]
+
+    k_det, _CL = identifier._decide(
+        k_sim,
+        k_rate,
+        k_shift,
+        N_expected,
+        intensity,
+        peaks,
+        element="Fe",
+        P_maj=0.9,
+        N_matched=N_matched,
+        P_cov=P_cov,
+    )
+
+    # --- Independent oracle: the paper-faithful Noel-2025 value ---------------
+    N_X = N_expected
+    N_penalty = min(1.0, math.sqrt(N_expected / 5.0))  # == 1.0 here
+    paper_k_det = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim) * N_penalty
+    # = 0.90 * (0.2*0.40 + 0.8*0.80) * 1.0 = 0.90 * 0.72 = 0.648
+
+    # --- The two REJECTED non-paper variants ---------------------------------
+    # (a) old blend with N_X = N_matched = 3:
+    N_X_old = N_matched
+    old_blend_raw = k_rate * ((1.0 / N_X_old) * k_shift + ((N_X_old - 1.0) / N_X_old) * k_sim)
+    old_Nmatched_k_det = old_blend_raw * N_penalty
+    # (b) old geometric-mean P_cov blend (on top of the N_matched blend):
+    old_pcov_k_det = math.sqrt(old_blend_raw * max(P_cov, 0.01)) * N_penalty
+
+    assert k_det == pytest.approx(
+        paper_k_det, abs=1e-12
+    ), f"k_det must equal the Noel-2025 paper value {paper_k_det}, got {k_det}"
+    assert abs(k_det - old_Nmatched_k_det) > 1e-3, (
+        "k_det must NOT use the old N_matched blend weighting "
+        f"({old_Nmatched_k_det}); got {k_det}"
+    )
+    assert abs(k_det - old_pcov_k_det) > 1e-3, (
+        "k_det must NOT use the old sqrt(... * P_cov) geometric-mean blend "
+        f"({old_pcov_k_det}); got {k_det}"
     )
 
 

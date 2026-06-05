@@ -1898,9 +1898,7 @@ class TestSiHighConcentrationSelfAbsorption:
             ),
         ]
 
-    def test_escape_factor_below_unity_for_si_resonance_lines(
-        self, si_resonance_lines
-    ):
+    def test_escape_factor_below_unity_for_si_resonance_lines(self, si_resonance_lines):
         """Escape factor f(tau) must be < 1 for optically-thick Si lines.
 
         Asserts the physics primitive ``_escape_factor`` does the right
@@ -1929,9 +1927,7 @@ class TestSiHighConcentrationSelfAbsorption:
         assert si_resonance_lines[0].element == "Si"
         assert si_resonance_lines[0].wavelength_nm == 251.611
 
-    def test_si_correction_pipeline_runs_and_logs(
-        self, si_resonance_lines, caplog
-    ):
+    def test_si_correction_pipeline_runs_and_logs(self, si_resonance_lines, caplog):
         """End-to-end ``correct()`` call must run and emit structured logs.
 
         Whether the correction *actually triggers* depends on the
@@ -1971,9 +1967,7 @@ class TestSiHighConcentrationSelfAbsorption:
         assert len(summary_records) == 1
         assert "max_tau=" in summary_records[0].message
 
-    def test_correct_logs_structured_summary_for_si(
-        self, si_resonance_lines, caplog
-    ):
+    def test_correct_logs_structured_summary_for_si(self, si_resonance_lines, caplog):
         """SelfAbsorptionCorrector.correct() emits one INFO-level summary line.
 
         Addresses the user's transparency complaint: previously the
@@ -2024,16 +2018,12 @@ class TestSiHighConcentrationSelfAbsorption:
                 total_number_density_cm3=1.0e17,
                 partition_funcs={"Si": 9.0},
             )
-        assert any(
-            "non-positive temperature" in r.message for r in caplog.records
-        ), (
+        assert any("non-positive temperature" in r.message for r in caplog.records), (
             "T=0 must trigger a WARNING so the silent zero-tau path is "
             f"visible; got: {[r.message for r in caplog.records]}"
         )
 
-    def test_correct_logs_missing_concentration_elements(
-        self, si_resonance_lines, caplog
-    ):
+    def test_correct_logs_missing_concentration_elements(self, si_resonance_lines, caplog):
         """Element absent from concentrations dict logs at INFO — never silent."""
         import logging
 
@@ -2047,8 +2037,7 @@ class TestSiHighConcentrationSelfAbsorption:
                 partition_funcs={"Si": 9.0},
             )
         assert any(
-            "no concentration entry" in r.message and "Si" in r.message
-            for r in caplog.records
+            "no concentration entry" in r.message and "Si" in r.message for r in caplog.records
         ), (
             "Missing concentration entry must be logged so silent skips are "
             f"diagnosable; got: {[r.message for r in caplog.records]}"
@@ -2059,17 +2048,25 @@ class TestALIASSelfAbsorptionLogging:
     """Tests that ALIAS identifier exposes self-absorption damping state.
 
     Replaces the previously-silent ``SA_DAMPING = 0.3`` hardcoded constant
-    with an opt-in flag + structured logging. Default behavior is
-    preserved (damping is ON with the historical 0.3 factor) so the F1
-    regression gate is not perturbed; only the visibility changes.
+    with an opt-in flag + structured logging. Audit Family 5 flipped the
+    default OFF: the ad-hoc resonance-line damping must not silently fire
+    by default (the paper-faithful ALIAS is optically-thin). The 0.3 factor
+    is preserved and still applied when ``self_absorption_aware=True`` is
+    passed explicitly.
     """
 
     def test_identifier_has_self_absorption_knobs(self, atomic_db):
-        """Constructor exposes the new self-absorption knobs with safe defaults."""
+        """Constructor exposes the self-absorption knobs; damping defaults OFF.
+
+        Audit Family 5: ``self_absorption_aware`` defaults to ``False`` so
+        the ad-hoc 0.3 damping is opt-in (paper-faithful, optically-thin by
+        default). The damping factor / cutoff are still exposed and used
+        when the operator opts in.
+        """
         from cflibs.inversion.identify.alias import ALIASIdentifier
 
         identifier = ALIASIdentifier(atomic_db)
-        assert identifier.self_absorption_aware is True
+        assert identifier.self_absorption_aware is False
         assert identifier.self_absorption_damping == 0.3
         assert identifier.self_absorption_e_i_cutoff_ev == 0.1
         assert identifier._sa_n_damped_lines == 0
@@ -2093,9 +2090,7 @@ class TestALIASSelfAbsorptionLogging:
         with pytest.raises(ValueError, match="e_i_cutoff"):
             ALIASIdentifier(atomic_db, self_absorption_e_i_cutoff_ev=-0.5)
 
-    def test_identifier_disabled_mode_logs_explicitly(
-        self, atomic_db, caplog
-    ):
+    def test_identifier_disabled_mode_logs_explicitly(self, atomic_db, caplog):
         """When self_absorption_aware=False, identify() logs that fact at INFO.
 
         Operators reading benchmark logs need to be able to tell at a
@@ -2113,10 +2108,7 @@ class TestALIASSelfAbsorptionLogging:
         with caplog.at_level(logging.INFO, logger="cflibs.inversion.identify.alias"):
             identifier.identify(wavelength, intensity)
 
-        assert any(
-            "self-absorption damping DISABLED" in r.message
-            for r in caplog.records
-        ), (
+        assert any("self-absorption damping DISABLED" in r.message for r in caplog.records), (
             "self_absorption_aware=False must emit an INFO log so disabled "
             f"mode is auditable; got: {[r.message for r in caplog.records]}"
         )
