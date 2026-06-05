@@ -14,6 +14,44 @@ from cflibs.plasma.state import (
 from cflibs.plasma import saha_boltzmann as saha_module
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 
+# --- Synthetic species + stub atomic source for the IPD-cutoff test ---------
+# Defined at module scope (not inside the test) so the SahaBoltzmannSolver that
+# holds it stays picklable — cflibs.core.cache.cached_partition_function keys
+# its LRU cache by pickling (self, args, kwargs), and pickle cannot serialise a
+# class defined inside a test function.
+_IPD_STUB_IP_I = 7.9  # Fe I-like ionization potential (eV)
+_IPD_STUB_G = (9.0, 11.0, 25.0)
+_IPD_STUB_E = (0.0, 0.05, 7.75)  # last level sits just below the raw IP
+
+
+class _IPDStubDB:
+    """Minimal atomic source: one neutral species with a near-IP level."""
+
+    db_path = "stub-ipd"
+
+    def get_ionization_potential(self, element, stage):
+        return {1: _IPD_STUB_IP_I, 2: 16.0, 3: 30.0}.get(stage)
+
+    def partition_function_for(self, element, stage):
+        from cflibs.plasma.partition import DirectSumPartitionFunctionProvider
+
+        if stage != 1:
+            return None
+        return DirectSumPartitionFunctionProvider(
+            element=element,
+            ionization_stage=1,
+            _g_levels=_IPD_STUB_G,
+            _e_levels_ev=_IPD_STUB_E,
+            ip_ev=_IPD_STUB_IP_I,
+            t_min=2000.0,
+            t_max=25000.0,
+            _g0=9.0,
+            source="test",
+        )
+
+    def get_energy_levels(self, element, stage):
+        return []
+
 
 def test_plasma_state_creation():
     """Test creating a plasma state."""
@@ -434,6 +472,136 @@ class TestIonizationPotentialLowering:
 
         with pytest.raises(ValueError, match="Unsupported IPD model"):
             ionization_potential_lowering(n_e_cm3=1e17, T_K=10000.0, model="stewart_pyatt")
+
+
+class TestIPDConsistencyFamilyJ:
+    """Audit Family J: one Debye-Hückel formula + IPD-consistent partition cutoff.
+
+    Before the fix two divergent Debye-Hückel formulas coexisted —
+    ``partition.ionization_potential_depression`` used the approximate
+    ``3e-8·Z·√n_e/√T`` form (≈0.0949 eV at n_e=1e17, T=1e4 K) while
+    ``saha_boltzmann.ionization_potential_lowering`` used the canonical
+    Gaussian-CGS form (≈0.0660 eV), a 1.44× discrepancy.  And the direct-sum
+    partition cutoff discarded the IPD lowering (summed to the RAW ip) even
+    though the Saha exponent used the IPD-lowered ip.
+    """
+
+    def test_two_ipd_call_sites_agree(self):
+        """(b) Both IPD entry points return the SAME Δχ to rel=1e-6."""
+        from cflibs.plasma.partition import ionization_potential_depression
+        from cflibs.plasma.saha_boltzmann import ionization_potential_lowering, _ipd_eV
+
+        n_e, T_K = 1e17, 1e4
+        a = ionization_potential_depression(n_e, T_K)
+        b = ionization_potential_lowering(n_e_cm3=n_e, T_K=T_K)
+        c = _ipd_eV(n_e, T_K)
+        assert a == pytest.approx(b, rel=1e-6)
+        assert a == pytest.approx(c, rel=1e-6)
+
+    def test_canonical_value_not_approximate(self):
+        """(b) The unified value is the canonical ~0.066 eV, NOT the old 0.0949."""
+        from cflibs.plasma.partition import ionization_potential_depression
+
+        delta_chi = ionization_potential_depression(1e17, 1e4)
+        # Independent Gaussian-CGS oracle: Δχ = e²/λ_D, λ_D = √(kT/4π n_e e²).
+        import numpy as np
+
+        e_esu = 1.602176634e-19 * 2.99792458e8 * 10.0
+        kb_erg = 1.380649e-23 * 1.0e7
+        erg_to_ev = (1.0 / 1.602176634e-19) * 1.0e-7
+        lambda_D = np.sqrt(kb_erg * 1e4 / (4.0 * np.pi * 1e17 * e_esu**2))
+        expected = (e_esu**2 / lambda_D) * erg_to_ev
+        assert delta_chi == pytest.approx(expected, rel=1e-9)
+        assert delta_chi == pytest.approx(0.0660, abs=0.001)
+        # The discarded approximate form would have given 0.0949 eV.
+        assert abs(delta_chi - 0.0949) > 0.02
+
+    def test_directsum_provider_truncates_at_ipd_lowered_cutoff(self):
+        """(a) provider.at(T, n_e) sums only to ip - Δχ, matching the Saha exponent.
+
+        A near-IP level that sits BELOW the raw ip but ABOVE ip - Δχ at high
+        n_e must be excluded when n_e is threaded — otherwise the partition
+        sum (which uses the raw ip) is inconsistent with the IPD-lowered Saha
+        exponent.  Self-contained (no DB): the provider is built directly and
+        checked against a hand-computed Boltzmann sum.
+        """
+        import numpy as np
+        from cflibs.core.constants import KB_EV
+        from cflibs.plasma.partition import (
+            DirectSumPartitionFunctionProvider,
+            ionization_potential_depression,
+        )
+
+        ip = 7.9  # Fe I-like ionization potential (eV)
+        g = (9.0, 11.0, 25.0)
+        E = (0.0, 0.05, 7.75)  # last level near the IP
+        prov = DirectSumPartitionFunctionProvider(
+            element="Fe",
+            ionization_stage=1,
+            _g_levels=g,
+            _e_levels_ev=E,
+            ip_ev=ip,
+            t_min=2000.0,
+            t_max=25000.0,
+            _g0=9.0,
+            source="test",
+        )
+
+        T_K, n_e = 12000.0, 1e18
+        delta_chi = ionization_potential_depression(n_e, T_K)
+        # Sanity: at these conditions Δχ ≈ 0.19 eV and the 7.75 eV level
+        # straddles the lowered cutoff.
+        assert delta_chi == pytest.approx(0.19, abs=0.02)
+        assert 7.75 < ip  # included by the raw cutoff
+        assert 7.75 > ip - delta_chi  # excluded by the IPD-lowered cutoff
+
+        U_raw = prov.at(T_K)  # n_e=None -> sharp ip cutoff (legacy behaviour)
+        U_ipd = prov.at(T_K, n_e=n_e)  # IPD-lowered cutoff (consistent path)
+
+        # Independent oracle: direct Boltzmann sums with each cutoff.
+        kT = KB_EV * T_K
+        oracle_raw = sum(gi * np.exp(-ei / kT) for gi, ei in zip(g, E) if ei < ip)
+        oracle_ipd = sum(gi * np.exp(-ei / kT) for gi, ei in zip(g, E) if ei < ip - delta_chi)
+
+        assert U_raw == pytest.approx(oracle_raw, rel=1e-9)
+        assert U_ipd == pytest.approx(oracle_ipd, rel=1e-9)
+        # The IPD-lowered cutoff must change U (the near-IP level is dropped).
+        assert U_ipd < U_raw
+        assert U_raw != pytest.approx(U_ipd, rel=1e-9)
+
+    def test_saha_solver_threads_n_e_into_partition_cutoff(self):
+        """(a) SahaBoltzmannSolver passes n_e so U truncates at the lowered IP.
+
+        Uses a tiny in-memory stub atomic source (no real DB) so the test runs
+        in CI without the ``requires_db`` marker.  The neutral species has a
+        level just below the raw ip; at high n_e that level falls into the
+        continuum, so the partition function the solver computes for stage I
+        must drop when n_e is high vs low.
+        """
+        import numpy as np
+        from cflibs.core.constants import EV_TO_K, KB_EV
+        from cflibs.plasma.partition import ionization_potential_depression
+
+        ip_I, g, E = _IPD_STUB_IP_I, _IPD_STUB_G, _IPD_STUB_E
+        solver = SahaBoltzmannSolver(_IPDStubDB())
+        T_K = 12000.0
+        T_eV = T_K / EV_TO_K
+
+        # cached_partition_function keys on (self, args, kwargs) so the two
+        # n_e values are cached independently.
+        U_low_ne = solver.calculate_partition_function(
+            "Fe", 1, T_eV, max_energy_ev=ip_I, n_e_cm3=1e15
+        )
+        U_high_ne = solver.calculate_partition_function(
+            "Fe", 1, T_eV, max_energy_ev=ip_I, n_e_cm3=1e18
+        )
+
+        # Oracle: lowered cutoff at high n_e excludes the 7.75 eV level.
+        kT = KB_EV * T_K
+        dchi_high = ionization_potential_depression(1e18, T_K)
+        oracle_high = sum(gi * np.exp(-ei / kT) for gi, ei in zip(g, E) if ei < ip_I - dchi_high)
+        assert U_high_ne == pytest.approx(oracle_high, rel=1e-9)
+        assert U_high_ne < U_low_ne
 
 
 if __name__ == "__main__":

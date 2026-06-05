@@ -47,7 +47,7 @@ except ImportError:  # pragma: no cover - fallback for old runtimes
 
 import numpy as np
 
-from cflibs.core.constants import KB_EV
+from cflibs.core.constants import C_LIGHT, E_CHARGE, J_TO_EV, KB, KB_EV
 from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp, vmap_if_available
 
 jit = jit_if_available
@@ -55,17 +55,39 @@ vmap = vmap_if_available
 
 
 # ---------------------------------------------------------------------------
-# Direct summation from energy levels
+# Canonical Debye-Hückel ionization potential depression (single source)
 # ---------------------------------------------------------------------------
+#
+# THE one Debye-Hückel IPD implementation for the whole package.  Previously
+# two divergent formulas coexisted (audit Family J): this module used the
+# approximate ``3e-8·Z·√n_e/√T`` form (~0.0949 eV at n_e=1e17, T=1e4 K) while
+# ``cflibs.plasma.saha_boltzmann`` used the canonical Gaussian-CGS form
+# (~0.0660 eV) — a 1.44× discrepancy.  Both call sites now route through
+# :func:`ionization_potential_depression`, so the Saha exponent and the
+# partition-sum truncation see the *same* Δχ.
+#
+# Derived CGS helpers built from the canonical SI constants in
+# ``cflibs.core.constants`` (mirrors ``saha_boltzmann.py``).
+_E_ESU = E_CHARGE * C_LIGHT * 10.0  # electron charge [esu = statcoulomb]
+_KB_ERG = KB * 1.0e7  # Boltzmann constant [erg/K]
+_ERG_TO_EV = J_TO_EV * 1.0e-7  # conversion factor erg -> eV
 
 
 def ionization_potential_depression(n_e: float, T_K: float, Z: int = 1) -> float:
-    """Debye-Hückel ionization potential depression.
+    """Debye-Hückel ionization potential depression (canonical Gaussian-CGS).
 
-    Δχ = 3×10⁻⁸ · Z · Nₑ^(1/2) · T^(-1/2)  [eV]
+    .. math::
 
-    From Mihalas (1978), Eq. 9-106.  See also Alimohamadi & Ferland (2022),
-    Eq. 13.
+        \\Delta\\chi = Z \\, \\frac{e^2}{\\lambda_D},
+        \\qquad
+        \\lambda_D = \\sqrt{\\frac{k_B T}{4\\pi n_e e^2}}
+
+    in Gaussian-CGS units, converted to eV.  At ``n_e = 1e17 cm⁻³``,
+    ``T = 1e4 K`` this gives ≈ 0.066 eV for ``Z = 1`` (Mihalas 1978
+    Eq. 9-106; Alimohamadi & Ferland 2022).  This is the SAME computation as
+    :func:`cflibs.plasma.saha_boltzmann.ionization_potential_lowering`, which
+    now delegates here so the Saha exponent and the direct-sum partition
+    cutoff use one consistent Δχ.
 
     Parameters
     ----------
@@ -83,7 +105,11 @@ def ionization_potential_depression(n_e: float, T_K: float, Z: int = 1) -> float
     """
     if n_e <= 0 or T_K <= 0:
         return 0.0
-    return 3.0e-8 * Z * np.sqrt(n_e) / np.sqrt(T_K)
+    # Debye length: lambda_D = sqrt(kT / (4*pi*n_e*e^2))  [cm]
+    lambda_D = np.sqrt(_KB_ERG * T_K / (4.0 * np.pi * n_e * _E_ESU**2))
+    # IPD = Z * e^2 / lambda_D  [erg], converted to eV.
+    delta_chi_erg = Z * _E_ESU**2 / lambda_D
+    return float(delta_chi_erg * _ERG_TO_EV)
 
 
 def direct_sum_partition_function(
@@ -1161,8 +1187,13 @@ class PartitionFunctionProvider(Protocol):
     from the other half (see arch candidate 4 § Problem).
     """
 
-    def at(self, T_K: Any) -> Any:
-        """Evaluate U(T) with bounds clamping and g0 floor applied."""
+    def at(self, T_K: Any, n_e: Optional[float] = None) -> Any:
+        """Evaluate U(T) with bounds clamping and g0 floor applied.
+
+        ``n_e`` (electron density, cm⁻³) optionally lowers the partition-sum
+        cutoff via Debye-Hückel IPD for direct-sum providers; the polynomial
+        fallback ignores it (no per-level cutoff exists for a fitted poly).
+        """
         ...
 
     def valid_range(self) -> Tuple[float, float]:
@@ -1236,12 +1267,25 @@ class DirectSumPartitionFunctionProvider:
     def valid_range(self) -> Tuple[float, float]:
         return float(self.t_min), float(self.t_max)
 
-    def at(self, T_K: Any) -> Any:
+    def at(self, T_K: Any, n_e: Optional[float] = None) -> Any:
         """Evaluate the exact direct sum with clamp + g0 floor.
 
         Accepts a Python float / numpy scalar / numpy ndarray.  For a scalar
         this delegates to :func:`direct_sum_partition_function`, reproducing the
-        historical ``evaluate_direct`` call bit-for-bit inside the clamp window.
+        historical ``evaluate_direct`` call bit-for-bit inside the clamp window
+        when ``n_e is None``.
+
+        Parameters
+        ----------
+        T_K : float or np.ndarray
+            Temperature(s) in Kelvin.
+        n_e : float, optional
+            Electron density in cm⁻³.  When provided, the direct-sum cutoff
+            is lowered to ``e_max = ip - Δχ(n_e, T)`` (Debye-Hückel IPD),
+            making the partition-sum truncation CONSISTENT with the
+            IPD-lowered Saha ionization exponent (audit Family J).  When
+            ``None`` (default) the sharp ``ip`` cutoff is used, preserving
+            the historical Boltzmann-plot behaviour bit-for-bit.
         """
         g_arr = np.asarray(self._g_levels, dtype=np.float64)
         e_arr = np.asarray(self._e_levels_ev, dtype=np.float64)
@@ -1251,14 +1295,16 @@ class DirectSumPartitionFunctionProvider:
             )
             out = np.array(
                 [
-                    direct_sum_partition_function(float(t), g_arr, e_arr, float(self.ip_ev))
+                    direct_sum_partition_function(
+                        float(t), g_arr, e_arr, float(self.ip_ev), n_e=n_e
+                    )
                     for t in T_clamped.ravel()
                 ],
                 dtype=np.float64,
             ).reshape(T_clamped.shape)
             return np.maximum(out, float(self._g0))
         T_clamped = float(np.clip(float(T_K), float(self.t_min), float(self.t_max)))
-        u = direct_sum_partition_function(T_clamped, g_arr, e_arr, float(self.ip_ev))
+        u = direct_sum_partition_function(T_clamped, g_arr, e_arr, float(self.ip_ev), n_e=n_e)
         return max(float(u), float(self._g0))
 
 
@@ -1309,14 +1355,20 @@ class PolynomialPartitionFunctionProvider:
     def valid_range(self) -> Tuple[float, float]:
         return float(self.t_min), float(self.t_max)
 
-    def at(self, T_K: Any) -> Any:
+    def at(self, T_K: Any, n_e: Optional[float] = None) -> Any:
         """Evaluate U(T) with clamp + g0 floor.
 
         Accepts a Python float / numpy scalar / numpy ndarray.  Use
         :func:`polynomial_partition_function_jax` directly (or wrap a
         :class:`BatchedPartitionFunctionProvider`) for jit-traced array
         inputs.
+
+        ``n_e`` is accepted for provider-contract uniformity with
+        :class:`DirectSumPartitionFunctionProvider` but ignored: the fitted
+        polynomial has no per-level energies, so there is no IPD cutoff to
+        lower.
         """
+        del n_e  # not applicable to the fitted-polynomial fallback
         coeffs = list(self.coefficients)
         if isinstance(T_K, np.ndarray) and T_K.ndim > 0:
             T_arr = np.asarray(T_K, dtype=np.float64)
