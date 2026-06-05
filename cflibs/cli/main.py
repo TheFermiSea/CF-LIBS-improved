@@ -475,14 +475,23 @@ def invert_cmd(args):
             "self_absorption_column_density_cm3", 1.0e16
         ),
         self_absorption_plasma_length_cm=analysis_cfg.get("self_absorption_plasma_length_cm", 0.1),
+        saha_boltzmann_graph=bool(analysis_cfg.get("saha_boltzmann_graph", False)),
     )
 
     closure_mode = analysis_cfg.get("closure_mode", "standard")
     closure_kwargs = dict(analysis_cfg.get("closure_kwargs", {}))
     if closure_mode == "matrix" and "matrix_element" in analysis_cfg:
         closure_kwargs.setdefault("matrix_element", analysis_cfg["matrix_element"])
-    if closure_mode == "oxide" and "oxide_elements" in analysis_cfg:
-        closure_kwargs.setdefault("oxide_elements", analysis_cfg["oxide_elements"])
+    if closure_mode == "oxide":
+        if "oxide_elements" in analysis_cfg:
+            closure_kwargs.setdefault("oxide_elements", analysis_cfg["oxide_elements"])
+        # Default geological molar-oxygen stoichiometry (O atoms per cation) when
+        # the config does not supply an explicit oxide_stoichiometry map.
+        if "oxide_stoichiometry" not in closure_kwargs:
+            from cflibs.inversion.physics.closure import default_oxide_stoichiometry
+
+            els = [o.element for o in observations]
+            closure_kwargs["oxide_stoichiometry"] = default_oxide_stoichiometry(els)
 
     result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
 
@@ -551,27 +560,42 @@ def analyze_cmd(args):
     if len(observations) == 0:
         raise ValueError("No usable spectral lines detected.")
 
+    saha_boltzmann_graph = bool(getattr(args, "saha_boltzmann_graph", False))
+    closure_mode = getattr(args, "closure_mode", "standard")
+
     solver = IterativeCFLIBSSolver(
         atomic_db=atomic_db,
         apply_self_absorption=apply_self_absorption,
+        saha_boltzmann_graph=saha_boltzmann_graph,
     )
+
+    # Build closure kwargs; oxide closure gets the default molar-oxygen
+    # stoichiometry (O atoms per cation) over the detected elements.
+    closure_kwargs: dict = {}
+    if closure_mode == "oxide":
+        from cflibs.inversion.physics.closure import default_oxide_stoichiometry
+
+        els = [o.element for o in observations]
+        closure_kwargs["oxide_stoichiometry"] = default_oxide_stoichiometry(els)
 
     uncertainty_mode = getattr(args, "uncertainty", "none")
     if uncertainty_mode == "analytical":
         try:
-            result = solver.solve_with_uncertainty(observations)
+            result = solver.solve_with_uncertainty(
+                observations, closure_mode=closure_mode, **closure_kwargs
+            )
         except ImportError:
             logger.warning(
                 "uncertainties package not installed; falling back to solve() without UQ. "
                 "Install with: pip install uncertainties"
             )
-            result = solver.solve(observations)
+            result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
     elif uncertainty_mode == "mc":
         from cflibs.inversion.physics.uncertainty import MonteCarloUQ
 
         mc = MonteCarloUQ(solver, n_samples=200)
         mc_result = mc.run(observations)
-        result = solver.solve(observations)
+        result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
         result = result.__class__(
             temperature_K=mc_result.T_mean,
             temperature_uncertainty_K=mc_result.T_std,
@@ -583,7 +607,7 @@ def analyze_cmd(args):
             quality_metrics=result.quality_metrics,
         )
     else:
-        result = solver.solve(observations)
+        result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
 
     fmt = getattr(args, "output_format", "table")
     if fmt == "json":
@@ -1019,6 +1043,28 @@ def main():
         help=(
             "Apply the curve-of-growth self-absorption correction in the solver "
             "and retain strong resonance lines (default: off)"
+        ),
+    )
+    analyze_parser.add_argument(
+        "--closure-mode",
+        type=str,
+        default="standard",
+        choices=["standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residual"],
+        help=(
+            "Closure equation used to normalize Boltzmann intercepts to "
+            "concentrations (default: standard). Use 'oxide' for geological "
+            "samples; the default molar-oxygen stoichiometry is applied "
+            "automatically."
+        ),
+    )
+    analyze_parser.add_argument(
+        "--saha-boltzmann-graph",
+        action="store_true",
+        help=(
+            "Use the pooled Saha-Boltzmann graph intercept extraction "
+            "(Aguilera & Aragon 2004): one global regression over all lines of "
+            "all species, shifting ion lines onto the neutral plane. Orthogonal "
+            "to --closure-mode; stacks with oxide closure (default: off)."
         ),
     )
     analyze_parser.set_defaults(func=analyze_cmd)

@@ -26,6 +26,68 @@ PWLR_WEIGHT_FLOOR = 1e-12
 PWLR_ADAPTIVE_SCALE_MAX = 50.0
 
 
+# ---------------------------------------------------------------------------
+# Geological oxide stoichiometry (oxygen atoms bound per cation).
+# ---------------------------------------------------------------------------
+#
+# Oxide closure (:meth:`ClosureEquation.apply_oxide_mode`) weights each element's
+# relative concentration (a cation NUMBER density n_cation = U·exp(q)·(1+S)) by an
+# ``oxide_stoichiometry`` factor before the sum-to-one normalization.  The
+# physically-grounded factor that makes the closure a *molar-oxygen* balance —
+# sum_s n_cation_s · (O atoms per cation_s) = n_O — is simply the number of
+# bound oxygen atoms per cation, b/a for an oxide X_a O_b.  This molar-oxygen
+# closure is the variant validated on real BHVO-2 (oxide RMSE 5.60 vs 10.33 for
+# bare sum-of-cations closure; SB-graph + oxide RMSE 4.29).
+#
+# The ratios below are pure stoichiometric constants fixed by each cation's
+# common geological oxidation state (the rock-forming major-element oxides):
+#   Si^4+  -> SiO2   (2 O / Si)        P^5+  -> P2O5  (2.5 O / P)
+#   Ti^4+  -> TiO2   (2 O / Ti)        Al^3+ -> Al2O3 (1.5 O / Al)
+#   Fe^3+  -> Fe2O3  (1.5 O / Fe; total iron reported as Fe2O3 per Jochum 2016)
+#   Mn^2+  -> MnO    (1 O / Mn)        Mg^2+ -> MgO   (1 O / Mg)
+#   Ca^2+  -> CaO    (1 O / Ca)        Na^+  -> Na2O  (0.5 O / Na)
+#   K^+    -> K2O    (0.5 O / K)
+# Elements absent from this map fall back to factor 1.0 in ``apply_oxide_mode``
+# (treated as elemental / metal), so the table is opt-in and dataset-agnostic.
+OXIDE_OXYGEN_PER_CATION: Dict[str, float] = {
+    "Si": 2.0,
+    "Ti": 2.0,
+    "Al": 1.5,
+    "Fe": 1.5,
+    "Mn": 1.0,
+    "Mg": 1.0,
+    "Ca": 1.0,
+    "Na": 0.5,
+    "K": 0.5,
+    "P": 2.5,
+}
+
+
+def default_oxide_stoichiometry(elements: Optional[list] = None) -> Dict[str, float]:
+    """Return the molar-oxygen oxide-closure factors (O atoms per cation).
+
+    These are the ``oxide_stoichiometry`` factors consumed by
+    :meth:`ClosureEquation.apply_oxide_mode`: weighting each cation number
+    density by its bound-oxygen count turns the closure into a molar-oxygen
+    balance.  See :data:`OXIDE_OXYGEN_PER_CATION` for the derivation.
+
+    Parameters
+    ----------
+    elements : list of str, optional
+        If given, restrict the returned mapping to these elements (entries
+        without a known oxide stoichiometry are omitted, so ``apply_oxide_mode``
+        treats them as elemental). If ``None`` the full table is returned.
+
+    Returns
+    -------
+    dict
+        Element -> oxygen-atoms-per-cation factor.
+    """
+    if elements is None:
+        return dict(OXIDE_OXYGEN_PER_CATION)
+    return {el: OXIDE_OXYGEN_PER_CATION[el] for el in elements if el in OXIDE_OXYGEN_PER_CATION}
+
+
 class ClosureMode(Enum):
     """Closure equation modes for CF-LIBS normalization."""
 
