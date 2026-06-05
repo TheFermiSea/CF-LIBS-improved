@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(rmdir benchmarks:*)"
+      "Bash(rmdir benchmarks:*)",
+      "mcp__gpd-arxiv",
+      "mcp__notebooklm",
+      "mcp__asta",
+      "mcp__gpd-conventions",
+      "mcp__gpd-errors",
+      "mcp__gpd-patterns",
+      "mcp__gpd-protocols",
+      "mcp__gpd-skills",
+      "mcp__gpd-state",
+      "mcp__gpd-verification",
+      "mcp__plugin_serena_serena",
+      "mcp__claude_ai_Hugging_Face"
     ]
   }
 }
