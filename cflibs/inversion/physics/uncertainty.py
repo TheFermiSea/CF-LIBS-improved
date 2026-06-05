@@ -87,13 +87,24 @@ def check_uncertainties_available() -> None:
 
 
 def _validated_abundance_multiplier(
-    abundance_multipliers: Optional[Dict[str, float]],
+    abundance_multipliers: Optional[Dict[str, Any]],
     element: str,
-) -> float:
-    """Return a finite positive abundance multiplier for an element."""
+):
+    """Return a finite positive abundance multiplier for an element.
+
+    The multiplier may be a plain float or a ``UFloat`` (so that an uncertain
+    Saha factor — e.g. one carrying the n_e variance — propagates through the
+    closure). UFloat multipliers are validated on their nominal value and
+    returned untouched so their uncertainty is preserved.
+    """
     multiplier = abundance_multipliers.get(element, 1.0) if abundance_multipliers else 1.0
-    if not np.isfinite(multiplier) or multiplier <= 0.0:
+    nominal = getattr(multiplier, "nominal_value", multiplier)
+    if not np.isfinite(nominal) or nominal <= 0.0:
         raise ValueError(f"abundance_multipliers[{element!r}] must be finite and positive")
+    # Preserve UFloat multipliers (uncertainty must survive); coerce plain
+    # numerics to float so downstream arithmetic stays exact.
+    if hasattr(multiplier, "nominal_value"):
+        return multiplier
     return float(multiplier)
 
 
@@ -170,7 +181,7 @@ def temperature_from_slope(slope_u: "UFloat") -> "UFloat":
 
 def saha_factor_with_uncertainty(
     T_eV_u: "UFloat",
-    n_e: float,
+    n_e: "Any",
     ionization_potential_eV: float,
     U_I: float,
     U_II: float,
@@ -181,15 +192,18 @@ def saha_factor_with_uncertainty(
 
     S = (SAHA_CONST / n_e) * T^1.5 * exp(-IP/T) * (U_II/U_I)
 
-    Note: Currently n_e is treated as exact (no uncertainty).
-    For full uncertainty propagation, n_e would need to be a ufloat.
+    Both the temperature ``T_eV_u`` and the electron density ``n_e`` may carry
+    uncertainty. Passing ``n_e`` as a ``UFloat`` propagates its variance into
+    the Saha factor (``S`` scales as ``1/n_e``), so a 10%-uncertain n_e
+    contributes a ~10% relative term to ``sigma_S``. A plain float ``n_e`` is
+    treated as exact, matching the previous behaviour.
 
     Parameters
     ----------
     T_eV_u : UFloat
         Temperature in eV with uncertainty
-    n_e : float
-        Electron density in cm^-3
+    n_e : float or UFloat
+        Electron density in cm^-3. May be a UFloat to propagate its variance.
     ionization_potential_eV : float
         Ionization potential in eV
     U_I : float
@@ -206,6 +220,9 @@ def saha_factor_with_uncertainty(
     """
     check_uncertainties_available()
 
+    # Division by a UFloat n_e propagates the n_e variance automatically; a
+    # plain float divides exactly. No special-casing needed thanks to the
+    # uncertainties package operator overloads.
     S_raw = (saha_const / n_e) * (T_eV_u**1.5) * umath.exp(-ionization_potential_eV / T_eV_u)
     S = S_raw * (U_II / U_I)
 
@@ -428,6 +445,24 @@ class PerturbationType(Enum):
     SPECTRAL_NOISE = "spectral_noise"  # Perturb line intensities
     ATOMIC_DATA = "atomic_data"  # Perturb A_ki values
     COMBINED = "combined"  # Both spectral and atomic
+
+
+class NoiseModel(Enum):
+    """Statistical model for spectral-intensity perturbation.
+
+    GAUSSIAN
+        Additive Gaussian noise ``I + N(0, sigma)``, clipped to be physical.
+        Appropriate when counts are high (sigma << I); for low-count lines the
+        Gaussian floor biases the mean upward, so prefer POISSON there.
+    POISSON
+        Resample the integer count from ``Poisson(I)``. Exactly unbiased
+        (``E[Poisson(I)] = I``) and the natural shot-noise model for the
+        ps-LIBS low-count regime (10-50 counts). ``noise_fraction`` is ignored
+        because Poisson variance is fixed by the count itself.
+    """
+
+    GAUSSIAN = "gaussian"
+    POISSON = "poisson"
 
 
 @dataclass
@@ -819,6 +854,7 @@ class MonteCarloUQ:
         atomic_uncertainty: Optional[AtomicDataUncertainty] = None,
         perturbation_type: PerturbationType = PerturbationType.SPECTRAL_NOISE,
         closure_mode: str = "standard",
+        noise_model: NoiseModel = NoiseModel.GAUSSIAN,
         **closure_kwargs,
     ) -> MonteCarloResult:
         """
@@ -831,6 +867,7 @@ class MonteCarloUQ:
         noise_fraction : float, optional
             Fractional noise to add to intensities (e.g., 0.05 = 5%).
             If None, uses the intensity_uncertainty from each observation.
+            Ignored when ``noise_model`` is POISSON.
         atomic_uncertainty : AtomicDataUncertainty, optional
             Uncertainty model for A_ki values. Required if perturbation_type
             includes ATOMIC_DATA.
@@ -838,6 +875,10 @@ class MonteCarloUQ:
             Type of perturbation (SPECTRAL_NOISE, ATOMIC_DATA, or COMBINED)
         closure_mode : str
             Closure mode for solver ('standard', 'matrix', 'oxide')
+        noise_model : NoiseModel
+            Spectral noise model (GAUSSIAN or POISSON). POISSON is unbiased for
+            low-count (ps-LIBS) lines; GAUSSIAN is the default for backward
+            compatibility.
         **closure_kwargs
             Additional arguments for closure equation
 
@@ -862,6 +903,7 @@ class MonteCarloUQ:
                 noise_fraction,
                 atomic_uncertainty,
                 perturbation_type,
+                noise_model,
             )
             for _ in range(self.n_samples)
         ]
@@ -891,6 +933,7 @@ class MonteCarloUQ:
         noise_fraction: Optional[float],
         atomic_uncertainty: Optional[AtomicDataUncertainty],
         perturbation_type: PerturbationType,
+        noise_model: NoiseModel = NoiseModel.GAUSSIAN,
     ) -> List[Any]:
         """
         Generate perturbed observations for one Monte Carlo sample.
@@ -907,6 +950,10 @@ class MonteCarloUQ:
             Model for A_ki uncertainties
         perturbation_type : PerturbationType
             Type of perturbation to apply
+        noise_model : NoiseModel
+            GAUSSIAN (additive) or POISSON (shot-noise resample). POISSON is
+            unbiased for low-count lines; GAUSSIAN clips negatives to 0 without
+            an upward-biasing floor.
 
         Returns
         -------
@@ -923,15 +970,26 @@ class MonteCarloUQ:
 
             # Perturb intensity
             if perturbation_type in (PerturbationType.SPECTRAL_NOISE, PerturbationType.COMBINED):
-                if noise_fraction is not None:
-                    sigma = noise_fraction * intensity
+                if noise_model is NoiseModel.POISSON:
+                    # Shot noise: E[Poisson(I)] = I exactly (no upward bias even
+                    # at 10-50 counts). noise_fraction is ignored by design.
+                    if intensity > 0:
+                        intensity = float(rng.poisson(intensity))
                 else:
-                    sigma = obs.intensity_uncertainty
+                    if noise_fraction is not None:
+                        sigma = noise_fraction * intensity
+                    else:
+                        sigma = obs.intensity_uncertainty
 
-                if sigma > 0:
-                    intensity = intensity + rng.normal(0, sigma)
-                    # Ensure positive intensity
-                    intensity = max(intensity, 1.0)
+                    if sigma > 0:
+                        intensity = intensity + rng.normal(0, sigma)
+                        # Clip to the physical floor (0). The previous hard
+                        # floor at 1.0 truncated only downward excursions and
+                        # biased the mean upward for low-count lines; clip at 0
+                        # keeps the additive noise centred at the true mean for
+                        # any line with mean >> sigma, and at worst introduces a
+                        # negligible bias far smaller than the +1.0 floor.
+                        intensity = max(intensity, 0.0)
 
             # Perturb A_ki
             if perturbation_type in (PerturbationType.ATOMIC_DATA, PerturbationType.COMBINED):
@@ -939,7 +997,8 @@ class MonteCarloUQ:
                     frac_err = atomic_uncertainty.get_uncertainty(obs.wavelength_nm)
                     sigma_A = frac_err * A_ki
                     A_ki = A_ki + rng.normal(0, sigma_A)
-                    # Ensure positive A_ki
+                    # Ensure positive A_ki (A_ki is an atomic constant, not a
+                    # count — a small positive floor avoids non-physical <=0).
                     A_ki = max(A_ki, 1.0)
 
             perturbed.append(
@@ -1105,6 +1164,9 @@ def run_monte_carlo_uq(
     noise_fraction: float = 0.05,
     seed: int = 42,
     closure_mode: str = "standard",
+    perturbation_type: PerturbationType = PerturbationType.COMBINED,
+    atomic_uncertainty: Optional[AtomicDataUncertainty] = None,
+    noise_model: NoiseModel = NoiseModel.GAUSSIAN,
     **closure_kwargs,
 ) -> MonteCarloResult:
     """
@@ -1112,6 +1174,13 @@ def run_monte_carlo_uq(
 
     This is a simple wrapper around MonteCarloUQ for quick uncertainty
     estimation. For more control, use the MonteCarloUQ class directly.
+
+    By default this propagates **both** spectral noise and atomic-data (A_ki)
+    uncertainty (``perturbation_type=COMBINED``). Dropping the A_ki term
+    understates the variance budget, since NIST A_ki grades commonly carry
+    10-25% uncertainty that maps directly onto line intensities. To recover the
+    old spectral-only behaviour, pass
+    ``perturbation_type=PerturbationType.SPECTRAL_NOISE``.
 
     Parameters
     ----------
@@ -1127,6 +1196,12 @@ def run_monte_carlo_uq(
         Random seed (default: 42)
     closure_mode : str
         Closure mode for solver
+    perturbation_type : PerturbationType
+        What to perturb (default: COMBINED — spectral noise + atomic data).
+    atomic_uncertainty : AtomicDataUncertainty, optional
+        Atomic-data uncertainty model used when ``perturbation_type`` includes
+        ATOMIC_DATA. If None and atomic perturbation is requested,
+        :meth:`MonteCarloUQ.run` builds a default 10% (grade-B) model.
     **closure_kwargs
         Additional closure arguments
 
@@ -1144,6 +1219,9 @@ def run_monte_carlo_uq(
     return mc.run(
         observations,
         noise_fraction=noise_fraction,
+        atomic_uncertainty=atomic_uncertainty,
+        perturbation_type=perturbation_type,
         closure_mode=closure_mode,
+        noise_model=noise_model,
         **closure_kwargs,
     )

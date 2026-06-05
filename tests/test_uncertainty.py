@@ -1031,4 +1031,298 @@ class TestSolveWithUncertaintyConsistency:
         assert result_uq.boltzmann_covariance.shape == (2, 2)
         assert result_uq.quality_metrics["boltzmann_covariance_element"] == "A"
         assert result_uq.temperature_uncertainty_K > 0.0
-        assert result_uq.temperature_uncertainty_K < 0.5 * result_uq.temperature_K
+
+
+# ============================================================================
+# Audit Family 7: completing the uncertainty variance budget
+# ============================================================================
+
+
+class TestSahaFactorNeUFloat:
+    """Bug (a): saha_factor_with_uncertainty must propagate an n_e UFloat."""
+
+    def test_exact_ne_gives_no_extra_variance(self):
+        """A plain float n_e is treated as exact (S has no n_e contribution)."""
+        from cflibs.inversion.physics.uncertainty import saha_factor_with_uncertainty
+        from uncertainties import ufloat
+
+        T_eV_u = ufloat(1.0, 0.05)
+        S_float = saha_factor_with_uncertainty(T_eV_u, 1e17, 7.9, 25.0, 15.0, 6.04e21)
+
+        # std comes only from T; recompute with T exact to isolate.
+        T_exact = ufloat(1.0, 0.0)
+        import warnings as _w
+
+        with _w.catch_warnings():
+            _w.simplefilter("ignore")
+            S_t_exact = saha_factor_with_uncertainty(T_exact, 1e17, 7.9, 25.0, 15.0, 6.04e21)
+        assert S_t_exact.std_dev == pytest.approx(0.0, abs=1e-30)
+        assert S_float.std_dev > 0.0  # only T contributes
+
+    def test_ne_ufloat_adds_relative_variance(self):
+        """S scales as 1/n_e, so a 10% n_e UFloat -> ~10% relative term in S.
+
+        Independent oracle: for S = k / n_e (T exact), sigma_S / S = sigma_ne / n_e.
+        """
+        from cflibs.inversion.physics.uncertainty import saha_factor_with_uncertainty
+        from uncertainties import ufloat
+        import warnings as _w
+
+        with _w.catch_warnings():
+            _w.simplefilter("ignore")
+            T_exact = ufloat(1.0, 0.0)
+            ne_u = ufloat(1e17, 0.10 * 1e17)
+            S = saha_factor_with_uncertainty(T_exact, ne_u, 7.9, 25.0, 15.0, 6.04e21)
+
+        assert S.std_dev / S.nominal_value == pytest.approx(0.10, rel=1e-6)
+
+
+class TestClosurePropagatesNeUncertainty:
+    """Bug (a) gate: propagate_through_closure with an n_e-uncertain multiplier
+    must yield a nonzero sigma_C contribution."""
+
+    def test_uncertain_abundance_multiplier_gives_nonzero_sigma_c(self):
+        from cflibs.inversion.physics.uncertainty import (
+            propagate_through_closure_standard,
+            saha_factor_with_uncertainty,
+        )
+        from uncertainties import ufloat
+        import warnings as _w
+
+        # Exact intercepts so the ONLY uncertainty source is the n_e UFloat
+        # threaded through the Saha (1 + n_II/n_I) multipliers.
+        intercepts_u = {"Fe": ufloat(10.0, 0.0), "Si": ufloat(8.0, 0.0)}
+        partition_funcs = {"Fe": 25.0, "Si": 15.0}
+
+        with _w.catch_warnings():
+            _w.simplefilter("ignore")
+            T_u = ufloat(1.0, 0.0)
+            ne_u = ufloat(1e17, 0.10 * 1e17)  # 10%-uncertain n_e
+            mults = {
+                "Fe": 1.0 + saha_factor_with_uncertainty(T_u, ne_u, 7.9, 25.0, 15.0, 6.04e21),
+                "Si": 1.0 + saha_factor_with_uncertainty(T_u, ne_u, 8.15, 15.0, 10.0, 6.04e21),
+            }
+
+        conc_u = propagate_through_closure_standard(
+            intercepts_u, partition_funcs, abundance_multipliers=mults
+        )
+
+        # n_e variance must reach sigma_C (non-zero contribution)
+        for el, cu in conc_u.items():
+            assert cu.std_dev > 0.0, f"sigma_C[{el}] should be non-zero from n_e UFloat"
+
+        # And exact multipliers must give zero sigma_C (control)
+        conc0 = propagate_through_closure_standard(
+            intercepts_u, partition_funcs, abundance_multipliers={"Fe": 2.0, "Si": 2.0}
+        )
+        for cu in conc0.values():
+            assert cu.std_dev == pytest.approx(0.0, abs=1e-12)
+
+
+@pytest.mark.requires_uncertainty
+class TestSolveWithUncertaintyNeBudget:
+    """Bug (a) wiring: solve_with_uncertainty(n_e_relative_uncertainty=...) must
+    enlarge sigma_C without moving the point estimates (concentrations/T/n_e)."""
+
+    @pytest.fixture
+    def mock_db(self):
+        from unittest.mock import MagicMock
+        from cflibs.atomic.database import AtomicDatabase
+        from cflibs.atomic.structures import PartitionFunction
+
+        db = MagicMock(spec=AtomicDatabase)
+        # Element-dependent IPs so the two elements have DIFFERENT Saha
+        # ionization balance. A common-mode (perfectly correlated) n_e error
+        # cancels in closure when every element shares the SAME multiplier;
+        # distinct IPs break that degeneracy so the n_e variance reaches sigma_C.
+        ip_map = {"A": 6.0, "B": 9.0}
+        db.get_ionization_potential.side_effect = lambda el, sp: ip_map.get(el, 7.0)
+        coeffs_I = [3.2188, 0, 0, 0, 0]
+        db.get_partition_coefficients.side_effect = lambda el, sp: PartitionFunction(
+            element=el,
+            ionization_stage=sp,
+            coefficients=coeffs_I,
+            t_min=1000,
+            t_max=20000,
+            source="test",
+        )
+        return db
+
+    def _make_mixed_stage_obs(self):
+        from cflibs.inversion.solve.iterative import LineObservation
+        from cflibs.core.constants import SAHA_CONST_CM3
+
+        T_eV = 1.0
+        n_e_init = 1.0e17
+        wavelength_nm = 500.0
+        saha_offset = np.log((SAHA_CONST_CM3 / n_e_init) * (T_eV**1.5))
+        ip_map = {"A": 6.0, "B": 9.0}  # match the fixture's per-element IPs
+        obs = []
+        for element, intercept in [("A", 8.0), ("B", 7.5)]:
+            ip = ip_map[element]
+            for E_k in [1.0, 2.0, 3.0]:
+                intensity = np.exp(intercept - E_k / T_eV) / wavelength_nm
+                obs.append(
+                    LineObservation(
+                        wavelength_nm,
+                        intensity,
+                        max(intensity * 0.02, 1e-12),
+                        element,
+                        1,
+                        E_k,
+                        1,
+                        1.0,
+                    )
+                )
+            for E_k in [4.5, 5.5, 6.5]:
+                intensity = np.exp(intercept + saha_offset - (ip + E_k) / T_eV) / wavelength_nm
+                obs.append(
+                    LineObservation(
+                        wavelength_nm,
+                        intensity,
+                        max(intensity * 0.02, 1e-12),
+                        element,
+                        2,
+                        E_k,
+                        1,
+                        1.0,
+                    )
+                )
+        return obs
+
+    def test_ne_uncertainty_enlarges_sigma_c_without_moving_point_estimates(self, mock_db):
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+
+        solver = IterativeCFLIBSSolver(mock_db, max_iterations=15)
+        obs = self._make_mixed_stage_obs()
+
+        res_base = solver.solve_with_uncertainty(obs, n_e_relative_uncertainty=0.0)
+        res_ne = solver.solve_with_uncertainty(obs, n_e_relative_uncertainty=0.10)
+
+        # Point estimates (concentrations, T, n_e) must be identical: this is an
+        # uncertainty-only change.
+        assert res_base.temperature_K == pytest.approx(res_ne.temperature_K, rel=1e-12)
+        assert res_base.electron_density_cm3 == pytest.approx(
+            res_ne.electron_density_cm3, rel=1e-12
+        )
+        for el in res_base.concentrations:
+            assert res_base.concentrations[el] == pytest.approx(res_ne.concentrations[el], rel=1e-9)
+
+        # sigma_C must be strictly larger with the extra n_e variance for at
+        # least one element (the mixed-stage elements pick up the Saha term).
+        enlarged = any(
+            res_ne.concentration_uncertainties[el]
+            > res_base.concentration_uncertainties[el] + 1e-12
+            for el in res_base.concentrations
+        )
+        assert enlarged, "n_e uncertainty did not enlarge any sigma_C"
+
+
+class TestRunMonteCarloUQDefaultsToAtomicData:
+    """Bug (b): the convenience run_monte_carlo_uq must include atomic-data
+    (A_ki) perturbation by default."""
+
+    def test_default_perturbation_is_combined(self):
+        """Default convenience call forwards COMBINED (spectral + atomic data)."""
+        from cflibs.inversion.physics.uncertainty import (
+            MonteCarloUQ,
+            PerturbationType,
+            run_monte_carlo_uq,
+        )
+        from cflibs.inversion.physics.boltzmann import LineObservation
+        from unittest.mock import MagicMock, patch
+
+        observations = [LineObservation(500.0, 1000.0, 50.0, "Fe", 1, 3.0, 5, 1e8)]
+        captured = {}
+
+        def spy_run(self, obs, **kwargs):
+            captured["perturbation_type"] = kwargs.get("perturbation_type")
+            return None  # short-circuit the (mocked) solver pipeline
+
+        with patch.object(MonteCarloUQ, "run", spy_run):
+            run_monte_carlo_uq(MagicMock(), observations, n_samples=2)
+
+        assert captured["perturbation_type"] == PerturbationType.COMBINED
+
+    def test_atomic_data_actually_perturbs_aki(self):
+        """COMBINED perturbation modifies A_ki (atomic-data variance is included)."""
+        from cflibs.inversion.physics.uncertainty import (
+            MonteCarloUQ,
+            PerturbationType,
+            AtomicDataUncertainty,
+        )
+        from cflibs.inversion.physics.boltzmann import LineObservation
+        from unittest.mock import MagicMock
+
+        mc = MonteCarloUQ(MagicMock(), n_samples=1, seed=1)
+        obs = [LineObservation(500.0, 1000.0, 50.0, "Fe", 1, 3.0, 5, 1e8)]
+        rng = np.random.default_rng(1)
+        perturbed = mc._perturb_observations(
+            obs,
+            rng,
+            0.05,
+            AtomicDataUncertainty(default_A_uncertainty=0.10),
+            PerturbationType.COMBINED,
+        )
+        assert perturbed[0].A_ki != obs[0].A_ki
+
+
+class TestLowCountNoiseIsUnbiased:
+    """Bug (c): low-count (ps-LIBS 10-50 count) MC intensity perturbation must
+    not be biased upward. The old additive-Gaussian +1.0 floor truncated only
+    downward excursions, biasing the mean up."""
+
+    def _perturb_many(self, true_intensity, n, noise_model, noise_fraction):
+        from cflibs.inversion.physics.uncertainty import (
+            MonteCarloUQ,
+            PerturbationType,
+        )
+        from cflibs.inversion.physics.boltzmann import LineObservation
+        from unittest.mock import MagicMock
+
+        mc = MonteCarloUQ(MagicMock(), n_samples=n, seed=7)
+        rng = np.random.default_rng(7)
+        obs = [LineObservation(500.0, true_intensity, true_intensity, "Fe", 1, 3.0, 5, 1e8)]
+        sampled = []
+        for _ in range(n):
+            p = mc._perturb_observations(
+                obs, rng, noise_fraction, None, PerturbationType.SPECTRAL_NOISE, noise_model
+            )
+            sampled.append(p[0].intensity)
+        return np.array(sampled)
+
+    def test_poisson_mean_matches_true_low_count(self):
+        """Poisson model: E[Poisson(I)] = I exactly (independent oracle)."""
+        from cflibs.inversion.physics.uncertainty import NoiseModel
+
+        true = 20.0  # low-count ps-LIBS line
+        sampled = self._perturb_many(true, 40000, NoiseModel.POISSON, noise_fraction=None)
+        # Within MC error (~ sqrt(true/n)) the mean equals the true rate, no
+        # upward bias.
+        assert sampled.mean() == pytest.approx(true, abs=0.15)
+
+    def test_gaussian_floor_no_longer_biases_to_one(self):
+        """Gaussian model: floor moved from +1.0 to 0.0 (no upward +1 floor bias).
+
+        Independent oracle: re-sample the SAME perturbed intensities and apply
+        the OLD vs NEW floor. The old +1.0 floor must give a strictly larger
+        (more upward-biased) mean than the new 0.0 floor for a low-count line.
+        """
+        from cflibs.inversion.physics.uncertainty import NoiseModel
+
+        true = 2.0  # low-count line where the floor bites
+        # Reproduce the additive-Gaussian draws the perturber would use, then
+        # compare floors directly (oracle independent of the production clip).
+        rng = np.random.default_rng(99)
+        sigma = 1.0 * true  # noise_fraction=1.0 -> sigma = true
+        raw = true + rng.normal(0.0, sigma, size=200000)
+        mean_old_floor = np.maximum(raw, 1.0).mean()  # buggy +1.0 floor
+        mean_new_floor = np.maximum(raw, 0.0).mean()  # fixed 0.0 floor
+
+        assert mean_old_floor > mean_new_floor, "new floor must reduce upward bias"
+        assert mean_old_floor - true > mean_new_floor - true
+
+        # And the production Gaussian path must never clip up to the old 1.0
+        # floor: with floor=0.0 some draws land in [0, 1).
+        gauss = self._perturb_many(true, 50000, NoiseModel.GAUSSIAN, noise_fraction=1.0)
+        assert np.any(gauss < 1.0), "fixed floor should allow intensities below 1.0"

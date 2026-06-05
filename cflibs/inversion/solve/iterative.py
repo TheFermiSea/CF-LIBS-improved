@@ -1009,6 +1009,62 @@ class IterativeCFLIBSSolver:
             multipliers[el] = 1.0 + max(S, 0.0)
         return multipliers
 
+    def _compute_abundance_multipliers_uncertain(
+        self,
+        elements: List[str],
+        T_K: float,
+        n_e_cm3: float,
+        n_e_relative_uncertainty: float,
+        partition_funcs_I: Dict[str, float],
+        partition_funcs_II: Dict[str, float],
+        ips: Dict[str, float],
+        T_corona: Optional[float] = None,
+    ) -> Dict[str, "Any"]:
+        """
+        Neutral-plane abundance multipliers ``(1 + n_II/n_I)`` as UFloats.
+
+        Mirrors :meth:`_compute_abundance_multipliers` but propagates an n_e
+        uncertainty through the Saha factor. The electron density is wrapped as
+        a UFloat with the given relative (1-sigma) uncertainty and threaded
+        through :func:`saha_factor_with_uncertainty` so that each multiplier
+        carries the resulting variance. Temperature is treated as exact here
+        (its variance is handled by the Boltzmann slope path).
+        """
+        from uncertainties import ufloat
+        from cflibs.inversion.physics.uncertainty import saha_factor_with_uncertainty
+
+        safe_ne = max(float(n_e_cm3), 1e10)
+        n_e_u = ufloat(safe_ne, n_e_relative_uncertainty * safe_ne)
+
+        corona_sensitive = {"Si", "Fe", "Ca", "Al", "Mg"}
+        multipliers: Dict[str, "Any"] = {}
+        for el in elements:
+            U_I = partition_funcs_I.get(el, 25.0)
+            U_II = partition_funcs_II.get(el, 15.0)
+
+            T_saha = T_K
+            if T_corona is not None and el in corona_sensitive:
+                T_saha = 0.3 * T_K + 0.7 * T_corona
+
+            T_eV_exact = max(T_saha / EV_TO_K, 0.1)
+            # Exact-T UFloat so saha_factor_with_uncertainty only injects the
+            # n_e variance into this multiplier (T variance is propagated via
+            # the pooled Boltzmann slope, not here, to avoid double counting).
+            # std_dev==0 is intentional; suppress the (benign) library warning.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=UserWarning)
+                T_eV_u = ufloat(T_eV_exact, 0.0)
+                S = saha_factor_with_uncertainty(
+                    T_eV_u,
+                    n_e_u,
+                    ips[el],
+                    U_I,
+                    U_II,
+                    SAHA_CONST_CM3,
+                )
+            multipliers[el] = 1.0 + S
+        return multipliers
+
     def _compute_effective_ips(
         self,
         ips: Dict[str, float],
@@ -1916,6 +1972,7 @@ class IterativeCFLIBSSolver:
         self,
         observations: List[LineObservation],
         closure_mode: str = "standard",
+        n_e_relative_uncertainty: float = 0.0,
         **closure_kwargs,
     ) -> CFLIBSResult:
         """
@@ -1928,6 +1985,11 @@ class IterativeCFLIBSSolver:
         Parameters:
             observations (List[LineObservation]): Spectral lines with intensity uncertainties.
             closure_mode (str): Closure algorithm to use ('standard', 'matrix', 'oxide', 'ilr', 'pwlr', or 'dirichlet_residual').
+            n_e_relative_uncertainty (float): Optional fractional (1-sigma) uncertainty on the
+                converged electron density. When > 0, the neutral-plane abundance multipliers
+                ``(1 + n_II/n_I)`` are built as UFloats via ``saha_factor_with_uncertainty`` so
+                the n_e variance propagates into the per-element concentration uncertainty.
+                Defaults to 0.0 (n_e treated as exact, preserving prior behaviour).
             **closure_kwargs: Arguments passed to the chosen closure routine (e.g. 'matrix_element',
                 'matrix_fraction', or 'oxide_stoichiometry').
 
@@ -1992,6 +2054,22 @@ class IterativeCFLIBSSolver:
             effective_ips,
             T_corona=result.temperature_corona_K,
         )
+
+        # When an n_e uncertainty is supplied, rebuild the neutral-plane
+        # multipliers (1 + n_II/n_I) as UFloats so the n_e variance propagates
+        # through closure into sigma_C. The Saha ratio scales as 1/n_e, so a
+        # UFloat n_e carries its relative uncertainty into each multiplier.
+        if n_e_relative_uncertainty and n_e_relative_uncertainty > 0.0:
+            abundance_multipliers = self._compute_abundance_multipliers_uncertain(
+                elements,
+                T_K,
+                n_e,
+                n_e_relative_uncertainty,
+                partition_funcs,
+                partition_funcs_II,
+                effective_ips,
+                T_corona=result.temperature_corona_K,
+            )
 
         if self.saha_boltzmann_graph:
             common_fit = self._fit_saha_boltzmann_graph(obs_by_element, T_K, n_e, effective_ips)

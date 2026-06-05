@@ -485,12 +485,25 @@ class JointOptimizer:
                 param_uncertainties["T_eV"] = float(final_T * std_errors[0])  # log(T) -> T
                 param_uncertainties["log_ne"] = float(std_errors[1])
 
-                # Concentration uncertainties (need Jacobian of softmax)
+                # Concentration uncertainties via the FULL closure Jacobian.
+                #
+                # The diagonal-only approximation
+                #   sigma_C_i ~ C_i (1 - C_i) * sigma_theta_i
+                # ignores the off-diagonal softmax coupling
+                #   J_ij = dC_i/dtheta_j = C_i (delta_ij - C_j),
+                # which makes it 30-50% low on degenerate/correlated
+                # compositions. Propagate the theta-block covariance through the
+                # exact Jacobian instead:
+                #   Sigma_C = J Sigma_theta J^T,   sigma_C_i = sqrt(Sigma_C_ii).
+                # jax.jacobian handles any JAX-native closure (softmax and
+                # beyond), so this stays correct if the closure changes.
+                theta_final = final_x[2:]
+                jac = np.array(jax.jacobian(self.closure.apply)(theta_final))
+                cov_theta = cov[2:, 2:]
+                cov_C = jac @ cov_theta @ jac.T
+                conc_std = np.sqrt(np.abs(np.diag(cov_C)))
                 for i, el in enumerate(self.elements):
-                    # Approximate uncertainty
-                    param_uncertainties[f"C_{el}"] = float(
-                        final_conc_arr[i] * (1 - final_conc_arr[i]) * std_errors[2 + i]
-                    )
+                    param_uncertainties[f"C_{el}"] = float(conc_std[i])
 
                 # Correlation matrix
                 std_diag = np.diag(1.0 / (std_errors + 1e-10))

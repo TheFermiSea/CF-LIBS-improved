@@ -672,3 +672,143 @@ class TestEdgeCases:
         assert len(profile_loss) == 5
         # The minimum profile loss should be very close to zero at the optimum
         assert np.min(profile_loss) < 1e-3
+
+
+class TestFullSoftmaxJacobianUncertainty:
+    """Bug (d) audit Family 7: concentration uncertainty must propagate the
+    theta-block covariance through the FULL softmax Jacobian
+    J_ij = C_i (delta_ij - C_j), not the diagonal-only C_i(1-C_i) sigma_i.
+    The diagonal version is 30-50% low on correlated/degenerate compositions."""
+
+    def _sigma_c_full_jacobian(self, theta0, cov_theta):
+        """Analytical sigma_C via Sigma_C = J cov_theta J^T (the fixed path)."""
+        from cflibs.inversion.physics.softmax_closure import softmax_jacobian
+
+        J = np.array(softmax_jacobian(jnp.array(theta0)))
+        cov_C = J @ cov_theta @ J.T
+        return np.sqrt(np.abs(np.diag(cov_C)))
+
+    def _sigma_c_diagonal_only(self, theta0, cov_theta):
+        """Old diagonal-only approximation C_i(1-C_i) sigma_theta_i."""
+        from cflibs.inversion.physics.softmax_closure import softmax_closure
+
+        C = np.array(softmax_closure(jnp.array(theta0)))
+        sigma_theta = np.sqrt(np.diag(cov_theta))
+        return C * (1.0 - C) * sigma_theta
+
+    def _sigma_c_monte_carlo(self, theta0, cov_theta, n=300000, seed=0):
+        """Independent MC oracle: theta ~ N(theta0, cov_theta) -> softmax -> std."""
+        from cflibs.inversion.physics.softmax_closure import softmax_closure
+
+        rng = np.random.default_rng(seed)
+        samples = rng.multivariate_normal(theta0, cov_theta, size=n)
+        C = np.array(softmax_closure(jnp.array(samples)))
+        return C.std(axis=0)
+
+    def test_full_jacobian_matches_monte_carlo_degenerate_5element(self):
+        """Full Jacobian sigma_C within ~5% of MC on a degenerate 5-element
+        composition; diagonal-only is ~30% low on the minor elements.
+
+        For independent theta errors (diagonal cov_theta) the full softmax
+        variance for element i is
+            Var_full(C_i) = C_i^2 [ (1-C_i)^2 sigma_i^2 + sum_{j!=i} C_j^2 sigma_j^2 ],
+        whereas the diagonal-only approximation keeps only the first term:
+            Var_diag(C_i) = C_i^2 (1-C_i)^2 sigma_i^2.
+        The dropped cross terms make diagonal-only strictly low. The deficit is
+        largest for MINOR elements coexisting with a dominant one (the
+        cross-term sum_{j!=i} C_j^2 is then ~ C_dominant^2 >> (1-C_i)^2), where
+        diagonal-only undershoots the truth by ~30%.
+        """
+        # Dominant + four minor elements: a degenerate, highly unequal simplex
+        # point where the off-diagonal softmax coupling dominates the minor
+        # elements' variance.
+        C = np.array([0.90, 0.025, 0.025, 0.025, 0.025])
+        theta0 = np.log(C)
+        theta0 = theta0 - theta0.mean()  # centered representative
+        sigma_theta = 0.15
+        cov_theta = np.diag(np.full(C.size, sigma_theta**2))
+
+        sigma_full = self._sigma_c_full_jacobian(theta0, cov_theta)
+        sigma_diag = self._sigma_c_diagonal_only(theta0, cov_theta)
+        sigma_mc = self._sigma_c_monte_carlo(theta0, cov_theta)
+
+        # Full Jacobian agrees with the MC oracle within ~5% for every element.
+        np.testing.assert_allclose(sigma_full, sigma_mc, rtol=0.05)
+
+        # Diagonal-only is substantially LOW on the minor elements (~30% low),
+        # while the full Jacobian is right: this is the bug the fix corrects.
+        minor_ratio = (sigma_diag / sigma_mc)[1:]
+        assert np.all(minor_ratio < 0.75), f"diagonal-only not low enough: {minor_ratio}"
+        # And full is much closer to MC than diagonal-only is, for the minor set.
+        full_err = np.abs(sigma_full - sigma_mc)[1:]
+        diag_err = np.abs(sigma_diag - sigma_mc)[1:]
+        assert np.all(full_err < diag_err)
+
+    def test_optimizer_reports_full_jacobian_sigma_c(self):
+        """End-to-end: JointOptimizer.optimize must report the full-Jacobian
+        sigma_C, not the diagonal-only approximation.
+
+        The softmax over-parameterization makes the loss Hessian singular along
+        the all-ones theta direction, so the real optimizer's Hessian-based
+        uncertainty block is frequently skipped on the toy model. To exercise
+        the PRODUCTION sigma_C propagation deterministically, we patch
+        jax.hessian to return a fixed, well-conditioned positive-definite matrix
+        and assert the optimizer's reported sigma_C equals the full-Jacobian
+        propagation of that covariance (and differs from diagonal-only).
+        """
+        from unittest.mock import patch
+        import cflibs.inversion.solve.joint_optimizer as jo
+
+        elements = ["Fe", "Mg", "Ca"]
+        line_centers = {"Fe": [500.0], "Mg": [510.0], "Ca": [520.0]}
+        line_strengths = {"Fe": [1.0], "Mg": [1.0], "Ca": [1.0]}
+        wavelength = np.linspace(480, 540, 150)
+
+        forward_model = create_simple_forward_model(elements, line_centers, line_strengths)
+        optimizer = JointOptimizer(forward_model, elements, wavelength, max_iterations=100)
+
+        conc_true = jnp.array([0.5, 0.3, 0.2])
+        measured = np.array(forward_model(1.0, 1e17, conc_true, wavelength))
+
+        # n_params = 2 (log_T, log_ne) + 3 elements = 5.
+        n = optimizer.n_params
+        rng = np.random.default_rng(0)
+        A = rng.normal(size=(n, n))
+        fixed_hessian = A @ A.T + np.eye(n) * 5.0  # SPD, well conditioned
+
+        def fake_hessian(_fn):
+            return lambda _x: jnp.array(fixed_hessian)
+
+        with patch.object(jo.jax, "hessian", fake_hessian):
+            result = optimizer.optimize(
+                measured,
+                initial_T_eV=1.0,
+                initial_n_e=1e17,
+                initial_concentrations={"Fe": 1 / 3, "Mg": 1 / 3, "Ca": 1 / 3},
+                method="BFGS",
+            )
+
+        sigma_reported = np.array([result.parameter_uncertainties[f"C_{el}"] for el in elements])
+        assert np.all(np.isfinite(sigma_reported))
+        assert np.all(sigma_reported > 0.0)
+
+        # Reconstruct the optimizer's covariance exactly as the production code
+        # does: cov = inv(H) * reduced_chi2 (or 1.0 if non-positive).
+        scale = result.reduced_chi_squared if result.reduced_chi_squared > 0 else 1.0
+        cov = np.linalg.inv(fixed_hessian) * scale
+        cov_theta = cov[2:, 2:]
+        theta0 = np.array(
+            optimizer._pack_params(
+                result.temperature_eV, result.electron_density_cm3, result.concentrations
+            )[2:]
+        )
+
+        sigma_full = self._sigma_c_full_jacobian(theta0, cov_theta)
+        sigma_diag = self._sigma_c_diagonal_only(theta0, cov_theta)
+
+        # Reported sigma_C equals the full-Jacobian propagation (the fix).
+        np.testing.assert_allclose(sigma_reported, sigma_full, rtol=1e-4, atol=1e-9)
+        # And it is observably different from the old diagonal-only estimate.
+        assert np.any(
+            np.abs(sigma_full - sigma_diag) > 0.05 * np.maximum(sigma_full, 1e-12)
+        ), "full Jacobian indistinguishable from diagonal-only on this fit"
