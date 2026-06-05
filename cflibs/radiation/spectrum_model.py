@@ -475,13 +475,15 @@ def planck_radiance_jax(wavelength_nm, T_eV) -> "jnp.ndarray":
 class SpectrumModelJax(SpectrumModel):
     """JAX-accelerated drop-in companion to :class:`SpectrumModel`.
 
-    The ionization balance and atomic-data lookups still go through the
-    Python ``SahaBoltzmannSolverJax`` (which produces JAX-evaluated values
-    but materialises them as Python floats at the boundary). The
-    wavelength-grid-sized arithmetic — emissivity broadening, Planck
-    radiance, radiative transfer and instrument convolution — runs on
-    ``jax.numpy`` arrays through ``_broaden_per_line_jax``,
-    ``_radiative_transfer_jax`` and ``apply_instrument_function_jax``.
+    The ionization balance and atomic-data lookups go through the Python
+    ``SahaBoltzmannSolverJax`` (which produces JAX-evaluated values but
+    materialises them as Python floats at the boundary). The
+    wavelength-grid-sized arithmetic — emissivity broadening (Gaussian or
+    Voigt, honouring ``apply_stark``), Planck radiance, radiative transfer
+    and instrument convolution — runs on ``jax.numpy`` arrays through the
+    unified :func:`cflibs.radiation.kernels.forward_model` kernel used by
+    the inherited :meth:`SpectrumModel.compute_spectrum` (this subclass no
+    longer overrides ``compute_spectrum``; it only swaps in the JAX solver).
 
     Numerical equivalence with :class:`SpectrumModel` is asserted by
     ``tests/radiation/test_spectrum_model_jax.py`` within
@@ -524,106 +526,23 @@ class SpectrumModelJax(SpectrumModel):
         # path doesn't pay H2D cost on every call.
         self._wavelength_jax = jnp.asarray(self.wavelength, dtype=jnp.float64)
 
-    def compute_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute synthetic spectrum on the configured wavelength grid.
-
-        Returns NumPy arrays so existing callers (acceptance tests, the
-        benchmark gate, the Bayesian inverter) don't have to special-case
-        the device-array boundary.
-        """
-        self.plasma.validate()
-
-        # 1. Saha-Boltzmann (uses JAX kernels internally).
-        logger.debug("Solving Saha-Boltzmann (JAX)...")
-        populations = self.solver.solve_plasma(self.plasma)
-
-        # 2. Transitions — same filter logic as the NumPy variant.
-        logger.debug("Loading transitions...")
-        all_transitions = []
-        for element in self.plasma.species.keys():
-            min_ri = 0.01 if self.broadening_mode == BroadeningMode.NIST_PARITY else 10.0
-            transitions = self.atomic_db.get_transitions(
-                element,
-                wavelength_min=self.lambda_min,
-                wavelength_max=self.lambda_max,
-                min_relative_intensity=min_ri,
-            )
-            all_transitions.extend(transitions)
-
-        # 3. Per-line emissivity table (NumPy is fine here — it is a small
-        #    array indexed by transition; the heavy work is the broadening).
-        line_wavelengths_list = []
-        line_emissivities_list = []
-        line_sigmas_list = []
-        for trans in all_transitions:
-            key = (trans.element, trans.ionization_stage, round(trans.E_k_ev, 8))
-            if key not in populations:
-                continue
-            n_k = populations[key]
-            wl_m = trans.wavelength_nm * 1e-9
-            n_k_m3 = n_k * 1e6
-            epsilon = (H_PLANCK * C_LIGHT / (4 * np.pi * wl_m)) * trans.A_ki * n_k_m3
-            line_wavelengths_list.append(trans.wavelength_nm)
-            line_emissivities_list.append(epsilon)
-            if self.broadening_mode == BroadeningMode.LEGACY:
-                T_eV = self.plasma.T_e_eV
-                line_sigmas_list.append(0.01 * np.sqrt(T_eV / 0.86))
-            elif self.broadening_mode == BroadeningMode.NIST_PARITY:
-                line_sigmas_list.append(self.instrument.sigma_at_wavelength(trans.wavelength_nm))
-            elif self.broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
-                mass = self._get_element_mass(trans.element)
-                fwhm = doppler_width(trans.wavelength_nm, self.plasma.T_e_eV, mass)
-                line_sigmas_list.append(fwhm / 2.355)
-            else:  # pragma: no cover - already validated in __init__
-                raise ValueError(f"Unsupported broadening mode: {self.broadening_mode!r}")
-
-        if not line_wavelengths_list:
-            zero = np.zeros_like(self.wavelength)
-            return self.wavelength, zero
-
-        line_wl_jnp = jnp.asarray(line_wavelengths_list, dtype=jnp.float64)
-        line_em_jnp = jnp.asarray(line_emissivities_list, dtype=jnp.float64)
-        line_sig_jnp = jnp.asarray(line_sigmas_list, dtype=jnp.float64)
-
-        # 4. Per-line broadening — full GPU work.
-        emissivity_jnp = _broaden_per_line_jax(
-            self._wavelength_jax, line_wl_jnp, line_em_jnp, line_sig_jnp
-        )
-
-        # 5. Radiative transfer (Planck + slab self-absorption).
-        intensity_jnp = _radiative_transfer_jax(
-            self._wavelength_jax,
-            emissivity_jnp,
-            jnp.asarray(self.plasma.T_e_eV),
-            jnp.asarray(self.path_length_m),
-        )
-
-        # 6. Instrument response curve.
-        if self.instrument.response_curve is not None:
-            logger.debug("Applying instrument response (JAX)...")
-            # If the instrument is the JAX variant, this stays on-device.
-            intensity_np = self.instrument.apply_response(
-                self.wavelength, np.asarray(intensity_jnp)
-            )
-            intensity_jnp = jnp.asarray(intensity_np)
-
-        # 7. Instrument function (Gaussian convolution).
-        if self.broadening_mode != BroadeningMode.NIST_PARITY:
-            if self.instrument.is_resolving_power_mode:
-                mid_wl = 0.5 * (self.lambda_min + self.lambda_max)
-                sigma_conv = self.instrument.sigma_at_wavelength(mid_wl)
-            else:
-                sigma_conv = self.instrument.resolution_sigma_nm
-            if sigma_conv > 0:
-                from cflibs.instrument.convolution import apply_instrument_function_jax
-
-                intensity = apply_instrument_function_jax(
-                    self.wavelength, np.asarray(intensity_jnp), sigma_conv
-                )
-            else:
-                intensity = np.asarray(intensity_jnp)
-        else:
-            intensity = np.asarray(intensity_jnp)
-
-        logger.info("Spectrum computation (JAX) complete")
-        return self.wavelength, intensity
+    # NOTE (audit Family 1): ``compute_spectrum`` is intentionally NOT
+    # overridden here. The base :meth:`SpectrumModel.compute_spectrum`
+    # already runs the whole wavelength-grid-sized arithmetic on JAX:
+    #
+    #   * populations come from ``self.solver`` — which this subclass swaps
+    #     to ``SahaBoltzmannSolverJax`` in ``__init__``;
+    #   * the per-line emissivity, broadening and radiative-transfer math is
+    #     delegated to :func:`cflibs.radiation.kernels.forward_model`, which
+    #     is fully ``jax.numpy``-native (it receives a ``jnp`` wavelength
+    #     grid via the ``HAS_JAX`` branch in the base method);
+    #   * the downstream instrument convolution uses
+    #     ``apply_instrument_function_jax`` because ``self.use_jax`` is True.
+    #
+    # The previous override re-implemented the kernel with a pure-Gaussian
+    # sum (``_broaden_per_line_jax``) and silently dropped ``apply_stark``,
+    # so ``SpectrumModelJax(apply_stark=True)`` produced Stark-free
+    # (Gaussian-only) lines while the base class produced Voigt. Deleting
+    # the override restores Voigt/Stark fidelity AND keeps the JAX dispatch,
+    # because ``forward_model`` honours ``apply_stark`` on the
+    # ``PHYSICAL_DOPPLER`` path via ``_voigt_sum_per_line``.
