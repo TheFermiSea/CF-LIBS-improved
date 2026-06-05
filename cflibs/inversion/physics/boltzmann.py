@@ -352,18 +352,20 @@ class BoltzmannPlotFitter:
                 logger.warning("Too few points remaining after rejection")
                 break
 
-            # Weighted least squares
+            # Weighted least squares. ``weights`` are 1/sigma^2; polyfit wants
+            # 1/sigma (it squares internally), so pass sqrt. See _compute_weights.
             weights = self._compute_weights(y_err)
+            polyfit_w = np.sqrt(weights)
 
             try:
                 # Need >2 points for covariance estimation
                 if len(x) > 2:
-                    (m, c), cov = np.polyfit(x, y, 1, w=weights, cov=True)
+                    (m, c), cov = np.polyfit(x, y, 1, w=polyfit_w, cov=True)
                     slope_err = np.sqrt(cov[0, 0])
                     intercept_err = np.sqrt(cov[1, 1])
                     covariance_matrix = cov
                 else:
-                    m, c = np.polyfit(x, y, 1, w=weights)
+                    m, c = np.polyfit(x, y, 1, w=polyfit_w)
                     slope_err = np.inf
                     intercept_err = np.inf
                     covariance_matrix = None
@@ -469,16 +471,17 @@ class BoltzmannPlotFitter:
 
             weights = self._compute_weights(y_err)
 
-            # POLYFIT WEIGHTING CONVENTION: ``numpy.polyfit(x, y, deg, w=W)``
-            # interprets ``W`` as ``1/sigma`` (it multiplies residuals by
-            # ``W`` and minimizes ``sum((W*r)^2) = sum(W^2 * r^2)``). The
-            # CPU sigma-clip path passes ``W = 1/y_err^2`` directly, so
-            # the *effective* weight in the minimization is ``W^2 =
-            # 1/y_err^4``. To match the CPU path byte-for-byte we square
-            # ``weights`` before passing to the closed-form 5-sum kernel
-            # (which minimizes ``sum(w * r^2)``).
-            # See docs/jax-port/iterative-boltzmann-consultation.md.
-            kernel_weights = weights * weights
+            # WEIGHTING CONVENTION (corrected): the inverse-variance weights
+            # ``1/sigma^2`` are exactly the weight on the *squared* residual in
+            # WLS. The closed-form 5-sum kernel minimises ``sum(w * r^2)``, so
+            # it consumes these weights DIRECTLY (no squaring). The CPU
+            # sigma-clip path achieves the same objective by passing
+            # ``sqrt(weights) = 1/sigma`` to ``numpy.polyfit`` (which squares
+            # its ``w`` internally). Both paths therefore minimise
+            # ``sum((1/sigma^2) r^2)`` and agree. (Previously this squared the
+            # weights to ``1/sigma^4`` to mirror a CPU-side polyfit bug; that
+            # bug is now fixed — see _compute_weights.)
+            kernel_weights = weights
 
             # Closed-form WLS via JAX kernel. Pack as a (1, N) batch-of-one.
             # NOTE: the kernel applies its own ``mask`` over weights, but we
@@ -503,12 +506,11 @@ class BoltzmannPlotFitter:
                 # numpy.polyfit(..., cov=True) scales its returned cov by
                 # chi^2/dof (the ``scale_cov=True`` default in older
                 # polyfit). We mirror that here using the **same**
-                # effective-weight convention as polyfit: kernel_weights
-                # = weights**2. The JAX kernel returns the *unscaled*
-                # formal cov (sigma_slope=sqrt(S_w/det)); we rescale by
-                # chi^2/dof so r_jax.slope_uncertainty matches
-                # r_cpu.slope_uncertainty byte-for-byte. See
-                # docs/jax-port/iterative-boltzmann-consultation.md.
+                # squared-residual weight as the corrected CPU path:
+                # ``kernel_weights == weights == 1/sigma^2``. The JAX kernel
+                # returns the *unscaled* formal cov (sigma_slope=sqrt(S_w/det));
+                # we rescale by chi^2/dof so r_jax.slope_uncertainty matches
+                # r_cpu.slope_uncertainty.
                 w_masked = kernel_weights
                 S_w = float(np.sum(w_masked))
                 S_wx = float(np.sum(w_masked * x))
@@ -617,7 +619,8 @@ class BoltzmannPlotFitter:
         if threshold is None:
             # Use median absolute deviation as robust scale estimate
             weights = self._compute_weights(y_err)
-            m_init, c_init = np.polyfit(x, y, 1, w=weights)
+            # polyfit wants 1/sigma (= sqrt of inverse-variance weights).
+            m_init, c_init = np.polyfit(x, y, 1, w=np.sqrt(weights))
             residuals_init = np.abs(y - (m_init * x + c_init))
             mad = np.median(residuals_init)
             # Use the instance outlier_sigma for consistency across methods
@@ -714,12 +717,14 @@ class BoltzmannPlotFitter:
             logger.warning("Too few valid points for Huber fit")
             return self._empty_result()
 
-        # Initial weights from measurement uncertainties
+        # Initial weights from measurement uncertainties. ``base_weights`` and
+        # ``combined_weights`` are squared-residual weights (1/sigma^2 times the
+        # dimensionless Huber factor); polyfit wants their sqrt (= 1/sigma scale).
         base_weights = self._compute_weights(y_err)
         combined_weights = base_weights.copy()  # Initialize for case with no iterations
 
         # IRLS with Huber weights
-        slope, intercept = np.polyfit(x, y, 1, w=base_weights)
+        slope, intercept = np.polyfit(x, y, 1, w=np.sqrt(base_weights))
         n_iterations = 0
 
         for iteration in range(self.max_iterations):
@@ -745,7 +750,7 @@ class BoltzmannPlotFitter:
 
             # Refit
             try:
-                new_slope, new_intercept = np.polyfit(x, y, 1, w=combined_weights)
+                new_slope, new_intercept = np.polyfit(x, y, 1, w=np.sqrt(combined_weights))
             except np.linalg.LinAlgError:
                 break
 
@@ -759,7 +764,7 @@ class BoltzmannPlotFitter:
         # Final fit with covariance (using final weights)
         covariance_matrix = None
         try:
-            (slope, intercept), cov = np.polyfit(x, y, 1, w=combined_weights, cov=True)
+            (slope, intercept), cov = np.polyfit(x, y, 1, w=np.sqrt(combined_weights), cov=True)
             slope_err = np.sqrt(cov[0, 0])
             intercept_err = np.sqrt(cov[1, 1])
             covariance_matrix = cov
@@ -888,7 +893,24 @@ class BoltzmannPlotFitter:
         return np.sqrt(sigma_intensity**2 + sigma_aki**2)
 
     def _compute_weights(self, y_err: np.ndarray) -> np.ndarray:
-        """Compute regression weights from measurement uncertainties."""
+        """Inverse-variance weights ``1/sigma^2`` for weighted least squares.
+
+        These are the weights that multiply the *squared* residual in the WLS
+        objective ``sum_i w_i (y_i - y_hat_i)^2`` — the correct form for
+        Gaussian measurement errors (Bevington & Robinson 2003, §6). They are
+        consumed directly by :meth:`_compute_r_squared`, by the JAX 5-sum
+        kernel (which minimises ``sum(w * r^2)``), and by the covariance
+        normal-equation sums.
+
+        IMPORTANT — :func:`numpy.polyfit` convention: ``polyfit(x, y, deg, w=W)``
+        applies ``W`` to the *unsquared* residual and minimises
+        ``sum((W*r)^2) = sum(W^2 r^2)``. So polyfit's ``w`` must be ``1/sigma``,
+        i.e. ``sqrt`` of these inverse-variance weights. Every polyfit call site
+        in this class therefore passes ``np.sqrt(self._compute_weights(...))``.
+        Passing these weights to polyfit directly would yield a non-physical
+        ``1/sigma^4`` weighting that collapses leverage onto the few
+        highest-SNR points and biases the fitted slope/temperature.
+        """
         if np.all(y_err == 0):
             return np.ones_like(y_err)
         safe_err = np.where(y_err > 0, y_err, np.inf)
@@ -910,11 +932,13 @@ class BoltzmannPlotFitter:
             covariance_matrix is 2x2: [[var(slope), cov], [cov, var(intercept)]]
         """
         weights = self._compute_weights(y_err)
+        # polyfit wants 1/sigma (= sqrt of inverse-variance weights).
+        polyfit_w = np.sqrt(weights)
         try:
-            (m, c), cov = np.polyfit(x, y, 1, w=weights, cov=True)
+            (m, c), cov = np.polyfit(x, y, 1, w=polyfit_w, cov=True)
             return m, c, np.sqrt(cov[0, 0]), np.sqrt(cov[1, 1]), cov
         except np.linalg.LinAlgError:
-            m, c = np.polyfit(x, y, 1, w=weights)
+            m, c = np.polyfit(x, y, 1, w=polyfit_w)
             return m, c, np.inf, np.inf, None
 
     def _create_result(
