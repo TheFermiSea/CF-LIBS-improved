@@ -15,6 +15,7 @@ This is a measurement tool, not a fix. Run on dev for the baseline, then
 after each change for the delta. Parametrized so the three interacting
 gates (rel-int floor, resonance exclusion, comb strength) can be ablated.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -47,10 +48,22 @@ def _resolve_db() -> Path:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--spectrum", default="data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv")
-    ap.add_argument("--min-relative-intensity", type=lambda s: None if s == "none" else float(s),
-                    default=None)
+    ap.add_argument(
+        "--min-relative-intensity", type=lambda s: None if s == "none" else float(s), default=None
+    )
     ap.add_argument("--exclude-resonance", choices=["auto", "true", "false"], default="auto")
     ap.add_argument("--apply-self-absorption", action="store_true")
+    ap.add_argument(
+        "--closure-mode",
+        default="standard",
+        choices=["standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residual"],
+        help="Closure equation (oxide => molar-oxygen stoichiometry auto-applied).",
+    )
+    ap.add_argument(
+        "--saha-boltzmann-graph",
+        action="store_true",
+        help="Use the pooled Saha-Boltzmann graph intercept extraction.",
+    )
     ap.add_argument("--label", default="baseline")
     args = ap.parse_args()
 
@@ -69,7 +82,10 @@ def main() -> None:
     sa = bool(args.apply_self_absorption)
 
     obs = _detect_and_select_lines(
-        wl, inten, db, requested,
+        wl,
+        inten,
+        db,
+        requested,
         min_relative_intensity=args.min_relative_intensity,
         apply_self_absorption=sa,
         exclude_resonance=excl,
@@ -82,8 +98,19 @@ def main() -> None:
         if el is not None:
             obs_counts[el] = obs_counts.get(el, 0) + 1
 
-    solver = IterativeCFLIBSSolver(atomic_db=db, apply_self_absorption=sa)
-    result = solver.solve(obs)
+    solver = IterativeCFLIBSSolver(
+        atomic_db=db,
+        apply_self_absorption=sa,
+        saha_boltzmann_graph=bool(args.saha_boltzmann_graph),
+    )
+    closure_kwargs: dict = {}
+    if args.closure_mode == "oxide":
+        from cflibs.inversion.physics.closure import default_oxide_stoichiometry
+
+        closure_kwargs["oxide_stoichiometry"] = default_oxide_stoichiometry(
+            [o.element for o in obs]
+        )
+    result = solver.solve(obs, closure_mode=args.closure_mode, **closure_kwargs)
     pred = dict(result.concentrations)
 
     # --- scoring ---
@@ -92,11 +119,16 @@ def main() -> None:
     fps = {e: pred.get(e, 0.0) for e in CONFOUNDERS if pred.get(e, 0.0) >= EPS_PRESENT}
 
     print(f"\n{'='*72}\n  BHVO-2 PRESENCE MEASUREMENT  [{args.label}]")
-    print(f"  spectrum={spec_path.name}  min_rel_int={args.min_relative_intensity}  "
-          f"exclude_resonance={args.exclude_resonance}  SA={sa}")
-    print(f"  T={result.temperature_K:.0f}K  ne={result.electron_density_cm3:.2e}  "
-          f"converged={result.converged}  n_obs={len(obs)}")
-    print('='*72)
+    print(
+        f"  spectrum={spec_path.name}  min_rel_int={args.min_relative_intensity}  "
+        f"exclude_resonance={args.exclude_resonance}  SA={sa}"
+    )
+    print(f"  closure={args.closure_mode}  saha_boltzmann_graph={bool(args.saha_boltzmann_graph)}")
+    print(
+        f"  T={result.temperature_K:.0f}K  ne={result.electron_density_cm3:.2e}  "
+        f"converged={result.converged}  n_obs={len(obs)}"
+    )
+    print("=" * 72)
     print(f"  {'el':<4}{'cert(wt%)':>11}{'pred(wt%)':>11}{'err':>9}{'n_obs':>7}")
     for e in cert_elems:
         c, p = cert[e] * 100, pred.get(e, 0.0) * 100
@@ -110,11 +142,18 @@ def main() -> None:
     print(f"  Confounder obs lines   : {conf_obs or 'NONE'}")
 
     summary = {
-        "label": args.label, "spectrum": spec_path.name, "rmse_wt%": rmse * 100,
-        "T_K": result.temperature_K, "ne": result.electron_density_cm3,
+        "label": args.label,
+        "spectrum": spec_path.name,
+        "rmse_wt%": rmse * 100,
+        "closure_mode": args.closure_mode,
+        "saha_boltzmann_graph": bool(args.saha_boltzmann_graph),
+        "T_K": result.temperature_K,
+        "ne": result.electron_density_cm3,
         "pred": {e: pred.get(e, 0.0) for e in requested},
-        "obs_counts": obs_counts, "dropped": dropped,
-        "fps": fps, "al_obs": obs_counts.get("Al", 0),
+        "obs_counts": obs_counts,
+        "dropped": dropped,
+        "fps": fps,
+        "al_obs": obs_counts.get("Al", 0),
     }
     # Repo-local, user-owned output dir (not a world-writable shared /tmp path).
     out_dir = Path(__file__).resolve().parent.parent / "output" / "bhvo2_measure"
