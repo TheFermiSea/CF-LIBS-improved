@@ -94,16 +94,23 @@ class TestValidate:
         assert len(report.warnings) > 0
 
     def test_delta_e_extracted_from_observations(self):
-        """When delta_E_eV is not given, uses max adjacent gap (not total span)."""
+        """When delta_E_eV is not given, uses the term-scheme span max(E_k).
+
+        Per Cristoforetti et al. (2010), McWhirter's delta_E is the largest
+        term-scheme gap (resonance ground -> first-excited), NOT the gap
+        between adjacent observed upper levels. Lines carry only upper-level
+        energies, so the largest reachable gap is the full span from the
+        ground state (0 eV) to the highest observed E_k.
+        """
         from unittest.mock import MagicMock
 
-        # Energies [1, 3, 5] eV: adjacent gaps are [2, 2] -> max adjacent gap = 2.0 eV
-        # (NOT the total span 5-1=4 eV)
+        # Energies [1, 3, 5] eV: term-scheme span (max E_k) = 5.0 eV,
+        # NOT the max adjacent gap (2.0 eV) and NOT 5-1=4 eV.
         obs = [MagicMock(E_k_ev=1.0), MagicMock(E_k_ev=3.0), MagicMock(E_k_ev=5.0)]
         validator = LTEValidator()
         report = validator.validate(T_K=10000.0, n_e_cm3=1e17, observations=obs)
 
-        expected_required = MCWHIRTER_C * (10000.0**0.5) * (2.0**3)
+        expected_required = MCWHIRTER_C * (10000.0**0.5) * (5.0**3)
         assert report.mcwhirter.n_e_required == pytest.approx(expected_required, rel=1e-4)
 
     def test_with_temporal_check(self):

@@ -316,8 +316,9 @@ def _extract_inputs(record: Any) -> Dict[str, Any]:
     * ``annotations.t_neutral_k`` / ``annotations.t_ion_k`` (preferred —
       a future PR can populate these from a multi-temperature solver)
     * ``electron_density_cm3``
-    * ``annotations.delta_e_ev`` (largest gap between adjacent levels;
-      conservative default 2.0 eV when absent — matches the existing
+    * ``annotations.delta_e_ev`` (largest term-scheme energy gap — the
+      resonance ground->first-excited transition per Cristoforetti et al.
+      2010; conservative default 2.0 eV when absent — matches the
       :class:`cflibs.plasma.lte_validator.LTEValidator` behaviour)
     * ``predicted_composition`` for closure residual
 

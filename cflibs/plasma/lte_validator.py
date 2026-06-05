@@ -114,7 +114,10 @@ class LTEValidator:
         n_e_cm3 : float
             Electron density [cm^-3]
         delta_E_eV : float
-            Largest energy gap between adjacent levels of interest [eV]
+            Largest energy gap in the atomic term scheme [eV] —
+            conventionally the resonance (ground -> first-excited)
+            transition (Cristoforetti et al. 2010, Spectrochim. Acta B
+            65, 86-95), NOT the gap between adjacent observed levels.
 
         Returns
         -------
@@ -228,9 +231,12 @@ class LTEValidator:
         n_e_cm3 : float
             Electron density [cm^-3]
         delta_E_eV : float, optional
-            Largest energy gap [eV]. If None, extracted from observations.
+            Largest term-scheme energy gap [eV]. If None, derived from
+            observations as the full span from the ground state to the
+            highest observed upper level (max E_k), which bounds the
+            resonance transition per Cristoforetti et al. (2010).
         observations : list of LineObservation, optional
-            Used to compute delta_E_eV if not provided directly.
+            Used to derive delta_E_eV if not provided directly.
         check_temporal : bool
             Whether to also run the temporal equilibration check.
         plasma_lifetime_ns : float
@@ -243,18 +249,31 @@ class LTEValidator:
         # Determine delta_E_eV
         if delta_E_eV is None:
             if observations is not None and len(observations) > 0:
-                # McWhirter criterion uses the largest gap between *adjacent*
-                # energy levels, not the total span.  Sort unique E_k values
-                # and take the maximum consecutive difference.
-                energies = sorted({o.E_k_ev for o in observations})
-                if len(energies) >= 2:
-                    gaps = [energies[i + 1] - energies[i] for i in range(len(energies) - 1)]
-                    delta_E_eV = float(max(gaps))
-                else:
-                    # Single energy level: delta_E is undefined; use conservative default
+                # The McWhirter criterion requires delta_E to be the *largest
+                # energy gap in the atomic term scheme* — conventionally the
+                # resonance (ground -> first-excited) transition, which is
+                # ~3-5 eV for typical LIBS species. Cristoforetti et al. (2010)
+                # Spectrochim. Acta B 65, 86-95 codifies this: McWhirter's
+                # n_e >= 1.6e12 * sqrt(T) * delta_E^3 floor scales with the
+                # cube of delta_E, so using the small gap between *adjacent*
+                # observed upper-level energies (which cluster narrowly) badly
+                # under-estimates the required density and lets non-LTE plasmas
+                # pass the gate.
+                #
+                # The observed lines do not carry lower-level energies, so the
+                # largest term-scheme gap reachable from data in scope is the
+                # full span from the ground state (E_lower >= 0) up to the
+                # highest observed upper level: max(E_k) - 0. This bounds the
+                # resonance-to-upper-level transition and is far larger than the
+                # adjacent-gap value.
+                energies = [o.E_k_ev for o in observations]
+                delta_E_eV = float(max(energies))
+                if delta_E_eV <= 0.0:
+                    # All upper levels at the ground state: term-scheme gap is
+                    # undefined; use conservative default.
                     delta_E_eV = 2.0
                     logger.warning(
-                        "Only one unique energy level in observations; "
+                        "All observation upper levels at ground state; "
                         "using default 2.0 eV for McWhirter criterion"
                     )
                 delta_E_eV = max(delta_E_eV, 0.1)  # floor to avoid degenerate case
