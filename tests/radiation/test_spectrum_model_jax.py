@@ -8,6 +8,11 @@ harness will exercise once GPU acceleration is wired in.
 
 from __future__ import annotations
 
+import os
+import sqlite3
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -16,6 +21,7 @@ import pytest
 
 jax = pytest.importorskip("jax")
 
+from cflibs.atomic.database import AtomicDatabase  # noqa: E402
 from cflibs.instrument.model import InstrumentModel  # noqa: E402
 from cflibs.plasma.state import SingleZoneLTEPlasma  # noqa: E402
 from cflibs.radiation.profiles import BroadeningMode  # noqa: E402
@@ -164,3 +170,211 @@ def test_spectrum_model_jax_uses_jax_solver(atomic_db):
     assert isinstance(model.solver, SahaBoltzmannSolverJax)
     # Wavelength grid must already be a jnp array on the model
     assert "jax" in type(model._wavelength_jax).__module__
+
+
+# ---------------------------------------------------------------------------
+# audit Family 1 — SpectrumModelJax must honour apply_stark (Voigt, not
+# Gaussian-only).  Before the fix, SpectrumModelJax.compute_spectrum
+# re-implemented the kernel with a pure-Gaussian sum and silently dropped
+# apply_stark, so SpectrumModelJax(apply_stark=True) produced Stark-free
+# lines while SpectrumModel(apply_stark=True) produced Voigt.
+# ---------------------------------------------------------------------------
+
+
+def _fwhm_of_peak(wavelength: np.ndarray, intensity: np.ndarray) -> float:
+    """FWHM (nm) of the largest peak — independent oracle, not kernel-derived.
+
+    Walks outward from the global max to the first half-max crossings. The
+    Voigt (Stark-on) profile has heavier Lorentzian wings than the pure
+    Gaussian (Stark-off) core, so its FWHM is strictly larger.
+    """
+    if intensity.max() <= 0:
+        return 0.0
+    peak_idx = int(np.argmax(intensity))
+    half = 0.5 * float(intensity[peak_idx])
+    left = peak_idx
+    while left > 0 and intensity[left] > half:
+        left -= 1
+    right = peak_idx
+    while right < len(intensity) - 1 and intensity[right] > half:
+        right += 1
+    return float(wavelength[right] - wavelength[left])
+
+
+def _wing_fraction(wavelength: np.ndarray, intensity: np.ndarray, core_nm: float) -> float:
+    """Fraction of total line flux outside ±``core_nm`` of the peak.
+
+    A pure Gaussian decays super-exponentially, so its far wings carry a
+    negligible flux fraction. A Voigt profile (Stark Lorentzian wing) puts
+    appreciable flux in the wings. This is an independent, profile-shape
+    oracle for "Stark was actually applied".
+    """
+    if intensity.max() <= 0:
+        return 0.0
+    peak_wl = wavelength[int(np.argmax(intensity))]
+    total = float(np.trapezoid(intensity, wavelength))
+    if total <= 0:
+        return 0.0
+    wing_mask = np.abs(wavelength - peak_wl) > core_nm
+    wing = float(np.trapezoid(intensity * wing_mask, wavelength))
+    return wing / total
+
+
+@pytest.fixture
+def stark_db_path():
+    """Temp DB with one isolated Fe I line carrying a large ``stark_w``.
+
+    Mirrors ``tests/radiation/test_spectrum_model_stark_default.py`` so the
+    JAX path is exercised against the same isolated-line oracle the NumPy
+    Stark-default regression test uses.
+    """
+    db_fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(db_fd)
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE lines (
+            id INTEGER PRIMARY KEY,
+            element TEXT,
+            sp_num INTEGER,
+            wavelength_nm REAL,
+            aki REAL,
+            ei_ev REAL,
+            ek_ev REAL,
+            gi INTEGER,
+            gk INTEGER,
+            rel_int REAL,
+            stark_w REAL,
+            stark_alpha REAL
+        )
+        """)
+    conn.execute("""
+        CREATE TABLE energy_levels (
+            element TEXT,
+            sp_num INTEGER,
+            g_level INTEGER,
+            energy_ev REAL
+        )
+        """)
+    conn.execute("""
+        CREATE TABLE species_physics (
+            element TEXT,
+            sp_num INTEGER,
+            ip_ev REAL,
+            PRIMARY KEY (element, sp_num)
+        )
+        """)
+    conn.execute("""
+        INSERT INTO lines
+            (element, sp_num, wavelength_nm, aki, ei_ev, ek_ev,
+             gi, gk, rel_int, stark_w, stark_alpha)
+        VALUES ('Fe', 1, 371.99, 1.0e7, 0.0, 3.33, 9, 11, 1000, 0.05, 0.5)
+        """)
+    conn.execute("""
+        INSERT INTO energy_levels (element, sp_num, g_level, energy_ev)
+        VALUES ('Fe', 1, 9, 0.0),
+               ('Fe', 1, 11, 3.33)
+        """)
+    conn.execute("""
+        INSERT INTO species_physics (element, sp_num, ip_ev)
+        VALUES ('Fe', 1, 7.87),
+               ('Fe', 2, 16.18)
+        """)
+    conn.commit()
+    conn.close()
+    yield db_path
+    Path(db_path).unlink(missing_ok=True)
+
+
+def _stark_common(db: AtomicDatabase) -> dict:
+    plasma = SingleZoneLTEPlasma(
+        T_e=10000.0,
+        n_e=1.0e17,  # high enough for Stark to dominate over Doppler
+        species={"Fe": 1.0e15},
+    )
+    instrument = InstrumentModel(resolution_fwhm_nm=0.01)
+    return dict(
+        plasma=plasma,
+        atomic_db=db,
+        instrument=instrument,
+        lambda_min=371.5,
+        lambda_max=372.5,
+        delta_lambda=0.005,
+        path_length_m=1.0e-4,  # optically thin: RT scales but doesn't reshape
+        broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
+    )
+
+
+@pytest.mark.requires_jax
+def test_spectrum_model_jax_applies_stark_when_requested(stark_db_path):
+    """SpectrumModelJax(apply_stark=True) must broaden via Voigt, not Gaussian.
+
+    Pins audit Family 1: the JAX model must produce a wider, heavier-winged
+    line with Stark on than with Stark off — i.e. apply_stark is honoured.
+    """
+    db = AtomicDatabase(stark_db_path)
+    common = _stark_common(db)
+
+    model_on = SpectrumModelJax(**common, apply_stark=True)
+    assert model_on.apply_stark is True
+    wl_on, i_on = model_on.compute_spectrum()
+
+    model_off = SpectrumModelJax(**common, apply_stark=False)
+    wl_off, i_off = model_off.compute_spectrum()
+
+    np.testing.assert_array_equal(wl_on, wl_off)
+    assert i_on.max() > 0
+    assert i_off.max() > 0
+
+    # FWHM oracle: Voigt (Stark-on) is strictly wider than Gaussian (off).
+    fwhm_on = _fwhm_of_peak(wl_on, i_on)
+    fwhm_off = _fwhm_of_peak(wl_off, i_off)
+    assert fwhm_on > fwhm_off, (
+        "SpectrumModelJax(apply_stark=True) must produce a wider line than "
+        f"apply_stark=False — got FWHM_on={fwhm_on:.5f} nm "
+        f"<= FWHM_off={fwhm_off:.5f} nm. Stark was silently dropped."
+    )
+
+    # Wing oracle: the Stark Lorentzian wing puts appreciably more flux
+    # outside the line core than a pure Gaussian does.
+    core_nm = 3.0 * fwhm_off  # well outside the Gaussian core
+    wing_on = _wing_fraction(wl_on, i_on, core_nm)
+    wing_off = _wing_fraction(wl_off, i_off, core_nm)
+    assert wing_on > wing_off, (
+        "Stark-on wings must carry more flux than Gaussian-only wings — "
+        f"got wing_on={wing_on:.4f} <= wing_off={wing_off:.4f}."
+    )
+
+
+@pytest.mark.requires_jax
+def test_spectrum_model_jax_stark_matches_numpy_voigt(stark_db_path):
+    """JAX Stark-on output matches base SpectrumModel Stark-on (Voigt parity).
+
+    The base SpectrumModel already routes apply_stark through the Voigt
+    forward_model path; SpectrumModelJax (after dropping its override) must
+    reproduce it within the documented rtol=1e-5, atol=1e-7 tolerance.
+    """
+    db = AtomicDatabase(stark_db_path)
+    common = _stark_common(db)
+
+    _, i_np = SpectrumModel(**common, apply_stark=True).compute_spectrum()
+    _, i_jax = SpectrumModelJax(**common, apply_stark=True).compute_spectrum()
+
+    scale = max(float(i_np.max()), 1e-30)
+    np.testing.assert_allclose(i_jax, i_np, rtol=1e-5, atol=1e-7 * scale)
+
+
+@pytest.mark.requires_jax
+def test_spectrum_model_jax_stark_off_matches_numpy_gaussian(stark_db_path):
+    """JAX Stark-off output matches base SpectrumModel Stark-off (Gaussian).
+
+    Confirms apply_stark=False reproduces the Gaussian-only result on both
+    paths — the override deletion must not perturb the non-Stark branch.
+    """
+    db = AtomicDatabase(stark_db_path)
+    common = _stark_common(db)
+
+    _, i_np = SpectrumModel(**common, apply_stark=False).compute_spectrum()
+    _, i_jax = SpectrumModelJax(**common, apply_stark=False).compute_spectrum()
+
+    scale = max(float(i_np.max()), 1e-30)
+    np.testing.assert_allclose(i_jax, i_np, rtol=1e-5, atol=1e-7 * scale)
