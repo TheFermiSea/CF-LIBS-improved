@@ -67,14 +67,20 @@ def _analyze_parser_defaults() -> dict:
 
 
 def test_helper_and_analyze_default_floor_agree():
-    """The shared helper default and the analyze CLI default are both 100.0."""
+    """The shared helper default and the analyze CLI default agree (both ``None``).
+
+    The absolute relative-intensity floor (was 100.0) was replaced by the
+    element-relative top-K gA-Boltzmann strength selection + shift-coherence
+    veto, so the default floor is now ``None``. The no-drift invariant is
+    preserved: the helper signature default and the analyze CLI default match.
+    """
     helper_default = (
         inspect.signature(_detect_and_select_lines).parameters["min_relative_intensity"].default
     )
-    assert helper_default == pytest.approx(100.0)
+    assert helper_default is None
 
     ns = _analyze_parser_defaults()
-    assert ns["min_relative_intensity"] == pytest.approx(100.0)
+    assert ns["min_relative_intensity"] is None
     assert ns["resolving_power"] is None
     assert ns["apply_self_absorption"] is False
 
