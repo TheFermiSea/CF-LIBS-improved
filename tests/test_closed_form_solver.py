@@ -314,6 +314,99 @@ def test_ilr_simplex_properties(mock_db):
 # ------------------------------------------------------------------
 
 
+# ------------------------------------------------------------------
+# 9. Matrix / oxide closure modes (audit Family 4, bug b)
+# ------------------------------------------------------------------
+
+
+def _two_element_obs(target, T_eV=1.0, U_s=25.0, beta=10.0):
+    """Build neutral-only observations encoding the given relative ratios."""
+    obs = []
+    energies = {"Fe": [1.0, 2.0, 3.0, 4.0], "Si": [1.5, 2.5, 3.5]}
+    for el, frac in target.items():
+        for E in energies[el]:
+            y = -E / T_eV + np.log(frac) + beta - np.log(U_s)
+            inten = np.exp(y) / 500.0
+            obs.append(LineObservation(500.0, inten, max(inten * 0.01, 1e-8), el, 1, E, 1, 1.0))
+    return obs
+
+
+def test_closure_mode_invalid_raises():
+    with pytest.raises(ValueError, match="closure_mode"):
+        ClosedFormConfig(closure_mode="bogus")
+
+
+def test_closure_mode_matrix_requires_element():
+    with pytest.raises(ValueError, match="matrix_element"):
+        ClosedFormConfig(closure_mode="matrix")
+
+
+def test_matrix_closure_fixes_matrix_element(mock_db):
+    """Validation gate (b): matrix mode fixes the matrix element fraction; the
+    ratio between elements is preserved from the standard simplex."""
+    target = {"Fe": 0.7, "Si": 0.3}  # standard-closed ratio Fe/Si = 7/3
+    obs = _two_element_obs(target)
+
+    std = ClosedFormILRSolver(mock_db, ClosedFormConfig(saha_passes=1)).solve(obs)
+    cfg = ClosedFormConfig(
+        saha_passes=1, closure_mode="matrix", matrix_element="Fe", matrix_fraction=0.8
+    )
+    res = ClosedFormILRSolver(mock_db, cfg).solve(obs)
+
+    # Fe pinned to exactly the matrix fraction.
+    assert res.concentrations["Fe"] == pytest.approx(0.8, abs=1e-6)
+    # The Fe/Si ratio is unchanged from the standard closure (only F changed).
+    std_ratio = std.concentrations["Fe"] / std.concentrations["Si"]
+    matrix_ratio = res.concentrations["Fe"] / res.concentrations["Si"]
+    assert matrix_ratio == pytest.approx(std_ratio, rel=1e-6)
+    # Si scales accordingly: Si = 0.8 * (std_Si / std_Fe).
+    assert res.concentrations["Si"] == pytest.approx(
+        0.8 * std.concentrations["Si"] / std.concentrations["Fe"], rel=1e-6
+    )
+
+
+def test_oxide_closure_oxides_sum_to_one(mock_db):
+    """Validation gate (b): oxide mode normalizes so implied oxides sum to 1.
+
+    Default geological factors: Fe -> 1.5 O/cation, Si -> 2.0 O/cation.
+    """
+    target = {"Fe": 0.6, "Si": 0.4}
+    obs = _two_element_obs(target)
+
+    cfg = ClosedFormConfig(saha_passes=1, closure_mode="oxide")
+    res = ClosedFormILRSolver(mock_db, cfg).solve(obs)
+
+    factors = {"Fe": 1.5, "Si": 2.0}
+    oxide_sum = sum(res.concentrations[el] * factors[el] for el in target)
+    assert oxide_sum == pytest.approx(1.0, abs=1e-6)
+    # Elemental Fe/Si ratio preserved from the standard simplex.
+    std = ClosedFormILRSolver(mock_db, ClosedFormConfig(saha_passes=1)).solve(obs)
+    assert res.concentrations["Fe"] / res.concentrations["Si"] == pytest.approx(
+        std.concentrations["Fe"] / std.concentrations["Si"], rel=1e-6
+    )
+
+
+def test_oxide_closure_custom_stoichiometry(mock_db):
+    target = {"Fe": 0.5, "Si": 0.5}
+    obs = _two_element_obs(target)
+    custom = {"Fe": 1.0, "Si": 3.0}
+
+    cfg = ClosedFormConfig(saha_passes=1, closure_mode="oxide", oxide_stoichiometry=custom)
+    res = ClosedFormILRSolver(mock_db, cfg).solve(obs)
+
+    oxide_sum = sum(res.concentrations[el] * custom[el] for el in target)
+    assert oxide_sum == pytest.approx(1.0, abs=1e-6)
+
+
+def test_standard_closure_mode_default_sums_to_one(mock_db):
+    """Default closure_mode='standard' is unchanged (sum=1)."""
+    target = {"Fe": 0.7, "Si": 0.3}
+    obs = _two_element_obs(target)
+    res = ClosedFormILRSolver(mock_db, ClosedFormConfig(saha_passes=1)).solve(obs)
+    assert sum(res.concentrations.values()) == pytest.approx(1.0, abs=1e-10)
+    assert res.quality_metrics["closure_mode_sum"] == pytest.approx(1.0, abs=1e-10)
+
+
 @pytest.mark.slow
 def test_speed_benchmark(mock_db):
     """Closed-form should complete without error; log relative speed."""

@@ -26,7 +26,11 @@ from collections import defaultdict
 from cflibs.core.constants import KB, KB_EV, SAHA_CONST_CM3, STP_PRESSURE, EV_TO_K
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.inversion.physics.boltzmann import LineObservation
-from cflibs.inversion.physics.closure import _helmert_basis, ilr_inverse
+from cflibs.inversion.physics.closure import (
+    _helmert_basis,
+    default_oxide_stoichiometry,
+    ilr_inverse,
+)
 from cflibs.inversion.solve.iterative import CFLIBSResult
 from cflibs.core.logging_config import get_logger
 
@@ -35,13 +39,51 @@ logger = get_logger("inversion.closed_form_solver")
 
 @dataclass
 class ClosedFormConfig:
-    """Configuration for the closed-form ILR solver."""
+    """Configuration for the closed-form ILR solver.
+
+    Attributes
+    ----------
+    closure_mode : str
+        Compositional closure applied to the ILR-recovered relative
+        concentrations.  One of:
+
+        * ``"standard"`` -- ``sum(C_s) = 1`` over detected elements (the ILR
+          regression already lands on this simplex).
+        * ``"matrix"`` -- fix one element to ``matrix_fraction`` (metallurgical
+          matrices); requires ``matrix_element``.
+        * ``"oxide"`` -- close on oxide mass for geological matrices: each
+          element's relative concentration is weighted by its oxide
+          stoichiometry so the implied oxides sum to 1 (default factors from
+          :func:`cflibs.inversion.physics.closure.default_oxide_stoichiometry`).
+    matrix_element : str, optional
+        Element held fixed in ``"matrix"`` mode.
+    matrix_fraction : float
+        Fixed fraction for ``matrix_element`` in ``"matrix"`` mode.
+    oxide_stoichiometry : dict, optional
+        Per-element oxygen-per-cation factors for ``"oxide"`` mode.  If
+        ``None``, the default geological table is used.
+    """
 
     saha_passes: int = 2
     partition_refine: bool = True
     ne_mode: str = "pressure"
     pressure_pa: float = STP_PRESSURE
     apply_ipd: bool = False
+    closure_mode: str = "standard"
+    matrix_element: Optional[str] = None
+    matrix_fraction: float = 0.9
+    oxide_stoichiometry: Optional[Dict[str, float]] = None
+
+    def __post_init__(self) -> None:
+        valid = {"standard", "matrix", "oxide"}
+        if self.closure_mode not in valid:
+            raise ValueError(
+                f"closure_mode must be one of {sorted(valid)}, got {self.closure_mode!r}"
+            )
+        if self.closure_mode == "matrix" and self.matrix_element is None:
+            raise ValueError("closure_mode='matrix' requires matrix_element")
+        if self.closure_mode == "matrix" and not (0.0 < self.matrix_fraction < 1.0):
+            raise ValueError("matrix_fraction must be in the open interval (0, 1)")
 
 
 class ClosedFormILRSolver:
@@ -297,6 +339,52 @@ class ClosedFormILRSolver:
 
         return T_K, compositions, physical
 
+    def _apply_closure_mode(self, compositions: Dict[str, float]) -> Dict[str, float]:
+        """Re-close standard (sum=1) compositions under the configured mode.
+
+        The ILR regression returns a standard-closed simplex
+        (``sum(C_s) = 1``) that is proportional to the relative concentrations
+        ``rel_C_s = M_s · U_s · exp(q_s)``.  ``matrix`` and ``oxide`` closure
+        only change the *experimental factor* F that scales those relative
+        concentrations, so they can be applied as a re-normalization of the
+        recovered simplex without re-running the regression.
+
+        * ``standard`` -- returned unchanged.
+        * ``matrix``  -- fix ``matrix_element`` to ``matrix_fraction``; all
+          other elements scale by the same factor
+          ``F = rel_C_matrix / matrix_fraction`` (Bulajic-style metallurgical
+          closure).  Returned fractions need not sum to 1.
+        * ``oxide``   -- weight each element by its oxide stoichiometry so the
+          implied oxides sum to 1; returned values are ELEMENTAL fractions
+          (``sum(C_s · factor_s) = 1``).
+        """
+        mode = self.config.closure_mode
+        if mode == "standard" or not compositions:
+            return compositions
+
+        if mode == "matrix":
+            matrix_el = self.config.matrix_element
+            if matrix_el not in compositions:
+                logger.warning(
+                    "matrix_element %s absent from solution; falling back to standard closure",
+                    matrix_el,
+                )
+                return compositions
+            # rel_C_s ∝ compositions[el]; F = rel_C_matrix / matrix_fraction.
+            F = compositions[matrix_el] / self.config.matrix_fraction
+            if F <= 0.0:
+                return compositions
+            return {el: rel / F for el, rel in compositions.items()}
+
+        # oxide
+        factors = self.config.oxide_stoichiometry
+        if factors is None:
+            factors = default_oxide_stoichiometry(list(compositions.keys()))
+        total_oxide = sum(rel * factors.get(el, 1.0) for el, rel in compositions.items())
+        if total_oxide <= 0.0:
+            return compositions
+        return {el: rel / total_oxide for el, rel in compositions.items()}
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -481,17 +569,26 @@ class ClosedFormILRSolver:
             idx = [0, cov_theta.shape[0] - 1]
             boltz_cov = cov_theta[np.ix_(idx, idx)]
 
+        # ── Apply the configured compositional closure ────────────────────
+        # n_e / pressure balance and the ILR uncertainty Jacobian operate on
+        # the standard (sum=1) simplex above (the proper number fractions for
+        # charge balance); matrix/oxide closure only rescales the *reported*
+        # absolute fractions by changing the experimental factor F.
+        reported_compositions = self._apply_closure_mode(compositions)
+        closure_sum = sum(reported_compositions.values())
+
         quality_metrics: Dict[str, float] = {
             "r_squared_last": r_squared,
             "n_lines": float(len(X)) if X is not None else 0.0,
             "n_elements": float(D),
+            "closure_mode_sum": float(closure_sum),
         }
 
         return CFLIBSResult(
             temperature_K=T_K,
             temperature_uncertainty_K=T_uncertainty_K,
             electron_density_cm3=n_e,
-            concentrations=compositions,
+            concentrations=reported_compositions,
             concentration_uncertainties=concentration_uncertainties,
             iterations=self.config.saha_passes,
             converged=converged,
