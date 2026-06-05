@@ -110,8 +110,13 @@ def select_candidate_elements(
 
     # Step 2: Multi-T robustness — run at T ± offsets
     if multi_t_offsets:
-        base_T = getattr(identifier, "_estimated_T", None) or identifier.fallback_T_K
-        base_ne = getattr(identifier, "_estimated_ne", None) or identifier.fallback_ne_cm3
+        # Use explicit is-not-None checks: a valid numeric estimate of exactly
+        # 0.0 is falsy, so `or fallback` would silently discard it. Preserve
+        # None -> fallback behavior; only stop treating 0.0 as missing.
+        _est_T = getattr(identifier, "_estimated_T", None)
+        base_T = _est_T if _est_T is not None else identifier.fallback_T_K
+        _est_ne = getattr(identifier, "_estimated_ne", None)
+        base_ne = _est_ne if _est_ne is not None else identifier.fallback_ne_cm3
 
         for offset in multi_t_offsets:
             T_offset = max(base_T + offset, 3000.0)  # Floor at 3000 K (physical minimum)
