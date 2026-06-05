@@ -732,6 +732,7 @@ class IterativeCFLIBSSolver:
         self_absorption_column_density_cm3: float = 1.0e16,
         min_boltzmann_r2: float = 0.3,
         boltzmann_weight_cap: float = 5.0,
+        saha_boltzmann_graph: bool = False,
     ):
         self.atomic_db = atomic_db
         self.max_iterations = max_iterations
@@ -791,6 +792,32 @@ class IterativeCFLIBSSolver:
         # K), while it monotonically corrects the ChemCam over-attribution.
         # Set to 0 (or any non-positive value) to disable.
         self.boltzmann_weight_cap = float(boltzmann_weight_cap)
+        # Saha-Boltzmann GRAPH intercept extraction (Aguilera & Aragon 2004,
+        # *Spectrochim. Acta B* 59, 1861, "saha-boltzmann plot" / CD-SB graph).
+        #
+        # OPT-IN (default False). When enabled, the per-iteration intercept
+        # extraction is swapped from the per-element-centered common-slope plane
+        # (``_apply_saha_correction`` + ``_fit_common_boltzmann_plane``) to a
+        # single POOLED global least-squares regression over ALL lines of ALL
+        # species/stages at once (``_fit_saha_boltzmann_graph``): one shared
+        # slope (-1/kT) plus one intercept dummy per element. Ion (stage z>1)
+        # lines are shifted onto the neutral plane exactly as the existing Saha
+        # correction does (x += IP1*(z-1); y -= ln(S)*(z-1)), so the fitted
+        # per-element intercept is q_s = ln(n_I / U_I) on the neutral plane —
+        # the SAME quantity ``_fit_common_boltzmann_plane`` produces, and the
+        # SAME quantity the closure step (standard / oxide / matrix / ...) and
+        # ``_compute_abundance_multipliers`` consume. The method is therefore
+        # ORTHOGONAL to ``closure_mode``: SB-graph + oxide closure stack.
+        #
+        # Why it helps: the high-E_k ion lines (Fe II / Ti II land at
+        # x = E_k + IP ~ 15-23 eV after the shift) give a long lever arm that
+        # well-conditions each element's neutral intercept. Neutral-only Fe spans
+        # ~1 eV, so its per-element centered fit is unstable (R^2 ~ 0); pooling
+        # the shifted ion lines onto one graph stabilises the slope AND every
+        # intercept simultaneously. On real ChemCam BHVO-2 this moves Fe from a
+        # ~39 wt% over-attribution toward ~18 (cert 8.6) with global R^2 ~ 0.95.
+        # See ``scripts/probe_saha_boltzmann_graph.py`` for the validated probe.
+        self.saha_boltzmann_graph = bool(saha_boltzmann_graph)
         # Self-absorption correction (Bulajic 2002; physics-audit defect B1).
         # When enabled, the iterative solver applies a curve-of-growth
         # escape-factor correction to the observed line intensities *before* the
@@ -1252,6 +1279,184 @@ class IterativeCFLIBSSolver:
             r_squared=r_squared,
         )
 
+    def _fit_saha_boltzmann_graph(
+        self,
+        obs_by_element: Dict[str, List[LineObservation]],
+        T_K: float,
+        n_e: float,
+        ips: Dict[str, float],
+    ) -> Optional[_CommonSlopeFit]:
+        """Pooled Saha-Boltzmann GRAPH fit (Aguilera & Aragon 2004).
+
+        Pools EVERY line of EVERY element/stage onto one graph and fits a single
+        shared slope ``m = -1/(k_B T)`` together with one intercept dummy per
+        element via a global least-squares system. Ion (stage ``z > 1``) lines
+        are mapped onto the neutral plane with the *same* Saha transform the
+        per-element path uses (:meth:`_apply_saha_correction`):
+
+            neutral (z=1): x = E_k,                 y = ln(I*lambda/(g_k*A_ki))
+            ion     (z>1): x = E_k + IP1*(z-1),     y = (...) - ln(S)*(z-1)
+
+        with ``ln(S) = ln(SAHA_CONST_CM3 / n_e * T_eV**1.5)`` (no partition
+        functions — these are absorbed into the fitted neutral intercept). The
+        per-element intercept returned is therefore ``q_s = ln(n_I / U_I)`` on
+        the neutral plane, identical in meaning to the intercept from
+        :meth:`_fit_common_boltzmann_plane`, so the downstream
+        :meth:`_compute_abundance_multipliers` ``(1 + n_II/n_I)`` scaling and the
+        :class:`ClosureEquation` step (standard / oxide / matrix / ...) consume
+        it unchanged.  This makes the SB-graph orthogonal to ``closure_mode``.
+
+        Unlike the centered common-slope plane, this is a *global* fit: every
+        element's intercept is estimated jointly against the shared slope, so the
+        long lever arm contributed by the high-``x`` shifted ion lines
+        well-conditions all intercepts at once. Inverse-variance weighting
+        (with the same :attr:`boltzmann_weight_cap` dynamic-range bound applied
+        per element as the common-slope path) is retained.
+
+        Parameters
+        ----------
+        obs_by_element : dict
+            RAW observations grouped by element (pre Saha remap). Both neutral
+            and ionic lines are passed; the ion shift is applied internally.
+        T_K, n_e : float
+            Current plasma temperature [K] and electron density [cm^-3]; set the
+            ``ln(S)`` ion->neutral shift.
+        ips : dict
+            First ionization potentials by element [eV] (effective IPs, already
+            IPD-corrected by the caller when applicable).
+
+        Returns
+        -------
+        _CommonSlopeFit | None
+            Slope, per-element neutral intercepts, per-element stats and the
+            global (pooled) weighted R^2. ``None`` when fewer than three usable
+            lines survive or the global system is under-determined.
+        """
+        T_eV = max(T_K / EV_TO_K, 0.1)
+        safe_ne = max(float(n_e), 1e10)
+        ln_S = float(np.log((SAHA_CONST_CM3 / safe_ne) * (T_eV**1.5)))
+
+        # Collect shifted (x, y, w) rows per element across ALL species/stages.
+        #
+        # WEIGHTING: the validated SB-graph (Aguilera & Aragon 2004; the probe in
+        # scripts/probe_saha_boltzmann_graph.py) uses an UNWEIGHTED global lstsq.
+        # That is essential to the method: with inverse-variance (≈ intensity)
+        # weighting the single brightest line of each element dominates its
+        # intercept dummy, lifting bright-resonance elements (Fe) by ~2 in
+        # ln-space (≈ 7x in C) and re-creating the over-attribution the global
+        # fit is meant to cure (Fe 16.7 -> 18.5 intercept; RMSE 8 -> 14 on real
+        # ChemCam BHVO-2). The pooled global geometry already conditions every
+        # intercept jointly via the shifted ion lines, so per-line weighting is
+        # neither needed nor helpful here. ``boltzmann_weight_cap`` is therefore
+        # not applied on this path. Lines are still inverse-variance *screened*
+        # for validity (finite, positive y-uncertainty -> usable) but contribute
+        # with unit weight.
+        per_el_x: Dict[str, List[float]] = defaultdict(list)
+        per_el_y: Dict[str, List[float]] = defaultdict(list)
+        per_el_w: Dict[str, List[float]] = defaultdict(list)
+        for el, obs_list in obs_by_element.items():
+            ip = ips.get(el, 15.0)
+            for obs in obs_list:
+                if obs.A_ki <= 0 or obs.g_k <= 0 or obs.intensity <= 0:
+                    continue
+                y = obs.y_value
+                z = obs.ionization_stage
+                x = obs.E_k_ev + (ip * (z - 1) if z > 1 else 0.0)
+                if z > 1:
+                    y = y - ln_S * (z - 1)
+                if not (np.isfinite(x) and np.isfinite(y)):
+                    continue
+                per_el_x[el].append(x)
+                per_el_y[el].append(y)
+                per_el_w[el].append(1.0)  # unweighted (validated SB-graph)
+
+        elements: List[str] = [el for el in obs_by_element.keys() if per_el_x.get(el)]
+        if not elements:
+            return None
+
+        # Assemble the global design matrix A = [x | element-dummies] and solve
+        # the weighted normal equations once. Columns: 0 = shared slope,
+        # 1..E = per-element intercepts.
+        el_index = {el: i for i, el in enumerate(elements)}
+        rows_x: List[float] = []
+        rows_y: List[float] = []
+        rows_w: List[float] = []
+        rows_el: List[int] = []
+        for el in elements:
+            rows_x.extend(per_el_x[el])
+            rows_y.extend(per_el_y[el])
+            rows_w.extend(per_el_w[el])
+            rows_el.extend([el_index[el]] * len(per_el_x[el]))
+
+        n_rows = len(rows_x)
+        E = len(elements)
+        if n_rows < 3 or n_rows < (1 + E):
+            # Under-determined global system; let the caller fall back.
+            return None
+
+        x_vec = np.asarray(rows_x, dtype=float)
+        y_vec = np.asarray(rows_y, dtype=float)
+        w_vec = np.asarray(rows_w, dtype=float)
+        el_vec = np.asarray(rows_el, dtype=int)
+
+        A = np.zeros((n_rows, 1 + E), dtype=float)
+        A[:, 0] = x_vec
+        A[np.arange(n_rows), 1 + el_vec] = 1.0
+
+        # Weighted least squares via sqrt(w) row scaling -> ordinary lstsq.
+        sw = np.sqrt(w_vec)
+        Aw = A * sw[:, None]
+        yw = y_vec * sw
+        coef, *_ = np.linalg.lstsq(Aw, yw, rcond=None)
+        slope = float(coef[0])
+
+        # Global weighted R^2 of the pooled fit.
+        y_pred = A @ coef
+        resid = y_vec - y_pred
+        ss_res = float(np.sum(w_vec * resid**2))
+        y_wmean = float(np.average(y_vec, weights=w_vec))
+        ss_tot = float(np.sum(w_vec * (y_vec - y_wmean) ** 2))
+        r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 1.0
+
+        # Slope variance from the weighted normal-equation covariance.
+        dof = max(n_rows - (1 + E), 1)
+        sigma2 = ss_res / dof
+        slope_variance = float("nan")
+        try:
+            cov = np.linalg.inv(Aw.T @ Aw) * sigma2
+            slope_variance = float(cov[0, 0])
+        except np.linalg.LinAlgError:
+            slope_variance = float("nan")
+        if not np.isfinite(slope_variance) or slope_variance <= 0.0:
+            denom = float(np.sum(w_vec * (x_vec - np.average(x_vec, weights=w_vec)) ** 2))
+            slope_variance = 1.0 / denom if denom > 0.0 else 1.0
+
+        intercepts = {el: float(coef[1 + el_index[el]]) for el in elements}
+
+        # Per-element stats on the SHIFTED (neutral-plane) coordinates so that
+        # ``solve_with_uncertainty`` and any consumer of ``element_stats`` see
+        # the same x/y values the global fit used.
+        element_stats: Dict[str, _CommonSlopeElementStats] = {}
+        for el in elements:
+            xs = np.asarray(per_el_x[el], dtype=float)
+            ys = np.asarray(per_el_y[el], dtype=float)
+            ws = np.asarray(per_el_w[el], dtype=float)
+            element_stats[el] = _CommonSlopeElementStats(
+                x_values=xs,
+                y_values=ys,
+                weights=ws,
+                x_mean=float(np.average(xs, weights=ws)),
+                y_mean=float(np.average(ys, weights=ws)),
+            )
+
+        return _CommonSlopeFit(
+            slope=slope,
+            slope_variance=slope_variance,
+            intercepts=intercepts,
+            element_stats=element_stats,
+            r_squared=r_squared,
+        )
+
     def solve(
         self, observations: List[LineObservation], closure_mode: str = "standard", **closure_kwargs
     ) -> CFLIBSResult:
@@ -1284,7 +1489,15 @@ class IterativeCFLIBSSolver:
         # correction whose escape factor is not part of the traced lax body, so
         # when it is enabled we run the reference Python loop (which is the
         # default production path anyway). Disable SA to opt back into lax.
-        if HAS_JAX and _lax_while_loop_enabled() and not self.apply_self_absorption:
+        # The Saha-Boltzmann graph intercept extraction is likewise only
+        # implemented on the Python path (its global lstsq is not traced into the
+        # lax common-slope kernel), so it forces the Python loop as well.
+        if (
+            HAS_JAX
+            and _lax_while_loop_enabled()
+            and not self.apply_self_absorption
+            and not self.saha_boltzmann_graph
+        ):
             try:
                 return self._solve_lax(observations, closure_mode, **closure_kwargs)
             except _LaxFallback as exc:
@@ -1373,13 +1586,29 @@ class IterativeCFLIBSSolver:
                 )
                 last_max_tau = self._last_sa_max_tau
 
-            # Map ionic lines to the neutral energy plane
-            corrected_obs_map = self._apply_saha_correction(
-                sa_obs_by_element, T_K, n_e, effective_ips
-            )
-
-            # 3. Multi-species Boltzmann Fit
-            common_fit = self._fit_common_boltzmann_plane(corrected_obs_map)
+            # 3. Multi-species Boltzmann Fit.
+            #
+            # Two intercept-extraction modes (both yield per-element neutral
+            # intercepts q_s = ln(n_I/U_I) that feed the SAME closure step):
+            #   * common-slope plane (default): per-element centered WLS with
+            #     ionic lines pre-mapped to the neutral plane by _apply_saha_-
+            #     correction, then centered points pooled for ONE slope.
+            #   * Saha-Boltzmann graph (opt-in, self.saha_boltzmann_graph):
+            #     a single GLOBAL regression over all lines of all species at
+            #     once (shared slope + per-element intercept dummies), the ion
+            #     shift applied inside _fit_saha_boltzmann_graph. The high-x
+            #     shifted ion lines give the lever arm that stabilises every
+            #     intercept jointly (see __init__ note).
+            if self.saha_boltzmann_graph:
+                common_fit = self._fit_saha_boltzmann_graph(
+                    sa_obs_by_element, T_K, n_e, effective_ips
+                )
+            else:
+                # Map ionic lines to the neutral energy plane, then fit.
+                corrected_obs_map = self._apply_saha_correction(
+                    sa_obs_by_element, T_K, n_e, effective_ips
+                )
+                common_fit = self._fit_common_boltzmann_plane(corrected_obs_map)
             if common_fit is None:
                 logger.warning("Insufficient points for fit")
                 break
@@ -1743,6 +1972,8 @@ class IterativeCFLIBSSolver:
         effective_ips = self._compute_effective_ips(ips, n_e, T_K)
 
         # Apply Saha correction so intercepts match those from solve()
+        # (common-slope path only; the SB-graph path applies the ion shift
+        # internally and consumes the raw observations).
         corrected_obs_map = self._apply_saha_correction(obs_by_element, T_K, n_e, effective_ips)
 
         # Get partition functions at converged T
@@ -1762,7 +1993,10 @@ class IterativeCFLIBSSolver:
             T_corona=result.temperature_corona_K,
         )
 
-        common_fit = self._fit_common_boltzmann_plane(corrected_obs_map)
+        if self.saha_boltzmann_graph:
+            common_fit = self._fit_saha_boltzmann_graph(obs_by_element, T_K, n_e, effective_ips)
+        else:
+            common_fit = self._fit_common_boltzmann_plane(corrected_obs_map)
         if common_fit is None:
             return result
 
