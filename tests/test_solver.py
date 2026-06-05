@@ -142,7 +142,7 @@ def test_min_boltzmann_r2_gate_is_configurable(mock_db):
     """Setting min_boltzmann_r2=0.0 with a negative slope disables the R^2 gate
     (slope-sign gate still applies)."""
     solver = IterativeCFLIBSSolver(mock_db, max_iterations=5, min_boltzmann_r2=0.0)
-    assert solver.min_boltzmann_r2 == 0.0
+    assert solver.min_boltzmann_r2 == pytest.approx(0.0, abs=1e-12)
     T_eV = 1.0
     obs = []
     for E in [1.0, 2.0, 3.0]:

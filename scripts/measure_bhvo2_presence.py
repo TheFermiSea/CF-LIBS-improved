@@ -116,8 +116,10 @@ def main() -> None:
         "obs_counts": obs_counts, "dropped": dropped,
         "fps": fps, "al_obs": obs_counts.get("Al", 0),
     }
-    Path("/tmp/bhvo2_measure").mkdir(exist_ok=True)
-    out = Path(f"/tmp/bhvo2_measure/{args.label}.json")
+    # Repo-local, user-owned output dir (not a world-writable shared /tmp path).
+    out_dir = Path(__file__).resolve().parent.parent / "output" / "bhvo2_measure"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{args.label}.json"
     out.write_text(json.dumps(summary, indent=2))
     print(f"  -> {out}")
 

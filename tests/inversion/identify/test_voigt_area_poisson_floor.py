@@ -51,12 +51,12 @@ def _fit(area: float, area_uncertainty: float) -> VoigtFitResult:
 def test_poisson_area_floor_matches_shot_noise_form():
     area, wl_step = 1.0e8, 0.005
     expected = math.sqrt(area * wl_step)
-    assert _poisson_area_floor(area, wl_step, scale=1.0) == math.sqrt(area * wl_step)
+    assert math.isclose(_poisson_area_floor(area, wl_step, scale=1.0), math.sqrt(area * wl_step))
     assert math.isclose(_poisson_area_floor(area, wl_step, scale=1.0), expected)
     # Disabled / degenerate inputs -> no floor.
-    assert _poisson_area_floor(area, wl_step, scale=0.0) == 0.0
-    assert _poisson_area_floor(area, 0.0, scale=1.0) == 0.0
-    assert _poisson_area_floor(-5.0, wl_step, scale=1.0) == 0.0
+    assert math.isclose(_poisson_area_floor(area, wl_step, scale=0.0), 0.0, abs_tol=1e-12)
+    assert math.isclose(_poisson_area_floor(area, 0.0, scale=1.0), 0.0, abs_tol=1e-12)
+    assert math.isclose(_poisson_area_floor(-5.0, wl_step, scale=1.0), 0.0, abs_tol=1e-12)
 
 
 def test_overconfident_voigt_sigma_is_raised_to_poisson_floor():
@@ -67,7 +67,7 @@ def test_overconfident_voigt_sigma_is_raised_to_poisson_floor():
         _transition(), fit, ground_state_threshold_ev=0.1, wl_step=wl_step
     )
     expected_floor = math.sqrt(area * wl_step)
-    assert obs.intensity_uncertainty == expected_floor
+    assert math.isclose(obs.intensity_uncertainty, expected_floor)
     assert obs.intensity_uncertainty > fit.area_uncertainty
 
 
@@ -79,7 +79,7 @@ def test_honest_large_voigt_sigma_is_not_lowered():
     obs, _ = _build_observation_from_fit(
         _transition(), fit, ground_state_threshold_ev=0.1, wl_step=wl_step
     )
-    assert obs.intensity_uncertainty == big_sigma
+    assert math.isclose(obs.intensity_uncertainty, big_sigma)
 
 
 def test_floor_disabled_reproduces_legacy_behaviour():
@@ -92,12 +92,12 @@ def test_floor_disabled_reproduces_legacy_behaviour():
         wl_step=0.005,
         poisson_floor_scale=0.0,
     )
-    assert obs.intensity_uncertainty == 1.0  # area_uncertainty, no Poisson floor
+    assert math.isclose(obs.intensity_uncertainty, 1.0)  # area_uncertainty, no Poisson floor
 
     obs0, _ = _build_observation_from_fit(
         _transition(), fit, ground_state_threshold_ev=0.1, wl_step=0.0
     )
-    assert obs0.intensity_uncertainty == 1.0
+    assert math.isclose(obs0.intensity_uncertainty, 1.0)
 
 
 def test_inner_1e6_guard_still_applies():
@@ -106,4 +106,4 @@ def test_inner_1e6_guard_still_applies():
     obs, _ = _build_observation_from_fit(
         _transition(), fit, ground_state_threshold_ev=0.1, wl_step=1.0e-9
     )
-    assert obs.intensity_uncertainty == 1e-6
+    assert math.isclose(obs.intensity_uncertainty, 1e-6)

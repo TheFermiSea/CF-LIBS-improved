@@ -45,6 +45,6 @@ print(f"{spec}  SA={sa}  T={res.temperature_K:.0f}K  ne={res.electron_density_cm
 print(f"{'el':<4}{'q':>12}{'U':>9}{'mult':>9}{'U*exp(q)*m':>13}{'C%':>8}{'cert%':>8}{'nobs':>5}")
 for e in sorted(set(list(q) + cert_el)):
     qi = q.get(e, float("nan")); Ui = U.get(e, float("nan")); mi = m.get(e, 1.0)
-    term = (Ui * math.exp(qi) * mi) if (qi == qi and Ui == Ui) else float("nan")
+    term = (Ui * math.exp(qi) * mi) if not (math.isnan(qi) or math.isnan(Ui)) else float("nan")
     print(f"{e:<4}{qi:>12.3f}{Ui:>9.2f}{mi:>9.3f}{term:>13.3e}"
           f"{pred.get(e,0)*100:>8.2f}{cert.get(e,0)*100:>8.2f}{nobs.get(e,0):>5}")
