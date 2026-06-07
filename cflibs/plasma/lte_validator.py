@@ -212,6 +212,74 @@ class LTEValidator:
             message=msg,
         )
 
+    @staticmethod
+    def _delta_e_from_observations(observations: list) -> float:
+        """
+        Derive the McWhirter delta_E_eV from observed lines.
+
+        The McWhirter criterion requires delta_E to be the *largest
+        energy gap in the atomic term scheme* — conventionally the
+        resonance (ground -> first-excited) transition, which is
+        ~3-5 eV for typical LIBS species. Cristoforetti et al. (2010)
+        Spectrochim. Acta B 65, 86-95 codifies this: McWhirter's
+        n_e >= 1.6e12 * sqrt(T) * delta_E^3 floor scales with the
+        cube of delta_E, so using the small gap between *adjacent*
+        observed upper-level energies (which cluster narrowly) badly
+        under-estimates the required density and lets non-LTE plasmas
+        pass the gate.
+
+        The observed lines do not carry lower-level energies, so the
+        largest term-scheme gap reachable from data in scope is the
+        full span from the ground state (E_lower >= 0) up to the
+        highest observed upper level: max(E_k) - 0. This bounds the
+        resonance-to-upper-level transition and is far larger than the
+        adjacent-gap value.
+        """
+        energies = [o.E_k_ev for o in observations]
+        delta_E_eV = float(max(energies))
+        if delta_E_eV <= 0.0:
+            # All upper levels at the ground state: term-scheme gap is
+            # undefined; use conservative default.
+            delta_E_eV = 2.0
+            logger.warning(
+                "All observation upper levels at ground state; "
+                "using default 2.0 eV for McWhirter criterion"
+            )
+        return max(delta_E_eV, 0.1)  # floor to avoid degenerate case
+
+    @staticmethod
+    def _resolve_delta_e_ev(
+        delta_E_eV: Optional[float],
+        observations: Optional[list],
+    ) -> float:
+        """Resolve delta_E_eV from an explicit value or observations."""
+        if delta_E_eV is not None:
+            return delta_E_eV
+        if observations is not None and len(observations) > 0:
+            return LTEValidator._delta_e_from_observations(observations)
+        logger.warning(
+            "delta_E_eV not specified and no observations provided; "
+            "using default 2.0 eV for McWhirter criterion"
+        )
+        return 2.0  # conservative default
+
+    @staticmethod
+    def _collect_warnings(
+        mcwhirter: LTECheckResult,
+        temporal: Optional[LTECheckResult],
+    ) -> List[str]:
+        """Gather and log warning messages from failed checks."""
+        warnings: List[str] = []
+        if not mcwhirter.satisfied:
+            warnings.append(mcwhirter.message)
+        if temporal is not None and not temporal.satisfied:
+            warnings.append(temporal.message)
+
+        if warnings:
+            for w in warnings:
+                logger.warning(w)
+        return warnings
+
     def validate(
         self,
         T_K: float,
@@ -246,43 +314,7 @@ class LTEValidator:
         -------
         LTEReport
         """
-        # Determine delta_E_eV
-        if delta_E_eV is None:
-            if observations is not None and len(observations) > 0:
-                # The McWhirter criterion requires delta_E to be the *largest
-                # energy gap in the atomic term scheme* — conventionally the
-                # resonance (ground -> first-excited) transition, which is
-                # ~3-5 eV for typical LIBS species. Cristoforetti et al. (2010)
-                # Spectrochim. Acta B 65, 86-95 codifies this: McWhirter's
-                # n_e >= 1.6e12 * sqrt(T) * delta_E^3 floor scales with the
-                # cube of delta_E, so using the small gap between *adjacent*
-                # observed upper-level energies (which cluster narrowly) badly
-                # under-estimates the required density and lets non-LTE plasmas
-                # pass the gate.
-                #
-                # The observed lines do not carry lower-level energies, so the
-                # largest term-scheme gap reachable from data in scope is the
-                # full span from the ground state (E_lower >= 0) up to the
-                # highest observed upper level: max(E_k) - 0. This bounds the
-                # resonance-to-upper-level transition and is far larger than the
-                # adjacent-gap value.
-                energies = [o.E_k_ev for o in observations]
-                delta_E_eV = float(max(energies))
-                if delta_E_eV <= 0.0:
-                    # All upper levels at the ground state: term-scheme gap is
-                    # undefined; use conservative default.
-                    delta_E_eV = 2.0
-                    logger.warning(
-                        "All observation upper levels at ground state; "
-                        "using default 2.0 eV for McWhirter criterion"
-                    )
-                delta_E_eV = max(delta_E_eV, 0.1)  # floor to avoid degenerate case
-            else:
-                delta_E_eV = 2.0  # conservative default
-                logger.warning(
-                    "delta_E_eV not specified and no observations provided; "
-                    "using default 2.0 eV for McWhirter criterion"
-                )
+        delta_E_eV = self._resolve_delta_e_ev(delta_E_eV, observations)
 
         mcwhirter = self.check_mcwhirter(T_K, n_e_cm3, delta_E_eV)
 
@@ -290,14 +322,6 @@ class LTEValidator:
         if check_temporal:
             temporal = self.check_temporal(T_K, n_e_cm3, plasma_lifetime_ns)
 
-        warnings = []
-        if not mcwhirter.satisfied:
-            warnings.append(mcwhirter.message)
-        if temporal is not None and not temporal.satisfied:
-            warnings.append(temporal.message)
-
-        if warnings:
-            for w in warnings:
-                logger.warning(w)
+        warnings = self._collect_warnings(mcwhirter, temporal)
 
         return LTEReport(mcwhirter=mcwhirter, temporal=temporal, warnings=warnings)
