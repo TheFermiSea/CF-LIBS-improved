@@ -362,6 +362,85 @@ class JointOptimizer:
         JointOptimizationResult
             Optimization results with uncertainties
         """
+        # Validate inputs and resolve defaults
+        measured, uncertainties, bounds, initial_concentrations = self._prepare_optimize_inputs(
+            measured_spectrum, uncertainties, bounds, initial_concentrations
+        )
+
+        # Pack initial parameters
+        x0 = self._pack_params(initial_T_eV, initial_n_e, initial_concentrations)
+
+        # Create loss function
+        loss_fn = self._create_loss_function(measured, uncertainties)
+
+        # Run optimization
+        logger.info(
+            f"Starting optimization: T0={initial_T_eV:.3f} eV, "
+            f"n_e0={initial_n_e:.2e} cm^-3, method={method}"
+        )
+
+        final_x, final_loss, iterations, gradient_norm, status = self._run_minimization(
+            loss_fn, x0, method
+        )
+
+        # Unpack final parameters
+        final_T, final_ne, final_conc_arr = self._unpack_params(final_x)
+        final_concentrations = {el: float(final_conc_arr[i]) for i, el in enumerate(self.elements)}
+
+        # Compute fit statistics
+        n_obs = self.n_wavelength
+        n_params = self.n_params
+        dof = max(n_obs - n_params, 1)
+
+        # Chi-squared from loss
+        chi_squared = final_loss * n_obs if self.loss_type == LossType.CHI_SQUARED else 0.0
+        reduced_chi_squared = chi_squared / dof if dof > 0 else 0.0
+
+        # Estimate parameter uncertainties from Hessian
+        param_uncertainties, correlation_matrix, hessian_condition = self._estimate_uncertainties(
+            loss_fn, final_x, final_T, reduced_chi_squared
+        )
+
+        logger.info(
+            f"Optimization complete: T={final_T:.3f} eV, n_e={final_ne:.2e} cm^-3, "
+            f"chi^2_red={reduced_chi_squared:.3f}, status={status.value}"
+        )
+
+        return JointOptimizationResult(
+            temperature_eV=float(final_T),
+            electron_density_cm3=float(final_ne),
+            concentrations=final_concentrations,
+            initial_temperature_eV=initial_T_eV,
+            initial_electron_density_cm3=initial_n_e,
+            initial_concentrations=initial_concentrations,
+            final_loss=final_loss,
+            chi_squared=chi_squared,
+            reduced_chi_squared=reduced_chi_squared,
+            degrees_of_freedom=dof,
+            convergence_status=status,
+            iterations=iterations,
+            gradient_norm=gradient_norm,
+            hessian_condition=hessian_condition,
+            correlation_matrix=correlation_matrix,
+            parameter_uncertainties=param_uncertainties,
+            method=method,
+            loss_type=self.loss_type.value,
+        )
+
+    def _prepare_optimize_inputs(
+        self,
+        measured_spectrum: np.ndarray,
+        uncertainties: Optional[np.ndarray],
+        bounds: Optional[Dict[str, Tuple[float, float]]],
+        initial_concentrations: Optional[Dict[str, float]],
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Tuple[float, float]], Dict[str, float]]:
+        """Validate the spectrum and resolve defaults for the optimize() call.
+
+        Returns the JAX-converted measured spectrum and uncertainties, the
+        resolved bounds dict, and normalized initial concentrations. Pure
+        extraction of optimize()'s input-preparation block — logic and
+        floating-point evaluation order are unchanged.
+        """
         # Validate inputs
         measured = jnp.array(measured_spectrum)
         if len(measured) != self.n_wavelength:
@@ -398,18 +477,20 @@ class JointOptimizer:
         if total > 0:
             initial_concentrations = {el: c / total for el, c in initial_concentrations.items()}
 
-        # Pack initial parameters
-        x0 = self._pack_params(initial_T_eV, initial_n_e, initial_concentrations)
+        return measured, uncertainties, bounds, initial_concentrations
 
-        # Create loss function
-        loss_fn = self._create_loss_function(measured, uncertainties)
+    def _run_minimization(
+        self,
+        loss_fn: Callable[[jnp.ndarray], float],
+        x0: jnp.ndarray,
+        method: str,
+    ) -> Tuple[jnp.ndarray, float, int, float, ConvergenceStatus]:
+        """Run the JAX minimizer and classify the convergence status.
 
-        # Run optimization
-        logger.info(
-            f"Starting optimization: T0={initial_T_eV:.3f} eV, "
-            f"n_e0={initial_n_e:.2e} cm^-3, method={method}"
-        )
-
+        Returns (final_x, final_loss, iterations, gradient_norm, status). Pure
+        extraction of optimize()'s minimization block — the try/except, the
+        gradient evaluation, and the status branching are byte-identical.
+        """
         try:
             # Use JAX minimize
             result = jax_minimize(
@@ -446,21 +527,22 @@ class JointOptimizer:
             gradient_norm = float("inf")
             status = ConvergenceStatus.FAILED
 
-        # Unpack final parameters
-        final_T, final_ne, final_conc_arr = self._unpack_params(final_x)
-        final_concentrations = {el: float(final_conc_arr[i]) for i, el in enumerate(self.elements)}
+        return final_x, final_loss, iterations, gradient_norm, status
 
-        # Compute fit statistics
-        n_obs = self.n_wavelength
-        n_params = self.n_params
-        dof = max(n_obs - n_params, 1)
+    def _estimate_uncertainties(
+        self,
+        loss_fn: Callable[[jnp.ndarray], float],
+        final_x: jnp.ndarray,
+        final_T: jnp.ndarray,
+        reduced_chi_squared: float,
+    ) -> Tuple[Dict[str, float], Optional[np.ndarray], float]:
+        """Estimate parameter uncertainties from the loss Hessian at the solution.
 
-        # Chi-squared from loss
-        chi_squared = final_loss * n_obs if self.loss_type == LossType.CHI_SQUARED else 0.0
-        reduced_chi_squared = chi_squared / dof if dof > 0 else 0.0
-
-        # Estimate parameter uncertainties from Hessian
-        param_uncertainties = {}
+        Returns (param_uncertainties, correlation_matrix, hessian_condition).
+        Pure extraction of optimize()'s Hessian/covariance block — every numpy
+        operation and its evaluation order is preserved exactly.
+        """
+        param_uncertainties: Dict[str, float] = {}
         correlation_matrix = None
         hessian_condition = float("inf")
 
@@ -512,31 +594,7 @@ class JointOptimizer:
         except Exception as e:
             logger.debug(f"Hessian computation failed: {e}")
 
-        logger.info(
-            f"Optimization complete: T={final_T:.3f} eV, n_e={final_ne:.2e} cm^-3, "
-            f"chi^2_red={reduced_chi_squared:.3f}, status={status.value}"
-        )
-
-        return JointOptimizationResult(
-            temperature_eV=float(final_T),
-            electron_density_cm3=float(final_ne),
-            concentrations=final_concentrations,
-            initial_temperature_eV=initial_T_eV,
-            initial_electron_density_cm3=initial_n_e,
-            initial_concentrations=initial_concentrations,
-            final_loss=final_loss,
-            chi_squared=chi_squared,
-            reduced_chi_squared=reduced_chi_squared,
-            degrees_of_freedom=dof,
-            convergence_status=status,
-            iterations=iterations,
-            gradient_norm=gradient_norm,
-            hessian_condition=hessian_condition,
-            correlation_matrix=correlation_matrix,
-            parameter_uncertainties=param_uncertainties,
-            method=method,
-            loss_type=self.loss_type.value,
-        )
+        return param_uncertainties, correlation_matrix, hessian_condition
 
     def _pack_params(
         self, T_eV: float, n_e: float, concentrations: Dict[str, float]
