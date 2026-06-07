@@ -167,50 +167,14 @@ class HybridIdentifier:
         )
 
         # ---- Stage 1: NNLS screening ----
-        nnls_id = SpectralNNLSIdentifier(
-            basis_library=self.basis_library,
-            detection_snr=self.nnls_detection_snr,
-            min_relative_coeff=self.nnls_min_relative_coeff,
-            continuum_degree=self.nnls_continuum_degree,
-            fallback_T_K=self.fallback_T_K,
-            fallback_ne_cm3=self.fallback_ne_cm3,
+        nnls_detected, nnls_scores, nnls_snrs = self._run_nnls_stage(
+            SpectralNNLSIdentifier, wavelength, intensity
         )
-        nnls_result = nnls_id.identify(wavelength, intensity)
-        nnls_detected: Set[str] = {e.element for e in nnls_result.detected_elements}
-
-        # Build a map of NNLS scores for metadata
-        nnls_scores: Dict[str, float] = {}
-        nnls_snrs: Dict[str, float] = {}
-        for e in nnls_result.all_elements:
-            nnls_scores[e.element] = e.score
-            nnls_snrs[e.element] = e.metadata.get("nnls_snr", 0.0)
 
         # ---- Stage 2: ALIAS confirmation ----
-        # Restrict ALIAS to NNLS candidates when require_both=True
-        alias_elements = (
-            [e for e in self.elements if e in nnls_detected] if self.require_both else self.elements
+        alias_result, alias_detected, alias_scores, alias_elements_map = self._run_alias_stage(
+            ALIASIdentifier, wavelength, intensity, nnls_detected, spectrum_id
         )
-        if not alias_elements:
-            alias_elements = self.elements
-
-        alias_id = ALIASIdentifier(
-            atomic_db=self.atomic_db,
-            elements=alias_elements,
-            resolving_power=self.resolving_power,
-            intensity_threshold_factor=self.alias_intensity_factor,
-            detection_threshold=self.alias_detection_threshold,
-            chance_window_scale=self.alias_chance_window_scale,
-            max_lines_per_element=self.alias_max_lines,
-        )
-        alias_result = alias_id.identify(wavelength, intensity, spectrum_id=spectrum_id)
-        alias_detected: Set[str] = {e.element for e in alias_result.detected_elements}
-
-        # Build ALIAS score map
-        alias_scores: Dict[str, float] = {}
-        alias_elements_map: Dict[str, ElementIdentification] = {}
-        for e in alias_result.all_elements:
-            alias_scores[e.element] = e.score
-            alias_elements_map[e.element] = e
 
         # ---- Combine stages ----
         if self.require_both:
@@ -218,72 +182,17 @@ class HybridIdentifier:
         else:
             final_detected = nnls_detected | alias_detected
 
-        # Reach into ALIAS's coverage payload (now stored on
-        # ``alias_result.parameters``) to mirror the L2/L3 per-element
-        # counters at the hybrid layer.  This is purely additive
-        # telemetry -- hybrid uses ALIAS's identification output
-        # unchanged.
-        alias_params = alias_result.parameters or {}
-        alias_zero_db = set(alias_params.get("elements_with_zero_db_lines_in_range", []) or [])
-        alias_zero_matches = set(alias_params.get("elements_with_zero_peak_matches", []) or [])
-
-        all_element_ids: List[ElementIdentification] = []
-        for element in self.elements:
-            detected = element in final_detected
-            in_nnls = element in nnls_detected
-            in_alias = element in alias_detected
-
-            # L2/L3 mirroring from ALIAS's coverage payload.
-            if element in alias_zero_db:
-                coverage.record_db_lines(element, 0)
-            if element in alias_zero_matches:
-                # No record_db_lines call here -- ALIAS will have
-                # already classified L2 above when applicable.
-                coverage.record_peak_matches(element, 0)
-            # L4 -- the hybrid combined decision (both / either stage).
-            coverage.record_fingerprint(
-                element,
-                passed=bool(detected),
-                score=(
-                    0.0
-                    if not (in_nnls or in_alias)
-                    else float(nnls_scores.get(element, 0.0) + alias_scores.get(element, 0.0))
-                ),
-            )
-
-            alias_eid = alias_elements_map.get(element)
-            matched_lines = alias_eid.matched_lines if alias_eid else []
-            unmatched_lines = alias_eid.unmatched_lines if alias_eid else []
-            n_matched = alias_eid.n_matched_lines if alias_eid else 0
-            n_total = alias_eid.n_total_lines if alias_eid else 0
-
-            s_nnls = nnls_scores.get(element, 0.0)
-            s_alias = alias_scores.get(element, 0.0)
-            combined_score = float(np.sqrt(max(s_nnls, 0) * max(s_alias, 0)))
-
-            eid = ElementIdentification(
-                element=element,
-                detected=detected,
-                score=combined_score,
-                confidence=combined_score,
-                n_matched_lines=n_matched,
-                n_total_lines=n_total,
-                matched_lines=matched_lines,
-                unmatched_lines=unmatched_lines,
-                metadata={
-                    "nnls_detected": in_nnls,
-                    "alias_detected": in_alias,
-                    "nnls_score": s_nnls,
-                    "alias_score": s_alias,
-                    "nnls_snr": nnls_snrs.get(element, 0.0),
-                    "stage": (
-                        "both"
-                        if in_nnls and in_alias
-                        else "nnls_only" if in_nnls else "alias_only" if in_alias else "neither"
-                    ),
-                },
-            )
-            all_element_ids.append(eid)
+        all_element_ids = self._build_all_element_ids(
+            coverage,
+            alias_result,
+            final_detected,
+            nnls_detected,
+            alias_detected,
+            nnls_scores,
+            nnls_snrs,
+            alias_scores,
+            alias_elements_map,
+        )
 
         detected_elements = [e for e in all_element_ids if e.detected]
         rejected_elements = [e for e in all_element_ids if not e.detected]
@@ -313,3 +222,197 @@ class HybridIdentifier:
             algorithm="hybrid_nnls_alias",
             parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
         )
+
+    def _run_nnls_stage(
+        self,
+        nnls_cls: type,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+    ) -> "tuple[Set[str], Dict[str, float], Dict[str, float]]":
+        """Stage 1: run NNLS screening and build score/SNR maps."""
+        nnls_id = nnls_cls(
+            basis_library=self.basis_library,
+            detection_snr=self.nnls_detection_snr,
+            min_relative_coeff=self.nnls_min_relative_coeff,
+            continuum_degree=self.nnls_continuum_degree,
+            fallback_T_K=self.fallback_T_K,
+            fallback_ne_cm3=self.fallback_ne_cm3,
+        )
+        nnls_result = nnls_id.identify(wavelength, intensity)
+        nnls_detected: Set[str] = {e.element for e in nnls_result.detected_elements}
+
+        # Build a map of NNLS scores for metadata
+        nnls_scores: Dict[str, float] = {}
+        nnls_snrs: Dict[str, float] = {}
+        for e in nnls_result.all_elements:
+            nnls_scores[e.element] = e.score
+            nnls_snrs[e.element] = e.metadata.get("nnls_snr", 0.0)
+
+        return nnls_detected, nnls_scores, nnls_snrs
+
+    def _run_alias_stage(
+        self,
+        alias_cls: type,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        nnls_detected: Set[str],
+        spectrum_id: "str | None",
+    ) -> "tuple[ElementIdentificationResult, Set[str], Dict[str, float], Dict[str, ElementIdentification]]":  # noqa: E501
+        """Stage 2: run ALIAS confirmation (restricted to NNLS candidates)."""
+        # Restrict ALIAS to NNLS candidates when require_both=True
+        alias_elements = (
+            [e for e in self.elements if e in nnls_detected] if self.require_both else self.elements
+        )
+        if not alias_elements:
+            alias_elements = self.elements
+
+        alias_id = alias_cls(
+            atomic_db=self.atomic_db,
+            elements=alias_elements,
+            resolving_power=self.resolving_power,
+            intensity_threshold_factor=self.alias_intensity_factor,
+            detection_threshold=self.alias_detection_threshold,
+            chance_window_scale=self.alias_chance_window_scale,
+            max_lines_per_element=self.alias_max_lines,
+        )
+        alias_result = alias_id.identify(wavelength, intensity, spectrum_id=spectrum_id)
+        alias_detected: Set[str] = {e.element for e in alias_result.detected_elements}
+
+        # Build ALIAS score map
+        alias_scores: Dict[str, float] = {}
+        alias_elements_map: Dict[str, ElementIdentification] = {}
+        for e in alias_result.all_elements:
+            alias_scores[e.element] = e.score
+            alias_elements_map[e.element] = e
+
+        return alias_result, alias_detected, alias_scores, alias_elements_map
+
+    @staticmethod
+    def _record_hybrid_coverage(
+        coverage: CoverageTracker,
+        element: str,
+        detected: bool,
+        in_nnls: bool,
+        in_alias: bool,
+        nnls_scores: Dict[str, float],
+        alias_scores: Dict[str, float],
+        alias_zero_db: Set[str],
+        alias_zero_matches: Set[str],
+    ) -> None:
+        """Mirror ALIAS L2/L3 counters and record the hybrid L4 decision."""
+        # L2/L3 mirroring from ALIAS's coverage payload.
+        if element in alias_zero_db:
+            coverage.record_db_lines(element, 0)
+        if element in alias_zero_matches:
+            # No record_db_lines call here -- ALIAS will have
+            # already classified L2 above when applicable.
+            coverage.record_peak_matches(element, 0)
+        # L4 -- the hybrid combined decision (both / either stage).
+        coverage.record_fingerprint(
+            element,
+            passed=bool(detected),
+            score=(
+                0.0
+                if not (in_nnls or in_alias)
+                else float(nnls_scores.get(element, 0.0) + alias_scores.get(element, 0.0))
+            ),
+        )
+
+    @staticmethod
+    def _build_element_id(
+        element: str,
+        detected: bool,
+        in_nnls: bool,
+        in_alias: bool,
+        nnls_scores: Dict[str, float],
+        nnls_snrs: Dict[str, float],
+        alias_scores: Dict[str, float],
+        alias_elements_map: Dict[str, ElementIdentification],
+    ) -> ElementIdentification:
+        """Construct the combined :class:`ElementIdentification` for one element."""
+        alias_eid = alias_elements_map.get(element)
+        matched_lines = alias_eid.matched_lines if alias_eid else []
+        unmatched_lines = alias_eid.unmatched_lines if alias_eid else []
+        n_matched = alias_eid.n_matched_lines if alias_eid else 0
+        n_total = alias_eid.n_total_lines if alias_eid else 0
+
+        s_nnls = nnls_scores.get(element, 0.0)
+        s_alias = alias_scores.get(element, 0.0)
+        combined_score = float(np.sqrt(max(s_nnls, 0) * max(s_alias, 0)))
+
+        return ElementIdentification(
+            element=element,
+            detected=detected,
+            score=combined_score,
+            confidence=combined_score,
+            n_matched_lines=n_matched,
+            n_total_lines=n_total,
+            matched_lines=matched_lines,
+            unmatched_lines=unmatched_lines,
+            metadata={
+                "nnls_detected": in_nnls,
+                "alias_detected": in_alias,
+                "nnls_score": s_nnls,
+                "alias_score": s_alias,
+                "nnls_snr": nnls_snrs.get(element, 0.0),
+                "stage": (
+                    "both"
+                    if in_nnls and in_alias
+                    else "nnls_only" if in_nnls else "alias_only" if in_alias else "neither"
+                ),
+            },
+        )
+
+    def _build_all_element_ids(
+        self,
+        coverage: CoverageTracker,
+        alias_result: ElementIdentificationResult,
+        final_detected: Set[str],
+        nnls_detected: Set[str],
+        alias_detected: Set[str],
+        nnls_scores: Dict[str, float],
+        nnls_snrs: Dict[str, float],
+        alias_scores: Dict[str, float],
+        alias_elements_map: Dict[str, ElementIdentification],
+    ) -> List[ElementIdentification]:
+        """Combine per-element stage decisions and emit hybrid coverage telemetry."""
+        # Reach into ALIAS's coverage payload (now stored on
+        # ``alias_result.parameters``) to mirror the L2/L3 per-element
+        # counters at the hybrid layer.  This is purely additive
+        # telemetry -- hybrid uses ALIAS's identification output
+        # unchanged.
+        alias_params = alias_result.parameters or {}
+        alias_zero_db = set(alias_params.get("elements_with_zero_db_lines_in_range", []) or [])
+        alias_zero_matches = set(alias_params.get("elements_with_zero_peak_matches", []) or [])
+
+        all_element_ids: List[ElementIdentification] = []
+        for element in self.elements:
+            detected = element in final_detected
+            in_nnls = element in nnls_detected
+            in_alias = element in alias_detected
+
+            self._record_hybrid_coverage(
+                coverage,
+                element,
+                detected,
+                in_nnls,
+                in_alias,
+                nnls_scores,
+                alias_scores,
+                alias_zero_db,
+                alias_zero_matches,
+            )
+
+            eid = self._build_element_id(
+                element,
+                detected,
+                in_nnls,
+                in_alias,
+                nnls_scores,
+                nnls_snrs,
+                alias_scores,
+                alias_elements_map,
+            )
+            all_element_ids.append(eid)
+
+        return all_element_ids
