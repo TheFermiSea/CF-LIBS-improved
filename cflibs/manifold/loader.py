@@ -196,6 +196,158 @@ class ManifoldLoader:
             params[element] = float(param_array[2 + i])
         return params
 
+    def _validate_search_inputs(
+        self, measured_spectrum: np.ndarray, method: str, use_jax: bool
+    ) -> None:
+        """Validate ``find_nearest_spectrum`` arguments and manifold state.
+
+        Parameters
+        ----------
+        measured_spectrum : array
+            Measured spectrum to validate against the manifold wavelength grid.
+        method : str
+            Requested similarity method.
+        use_jax : bool
+            Whether JAX acceleration was requested.
+
+        Raises
+        ------
+        ValueError
+            If the spectrum length, method, or manifold size is invalid.
+        ImportError
+            If JAX is requested but not installed.
+        """
+        if len(measured_spectrum) != len(self.wavelength):
+            raise ValueError(
+                f"Spectrum length {len(measured_spectrum)} does not match "
+                f"manifold wavelength grid {len(self.wavelength)}"
+            )
+        if method not in {"cosine", "euclidean", "correlation"}:
+            raise ValueError(f"Unknown similarity method: {method}")
+        if use_jax and not HAS_JAX:
+            raise ImportError("JAX is not installed. Install with: pip install jax jaxlib")
+        if self.n_spectra == 0:
+            raise ValueError("Cannot search an empty manifold")
+
+    @staticmethod
+    def _chunk_similarities_jax(
+        spectra_chunk_np: np.ndarray,
+        method: str,
+        measured_j: Any,
+        measured_norm_j: Any,
+        measured_centered_j: Any,
+    ) -> np.ndarray:
+        """Compute per-chunk similarities using JAX.
+
+        Parameters
+        ----------
+        spectra_chunk_np : array
+            Manifold spectra chunk (``float32``).
+        method : str
+            Similarity method: ``'cosine'``, ``'euclidean'`` or ``'correlation'``.
+        measured_j : array
+            JAX measured spectrum.
+        measured_norm_j : array
+            Normalized JAX measured spectrum.
+        measured_centered_j : array
+            Centered + normalized JAX measured spectrum.
+
+        Returns
+        -------
+        array
+            Similarity scores for the chunk as a ``float32`` NumPy array.
+        """
+        spectra_chunk = jnp.asarray(spectra_chunk_np)
+        if method == "cosine":
+            chunk_norms = spectra_chunk / (
+                jnp.linalg.norm(spectra_chunk, axis=1, keepdims=True) + 1e-10
+            )
+            similarities = jnp.dot(chunk_norms, measured_norm_j)
+        elif method == "euclidean":
+            distances = jnp.linalg.norm(spectra_chunk - measured_j, axis=1)
+            similarities = 1.0 / (1.0 + distances)
+        else:
+            chunk_norms = spectra_chunk / (
+                jnp.linalg.norm(spectra_chunk, axis=1, keepdims=True) + 1e-10
+            )
+            chunk_centered = chunk_norms - jnp.mean(chunk_norms, axis=1, keepdims=True)
+            similarities = jnp.dot(chunk_centered, measured_centered_j) / (
+                jnp.linalg.norm(chunk_centered, axis=1) * jnp.linalg.norm(measured_centered_j)
+                + 1e-10
+            )
+        return np.asarray(similarities, dtype=np.float32)
+
+    @staticmethod
+    def _chunk_similarities_numpy(
+        spectra_chunk_np: np.ndarray,
+        method: str,
+        measured_np: np.ndarray,
+        measured_norm_np: np.ndarray,
+        measured_centered_np: np.ndarray,
+    ) -> np.ndarray:
+        """Compute per-chunk similarities using NumPy.
+
+        Parameters
+        ----------
+        spectra_chunk_np : array
+            Manifold spectra chunk (``float32``).
+        method : str
+            Similarity method: ``'cosine'``, ``'euclidean'`` or ``'correlation'``.
+        measured_np : array
+            Measured spectrum (``float32``).
+        measured_norm_np : array
+            Normalized measured spectrum.
+        measured_centered_np : array
+            Centered + normalized measured spectrum.
+
+        Returns
+        -------
+        array
+            Similarity scores for the chunk as a ``float32`` NumPy array.
+        """
+        if method == "cosine":
+            chunk_norms = spectra_chunk_np / (
+                np.linalg.norm(spectra_chunk_np, axis=1, keepdims=True) + 1e-10
+            )
+            similarities = np.dot(chunk_norms, measured_norm_np)
+        elif method == "euclidean":
+            distances = np.linalg.norm(spectra_chunk_np - measured_np, axis=1)
+            similarities = 1.0 / (1.0 + distances)
+        else:
+            chunk_norms = spectra_chunk_np / (
+                np.linalg.norm(spectra_chunk_np, axis=1, keepdims=True) + 1e-10
+            )
+            chunk_centered = chunk_norms - np.mean(chunk_norms, axis=1, keepdims=True)
+            similarities = np.dot(chunk_centered, measured_centered_np) / (
+                np.linalg.norm(chunk_centered, axis=1) * np.linalg.norm(measured_centered_np)
+                + 1e-10
+            )
+        return np.asarray(similarities, dtype=np.float32)
+
+    @staticmethod
+    def _best_in_chunk(similarities_np: np.ndarray) -> Tuple[int, float]:
+        """Return the best finite similarity within a chunk.
+
+        Parameters
+        ----------
+        similarities_np : array
+            Per-chunk similarity scores.
+
+        Returns
+        -------
+        local_idx : int
+            Index of the best finite similarity within the chunk, or ``-1`` when
+            the chunk contains no finite scores.
+        local_similarity : float
+            The best finite similarity score, or ``-inf`` when none is finite.
+        """
+        finite_mask = np.isfinite(similarities_np)
+        if not np.any(finite_mask):
+            return -1, -np.inf
+        masked_similarities = np.where(finite_mask, similarities_np, -np.inf)
+        local_idx = int(np.argmax(masked_similarities))
+        return local_idx, float(masked_similarities[local_idx])
+
     def find_nearest_spectrum(
         self,
         measured_spectrum: np.ndarray,
@@ -227,17 +379,7 @@ class ManifoldLoader:
         params : dict
             Parameters for matched spectrum
         """
-        if len(measured_spectrum) != len(self.wavelength):
-            raise ValueError(
-                f"Spectrum length {len(measured_spectrum)} does not match "
-                f"manifold wavelength grid {len(self.wavelength)}"
-            )
-        if method not in {"cosine", "euclidean", "correlation"}:
-            raise ValueError(f"Unknown similarity method: {method}")
-        if use_jax and not HAS_JAX:
-            raise ImportError("JAX is not installed. Install with: pip install jax jaxlib")
-        if self.n_spectra == 0:
-            raise ValueError("Cannot search an empty manifold")
+        self._validate_search_inputs(measured_spectrum, method, use_jax)
 
         batch_size = search_batch_size or self._default_chunk_size()
         measured_np = np.asarray(measured_spectrum, dtype=np.float32)
@@ -257,55 +399,16 @@ class ManifoldLoader:
             spectra_chunk_np = np.asarray(self.spectra[start:stop], dtype=np.float32)
 
             if use_jax:
-                spectra_chunk = jnp.asarray(spectra_chunk_np)
-                if method == "cosine":
-                    chunk_norms = spectra_chunk / (
-                        jnp.linalg.norm(spectra_chunk, axis=1, keepdims=True) + 1e-10
-                    )
-                    similarities = jnp.dot(chunk_norms, measured_norm_j)
-                elif method == "euclidean":
-                    distances = jnp.linalg.norm(spectra_chunk - measured_j, axis=1)
-                    similarities = 1.0 / (1.0 + distances)
-                else:
-                    chunk_norms = spectra_chunk / (
-                        jnp.linalg.norm(spectra_chunk, axis=1, keepdims=True) + 1e-10
-                    )
-                    chunk_centered = chunk_norms - jnp.mean(chunk_norms, axis=1, keepdims=True)
-                    similarities = jnp.dot(chunk_centered, measured_centered_j) / (
-                        jnp.linalg.norm(chunk_centered, axis=1)
-                        * jnp.linalg.norm(measured_centered_j)
-                        + 1e-10
-                    )
-                similarities_np = np.asarray(similarities, dtype=np.float32)
+                similarities_np = self._chunk_similarities_jax(
+                    spectra_chunk_np, method, measured_j, measured_norm_j, measured_centered_j
+                )
             else:
-                if method == "cosine":
-                    chunk_norms = spectra_chunk_np / (
-                        np.linalg.norm(spectra_chunk_np, axis=1, keepdims=True) + 1e-10
-                    )
-                    similarities = np.dot(chunk_norms, measured_norm_np)
-                elif method == "euclidean":
-                    distances = np.linalg.norm(spectra_chunk_np - measured_np, axis=1)
-                    similarities = 1.0 / (1.0 + distances)
-                else:
-                    chunk_norms = spectra_chunk_np / (
-                        np.linalg.norm(spectra_chunk_np, axis=1, keepdims=True) + 1e-10
-                    )
-                    chunk_centered = chunk_norms - np.mean(chunk_norms, axis=1, keepdims=True)
-                    similarities = np.dot(chunk_centered, measured_centered_np) / (
-                        np.linalg.norm(chunk_centered, axis=1)
-                        * np.linalg.norm(measured_centered_np)
-                        + 1e-10
-                    )
-                similarities_np = np.asarray(similarities, dtype=np.float32)
+                similarities_np = self._chunk_similarities_numpy(
+                    spectra_chunk_np, method, measured_np, measured_norm_np, measured_centered_np
+                )
 
-            finite_mask = np.isfinite(similarities_np)
-            if not np.any(finite_mask):
-                continue
-            masked_similarities = np.where(finite_mask, similarities_np, -np.inf)
-            local_idx = int(np.argmax(masked_similarities))
-            local_similarity = float(masked_similarities[local_idx])
-
-            if local_similarity > best_similarity:
+            local_idx, local_similarity = self._best_in_chunk(similarities_np)
+            if local_idx >= 0 and local_similarity > best_similarity:
                 best_similarity = local_similarity
                 best_idx = start + local_idx
 
