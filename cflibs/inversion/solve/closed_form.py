@@ -515,7 +515,17 @@ class ClosedFormILRSolver:
                 converged = False
 
         # ── Estimate n_e via pressure/charge balance (fixed-point) ─────
+        # The isobaric 1-atm (STP) pressure balance is physically non-standard
+        # for a LIBS plasma (hypersonic shock, ~1e11 Pa initially; never static
+        # 1 atm in the analysis window). It is a coarse fallback here; the
+        # canonical n_e diagnostic is Stark broadening of a measured line
+        # (Tognoni 2010; Aragón & Aguilera 2010), used by the iterative solver
+        # when a Stark line is available.
         if self.config.ne_mode == "pressure":
+            logger.warning(
+                "Estimating n_e via the 1-atm (STP) pressure balance — physically "
+                "non-standard for LIBS; prefer a Stark-width diagnostic where available."
+            )
             for _ in range(20):
                 ne_prev = n_e
                 total_eps = 0.0

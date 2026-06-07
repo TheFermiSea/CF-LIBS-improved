@@ -493,6 +493,38 @@ class ClosureEquation:
     """
 
     @staticmethod
+    def validate_degeneracy(
+        concentrations: Dict[str, float],
+        threshold: float = 0.8,
+    ) -> bool:
+        """Flag a degenerate (single-element-dominated) composition.
+
+        Returns ``True`` when more than one element is present and any single
+        element soaks more than ``threshold`` of the total closure mass — the
+        "keystone collapse" signature in which the closure has lost
+        discriminating power and the recovered composition is untrustworthy.
+
+        A single-element solve (``len <= 1``) is never flagged: a pure sample
+        legitimately closes to a single 1.0 concentration.
+
+        Parameters
+        ----------
+        concentrations : Dict[str, float]
+            Element -> number/mole fraction (typically summing to 1).
+        threshold : float
+            Dominance fraction above which the composition is degenerate
+            (default 0.8).
+
+        Returns
+        -------
+        bool
+            ``True`` if degenerate, ``False`` otherwise.
+        """
+        if len(concentrations) <= 1:
+            return False
+        return any(c > threshold for c in concentrations.values())
+
+    @staticmethod
     def apply_standard(
         intercepts: Dict[str, float],
         partition_funcs: Dict[str, float],

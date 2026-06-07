@@ -140,6 +140,139 @@ def stark_width(
     return 2.0 * hwhm
 
 
+def deconvolve_stark_fwhm(
+    measured_fwhm_nm: float,
+    instrument_fwhm_nm: float = 0.0,
+    doppler_fwhm_nm: float = 0.0,
+) -> float:
+    """Recover the Lorentzian Stark FWHM from a measured line width.
+
+    The observed line is a Voigt profile: a Lorentzian electron-impact Stark
+    core convolved with the Gaussian instrument + Doppler broadening. The
+    Gaussian widths add in quadrature and the Lorentzian width recovers via the
+    standard Voigt deconvolution approximation (Olivero & Longbothum 1977)::
+
+        f_V  = 0.5346 f_L + sqrt(0.2166 f_L^2 + f_G^2)
+
+    solved for the Lorentzian component ``f_L`` given the measured Voigt FWHM
+    ``f_V`` and the combined Gaussian FWHM ``f_G = sqrt(f_inst^2 + f_dopp^2)``::
+
+        f_L = (f_V^2 - f_G^2) / (f_V + 0.5346 * something)
+
+    We use the algebraically exact inversion of the Olivero-Longbothum form,
+    which for the pure-Gaussian-subtraction limit reduces to quadrature
+    subtraction. Returns 0.0 if the Gaussian component already accounts for the
+    full measured width (no recoverable Stark contribution).
+
+    Parameters
+    ----------
+    measured_fwhm_nm : float
+        Measured (Voigt) FWHM of the diagnostic line in nm.
+    instrument_fwhm_nm : float
+        Instrument response FWHM in nm (Gaussian).
+    doppler_fwhm_nm : float
+        Doppler (thermal) FWHM in nm (Gaussian).
+
+    Returns
+    -------
+    float
+        Lorentzian Stark FWHM in nm (0.0 if not recoverable).
+    """
+    if measured_fwhm_nm is None or measured_fwhm_nm <= 0:
+        return 0.0
+    f_G = float(np.hypot(instrument_fwhm_nm, doppler_fwhm_nm))
+    f_V = float(measured_fwhm_nm)
+    if f_G <= 0.0:
+        return f_V
+    if f_V <= f_G:
+        # Gaussian alone already exceeds the measured width — no recoverable
+        # Lorentzian (Stark) component.
+        return 0.0
+    # Invert the Olivero-Longbothum (1977) Voigt-FWHM approximation
+    #   f_V = 0.5346 f_L + sqrt(0.2166 f_L^2 + f_G^2)
+    # for f_L. Let a = 0.5346, b = 0.2166. Rearranging and squaring:
+    #   (f_V - a f_L)^2 = b f_L^2 + f_G^2
+    #   (1 - b) f_L^2 ... actually expand: f_V^2 - 2 a f_V f_L + a^2 f_L^2
+    #     = b f_L^2 + f_G^2
+    #   (a^2 - b) f_L^2 - 2 a f_V f_L + (f_V^2 - f_G^2) = 0
+    a = 0.5346
+    b = 0.2166
+    qa = a * a - b
+    qb = -2.0 * a * f_V
+    qc = f_V * f_V - f_G * f_G
+    disc = qb * qb - 4.0 * qa * qc
+    if disc < 0.0:
+        # Fall back to plain quadrature subtraction (Gaussian-dominated edge).
+        return float(np.sqrt(max(f_V * f_V - f_G * f_G, 0.0)))
+    # qa = 0.5346^2 - 0.2166 = 0.2858 - 0.2166 = 0.0692 > 0; take the physical
+    # (positive, smaller) root.
+    f_L = (-qb - np.sqrt(disc)) / (2.0 * qa)
+    if f_L <= 0.0:
+        f_L = (-qb + np.sqrt(disc)) / (2.0 * qa)
+    return float(max(f_L, 0.0))
+
+
+def estimate_ne_from_stark(
+    measured_fwhm_nm: float,
+    T_K: float,
+    stark_w_ref: Optional[float],
+    stark_alpha: Optional[float] = None,
+    ref_T_K: float = REF_T_K,
+    instrument_fwhm_nm: float = 0.0,
+    doppler_fwhm_nm: float = 0.0,
+) -> Optional[float]:
+    """Invert the Stark-width law to estimate electron density from a line FWHM.
+
+    Stark broadening is the canonical electron-density diagnostic in LIBS
+    (Tognoni 2010; Aragón & Aguilera 2010, *Spectrochim. Acta B* 65, 395). The
+    forward law used throughout this project (see :func:`stark_width`) is the
+    linear-in-density electron-impact width::
+
+        w_fwhm = stark_w_ref * (n_e / REF_NE) * (T / ref_T_K)^(-alpha)
+
+    Solving for ``n_e`` given a *measured* line FWHM (after deconvolving the
+    instrument and Doppler Gaussian contributions, :func:`deconvolve_stark_fwhm`)::
+
+        n_e = REF_NE * (w_stark / stark_w_ref) * (T / ref_T_K)^(alpha)
+
+    Parameters
+    ----------
+    measured_fwhm_nm : float
+        Measured (Voigt) FWHM of the diagnostic line in nm.
+    T_K : float
+        Plasma temperature in K (for the weak ``(T/ref_T_K)^alpha`` correction).
+    stark_w_ref : float
+        Stored reference Stark width for the line: electron-impact FWHM at
+        ``REF_NE = 1e17 cm^-3``, ``T = ref_T_K`` (nm).
+    stark_alpha : float, optional
+        Temperature-scaling exponent (default 0.5).
+    ref_T_K : float
+        Reference temperature the stored width is tabulated at (default REF_T_K).
+    instrument_fwhm_nm : float
+        Instrument response FWHM in nm (Gaussian), removed in quadrature.
+    doppler_fwhm_nm : float
+        Doppler (thermal) FWHM in nm (Gaussian), removed in quadrature.
+
+    Returns
+    -------
+    float or None
+        Estimated electron density in cm^-3, or ``None`` if the line carries no
+        usable Stark width (``stark_w_ref`` missing/non-positive, or the
+        measured width is fully accounted for by instrument + Doppler).
+    """
+    if stark_w_ref is None or stark_w_ref <= 0:
+        return None
+    w_stark = deconvolve_stark_fwhm(measured_fwhm_nm, instrument_fwhm_nm, doppler_fwhm_nm)
+    if w_stark <= 0.0:
+        return None
+    alpha = stark_alpha if stark_alpha is not None else 0.5
+    T_eff = max(float(T_K), 1000.0)
+    n_e = REF_NE * (w_stark / stark_w_ref) * (T_eff / ref_T_K) ** alpha
+    if not np.isfinite(n_e) or n_e <= 0.0:
+        return None
+    return float(n_e)
+
+
 def stark_shift(n_e_cm3: float, stark_d_ref: Optional[float]) -> float:
     """
     Calculate Stark shift.
