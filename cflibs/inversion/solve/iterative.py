@@ -2686,6 +2686,7 @@ class IterativeCFLIBSSolverJax(IterativeCFLIBSSolver):
         self,
         observations: List[LineObservation],
         closure_mode: str = "standard",
+        stark_diagnostic: Optional["StarkDiagnosticLine"] = None,
         **closure_kwargs,
     ) -> CFLIBSResult:
         """Deprecated thin shim for the JAX iterative path (T1-3).
@@ -2709,6 +2710,15 @@ class IterativeCFLIBSSolverJax(IterativeCFLIBSSolver):
             DeprecationWarning,
             stacklevel=2,
         )
+        # The Stark-width n_e diagnostic is implemented only on the parent
+        # Python path; force it when a diagnostic line is supplied.
+        if stark_diagnostic is not None:
+            return super().solve(
+                observations,
+                closure_mode,
+                stark_diagnostic=stark_diagnostic,
+                **closure_kwargs,
+            )
         if not HAS_JAX:
             return super().solve(observations, closure_mode, **closure_kwargs)
         # Route through the new lax.while_loop path; fall back to the parent
