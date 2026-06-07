@@ -77,6 +77,15 @@ except ImportError:  # pragma: no cover
     dynesty = None  # type: ignore[assignment]
     _DynestyNestedSampler = None  # type: ignore[assignment]
 
+# Convergence-diagnostics helpers live in :mod:`.diagnostics` to keep this
+# module under the ADR-0001 / T1-6 800-LOC cap. Re-exported here so the
+# historical import path (and _diagnostics_from_mcmc below) keep working.
+from .diagnostics import (  # noqa: E402,F401  (re-export for back-compat + tests)
+    _autocorr_fft,
+    _chain_diagnostics,
+    _ess_numpy,
+    _split_rhat_numpy,
+)
 
 # ---------------------------------------------------------------------------
 # Sampler Protocol + generic SamplerResult envelope (T1-6 spec section 4)
@@ -132,41 +141,34 @@ def _diagnostics_from_mcmc(
     num_chains: int,
     variables: Tuple[str, ...] = ("T_eV", "log_ne"),
 ) -> Tuple[Dict[str, float], Dict[str, float]]:
-    """Compute R-hat / ESS diagnostics with an ArviZ fallback to single-chain estimates."""
+    """Compute *real* split-R-hat / autocorrelation-corrected ESS diagnostics.
+
+    For multi-chain runs ArviZ's between-chain split-R-hat and ESS are used
+    directly. For single-chain runs we deliberately do NOT fabricate
+    ``r_hat = 1.0`` / ``ess = num_samples``: instead the single chain is split
+    into two halves so a genuine *split*-R-hat can be computed (Gelman et al.,
+    BDA3 §11.4 / Vehtari et al. 2021), and ESS is corrected for
+    autocorrelation. A non-mixing / under-warmed chain therefore reports
+    ``r_hat > 1`` and ``ess << num_samples`` rather than trivially CONVERGED.
+    """
     r_hat: Dict[str, float] = {}
     ess: Dict[str, float] = {}
 
-    if HAS_ARVIZ and num_chains > 1:
-        try:
-            idata = az.from_numpyro(mcmc)
-            rhat_data = az.rhat(idata)
-            ess_data = az.ess(idata)
-            for var in variables:
-                if var in rhat_data:
-                    r_hat[var] = float(rhat_data[var].values)
-                if var in ess_data:
-                    ess[var] = float(ess_data[var].values)
-        except Exception as e:  # pragma: no cover
-            logger.warning(f"ArviZ diagnostics failed: {e}")
-            r_hat, ess = _simple_diagnostics_from_mcmc(mcmc, variables)
-    else:
-        r_hat, ess = _simple_diagnostics_from_mcmc(mcmc, variables)
-
-    return r_hat, ess
-
-
-def _simple_diagnostics_from_mcmc(
-    mcmc: Any, variables: Tuple[str, ...]
-) -> Tuple[Dict[str, float], Dict[str, float]]:
-    """Simple single-chain ESS / R-hat fallback."""
-    samples = mcmc.get_samples()
-    r_hat: Dict[str, float] = {}
-    ess: Dict[str, float] = {}
+    samples = mcmc.get_samples(group_by_chain=True)
     for var in variables:
-        if var in samples:
-            s = np.array(samples[var]).flatten()
-            ess[var] = float(len(s))  # naive: assume independent samples
-            r_hat[var] = 1.0  # single chain: between-chain variance undefined
+        if var not in samples:
+            continue
+        arr = np.asarray(samples[var])
+        # Collapse any trailing event dims to a scalar-per-draw view by
+        # diagnosing the first coordinate (T_eV / log_ne are scalar sites).
+        if arr.ndim > 2:
+            arr = arr.reshape(arr.shape[0], arr.shape[1], -1)[..., 0]
+        rh, es = _chain_diagnostics(arr)
+        if np.isfinite(rh):
+            r_hat[var] = rh
+        if np.isfinite(es):
+            ess[var] = es
+
     return r_hat, ess
 
 

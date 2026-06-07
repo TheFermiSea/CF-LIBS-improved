@@ -198,3 +198,113 @@ __all__ = [
     "posterior_predictive_check",
     "HAS_ARVIZ",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Convergence diagnostics (split-R-hat / autocorrelation-corrected ESS)
+# moved here from samplers.py to respect the 800-LOC cap (ADR-0001 / T1-6).
+# ---------------------------------------------------------------------------
+
+
+def _chain_diagnostics(arr: np.ndarray) -> Tuple[float, float]:
+    """Return ``(split_rhat, ess)`` for a ``(num_chains, num_draws)`` array.
+
+    Prefers ArviZ (``az.rhat`` / ``az.ess``, which use rank-normalised
+    split-R-hat and autocorrelation-corrected ESS). When only a single chain
+    is present, the chain is split into two contiguous halves so a real
+    split-R-hat is still defined. Falls back to a hand-rolled FFT
+    autocorrelation ESS and manual split-R-hat when ArviZ is unavailable.
+    """
+    arr = np.asarray(arr, dtype=float)
+    if arr.ndim == 1:
+        arr = arr[None, :]
+
+    # Single chain -> split into two contiguous halves so between-"chain"
+    # variance (split-R-hat) is well defined instead of fabricating 1.0.
+    if arr.shape[0] < 2:
+        flat = arr.reshape(-1)
+        half = flat.shape[0] // 2
+        if half < 2:  # too few draws to diagnose anything meaningful
+            return float("nan"), float(flat.shape[0])
+        arr = np.stack([flat[:half], flat[half : 2 * half]])
+
+    if HAS_ARVIZ:
+        try:
+            return float(az.rhat(arr)), float(az.ess(arr))
+        except Exception as e:  # pragma: no cover
+            logger.warning(f"ArviZ diagnostics failed, using numpy fallback: {e}")
+
+    return _split_rhat_numpy(arr), _ess_numpy(arr)
+
+
+def _split_rhat_numpy(arr: np.ndarray) -> float:
+    """Split-R-hat for a ``(num_chains, num_draws)`` array (BDA3 §11.4).
+
+    Each chain is split into two halves before computing between- and
+    within-half variances, so even a single long chain yields a meaningful
+    diagnostic. Returns ``nan`` when too few draws are available.
+    """
+    m_chains, n_draws = arr.shape
+    half = n_draws // 2
+    if half < 2:
+        return float("nan")
+    # Split each chain into two halves -> 2*m sub-chains of length ``half``.
+    splits = np.concatenate([arr[:, :half], arr[:, half : 2 * half]], axis=0)
+    n = half
+
+    chain_means = splits.mean(axis=1)
+    chain_vars = splits.var(axis=1, ddof=1)
+
+    b = n * np.var(chain_means, ddof=1)  # between-chain variance
+    w = chain_vars.mean()  # within-chain variance
+    if w <= 0:
+        return float("nan")
+
+    var_hat = (n - 1) / n * w + b / n
+    rhat = np.sqrt(var_hat / w)
+    return float(rhat)
+
+
+def _autocorr_fft(x: np.ndarray) -> np.ndarray:
+    """Normalised autocorrelation of a 1D series via FFT (lag 0 = 1.0)."""
+    x = x - x.mean()
+    n = x.shape[0]
+    # Zero-pad to next power of two >= 2n for linear (non-circular) correlation.
+    size = 1
+    while size < 2 * n:
+        size *= 2
+    f = np.fft.rfft(x, size)
+    acf = np.fft.irfft(f * np.conjugate(f), size)[:n]
+    if acf[0] == 0:
+        return np.zeros(n)
+    return acf / acf[0]
+
+
+def _ess_numpy(arr: np.ndarray) -> float:
+    """Autocorrelation-corrected ESS for ``(num_chains, num_draws)`` (Geyer IPS).
+
+    Uses Geyer's initial-positive-sequence estimator on the mean
+    autocorrelation across chains. Never returns the raw sample count for an
+    autocorrelated series.
+    """
+    m_chains, n_draws = arr.shape
+    if n_draws < 4:
+        return float(m_chains * n_draws)
+
+    # Mean autocorrelation across chains.
+    acfs = np.array([_autocorr_fft(arr[c]) for c in range(m_chains)])
+    rho = acfs.mean(axis=0)
+
+    # Geyer initial-positive-sequence: sum adjacent pairs while positive.
+    tau = 1.0
+    t = 1
+    while t + 1 < n_draws:
+        pair = rho[t] + rho[t + 1]
+        if pair <= 0:
+            break
+        tau += 2.0 * pair
+        t += 2
+    if tau < 1.0:
+        tau = 1.0
+    ess = m_chains * n_draws / tau
+    return float(ess)
