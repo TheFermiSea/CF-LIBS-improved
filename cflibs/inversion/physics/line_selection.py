@@ -196,70 +196,25 @@ class LineSelector:
             atomic_uncertainties = {}
 
         warnings = []
-        scores = []
 
         # Score all lines
-        for obs in observations:
-            score_info = self._score_line(obs, observations, resonance_lines, atomic_uncertainties)
-            scores.append(score_info)
+        scores = [
+            self._score_line(obs, observations, resonance_lines, atomic_uncertainties)
+            for obs in observations
+        ]
 
         # Filter by criteria
-        valid_scores = []
-        rejected_scores = []
-
-        for score in scores:
-            if score.rejection_reason is not None:
-                rejected_scores.append(score)
-            elif score.snr < self.min_snr:
-                score.rejection_reason = f"Low SNR ({score.snr:.1f} < {self.min_snr})"
-                rejected_scores.append(score)
-            elif score.is_resonance and self.exclude_resonance:
-                score.rejection_reason = "Resonance line (self-absorption risk)"
-                rejected_scores.append(score)
-            elif score.isolation_factor < 0.5:
-                score.rejection_reason = f"Blended (isolation={score.isolation_factor:.2f})"
-                rejected_scores.append(score)
-            else:
-                valid_scores.append(score)
+        valid_scores, rejected_scores = self._partition_by_criteria(scores)
 
         # Group by element and ensure energy spread
-
         by_element = defaultdict(list)
         for score in valid_scores:
             by_element[score.observation.element].append(score)
 
-        selected_scores = []
-        for element, elem_scores in by_element.items():
-            # Sort by score descending
-            elem_scores.sort(key=lambda s: s.score, reverse=True)
-
-            # Check energy spread
-            if len(elem_scores) >= 2:
-                energies = [s.observation.E_k_ev for s in elem_scores]
-                spread = max(energies) - min(energies)
-
-                if spread < self.min_energy_spread_ev:
-                    warnings.append(
-                        f"{element}: Energy spread {spread:.2f} eV < {self.min_energy_spread_ev} eV"
-                    )
-
-            # Select top lines up to max
-            n_select = min(len(elem_scores), self.max_lines_per_element)
-            selected_scores.extend(elem_scores[:n_select])
-
-            # Mark excess as rejected
-            for score in elem_scores[n_select:]:
-                score.rejection_reason = "Exceeded max lines per element"
-                rejected_scores.append(score)
+        selected_scores = self._select_per_element(by_element, rejected_scores, warnings)
 
         # Check minimum lines per element
-        for element, elem_scores in by_element.items():
-            n_valid = sum(1 for s in elem_scores if s.rejection_reason is None)
-            if n_valid < self.min_lines_per_element:
-                warnings.append(
-                    f"{element}: Only {n_valid} lines available "
-                    f"(need {self.min_lines_per_element})"
-                )
+        self._warn_insufficient_lines(by_element, warnings)
 
         # Calculate overall energy spread
         all_energies = [s.observation.E_k_ev for s in selected_scores]
@@ -276,6 +231,87 @@ class LineSelector:
             n_elements=len(by_element),
             warnings=warnings,
         )
+
+    def _partition_by_criteria(
+        self,
+        scores: List[LineScore],
+    ) -> Tuple[List[LineScore], List[LineScore]]:
+        """Split scored lines into valid/rejected, tagging rejection reasons."""
+        valid_scores: List[LineScore] = []
+        rejected_scores: List[LineScore] = []
+
+        for score in scores:
+            if score.rejection_reason is not None:
+                rejected_scores.append(score)
+            elif score.snr < self.min_snr:
+                score.rejection_reason = f"Low SNR ({score.snr:.1f} < {self.min_snr})"
+                rejected_scores.append(score)
+            elif score.is_resonance and self.exclude_resonance:
+                score.rejection_reason = "Resonance line (self-absorption risk)"
+                rejected_scores.append(score)
+            elif score.isolation_factor < 0.5:
+                score.rejection_reason = f"Blended (isolation={score.isolation_factor:.2f})"
+                rejected_scores.append(score)
+            else:
+                valid_scores.append(score)
+
+        return valid_scores, rejected_scores
+
+    def _select_per_element(
+        self,
+        by_element: Dict[str, List[LineScore]],
+        rejected_scores: List[LineScore],
+        warnings: List[str],
+    ) -> List[LineScore]:
+        """Per element: sort, warn on spread, take top lines, reject the excess."""
+        selected_scores: List[LineScore] = []
+        for element, elem_scores in by_element.items():
+            # Sort by score descending
+            elem_scores.sort(key=lambda s: s.score, reverse=True)
+
+            # Check energy spread
+            self._warn_energy_spread(element, elem_scores, warnings)
+
+            # Select top lines up to max
+            n_select = min(len(elem_scores), self.max_lines_per_element)
+            selected_scores.extend(elem_scores[:n_select])
+
+            # Mark excess as rejected
+            for score in elem_scores[n_select:]:
+                score.rejection_reason = "Exceeded max lines per element"
+                rejected_scores.append(score)
+
+        return selected_scores
+
+    def _warn_energy_spread(
+        self,
+        element: str,
+        elem_scores: List[LineScore],
+        warnings: List[str],
+    ) -> None:
+        """Append a warning when an element's energy spread is below threshold."""
+        if len(elem_scores) >= 2:
+            energies = [s.observation.E_k_ev for s in elem_scores]
+            spread = max(energies) - min(energies)
+
+            if spread < self.min_energy_spread_ev:
+                warnings.append(
+                    f"{element}: Energy spread {spread:.2f} eV < {self.min_energy_spread_ev} eV"
+                )
+
+    def _warn_insufficient_lines(
+        self,
+        by_element: Dict[str, List[LineScore]],
+        warnings: List[str],
+    ) -> None:
+        """Append a warning for any element with fewer than the minimum valid lines."""
+        for element, elem_scores in by_element.items():
+            n_valid = sum(1 for s in elem_scores if s.rejection_reason is None)
+            if n_valid < self.min_lines_per_element:
+                warnings.append(
+                    f"{element}: Only {n_valid} lines available "
+                    f"(need {self.min_lines_per_element})"
+                )
 
     def _score_line(
         self,
