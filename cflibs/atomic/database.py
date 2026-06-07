@@ -872,6 +872,7 @@ class AtomicDatabase(AtomicDataSource):
         sp_idx: list[int] = []
         stark_ws: list[float] = []
         stark_alphas: list[float] = []
+        stark_ds: list[float] = []
 
         for element in elements:
             for transition in self.get_transitions(
@@ -900,6 +901,15 @@ class AtomicDatabase(AtomicDataSource):
                 stark_alphas.append(
                     float(transition.stark_alpha) if transition.stark_alpha is not None else 0.0
                 )
+                # Signed Stark shift of the line center at REF_NE = 1e17 cm^-3
+                # (nm). Many lines have no catalogued shift — default 0.0 so
+                # the forward kernel leaves them unmoved (no failure).
+                # TODO: backfill ``lines.stark_shift`` from a published Stark
+                # database (e.g. Stark-B / NIST) for elements where shift data
+                # is missing; until then those lines carry a 0.0 shift.
+                stark_ds.append(
+                    float(transition.stark_shift) if transition.stark_shift is not None else 0.0
+                )
 
         n_lines = len(wls)
         line_wavelengths_nm = _xp.asarray(wls, dtype=_real_dtype)
@@ -911,6 +921,7 @@ class AtomicDatabase(AtomicDataSource):
         line_species_index = _xp.asarray(sp_idx, dtype=_xp.int32)
         line_stark_w = _xp.asarray(stark_ws, dtype=_real_dtype)
         line_stark_alpha = _xp.asarray(stark_alphas, dtype=_real_dtype)
+        line_stark_d = _xp.asarray(stark_ds, dtype=_real_dtype)
         line_natural_w = _xp.zeros(n_lines, dtype=_real_dtype)
 
         if partition_rows:
@@ -958,6 +969,7 @@ class AtomicDatabase(AtomicDataSource):
             line_stark_w=line_stark_w,
             line_natural_w=line_natural_w,
             line_stark_alpha=line_stark_alpha,
+            line_stark_d=line_stark_d,
             partition_coeffs=partition_coeffs,
             ionization_potential_ev=ionization_potential_ev,
             level_g=level_g_out,
