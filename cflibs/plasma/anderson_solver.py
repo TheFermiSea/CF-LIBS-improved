@@ -113,6 +113,110 @@ class AtomicDataJAX(NamedTuple):
     partition_g0: jnp.ndarray = None  # type: ignore[assignment]
 
 
+def _fill_partition_for_species(
+    atomic_db: Any,
+    elem: str,
+    stage: int,
+    i: int,
+    pf_arr: np.ndarray,
+    tmin_arr: np.ndarray,
+    tmax_arr: np.ndarray,
+) -> None:
+    """Populate partition-coefficient / validity-window rows for one species.
+
+    Writes into ``pf_arr[i, stage - 1]`` (and the matching ``tmin``/``tmax``
+    rows) using the database row when available, falling back to a
+    ground-state-degeneracy default of ``log(2.0)`` otherwise.  Mutates the
+    supplied arrays in place; no value is returned.
+    """
+    pf = None
+    if hasattr(atomic_db, "get_partition_coefficients"):
+        pf = atomic_db.get_partition_coefficients(elem, stage)
+    if pf is not None:
+        coeffs = list(pf.coefficients)
+        while len(coeffs) < 5:
+            coeffs.append(0.0)
+        pf_arr[i, stage - 1, :] = coeffs[:5]
+        tmin_arr[i, stage - 1] = float(pf.t_min)
+        tmax_arr[i, stage - 1] = float(pf.t_max)
+    else:
+        # Default: log(U) ~ log(2) (ground state degeneracy ~ 2)
+        pf_arr[i, stage - 1, 0] = np.log(2.0)
+
+
+def _fill_ground_state_g(
+    atomic_db: Any,
+    elem: str,
+    stage: int,
+    i: int,
+    g0_arr: np.ndarray,
+    get_ground_state_g: Any,
+) -> None:
+    """Populate the ground-state statistical weight for one species.
+
+    Writes into ``g0_arr[i, stage - 1]`` from the database, defaulting to
+    ``1.0`` (conservative physical lower bound) on any lookup failure.
+    Mutates ``g0_arr`` in place.
+    """
+    try:
+        g0_arr[i, stage - 1] = float(get_ground_state_g(atomic_db, elem, stage))
+    except Exception:
+        g0_arr[i, stage - 1] = 1.0
+
+
+def _fill_ionization_potential(
+    atomic_db: Any,
+    elem: str,
+    stage: int,
+    i: int,
+    ip_arr: np.ndarray,
+) -> bool:
+    """Populate the ionization potential for transition ``stage -> stage+1``.
+
+    Writes into ``ip_arr[i, stage - 1]`` and returns whether the per-element
+    stage loop should continue.  Returns ``False`` (stop) when the database
+    has no positive IP for this transition, matching the original ``break``.
+    """
+    ip = atomic_db.get_ionization_potential(elem, stage)
+    if ip is not None and ip > 0:
+        ip_arr[i, stage - 1] = ip
+        return True
+    return False
+
+
+def _fill_element_species(
+    atomic_db: Any,
+    elem: str,
+    i: int,
+    max_stages: int,
+    ip_arr: np.ndarray,
+    pf_arr: np.ndarray,
+    tmin_arr: np.ndarray,
+    tmax_arr: np.ndarray,
+    g0_arr: np.ndarray,
+    get_ground_state_g: Any,
+) -> int:
+    """Populate all per-species rows for a single element and return n_species.
+
+    Iterates ionization stages for ``elem``, delegating each cohesive block
+    (partition coefficients, ground-state weight, ionization potential) to its
+    helper.  Stops early when a transition has no positive IP, exactly as the
+    original inline ``break``.
+    """
+    n_species = 0
+    for stage in range(1, max_stages + 1):
+        _fill_partition_for_species(atomic_db, elem, stage, i, pf_arr, tmin_arr, tmax_arr)
+        _fill_ground_state_g(atomic_db, elem, stage, i, g0_arr, get_ground_state_g)
+
+        n_species = stage
+
+        # Get IP for transition stage -> stage+1
+        if stage < max_stages:
+            if not _fill_ionization_potential(atomic_db, elem, stage, i, ip_arr):
+                break
+    return n_species
+
+
 def prepare_atomic_data_jax(
     elements: list[str],
     atomic_db: Any,
@@ -151,39 +255,18 @@ def prepare_atomic_data_jax(
     ns_arr = np.zeros(n_elem, dtype=np.int32)
 
     for i, elem in enumerate(elements):
-        n_species = 0
-        for stage in range(1, max_stages + 1):
-            # Get partition function for this species
-            pf = None
-            if hasattr(atomic_db, "get_partition_coefficients"):
-                pf = atomic_db.get_partition_coefficients(elem, stage)
-            if pf is not None:
-                coeffs = list(pf.coefficients)
-                while len(coeffs) < 5:
-                    coeffs.append(0.0)
-                pf_arr[i, stage - 1, :] = coeffs[:5]
-                tmin_arr[i, stage - 1] = float(pf.t_min)
-                tmax_arr[i, stage - 1] = float(pf.t_max)
-            else:
-                # Default: log(U) ~ log(2) (ground state degeneracy ~ 2)
-                pf_arr[i, stage - 1, 0] = np.log(2.0)
-
-            try:
-                g0_arr[i, stage - 1] = float(get_ground_state_g(atomic_db, elem, stage))
-            except Exception:
-                g0_arr[i, stage - 1] = 1.0
-
-            n_species = stage
-
-            # Get IP for transition stage -> stage+1
-            if stage < max_stages:
-                ip = atomic_db.get_ionization_potential(elem, stage)
-                if ip is not None and ip > 0:
-                    ip_arr[i, stage - 1] = ip
-                else:
-                    break
-
-        ns_arr[i] = n_species
+        ns_arr[i] = _fill_element_species(
+            atomic_db,
+            elem,
+            i,
+            max_stages,
+            ip_arr,
+            pf_arr,
+            tmin_arr,
+            tmax_arr,
+            g0_arr,
+            get_ground_state_g,
+        )
 
     return AtomicDataJAX(
         ionization_potentials=jnp.array(ip_arr),
