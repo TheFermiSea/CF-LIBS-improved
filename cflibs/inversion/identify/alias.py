@@ -598,6 +598,46 @@ def compute_p_snr_jax(
     return float(0.5 * (1.0 + jax.scipy.special.erf(z)))
 
 
+def _multi_metric_physics_validity(N_matched: int, boltz_r2: float) -> float:
+    """Physics-validity sub-score (0.3 weight) from Boltzmann R^2.
+
+    Fewer than 3 lines: can't do Boltzmann, use soft penalty.
+    """
+    if N_matched >= 3:
+        if boltz_r2 >= 0.85:
+            return 1.0
+        elif boltz_r2 >= 0.7:
+            return 0.8
+        elif boltz_r2 >= 0.5:
+            return 0.6
+        else:
+            return 0.3
+    else:
+        # Fewer than 3 lines: can't do Boltzmann, use soft penalty
+        return 0.5
+
+
+def _multi_metric_interpretability(R_rat: float) -> float:
+    """Interpretability sub-score (0.15 weight) from ratio consistency."""
+    if R_rat > 0.7:
+        return 0.8
+    elif R_rat > 0.5:
+        return 0.6
+    else:
+        return 0.4
+
+
+def _multi_metric_detected(composite_score: float, N_matched: int, k_sim: float) -> bool:
+    """Detection decision: composite score must exceed threshold and pass hard gates."""
+    if composite_score >= 0.5:
+        # Hard gate: minimum matched lines
+        if N_matched >= 3:
+            return True
+        elif N_matched >= 2 and k_sim > 0.5:
+            return True
+    return False
+
+
 def _evaluate_candidate_with_multi_metric_gate(
     element: str,
     fused_lines: list,
@@ -636,19 +676,7 @@ def _evaluate_candidate_with_multi_metric_gate(
     correctness = k_sim * k_rate * max(P_cov, 0.01)
 
     # Physics validity (0.3 weight): Boltzmann R^2, LTE consistency, physical T
-    physics_validity = 0.5  # Default neutral
-    if N_matched >= 3:
-        if boltz_r2 >= 0.85:
-            physics_validity = 1.0
-        elif boltz_r2 >= 0.7:
-            physics_validity = 0.8
-        elif boltz_r2 >= 0.5:
-            physics_validity = 0.6
-        else:
-            physics_validity = 0.3
-    else:
-        # Fewer than 3 lines: can't do Boltzmann, use soft penalty
-        physics_validity = 0.5
+    physics_validity = _multi_metric_physics_validity(N_matched, boltz_r2)
 
     # Efficiency (0.15 weight): Computation time proxy
     # Fewer lines matched relative to expected = more efficient
@@ -659,13 +687,7 @@ def _evaluate_candidate_with_multi_metric_gate(
 
     # Interpretability (0.15 weight): Physical reasonableness
     # Based on ratio consistency and NNLS attribution
-    interpretability = 0.5  # Default neutral
-    if R_rat > 0.7:
-        interpretability = 0.8
-    elif R_rat > 0.5:
-        interpretability = 0.6
-    else:
-        interpretability = 0.4
+    interpretability = _multi_metric_interpretability(R_rat)
 
     # Composite score
     composite_score = (
@@ -674,13 +696,7 @@ def _evaluate_candidate_with_multi_metric_gate(
 
     # Detection decision: composite score must exceed threshold
     # and pass hard gates
-    detected = False
-    if composite_score >= 0.5:
-        # Hard gate: minimum matched lines
-        if N_matched >= 3:
-            detected = True
-        elif N_matched >= 2 and k_sim > 0.5:
-            detected = True
+    detected = _multi_metric_detected(composite_score, N_matched, k_sim)
 
     return {
         "detected": detected,
@@ -1074,15 +1090,76 @@ class ALIASIdentifier:
         self.n_e_range_cm3 = n_e_range_cm3
         self.T_steps = T_steps
         self.n_e_steps = n_e_steps
-        # Resolve threshold defaults from `high_recall` preset.
-        # Strict mode (default): preserves the precision-king baseline
-        #   precision=1.000, FP/spec=0 on n=33 cross-shard
-        #   (see .swarm/identifier-f1-baseline.json).
-        # Recall mode (opt-in): lowers both thresholds to trade precision
-        #   for recall. This is the opt-in replacement for the closed
-        #   PR #134, which silently flipped these defaults.
-        # Explicit user-supplied values always win, so callers can pin
-        # either knob independently of the preset.
+        self._init_threshold_defaults(high_recall, intensity_threshold_factor, detection_threshold)
+        self.chance_window_scale = chance_window_scale
+        self.elements = elements
+        self.max_lines_per_element = max_lines_per_element
+        self.reference_temperature = reference_temperature
+        self.max_screening_candidates = max_screening_candidates
+        self.relative_cl_threshold = relative_cl_threshold
+        self._init_relative_cl_gate(
+            relative_cl_per_ion_stage,
+            relative_cl_threshold_neutral,
+            relative_cl_threshold_ionized,
+        )
+        self._init_r2_gate(boltzmann_r2_min, r2_gate_mode, r2_gate_t_quality_threshold)
+        self._init_jax_flags(
+            use_jax_boltzmann_fit,
+            use_jax_nnls,
+            use_jax_p_snr,
+            use_jax_template_build,
+        )
+        self._init_self_absorption(
+            self_absorption_aware,
+            self_absorption_damping,
+            self_absorption_e_i_cutoff_ev,
+        )
+        # Temperature-estimator strategy (CF-LIBS-improved-762f).
+        # See the docstring for full rationale.
+        _valid_modes = ("legacy", "robust", "weighted")
+        if temperature_estimator_mode not in _valid_modes:
+            raise ValueError(
+                f"temperature_estimator_mode must be one of {_valid_modes}, "
+                f"got {temperature_estimator_mode!r}"
+            )
+        self.temperature_estimator_mode = str(temperature_estimator_mode)
+        if self._any_jax_flag() and not _HAS_JAX:  # pragma: no cover
+            raise ImportError("use_jax_* flags require JAX. Install with: pip install jax jaxlib")
+
+        # Create Saha-Boltzmann solver
+        self.solver = SahaBoltzmannSolver(atomic_db)
+
+        # Create (T, n_e) grid
+        self.T_grid_K = np.linspace(T_range_K[0], T_range_K[1], T_steps)
+        self.n_e_grid_cm3 = np.linspace(n_e_range_cm3[0], n_e_range_cm3[1], n_e_steps)
+
+        # Set during identify() by auto-calibration
+        self._effective_R: Optional[float] = None
+        self._global_wl_shift: float = 0.0
+
+        # Ubiquitous atmospheric/ablation contaminants always tested
+        self._always_test: Set[str] = {"H"}
+
+        # Estimated plasma temperature (set by _estimate_plasma_temperature)
+        self._estimated_T: Optional[float] = None
+
+    def _init_threshold_defaults(
+        self,
+        high_recall: bool,
+        intensity_threshold_factor: Optional[float],
+        detection_threshold: Optional[float],
+    ) -> None:
+        """Resolve peak/identification threshold defaults from ``high_recall``.
+
+        Strict mode (default): preserves the precision-king baseline
+          precision=1.000, FP/spec=0 on n=33 cross-shard
+          (see .swarm/identifier-f1-baseline.json).
+        Recall mode (opt-in): lowers both thresholds to trade precision
+          for recall. This is the opt-in replacement for the closed
+          PR #134, which silently flipped these defaults.
+        Explicit user-supplied values always win, so callers can pin
+        either knob independently of the preset.
+        """
         self.high_recall = bool(high_recall)
         _STRICT_INTENSITY_FACTOR = 3.0
         _STRICT_DETECTION_THRESHOLD = 0.02
@@ -1100,17 +1177,21 @@ class ALIASIdentifier:
             )
         else:
             self.detection_threshold = detection_threshold
-        self.chance_window_scale = chance_window_scale
-        self.elements = elements
-        self.max_lines_per_element = max_lines_per_element
-        self.reference_temperature = reference_temperature
-        self.max_screening_candidates = max_screening_candidates
-        self.relative_cl_threshold = relative_cl_threshold
-        # Per-ion-stage relative-CL gate knobs (CF-LIBS-improved-dj6y).
-        # Defaults preserve the historical global gate behavior. When the
-        # opt-in flag is on, neutrals and ionized species are gated against
-        # separate subset-maxima so a high-CL neutral (e.g. Al I) cannot
-        # eliminate a lower-CL ion (e.g. Mg II) via the global threshold.
+
+    def _init_relative_cl_gate(
+        self,
+        relative_cl_per_ion_stage: bool,
+        relative_cl_threshold_neutral: Optional[float],
+        relative_cl_threshold_ionized: Optional[float],
+    ) -> None:
+        """Validate and store the per-ion-stage relative-CL gate knobs.
+
+        Per-ion-stage relative-CL gate knobs (CF-LIBS-improved-dj6y).
+        Defaults preserve the historical global gate behavior. When the
+        opt-in flag is on, neutrals and ionized species are gated against
+        separate subset-maxima so a high-CL neutral (e.g. Al I) cannot
+        eliminate a lower-CL ion (e.g. Mg II) via the global threshold.
+        """
         self.relative_cl_per_ion_stage = bool(relative_cl_per_ion_stage)
         for _kw_name, _kw_val in (
             ("relative_cl_threshold_neutral", relative_cl_threshold_neutral),
@@ -1132,22 +1213,32 @@ class ALIASIdentifier:
             if relative_cl_threshold_ionized is not None
             else None
         )
+
+    def _init_r2_gate(
+        self,
+        boltzmann_r2_min: float,
+        r2_gate_mode: str,
+        r2_gate_t_quality_threshold: float,
+    ) -> None:
+        """Validate and store the Boltzmann R^2 gate configuration.
+
+        Adaptive R^2 gate (CF-LIBS-improved-ftp1; default flipped to
+        "adaptive_t" for blocker ALIAS-R2GATE-2). The historical "fixed"
+        static-0.85 gate hard-rejected valid ps-LIBS fits; "adaptive_t"
+        relaxes the gate to the cold-plasma floor whenever the estimated
+        plasma temperature falls below ``r2_gate_t_quality_threshold``
+        (now defaulted to 15000 K, the ps-LIBS warm edge, so the
+        cold-biased ALIAS T-estimator cannot push est_T above the
+        threshold and silently re-impose the strict floor — the cold-T
+        guard, ALIAS-TEST-EST-6). Pass ``r2_gate_mode="fixed"`` (or use
+        the ``strict`` preset) to restore the precision-king static gate.
+        See the docstring for the rationale on adaptive_t / disabled.
+        """
         if not (np.isfinite(boltzmann_r2_min) and 0.0 <= boltzmann_r2_min <= 1.0):
             raise ValueError(
                 f"boltzmann_r2_min must be finite and in [0, 1], got {boltzmann_r2_min!r}"
             )
         self.boltzmann_r2_min = float(boltzmann_r2_min)
-        # Adaptive R^2 gate (CF-LIBS-improved-ftp1; default flipped to
-        # "adaptive_t" for blocker ALIAS-R2GATE-2). The historical "fixed"
-        # static-0.85 gate hard-rejected valid ps-LIBS fits; "adaptive_t"
-        # relaxes the gate to the cold-plasma floor whenever the estimated
-        # plasma temperature falls below ``r2_gate_t_quality_threshold``
-        # (now defaulted to 15000 K, the ps-LIBS warm edge, so the
-        # cold-biased ALIAS T-estimator cannot push est_T above the
-        # threshold and silently re-impose the strict floor — the cold-T
-        # guard, ALIAS-TEST-EST-6). Pass ``r2_gate_mode="fixed"`` (or use
-        # the ``strict`` preset) to restore the precision-king static gate.
-        # See the docstring for the rationale on adaptive_t / disabled.
         _R2_GATE_MODES = ("fixed", "adaptive_t", "disabled")
         if r2_gate_mode not in _R2_GATE_MODES:
             raise ValueError(f"r2_gate_mode must be one of {_R2_GATE_MODES}, got {r2_gate_mode!r}")
@@ -1161,26 +1252,52 @@ class ALIASIdentifier:
         # Cold-plasma R^2 floor when adaptive_t mode fires. Internal
         # constant — surfaces in the gate logic in identify() below.
         self._r2_gate_cold_floor = 0.3
-        self.use_jax_boltzmann_fit = bool(use_jax_boltzmann_fit)
-        self.use_jax_nnls = bool(use_jax_nnls)
-        self.use_jax_p_snr = bool(use_jax_p_snr)
-        self.use_jax_template_build = bool(use_jax_template_build)
-        # Fail fast when a JAX path is requested without x64 (bead jbfg.1 /
-        # arch review #2 candidate 2). Replaces the prior hidden side effect
-        # in cflibs.benchmark.unified._jax_identifier_flags_for; ad-hoc
-        # callers should run cflibs.core.jax_runtime.configure_for_identifiers()
-        # at session start (UnifiedBenchmarkRunner already does this).
-        if (
+
+    def _any_jax_flag(self) -> bool:
+        """Return True when any ``use_jax_*`` path is enabled."""
+        return (
             self.use_jax_boltzmann_fit
             or self.use_jax_nnls
             or self.use_jax_p_snr
             or self.use_jax_template_build
-        ):
+        )
+
+    def _init_jax_flags(
+        self,
+        use_jax_boltzmann_fit: bool,
+        use_jax_nnls: bool,
+        use_jax_p_snr: bool,
+        use_jax_template_build: bool,
+    ) -> None:
+        """Store ``use_jax_*`` flags and fail fast when x64 is missing.
+
+        Fail fast when a JAX path is requested without x64 (bead jbfg.1 /
+        arch review #2 candidate 2). Replaces the prior hidden side effect
+        in cflibs.benchmark.unified._jax_identifier_flags_for; ad-hoc
+        callers should run cflibs.core.jax_runtime.configure_for_identifiers()
+        at session start (UnifiedBenchmarkRunner already does this).
+        """
+        self.use_jax_boltzmann_fit = bool(use_jax_boltzmann_fit)
+        self.use_jax_nnls = bool(use_jax_nnls)
+        self.use_jax_p_snr = bool(use_jax_p_snr)
+        self.use_jax_template_build = bool(use_jax_template_build)
+        if self._any_jax_flag():
             from cflibs.core.jax_runtime import check_jax64bit
 
             check_jax64bit()
-        # Self-absorption scoring knobs (CF-LIBS-improved-self-abs-audit).
-        # Defaults preserve the historical behavior — see the docstring.
+
+    def _init_self_absorption(
+        self,
+        self_absorption_aware: bool,
+        self_absorption_damping: float,
+        self_absorption_e_i_cutoff_ev: float,
+    ) -> None:
+        """Validate and store the self-absorption scoring knobs.
+
+        Self-absorption scoring knobs (CF-LIBS-improved-self-abs-audit).
+        Defaults preserve the historical behavior — see the constructor
+        docstring.
+        """
         self.self_absorption_aware = bool(self_absorption_aware)
         if not (np.isfinite(self_absorption_damping) and 0.0 < self_absorption_damping <= 1.0):
             raise ValueError(
@@ -1200,40 +1317,6 @@ class ALIASIdentifier:
         # damping behavior is auditable from the post-run log line.
         self._sa_n_damped_lines: int = 0
         self._sa_damped_elements: Set[str] = set()
-        # Temperature-estimator strategy (CF-LIBS-improved-762f).
-        # See the docstring for full rationale.
-        _valid_modes = ("legacy", "robust", "weighted")
-        if temperature_estimator_mode not in _valid_modes:
-            raise ValueError(
-                f"temperature_estimator_mode must be one of {_valid_modes}, "
-                f"got {temperature_estimator_mode!r}"
-            )
-        self.temperature_estimator_mode = str(temperature_estimator_mode)
-        _any_jax = (
-            self.use_jax_boltzmann_fit
-            or self.use_jax_nnls
-            or self.use_jax_p_snr
-            or self.use_jax_template_build
-        )
-        if _any_jax and not _HAS_JAX:  # pragma: no cover
-            raise ImportError("use_jax_* flags require JAX. Install with: pip install jax jaxlib")
-
-        # Create Saha-Boltzmann solver
-        self.solver = SahaBoltzmannSolver(atomic_db)
-
-        # Create (T, n_e) grid
-        self.T_grid_K = np.linspace(T_range_K[0], T_range_K[1], T_steps)
-        self.n_e_grid_cm3 = np.linspace(n_e_range_cm3[0], n_e_range_cm3[1], n_e_steps)
-
-        # Set during identify() by auto-calibration
-        self._effective_R: Optional[float] = None
-        self._global_wl_shift: float = 0.0
-
-        # Ubiquitous atmospheric/ablation contaminants always tested
-        self._always_test: Set[str] = {"H"}
-
-        # Estimated plasma temperature (set by _estimate_plasma_temperature)
-        self._estimated_T: Optional[float] = None
 
     def _apply_relative_cl_gate(self, all_element_ids: list) -> None:
         """Mutate ``e.detected`` in place per the relative-CL gate.
@@ -1264,11 +1347,9 @@ class ALIASIdentifier:
             return
 
         if not self.relative_cl_per_ion_stage:
-            max_CL = max(e.confidence for e in all_element_ids)
-            relative_threshold = max_CL * self.relative_cl_threshold
-            for e in all_element_ids:
-                if e.confidence < relative_threshold:
-                    e.detected = False
+            self._gate_subset_relative_cl(
+                all_element_ids, all_element_ids, self.relative_cl_threshold
+            )
             return
 
         neutral_threshold = (
@@ -1281,6 +1362,32 @@ class ALIASIdentifier:
             if self.relative_cl_threshold_ionized is not None
             else self.relative_cl_threshold
         )
+
+        neutrals, ionized, unclassified = self._partition_by_dominant_ion_stage(all_element_ids)
+
+        if neutrals:
+            self._gate_subset_relative_cl(neutrals, neutrals, neutral_threshold)
+        if ionized:
+            self._gate_subset_relative_cl(ionized, ionized, ionized_threshold)
+        if unclassified:
+            self._gate_subset_relative_cl(unclassified, all_element_ids, self.relative_cl_threshold)
+
+    @staticmethod
+    def _gate_subset_relative_cl(subset: list, max_pool: list, threshold: float) -> None:
+        """Reject ``subset`` members below ``max(confidence in max_pool) * threshold``."""
+        relative_threshold = max(e.confidence for e in max_pool) * threshold
+        for e in subset:
+            if e.confidence < relative_threshold:
+                e.detected = False
+
+    @staticmethod
+    def _partition_by_dominant_ion_stage(all_element_ids: list) -> tuple:
+        """Split elements into (neutrals, ionized, unclassified) by dominant ion stage.
+
+        An element's dominant ion stage is the ionization stage of its
+        highest-intensity matched line; elements with no matched lines are
+        unclassified.
+        """
 
         def _dominant_ion_stage(elem_id) -> Optional[int]:
             if not elem_id.matched_lines:
@@ -1299,25 +1406,7 @@ class ALIASIdentifier:
                 neutrals.append(e)
             else:
                 ionized.append(e)
-
-        if neutrals:
-            max_CL_neutral = max(e.confidence for e in neutrals)
-            relative_threshold_n = max_CL_neutral * neutral_threshold
-            for e in neutrals:
-                if e.confidence < relative_threshold_n:
-                    e.detected = False
-        if ionized:
-            max_CL_ionized = max(e.confidence for e in ionized)
-            relative_threshold_i = max_CL_ionized * ionized_threshold
-            for e in ionized:
-                if e.confidence < relative_threshold_i:
-                    e.detected = False
-        if unclassified:
-            max_CL_all = max(e.confidence for e in all_element_ids)
-            relative_threshold_u = max_CL_all * self.relative_cl_threshold
-            for e in unclassified:
-                if e.confidence < relative_threshold_u:
-                    e.detected = False
+        return neutrals, ionized, unclassified
 
     def identify(
         self,
@@ -1386,7 +1475,94 @@ class ALIASIdentifier:
         # Step 0b: Estimate plasma temperature from detected peaks
         self._estimate_plasma_temperature(peaks, corrected_intensity, wl_min, wl_max)
 
-        # Get elements to search
+        search_elements = self._resolve_search_elements()
+        screened = self._apply_screening(search_elements, peaks, wl_min, wl_max, coverage)
+
+        # ── Phase 1: Independent scoring ──────────────────────────────
+        # Use corrected_intensity throughout scoring so continuum doesn't
+        # dominate cosine similarity and NNLS attribution.
+        global_p_snr = self._dispatch_p_snr(corrected_intensity, peaks)
+        candidates = self._score_candidates_phase1(
+            screened, peaks, wavelength, corrected_intensity, wl_min, wl_max, global_p_snr, coverage
+        )
+
+        # ── Phase 1.5: NNLS peak-space mixture attribution ────────────
+        A, peak_intensities_arr = self._attribute_nnls_phase(candidates, peaks, corrected_intensity)
+
+        # ── Phase 1.75: Iron-group pre-subtraction (ChemCam-style) ────
+        self._iron_group_presubtraction(candidates, peaks, A, peak_intensities_arr)
+
+        # ── Phase 2: Global peak competition ──────────────────────────
+        self._run_peak_competition(candidates)
+
+        # ── Phase 3: Rescore & build results ──────────────────────────
+        competition_ran = self.resolving_power >= 2000
+        all_element_ids = []
+
+        for cand in candidates:
+            element_id = self._build_element_id(
+                cand,
+                competition_ran,
+                global_p_snr,
+                peaks,
+                wavelength,
+                corrected_intensity,
+                coverage,
+            )
+            all_element_ids.append(element_id)
+
+        # Apply relative threshold: element CL must be >= max_CL * relative_cl_threshold
+        # This prevents spurious detections when one element dominates.
+        # Set self.relative_cl_threshold = 0 to disable.
+        self._apply_relative_cl_gate(all_element_ids)
+
+        # Split into detected/rejected
+        detected_elements = [e for e in all_element_ids if e.detected]
+        rejected_elements = [e for e in all_element_ids if not e.detected]
+
+        # Count matched peaks (peak matched if any element matched it, detected or rejected)
+        matched_peak_indices = set()
+        for element_id in all_element_ids:  # Use all_element_ids, not just detected
+            for line in element_id.matched_lines:
+                peak_idx = np.argmin(
+                    np.abs(np.array([p[1] for p in peaks]) - line.wavelength_exp_nm)
+                )
+                matched_peak_indices.add(int(peak_idx))
+
+        self._log_self_absorption_summary(peaks, detected_elements)
+
+        # Detection-coverage finalisation: record peak count + emit
+        # summary log line.  Additive telemetry only.
+        coverage.set_n_peaks(len(peaks))
+        coverage.emit_summary()
+
+        base_parameters = {
+            "resolving_power": self.resolving_power,
+            "effective_R": self._effective_R,
+            "global_wl_shift_nm": self._global_wl_shift,
+            "estimated_T_K": self._estimated_T,
+            "T_min_K": self.T_range_K[0],
+            "T_max_K": self.T_range_K[1],
+            "n_e_min_cm3": self.n_e_range_cm3[0],
+            "n_e_max_cm3": self.n_e_range_cm3[1],
+            "intensity_threshold_factor": self.intensity_threshold_factor,
+            "detection_threshold": self.detection_threshold,
+        }
+
+        return ElementIdentificationResult(
+            detected_elements=detected_elements,
+            rejected_elements=rejected_elements,
+            all_elements=all_element_ids,
+            experimental_peaks=peaks,
+            n_peaks=len(peaks),
+            n_matched_peaks=len(matched_peak_indices),
+            n_unmatched_peaks=len(peaks) - len(matched_peak_indices),
+            algorithm="alias",
+            parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
+        )
+
+    def _resolve_search_elements(self) -> List[str]:
+        """Return the element list to search, preferring DB-provided availability."""
         if self.elements is None:
             # Prefer database-provided availability when possible.
             get_available = getattr(self.atomic_db, "get_available_elements", None)
@@ -1395,79 +1571,362 @@ class ALIASIdentifier:
                     available = list(get_available())
                 except Exception:
                     available = []
-                search_elements = available or ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
-            else:
-                search_elements = ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
-        else:
-            search_elements = self.elements
+                return available or ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
+            return ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"]
+        return self.elements
 
-        # Step 0c: Fast screening — restrict to elements with strong-line matches
-        # Skip screening when user explicitly provided a short element list
+    def _apply_screening(
+        self,
+        search_elements: List[str],
+        peaks: List[Tuple[int, float]],
+        wl_min: float,
+        wl_max: float,
+        coverage: "CoverageTracker",
+    ) -> List[str]:
+        """Step 0c: fast-screen candidates and record screened-out zero-matches.
+
+        Skip screening when the user explicitly provided a short element
+        list. Fast-screened-out elements are recorded as zero-match /
+        fingerprint failures so the coverage payload surfaces every
+        candidate the caller asked about.
+
+        We deliberately do *not* record an L2 zero here: fast-screening
+        rejects on "no strong-line match", not on "DB has zero lines in
+        window", and conflating the two would mis-classify the failure
+        layer. Recording an L3 zero (with no L2 row) leaves
+        ``elements_with_zero_peak_matches`` populated -- the smoking gun
+        the task is after -- without falsifying the L2 column. Telemetry
+        is additive; identifier behaviour is unchanged.
+        """
         if self.elements is not None and len(self.elements) <= 10:
             screened = search_elements
         else:
             screened = self._fast_screening(search_elements, peaks, wl_min, wl_max)
 
-        # Record fast-screened-out elements as zero-match / fingerprint
-        # failures so the coverage payload surfaces every candidate the
-        # caller asked about, not just those that survived screening.
-        # We deliberately do *not* record an L2 zero here: fast-screening
-        # rejects on "no strong-line match", not on "DB has zero lines
-        # in window", and conflating the two would mis-classify the
-        # failure layer.  Recording an L3 zero (with no L2 row) leaves
-        # ``elements_with_zero_peak_matches`` populated -- which is the
-        # smoking gun the task is after -- without falsifying the L2
-        # column.  Telemetry is additive; identifier behaviour is
-        # unchanged.
         screened_set = set(screened)
         for element in search_elements:
             if element not in screened_set:
                 coverage.record_peak_matches(element, 0)
                 coverage.record_fingerprint(element, passed=False, score=0.0)
+        return screened
 
-        # ── Phase 1: Independent scoring ──────────────────────────────
-        # Use corrected_intensity throughout scoring so continuum doesn't
-        # dominate cosine similarity and NNLS attribution.
-        global_p_snr = self._dispatch_p_snr(corrected_intensity, peaks)
+    def _score_candidates_phase1(
+        self,
+        screened: List[str],
+        peaks: List[Tuple[int, float]],
+        wavelength: np.ndarray,
+        corrected_intensity: np.ndarray,
+        wl_min: float,
+        wl_max: float,
+        global_p_snr: float,
+        coverage: "CoverageTracker",
+    ) -> List[dict]:
+        """Phase 1: independent per-element scoring, returning the candidate list."""
         candidates: List[dict] = []
-
         for element in screened:
-            element_lines = self._compute_element_emissivities(
-                element, wl_min, wl_max, T_estimated=self._estimated_T
+            cand = self._score_one_candidate_phase1(
+                element,
+                peaks,
+                wavelength,
+                corrected_intensity,
+                wl_min,
+                wl_max,
+                global_p_snr,
+                coverage,
             )
-            # L2 -- per-element line presence in DB (post-alias filter).
-            # alias selects observable lines (A_ki*g_k >= 1e4) and caps
-            # to ``max_lines_per_element`` strongest, so we record the
-            # count the matcher will actually see.
-            coverage.record_db_lines(element, len(element_lines))
-            if not element_lines:
-                # L3/L4 are unreachable when there is nothing to match;
-                # record the zero-state so the summary surfaces it.
-                coverage.record_peak_matches(element, 0)
-                coverage.record_fingerprint(element, passed=False, score=0.0)
-                continue
+            if cand is not None:
+                candidates.append(cand)
+        return candidates
 
-            fused_lines = self._fuse_lines(element_lines, wavelength)
-            if not fused_lines:
-                coverage.record_peak_matches(element, 0)
-                coverage.record_fingerprint(element, passed=False, score=0.0)
-                continue
+    def _score_one_candidate_phase1(
+        self,
+        element: str,
+        peaks: List[Tuple[int, float]],
+        wavelength: np.ndarray,
+        corrected_intensity: np.ndarray,
+        wl_min: float,
+        wl_max: float,
+        global_p_snr: float,
+        coverage: "CoverageTracker",
+    ) -> Optional[dict]:
+        """Score one element in Phase 1, or ``None`` if it has no lines to match."""
+        element_lines = self._compute_element_emissivities(
+            element, wl_min, wl_max, T_estimated=self._estimated_T
+        )
+        # L2 -- per-element line presence in DB (post-alias filter).
+        # alias selects observable lines (A_ki*g_k >= 1e4) and caps
+        # to ``max_lines_per_element`` strongest, so we record the
+        # count the matcher will actually see.
+        coverage.record_db_lines(element, len(element_lines))
+        if not element_lines:
+            # L3/L4 are unreachable when there is nothing to match;
+            # record the zero-state so the summary surfaces it.
+            coverage.record_peak_matches(element, 0)
+            coverage.record_fingerprint(element, passed=False, score=0.0)
+            return None
 
-            matched_mask, wavelength_shifts, matched_peak_idx = self._match_lines(
-                fused_lines, peaks
+        fused_lines = self._fuse_lines(element_lines, wavelength)
+        if not fused_lines:
+            coverage.record_peak_matches(element, 0)
+            coverage.record_fingerprint(element, passed=False, score=0.0)
+            return None
+
+        matched_mask, wavelength_shifts, matched_peak_idx = self._match_lines(fused_lines, peaks)
+        # L3 -- per-element peak match.  ``matched_mask`` is the
+        # bool array of fused lines that paired with any detected
+        # peak inside tolerance.
+        coverage.record_peak_matches(element, int(np.sum(matched_mask)))
+
+        if np.any(matched_mask):
+            emissivity_threshold = self._determine_emissivity_threshold(fused_lines, matched_mask)
+        else:
+            emissivity_threshold = -np.inf
+
+        k_sim, k_rate, k_shift, P_maj, N_expected, N_matched, P_cov = self._compute_scores(
+            fused_lines,
+            matched_mask,
+            matched_peak_idx,
+            wavelength_shifts,
+            corrected_intensity,
+            peaks,
+            emissivity_threshold,
+        )
+
+        P_sig, fill_factor, p_chance, p_tail = self._compute_random_match_significance(
+            peaks=peaks,
+            wavelength=wavelength,
+            N_expected=N_expected,
+            N_matched=N_matched,
+        )
+
+        k_det, CL = self._decide(
+            k_sim,
+            k_rate,
+            k_shift,
+            N_expected,
+            corrected_intensity,
+            peaks,
+            element=element,
+            P_maj=P_maj,
+            P_sig=P_sig,
+            N_matched=N_matched,
+            P_cov=P_cov,
+        )
+
+        return {
+            "element": element,
+            "fused_lines": fused_lines,
+            "matched_mask": matched_mask,
+            "matched_peak_idx": matched_peak_idx,
+            "wavelength_shifts": wavelength_shifts,
+            "emissivity_threshold": emissivity_threshold,
+            "initial_CL": CL,
+            # Cache phase 1 scores for reuse when competition is skipped
+            "scores": (k_sim, k_rate, k_shift, P_maj, N_expected, N_matched, P_cov),
+            "N_matched": N_matched,
+            "P_sig_data": (P_sig, fill_factor, p_chance, p_tail),
+            "k_det": k_det,
+            "P_SNR": global_p_snr,
+        }
+
+    def _attribute_nnls_phase(
+        self,
+        candidates: List[dict],
+        peaks: List[Tuple[int, float]],
+        corrected_intensity: np.ndarray,
+    ) -> Tuple[Optional["np.ndarray"], Optional["np.ndarray"]]:
+        """Phase 1.5: NNLS peak-space mixture attribution.
+
+        Non-negative least squares fit of all candidate templates against
+        observed peak intensities.  Annotates each candidate with:
+          P_mix  — leave-one-out partial R^2 (global)
+          P_local — local explanation score (what fraction of claimed
+                    peaks' intensity does this element actually explain?)
+          sparse_nnls_coeff / nnls_significant — L1-penalized FP suppressor
+        Returns ``(A, peak_intensities_arr)`` for downstream phases.
+        """
+        if not (candidates and peaks):
+            for cand in candidates:
+                cand["P_mix"] = 1.0
+                cand["P_local"] = 1.0
+                cand["sparse_nnls_coeff"] = 0.0
+                cand["nnls_significant"] = False
+            return None, None
+
+        peak_intensities_arr = np.array([corrected_intensity[p[0]] for p in peaks])
+        A = self._dispatch_build_templates(candidates, peaks)
+        P_mix_arr, P_local_arr = self._dispatch_nnls_attribution(A, peak_intensities_arr)
+        sparse_c, nnls_noise = self._dispatch_sparse_nnls(A, peak_intensities_arr)
+
+        for i, cand in enumerate(candidates):
+            cand["P_mix"] = float(P_mix_arr[i])
+            cand["P_local"] = float(P_local_arr[i])
+            cand["sparse_nnls_coeff"] = float(sparse_c[i])
+            cand["nnls_significant"] = float(sparse_c[i]) > nnls_noise
+        return A, peak_intensities_arr
+
+    def _dispatch_build_templates(
+        self, candidates: List[dict], peaks: List[Tuple[int, float]]
+    ) -> "np.ndarray":
+        """Build the NNLS template matrix via the JAX or Python path."""
+        if self.use_jax_template_build:
+            return self._build_nnls_templates_jax_wrapper(candidates, peaks)
+        return self._build_nnls_templates(candidates, peaks)
+
+    def _dispatch_nnls_attribution(
+        self, A: "np.ndarray", peak_intensities_arr: "np.ndarray"
+    ) -> Tuple["np.ndarray", "np.ndarray"]:
+        """Compute (P_mix, P_local) NNLS attribution via the JAX or CPU path."""
+        if self.use_jax_nnls:
+            P_mix_arr, P_local_arr, _ = compute_nnls_attribution_jax(A, peak_intensities_arr)
+        else:
+            P_mix_arr, P_local_arr, _ = self._compute_nnls_attribution(A, peak_intensities_arr)
+        return P_mix_arr, P_local_arr
+
+    def _dispatch_sparse_nnls(
+        self, A: "np.ndarray", peak_intensities_arr: "np.ndarray"
+    ) -> Tuple["np.ndarray", float]:
+        """Sparse L1-penalized NNLS coefficients plus the 10%-of-median noise floor.
+
+        Higher alpha at low RP where blending causes more false sharing.
+        Elements below the noise floor are treated as noise.
+        """
+        sparse_alpha = 0.05 if self.resolving_power < 1000 else 0.01
+        if self.use_jax_nnls:
+            sparse_c, _ = solve_sparse_nnls_jax(A, peak_intensities_arr, alpha=sparse_alpha)
+        else:
+            sparse_c, _ = self._compute_sparse_nnls_scores(
+                A, peak_intensities_arr, alpha=sparse_alpha
             )
-            # L3 -- per-element peak match.  ``matched_mask`` is the
-            # bool array of fused lines that paired with any detected
-            # peak inside tolerance.
-            coverage.record_peak_matches(element, int(np.sum(matched_mask)))
+        # Noise floor: coefficient must exceed 10% of median to be
+        # considered significant — elements below this are noise
+        nonzero_c = sparse_c[sparse_c > 0]
+        nnls_noise = float(np.median(nonzero_c) * 0.1) if len(nonzero_c) > 0 else 0.0
+        return sparse_c, nnls_noise
 
-            if np.any(matched_mask):
-                emissivity_threshold = self._determine_emissivity_threshold(
-                    fused_lines, matched_mask
-                )
+    def _iron_group_presubtraction(
+        self,
+        candidates: List[dict],
+        peaks: List[Tuple[int, float]],
+        A: Optional["np.ndarray"],
+        peak_intensities_arr: Optional["np.ndarray"],
+    ) -> None:
+        """Phase 1.75: subtract iron-group contribution and recompute P_local.
+
+        At low RP, Fe/Mn/Cr/Ti create a dense pseudo-continuum that
+        inflates other elements' NNLS ownership scores.  Subtract their
+        predicted contribution from peak intensities and recompute
+        P_local for non-iron-group elements so the gate discriminates on
+        the residual, not the raw spectrum.
+        """
+        _IRON_GROUP = {"Fe", "Mn", "Cr", "Ti"}
+        if not (candidates and peaks and A is not None and self.resolving_power < 2000):
+            return
+        ig_indices = [i for i, c in enumerate(candidates) if c["element"] in _IRON_GROUP]
+        if not (ig_indices and peak_intensities_arr is not None):
+            return
+
+        c_nnls = self._solve_iron_group_nnls(A, peak_intensities_arr, len(candidates))
+        ig_contribution = np.zeros_like(peak_intensities_arr)
+        for idx in ig_indices:
+            ig_contribution += c_nnls[idx] * A[:, idx]
+
+        # Compute residual peak intensities
+        residual_peaks = np.maximum(peak_intensities_arr - ig_contribution, 0.0)
+        residual_total = float(np.sum(residual_peaks))
+
+        if residual_total > 0:
+            self._recompute_residual_p_local(candidates, A, c_nnls, residual_peaks, _IRON_GROUP)
+
+    def _solve_iron_group_nnls(
+        self, A: "np.ndarray", peak_intensities_arr: "np.ndarray", n_candidates: int
+    ) -> "np.ndarray":
+        """Re-solve NNLS for iron-group coefficients; zeros on solver failure."""
+        c_nnls = np.zeros(n_candidates)
+        try:
+            if self.use_jax_nnls:
+                c_nnls = solve_nnls_jax(A, peak_intensities_arr)
             else:
-                emissivity_threshold = -np.inf
+                from scipy.optimize import nnls as _nnls
 
+                c_nnls, _ = _nnls(A, peak_intensities_arr)
+        except Exception:
+            pass
+        return c_nnls
+
+    @staticmethod
+    def _recompute_residual_p_local(
+        candidates: List[dict],
+        A: "np.ndarray",
+        c_nnls: "np.ndarray",
+        residual_peaks: "np.ndarray",
+        iron_group: set,
+    ) -> None:
+        """Recompute P_local for non-iron-group elements against the residual spectrum."""
+        for i, cand in enumerate(candidates):
+            if cand["element"] in iron_group:
+                continue
+            claimed = A[:, i] > 1e-6
+            if not np.any(claimed):
+                continue
+            obs_residual = np.sum(residual_peaks[claimed])
+            if obs_residual <= 0:
+                cand["P_local"] = 0.0
+                continue
+            elem_contrib = np.sum(A[claimed, i] * c_nnls[i])
+            cand["P_local"] = float(np.clip(elem_contrib / obs_residual, 0.0, 1.0))
+
+    def _run_peak_competition(self, candidates: List[dict]) -> None:
+        """Phase 2: global winner-take-all peak competition (RP >= 2000 only).
+
+        Only active at RP >= 2000 where peaks are narrow enough for
+        meaningful exclusivity.  At low RP (broadband spectrometers),
+        shared peaks are the norm and winner-take-all competition causes
+        false negatives for real minor elements.
+        """
+        if self.resolving_power < 2000:
+            return
+        peak_claims: dict = defaultdict(list)
+
+        for c_idx, cand in enumerate(candidates):
+            mask = cand["matched_mask"]
+            pidx_arr = cand["matched_peak_idx"]
+            for l_idx in range(len(mask)):
+                if mask[l_idx]:
+                    pidx = int(pidx_arr[l_idx])
+                    peak_claims[pidx].append((cand["initial_CL"], c_idx, l_idx))
+
+        # Resolve: highest initial CL wins; losers get unmatched
+        for pidx, claims in peak_claims.items():
+            if len(claims) <= 1:
+                continue
+            claims.sort(key=lambda x: x[0], reverse=True)
+            for i in range(1, len(claims)):
+                _, loser_c, loser_l = claims[i]
+                candidates[loser_c]["matched_mask"][loser_l] = False
+                candidates[loser_c]["matched_peak_idx"][loser_l] = -1
+                candidates[loser_c]["wavelength_shifts"][loser_l] = 0.0
+
+    def _build_element_id(
+        self,
+        cand: dict,
+        competition_ran: bool,
+        global_p_snr: float,
+        peaks: List[Tuple[int, float]],
+        wavelength: np.ndarray,
+        corrected_intensity: np.ndarray,
+        coverage: "CoverageTracker",
+    ) -> "ElementIdentification":
+        """Phase 3: rescore one candidate, apply post-CL gates, build its ElementIdentification."""
+        element = cand["element"]
+        fused_lines = cand["fused_lines"]
+        matched_mask = cand["matched_mask"]
+        matched_peak_idx = cand["matched_peak_idx"]
+        wavelength_shifts = cand["wavelength_shifts"]
+        emissivity_threshold = cand["emissivity_threshold"]
+
+        if competition_ran:
+            # Rescore with post-competition matches
             k_sim, k_rate, k_shift, P_maj, N_expected, N_matched, P_cov = self._compute_scores(
                 fused_lines,
                 matched_mask,
@@ -1498,398 +1957,256 @@ class ALIASIdentifier:
                 N_matched=N_matched,
                 P_cov=P_cov,
             )
-
-            candidates.append(
-                {
-                    "element": element,
-                    "fused_lines": fused_lines,
-                    "matched_mask": matched_mask,
-                    "matched_peak_idx": matched_peak_idx,
-                    "wavelength_shifts": wavelength_shifts,
-                    "emissivity_threshold": emissivity_threshold,
-                    "initial_CL": CL,
-                    # Cache phase 1 scores for reuse when competition is skipped
-                    "scores": (k_sim, k_rate, k_shift, P_maj, N_expected, N_matched, P_cov),
-                    "N_matched": N_matched,
-                    "P_sig_data": (P_sig, fill_factor, p_chance, p_tail),
-                    "k_det": k_det,
-                    "P_SNR": global_p_snr,
-                }
-            )
-
-        # ── Phase 1.5: NNLS peak-space mixture attribution ────────────
-        # Non-negative least squares fit of all candidate templates against
-        # observed peak intensities.  Returns three metrics:
-        #   P_mix  — leave-one-out partial R^2 (global)
-        #   P_local — local explanation score (what fraction of claimed
-        #             peaks' intensity does this element actually explain?)
-        peak_intensities_arr = None
-        A = None
-        if candidates and peaks:
-            peak_intensities_arr = np.array([corrected_intensity[p[0]] for p in peaks])
-            if self.use_jax_template_build:
-                A = self._build_nnls_templates_jax_wrapper(candidates, peaks)
-            else:
-                A = self._build_nnls_templates(candidates, peaks)
-            if self.use_jax_nnls:
-                P_mix_arr, P_local_arr, _ = compute_nnls_attribution_jax(A, peak_intensities_arr)
-            else:
-                P_mix_arr, P_local_arr, _ = self._compute_nnls_attribution(A, peak_intensities_arr)
-
-            # Sparse NNLS: L1-penalized fit suppresses diffuse FPs
-            # Higher alpha at low RP where blending causes more false sharing
-            sparse_alpha = 0.05 if self.resolving_power < 1000 else 0.01
-            if self.use_jax_nnls:
-                sparse_c, _ = solve_sparse_nnls_jax(A, peak_intensities_arr, alpha=sparse_alpha)
-            else:
-                sparse_c, _ = self._compute_sparse_nnls_scores(
-                    A, peak_intensities_arr, alpha=sparse_alpha
-                )
-            # Noise floor: coefficient must exceed 10% of median to be
-            # considered significant — elements below this are noise
-            nonzero_c = sparse_c[sparse_c > 0]
-            nnls_noise = float(np.median(nonzero_c) * 0.1) if len(nonzero_c) > 0 else 0.0
-
-            for i, cand in enumerate(candidates):
-                cand["P_mix"] = float(P_mix_arr[i])
-                cand["P_local"] = float(P_local_arr[i])
-                cand["sparse_nnls_coeff"] = float(sparse_c[i])
-                cand["nnls_significant"] = float(sparse_c[i]) > nnls_noise
         else:
-            for cand in candidates:
-                cand["P_mix"] = 1.0
-                cand["P_local"] = 1.0
-                cand["sparse_nnls_coeff"] = 0.0
-                cand["nnls_significant"] = False
+            # No competition — reuse phase 1 scores
+            k_sim, k_rate, k_shift, P_maj, N_expected, N_matched, P_cov = cand["scores"]
+            P_sig, fill_factor, p_chance, p_tail = cand["P_sig_data"]
+            k_det = cand["k_det"]
+            CL = cand["initial_CL"]
 
-        # ── Phase 1.75: Iron-group pre-subtraction (ChemCam-style) ────
-        # At low RP, Fe/Mn/Cr/Ti create a dense pseudo-continuum that
-        # inflates other elements' NNLS ownership scores.  Subtract
-        # their predicted contribution from peak intensities and
-        # recompute P_local for non-iron-group elements so the gate
-        # discriminates on the residual, not the raw spectrum.
-        _IRON_GROUP = {"Fe", "Mn", "Cr", "Ti"}
-        if candidates and peaks and A is not None and self.resolving_power < 2000:
-            ig_indices = [i for i, c in enumerate(candidates) if c["element"] in _IRON_GROUP]
-            if ig_indices and peak_intensities_arr is not None:
-                ig_contribution = np.zeros_like(peak_intensities_arr)
-                c_nnls = np.zeros(len(candidates))
-                # Re-solve NNLS to get coefficients
-                try:
-                    if self.use_jax_nnls:
-                        c_nnls = solve_nnls_jax(A, peak_intensities_arr)
-                    else:
-                        from scipy.optimize import nnls as _nnls
+        P_SNR = cand["P_SNR"] if not competition_ran else global_p_snr
 
-                        c_nnls, _ = _nnls(A, peak_intensities_arr)
-                except Exception:
-                    pass
-                for idx in ig_indices:
-                    ig_contribution += c_nnls[idx] * A[:, idx]
+        P_mix = cand.get("P_mix", 1.0)
+        P_local = cand.get("P_local", 1.0)
 
-                # Compute residual peak intensities
-                residual_peaks = np.maximum(peak_intensities_arr - ig_contribution, 0.0)
-                residual_total = float(np.sum(residual_peaks))
+        R_rat = self._compute_ratio_consistency(
+            fused_lines,
+            matched_mask,
+            matched_peak_idx,
+            corrected_intensity,
+            peaks,
+        )
 
-                if residual_total > 0:
-                    # Recompute P_local for non-iron-group elements against residual
-                    for i, cand in enumerate(candidates):
-                        if cand["element"] in _IRON_GROUP:
-                            continue
-                        claimed = A[:, i] > 1e-6
-                        if not np.any(claimed):
-                            continue
-                        obs_residual = np.sum(residual_peaks[claimed])
-                        if obs_residual <= 0:
-                            cand["P_local"] = 0.0
-                            continue
-                        elem_contrib = np.sum(A[claimed, i] * c_nnls[i])
-                        cand["P_local"] = float(np.clip(elem_contrib / obs_residual, 0.0, 1.0))
+        CL, boltz_factor, boltz_r2 = self._apply_post_cl_gates(
+            CL,
+            cand,
+            element,
+            fused_lines,
+            matched_mask,
+            matched_peak_idx,
+            corrected_intensity,
+            peaks,
+            P_mix,
+            P_local,
+            R_rat,
+            N_expected,
+            N_matched,
+            k_sim,
+        )
 
-        # ── Phase 2: Global peak competition ──────────────────────────
-        # Only active at RP >= 2000 where peaks are narrow enough for
-        # meaningful exclusivity.  At low RP (broadband spectrometers),
-        # shared peaks are the norm and winner-take-all competition
-        # causes false negatives for real minor elements.
-        if self.resolving_power >= 2000:
-            peak_claims: dict = defaultdict(list)
+        # Adaptive detection threshold: elements with few expected
+        # lines have higher false-match rates at low RP and need a
+        # proportionally higher CL to be considered detected.
+        adaptive_dt = self.detection_threshold
+        if N_expected > 0 and N_expected < 10:
+            adaptive_dt *= min(3.0, math.sqrt(10.0 / N_expected))
+        detected = CL >= adaptive_dt
 
-            for c_idx, cand in enumerate(candidates):
-                mask = cand["matched_mask"]
-                pidx_arr = cand["matched_peak_idx"]
-                for l_idx in range(len(mask)):
-                    if mask[l_idx]:
-                        pidx = int(pidx_arr[l_idx])
-                        peak_claims[pidx].append((cand["initial_CL"], c_idx, l_idx))
+        # Physics-grounded hard gates (Task wzus):
+        # (a) Require at least three matched lines, rejecting single-line
+        #     and doublet-only identifications.
+        # (b) Require Boltzmann R^2 >= boltzmann_r2_min only when at least
+        #     three matched lines make a regression meaningful.
+        min_required_matches = 3
+        if N_matched < min_required_matches:
+            detected = False
+        if self._r2_gate_rejects(boltz_r2, N_matched):
+            detected = False
 
-            # Resolve: highest initial CL wins; losers get unmatched
-            for pidx, claims in peak_claims.items():
-                if len(claims) <= 1:
-                    continue
-                claims.sort(key=lambda x: x[0], reverse=True)
-                for i in range(1, len(claims)):
-                    _, loser_c, loser_l = claims[i]
-                    candidates[loser_c]["matched_mask"][loser_l] = False
-                    candidates[loser_c]["matched_peak_idx"][loser_l] = -1
-                    candidates[loser_c]["wavelength_shifts"][loser_l] = 0.0
+        # L4 -- per-element fingerprint pass.  alias's effective
+        # "fingerprint" is the post-gate CL compared to
+        # ``adaptive_dt`` (plus the hard gates above).  Record the
+        # final boolean and the score+floor for transparency.
+        coverage.record_fingerprint(
+            element,
+            passed=bool(detected),
+            score=float(CL),
+            floor=float(adaptive_dt),
+        )
 
-        # ── Phase 3: Rescore & build results ──────────────────────────
-        competition_ran = self.resolving_power >= 2000
-        all_element_ids = []
+        matched_lines, unmatched_lines = self._build_identified_lines(
+            fused_lines, matched_mask, matched_peak_idx, peaks, corrected_intensity, element, k_sim
+        )
 
-        for cand in candidates:
-            element = cand["element"]
-            fused_lines = cand["fused_lines"]
-            matched_mask = cand["matched_mask"]
-            matched_peak_idx = cand["matched_peak_idx"]
-            wavelength_shifts = cand["wavelength_shifts"]
-            emissivity_threshold = cand["emissivity_threshold"]
+        return ElementIdentification(
+            element=element,
+            detected=detected,
+            score=k_det,
+            confidence=CL,
+            n_matched_lines=int(np.sum(matched_mask)),
+            n_total_lines=len(fused_lines),
+            matched_lines=matched_lines,
+            unmatched_lines=unmatched_lines,
+            metadata={
+                "k_sim": k_sim,
+                "k_rate": k_rate,
+                "k_shift": k_shift,
+                "k_det": k_det,
+                "emissivity_threshold": emissivity_threshold,
+                "N_expected": N_expected,
+                "N_matched": N_matched,
+                "P_maj": P_maj,
+                "P_ab": self._compute_P_ab(element),
+                "P_cov": P_cov,
+                "P_mix": P_mix,
+                "P_local": P_local,
+                "R_rat": R_rat,
+                "P_SNR": P_SNR,
+                "P_sig": P_sig,
+                "p_tail": p_tail,
+                "p_chance": p_chance,
+                "fill_factor": fill_factor,
+                "N_penalty": min(1.0, math.sqrt(N_expected / 5.0)) if N_expected > 0 else 0.0,
+                "boltzmann_factor": boltz_factor,
+                "boltzmann_r2": boltz_r2,
+                "min_required_matches": min_required_matches,
+                "sparse_nnls_coeff": cand.get("sparse_nnls_coeff", 0.0),
+                "nnls_significant": cand.get("nnls_significant", True),
+                "effective_R": self._effective_R,
+                "global_wl_shift": self._global_wl_shift,
+                "estimated_T": self._estimated_T,
+            },
+        )
 
-            if competition_ran:
-                # Rescore with post-competition matches
-                k_sim, k_rate, k_shift, P_maj, N_expected, N_matched, P_cov = self._compute_scores(
-                    fused_lines,
-                    matched_mask,
-                    matched_peak_idx,
-                    wavelength_shifts,
-                    corrected_intensity,
-                    peaks,
-                    emissivity_threshold,
-                )
+    def _apply_post_cl_gates(
+        self,
+        CL: float,
+        cand: dict,
+        element: str,
+        fused_lines: List[dict],
+        matched_mask: np.ndarray,
+        matched_peak_idx: np.ndarray,
+        corrected_intensity: np.ndarray,
+        peaks: List[Tuple[int, float]],
+        P_mix: float,
+        P_local: float,
+        R_rat: float,
+        N_expected: int,
+        N_matched: int,
+        k_sim: float,
+    ) -> Tuple[float, float, float]:
+        """Apply the five post-CL discriminator gates; return ``(CL, boltz_factor, boltz_r2)``.
 
-                P_sig, fill_factor, p_chance, p_tail = self._compute_random_match_significance(
-                    peaks=peaks,
-                    wavelength=wavelength,
-                    N_expected=N_expected,
-                    N_matched=N_matched,
-                )
+        Two NNLS-derived gates suppress false positives whose peaks ride
+        on a dominant element's lines:
 
-                k_det, CL = self._decide(
-                    k_sim,
-                    k_rate,
-                    k_shift,
-                    N_expected,
-                    corrected_intensity,
-                    peaks,
-                    element=element,
-                    P_maj=P_maj,
-                    P_sig=P_sig,
-                    N_matched=N_matched,
-                    P_cov=P_cov,
+        1. P_local (NNLS peak ownership): fraction of claimed peaks'
+           intensity that this element's NNLS coefficient explains.
+           FP elements ride on dominant-element peaks → P_local ~ 0.
+        2. P_mix (leave-one-out partial R²): how much total spectrum
+           energy is uniquely attributable to this element.
+           FP elements add nothing → P_mix ~ 0.
+
+        R_rat (intensity-ratio consistency) provides a soft additional
+        check: do observed ratios match predicted emissivity ratios?
+
+        NOTE: P_sig (binomial significance) is deliberately excluded.
+        At low RP (high fill factor), line-rich elements like Fe have
+        match counts BELOW random expectation, giving P_sig → 0 for true
+        positives. P_sig only works at high RP / low fill factor.
+        """
+        # Gate 1: P_local — soft ramp with 0.25 floor
+        CL *= float(np.clip(P_local + 0.25, 0.25, 1.0))
+
+        # Hard rejection: negligible NNLS ownership means this element's
+        # peaks are fully explained by other elements.
+        # Adaptive threshold: line-rich elements (Fe, Ca, Mn) overlap
+        # heavily at low RP, driving P_local artificially low even for
+        # true positives.  Use a softer threshold for them.
+        # Strong multi-line evidence (high match rate + decent k_sim)
+        # can bypass P_local entirely — the element matched most of
+        # its lines with consistent intensities.
+        p_local_threshold = 0.01 if N_expected >= 10 else 0.05
+        high_match_evidence = N_expected >= 5 and N_matched >= 0.7 * N_expected and k_sim > 0.3
+        if P_local < p_local_threshold and not high_match_evidence:
+            CL = 0.0
+
+        # Gate 2: P_mix — moderate gate, 0.2 floor
+        # True minor elements have P_mix ~0.02-0.10, FPs have ~0.000-0.005
+        CL *= float(np.clip(0.2 + 8.0 * P_mix, 0.2, 1.0))
+
+        # Gate 3: R_rat — soft consistency check (0.5 min, 1.0 max)
+        CL *= 0.5 + 0.5 * R_rat
+
+        # Gate 4: Boltzmann consistency — verify matched lines follow
+        # ln(I·λ/gA) vs E_k with physically reasonable temperature.
+        #
+        # Bead CF-LIBS-improved-n3rf.1: Detective C established that
+        # on Vrabel Si-positive spectra the Boltzmann R² collapses to
+        # 0.000–0.220 because the Si I 288.16 nm resonance line is
+        # heavily self-absorbed, dragging its ln(I·λ/gA) off the
+        # linear fit. The candidate dict carries ``nnls_significant``;
+        # the consistency check forwards it to the internal
+        # ``_apply_resonance_filter`` seam (arch candidate 5) so the
+        # resonance-line decision is no longer a public kwarg on the
+        # check's signature.
+        boltz_factor, boltz_r2 = self._boltzmann_consistency_check(
+            element,
+            fused_lines,
+            matched_mask,
+            matched_peak_idx,
+            corrected_intensity,
+            peaks,
+            candidate=cand,
+        )
+        CL *= boltz_factor
+
+        # Gate 5: Sparse NNLS significance (primary discriminator at low RP)
+        # At RP<2000, peak-matching CL cannot discriminate (TP/FP overlap).
+        # The sparse NNLS coefficient is the strongest false-positive
+        # suppressor: elements zeroed out by L1 penalty are truly absent.
+        nnls_sig = cand.get("nnls_significant", True)
+        if not nnls_sig and self.resolving_power < 2000:
+            CL = 0.0
+
+        return CL, boltz_factor, boltz_r2
+
+    @staticmethod
+    def _build_identified_lines(
+        fused_lines: List[dict],
+        matched_mask: np.ndarray,
+        matched_peak_idx: np.ndarray,
+        peaks: List[Tuple[int, float]],
+        corrected_intensity: np.ndarray,
+        element: str,
+        k_sim: float,
+    ) -> Tuple[list, list]:
+        """Build (matched_lines, unmatched_lines) for a candidate's fused lines.
+
+        Reuse peak indices from matching to avoid re-selection outside window.
+        """
+        matched_lines = []
+        unmatched_lines = []
+        for i, line_data in enumerate(fused_lines):
+            trans = line_data["transition"]
+            if matched_mask[i]:
+                pidx = matched_peak_idx[i]
+                matched_lines.append(
+                    IdentifiedLine(
+                        wavelength_exp_nm=peaks[pidx][1],
+                        wavelength_th_nm=line_data["wavelength_nm"],
+                        element=element,
+                        ionization_stage=trans.ionization_stage,
+                        intensity_exp=corrected_intensity[peaks[pidx][0]],
+                        emissivity_th=line_data["avg_emissivity"],
+                        transition=trans,
+                        correlation=k_sim,
+                    )
                 )
             else:
-                # No competition — reuse phase 1 scores
-                k_sim, k_rate, k_shift, P_maj, N_expected, N_matched, P_cov = cand["scores"]
-                P_sig, fill_factor, p_chance, p_tail = cand["P_sig_data"]
-                k_det = cand["k_det"]
-                CL = cand["initial_CL"]
+                unmatched_lines.append(trans)
+        return matched_lines, unmatched_lines
 
-            P_SNR = cand["P_SNR"] if not competition_ran else global_p_snr
+    def _log_self_absorption_summary(
+        self, peaks: List[Tuple[int, float]], detected_elements: list
+    ) -> None:
+        """Emit the structured self-absorption damping summary log line.
 
-            # ── Post-CL discriminators ──────────────────────────────────
-            # Two NNLS-derived gates suppress false positives whose peaks
-            # ride on a dominant element's lines:
-            #
-            # 1. P_local (NNLS peak ownership): fraction of claimed peaks'
-            #    intensity that this element's NNLS coefficient explains.
-            #    FP elements ride on dominant-element peaks → P_local ~ 0.
-            # 2. P_mix (leave-one-out partial R²): how much total spectrum
-            #    energy is uniquely attributable to this element.
-            #    FP elements add nothing → P_mix ~ 0.
-            #
-            # R_rat (intensity-ratio consistency) provides a soft additional
-            # check: do observed ratios match predicted emissivity ratios?
-            #
-            # NOTE: P_sig (binomial significance) is deliberately excluded.
-            # At low RP (high fill factor), line-rich elements like Fe have
-            # match counts BELOW random expectation, giving P_sig → 0 for
-            # true positives. P_sig only works at high RP / low fill factor.
-
-            P_mix = cand.get("P_mix", 1.0)
-            P_local = cand.get("P_local", 1.0)
-
-            R_rat = self._compute_ratio_consistency(
-                fused_lines,
-                matched_mask,
-                matched_peak_idx,
-                corrected_intensity,
-                peaks,
-            )
-
-            # Post-CL discriminators — suppress false positives whose peaks
-            # ride on a dominant element's lines.
-
-            # Gate 1: P_local — soft ramp with 0.25 floor
-            CL *= float(np.clip(P_local + 0.25, 0.25, 1.0))
-
-            # Hard rejection: negligible NNLS ownership means this element's
-            # peaks are fully explained by other elements.
-            # Adaptive threshold: line-rich elements (Fe, Ca, Mn) overlap
-            # heavily at low RP, driving P_local artificially low even for
-            # true positives.  Use a softer threshold for them.
-            # Strong multi-line evidence (high match rate + decent k_sim)
-            # can bypass P_local entirely — the element matched most of
-            # its lines with consistent intensities.
-            p_local_threshold = 0.01 if N_expected >= 10 else 0.05
-            high_match_evidence = N_expected >= 5 and N_matched >= 0.7 * N_expected and k_sim > 0.3
-            if P_local < p_local_threshold and not high_match_evidence:
-                CL = 0.0
-
-            # Gate 2: P_mix — moderate gate, 0.2 floor
-            # True minor elements have P_mix ~0.02-0.10, FPs have ~0.000-0.005
-            CL *= float(np.clip(0.2 + 8.0 * P_mix, 0.2, 1.0))
-
-            # Gate 3: R_rat — soft consistency check (0.5 min, 1.0 max)
-            CL *= 0.5 + 0.5 * R_rat
-
-            # Gate 4: Boltzmann consistency — verify matched lines follow
-            # ln(I·λ/gA) vs E_k with physically reasonable temperature.
-            #
-            # Bead CF-LIBS-improved-n3rf.1: Detective C established that
-            # on Vrabel Si-positive spectra the Boltzmann R² collapses to
-            # 0.000–0.220 because the Si I 288.16 nm resonance line is
-            # heavily self-absorbed, dragging its ln(I·λ/gA) off the
-            # linear fit. The candidate dict carries ``nnls_significant``;
-            # the consistency check forwards it to the internal
-            # ``_apply_resonance_filter`` seam (arch candidate 5) so the
-            # resonance-line decision is no longer a public kwarg on the
-            # check's signature.
-            boltz_factor, boltz_r2 = self._boltzmann_consistency_check(
-                element,
-                fused_lines,
-                matched_mask,
-                matched_peak_idx,
-                corrected_intensity,
-                peaks,
-                candidate=cand,
-            )
-            CL *= boltz_factor
-
-            # Gate 5: Sparse NNLS significance (primary discriminator at low RP)
-            # At RP<2000, peak-matching CL cannot discriminate (TP/FP overlap).
-            # The sparse NNLS coefficient is the strongest false-positive
-            # suppressor: elements zeroed out by L1 penalty are truly absent.
-            nnls_sig = cand.get("nnls_significant", True)
-            if not nnls_sig and self.resolving_power < 2000:
-                CL = 0.0
-
-            # Adaptive detection threshold: elements with few expected
-            # lines have higher false-match rates at low RP and need a
-            # proportionally higher CL to be considered detected.
-            adaptive_dt = self.detection_threshold
-            if N_expected > 0 and N_expected < 10:
-                adaptive_dt *= min(3.0, math.sqrt(10.0 / N_expected))
-            detected = CL >= adaptive_dt
-
-            # Physics-grounded hard gates (Task wzus):
-            # (a) Require at least three matched lines, rejecting single-line
-            #     and doublet-only identifications.
-            # (b) Require Boltzmann R^2 >= boltzmann_r2_min only when at least
-            #     three matched lines make a regression meaningful.
-            min_required_matches = 3
-            if N_matched < min_required_matches:
-                detected = False
-            if self._r2_gate_rejects(boltz_r2, N_matched):
-                detected = False
-
-            # L4 -- per-element fingerprint pass.  alias's effective
-            # "fingerprint" is the post-gate CL compared to
-            # ``adaptive_dt`` (plus the hard gates above).  Record the
-            # final boolean and the score+floor for transparency.
-            coverage.record_fingerprint(
-                element,
-                passed=bool(detected),
-                score=float(CL),
-                floor=float(adaptive_dt),
-            )
-
-            # Create IdentifiedLine objects for matched lines
-            # Reuse peak indices from matching to avoid re-selection outside window
-            matched_lines = []
-            unmatched_lines = []
-            for i, line_data in enumerate(fused_lines):
-                trans = line_data["transition"]
-                if matched_mask[i]:
-                    pidx = matched_peak_idx[i]
-                    matched_lines.append(
-                        IdentifiedLine(
-                            wavelength_exp_nm=peaks[pidx][1],
-                            wavelength_th_nm=line_data["wavelength_nm"],
-                            element=element,
-                            ionization_stage=trans.ionization_stage,
-                            intensity_exp=corrected_intensity[peaks[pidx][0]],
-                            emissivity_th=line_data["avg_emissivity"],
-                            transition=trans,
-                            correlation=k_sim,
-                        )
-                    )
-                else:
-                    unmatched_lines.append(trans)
-
-            element_id = ElementIdentification(
-                element=element,
-                detected=detected,
-                score=k_det,
-                confidence=CL,
-                n_matched_lines=int(np.sum(matched_mask)),
-                n_total_lines=len(fused_lines),
-                matched_lines=matched_lines,
-                unmatched_lines=unmatched_lines,
-                metadata={
-                    "k_sim": k_sim,
-                    "k_rate": k_rate,
-                    "k_shift": k_shift,
-                    "k_det": k_det,
-                    "emissivity_threshold": emissivity_threshold,
-                    "N_expected": N_expected,
-                    "N_matched": N_matched,
-                    "P_maj": P_maj,
-                    "P_ab": self._compute_P_ab(element),
-                    "P_cov": P_cov,
-                    "P_mix": P_mix,
-                    "P_local": P_local,
-                    "R_rat": R_rat,
-                    "P_SNR": P_SNR,
-                    "P_sig": P_sig,
-                    "p_tail": p_tail,
-                    "p_chance": p_chance,
-                    "fill_factor": fill_factor,
-                    "N_penalty": min(1.0, math.sqrt(N_expected / 5.0)) if N_expected > 0 else 0.0,
-                    "boltzmann_factor": boltz_factor,
-                    "boltzmann_r2": boltz_r2,
-                    "min_required_matches": min_required_matches,
-                    "sparse_nnls_coeff": cand.get("sparse_nnls_coeff", 0.0),
-                    "nnls_significant": cand.get("nnls_significant", True),
-                    "effective_R": self._effective_R,
-                    "global_wl_shift": self._global_wl_shift,
-                    "estimated_T": self._estimated_T,
-                },
-            )
-
-            all_element_ids.append(element_id)
-
-        # Apply relative threshold: element CL must be >= max_CL * relative_cl_threshold
-        # This prevents spurious detections when one element dominates.
-        # Set self.relative_cl_threshold = 0 to disable.
-        self._apply_relative_cl_gate(all_element_ids)
-
-        # Split into detected/rejected
-        detected_elements = [e for e in all_element_ids if e.detected]
-        rejected_elements = [e for e in all_element_ids if not e.detected]
-
-        # Count matched peaks (peak matched if any element matched it, detected or rejected)
-        matched_peak_indices = set()
-        for element_id in all_element_ids:  # Use all_element_ids, not just detected
-            for line in element_id.matched_lines:
-                peak_idx = np.argmin(
-                    np.abs(np.array([p[1] for p in peaks]) - line.wavelength_exp_nm)
-                )
-                matched_peak_indices.add(int(peak_idx))
-
-        # Structured log line for the self-absorption damping path. Operators
-        # debugging "why is Si missed in soil spectra" need to see this even
-        # at INFO level — addresses the user's transparency complaint that
-        # the hardcoded ``SA_DAMPING = 0.3`` was applied silently.
+        Operators debugging "why is Si missed in soil spectra" need to see
+        this even at INFO level — addresses the user's transparency
+        complaint that the hardcoded ``SA_DAMPING = 0.3`` was applied
+        silently.
+        """
         if self.self_absorption_aware:
             if self._sa_n_damped_lines > 0:
                 logger.info(
@@ -1923,36 +2240,6 @@ class ALIASIdentifier:
                 len(peaks),
                 len(detected_elements),
             )
-
-        # Detection-coverage finalisation: record peak count + emit
-        # summary log line.  Additive telemetry only.
-        coverage.set_n_peaks(len(peaks))
-        coverage.emit_summary()
-
-        base_parameters = {
-            "resolving_power": self.resolving_power,
-            "effective_R": self._effective_R,
-            "global_wl_shift_nm": self._global_wl_shift,
-            "estimated_T_K": self._estimated_T,
-            "T_min_K": self.T_range_K[0],
-            "T_max_K": self.T_range_K[1],
-            "n_e_min_cm3": self.n_e_range_cm3[0],
-            "n_e_max_cm3": self.n_e_range_cm3[1],
-            "intensity_threshold_factor": self.intensity_threshold_factor,
-            "detection_threshold": self.detection_threshold,
-        }
-
-        return ElementIdentificationResult(
-            detected_elements=detected_elements,
-            rejected_elements=rejected_elements,
-            all_elements=all_element_ids,
-            experimental_peaks=peaks,
-            n_peaks=len(peaks),
-            n_matched_peaks=len(matched_peak_indices),
-            n_unmatched_peaks=len(peaks) - len(matched_peak_indices),
-            algorithm="alias",
-            parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
-        )
 
     def _detect_peaks(
         self, wavelength: np.ndarray, intensity: np.ndarray
@@ -2027,24 +2314,7 @@ class ALIASIdentifier:
 
         peak_wls = np.array([p[1] for p in peaks])
 
-        # Get strong reference lines from common LIBS elements
-        reference_elements = ["Fe", "Ca", "Mg", "Ti", "Al", "Cu", "Na", "Si", "Cr", "Mn"]
-        kT_ref = KB_EV * self.reference_temperature
-
-        ref_lines = []
-        for el in reference_elements:
-            for ion_stage in [1, 2]:
-                try:
-                    trans = self.atomic_db.get_transitions(
-                        el, ion_stage, wavelength_min=wl_min, wavelength_max=wl_max
-                    )
-                    if trans:
-                        for t in trans:
-                            strength = t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref)
-                            ref_lines.append((t.wavelength_nm, strength, el))
-                except (KeyError, ValueError, AttributeError):
-                    continue
-
+        ref_lines = self._collect_calibration_ref_lines(wl_min, wl_max)
         if not ref_lines:
             self._global_wl_shift = 0.0
             self._effective_R = self.resolving_power
@@ -2054,17 +2324,7 @@ class ALIASIdentifier:
         ref_lines.sort(key=lambda x: x[1], reverse=True)
         top_refs = ref_lines[:30]
 
-        # For each reference line, find the nearest peak using a generous
-        # initial tolerance (R=1000, ~0.4nm at 400nm)
-        offsets = []
-        for ref_wl, _strength, _el in top_refs:
-            dists = peak_wls - ref_wl
-            abs_dists = np.abs(dists)
-            generous_tol = ref_wl / 1000.0  # R=1000
-            within = abs_dists <= generous_tol
-            if np.any(within):
-                best_idx = np.argmin(abs_dists)
-                offsets.append(float(dists[best_idx]))
+        offsets = self._calibration_offsets(top_refs, peak_wls)
 
         if len(offsets) < 3:
             self._global_wl_shift = 0.0
@@ -2087,6 +2347,49 @@ class ALIASIdentifier:
         else:
             # Perfect calibration — use nominal R
             self._effective_R = self.resolving_power
+
+    def _collect_calibration_ref_lines(self, wl_min: float, wl_max: float) -> list:
+        """Collect ``(wavelength_nm, strength, element)`` reference lines for calibration.
+
+        Strong reference lines from common LIBS elements (both neutral and
+        singly-ionized) ranked by Boltzmann-weighted strength at the
+        reference temperature.
+        """
+        reference_elements = ["Fe", "Ca", "Mg", "Ti", "Al", "Cu", "Na", "Si", "Cr", "Mn"]
+        kT_ref = KB_EV * self.reference_temperature
+
+        ref_lines = []
+        for el in reference_elements:
+            for ion_stage in [1, 2]:
+                try:
+                    trans = self.atomic_db.get_transitions(
+                        el, ion_stage, wavelength_min=wl_min, wavelength_max=wl_max
+                    )
+                    if trans:
+                        for t in trans:
+                            strength = t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref)
+                            ref_lines.append((t.wavelength_nm, strength, el))
+                except (KeyError, ValueError, AttributeError):
+                    continue
+        return ref_lines
+
+    @staticmethod
+    def _calibration_offsets(top_refs: list, peak_wls: np.ndarray) -> list:
+        """Find peak-minus-reference offsets within a generous (R=1000) tolerance.
+
+        For each reference line, find the nearest peak using a generous
+        initial tolerance (R=1000, ~0.4nm at 400nm).
+        """
+        offsets = []
+        for ref_wl, _strength, _el in top_refs:
+            dists = peak_wls - ref_wl
+            abs_dists = np.abs(dists)
+            generous_tol = ref_wl / 1000.0  # R=1000
+            within = abs_dists <= generous_tol
+            if np.any(within):
+                best_idx = np.argmin(abs_dists)
+                offsets.append(float(dists[best_idx]))
+        return offsets
 
     def _estimate_plasma_temperature(
         self,
@@ -2123,181 +2426,288 @@ class ALIASIdentifier:
         probe_elements = ["Fe", "Ti", "Cr", "Ca", "Mn", "Ni", "V", "Cu", "Mg", "Si", "Al"]
         delta_lambda = 0.5 * (wl_min + wl_max) / max(self._effective_R or self.resolving_power, 500)
 
-        # ------------------------------------------------------------------
-        # Robust mode (opt-in, CF-LIBS-improved-762f): collect candidate T_K
-        # from EVERY element using weighted regression, then accept the
-        # cross-element median if 3+ elements fall within a 2000 K window.
-        # See ``_estimate_T_robust`` below for the per-element fit.
-        # ------------------------------------------------------------------
+        # Pass 1: slope-fit strategy governed by temperature_estimator_mode.
         if self.temperature_estimator_mode == "robust":
-            robust_candidates: List[Tuple[str, float, float, int]] = []
-            for probe_el in probe_elements:
-                cand = self._estimate_T_single_element_robust(
-                    probe_el,
-                    peak_wls,
-                    peak_intensities,
-                    wl_min,
-                    wl_max,
-                    delta_lambda,
-                )
-                if cand is not None:
-                    T_K, r_sq, n_lines = cand
-                    robust_candidates.append((probe_el, T_K, r_sq, n_lines))
-
-            if robust_candidates:
-                T_values = np.array([c[1] for c in robust_candidates])
-                # Cross-element consistency: 3+ elements within a 2000 K window
-                # around the median?
-                T_median = float(np.median(T_values))
-                within_window = np.sum(np.abs(T_values - T_median) <= 2000.0)
-                # INFO log so operators can audit the consensus.
-                logger.info(
-                    "alias._estimate_plasma_temperature robust mode: "
-                    "n_elements=%d, per_element=%s, median_T_K=%.0f, "
-                    "n_within_2000K=%d, selected_T_K=%s",
-                    len(robust_candidates),
-                    [(el, round(T, 0), round(r2, 3), n) for el, T, r2, n in robust_candidates],
-                    T_median,
-                    int(within_window),
-                    f"{T_median:.0f}" if within_window >= 3 else "fall-through-to-pass2",
-                )
-                if (
-                    within_window >= 3
-                    and self._T_ESTIMATE_MIN_K < T_median < self._T_ESTIMATE_MAX_K
-                ):
-                    self._estimated_T = T_median
-                    return
-                # Single-element or scatter > 2000 K: still take the best
-                # individual fit (highest r_sq, then largest n_lines) if
-                # any single element looks credible.
-                # Otherwise fall through to Pass 2.
-                robust_candidates.sort(key=lambda c: (c[2], c[3]), reverse=True)
-                best_el, best_T, best_r2, best_n = robust_candidates[0]
-                if (
-                    best_r2 > 0.5
-                    and best_n >= 4
-                    and self._T_ESTIMATE_MIN_K < best_T < self._T_ESTIMATE_MAX_K
-                ):
-                    logger.info(
-                        "alias._estimate_plasma_temperature robust mode: "
-                        "no cross-element consensus, accepting best "
-                        "single-element fit element=%s T_K=%.0f r_sq=%.3f "
-                        "n_lines=%d",
-                        best_el,
-                        best_T,
-                        best_r2,
-                        best_n,
-                    )
-                    self._estimated_T = float(best_T)
-                    return
-            # else: fall through to Pass 2 below.
-
+            pass1_T = self._estimate_T_pass1_robust(
+                probe_elements, peak_wls, peak_intensities, wl_min, wl_max, delta_lambda
+            )
         else:
-            # Legacy + weighted modes share the per-element early-return loop.
-            # The only difference: "weighted" drops the bottom quartile by SNR
-            # before fitting; "legacy" uses the unweighted slope on all lines.
-            for probe_el in probe_elements:
-                try:
-                    transitions = self.atomic_db.get_transitions(
-                        probe_el, 1, wavelength_min=wl_min, wavelength_max=wl_max
-                    )
-                    if not transitions:
-                        continue
-                except (KeyError, ValueError, AttributeError):
-                    continue
-
-                # Filter to lines with known A_ki and g_k
-                good_trans = [t for t in transitions if t.A_ki > 0 and t.g_k > 0 and t.E_k_ev > 0]
-                if len(good_trans) < 4:
-                    continue
-
-                # Sort by expected strength and take top 15
-                kT_ref = KB_EV * self.reference_temperature
-                good_trans.sort(
-                    key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref),
-                    reverse=True,
-                )
-                good_trans = good_trans[:15]
-
-                # Match to peaks
-                E_k_vals = []
-                y_vals = []
-                I_vals = []  # tracked for weighted-mode SNR pruning
-                shift = self._global_wl_shift
-
-                for t in good_trans:
-                    wl_shifted = t.wavelength_nm + shift
-                    dists = np.abs(peak_wls - wl_shifted)
-                    best_idx = int(np.argmin(dists))
-                    if dists[best_idx] <= delta_lambda:
-                        I_obs = peak_intensities[best_idx]
-                        if I_obs > 0 and t.A_ki > 0 and t.g_k > 0:
-                            y = math.log(I_obs * t.wavelength_nm / (t.g_k * t.A_ki))
-                            E_k_vals.append(t.E_k_ev)
-                            y_vals.append(y)
-                            I_vals.append(float(I_obs))
-
-                if len(E_k_vals) < 4:
-                    continue
-
-                # Weighted mode (opt-in): drop the bottom quartile by intensity
-                # (SNR proxy) to deprioritize the noisy weak high-E_k lines.
-                if self.temperature_estimator_mode == "weighted":
-                    I_arr_local = np.array(I_vals)
-                    if I_arr_local.size >= 4:
-                        snr_cutoff = float(np.quantile(I_arr_local, 0.25))
-                        keep_mask = I_arr_local > snr_cutoff
-                        # Keep at least 4 lines so the fit remains tractable.
-                        if int(np.sum(keep_mask)) >= 4:
-                            E_k_vals = [e for e, k in zip(E_k_vals, keep_mask) if k]
-                            y_vals = [y for y, k in zip(y_vals, keep_mask) if k]
-                            I_vals = [i for i, k in zip(I_vals, keep_mask) if k]
-
-                if len(E_k_vals) < 4:
-                    continue
-
-                # Fit Boltzmann slope: y = -1/(kT) * E_k + const
-                E_k_arr = np.array(E_k_vals)
-                y_arr = np.array(y_vals)
-
-                try:
-                    if self.use_jax_boltzmann_fit:
-                        # JAX path (opt-in). One-spectrum batch; the heavy lift
-                        # comes when future callers vectorize across many spectra.
-                        T_K_arr, slope_arr, r_sq_arr = boltzmann_temperature_jax(
-                            y_arr[None, :],
-                            E_k_arr,
-                            weights=None,
-                            return_diagnostics=True,
-                        )
-                        slope = float(slope_arr[0])
-                        r_sq = float(r_sq_arr[0])
-                        T_K_jax = float(T_K_arr[0])
-
-                        if not np.isfinite(slope) or abs(slope) < 1e-10:
-                            continue
-                        if slope < 0 and r_sq > 0.2:
-                            T_K = T_K_jax
-                            if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
-                                self._estimated_T = float(T_K)
-                                return
-                    else:
-                        result = linregress(E_k_arr, y_arr)
-                        slope = result.slope
-                        r_sq = result.rvalue**2
-
-                        if abs(slope) < 1e-10:
-                            continue
-                        if slope < 0 and r_sq > 0.2:
-                            T_K = -1.0 / (slope * KB_EV)
-                            if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
-                                self._estimated_T = float(T_K)
-                                return
-                except (ValueError, ZeroDivisionError):
-                    continue
+            pass1_T = self._estimate_T_pass1_slope(
+                probe_elements, peak_wls, peak_intensities, wl_min, wl_max, delta_lambda
+            )
+        if pass1_T is not None:
+            self._estimated_T = pass1_T
+            return
 
         # Pass 2: Line-ratio fallback — estimate T from best 2-line pair
+        pass2_T = self._estimate_T_pass2_line_ratio(
+            probe_elements, peak_wls, peak_intensities, wl_min, wl_max, delta_lambda
+        )
+        if pass2_T is not None:
+            self._estimated_T = pass2_T
+            return
+
+        # Final fallback: use reference temperature instead of None
+        self._estimated_T = self.reference_temperature
+
+    def _estimate_T_pass1_robust(
+        self,
+        probe_elements: List[str],
+        peak_wls: np.ndarray,
+        peak_intensities: np.ndarray,
+        wl_min: float,
+        wl_max: float,
+        delta_lambda: float,
+    ) -> Optional[float]:
+        """Pass-1 robust mode: cross-element weighted-regression consensus.
+
+        Robust mode (opt-in, CF-LIBS-improved-762f): collect candidate T_K
+        from EVERY element using weighted regression, then accept the
+        cross-element median if 3+ elements fall within a 2000 K window.
+        Returns the selected T_K, or ``None`` to fall through to Pass 2.
+        """
+        robust_candidates: List[Tuple[str, float, float, int]] = []
+        for probe_el in probe_elements:
+            cand = self._estimate_T_single_element_robust(
+                probe_el,
+                peak_wls,
+                peak_intensities,
+                wl_min,
+                wl_max,
+                delta_lambda,
+            )
+            if cand is not None:
+                T_K, r_sq, n_lines = cand
+                robust_candidates.append((probe_el, T_K, r_sq, n_lines))
+
+        if not robust_candidates:
+            return None
+
+        T_values = np.array([c[1] for c in robust_candidates])
+        # Cross-element consistency: 3+ elements within a 2000 K window
+        # around the median?
+        T_median = float(np.median(T_values))
+        within_window = np.sum(np.abs(T_values - T_median) <= 2000.0)
+        # INFO log so operators can audit the consensus.
+        logger.info(
+            "alias._estimate_plasma_temperature robust mode: "
+            "n_elements=%d, per_element=%s, median_T_K=%.0f, "
+            "n_within_2000K=%d, selected_T_K=%s",
+            len(robust_candidates),
+            [(el, round(T, 0), round(r2, 3), n) for el, T, r2, n in robust_candidates],
+            T_median,
+            int(within_window),
+            f"{T_median:.0f}" if within_window >= 3 else "fall-through-to-pass2",
+        )
+        if within_window >= 3 and self._T_ESTIMATE_MIN_K < T_median < self._T_ESTIMATE_MAX_K:
+            return T_median
+        # Single-element or scatter > 2000 K: still take the best
+        # individual fit (highest r_sq, then largest n_lines) if
+        # any single element looks credible.
+        # Otherwise fall through to Pass 2.
+        robust_candidates.sort(key=lambda c: (c[2], c[3]), reverse=True)
+        best_el, best_T, best_r2, best_n = robust_candidates[0]
+        if (
+            best_r2 > 0.5
+            and best_n >= 4
+            and self._T_ESTIMATE_MIN_K < best_T < self._T_ESTIMATE_MAX_K
+        ):
+            logger.info(
+                "alias._estimate_plasma_temperature robust mode: "
+                "no cross-element consensus, accepting best "
+                "single-element fit element=%s T_K=%.0f r_sq=%.3f "
+                "n_lines=%d",
+                best_el,
+                best_T,
+                best_r2,
+                best_n,
+            )
+            return float(best_T)
+        return None
+
+    def _estimate_T_pass1_slope(
+        self,
+        probe_elements: List[str],
+        peak_wls: np.ndarray,
+        peak_intensities: np.ndarray,
+        wl_min: float,
+        wl_max: float,
+        delta_lambda: float,
+    ) -> Optional[float]:
+        """Pass-1 legacy/weighted mode: per-element Boltzmann-slope early-return.
+
+        Legacy + weighted modes share the per-element early-return loop.
+        The only difference: "weighted" drops the bottom quartile by SNR
+        before fitting; "legacy" uses the unweighted slope on all lines.
+        Returns the first valid T_K found, or ``None`` to fall through.
+        """
+        for probe_el in probe_elements:
+            T_K = self._estimate_T_one_element_slope(
+                probe_el, peak_wls, peak_intensities, wl_min, wl_max, delta_lambda
+            )
+            if T_K is not None:
+                return T_K
+        return None
+
+    def _estimate_T_one_element_slope(
+        self,
+        probe_el: str,
+        peak_wls: np.ndarray,
+        peak_intensities: np.ndarray,
+        wl_min: float,
+        wl_max: float,
+        delta_lambda: float,
+    ) -> Optional[float]:
+        """Legacy/weighted Boltzmann-slope T_K for one element, or ``None``."""
+        try:
+            transitions = self.atomic_db.get_transitions(
+                probe_el, 1, wavelength_min=wl_min, wavelength_max=wl_max
+            )
+            if not transitions:
+                return None
+        except (KeyError, ValueError, AttributeError):
+            return None
+
+        # Filter to lines with known A_ki and g_k
+        good_trans = [t for t in transitions if t.A_ki > 0 and t.g_k > 0 and t.E_k_ev > 0]
+        if len(good_trans) < 4:
+            return None
+
+        # Sort by expected strength and take top 15
+        kT_ref = KB_EV * self.reference_temperature
+        good_trans.sort(
+            key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref),
+            reverse=True,
+        )
+        good_trans = good_trans[:15]
+
+        E_k_vals, y_vals, I_vals = self._collect_slope_points(
+            good_trans, peak_wls, peak_intensities, delta_lambda
+        )
+
+        if len(E_k_vals) < 4:
+            return None
+
+        # Weighted mode (opt-in): drop the bottom quartile by intensity
+        # (SNR proxy) to deprioritize the noisy weak high-E_k lines.
+        if self.temperature_estimator_mode == "weighted":
+            E_k_vals, y_vals, I_vals = self._prune_low_snr_slope_points(E_k_vals, y_vals, I_vals)
+
+        if len(E_k_vals) < 4:
+            return None
+
+        # Fit Boltzmann slope: y = -1/(kT) * E_k + const
+        E_k_arr = np.array(E_k_vals)
+        y_arr = np.array(y_vals)
+
+        return self._fit_slope_temperature(E_k_arr, y_arr)
+
+    def _collect_slope_points(
+        self,
+        good_trans: list,
+        peak_wls: np.ndarray,
+        peak_intensities: np.ndarray,
+        delta_lambda: float,
+    ) -> Tuple[list, list, list]:
+        """Match strong transitions to peaks, returning (E_k, y, I) Boltzmann-plot points."""
+        E_k_vals: List[float] = []
+        y_vals: List[float] = []
+        I_vals: List[float] = []  # tracked for weighted-mode SNR pruning
         shift = self._global_wl_shift
+
+        for t in good_trans:
+            wl_shifted = t.wavelength_nm + shift
+            dists = np.abs(peak_wls - wl_shifted)
+            best_idx = int(np.argmin(dists))
+            if dists[best_idx] <= delta_lambda:
+                I_obs = peak_intensities[best_idx]
+                if I_obs > 0 and t.A_ki > 0 and t.g_k > 0:
+                    y = math.log(I_obs * t.wavelength_nm / (t.g_k * t.A_ki))
+                    E_k_vals.append(t.E_k_ev)
+                    y_vals.append(y)
+                    I_vals.append(float(I_obs))
+        return E_k_vals, y_vals, I_vals
+
+    @staticmethod
+    def _prune_low_snr_slope_points(
+        E_k_vals: list, y_vals: list, I_vals: list
+    ) -> Tuple[list, list, list]:
+        """Weighted mode: drop the bottom intensity quartile, keeping >= 4 lines."""
+        I_arr_local = np.array(I_vals)
+        if I_arr_local.size >= 4:
+            snr_cutoff = float(np.quantile(I_arr_local, 0.25))
+            keep_mask = I_arr_local > snr_cutoff
+            # Keep at least 4 lines so the fit remains tractable.
+            if int(np.sum(keep_mask)) >= 4:
+                E_k_vals = [e for e, k in zip(E_k_vals, keep_mask) if k]
+                y_vals = [y for y, k in zip(y_vals, keep_mask) if k]
+                I_vals = [i for i, k in zip(I_vals, keep_mask) if k]
+        return E_k_vals, y_vals, I_vals
+
+    def _fit_slope_temperature(self, E_k_arr: np.ndarray, y_arr: np.ndarray) -> Optional[float]:
+        """Fit a Boltzmann slope and return the in-range T_K, or ``None``.
+
+        Honors ``use_jax_boltzmann_fit``; both paths require slope < 0,
+        r_sq > 0.2 and T_K within the physical estimate window.
+        """
+        try:
+            if self.use_jax_boltzmann_fit:
+                return self._fit_slope_temperature_jax(E_k_arr, y_arr)
+            return self._fit_slope_temperature_scipy(E_k_arr, y_arr)
+        except (ValueError, ZeroDivisionError):
+            return None
+
+    def _fit_slope_temperature_jax(self, E_k_arr: np.ndarray, y_arr: np.ndarray) -> Optional[float]:
+        """JAX Boltzmann-slope fit (opt-in). One-spectrum batch.
+
+        The heavy lift comes when future callers vectorize across many
+        spectra.
+        """
+        T_K_arr, slope_arr, r_sq_arr = boltzmann_temperature_jax(
+            y_arr[None, :],
+            E_k_arr,
+            weights=None,
+            return_diagnostics=True,
+        )
+        slope = float(slope_arr[0])
+        r_sq = float(r_sq_arr[0])
+        T_K_jax = float(T_K_arr[0])
+
+        if not np.isfinite(slope) or abs(slope) < 1e-10:
+            return None
+        return self._accept_slope_temperature(slope, r_sq, T_K_jax)
+
+    def _fit_slope_temperature_scipy(
+        self, E_k_arr: np.ndarray, y_arr: np.ndarray
+    ) -> Optional[float]:
+        """scipy ``linregress`` Boltzmann-slope fit (legacy default)."""
+        result = linregress(E_k_arr, y_arr)
+        slope = result.slope
+        r_sq = result.rvalue**2
+
+        if abs(slope) < 1e-10:
+            return None
+        # ``abs(slope) >= 1e-10`` guarantees slope != 0 here.
+        T_K = -1.0 / (slope * KB_EV)
+        return self._accept_slope_temperature(slope, r_sq, T_K)
+
+    def _accept_slope_temperature(self, slope: float, r_sq: float, T_K: float) -> Optional[float]:
+        """Return ``T_K`` when slope<0, r_sq>0.2 and T_K in the physical window."""
+        if slope < 0 and r_sq > 0.2:
+            if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K:
+                return float(T_K)
+        return None
+
+    def _estimate_T_pass2_line_ratio(
+        self,
+        probe_elements: List[str],
+        peak_wls: np.ndarray,
+        peak_intensities: np.ndarray,
+        wl_min: float,
+        wl_max: float,
+        delta_lambda: float,
+    ) -> Optional[float]:
+        """Pass-2 fallback: estimate T from the best 2-line intensity ratio."""
         for probe_el in probe_elements:
             try:
                 transitions = self.atomic_db.get_transitions(
@@ -2312,48 +2722,73 @@ class ALIASIdentifier:
             if len(good_trans) < 2:
                 continue
 
-            # Match to peaks
-            matched_pairs = []
-            for t in good_trans:
-                wl_shifted = t.wavelength_nm + shift
-                dists = np.abs(peak_wls - wl_shifted)
-                best_idx = int(np.argmin(dists))
-                if dists[best_idx] <= delta_lambda:
-                    I_obs = peak_intensities[best_idx]
-                    if I_obs > 0:
-                        matched_pairs.append((t, I_obs))
-
+            matched_pairs = self._match_ratio_pairs(
+                good_trans, peak_wls, peak_intensities, delta_lambda
+            )
             if len(matched_pairs) < 2:
                 continue
 
-            # Find pair with largest E_k separation
-            best_T_local = None
-            best_dE = 0.0
-            for i in range(len(matched_pairs)):
-                for j in range(i + 1, len(matched_pairs)):
-                    t1, I1 = matched_pairs[i]
-                    t2, I2 = matched_pairs[j]
-                    dE = abs(t1.E_k_ev - t2.E_k_ev)
-                    if dE < 0.5:
-                        continue
-                    numer = I2 * t2.wavelength_nm * t1.g_k * t1.A_ki
-                    denom = I1 * t1.wavelength_nm * t2.g_k * t2.A_ki
-                    if denom <= 0 or numer <= 0:
-                        continue
-                    ln_ratio = math.log(numer / denom)
-                    if abs(ln_ratio) < 1e-10:
-                        continue
-                    T_K = -(t2.E_k_ev - t1.E_k_ev) / (KB_EV * ln_ratio)
-                    if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K and dE > best_dE:
-                        best_T_local = T_K
-                        best_dE = dE
-
+            best_T_local = self._best_pair_ratio_temperature(matched_pairs)
             if best_T_local is not None:
-                self._estimated_T = float(best_T_local)
-                return
+                return float(best_T_local)
+        return None
 
-        # Final fallback: use reference temperature instead of None
-        self._estimated_T = self.reference_temperature
+    def _match_ratio_pairs(
+        self,
+        good_trans: list,
+        peak_wls: np.ndarray,
+        peak_intensities: np.ndarray,
+        delta_lambda: float,
+    ) -> list:
+        """Match transitions to peaks, returning ``(transition, I_obs)`` pairs."""
+        shift = self._global_wl_shift
+        matched_pairs = []
+        for t in good_trans:
+            wl_shifted = t.wavelength_nm + shift
+            dists = np.abs(peak_wls - wl_shifted)
+            best_idx = int(np.argmin(dists))
+            if dists[best_idx] <= delta_lambda:
+                I_obs = peak_intensities[best_idx]
+                if I_obs > 0:
+                    matched_pairs.append((t, I_obs))
+        return matched_pairs
+
+    def _best_pair_ratio_temperature(self, matched_pairs: list) -> Optional[float]:
+        """Return T_K from the matched-line pair with the largest valid E_k separation."""
+        best_T_local = None
+        best_dE = 0.0
+        for i in range(len(matched_pairs)):
+            for j in range(i + 1, len(matched_pairs)):
+                T_K = self._pair_ratio_temperature(matched_pairs[i], matched_pairs[j])
+                if T_K is None:
+                    continue
+                dE = abs(matched_pairs[i][0].E_k_ev - matched_pairs[j][0].E_k_ev)
+                if self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K and dE > best_dE:
+                    best_T_local = T_K
+                    best_dE = dE
+        return best_T_local
+
+    @staticmethod
+    def _pair_ratio_temperature(pair1: tuple, pair2: tuple) -> Optional[float]:
+        """Two-line Boltzmann temperature from an (transition, I_obs) pair, or ``None``.
+
+        Returns ``None`` for degenerate pairs (E_k separation < 0.5 eV,
+        non-positive ratio numerator/denominator, or near-zero log-ratio).
+        The physical-range gate is applied by the caller.
+        """
+        t1, I1 = pair1
+        t2, I2 = pair2
+        dE = abs(t1.E_k_ev - t2.E_k_ev)
+        if dE < 0.5:
+            return None
+        numer = I2 * t2.wavelength_nm * t1.g_k * t1.A_ki
+        denom = I1 * t1.wavelength_nm * t2.g_k * t2.A_ki
+        if denom <= 0 or numer <= 0:
+            return None
+        ln_ratio = math.log(numer / denom)
+        if abs(ln_ratio) < 1e-10:
+            return None
+        return -(t2.E_k_ev - t1.E_k_ev) / (KB_EV * ln_ratio)
 
     def _estimate_T_single_element_robust(
         self,
@@ -2403,15 +2838,62 @@ class ALIASIdentifier:
         )
         good_trans = good_trans[:15]
 
+        E_k_vals, y_vals, sigma_y_vals = self._collect_weighted_slope_points(
+            good_trans, peak_wls, peak_intensities, delta_lambda
+        )
+
+        if len(E_k_vals) < 4:
+            return None
+
+        E_k_arr = np.array(E_k_vals)
+        y_arr = np.array(y_vals)
+        sigma_arr = np.array(sigma_y_vals)
+        weights = 1.0 / np.square(sigma_arr)
+        # Need E_k spread for the regression to be meaningful.
+        if float(np.ptp(E_k_arr)) < 0.5:
+            return None
+
+        fit = self._weighted_slope_lsq(E_k_arr, y_arr, weights)
+        if fit is None:
+            return None
+        slope, r_sq = fit
+
+        if not np.isfinite(slope) or abs(slope) < 1e-10:
+            return None
+        if slope >= 0:
+            return None
+        T_K = -1.0 / (slope * KB_EV)
+        if not (self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K):
+            return None
+        # Note: polarity audit of the legacy ``r_sq > 0.2`` gate
+        # (alias.py: search "slope < 0 and r_sq > 0.2") found the polarity
+        # is CORRECT — high r^2 ⇒ accept (good fit), not invert it. So we
+        # apply the same r_sq threshold here as a sanity floor, but in
+        # robust mode the cross-element median check is the primary
+        # selection criterion, not a per-element r_sq gate.
+        if r_sq < 0.2:
+            return None
+        return float(T_K), float(r_sq), int(len(E_k_vals))
+
+    def _collect_weighted_slope_points(
+        self,
+        good_trans: list,
+        peak_wls: np.ndarray,
+        peak_intensities: np.ndarray,
+        delta_lambda: float,
+    ) -> Tuple[list, list, list]:
+        """Match transitions to peaks, returning (E_k, y, sigma_y) weighted-fit points.
+
+        Per-spectrum noise proxy: median |corrected intensity| of the
+        bottom half of matched peaks is a robust low-end estimate.
+        We do not have access to the noise estimate from _detect_peaks
+        here, so use a per-line fallback ``max(1e-12, sqrt(I))``.
+        """
         E_k_vals: List[float] = []
         y_vals: List[float] = []
         sigma_y_vals: List[float] = []
         shift = self._global_wl_shift
 
-        # Per-spectrum noise proxy: median |corrected intensity| of the
-        # bottom half of matched peaks is a robust low-end estimate.
-        # We do not have access to the noise estimate from _detect_peaks
-        # here, so use a per-line fallback ``max(1e-12, sqrt(I))``.
         for t in good_trans:
             wl_shifted = t.wavelength_nm + shift
             dists = np.abs(peak_wls - wl_shifted)
@@ -2430,21 +2912,18 @@ class ALIASIdentifier:
             E_k_vals.append(t.E_k_ev)
             y_vals.append(y)
             sigma_y_vals.append(max(sigma_y, 1e-12))
+        return E_k_vals, y_vals, sigma_y_vals
 
-        if len(E_k_vals) < 4:
-            return None
+    @staticmethod
+    def _weighted_slope_lsq(
+        E_k_arr: np.ndarray, y_arr: np.ndarray, weights: np.ndarray
+    ) -> Optional[Tuple[float, float]]:
+        """Closed-form weighted linear least squares; return ``(slope, r_sq)`` or ``None``.
 
-        E_k_arr = np.array(E_k_vals)
-        y_arr = np.array(y_vals)
-        sigma_arr = np.array(sigma_y_vals)
-        weights = 1.0 / np.square(sigma_arr)
-        # Need E_k spread for the regression to be meaningful.
-        if float(np.ptp(E_k_arr)) < 0.5:
-            return None
-
-        # Closed-form weighted linear least squares for y = a + b·x:
-        #   b = (sum w x y · sum w − sum w x · sum w y) / (sum w x^2 · sum w − (sum w x)^2)
-        # r^2 computed against the weighted mean of y.
+        Closed-form weighted linear least squares for y = a + b·x:
+          b = (sum w x y · sum w − sum w x · sum w y) / (sum w x^2 · sum w − (sum w x)^2)
+        r^2 computed against the weighted mean of y.
+        """
         try:
             W = float(np.sum(weights))
             if W <= 0:
@@ -2468,23 +2947,7 @@ class ALIASIdentifier:
             r_sq = 1.0 - SS_res / SS_tot
         except (ValueError, ZeroDivisionError, FloatingPointError):
             return None
-
-        if not np.isfinite(slope) or abs(slope) < 1e-10:
-            return None
-        if slope >= 0:
-            return None
-        T_K = -1.0 / (slope * KB_EV)
-        if not (self._T_ESTIMATE_MIN_K < T_K < self._T_ESTIMATE_MAX_K):
-            return None
-        # Note: polarity audit of the legacy ``r_sq > 0.2`` gate
-        # (alias.py: search "slope < 0 and r_sq > 0.2") found the polarity
-        # is CORRECT — high r^2 ⇒ accept (good fit), not invert it. So we
-        # apply the same r_sq threshold here as a sanity floor, but in
-        # robust mode the cross-element median check is the primary
-        # selection criterion, not a per-element r_sq gate.
-        if r_sq < 0.2:
-            return None
-        return float(T_K), float(r_sq), int(len(E_k_vals))
+        return slope, r_sq
 
     # EVOLVE-BLOCK-START
     def _fast_screening(
@@ -2522,46 +2985,11 @@ class ALIASIdentifier:
         for element in all_elements:
             if element in self._always_test:
                 continue
-
-            # Get all lines and compute strengths
-            lines_with_strength = []
-            for ion_stage in [1, 2]:
-                try:
-                    trans = self.atomic_db.get_transitions(
-                        element, ion_stage, wavelength_min=wl_min, wavelength_max=wl_max
-                    )
-                    if trans:
-                        for t in trans:
-                            strength = t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref)
-                            lines_with_strength.append((t.wavelength_nm, strength))
-                except (KeyError, ValueError, AttributeError):
-                    continue
-
-            if not lines_with_strength:
-                continue
-
-            lines_with_strength.sort(key=lambda x: x[1], reverse=True)
-            top10 = lines_with_strength[:10]
-
-            # Compute screening score: sum of strengths for matched lines
-            # divided by total strength (strength-weighted match rate)
-            total_strength = sum(s for _, s in top10)
-            matched_strength = 0.0
-            n_matched = 0
-            for wl_th, strength in top10:
-                wl_shifted = wl_th + shift
-                dists = np.abs(peak_wls - wl_shifted)
-                if np.min(dists) <= screening_tol:
-                    matched_strength += strength
-                    n_matched += 1
-
-            # Single-line exception: elements with ≤1 line in the window
-            # (e.g., Li I 670.8nm) need only 1 match to pass screening.
-            min_matches = 1 if len(top10) <= 1 else 2
-            if n_matched >= min_matches and total_strength > 0:
-                score = matched_strength / total_strength
-                if score >= 0.3:
-                    element_scores.append((element, score, n_matched))
+            scored = self._screen_one_element(
+                element, peak_wls, wl_min, wl_max, kT_ref, shift, screening_tol
+            )
+            if scored is not None:
+                element_scores.append(scored)
 
         # Sort by screening score, take top max_screening_candidates
         element_scores.sort(key=lambda x: x[1], reverse=True)
@@ -2571,6 +2999,71 @@ class ALIASIdentifier:
                 passed.append(element)
 
         return passed
+
+    def _screen_one_element(
+        self,
+        element: str,
+        peak_wls: np.ndarray,
+        wl_min: float,
+        wl_max: float,
+        kT_ref: float,
+        shift: float,
+        screening_tol: float,
+    ) -> Optional[Tuple[str, float, int]]:
+        """Strength-weighted screening score for one element, or ``None`` if it fails.
+
+        Computes a quick screening score based on how many of the element's
+        top-10 lines match peaks, weighted by line strength. Returns
+        ``(element, score, n_matched)`` when the element passes the
+        min-match and score>=0.3 gates, else ``None``.
+        """
+        # Get all lines and compute strengths
+        lines_with_strength = self._screening_lines_with_strength(element, wl_min, wl_max, kT_ref)
+
+        if not lines_with_strength:
+            return None
+
+        lines_with_strength.sort(key=lambda x: x[1], reverse=True)
+        top10 = lines_with_strength[:10]
+
+        # Compute screening score: sum of strengths for matched lines
+        # divided by total strength (strength-weighted match rate)
+        total_strength = sum(s for _, s in top10)
+        matched_strength = 0.0
+        n_matched = 0
+        for wl_th, strength in top10:
+            wl_shifted = wl_th + shift
+            dists = np.abs(peak_wls - wl_shifted)
+            if np.min(dists) <= screening_tol:
+                matched_strength += strength
+                n_matched += 1
+
+        # Single-line exception: elements with ≤1 line in the window
+        # (e.g., Li I 670.8nm) need only 1 match to pass screening.
+        min_matches = 1 if len(top10) <= 1 else 2
+        if n_matched >= min_matches and total_strength > 0:
+            score = matched_strength / total_strength
+            if score >= 0.3:
+                return (element, score, n_matched)
+        return None
+
+    def _screening_lines_with_strength(
+        self, element: str, wl_min: float, wl_max: float, kT_ref: float
+    ) -> list:
+        """Collect ``(wavelength_nm, strength)`` for an element across ion stages 1 and 2."""
+        lines_with_strength = []
+        for ion_stage in [1, 2]:
+            try:
+                trans = self.atomic_db.get_transitions(
+                    element, ion_stage, wavelength_min=wl_min, wavelength_max=wl_max
+                )
+                if trans:
+                    for t in trans:
+                        strength = t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT_ref)
+                        lines_with_strength.append((t.wavelength_nm, strength))
+            except (KeyError, ValueError, AttributeError):
+                continue
+        return lines_with_strength
 
     # EVOLVE-BLOCK-END
 
@@ -2947,8 +3440,51 @@ class ALIASIdentifier:
         List[dict]
             List of dicts with keys: transition, avg_emissivity, wavelength_nm
         """
+        transitions = self._select_emissivity_transitions(element, wl_min, wl_max)
+        if not transitions:
+            return []
+
+        # Compute emissivities
+        line_data = []
+        total_density = 1e15  # Arbitrary reference density
+
+        # When T_estimated is available, use a narrow grid around that T
+        # instead of the full T range. This makes emissivities reflect the
+        # actual plasma conditions rather than averaged-out values.
+        if T_estimated is not None:
+            T_grid = np.array([T_estimated])
+        else:
+            # Always use a single reference T — averaging over the full
+            # grid dilutes the reference vector and makes cosine similarity
+            # meaningless.
+            T_grid = np.array([self.reference_temperature])
+
+        grid_stage_densities = self._precompute_grid_stage_densities(element, T_grid, total_density)
+
+        for transition in transitions:
+            avg_emissivity = self._average_transition_emissivity(
+                element, transition, T_grid, grid_stage_densities, total_density
+            )
+            if avg_emissivity is not None:
+                line_data.append(
+                    {
+                        "transition": transition,
+                        "avg_emissivity": avg_emissivity,
+                        "wavelength_nm": transition.wavelength_nm,
+                    }
+                )
+
+        return line_data
+
+    def _select_emissivity_transitions(self, element: str, wl_min: float, wl_max: float) -> list:
+        """Collect, filter and cap transitions used for emissivity calculation.
+
+        Removes unobservable weak lines (A_ki*g_k < 1e4) and caps to the
+        strongest ``max_lines_per_element`` by estimated emissivity to avoid
+        line-count disparity.
+        """
         # Get transitions for element (try both neutral and ionized)
-        transitions = []
+        transitions: list = []
         for ion_stage in [1, 2]:
             try:
                 trans_list = self.atomic_db.get_transitions(
@@ -2975,24 +3511,13 @@ class ALIASIdentifier:
                 reverse=True,
             )
             transitions = transitions[: self.max_lines_per_element]
+        return transitions
 
-        # Compute emissivities
-        line_data = []
-        total_density = 1e15  # Arbitrary reference density
-
-        # When T_estimated is available, use a narrow grid around that T
-        # instead of the full T range. This makes emissivities reflect the
-        # actual plasma conditions rather than averaged-out values.
-        if T_estimated is not None:
-            T_grid = np.array([T_estimated])
-        else:
-            # Always use a single reference T — averaging over the full
-            # grid dilutes the reference vector and makes cosine similarity
-            # meaningless.
-            T_grid = np.array([self.reference_temperature])
-
-        # Precompute stage densities for all (T, n_e) grid points
-        grid_stage_densities = {}
+    def _precompute_grid_stage_densities(
+        self, element: str, T_grid: np.ndarray, total_density: float
+    ) -> dict:
+        """Precompute ionization-balance stage densities for all (T, n_e) grid points."""
+        grid_stage_densities: dict = {}
         for T_K in T_grid:
             for n_e in self.n_e_grid_cm3:
                 T_eV = T_K * KB_EV
@@ -3004,51 +3529,52 @@ class ALIASIdentifier:
                 except (KeyError, ValueError, ZeroDivisionError):
                     # Failed for this grid point, skip
                     continue
+        return grid_stage_densities
 
-        for transition in transitions:
-            emissivities = []
+    def _average_transition_emissivity(
+        self,
+        element: str,
+        transition,
+        T_grid: np.ndarray,
+        grid_stage_densities: dict,
+        total_density: float,
+    ) -> Optional[float]:
+        """Mean emissivity of a transition over the (T, n_e) grid, or ``None`` if empty."""
+        emissivities = []
 
-            for T_K in T_grid:
-                for n_e in self.n_e_grid_cm3:
-                    T_eV = T_K * KB_EV
+        for T_K in T_grid:
+            for n_e in self.n_e_grid_cm3:
+                T_eV = T_K * KB_EV
 
-                    # Get precomputed ionization balance
-                    stage_densities = grid_stage_densities.get((T_K, n_e))
-                    if stage_densities is None:
-                        continue
+                # Get precomputed ionization balance
+                stage_densities = grid_stage_densities.get((T_K, n_e))
+                if stage_densities is None:
+                    continue
 
-                    stage_density = stage_densities.get(transition.ionization_stage, 0.0)
-                    if stage_density == 0.0:
-                        continue
+                stage_density = stage_densities.get(transition.ionization_stage, 0.0)
+                if stage_density == 0.0:
+                    continue
 
-                    W_q = stage_density / total_density
+                W_q = stage_density / total_density
 
-                    try:
-                        # Get partition function
-                        U_T = self.solver.calculate_partition_function(
-                            element, transition.ionization_stage, T_eV
-                        )
+                try:
+                    # Get partition function
+                    U_T = self.solver.calculate_partition_function(
+                        element, transition.ionization_stage, T_eV
+                    )
 
-                        # Emissivity: eps = W^q * A_ki * g_k * exp(-E_k/kT) / U(T)
-                        boltzmann_factor = np.exp(-transition.E_k_ev / T_eV)
-                        eps = W_q * transition.A_ki * transition.g_k * boltzmann_factor / U_T
+                    # Emissivity: eps = W^q * A_ki * g_k * exp(-E_k/kT) / U(T)
+                    boltzmann_factor = np.exp(-transition.E_k_ev / T_eV)
+                    eps = W_q * transition.A_ki * transition.g_k * boltzmann_factor / U_T
 
-                        emissivities.append(eps)
-                    except (KeyError, ValueError, ZeroDivisionError):
-                        # Failed to compute partition function or emissivity, skip
-                        continue
+                    emissivities.append(eps)
+                except (KeyError, ValueError, ZeroDivisionError):
+                    # Failed to compute partition function or emissivity, skip
+                    continue
 
-            if emissivities:
-                avg_emissivity = np.mean(emissivities)
-                line_data.append(
-                    {
-                        "transition": transition,
-                        "avg_emissivity": avg_emissivity,
-                        "wavelength_nm": transition.wavelength_nm,
-                    }
-                )
-
-        return line_data
+        if emissivities:
+            return np.mean(emissivities)
+        return None
 
     def _fuse_lines(self, line_data: List[dict], wavelength_nm: np.ndarray) -> List[dict]:
         """
@@ -3188,7 +3714,56 @@ class ALIASIdentifier:
         # which uses a single threshold across the top-10 lines.
         delta_lambda = float(np.mean(tol_per_line)) if len(tol_per_line) > 0 else 0.0
 
-        # Additionally refine per-element shift from top 10 lines
+        element_shift = self._refine_element_shift(
+            fused_lines, peak_wavelengths, global_shift, delta_lambda
+        )
+
+        matched_mask = np.zeros(n, dtype=bool)
+        wavelength_shifts = np.zeros(n)
+        matched_peak_idx = np.full(n, -1, dtype=int)
+
+        # Pass 1: tight tolerance, per-line
+        self._match_lines_pass1(
+            fused_lines,
+            peak_wavelengths,
+            element_shift,
+            tol_per_line,
+            matched_mask,
+            wavelength_shifts,
+            matched_peak_idx,
+        )
+
+        # Pass 2: for unmatched strong lines, try wider tolerance (2x per-line)
+        self._match_lines_pass2(
+            fused_lines,
+            peak_wavelengths,
+            element_shift,
+            tol_per_line,
+            matched_mask,
+            wavelength_shifts,
+            matched_peak_idx,
+        )
+
+        # Enforce one-to-one: each experimental peak is assigned to at most
+        # one theoretical line (highest emissivity wins).
+        self._enforce_one_to_one_matches(
+            fused_lines, n, matched_mask, wavelength_shifts, matched_peak_idx
+        )
+
+        return matched_mask, wavelength_shifts, matched_peak_idx
+
+    @staticmethod
+    def _refine_element_shift(
+        fused_lines: List[dict],
+        peak_wavelengths: np.ndarray,
+        global_shift: float,
+        delta_lambda: float,
+    ) -> float:
+        """Refine the per-element wavelength shift from the top-10 strongest lines.
+
+        Uses per-element shift if >= 2 lines match within 1.5*delta_lambda,
+        else falls back to the global shift.
+        """
         sorted_by_emissivity = sorted(fused_lines, key=lambda x: x["avg_emissivity"], reverse=True)
         top_lines = sorted_by_emissivity[: min(10, len(sorted_by_emissivity))]
 
@@ -3202,17 +3777,21 @@ class ALIASIdentifier:
                     closest_idx = np.argmin(distances)
                     per_element_shifts.append(peak_wavelengths[closest_idx] - line["wavelength_nm"])
 
-        # Use per-element shift if enough matches, else fall back to global
         if len(per_element_shifts) >= 2:
-            element_shift = float(np.median(per_element_shifts))
-        else:
-            element_shift = global_shift
+            return float(np.median(per_element_shifts))
+        return global_shift
 
-        matched_mask = np.zeros(n, dtype=bool)
-        wavelength_shifts = np.zeros(n)
-        matched_peak_idx = np.full(n, -1, dtype=int)
-
-        # Pass 1: tight tolerance, per-line
+    @staticmethod
+    def _match_lines_pass1(
+        fused_lines: List[dict],
+        peak_wavelengths: np.ndarray,
+        element_shift: float,
+        tol_per_line: np.ndarray,
+        matched_mask: np.ndarray,
+        wavelength_shifts: np.ndarray,
+        matched_peak_idx: np.ndarray,
+    ) -> None:
+        """Pass 1: match every line at its tight per-line tolerance (in place)."""
         for i, line in enumerate(fused_lines):
             wl_th = line["wavelength_nm"] + element_shift
 
@@ -3225,8 +3804,20 @@ class ALIASIdentifier:
                 matched_peak_idx[i] = closest_idx
                 wavelength_shifts[i] = peak_wavelengths[closest_idx] - line["wavelength_nm"]
 
-        # Pass 2: for unmatched strong lines, try wider tolerance (2x per-line)
-        # "strong" = above median emissivity of all lines
+    @staticmethod
+    def _match_lines_pass2(
+        fused_lines: List[dict],
+        peak_wavelengths: np.ndarray,
+        element_shift: float,
+        tol_per_line: np.ndarray,
+        matched_mask: np.ndarray,
+        wavelength_shifts: np.ndarray,
+        matched_peak_idx: np.ndarray,
+    ) -> None:
+        """Pass 2: retry unmatched strong lines at 2x tolerance (in place).
+
+        "strong" = above median emissivity of all lines.
+        """
         emissivities = np.array([line["avg_emissivity"] for line in fused_lines])
         emiss_median = np.median(emissivities) if len(emissivities) > 0 else 0.0
 
@@ -3246,10 +3837,19 @@ class ALIASIdentifier:
                 matched_peak_idx[i] = closest_idx
                 wavelength_shifts[i] = peak_wavelengths[closest_idx] - line["wavelength_nm"]
 
-        # Enforce one-to-one: each experimental peak is assigned to at most
-        # one theoretical line (highest emissivity wins).  This prevents a
-        # single broad peak from "confirming" multiple theoretical lines,
-        # which inflates k_rate at low resolving power.
+    @staticmethod
+    def _enforce_one_to_one_matches(
+        fused_lines: List[dict],
+        n: int,
+        matched_mask: np.ndarray,
+        wavelength_shifts: np.ndarray,
+        matched_peak_idx: np.ndarray,
+    ) -> None:
+        """Each experimental peak is assigned to at most one line; highest emissivity wins.
+
+        This prevents a single broad peak from "confirming" multiple
+        theoretical lines, which inflates k_rate at low resolving power.
+        """
         claimed_peaks: dict = {}  # peak_idx -> (line_idx, emissivity)
         for i in range(n):
             if not matched_mask[i]:
@@ -3268,8 +3868,6 @@ class ALIASIdentifier:
                 matched_mask[i] = False
                 wavelength_shifts[i] = 0.0
                 matched_peak_idx[i] = -1
-
-        return matched_mask, wavelength_shifts, matched_peak_idx
 
     def _determine_emissivity_threshold(
         self, fused_lines: List[dict], matched_mask: np.ndarray
@@ -3404,10 +4002,41 @@ class ALIASIdentifier:
         if n_matched_above == 0:
             return 0.0, 0.0, 0.0, 0.5, N_expected, 0, P_cov
 
-        # Soft P_maj: weighted coverage of top-k strongest above-threshold
-        # lines.  Binary P_maj (strongest matched → 1.0, else 0.5) causes
-        # false negatives when the major line is obscured by matrix
-        # emission (e.g. V in Ti6Al4V where Ti dominates).
+        P_maj = self._compute_P_maj(emissivities, above_threshold, matched_above, N_expected)
+
+        # k_rate: emissivity-weighted detection rate.
+        if total_emissivity_above > 0:
+            k_rate = matched_emissivity / total_emissivity_above
+        else:
+            k_rate = 0.0
+
+        k_shift = self._compute_k_shift(fused_lines, emissivities, matched_above, wavelength_shifts)
+
+        k_sim = self._compute_k_sim(
+            fused_lines,
+            emissivities,
+            matched_above,
+            matched_peak_idx,
+            intensity,
+            peaks,
+            n_matched_above,
+        )
+
+        return k_sim, k_rate, k_shift, P_maj, N_expected, n_matched_above, P_cov
+
+    @staticmethod
+    def _compute_P_maj(
+        emissivities: np.ndarray,
+        above_threshold: np.ndarray,
+        matched_above: np.ndarray,
+        N_expected: int,
+    ) -> float:
+        """Soft P_maj: weighted coverage of the top-k strongest above-threshold lines.
+
+        Binary P_maj (strongest matched → 1.0, else 0.5) causes false
+        negatives when the major line is obscured by matrix emission
+        (e.g. V in Ti6Al4V where Ti dominates).
+        """
         top_k = min(3, N_expected)
         if top_k > 0:
             above_emissivities = emissivities * above_threshold.astype(float)
@@ -3417,17 +4046,17 @@ class ALIASIdentifier:
             weights = np.sqrt(emissivities[sorted_indices])
             matched_weights = float(np.sum(weights * matched_above[sorted_indices]))
             total_weights = float(np.sum(weights))
-            P_maj = 0.5 + 0.5 * (matched_weights / total_weights) if total_weights > 0 else 0.5
-        else:
-            P_maj = 0.5
+            return 0.5 + 0.5 * (matched_weights / total_weights) if total_weights > 0 else 0.5
+        return 0.5
 
-        # k_rate: emissivity-weighted detection rate.
-        if total_emissivity_above > 0:
-            k_rate = matched_emissivity / total_emissivity_above
-        else:
-            k_rate = 0.0
-
-        # k_shift: wavelength match quality
+    def _compute_k_shift(
+        self,
+        fused_lines: List[dict],
+        emissivities: np.ndarray,
+        matched_above: np.ndarray,
+        wavelength_shifts: np.ndarray,
+    ) -> float:
+        """k_shift: emissivity-weighted wavelength-match quality."""
         mean_wl = np.mean([line["wavelength_nm"] for line in fused_lines])
         delta_lambda = mean_wl / self.resolving_power
 
@@ -3435,30 +4064,37 @@ class ALIASIdentifier:
         emiss_matched = emissivities[matched_above]
         if len(shifts_matched) > 0 and np.sum(emiss_matched) > 0:
             weighted_shift = np.average(shifts_matched, weights=emiss_matched)
-            k_shift = max(0.0, 1.0 - weighted_shift / delta_lambda)
-        else:
-            k_shift = 0.0
+            return max(0.0, 1.0 - weighted_shift / delta_lambda)
+        return 0.0
 
-        # k_sim: cosine similarity between theoretical and experimental
-        # intensities over MATCHED lines only (paper-faithful).
-        # Coverage is handled exclusively by k_rate.
-        #
-        # Self-absorption correction (gated by self.self_absorption_aware,
-        # default True): resonance lines below
-        # ``self.self_absorption_e_i_cutoff_ev`` are systematically weaker
-        # than optically-thin predictions in high-concentration matrices
-        # (Si in soil at 60% SiO2 is the canonical example). Damping the
-        # theoretical emissivity by ``self.self_absorption_damping`` avoids
-        # penalizing the cosine angle. Counters are reset by ``identify``
-        # and reported via a structured log line at the end of each call,
-        # so the operator can see which elements got damped — addresses
-        # the "silent SA_DAMPING = 0.3" complaint from
-        # CF-LIBS-improved-self-abs-audit.
+    def _collect_k_sim_vectors(
+        self,
+        fused_lines: List[dict],
+        emissivities: np.ndarray,
+        matched_above: np.ndarray,
+        matched_peak_idx: np.ndarray,
+        intensity: np.ndarray,
+        peaks: List[Tuple[int, float]],
+    ) -> Tuple[list, list, set]:
+        """Build SA-damped theoretical and experimental intensity vectors for k_sim.
+
+        Self-absorption correction (gated by self.self_absorption_aware,
+        default True): resonance lines below
+        ``self.self_absorption_e_i_cutoff_ev`` are systematically weaker
+        than optically-thin predictions in high-concentration matrices
+        (Si in soil at 60% SiO2 is the canonical example). Damping the
+        theoretical emissivity by ``self.self_absorption_damping`` avoids
+        penalizing the cosine angle. Counters are reset by ``identify``
+        and reported via a structured log line at the end of each call,
+        so the operator can see which elements got damped — addresses
+        the "silent SA_DAMPING = 0.3" complaint from
+        CF-LIBS-improved-self-abs-audit.
+        """
         sa_aware = self.self_absorption_aware
         sa_damping = self.self_absorption_damping
         sa_e_i_cutoff = self.self_absorption_e_i_cutoff_ev
-        theoretical_intensities = []
-        experimental_intensities = []
+        theoretical_intensities: list = []
+        experimental_intensities: list = []
         unique_peak_set: set = set()
 
         for i in range(len(fused_lines)):
@@ -3475,6 +4111,31 @@ class ALIASIdentifier:
                 pidx = matched_peak_idx[i]
                 experimental_intensities.append(intensity[peaks[pidx][0]])
                 unique_peak_set.add(pidx)
+        return theoretical_intensities, experimental_intensities, unique_peak_set
+
+    def _compute_k_sim(
+        self,
+        fused_lines: List[dict],
+        emissivities: np.ndarray,
+        matched_above: np.ndarray,
+        matched_peak_idx: np.ndarray,
+        intensity: np.ndarray,
+        peaks: List[Tuple[int, float]],
+        n_matched_above: int,
+    ) -> float:
+        """k_sim: cosine similarity over matched lines, with uniqueness penalty.
+
+        Cosine similarity between theoretical and experimental intensities
+        over MATCHED lines only (paper-faithful). Coverage is handled
+        exclusively by k_rate.
+        """
+        (
+            theoretical_intensities,
+            experimental_intensities,
+            unique_peak_set,
+        ) = self._collect_k_sim_vectors(
+            fused_lines, emissivities, matched_above, matched_peak_idx, intensity, peaks
+        )
 
         if len(theoretical_intensities) > 1:
             th_vec = np.array(theoretical_intensities)
@@ -3501,7 +4162,7 @@ class ALIASIdentifier:
             uniqueness_factor = n_unique_peaks / n_matched_above
             k_sim *= uniqueness_factor
 
-        return k_sim, k_rate, k_shift, P_maj, N_expected, n_matched_above, P_cov
+        return k_sim
 
     def _compute_P_ab(self, element: str) -> float:
         """
@@ -3903,22 +4564,8 @@ class ALIASIdentifier:
         # Gated by self.self_absorption_aware (default True); previously
         # this used a hardcoded ``SA_DAMPING = 0.3``. The counters mutated
         # below feed the post-identify summary log line for transparency.
-        sa_aware = self.self_absorption_aware
-        sa_damping_value = self.self_absorption_damping if sa_aware else 1.0
-        sa_e_i_cutoff = self.self_absorption_e_i_cutoff_ev
         raw_emiss = np.array([fused_lines[i]["avg_emissivity"] for i in matched_indices])
-        damping_values = []
-        for i in matched_indices:
-            trans = fused_lines[i]["transition"]
-            if sa_aware and getattr(trans, "E_i_ev", 1.0) < sa_e_i_cutoff:
-                damping_values.append(sa_damping_value)
-                self._sa_n_damped_lines += 1
-                el = getattr(trans, "element", None)
-                if el is not None:
-                    self._sa_damped_elements.add(el)
-            else:
-                damping_values.append(1.0)
-        damping = np.array(damping_values)
+        damping = self._ratio_damping_values(fused_lines, matched_indices)
         emissivities = raw_emiss * damping
         obs_intensities = np.array(
             [intensity[peaks[matched_peak_idx[i]][0]] for i in matched_indices]
@@ -3932,20 +4579,10 @@ class ALIASIdentifier:
         log_th = np.log(emissivities[valid])
         log_obs = np.log(obs_intensities[valid])
 
-        # Build all pairwise log-ratio differences
-        n = len(log_th)
-        th_ratios = []
-        exp_ratios = []
-        for i in range(n):
-            for j in range(i + 1, n):
-                th_ratios.append(log_th[i] - log_th[j])
-                exp_ratios.append(log_obs[i] - log_obs[j])
+        th_arr, exp_arr = self._pairwise_log_ratios(log_th, log_obs)
 
-        if len(th_ratios) < 3:
+        if len(th_arr) < 3:
             return 0.5
-
-        th_arr = np.array(th_ratios)
-        exp_arr = np.array(exp_ratios)
 
         # Pearson correlation of log-ratios
         corr = np.corrcoef(th_arr, exp_arr)[0, 1]
@@ -3954,6 +4591,45 @@ class ALIASIdentifier:
 
         # Map [-1, 1] → [0, 1]; negative correlation is worse than zero
         return float(max(0.0, (corr + 1.0) / 2.0))
+
+    def _ratio_damping_values(self, fused_lines: List[dict], matched_indices: np.ndarray):
+        """Per-matched-line self-absorption damping factors for the ratio check.
+
+        Apply self-absorption damping to resonance lines so theoretical
+        log-ratios better match observed ratios for strong transitions.
+        Gated by self.self_absorption_aware (default True); previously this
+        used a hardcoded ``SA_DAMPING = 0.3``. The counters mutated here
+        feed the post-identify summary log line for transparency.
+        """
+        sa_aware = self.self_absorption_aware
+        sa_damping_value = self.self_absorption_damping if sa_aware else 1.0
+        sa_e_i_cutoff = self.self_absorption_e_i_cutoff_ev
+        damping_values = []
+        for i in matched_indices:
+            trans = fused_lines[i]["transition"]
+            if sa_aware and getattr(trans, "E_i_ev", 1.0) < sa_e_i_cutoff:
+                damping_values.append(sa_damping_value)
+                self._sa_n_damped_lines += 1
+                el = getattr(trans, "element", None)
+                if el is not None:
+                    self._sa_damped_elements.add(el)
+            else:
+                damping_values.append(1.0)
+        return np.array(damping_values)
+
+    @staticmethod
+    def _pairwise_log_ratios(
+        log_th: np.ndarray, log_obs: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Build all pairwise log-ratio differences for the theoretical/observed vectors."""
+        n = len(log_th)
+        th_ratios = []
+        exp_ratios = []
+        for i in range(n):
+            for j in range(i + 1, n):
+                th_ratios.append(log_th[i] - log_th[j])
+                exp_ratios.append(log_obs[i] - log_obs[j])
+        return np.array(th_ratios), np.array(exp_ratios)
 
     def _compute_random_match_significance(
         self,
