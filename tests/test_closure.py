@@ -80,3 +80,23 @@ def test_standard_closure_applies_abundance_multipliers():
 
     assert res.concentrations["Fe"] == expected_fe / expected_total
     assert res.concentrations["Cu"] == expected_cu / expected_total
+
+
+def test_validate_degeneracy_flags_dominant_element():
+    # One element soaking > 0.8 with > 1 element present is degenerate.
+    assert ClosureEquation.validate_degeneracy({"Fe": 0.95, "Cu": 0.05}) is True
+    # Exactly at the threshold is NOT degenerate (strict >).
+    assert ClosureEquation.validate_degeneracy({"Fe": 0.8, "Cu": 0.2}) is False
+    # Balanced composition is fine.
+    assert ClosureEquation.validate_degeneracy({"Fe": 0.5, "Cu": 0.5}) is False
+
+
+def test_validate_degeneracy_single_element_never_degenerate():
+    # A pure sample legitimately closes to a single 1.0 — never flagged.
+    assert ClosureEquation.validate_degeneracy({"Fe": 1.0}) is False
+    assert ClosureEquation.validate_degeneracy({}) is False
+
+
+def test_validate_degeneracy_custom_threshold():
+    assert ClosureEquation.validate_degeneracy({"Fe": 0.7, "Cu": 0.3}, threshold=0.6) is True
+    assert ClosureEquation.validate_degeneracy({"Fe": 0.7, "Cu": 0.3}, threshold=0.9) is False

@@ -19,6 +19,7 @@ from cflibs.core.constants import (
     C_LIGHT,
 )
 from cflibs.atomic.database import AtomicDatabase
+from cflibs.radiation.stark import estimate_ne_from_stark
 from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy
@@ -118,6 +119,43 @@ class CFLIBSResult:
     quality_metrics: Dict[str, float] = field(default_factory=dict)
     electron_density_uncertainty_cm3: float = 0.0
     boltzmann_covariance: Optional[np.ndarray] = field(default=None, repr=False)
+
+
+@dataclass
+class StarkDiagnosticLine:
+    """A measured isolated line used to diagnose ``n_e`` from its Stark width.
+
+    Stark broadening is the canonical electron-density diagnostic in LIBS
+    (Tognoni 2010; Aragón & Aguilera 2010, *Spectrochim. Acta B* 65, 395 —
+    Hα / Fe I / Si II). The solver inverts the project-wide electron-impact
+    width law (:func:`cflibs.radiation.stark.estimate_ne_from_stark`) to obtain
+    ``n_e`` from a measured FWHM, after deconvolving the Gaussian instrument and
+    Doppler contributions.
+
+    Attributes
+    ----------
+    measured_fwhm_nm : float
+        Measured (Voigt) FWHM of the diagnostic line in nm.
+    stark_w_ref_nm : float
+        Reference electron-impact Stark FWHM for this line at
+        ``REF_NE = 1e17 cm^-3``, ``T = 10000 K`` (nm). Same convention as the
+        stored ``lines.stark_w`` column.
+    stark_alpha : float, optional
+        Temperature-scaling exponent (default 0.5).
+    instrument_fwhm_nm : float
+        Instrument response FWHM in nm (Gaussian), removed in quadrature.
+    doppler_fwhm_nm : float
+        Doppler (thermal) FWHM in nm (Gaussian), removed in quadrature.
+    wavelength_nm : float, optional
+        Diagnostic line wavelength (informational/logging only).
+    """
+
+    measured_fwhm_nm: float
+    stark_w_ref_nm: float
+    stark_alpha: float = 0.5
+    instrument_fwhm_nm: float = 0.0
+    doppler_fwhm_nm: float = 0.0
+    wavelength_nm: Optional[float] = None
 
 
 @dataclass
@@ -992,9 +1030,11 @@ class IterativeCFLIBSSolver:
         abundance before normalization.
         """
         multipliers: Dict[str, float] = {}
-        # Per Hermann (2017), high-Z elements (Si, Fe, Ca, Al, Mg) in Aalto
-        # are sensitive to the corona. We use T_corona for their neutral-plane
-        # scaling if provided.
+        # Empirically, the refractory high-Z majors (Si, Fe, Ca, Al, Mg) are the
+        # most corona-sensitive, so when a two-region corona temperature is
+        # provided we use it (weighted) for their neutral-plane Saha scaling.
+        # This element set and the weighting are empirical stabilization choices,
+        # not a specific literature prescription.
         corona_sensitive = {"Si", "Fe", "Ca", "Al", "Mg"}
         for el in elements:
             U_I = partition_funcs_I.get(el, 25.0)
@@ -1079,6 +1119,27 @@ class IterativeCFLIBSSolver:
 
         delta_chi = ionization_potential_lowering(n_e, T_K)
         return {el: max(ip - delta_chi, 0.0) for el, ip in ips.items()}
+
+    def _estimate_ne_from_stark(
+        self,
+        stark_diagnostic: Optional["StarkDiagnosticLine"],
+        T_K: float,
+    ) -> Optional[float]:
+        """Estimate ``n_e`` from a measured Stark line FWHM (primary diagnostic).
+
+        Returns ``None`` when no usable Stark line is supplied, so the caller
+        can fall back to the (physically weaker) pressure-balance estimate.
+        """
+        if stark_diagnostic is None:
+            return None
+        return estimate_ne_from_stark(
+            measured_fwhm_nm=stark_diagnostic.measured_fwhm_nm,
+            T_K=T_K,
+            stark_w_ref=stark_diagnostic.stark_w_ref_nm,
+            stark_alpha=stark_diagnostic.stark_alpha,
+            instrument_fwhm_nm=stark_diagnostic.instrument_fwhm_nm,
+            doppler_fwhm_nm=stark_diagnostic.doppler_fwhm_nm,
+        )
 
     def _apply_saha_correction(
         self,
@@ -1514,7 +1575,11 @@ class IterativeCFLIBSSolver:
         )
 
     def solve(
-        self, observations: List[LineObservation], closure_mode: str = "standard", **closure_kwargs
+        self,
+        observations: List[LineObservation],
+        closure_mode: str = "standard",
+        stark_diagnostic: Optional["StarkDiagnosticLine"] = None,
+        **closure_kwargs,
     ) -> CFLIBSResult:
         """
         Estimate plasma temperature, electron density, and elemental concentrations from spectral line observations using the iterative CF-LIBS algorithm.
@@ -1526,6 +1591,7 @@ class IterativeCFLIBSSolver:
         Parameters:
             observations (List[LineObservation]): Spectral line observations to invert; lines are grouped by element.
             closure_mode (str): Closure method for converting Boltzmann intercepts to concentrations. One of "standard", "matrix", "oxide", "ilr", "pwlr", or "dirichlet_residual".
+            stark_diagnostic (StarkDiagnosticLine, optional): Measured isolated line used as the PRIMARY per-iteration ``n_e`` diagnostic via its Stark width (Tognoni 2010; Aragón & Aguilera 2010). When absent, ``n_e`` falls back to the (physically invalid for LIBS) 1-atm pressure balance, which logs a warning.
             **closure_kwargs: Additional keyword arguments forwarded to the chosen closure method (for example, a matrix_element for "matrix" mode).
 
         Returns:
@@ -1548,21 +1614,33 @@ class IterativeCFLIBSSolver:
         # The Saha-Boltzmann graph intercept extraction is likewise only
         # implemented on the Python path (its global lstsq is not traced into the
         # lax common-slope kernel), so it forces the Python loop as well.
+        # The Stark n_e diagnostic is only wired into the Python reference loop
+        # (the lax body's n_e update is a traced pressure-balance kernel), so a
+        # supplied stark_diagnostic forces the Python path.
         if (
             HAS_JAX
             and _lax_while_loop_enabled()
             and not self.apply_self_absorption
             and not self.saha_boltzmann_graph
+            and stark_diagnostic is None
         ):
             try:
                 return self._solve_lax(observations, closure_mode, **closure_kwargs)
             except _LaxFallback as exc:
                 logger.info("lax.while_loop path bailed out (%s); using Python loop", exc)
-                return self._solve_python(observations, closure_mode, **closure_kwargs)
-        return self._solve_python(observations, closure_mode, **closure_kwargs)
+                return self._solve_python(
+                    observations, closure_mode, stark_diagnostic=stark_diagnostic, **closure_kwargs
+                )
+        return self._solve_python(
+            observations, closure_mode, stark_diagnostic=stark_diagnostic, **closure_kwargs
+        )
 
     def _solve_python(
-        self, observations: List[LineObservation], closure_mode: str = "standard", **closure_kwargs
+        self,
+        observations: List[LineObservation],
+        closure_mode: str = "standard",
+        stark_diagnostic: Optional["StarkDiagnosticLine"] = None,
+        **closure_kwargs,
     ) -> CFLIBSResult:
         """Reference Python ``for``-loop implementation of :meth:`solve`.
 
@@ -1599,6 +1677,11 @@ class IterativeCFLIBSSolver:
         concentrations: Dict[str, float] = {}  # Initialize before loop
         last_common_fit: Optional[_CommonSlopeFit] = None
         last_max_tau = 0.0
+        # Diagnostics tracked across iterations for the post-loop quality_metrics
+        # (also guards against an early break leaving them unbound).
+        boltzmann_degenerate = True  # until a clean fit proves otherwise
+        closure_degenerate = False
+        ne_from_stark = False
 
         for _ in range(1, self.max_iterations + 1):
             T_prev = T_K
@@ -1692,8 +1775,10 @@ class IterativeCFLIBSSolver:
             T_K = 0.5 * T_prev + 0.5 * T_new
 
             if self.two_region:
-                # Per Hermann (2017), corona temperature is typically 70-90% of core.
-                # We use a fixed ratio of 0.8 for the iterative update.
+                # Empirical two-region DOF reduction: take the cooler outer/corona
+                # zone at ~0.8 of the core temperature. The 0.8 is a common
+                # stabilization choice for two-region LTE fits; it has NO specific
+                # literature attribution (it is not a Hermann 2017 value).
                 T_corona = 0.8 * T_K
 
             # Calculate Intercepts
@@ -1753,48 +1838,75 @@ class IterativeCFLIBSSolver:
 
             concentrations = closure_res.concentrations
 
-            # 5. Update electron density via pressure balance
+            # 5. Update electron density.
+            #
+            # PRIMARY: Stark broadening of a measured isolated line is the
+            # canonical n_e diagnostic in LIBS (Tognoni 2010; Aragón & Aguilera
+            # 2010, Spectrochim. Acta B 65, 395 — Hα / Fe I / Si II). When a
+            # usable Stark line is supplied we invert the electron-impact width
+            # law for n_e (instrument + Doppler deconvolved) and use it directly.
+            #
+            # FALLBACK: the isobaric 1-atm (STP) pressure balance. This is
+            # *physically invalid* for a LIBS plasma — the laser-induced plasma
+            # is a hypersonic shock at ~1e11 Pa initially and is NEVER at static
+            # 1 atm in the analysis window — so it is demoted to a last resort
+            # and emits a warning whenever it drives the n_e update.
+            ne_stark = self._estimate_ne_from_stark(stark_diagnostic, T_K)
+            if ne_stark is not None:
+                ne_new = ne_stark
+                ne_from_stark = True
+            else:
+                if stark_diagnostic is not None:
+                    logger.warning(
+                        "Stark diagnostic line supplied but yielded no usable n_e "
+                        "(width fully accounted for by instrument+Doppler, or no "
+                        "reference Stark width); falling back to 1-atm pressure balance."
+                    )
+                logger.warning(
+                    "No usable Stark n_e diagnostic; using the isobaric 1-atm "
+                    "(STP) pressure-balance fallback for n_e. This is physically "
+                    "non-standard for LIBS (hypersonic shock, never static 1 atm) "
+                    "and should be treated as a coarse last-resort estimate."
+                )
+                # Calculate avg_Z based on Saha ratios.
+                # eps_s = n_II / (n_I + n_II) = S / (1+S) (electrons per atom).
+                total_eps = 0.0
+                for el, C_s in concentrations.items():
+                    U_I = partition_funcs.get(el, 25.0)
+                    U_II = partition_funcs_II.get(el, 15.0)
+                    S = self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el])
+                    eps_s = S / (1.0 + S)
+                    total_eps += C_s * eps_s
 
-            # Calculate avg_Z based on Saha ratios
-            # n_II / n_I = S(T, ne)
-            # Z_bar_s = (1*n_I + 2*n_II) / (n_I + n_II) - 1  (since Z=0 for neutral? No, Z=1 neutral in our code)
-            # In code sp_num=1 is neutral (charge 0), sp_num=2 is ion (charge +1)
-            # So electron contribution: Neutral=0, Ion=1
-            # Avg electrons per atom of species s:
-            # eps_s = (n_II) / (n_I + n_II) = S / (1+S)
-
-            total_eps = 0.0
-            for el, C_s in concentrations.items():
-                U_I = partition_funcs.get(el, 25.0)
-                U_II = partition_funcs_II.get(el, 15.0)
-                S = self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el])
-                eps_s = S / (1.0 + S)
-                total_eps += C_s * eps_s
-
-            avg_Z = total_eps
-
-            # Total particle density (nuclei)
-            # n_tot = P / (k T (1 + avg_Z))
-            # n_e = avg_Z * n_tot
-
-            n_tot = self.pressure_pa / (KB * T_K * (1.0 + avg_Z))
-            # Convert to cm^-3
-            n_tot_cm3 = n_tot * 1e-6
-
-            ne_new = avg_Z * n_tot_cm3
+                avg_Z = total_eps
+                # n_tot = P / (k T (1 + avg_Z));  n_e = avg_Z * n_tot
+                n_tot = self.pressure_pa / (KB * T_K * (1.0 + avg_Z))
+                n_tot_cm3 = n_tot * 1e-6  # m^-3 -> cm^-3
+                ne_new = avg_Z * n_tot_cm3
+                ne_from_stark = False
 
             # Damping
             n_e = 0.5 * ne_prev + 0.5 * ne_new
 
             history.append((T_K, n_e))
 
+            # Composition degeneracy gate (supersedes PR #220, which only
+            # *reported* the flag). A single element soaking >80% of the closure
+            # mass with >1 element present is the "keystone collapse" signature:
+            # the closure has lost discriminating power and the composition is
+            # untrustworthy. Acting on it (not just reporting) means such a solve
+            # can NEVER be flagged converged.
+            closure_degenerate = ClosureEquation.validate_degeneracy(concentrations)
+
             # Check convergence. A degenerate Boltzmann fit holds T at the prior,
             # which would otherwise satisfy |ΔT| < tol spuriously — so a
-            # degenerate fit can never be reported as converged. The composition
-            # from such a fit is untrustworthy and the False flag tells callers
-            # (and round-trip/NIST tooling) to treat T and C as unconstrained.
+            # degenerate fit can never be reported as converged. Likewise a
+            # degenerate composition is never reported as converged. The False
+            # flag tells callers (and round-trip/NIST tooling) to treat T and C
+            # as unconstrained.
             if (
                 not boltzmann_degenerate
+                and not closure_degenerate
                 and abs(T_K - T_prev) < self.t_tolerance_k
                 and abs(n_e - ne_prev) / ne_prev < self.ne_tolerance_frac
             ):
@@ -1811,8 +1923,22 @@ class IterativeCFLIBSSolver:
             n_e_cm3=n_e,
             observations=observations,
         )
+        fit_r2_final = last_common_fit.r_squared if last_common_fit is not None else 0.0
         quality_metrics = {
-            "r_squared_last": last_common_fit.r_squared if last_common_fit is not None else 0.0
+            "r_squared_last": fit_r2_final,
+            # Silent-failure gates (supersedes PR #220 — incorporates its
+            # additive metrics AND acts on them). These let downstream consumers
+            # detect a non-physical Boltzmann slope or a collapsed composition
+            # even though the solver already refuses to flag such a solve as
+            # converged.
+            "boltzmann_r_squared": fit_r2_final,
+            "n_elements_fit": float(len(concentrations)),
+            "closure_degenerate": float(closure_degenerate),
+            "boltzmann_degenerate": float(boltzmann_degenerate),
+            # n_e provenance: 1.0 when the canonical Stark-width diagnostic drove
+            # the final n_e, 0.0 when the physically-invalid 1-atm pressure
+            # balance fallback was used.
+            "ne_from_stark": float(ne_from_stark),
         }
         quality_metrics.update(lte_report.quality_metrics)
         # Self-absorption diagnostics: max optical depth seen on the final
@@ -1820,7 +1946,17 @@ class IterativeCFLIBSSolver:
         quality_metrics["self_absorption_applied"] = float(self.apply_self_absorption)
         quality_metrics["self_absorption_max_tau"] = float(last_max_tau)
 
+        # Defensive: a degenerate Boltzmann slope (non-physical T) or a
+        # collapsed composition must never report converged, even if an early
+        # break left the loop's convergence flag set on a prior clean iteration.
+        if boltzmann_degenerate or closure_degenerate:
+            converged = False
+
         if self.two_region and T_corona is None:
+            # Empirical two-region DOF-reduction: the cooler outer/corona zone is
+            # taken as ~0.8 of the core temperature. This 0.8 is a common
+            # stabilization choice for two-region LTE fits, NOT a value with a
+            # specific literature attribution.
             T_corona = 0.8 * T_K
 
         return CFLIBSResult(
