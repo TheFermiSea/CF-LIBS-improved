@@ -82,6 +82,39 @@ def _passes_detection_gate(
     return coeff > 1e-10 and element_snr >= detection_snr and relative_to_max >= min_relative_coeff
 
 
+def _validate_and_sort_inputs(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Validate the observed spectrum and return it sorted by wavelength.
+
+    Coerces both arrays to float64, enforces 1-D non-empty equal-length
+    inputs, and sorts both by ascending wavelength when needed (the rest
+    of the pipeline assumes a monotonic grid). Extracted verbatim from
+    ``identify()`` — no behavior change.
+    """
+    wavelength = np.asarray(wavelength, dtype=np.float64)
+    intensity = np.asarray(intensity, dtype=np.float64)
+    if wavelength.ndim != 1 or intensity.ndim != 1:
+        raise ValueError("wavelength and intensity must be 1-D arrays")
+    if len(wavelength) == 0 or len(intensity) == 0:
+        raise ValueError("wavelength and intensity must be non-empty")
+    if len(wavelength) != len(intensity):
+        raise ValueError(
+            f"wavelength ({len(wavelength)}) and intensity ({len(intensity)}) "
+            "must have the same length"
+        )
+
+    # Ensure monotonically increasing wavelength (sort if needed)
+    sort_idx = np.argsort(wavelength)
+    if not np.array_equal(sort_idx, np.arange(len(wavelength))):
+        logger.debug("Sorting wavelength array to ensure monotonic order")
+        wavelength = wavelength[sort_idx]
+        intensity = intensity[sort_idx]
+
+    return wavelength, intensity
+
+
 # ---------------------------------------------------------------------------
 # JAX NNLS kernel (opt-in fast path for GPU batching)
 #
@@ -453,25 +486,8 @@ class SpectralNNLSIdentifier:
         ElementIdentificationResult
             Detected and rejected elements with metadata.
         """
-        # Input validation
-        wavelength = np.asarray(wavelength, dtype=np.float64)
-        intensity = np.asarray(intensity, dtype=np.float64)
-        if wavelength.ndim != 1 or intensity.ndim != 1:
-            raise ValueError("wavelength and intensity must be 1-D arrays")
-        if len(wavelength) == 0 or len(intensity) == 0:
-            raise ValueError("wavelength and intensity must be non-empty")
-        if len(wavelength) != len(intensity):
-            raise ValueError(
-                f"wavelength ({len(wavelength)}) and intensity ({len(intensity)}) "
-                "must have the same length"
-            )
-
-        # Ensure monotonically increasing wavelength (sort if needed)
-        sort_idx = np.argsort(wavelength)
-        if not np.array_equal(sort_idx, np.arange(len(wavelength))):
-            logger.debug("Sorting wavelength array to ensure monotonic order")
-            wavelength = wavelength[sort_idx]
-            intensity = intensity[sort_idx]
+        # Input validation + monotonic-wavelength sort
+        wavelength, intensity = _validate_and_sort_inputs(wavelength, intensity)
 
         # Step 1: Preprocess — baseline subtraction
         baseline = estimate_baseline(wavelength, intensity)
@@ -523,6 +539,55 @@ class SpectralNNLSIdentifier:
         element_coeffs = coefficients[:n_elements]
 
         # Step 7: Compute significance (SNR) for each element
+        snr, sigma_coeffs = self._compute_element_snr(
+            A, observed_resampled, coefficients, element_coeffs, n_elements
+        )
+
+        # Step 8: Build results
+        all_element_ids = self._build_element_identifications(
+            elements, element_coeffs, snr, sigma_coeffs, T_est, ne_est
+        )
+
+        # Split by detection
+        detected_elements = [e for e in all_element_ids if e.detected]
+        rejected_elements = [e for e in all_element_ids if not e.detected]
+
+        return ElementIdentificationResult(
+            detected_elements=detected_elements,
+            rejected_elements=rejected_elements,
+            all_elements=all_element_ids,
+            experimental_peaks=[],  # Full-spectrum: no peak list
+            n_peaks=0,
+            n_matched_peaks=0,
+            n_unmatched_peaks=0,
+            algorithm="spectral_nnls",
+            parameters={
+                "detection_snr": self.detection_snr,
+                "min_relative_coeff": self.min_relative_coeff,
+                "continuum_degree": self.continuum_degree,
+                "estimated_T_K": T_est,
+                "estimated_ne_cm3": ne_est,
+                "residual_norm": float(residual_norm),
+                "n_elements_tested": n_elements,
+                "n_detected": len(detected_elements),
+            },
+        )
+
+    def _compute_element_snr(
+        self,
+        A: np.ndarray,
+        observed_resampled: np.ndarray,
+        coefficients: np.ndarray,
+        element_coeffs: np.ndarray,
+        n_elements: int,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Coefficient SNR + per-element sigma for the NNLS decomposition.
+
+        Computes the residual variance (floored at 1e-4 of the signal
+        variance), the coefficient uncertainties from the
+        ``(A^T A)^-1`` diagonal, and ``snr = element_coeffs / sigma``.
+        Extracted verbatim from ``identify()`` Step 7 — no behavior change.
+        """
         residual = observed_resampled - A.T @ coefficients
         n_params = A.shape[0]
         dof = max(len(residual) - n_params, 1)
@@ -542,8 +607,23 @@ class SpectralNNLSIdentifier:
             sigma_coeffs = np.ones(n_elements) * 0.1
 
         snr = element_coeffs / np.maximum(sigma_coeffs, 1e-10)
+        return snr, sigma_coeffs
 
-        # Step 8: Build results
+    def _build_element_identifications(
+        self,
+        elements: List[str],
+        element_coeffs: np.ndarray,
+        snr: np.ndarray,
+        sigma_coeffs: np.ndarray,
+        T_est: float,
+        ne_est: float,
+    ) -> List[ElementIdentification]:
+        """Build the per-element :class:`ElementIdentification` list.
+
+        Applies the detection gate and packs the NNLS diagnostics into each
+        element's metadata. Extracted verbatim from ``identify()`` Step 8 —
+        no behavior change.
+        """
         all_element_ids: List[ElementIdentification] = []
 
         # Total element coefficient mass: reported as ``concentration_estimate``
@@ -603,30 +683,7 @@ class SpectralNNLSIdentifier:
             )
             all_element_ids.append(element_id)
 
-        # Split by detection
-        detected_elements = [e for e in all_element_ids if e.detected]
-        rejected_elements = [e for e in all_element_ids if not e.detected]
-
-        return ElementIdentificationResult(
-            detected_elements=detected_elements,
-            rejected_elements=rejected_elements,
-            all_elements=all_element_ids,
-            experimental_peaks=[],  # Full-spectrum: no peak list
-            n_peaks=0,
-            n_matched_peaks=0,
-            n_unmatched_peaks=0,
-            algorithm="spectral_nnls",
-            parameters={
-                "detection_snr": self.detection_snr,
-                "min_relative_coeff": self.min_relative_coeff,
-                "continuum_degree": self.continuum_degree,
-                "estimated_T_K": T_est,
-                "estimated_ne_cm3": ne_est,
-                "residual_norm": float(residual_norm),
-                "n_elements_tested": n_elements,
-                "n_detected": len(detected_elements),
-            },
-        )
+        return all_element_ids
 
     def _build_augmented_matrix(
         self,
