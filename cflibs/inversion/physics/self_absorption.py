@@ -477,6 +477,34 @@ def correct_via_doublet_ratio(
     )
 
 
+def _ordered_doublet_pair(
+    li: LineObservation,
+    lj: LineObservation,
+    dE_ev_tol: float,
+) -> Optional[Tuple[LineObservation, LineObservation]]:
+    """
+    Return ``(li, lj)`` candidates as a doublet pair ordered by
+    wavelength (shorter first), or ``None`` when the two lines do not
+    form a doublet.
+
+    Two lines form a doublet when they share the same species (element +
+    ionization stage) and the same upper level (``E_k_ev`` within
+    ``dE_ev_tol``). Equal-wavelength matches are degenerate and rejected.
+    """
+    if li.element != lj.element:
+        return None
+    if li.ionization_stage != lj.ionization_stage:
+        return None
+    if abs(li.E_k_ev - lj.E_k_ev) > dE_ev_tol:
+        return None
+    if li.wavelength_nm < lj.wavelength_nm:
+        return (li, lj)
+    if lj.wavelength_nm < li.wavelength_nm:
+        return (lj, li)
+    # Equal-wavelength case: skip (degenerate, not a doublet)
+    return None
+
+
 def find_doublet_pairs(
     lines: Sequence[LineObservation],
     dE_ev_tol: float = 0.001,
@@ -504,18 +532,9 @@ def find_doublet_pairs(
     n = len(lines)
     for i in range(n):
         for j in range(i + 1, n):
-            li, lj = lines[i], lines[j]
-            if li.element != lj.element:
-                continue
-            if li.ionization_stage != lj.ionization_stage:
-                continue
-            if abs(li.E_k_ev - lj.E_k_ev) > dE_ev_tol:
-                continue
-            if li.wavelength_nm < lj.wavelength_nm:
-                pairs.append((li, lj))
-            elif lj.wavelength_nm < li.wavelength_nm:
-                pairs.append((lj, li))
-            # Equal-wavelength case: skip (degenerate, not a doublet)
+            pair = _ordered_doublet_pair(lines[i], lines[j], dE_ev_tol)
+            if pair is not None:
+                pairs.append(pair)
     return pairs
 
 
@@ -733,58 +752,23 @@ class SelfAbsorptionCorrector:
         # result was a genuine optically-thin spectrum or a silent skip.
         n_observations = len(observations)
         if n_observations == 0:
-            logger.info(
-                "self_absorption.correct skipped: empty observation list "
-                "(T=%.0fK, n_tot=%.2e cm^-3, n_elements=%d)",
-                temperature_K,
-                total_number_density_cm3,
-                len(concentrations),
-            )
-            return SelfAbsorptionResult(
-                corrected_observations=[],
-                masked_observations=[],
-                corrections={},
-                n_corrected=0,
-                n_masked=0,
-                max_optical_depth=0.0,
-                warnings=["Empty observation list — no correction applied"],
-            )
-        if total_number_density_cm3 <= 0:
-            logger.warning(
-                "self_absorption.correct: non-positive total number density "
-                "(n_tot=%.2e cm^-3); all optical depths will be zero and no "
-                "correction will be applied (n_lines=%d)",
-                total_number_density_cm3,
-                n_observations,
-            )
-        if temperature_K <= 0:
-            logger.warning(
-                "self_absorption.correct: non-positive temperature "
-                "(T=%.1fK); optical depth estimator will return zero and no "
-                "correction will be applied (n_lines=%d)",
-                temperature_K,
-                n_observations,
-            )
-        # Track which element/stage pairs are *seen* in observations but absent
-        # from `concentrations` — these silently get tau=0 inside
-        # `_estimate_optical_depth`. Used for the summary log emitted below.
-        missing_conc_elements = {
-            obs.element for obs in observations if obs.element not in concentrations
-        }
-        missing_partition_elements = {
-            obs.element for obs in observations if obs.element not in partition_funcs
-        }
-        if missing_conc_elements:
-            logger.info(
-                "self_absorption.correct: elements with no concentration entry "
-                "(tau forced to 0): %s",
-                sorted(missing_conc_elements),
+            return self._empty_correct_result(
+                temperature_K, total_number_density_cm3, concentrations
             )
 
-        warnings = []
-        corrected_obs = []
-        masked_obs = []
-        corrections = {}
+        missing_conc_elements, missing_partition_elements = self._log_correct_preconditions(
+            observations,
+            temperature_K,
+            total_number_density_cm3,
+            concentrations,
+            partition_funcs,
+            n_observations,
+        )
+
+        warnings: List[str] = []
+        corrected_obs: List[LineObservation] = []
+        masked_obs: List[LineObservation] = []
+        corrections: Dict[float, AbsorptionCorrectionResult] = {}
         max_tau = 0.0
 
         for obs in observations:
@@ -803,71 +787,21 @@ class SelfAbsorptionCorrector:
 
             max_tau = max(max_tau, tau)
 
-            if tau > self.mask_threshold:
-                # Too optically thick - mask this line
-                masked_obs.append(obs)
-                corrections[obs.wavelength_nm] = AbsorptionCorrectionResult(
-                    original_intensity=obs.intensity,
-                    corrected_intensity=0.0,
-                    optical_depth=tau,
-                    correction_factor=0.0,
-                    is_optically_thick=True,
-                )
-                warnings.append(
-                    f"Line {obs.wavelength_nm:.2f} nm masked: τ={tau:.2f} > {self.mask_threshold}"
-                )
-
-            elif tau > self.optical_depth_threshold:
-                # Apply correction — pass plasma state so _apply_recursive_correction
-                # can recompute τ from physics each iteration (Bulajic 2002 §3) rather
-                # than rescaling it from the observed intensity (which would be a
-                # dimensionally-wrong feedback hack). See B4 in the 2026-05-27 physics
-                # audit for the bug being fixed here.
-                result = self._apply_recursive_correction(
-                    obs,
-                    tau,
-                    temperature_K,
-                    concentrations,
-                    total_number_density_cm3,
-                    partition_funcs,
-                    E_i_ev,
-                )
-                corrected_obs.append(self._create_corrected_observation(obs, result))
-                corrections[obs.wavelength_nm] = result
-
-            else:
-                # Optically thin - no correction needed
-                corrected_obs.append(obs)
-                corrections[obs.wavelength_nm] = AbsorptionCorrectionResult(
-                    original_intensity=obs.intensity,
-                    corrected_intensity=obs.intensity,
-                    optical_depth=tau,
-                    correction_factor=1.0,
-                    is_optically_thick=False,
-                )
-
-        # Per-element bookkeeping for the summary log: which elements had at
-        # least one line corrected or masked?  Operators want to see this when
-        # debugging "why was Si missed in soil at 60% SiO2".
-        affected_elements: Dict[str, Dict[str, int]] = {}
-        for obs in observations:
-            corr = corrections.get(obs.wavelength_nm)
-            if corr is None:
-                continue
-            slot = affected_elements.setdefault(
-                obs.element, {"corrected": 0, "masked": 0, "thin": 0}
+            self._record_correction(
+                obs,
+                tau,
+                temperature_K,
+                concentrations,
+                total_number_density_cm3,
+                partition_funcs,
+                E_i_ev,
+                corrected_obs,
+                masked_obs,
+                corrections,
+                warnings,
             )
-            if corr.correction_factor == 0.0:
-                slot["masked"] += 1
-            elif corr.correction_factor == 1.0:
-                slot["thin"] += 1
-            else:
-                slot["corrected"] += 1
-        affected_summary = {
-            el: counts
-            for el, counts in affected_elements.items()
-            if counts["corrected"] > 0 or counts["masked"] > 0
-        }
+
+        affected_summary = self._summarize_affected_elements(observations, corrections)
 
         # Preserve historical n_corrected semantics (count of non-thin
         # corrections, which historically lumped masked + corrected) so the
@@ -885,6 +819,204 @@ class SelfAbsorptionCorrector:
             [c for c in corrections.values() if abs(c.correction_factor - 1.0) > 1e-9]
         )
         n_masked = len(masked_obs)
+
+        self._log_correct_summary(
+            n_observations,
+            n_corrected_legacy,
+            n_masked,
+            max_tau,
+            temperature_K,
+            total_number_density_cm3,
+            missing_conc_elements,
+            missing_partition_elements,
+            affected_summary,
+        )
+
+        return SelfAbsorptionResult(
+            corrected_observations=corrected_obs,
+            masked_observations=masked_obs,
+            corrections=corrections,
+            n_corrected=n_corrected_legacy,
+            n_masked=n_masked,
+            max_optical_depth=max_tau,
+            warnings=warnings,
+        )
+
+    def _empty_correct_result(
+        self,
+        temperature_K: float,
+        total_number_density_cm3: float,
+        concentrations: Dict[str, float],
+    ) -> SelfAbsorptionResult:
+        """Log and build the no-op result for an empty observation list."""
+        logger.info(
+            "self_absorption.correct skipped: empty observation list "
+            "(T=%.0fK, n_tot=%.2e cm^-3, n_elements=%d)",
+            temperature_K,
+            total_number_density_cm3,
+            len(concentrations),
+        )
+        return SelfAbsorptionResult(
+            corrected_observations=[],
+            masked_observations=[],
+            corrections={},
+            n_corrected=0,
+            n_masked=0,
+            max_optical_depth=0.0,
+            warnings=["Empty observation list — no correction applied"],
+        )
+
+    def _log_correct_preconditions(
+        self,
+        observations: List[LineObservation],
+        temperature_K: float,
+        total_number_density_cm3: float,
+        concentrations: Dict[str, float],
+        partition_funcs: Dict[str, float],
+        n_observations: int,
+    ) -> Tuple[set, set]:
+        """
+        Emit pre-loop edge-case warnings and return the sets of elements that
+        are seen in ``observations`` but missing from ``concentrations`` /
+        ``partition_funcs``.
+
+        Elements absent from ``concentrations`` silently get tau=0 inside
+        ``_estimate_optical_depth``; the returned sets feed the summary log.
+        """
+        if total_number_density_cm3 <= 0:
+            logger.warning(
+                "self_absorption.correct: non-positive total number density "
+                "(n_tot=%.2e cm^-3); all optical depths will be zero and no "
+                "correction will be applied (n_lines=%d)",
+                total_number_density_cm3,
+                n_observations,
+            )
+        if temperature_K <= 0:
+            logger.warning(
+                "self_absorption.correct: non-positive temperature "
+                "(T=%.1fK); optical depth estimator will return zero and no "
+                "correction will be applied (n_lines=%d)",
+                temperature_K,
+                n_observations,
+            )
+        missing_conc_elements = {
+            obs.element for obs in observations if obs.element not in concentrations
+        }
+        missing_partition_elements = {
+            obs.element for obs in observations if obs.element not in partition_funcs
+        }
+        if missing_conc_elements:
+            logger.info(
+                "self_absorption.correct: elements with no concentration entry "
+                "(tau forced to 0): %s",
+                sorted(missing_conc_elements),
+            )
+        return missing_conc_elements, missing_partition_elements
+
+    def _record_correction(
+        self,
+        obs: LineObservation,
+        tau: float,
+        temperature_K: float,
+        concentrations: Dict[str, float],
+        total_number_density_cm3: float,
+        partition_funcs: Dict[str, float],
+        E_i_ev: float,
+        corrected_obs: List[LineObservation],
+        masked_obs: List[LineObservation],
+        corrections: Dict[float, AbsorptionCorrectionResult],
+        warnings: List[str],
+    ) -> None:
+        """
+        Classify a single line by optical depth and record its outcome
+        (mask / correct / leave-thin) into the supplied accumulators.
+        """
+        if tau > self.mask_threshold:
+            # Too optically thick - mask this line
+            masked_obs.append(obs)
+            corrections[obs.wavelength_nm] = AbsorptionCorrectionResult(
+                original_intensity=obs.intensity,
+                corrected_intensity=0.0,
+                optical_depth=tau,
+                correction_factor=0.0,
+                is_optically_thick=True,
+            )
+            warnings.append(
+                f"Line {obs.wavelength_nm:.2f} nm masked: τ={tau:.2f} > {self.mask_threshold}"
+            )
+
+        elif tau > self.optical_depth_threshold:
+            # Apply correction — pass plasma state so _apply_recursive_correction
+            # can recompute τ from physics each iteration (Bulajic 2002 §3) rather
+            # than rescaling it from the observed intensity (which would be a
+            # dimensionally-wrong feedback hack). See B4 in the 2026-05-27 physics
+            # audit for the bug being fixed here.
+            result = self._apply_recursive_correction(
+                obs,
+                tau,
+                temperature_K,
+                concentrations,
+                total_number_density_cm3,
+                partition_funcs,
+                E_i_ev,
+            )
+            corrected_obs.append(self._create_corrected_observation(obs, result))
+            corrections[obs.wavelength_nm] = result
+
+        else:
+            # Optically thin - no correction needed
+            corrected_obs.append(obs)
+            corrections[obs.wavelength_nm] = AbsorptionCorrectionResult(
+                original_intensity=obs.intensity,
+                corrected_intensity=obs.intensity,
+                optical_depth=tau,
+                correction_factor=1.0,
+                is_optically_thick=False,
+            )
+
+    @staticmethod
+    def _summarize_affected_elements(
+        observations: List[LineObservation],
+        corrections: Dict[float, AbsorptionCorrectionResult],
+    ) -> Dict[str, Dict[str, int]]:
+        """
+        Per-element bookkeeping for the summary log: which elements had at
+        least one line corrected or masked?  Operators want to see this when
+        debugging "why was Si missed in soil at 60% SiO2".
+        """
+        affected_elements: Dict[str, Dict[str, int]] = {}
+        for obs in observations:
+            corr = corrections.get(obs.wavelength_nm)
+            if corr is None:
+                continue
+            slot = affected_elements.setdefault(
+                obs.element, {"corrected": 0, "masked": 0, "thin": 0}
+            )
+            if corr.correction_factor == 0.0:
+                slot["masked"] += 1
+            elif corr.correction_factor == 1.0:
+                slot["thin"] += 1
+            else:
+                slot["corrected"] += 1
+        return {
+            el: counts
+            for el, counts in affected_elements.items()
+            if counts["corrected"] > 0 or counts["masked"] > 0
+        }
+
+    @staticmethod
+    def _log_correct_summary(
+        n_observations: int,
+        n_corrected_legacy: int,
+        n_masked: int,
+        max_tau: float,
+        temperature_K: float,
+        total_number_density_cm3: float,
+        missing_conc_elements: set,
+        missing_partition_elements: set,
+        affected_summary: Dict[str, Dict[str, int]],
+    ) -> None:
+        """Emit the structured per-call summary log line."""
         n_truly_corrected = n_corrected_legacy - n_masked
         n_thin = n_observations - n_corrected_legacy
 
@@ -903,16 +1035,6 @@ class SelfAbsorptionCorrector:
             len(missing_conc_elements),
             len(missing_partition_elements),
             affected_summary or "{}",
-        )
-
-        return SelfAbsorptionResult(
-            corrected_observations=corrected_obs,
-            masked_observations=masked_obs,
-            corrections=corrections,
-            n_corrected=n_corrected_legacy,
-            n_masked=n_masked,
-            max_optical_depth=max_tau,
-            warnings=warnings,
         )
 
     def _estimate_optical_depth(
