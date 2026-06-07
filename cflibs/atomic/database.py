@@ -87,7 +87,19 @@ class AtomicDatabase(AtomicDataSource):
         """Perform the actual migration steps."""
         cursor = conn.cursor()
 
-        # 1. Check lines table columns
+        self._migrate_lines_columns(cursor)
+        self._migrate_partition_functions_table(cursor)
+        self._migrate_species_physics_columns(cursor)
+        self._populate_energy_levels_if_empty(cursor)
+        self._populate_species_physics_if_empty(cursor)
+        self._populate_partition_functions_if_empty(cursor)
+        self._backfill_aki_uncertainties_if_missing(cursor)
+
+        conn.commit()
+
+    @staticmethod
+    def _migrate_lines_columns(cursor: sqlite3.Cursor):
+        """Step 1: add any missing Stark/uncertainty columns to the lines table."""
         cursor.execute("PRAGMA table_info(lines)")
         columns = {row[1] for row in cursor.fetchall()}
 
@@ -103,25 +115,30 @@ class AtomicDatabase(AtomicDataSource):
         valid_dtypes = {"REAL", "INTEGER", "TEXT", "BLOB", "NUMERIC"}
         for col, dtype in required_line_cols.items():
             if col not in columns:
-                if not col.isidentifier():
-                    raise ValueError(f"Invalid column name for migration: {col}")
-                if dtype.upper() not in valid_dtypes:
-                    raise ValueError(f"Invalid data type for migration: {dtype}")
+                AtomicDatabase._add_line_column(cursor, col, dtype, valid_dtypes)
 
-                logger.info(f"Migrating schema: Adding {col} to lines table")
-                cursor.execute(f"ALTER TABLE lines ADD COLUMN {col} {dtype}")
+    @staticmethod
+    def _add_line_column(cursor: sqlite3.Cursor, col: str, dtype: str, valid_dtypes: set[str]):
+        """Validate and add a single column to the lines table, backfilling as needed."""
+        if not col.isidentifier():
+            raise ValueError(f"Invalid column name for migration: {col}")
+        if dtype.upper() not in valid_dtypes:
+            raise ValueError(f"Invalid data type for migration: {dtype}")
 
-                # Backfill is_resonance if we just added it
-                if col == "is_resonance":
-                    logger.info("Backfilling is_resonance based on ei_ev")
-                    # SQLite doesn't strictly support boolean, so 1/0
-                    # Assuming ei_ev exists and is populated
-                    cursor.execute("UPDATE lines SET is_resonance = 1 WHERE ei_ev < 0.01")
-                    cursor.execute(
-                        "UPDATE lines SET is_resonance = 0 WHERE ei_ev >= 0.01 OR ei_ev IS NULL"
-                    )
+        logger.info(f"Migrating schema: Adding {col} to lines table")
+        cursor.execute(f"ALTER TABLE lines ADD COLUMN {col} {dtype}")
 
-        # 2. Check partition_functions table
+        # Backfill is_resonance if we just added it
+        if col == "is_resonance":
+            logger.info("Backfilling is_resonance based on ei_ev")
+            # SQLite doesn't strictly support boolean, so 1/0
+            # Assuming ei_ev exists and is populated
+            cursor.execute("UPDATE lines SET is_resonance = 1 WHERE ei_ev < 0.01")
+            cursor.execute("UPDATE lines SET is_resonance = 0 WHERE ei_ev >= 0.01 OR ei_ev IS NULL")
+
+    @staticmethod
+    def _migrate_partition_functions_table(cursor: sqlite3.Cursor):
+        """Step 2: create the partition_functions table if it does not exist."""
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='partition_functions'"
         )
@@ -143,7 +160,9 @@ class AtomicDatabase(AtomicDataSource):
                 )
             """)
 
-        # 3. Check species_physics table for atomic_mass
+    @staticmethod
+    def _migrate_species_physics_columns(cursor: sqlite3.Cursor):
+        """Step 3: add the atomic_mass column to species_physics if missing."""
         cursor.execute("PRAGMA table_info(species_physics)")
         physics_columns = {row[1] for row in cursor.fetchall()}
 
@@ -151,7 +170,8 @@ class AtomicDatabase(AtomicDataSource):
             logger.info("Migrating schema: Adding atomic_mass to species_physics table")
             cursor.execute("ALTER TABLE species_physics ADD COLUMN atomic_mass REAL")
 
-        # 4. Auto-populate energy_levels from lines table if empty
+    def _populate_energy_levels_if_empty(self, cursor: sqlite3.Cursor):
+        """Step 4: auto-populate energy_levels from the lines table when empty."""
         cursor.execute("SELECT COUNT(*) FROM energy_levels")
         if cursor.fetchone()[0] == 0:
             cursor.execute("SELECT COUNT(*) FROM lines")
@@ -160,19 +180,22 @@ class AtomicDatabase(AtomicDataSource):
                 logger.info("Populating energy_levels from lines table...")
                 self._populate_energy_levels(cursor)
 
-        # 5. Auto-populate species_physics with NIST IPs if empty
+    def _populate_species_physics_if_empty(self, cursor: sqlite3.Cursor):
+        """Step 5: auto-populate species_physics with NIST IPs when empty."""
         cursor.execute("SELECT COUNT(*) FROM species_physics")
         if cursor.fetchone()[0] == 0:
             logger.info("Populating species_physics with NIST ionization potentials...")
             self._populate_species_physics(cursor)
 
-        # 6. Auto-populate partition_functions with NIST-fitted Irwin coefficients if empty
+    def _populate_partition_functions_if_empty(self, cursor: sqlite3.Cursor):
+        """Step 6: auto-populate partition_functions with Irwin coefficients when empty."""
         cursor.execute("SELECT COUNT(*) FROM partition_functions")
         if cursor.fetchone()[0] == 0:
             logger.info("Populating partition_functions with NIST Irwin coefficients...")
             self._populate_partition_functions(cursor)
 
-        # 7. Backfill aki_uncertainty from accuracy_grade or heuristic where missing
+    def _backfill_aki_uncertainties_if_missing(self, cursor: sqlite3.Cursor):
+        """Step 7: backfill aki_uncertainty from accuracy_grade or heuristic where missing."""
         cursor.execute(
             "SELECT COUNT(*) FROM lines WHERE aki IS NOT NULL AND aki_uncertainty IS NULL"
         )
@@ -180,8 +203,6 @@ class AtomicDatabase(AtomicDataSource):
         if n_missing > 0:
             logger.info("Backfilling %d lines missing aki_uncertainty...", n_missing)
             self._populate_aki_uncertainties(cursor)
-
-        conn.commit()
 
     @staticmethod
     def _populate_energy_levels(cursor: sqlite3.Cursor):
@@ -365,6 +386,35 @@ class AtomicDatabase(AtomicDataSource):
         list[Transition]
             list of transition objects
         """
+        query, params = self._build_transitions_query(
+            element,
+            ionization_stage,
+            wavelength_min,
+            wavelength_max,
+            min_relative_intensity,
+        )
+
+        try:
+            with self._get_connection() as conn:
+                df = pd.read_sql_query(query, conn, params=params)
+        except Exception as e:
+            logger.error(f"Error querying transitions: {e}")
+            return []
+
+        transitions = [self._row_to_transition(row) for _, row in df.iterrows()]
+
+        logger.debug(f"Retrieved {len(transitions)} transitions for {element}")
+        return transitions
+
+    @staticmethod
+    def _build_transitions_query(
+        element: str,
+        ionization_stage: int | None,
+        wavelength_min: float | None,
+        wavelength_max: float | None,
+        min_relative_intensity: float | None,
+    ) -> tuple[str, list[object]]:
+        """Build the SQL query and bound parameters for :meth:`get_transitions`."""
         # Check if new columns exist in the actual query execution (though schema check should have fixed it)
         # We select all relevant columns.
         query = """
@@ -395,64 +445,53 @@ class AtomicDatabase(AtomicDataSource):
             params.append(min_relative_intensity)
 
         query += " ORDER BY wavelength_nm"
+        return query, params
 
-        try:
-            with self._get_connection() as conn:
-                df = pd.read_sql_query(query, conn, params=params)
-        except Exception as e:
-            logger.error(f"Error querying transitions: {e}")
-            return []
+    @staticmethod
+    def _row_to_transition(row: "pd.Series") -> Transition:
+        """Convert a single ``lines`` query row into a :class:`Transition`."""
+        # Handle potential missing columns if something went wrong, defaulting to None
+        stark_w = float(row["stark_w"]) if "stark_w" in row and pd.notna(row["stark_w"]) else None
+        stark_alpha = (
+            float(row["stark_alpha"])
+            if "stark_alpha" in row and pd.notna(row["stark_alpha"])
+            else None
+        )
+        stark_shift = (
+            float(row["stark_shift"])
+            if "stark_shift" in row and pd.notna(row["stark_shift"])
+            else None
+        )
+        is_resonance = (
+            bool(row["is_resonance"])
+            if "is_resonance" in row and pd.notna(row["is_resonance"])
+            else False
+        )
 
-        transitions = []
-        for _, row in df.iterrows():
-            # Handle potential missing columns if something went wrong, defaulting to None
-            stark_w = (
-                float(row["stark_w"]) if "stark_w" in row and pd.notna(row["stark_w"]) else None
-            )
-            stark_alpha = (
-                float(row["stark_alpha"])
-                if "stark_alpha" in row and pd.notna(row["stark_alpha"])
-                else None
-            )
-            stark_shift = (
-                float(row["stark_shift"])
-                if "stark_shift" in row and pd.notna(row["stark_shift"])
-                else None
-            )
-            is_resonance = (
-                bool(row["is_resonance"])
-                if "is_resonance" in row and pd.notna(row["is_resonance"])
-                else False
-            )
+        aki_uncertainty = (
+            float(row["aki_uncertainty"]) if pd.notna(row["aki_uncertainty"]) else None
+        )
+        accuracy_grade = str(row["accuracy_grade"]) if pd.notna(row["accuracy_grade"]) else None
 
-            aki_uncertainty = (
-                float(row["aki_uncertainty"]) if pd.notna(row["aki_uncertainty"]) else None
-            )
-            accuracy_grade = str(row["accuracy_grade"]) if pd.notna(row["accuracy_grade"]) else None
-
-            trans = Transition(
-                element=row["element"],
-                ionization_stage=int(row["sp_num"]),
-                wavelength_nm=float(row["wavelength_nm"]),
-                A_ki=float(row["aki"]),
-                E_k_ev=float(row["ek_ev"]),
-                E_i_ev=(0.0 if pd.isna(row.get("ei_ev", 0.0)) else float(row.get("ei_ev", 0.0))),
-                g_k=int(row["gk"]),
-                g_i=1 if pd.isna(row.get("gi", 1)) else int(row.get("gi", 1)),
-                relative_intensity=(
-                    float(row.get("rel_int", 0.0)) if pd.notna(row.get("rel_int")) else None
-                ),
-                stark_w=stark_w,
-                stark_alpha=stark_alpha,
-                stark_shift=stark_shift,
-                is_resonance=is_resonance,
-                aki_uncertainty=aki_uncertainty,
-                accuracy_grade=accuracy_grade,
-            )
-            transitions.append(trans)
-
-        logger.debug(f"Retrieved {len(transitions)} transitions for {element}")
-        return transitions
+        return Transition(
+            element=row["element"],
+            ionization_stage=int(row["sp_num"]),
+            wavelength_nm=float(row["wavelength_nm"]),
+            A_ki=float(row["aki"]),
+            E_k_ev=float(row["ek_ev"]),
+            E_i_ev=(0.0 if pd.isna(row.get("ei_ev", 0.0)) else float(row.get("ei_ev", 0.0))),
+            g_k=int(row["gk"]),
+            g_i=1 if pd.isna(row.get("gi", 1)) else int(row.get("gi", 1)),
+            relative_intensity=(
+                float(row.get("rel_int", 0.0)) if pd.notna(row.get("rel_int")) else None
+            ),
+            stark_w=stark_w,
+            stark_alpha=stark_alpha,
+            stark_shift=stark_shift,
+            is_resonance=is_resonance,
+            aki_uncertainty=aki_uncertainty,
+            accuracy_grade=accuracy_grade,
+        )
 
     def get_energy_levels(self, element: str, ionization_stage: int) -> list[EnergyLevel]:
         """
@@ -795,6 +834,107 @@ class AtomicDatabase(AtomicDataSource):
                 f"wavelength_range must be (low, high) with low < high; got {wavelength_range!r}"
             )
 
+        (
+            species_keys,
+            ip_list,
+            partition_rows,
+            partition_t_min_list,
+            partition_t_max_list,
+            partition_g0_list,
+            level_g_rows,
+            level_E_rows,
+        ) = self._collect_species_partitions(elements, pad_to_n_elements, include_levels)
+
+        species_to_idx = {key: i for i, key in enumerate(species_keys)}
+        (
+            wls,
+            Akis,
+            Eks,
+            gks,
+            Eis,
+            gis,
+            sp_idx,
+            stark_ws,
+            stark_alphas,
+            stark_ds,
+        ) = self._collect_line_arrays(
+            elements, wl_min, wl_max, min_relative_intensity, species_to_idx
+        )
+
+        n_lines = len(wls)
+        line_wavelengths_nm = _xp.asarray(wls, dtype=_real_dtype)
+        line_A_ki = _xp.asarray(Akis, dtype=_real_dtype)
+        line_E_k_ev = _xp.asarray(Eks, dtype=_real_dtype)
+        line_g_k = _xp.asarray(gks, dtype=_real_dtype)
+        line_E_i_ev = _xp.asarray(Eis, dtype=_real_dtype)
+        line_g_i = _xp.asarray(gis, dtype=_real_dtype)
+        line_species_index = _xp.asarray(sp_idx, dtype=_xp.int32)
+        line_stark_w = _xp.asarray(stark_ws, dtype=_real_dtype)
+        line_stark_alpha = _xp.asarray(stark_alphas, dtype=_real_dtype)
+        line_stark_d = _xp.asarray(stark_ds, dtype=_real_dtype)
+        line_natural_w = _xp.zeros(n_lines, dtype=_real_dtype)
+
+        if partition_rows:
+            partition_coeffs = _xp.asarray(partition_rows, dtype=_real_dtype)
+            partition_t_min = _xp.asarray(partition_t_min_list, dtype=_real_dtype)
+            partition_t_max = _xp.asarray(partition_t_max_list, dtype=_real_dtype)
+            partition_g0 = _xp.asarray(partition_g0_list, dtype=_real_dtype)
+        else:
+            partition_coeffs = _xp.zeros((0, 5), dtype=_real_dtype)
+            partition_t_min = _xp.zeros((0,), dtype=_real_dtype)
+            partition_t_max = _xp.zeros((0,), dtype=_real_dtype)
+            partition_g0 = _xp.zeros((0,), dtype=_real_dtype)
+        ionization_potential_ev = _xp.asarray(ip_list, dtype=_real_dtype)
+
+        level_g_out, level_E_ev_out, level_mask_out = self._pad_level_arrays(
+            level_g_rows, level_E_rows, include_levels, _xp
+        )
+
+        return AtomicSnapshot(
+            species=tuple(species_keys),
+            line_wavelengths_nm=line_wavelengths_nm,
+            line_A_ki=line_A_ki,
+            line_E_k_ev=line_E_k_ev,
+            line_g_k=line_g_k,
+            line_E_i_ev=line_E_i_ev,
+            line_g_i=line_g_i,
+            line_species_index=line_species_index,
+            line_stark_w=line_stark_w,
+            line_natural_w=line_natural_w,
+            line_stark_alpha=line_stark_alpha,
+            line_stark_d=line_stark_d,
+            partition_coeffs=partition_coeffs,
+            ionization_potential_ev=ionization_potential_ev,
+            level_g=level_g_out,
+            level_E_ev=level_E_ev_out,
+            level_mask=level_mask_out,
+            partition_t_min=partition_t_min,
+            partition_t_max=partition_t_max,
+            partition_g0=partition_g0,
+        )
+
+    def _collect_species_partitions(
+        self,
+        elements: list[str],
+        pad_to_n_elements: int | None,
+        include_levels: bool,
+    ) -> tuple[
+        list[tuple[str, int]],
+        list[float],
+        list[list[float]],
+        list[float],
+        list[float],
+        list[float],
+        list[list[float]],
+        list[list[float]],
+    ]:
+        """Gather per-species ionization/partition data for :meth:`snapshot`.
+
+        Builds, in species-axis order, the keys, ionization potentials,
+        partition-polynomial rows (with per-species ``t_min``/``t_max``/``g0``),
+        and optional energy-level rows, then applies the optional zero-padding
+        up to ``pad_to_n_elements``.
+        """
         species_keys: list[tuple[str, int]] = []
         ip_list: list[float] = []
         partition_rows: list[list[float]] = []
@@ -862,7 +1002,42 @@ class AtomicDatabase(AtomicDataSource):
                 level_g_rows.extend([[] for _ in range(pad)])
                 level_E_rows.extend([[] for _ in range(pad)])
 
-        species_to_idx = {key: i for i, key in enumerate(species_keys)}
+        return (
+            species_keys,
+            ip_list,
+            partition_rows,
+            partition_t_min_list,
+            partition_t_max_list,
+            partition_g0_list,
+            level_g_rows,
+            level_E_rows,
+        )
+
+    def _collect_line_arrays(
+        self,
+        elements: list[str],
+        wl_min: float,
+        wl_max: float,
+        min_relative_intensity: float,
+        species_to_idx: dict[tuple[str, int], int],
+    ) -> tuple[
+        list[float],
+        list[float],
+        list[float],
+        list[float],
+        list[float],
+        list[float],
+        list[int],
+        list[float],
+        list[float],
+        list[float],
+    ]:
+        """Pack the per-line column arrays for :meth:`snapshot`.
+
+        Iterates transitions for every requested element within the wavelength
+        window, dropping lines whose species is not in ``species_to_idx``, and
+        returns the parallel per-line lists in line-axis order.
+        """
         wls: list[float] = []
         Akis: list[float] = []
         Eks: list[float] = []
@@ -911,34 +1086,31 @@ class AtomicDatabase(AtomicDataSource):
                     float(transition.stark_shift) if transition.stark_shift is not None else 0.0
                 )
 
-        n_lines = len(wls)
-        line_wavelengths_nm = _xp.asarray(wls, dtype=_real_dtype)
-        line_A_ki = _xp.asarray(Akis, dtype=_real_dtype)
-        line_E_k_ev = _xp.asarray(Eks, dtype=_real_dtype)
-        line_g_k = _xp.asarray(gks, dtype=_real_dtype)
-        line_E_i_ev = _xp.asarray(Eis, dtype=_real_dtype)
-        line_g_i = _xp.asarray(gis, dtype=_real_dtype)
-        line_species_index = _xp.asarray(sp_idx, dtype=_xp.int32)
-        line_stark_w = _xp.asarray(stark_ws, dtype=_real_dtype)
-        line_stark_alpha = _xp.asarray(stark_alphas, dtype=_real_dtype)
-        line_stark_d = _xp.asarray(stark_ds, dtype=_real_dtype)
-        line_natural_w = _xp.zeros(n_lines, dtype=_real_dtype)
+        return (
+            wls,
+            Akis,
+            Eks,
+            gks,
+            Eis,
+            gis,
+            sp_idx,
+            stark_ws,
+            stark_alphas,
+            stark_ds,
+        )
 
-        if partition_rows:
-            partition_coeffs = _xp.asarray(partition_rows, dtype=_real_dtype)
-            partition_t_min = _xp.asarray(partition_t_min_list, dtype=_real_dtype)
-            partition_t_max = _xp.asarray(partition_t_max_list, dtype=_real_dtype)
-            partition_g0 = _xp.asarray(partition_g0_list, dtype=_real_dtype)
-        else:
-            partition_coeffs = _xp.zeros((0, 5), dtype=_real_dtype)
-            partition_t_min = _xp.zeros((0,), dtype=_real_dtype)
-            partition_t_max = _xp.zeros((0,), dtype=_real_dtype)
-            partition_g0 = _xp.zeros((0,), dtype=_real_dtype)
-        ionization_potential_ev = _xp.asarray(ip_list, dtype=_real_dtype)
+    @staticmethod
+    def _pad_level_arrays(
+        level_g_rows: list[list[float]],
+        level_E_rows: list[list[float]],
+        include_levels: bool,
+        _xp: Any,
+    ) -> tuple[Any, Any, Any]:
+        """Pad ragged per-species energy-level rows into rectangular arrays.
 
-        level_g_out: Any
-        level_E_ev_out: Any
-        level_mask_out: Any
+        Returns ``(level_g, level_E_ev, level_mask)`` ready for the snapshot, or
+        ``(None, None, None)`` when levels were not requested or none exist.
+        """
         if include_levels and level_g_rows:
             n_max = max((len(row) for row in level_g_rows), default=0)
             n_cols = max(n_max, 1)
@@ -949,36 +1121,12 @@ class AtomicDatabase(AtomicDataSource):
                 level_g_padded[i, : len(gs)] = gs
                 level_E_padded[i, : len(Es)] = Es
                 level_mask[i, : len(gs)] = True
-            level_g_out = _xp.asarray(level_g_padded)
-            level_E_ev_out = _xp.asarray(level_E_padded)
-            level_mask_out = _xp.asarray(level_mask)
-        else:
-            level_g_out = None
-            level_E_ev_out = None
-            level_mask_out = None
-
-        return AtomicSnapshot(
-            species=tuple(species_keys),
-            line_wavelengths_nm=line_wavelengths_nm,
-            line_A_ki=line_A_ki,
-            line_E_k_ev=line_E_k_ev,
-            line_g_k=line_g_k,
-            line_E_i_ev=line_E_i_ev,
-            line_g_i=line_g_i,
-            line_species_index=line_species_index,
-            line_stark_w=line_stark_w,
-            line_natural_w=line_natural_w,
-            line_stark_alpha=line_stark_alpha,
-            line_stark_d=line_stark_d,
-            partition_coeffs=partition_coeffs,
-            ionization_potential_ev=ionization_potential_ev,
-            level_g=level_g_out,
-            level_E_ev=level_E_ev_out,
-            level_mask=level_mask_out,
-            partition_t_min=partition_t_min,
-            partition_t_max=partition_t_max,
-            partition_g0=partition_g0,
-        )
+            return (
+                _xp.asarray(level_g_padded),
+                _xp.asarray(level_E_padded),
+                _xp.asarray(level_mask),
+            )
+        return (None, None, None)
 
     def close(self):
         """Close database connection."""
