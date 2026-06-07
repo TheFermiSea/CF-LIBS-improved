@@ -540,113 +540,198 @@ class CombIdentifier:
                 continue
 
             # Correlate each transition (tooth)
-            teeth = []
-            matched_lines = []
-            unmatched_lines = []
-
-            for trans in transitions:
-                tooth_result = self._correlate_tooth(
-                    wavelength,
-                    intensity,
-                    baseline,
-                    trans.wavelength_nm,
-                    threshold,
-                    transition=trans,
-                )
-                tooth_result["transition"] = trans
-                teeth.append(tooth_result)
-
-                if tooth_result["active"]:
-                    # Create IdentifiedLine for active tooth
-                    matched_lines.append(
-                        IdentifiedLine(
-                            wavelength_exp_nm=tooth_result["center_nm"]
-                            + tooth_result["best_shift"] * np.median(np.diff(wavelength)),
-                            wavelength_th_nm=trans.wavelength_nm,
-                            element=element,
-                            ionization_stage=trans.ionization_stage,
-                            intensity_exp=intensity[
-                                np.clip(
-                                    np.argmin(np.abs(wavelength - tooth_result["center_nm"]))
-                                    + tooth_result["best_shift"],
-                                    0,
-                                    len(intensity) - 1,
-                                )
-                            ],
-                            emissivity_th=0.0,
-                            transition=trans,
-                            correlation=tooth_result["best_correlation"],
-                            is_interfered=False,
-                            interfering_elements=[],
-                        )
-                    )
-                else:
-                    unmatched_lines.append(trans)
-
-            # Compute fingerprint for this element
-            fingerprint = self._compute_fingerprint(teeth)
-            element_teeth[element] = teeth
-
-            # Create ElementIdentification
-            n_active_teeth = sum(1 for t in teeth if t["active"])
-            detected = is_element_detected(
+            teeth, matched_lines, unmatched_lines = self._correlate_element_teeth(
+                wavelength,
+                intensity,
+                baseline,
+                threshold,
                 element,
-                fingerprint,
-                n_active_teeth,
-                self.min_correlation,
-                self.min_active_teeth,
+                transitions,
             )
 
-            # L3 / L4 detection-coverage telemetry.  ``len(matched_lines)``
-            # is the per-element peak-match count (L3) and ``detected``
-            # is the comb fingerprint-floor decision (L4) -- before the
-            # subsequent relative-threshold downgrade, which acts as a
-            # second-level gate against the median score and is a
-            # separate concern from per-element fingerprint coverage.
-            if coverage is not None:
-                coverage.record_peak_matches(element, len(matched_lines))
-                coverage.record_fingerprint(
+            element_teeth[element] = teeth
+            element_identifications.append(
+                self._build_element_identification(
                     element,
-                    passed=bool(detected),
-                    score=float(fingerprint),
-                    floor=float(self.min_correlation),
+                    transitions,
+                    teeth,
+                    matched_lines,
+                    unmatched_lines,
+                    coverage=coverage,
                 )
-            element_id = ElementIdentification(
-                element=element,
-                detected=detected,
-                score=fingerprint,
-                confidence=fingerprint,
-                n_matched_lines=len(matched_lines),
-                n_total_lines=len(transitions),
-                matched_lines=matched_lines,
-                unmatched_lines=unmatched_lines,
-                metadata={
-                    "fingerprint": fingerprint,
-                    "n_active_teeth": n_active_teeth,
-                    "n_total_teeth": len(teeth),
-                },
             )
-            element_identifications.append(element_id)
 
         # Step 4: Analyze interferences across all elements
         element_teeth = self._analyze_interferences(element_teeth)
 
         # Update interfered status in element identifications
+        self._apply_interference_status(element_identifications, element_teeth)
+
+        # Step 5: Apply relative threshold to reject elements that don't stand out
+        self._apply_relative_threshold(element_identifications)
+
+        return element_identifications
+
+    def _correlate_element_teeth(
+        self,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        baseline: np.ndarray,
+        threshold: float,
+        element: str,
+        transitions: List[Transition],
+    ) -> Tuple[List[dict], List[IdentifiedLine], List[Transition]]:
+        """Correlate every transition (tooth) for one element.
+
+        Returns the per-tooth results plus the matched/unmatched line
+        splits used to build the element's ``ElementIdentification``.
+        Behaviour is identical to the inlined loop it replaces.
+        """
+        teeth: List[dict] = []
+        matched_lines: List[IdentifiedLine] = []
+        unmatched_lines: List[Transition] = []
+
+        for trans in transitions:
+            tooth_result = self._correlate_tooth(
+                wavelength,
+                intensity,
+                baseline,
+                trans.wavelength_nm,
+                threshold,
+                transition=trans,
+            )
+            tooth_result["transition"] = trans
+            teeth.append(tooth_result)
+
+            if tooth_result["active"]:
+                # Create IdentifiedLine for active tooth
+                matched_lines.append(
+                    self._build_matched_line(wavelength, intensity, element, trans, tooth_result)
+                )
+            else:
+                unmatched_lines.append(trans)
+
+        return teeth, matched_lines, unmatched_lines
+
+    def _build_matched_line(
+        self,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        element: str,
+        trans: Transition,
+        tooth_result: dict,
+    ) -> IdentifiedLine:
+        """Construct the ``IdentifiedLine`` for an active tooth."""
+        return IdentifiedLine(
+            wavelength_exp_nm=tooth_result["center_nm"]
+            + tooth_result["best_shift"] * np.median(np.diff(wavelength)),
+            wavelength_th_nm=trans.wavelength_nm,
+            element=element,
+            ionization_stage=trans.ionization_stage,
+            intensity_exp=intensity[
+                np.clip(
+                    np.argmin(np.abs(wavelength - tooth_result["center_nm"]))
+                    + tooth_result["best_shift"],
+                    0,
+                    len(intensity) - 1,
+                )
+            ],
+            emissivity_th=0.0,
+            transition=trans,
+            correlation=tooth_result["best_correlation"],
+            is_interfered=False,
+            interfering_elements=[],
+        )
+
+    def _build_element_identification(
+        self,
+        element: str,
+        transitions: List[Transition],
+        teeth: List[dict],
+        matched_lines: List[IdentifiedLine],
+        unmatched_lines: List[Transition],
+        coverage: Optional[CoverageTracker] = None,
+    ) -> ElementIdentification:
+        """Compute the fingerprint, detection decision, and telemetry for
+        one element, returning its ``ElementIdentification``."""
+        # Compute fingerprint for this element
+        fingerprint = self._compute_fingerprint(teeth)
+
+        # Create ElementIdentification
+        n_active_teeth = sum(1 for t in teeth if t["active"])
+        detected = is_element_detected(
+            element,
+            fingerprint,
+            n_active_teeth,
+            self.min_correlation,
+            self.min_active_teeth,
+        )
+
+        # L3 / L4 detection-coverage telemetry.  ``len(matched_lines)``
+        # is the per-element peak-match count (L3) and ``detected``
+        # is the comb fingerprint-floor decision (L4) -- before the
+        # subsequent relative-threshold downgrade, which acts as a
+        # second-level gate against the median score and is a
+        # separate concern from per-element fingerprint coverage.
+        if coverage is not None:
+            coverage.record_peak_matches(element, len(matched_lines))
+            coverage.record_fingerprint(
+                element,
+                passed=bool(detected),
+                score=float(fingerprint),
+                floor=float(self.min_correlation),
+            )
+        return ElementIdentification(
+            element=element,
+            detected=detected,
+            score=fingerprint,
+            confidence=fingerprint,
+            n_matched_lines=len(matched_lines),
+            n_total_lines=len(transitions),
+            matched_lines=matched_lines,
+            unmatched_lines=unmatched_lines,
+            metadata={
+                "fingerprint": fingerprint,
+                "n_active_teeth": n_active_teeth,
+                "n_total_teeth": len(teeth),
+            },
+        )
+
+    def _apply_interference_status(
+        self,
+        element_identifications: List[ElementIdentification],
+        element_teeth: Dict[str, List[dict]],
+    ) -> None:
+        """Mark matched lines as interfered based on overlapping teeth."""
         for element_id in element_identifications:
             element = element_id.element
             if element in element_teeth:
-                for line in element_id.matched_lines:
-                    # Check if this line's wavelength is interfered
-                    for tooth in element_teeth[element]:
-                        if abs(tooth["center_nm"] - line.wavelength_th_nm) < 0.01 and tooth.get(
-                            "interfering_elements"
-                        ):
-                            line.is_interfered = True
-                            line.interfering_elements = tooth["interfering_elements"]
+                self._mark_lines_interfered(element_id.matched_lines, element_teeth[element])
 
-        # Step 5: Apply relative threshold to reject elements that don't stand out
-        # Uses median of ALL non-zero scores as noise baseline; requires 3+ elements
-        # to form a meaningful noise floor (2 elements can't distinguish signal from noise)
+    def _mark_lines_interfered(
+        self, matched_lines: List[IdentifiedLine], teeth: List[dict]
+    ) -> None:
+        """Mark each matched line interfered if an overlapping tooth carries
+        interfering elements."""
+        for line in matched_lines:
+            # Check if this line's wavelength is interfered
+            for tooth in teeth:
+                if abs(tooth["center_nm"] - line.wavelength_th_nm) < 0.01 and tooth.get(
+                    "interfering_elements"
+                ):
+                    line.is_interfered = True
+                    line.interfering_elements = tooth["interfering_elements"]
+
+    def _apply_relative_threshold(
+        self, element_identifications: List[ElementIdentification]
+    ) -> None:
+        """Reject detected elements whose score does not stand out above the
+        median-score noise floor (Step 5).  Mutates the list in place.
+
+        Uses median of ALL non-zero scores as noise baseline; requires 3+
+        elements to form a meaningful noise floor (2 elements can't
+        distinguish signal from noise).
+        """
         non_zero_scores = [e.score for e in element_identifications if e.score > 0]
         if len(non_zero_scores) >= 3:
             median_score = np.median(non_zero_scores)
@@ -667,8 +752,6 @@ class CombIdentifier:
                     unmatched_lines=element_id.unmatched_lines,
                     metadata=element_id.metadata,
                 )
-
-        return element_identifications
 
     def _detect_and_count_peaks(
         self,
@@ -842,27 +925,7 @@ class CombIdentifier:
 
         # Estimate resolution element from wavelength spacing
         dwl = np.median(np.diff(wavelength))
-        # Stark-aware tolerance — sqrt(fwhm_inst**2 + omega_stark**2) when a
-        # transition with stark_w metadata is supplied; otherwise the helper
-        # falls back to lambda/R (no Stark). PR #151 wired the same helper
-        # into alias._match_lines (per-line tolerance instead of a global
-        # mean_wl/eff_R); this is the comb-side counterpart for the
-        # triangular-template width. See CF-LIBS-improved-5ozw. Wave-1 fix
-        # A1 also threads self.reference_temperature so the Stark FWHM is
-        # evaluated at the comb's working T (defaults to 10000 K — Konjević
-        # reference — when the caller did not override).
-        if self.resolving_power:
-            resolution_nm = get_wavelength_tolerance(
-                center_nm,
-                transition=transition,
-                resolving_power=self.resolving_power,
-                fallback=center_nm / self.resolving_power,
-                T_K=self.reference_temperature,
-            )
-        else:
-            resolution_nm = 0.1
-        max_width_pts = int((resolution_nm * self.max_width_factor) / dwl)
-        max_width_pts = max(self.min_width_pts, max_width_pts)
+        max_width_pts = self._resolve_max_width_pts(center_nm, dwl, transition)
 
         # Tier-2 FP reduction: Mn/Na/K teeth must clear a stricter per-tooth
         # correlation floor (widen-only). Non-Tier-2 elements (Fe, Ti, Si, ...)
@@ -883,57 +946,17 @@ class CombIdentifier:
                 activation_threshold=effective_activation_threshold,
             )
 
-        best_correlation = -1.0
-        best_shift = 0
-        best_width = self.min_width_pts
-
-        # Search over widths (odd values only)
-        for width in range(self.min_width_pts, max_width_pts + 1, 2):
-            # Build template once per width (cache across shifts)
-            template = self._build_triangular_template(width)
-
-            # Search over shifts
-            for shift in range(-self.max_shift_pts, self.max_shift_pts + 1):
-                shifted_idx = center_idx + shift
-
-                # Extract data segment
-                half_width = width // 2
-                start_idx = max(0, shifted_idx - half_width)
-                end_idx = min(len(intensity), shifted_idx + half_width + 1)
-
-                if end_idx - start_idx < self.min_width_pts:
-                    continue
-
-                data_segment = intensity[start_idx:end_idx] - baseline[start_idx:end_idx]
-
-                # Ensure same length
-                if len(data_segment) != len(template):
-                    # Truncate or skip
-                    continue
-
-                # Compute Pearson correlation
-                if np.std(data_segment) < 1e-10 or np.std(template) < 1e-10:
-                    correlation = 0.0
-                else:
-                    correlation, _ = pearsonr(data_segment, template)
-                    if np.isnan(correlation):
-                        correlation = 0.0
-
-                if correlation > best_correlation:
-                    best_correlation = correlation
-                    best_shift = shift
-                    best_width = width
+        best_correlation, best_shift, best_width = self._search_best_correlation(
+            intensity, baseline, center_idx, max_width_pts
+        )
 
         # Clamp negative correlations to 0 (downstream expects 0-1 metric)
         best_correlation = max(best_correlation, 0.0)
 
         # Check if there's actually signal above threshold at the best position
-        shifted_idx = center_idx + best_shift
-        half_w = best_width // 2
-        start = max(0, shifted_idx - half_w)
-        end = min(len(intensity), shifted_idx + half_w + 1)
-        segment = intensity[start:end] - baseline[start:end]
-        peak_amplitude = np.max(segment) if len(segment) > 0 else 0.0
+        peak_amplitude = self._compute_peak_amplitude(
+            intensity, baseline, center_idx, best_shift, best_width
+        )
 
         # Tooth is active only if BOTH correlation meets per-tooth threshold AND signal is present
         # Paper (Gajarska et al. 2024): per-tooth activation uses separate threshold (0.5).
@@ -948,6 +971,127 @@ class CombIdentifier:
             "best_width": best_width,
             "active": active,
         }
+
+    def _resolve_max_width_pts(
+        self, center_nm: float, dwl: float, transition: Optional[Transition]
+    ) -> int:
+        """Resolve the maximum template width (in points) for a tooth.
+
+        Stark-aware tolerance — sqrt(fwhm_inst**2 + omega_stark**2) when a
+        transition with stark_w metadata is supplied; otherwise the helper
+        falls back to lambda/R (no Stark). PR #151 wired the same helper
+        into alias._match_lines (per-line tolerance instead of a global
+        mean_wl/eff_R); this is the comb-side counterpart for the
+        triangular-template width. See CF-LIBS-improved-5ozw. Wave-1 fix
+        A1 also threads self.reference_temperature so the Stark FWHM is
+        evaluated at the comb's working T (defaults to 10000 K — Konjević
+        reference — when the caller did not override).
+        """
+        if self.resolving_power:
+            resolution_nm = get_wavelength_tolerance(
+                center_nm,
+                transition=transition,
+                resolving_power=self.resolving_power,
+                fallback=center_nm / self.resolving_power,
+                T_K=self.reference_temperature,
+            )
+        else:
+            resolution_nm = 0.1
+        max_width_pts = int((resolution_nm * self.max_width_factor) / dwl)
+        return max(self.min_width_pts, max_width_pts)
+
+    def _search_best_correlation(
+        self,
+        intensity: np.ndarray,
+        baseline: np.ndarray,
+        center_idx: int,
+        max_width_pts: int,
+    ) -> Tuple[float, int, int]:
+        """Search the (width, shift) grid for the highest Pearson correlation.
+
+        Returns ``(best_correlation, best_shift, best_width)`` with the same
+        first-winner-wins (strict ``>``) semantics as the inlined loop.
+        """
+        best_correlation = -1.0
+        best_shift = 0
+        best_width = self.min_width_pts
+
+        # Search over widths (odd values only)
+        for width in range(self.min_width_pts, max_width_pts + 1, 2):
+            # Build template once per width (cache across shifts)
+            template = self._build_triangular_template(width)
+
+            # Search over shifts
+            for shift in range(-self.max_shift_pts, self.max_shift_pts + 1):
+                correlation = self._correlate_one_candidate(
+                    intensity, baseline, center_idx, width, shift, template
+                )
+                if correlation is None:
+                    continue
+
+                if correlation > best_correlation:
+                    best_correlation = correlation
+                    best_shift = shift
+                    best_width = width
+
+        return best_correlation, best_shift, best_width
+
+    def _correlate_one_candidate(
+        self,
+        intensity: np.ndarray,
+        baseline: np.ndarray,
+        center_idx: int,
+        width: int,
+        shift: int,
+        template: np.ndarray,
+    ) -> Optional[float]:
+        """Correlate one (width, shift) candidate against ``template``.
+
+        Returns the Pearson correlation, or ``None`` for the candidates the
+        inlined loop skipped via ``continue`` (out-of-window / length mismatch).
+        """
+        shifted_idx = center_idx + shift
+
+        # Extract data segment
+        half_width = width // 2
+        start_idx = max(0, shifted_idx - half_width)
+        end_idx = min(len(intensity), shifted_idx + half_width + 1)
+
+        if end_idx - start_idx < self.min_width_pts:
+            return None
+
+        data_segment = intensity[start_idx:end_idx] - baseline[start_idx:end_idx]
+
+        # Ensure same length
+        if len(data_segment) != len(template):
+            # Truncate or skip
+            return None
+
+        # Compute Pearson correlation
+        if np.std(data_segment) < 1e-10 or np.std(template) < 1e-10:
+            correlation = 0.0
+        else:
+            correlation, _ = pearsonr(data_segment, template)
+            if np.isnan(correlation):
+                correlation = 0.0
+
+        return correlation
+
+    def _compute_peak_amplitude(
+        self,
+        intensity: np.ndarray,
+        baseline: np.ndarray,
+        center_idx: int,
+        best_shift: int,
+        best_width: int,
+    ) -> float:
+        """Peak baseline-subtracted amplitude at the winning (shift, width)."""
+        shifted_idx = center_idx + best_shift
+        half_w = best_width // 2
+        start = max(0, shifted_idx - half_w)
+        end = min(len(intensity), shifted_idx + half_w + 1)
+        segment = intensity[start:end] - baseline[start:end]
+        return np.max(segment) if len(segment) > 0 else 0.0
 
     def _get_template(self, width: int) -> np.ndarray:
         """Return cached triangular template for ``width``."""
@@ -998,8 +1142,36 @@ class CombIdentifier:
         widths_np = np.asarray(widths_list, dtype=np.int64)
         shifts_np = np.arange(-self.max_shift_pts, self.max_shift_pts + 1, dtype=np.int64)
 
-        # Build padded templates: cache lookups keep this cheap across
-        # repeat calls with the same width set.
+        templates, template_mask = self._build_jax_templates(widths_np)
+
+        corr_grid, seg_amp, candidate_ok = _correlate_tooth_jax(
+            intensity,
+            baseline,
+            center_idx,
+            widths_np,
+            shifts_np,
+            templates,
+            template_mask,
+        )
+
+        return self._select_jax_winner(
+            corr_grid,
+            seg_amp,
+            candidate_ok,
+            widths_np,
+            shifts_np,
+            center_nm,
+            threshold,
+            activation_threshold,
+        )
+
+    def _build_jax_templates(self, widths_np: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Build padded triangular templates and their support mask.
+
+        Cache lookups keep this cheap across repeat calls with the same
+        width set.  Returns ``(templates, template_mask)`` each shaped
+        ``(W, max_w)``.
+        """
         max_w = int(widths_np[-1])
         # Force odd: matches the CPU `_build_triangular_template` which
         # bumps even widths up by 1, then templates land on the same
@@ -1015,17 +1187,24 @@ class CombIdentifier:
             start = half_max - half_w
             templates[i, start : start + len(t)] = t
             template_mask[i, start : start + len(t)] = 1.0
+        return templates, template_mask
 
-        corr_grid, seg_amp, candidate_ok = _correlate_tooth_jax(
-            intensity,
-            baseline,
-            center_idx,
-            widths_np,
-            shifts_np,
-            templates,
-            template_mask,
-        )
+    def _select_jax_winner(
+        self,
+        corr_grid: np.ndarray,
+        seg_amp: np.ndarray,
+        candidate_ok: np.ndarray,
+        widths_np: np.ndarray,
+        shifts_np: np.ndarray,
+        center_nm: float,
+        threshold: float,
+        activation_threshold: float,
+    ) -> dict:
+        """Select the winning (width, shift) from the JAX correlation grid.
 
+        Mirrors the CPU first-winner-wins (strict ``>``) selection and the
+        same no-valid-candidate sentinels, returning the tooth result dict.
+        """
         # Argmax over the (W, S) grid.
         # Note: CPU path uses strict `>` (first winner wins); to match
         # that exactly we flatten in (width-major, shift-major) order
@@ -1084,8 +1263,29 @@ class CombIdentifier:
         Dict[str, List[dict]]
             Updated element_teeth with interference information added
         """
-        # Build list of all active teeth with element labels
-        all_active_teeth = []
+        # Build list of all active teeth with element labels, sorted by
+        # wavelength for efficient sliding-window comparison.
+        all_active_teeth = self._collect_active_teeth(element_teeth)
+
+        # Two-pointer interference detection
+        n = len(all_active_teeth)
+        for i in range(n):
+            element_i, tooth_i = all_active_teeth[i]
+            # Look forward while within tolerance (reciprocal marking of the
+            # forward teeth happens inside the helper).
+            interfering = self._find_forward_interferers(
+                all_active_teeth, i, n, element_i, tooth_i, wl_tolerance_nm
+            )
+
+            # Only update if not already set by reciprocal marking
+            self._finalize_tooth_interference(tooth_i, interfering)
+
+        return element_teeth
+
+    def _collect_active_teeth(self, element_teeth: Dict[str, List[dict]]) -> List[Tuple[str, dict]]:
+        """Collect ``(element, tooth)`` pairs for all active teeth, sorted by
+        center wavelength."""
+        all_active_teeth: List[Tuple[str, dict]] = []
         for element, teeth in element_teeth.items():
             for tooth in teeth:
                 if tooth["active"]:
@@ -1093,40 +1293,50 @@ class CombIdentifier:
 
         # Sort by wavelength for efficient sliding-window comparison
         all_active_teeth.sort(key=lambda x: x[1]["center_nm"])
+        return all_active_teeth
 
-        # Two-pointer interference detection
-        n = len(all_active_teeth)
-        for i in range(n):
-            element_i, tooth_i = all_active_teeth[i]
-            interfering = []
-            # Look forward while within tolerance
-            j = i + 1
-            while (
-                j < n
-                and (all_active_teeth[j][1]["center_nm"] - tooth_i["center_nm"]) < wl_tolerance_nm
-            ):
-                element_j, tooth_j = all_active_teeth[j]
-                if element_i != element_j:
-                    interfering.append(element_j)
-                    # Also mark the other tooth (reciprocal marking)
-                    if "interfering_elements" not in tooth_j:
-                        tooth_j["interfering_elements"] = []
-                    if element_i not in tooth_j["interfering_elements"]:
-                        tooth_j["interfering_elements"].append(element_i)
-                        tooth_j["is_interfered"] = True
-                j += 1
+    def _find_forward_interferers(
+        self,
+        all_active_teeth: List[Tuple[str, dict]],
+        i: int,
+        n: int,
+        element_i: str,
+        tooth_i: dict,
+        wl_tolerance_nm: float,
+    ) -> List[str]:
+        """Scan forward from ``i`` while within tolerance, recording the
+        interfering elements for ``tooth_i`` and reciprocally marking the
+        forward teeth.  Returns the list of interfering elements."""
+        interfering: List[str] = []
+        j = i + 1
+        while (
+            j < n and (all_active_teeth[j][1]["center_nm"] - tooth_i["center_nm"]) < wl_tolerance_nm
+        ):
+            element_j, tooth_j = all_active_teeth[j]
+            if element_i != element_j:
+                interfering.append(element_j)
+                self._mark_reciprocal_interference(tooth_j, element_i)
+            j += 1
+        return interfering
 
-            # Only update if not already set by reciprocal marking
-            if interfering:
-                tooth_i["is_interfered"] = True
-                existing = tooth_i.get("interfering_elements", [])
-                tooth_i["interfering_elements"] = sorted(set(existing + interfering))
-            elif "is_interfered" not in tooth_i:
-                # Only set to False if not already marked from a previous iteration
-                tooth_i["is_interfered"] = False
-                tooth_i["interfering_elements"] = []
+    def _mark_reciprocal_interference(self, tooth_j: dict, element_i: str) -> None:
+        """Mark ``tooth_j`` as interfered by ``element_i`` (reciprocal)."""
+        if "interfering_elements" not in tooth_j:
+            tooth_j["interfering_elements"] = []
+        if element_i not in tooth_j["interfering_elements"]:
+            tooth_j["interfering_elements"].append(element_i)
+            tooth_j["is_interfered"] = True
 
-        return element_teeth
+    def _finalize_tooth_interference(self, tooth_i: dict, interfering: List[str]) -> None:
+        """Apply the forward-scan interference result to ``tooth_i``."""
+        if interfering:
+            tooth_i["is_interfered"] = True
+            existing = tooth_i.get("interfering_elements", [])
+            tooth_i["interfering_elements"] = sorted(set(existing + interfering))
+        elif "is_interfered" not in tooth_i:
+            # Only set to False if not already marked from a previous iteration
+            tooth_i["is_interfered"] = False
+            tooth_i["interfering_elements"] = []
 
     def _compute_fingerprint(self, teeth: List[dict]) -> float:
         """
