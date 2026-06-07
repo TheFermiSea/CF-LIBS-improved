@@ -13,7 +13,10 @@ from cflibs.plasma.state import SingleZoneLTEPlasma
 from cflibs.core.abc import SolverStrategy, AtomicDataSource
 from cflibs.core.cache import cached_partition_function
 from cflibs.core.logging_config import get_logger
-from cflibs.plasma.partition import PartitionFunctionEvaluator
+from cflibs.plasma.partition import (
+    PartitionFunctionEvaluator,
+    ionization_potential_depression,
+)
 
 
 class IPDModel(Protocol):
@@ -99,10 +102,14 @@ class SahaBoltzmannSolver(SolverStrategy):
         # For neutral to singly ionized:
         # n_II * n_e / n_I = SAHA_CONST * T^1.5 * (U_II/U_I) * exp(-IP_I/kT)
 
-        U_I = self.calculate_partition_function(element, 1, T_e_eV, max_energy_ev=eff_ip_I)
+        U_I = self.calculate_partition_function(
+            element, 1, T_e_eV, max_energy_ev=eff_ip_I, n_e_cm3=n_e_cm3
+        )
 
         eff_ip_II = max(ip_II - delta_chi, 0.0) if ip_II is not None else None
-        U_II = self.calculate_partition_function(element, 2, T_e_eV, max_energy_ev=eff_ip_II)
+        U_II = self.calculate_partition_function(
+            element, 2, T_e_eV, max_energy_ev=eff_ip_II, n_e_cm3=n_e_cm3
+        )
 
         if U_I <= 0.0 or U_II <= 0.0:
             logger.warning(
@@ -129,7 +136,9 @@ class SahaBoltzmannSolver(SolverStrategy):
         if ip_II is not None:
             ip_III = self.atomic_db.get_ionization_potential(element, 3)
             eff_ip_III = max(ip_III - delta_chi, 0.0) if ip_III is not None else None
-            U_III = self.calculate_partition_function(element, 3, T_e_eV, max_energy_ev=eff_ip_III)
+            U_III = self.calculate_partition_function(
+                element, 3, T_e_eV, max_energy_ev=eff_ip_III, n_e_cm3=n_e_cm3
+            )
             S2 = (
                 (SAHA_CONST_CM3 / n_e_cm3)
                 * (T_e_eV**1.5)
@@ -155,6 +164,7 @@ class SahaBoltzmannSolver(SolverStrategy):
         ionization_stage: int,
         T_e_eV: float,
         max_energy_ev: float | None = None,
+        n_e_cm3: float | None = None,
     ) -> float:
         """
         Calculate partition function for a species.
@@ -171,6 +181,12 @@ class SahaBoltzmannSolver(SolverStrategy):
             Maximum energy level to include.  When ``None`` (default), the
             ionization potential of the species is used as the physical cap
             (scaled to 98 % of IP to exclude autoionizing levels).
+        n_e_cm3 : float or None
+            Electron density in cm⁻³.  When provided, the direct-sum provider
+            truncates the partition sum at the IPD-lowered limit
+            ``e_max = ip - Δχ(n_e, T)`` — CONSISTENT with the IPD-lowered Saha
+            exponent (audit Family J).  When ``None`` (default) the sharp ``ip``
+            cutoff is used, preserving Boltzmann-plot behaviour bit-for-bit.
 
         Returns
         -------
@@ -181,16 +197,18 @@ class SahaBoltzmannSolver(SolverStrategy):
         # `partition_function_for` applies the one direct-sum-preferred,
         # always-guarded policy.  For species with levels the CPU scalar
         # provider sums them directly (bit-for-bit identical to the prior
-        # `evaluate_direct` branch); otherwise it returns the guarded stored
-        # polynomial.  Fallback 2 below covers only species the factory cannot
-        # resolve at all but for which `get_energy_levels` still yields rows
-        # (direct-sum fit failed and no stored polynomial) — that branch keeps
-        # the `max_energy_ev` cutoff behaviour.
+        # `evaluate_direct` branch when n_e is None); otherwise it returns the
+        # guarded stored polynomial.  Threading `n_e_cm3` lets the direct-sum
+        # provider lower its cutoff to match the IPD-lowered Saha exponent.
+        # Fallback 2 below covers only species the factory cannot resolve at all
+        # but for which `get_energy_levels` still yields rows (direct-sum fit
+        # failed and no stored polynomial) — that branch keeps the
+        # `max_energy_ev` cutoff behaviour, which already encodes eff_ip.
         T_K = T_e_eV * EV_TO_K
         if hasattr(self.atomic_db, "partition_function_for"):
             provider = self.atomic_db.partition_function_for(element, ionization_stage)
             if provider is not None:
-                return float(provider.at(T_K))
+                return float(provider.at(T_K, n_e=n_e_cm3))
 
         # Fallback 2: manual summation over EnergyLevel objects
         levels = self.atomic_db.get_energy_levels(element, ionization_stage)
@@ -300,8 +318,11 @@ class SahaBoltzmannSolver(SolverStrategy):
         else:
             max_energy_ev = ip * 0.98 if ip else 50.0
 
+        # Pass n_e_cm3 so the direct-sum provider truncates U at the SAME
+        # IPD-lowered cutoff the per-level loop below uses (max_energy_ev),
+        # keeping Σ populations == stage_density_cm3 (audit Family J).
         U = self.calculate_partition_function(
-            element, ionization_stage, T_e_eV, max_energy_ev=max_energy_ev
+            element, ionization_stage, T_e_eV, max_energy_ev=max_energy_ev, n_e_cm3=n_e_cm3
         )
 
         if U <= 0.0:
@@ -437,17 +458,12 @@ def ionization_potential_lowering(
     if model != "debye_huckel":
         raise ValueError(f"Unsupported IPD model: {model!r}. Use 'debye_huckel'.")
 
-    if n_e_cm3 <= 0.0 or T_K <= 0.0:
-        return 0.0
-
-    # Debye length: lambda_D = sqrt(kT / (4*pi*n_e*e^2))  [cm]
-    lambda_D = np.sqrt(_KB_ERG * T_K / (4.0 * np.pi * n_e_cm3 * _E_ESU**2))
-
-    # IPD = e^2 / lambda_D  [erg]
-    delta_chi_erg = _E_ESU**2 / lambda_D
-
-    # Convert to eV
-    return float(delta_chi_erg * _ERG_TO_EV)
+    # Delegate to the single canonical Debye-Hückel implementation in
+    # cflibs.plasma.partition so the Saha exponent and the direct-sum
+    # partition cutoff use ONE consistent Δχ (audit Family J). The math is
+    # the Gaussian-CGS Debye-Hückel form (≈0.066 eV at n_e=1e17, T=1e4 K),
+    # identical to the expression this function previously inlined.
+    return ionization_potential_depression(n_e_cm3, T_K)
 
 
 # ---------------------------------------------------------------------------
@@ -474,20 +490,17 @@ def ionization_potential_lowering(
 #    feed the results into NumPy emissivity routines without leaking traced
 #    values across the JAX/NumPy boundary.
 
-# Pre-compute the IPD prefactor so we never call ``np.sqrt`` inside jit.
-# delta_chi_eV = e^3 * sqrt(4*pi*n_e/(k_B*T)) (Gaussian CGS) * erg->eV
-_IPD_PREFACTOR_EV_CM_K = float(_E_ESU**3 * np.sqrt(4.0 * np.pi / _KB_ERG) * _ERG_TO_EV)
-
 
 def _ipd_eV(n_e_cm3: float, T_K: float) -> float:
     """Pure-Python (numpy) Debye-Hückel IPD in eV — kept out of jit boundary.
 
-    Mirrors :func:`ionization_potential_lowering` but inlined as a fast
-    numpy expression for use outside jit boundaries.
+    Delegates to the single canonical :func:`ionization_potential_depression`
+    (audit Family J) so the JAX host path uses the SAME Δχ as the CPU Saha
+    solver and the direct-sum partition cutoff.  ``e^2/λ_D`` (canonical) equals
+    the ``e^3·√(4π n_e/k_B T)`` prefactor form documented above, so this is a
+    pure refactor — the numeric value is unchanged.
     """
-    if n_e_cm3 <= 0.0 or T_K <= 0.0:
-        return 0.0
-    return float(_IPD_PREFACTOR_EV_CM_K * np.sqrt(n_e_cm3 / T_K))
+    return ionization_potential_depression(n_e_cm3, T_K)
 
 
 # JIT-compiled inner kernels live in cflibs.plasma.kernels (ADR-0001 T1-1
