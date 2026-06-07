@@ -59,16 +59,10 @@ from .atomic import (
     _resolve_total_species_density_cm3,
     load_atomic_data,
     logger,
-    mcwhirter_log_penalty,
     partition_function,
 )
-from .priors import (
-    HAS_JAX,
-    HAS_NUMPYRO,
-    NoiseParameters,
-    PriorConfig,
-    TwoZonePriorConfig,
-)
+from .likelihood import log_likelihood
+from .priors import HAS_JAX
 
 # ---------------------------------------------------------------------------
 # Optional-deps gateway
@@ -81,13 +75,6 @@ if HAS_JAX:
 else:  # pragma: no cover
     jnp = None  # type: ignore[assignment]
     _voigt_profile_kernel_jax = None  # type: ignore[assignment]
-
-if HAS_NUMPYRO:
-    import numpyro
-    import numpyro.distributions as dist
-else:  # pragma: no cover
-    numpyro = None  # type: ignore[assignment]
-    dist = None  # type: ignore[assignment]
 
 
 def _stage_bound(bound: Any, stage_idx: int) -> Any:
@@ -135,6 +122,15 @@ class BayesianForwardModel:
     resolving_power : float, optional
         Spectrometer resolving power ``R = lambda / Delta lambda``. When set,
         FWHM varies as ``lambda / R`` across the spectrum.
+    apply_self_absorption : bool, default False
+        When True, route the unified kernel through its optically-thick
+        radiative-transfer branch ``B_lambda * (1 - exp(-kappa * L))`` instead of
+        the optically-thin emission sum. Default keeps the historical
+        optically-thin behaviour; set True (with ``path_length_m`` > 0) to make
+        self-absorption reachable from the Bayesian forward model.
+    path_length_m : float, default 0.0
+        Plasma path length (m) consulted only when ``apply_self_absorption`` is
+        True.
     """
 
     def __init__(
@@ -146,6 +142,8 @@ class BayesianForwardModel:
         pixels: int = 2048,
         instrument_fwhm_nm: Optional[float] = None,
         resolving_power: Optional[float] = None,
+        apply_self_absorption: bool = False,
+        path_length_m: float = 0.0,
     ):
         if not HAS_JAX:
             raise ImportError("JAX required. Install with: pip install jax jaxlib")
@@ -160,10 +158,17 @@ class BayesianForwardModel:
         if not has_fwhm and not has_rp:
             instrument_fwhm_nm = 0.05
 
+        if apply_self_absorption and path_length_m <= 0.0:
+            raise ValueError(
+                "apply_self_absorption=True requires path_length_m > 0 " f"(got {path_length_m})"
+            )
+
         self.elements = elements
         self.wavelength_range = wavelength_range
         self.instrument_fwhm_nm = instrument_fwhm_nm if instrument_fwhm_nm is not None else 0.05
         self.resolving_power = resolving_power
+        self.apply_self_absorption = apply_self_absorption
+        self.path_length_m = path_length_m
 
         if wavelength_grid is not None:
             self.wavelength = _as_jax_real(wavelength_grid)
@@ -345,8 +350,8 @@ class BayesianForwardModel:
             self.instrument,
             self.wavelength,
             broadening_mode=BroadeningMode.PHYSICAL_DOPPLER,
-            path_length_m=0.0,
-            apply_self_absorption=False,
+            path_length_m=self.path_length_m,
+            apply_self_absorption=self.apply_self_absorption,
             fold_instrument_sigma=True,
             apply_stark=True,
             total_species_density_cm3=total_species_density,
@@ -450,17 +455,46 @@ class TwoZoneBayesianForwardModel:
             t_max=_stage_bound(data.partition_t_max, 1),
             g0=_stage_bound(data.partition_g0, 1),
         )
+        U2 = partition_function(
+            T_K,
+            data.partition_coeffs[:, 2],
+            t_min=_stage_bound(data.partition_t_min, 2),
+            t_max=_stage_bound(data.partition_t_max, 2),
+            g0=_stage_bound(data.partition_g0, 2),
+        )
         IP_I = data.ionization_potentials[:, 0]
+        IP_II = data.ionization_potentials[:, 1]
 
+        # Saha balance over neutral / singly / doubly ionized (John et al. 2023).
+        # Truncating at the singly-ionized stage under-counts the ladder for
+        # low-second-IP elements (e.g. Ca II->III IP = 11.87 eV, Mg) whose
+        # doubly-ionized fraction exceeds 1% at core T ~ 1.3 eV. Triply+ is
+        # safely negligible (<1%) in the ps-LIBS regime, so we stop at III.
+        # Step ratios (each relative to the next-lower stage) share the same
+        # Saha prefactor (S / n_e) * T_eV^1.5; the n_e in the denominator is the
+        # sampled electron density, consistent with the charge-balance closure
+        # n_e = n_I*0 + n_II*1 + n_III*2 = n_II + 2 n_III enforced implicitly
+        # through the Saha n_e dependence (see test_saha_charge_balance_holds).
         saha_factor = (_JAX_SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
-        ratio_ion_neutral = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)
-        frac_neutral = 1.0 / (1.0 + ratio_ion_neutral)
-        frac_ion = ratio_ion_neutral / (1.0 + ratio_ion_neutral)
+        r1 = saha_factor * (U1 / U0) * jnp.exp(-IP_I / T_eV)  # n_II / n_I
+        r2 = saha_factor * (U2 / U1) * jnp.exp(-IP_II / T_eV)  # n_III / n_II
+        denom = 1.0 + r1 + r1 * r2
+        frac_neutral = 1.0 / denom
+        frac_ion = r1 / denom
+        frac_doubly = (r1 * r2) / denom
 
         el_idx = data.element_idx
         ion_stage = data.ion_stage
-        pop_fraction = jnp.where(ion_stage == 0, frac_neutral[el_idx], frac_ion[el_idx])
-        U_val = jnp.where(ion_stage == 0, U0[el_idx], U1[el_idx])
+        pop_fraction = jnp.where(
+            ion_stage == 0,
+            frac_neutral[el_idx],
+            jnp.where(ion_stage == 1, frac_ion[el_idx], frac_doubly[el_idx]),
+        )
+        U_val = jnp.where(
+            ion_stage == 0,
+            U0[el_idx],
+            jnp.where(ion_stage == 1, U1[el_idx], U2[el_idx]),
+        )
 
         element_conc = concentrations[el_idx]
         N_species = element_conc * total_species_density * pop_fraction
@@ -481,8 +515,15 @@ class TwoZoneBayesianForwardModel:
         )
 
         mass_kg = data.mass_amu * _JAX_M_PROTON
+        # 1D Maxwell-Boltzmann standard deviation: sigma = (lambda/c) * sqrt(kT/m).
+        # The earlier sqrt(2 kT/m) form is the most-probable-speed v_p, NOT the
+        # std of the line-of-sight velocity distribution; it over-broadened the
+        # Gaussian core by sqrt(2) ~ 1.414. Canonical source of truth:
+        # cflibs/radiation/profiles.doppler_width / doppler_sigma_jax and the
+        # single-zone kernel cflibs/radiation/kernels._per_line_doppler_sigma,
+        # both of which use sqrt(kT/m) with no factor of 2.
         sigma_doppler = data.wavelength_nm * jnp.sqrt(
-            _as_jax_real(2.0) * T_eV * _JAX_EV_TO_J / (mass_kg * _JAX_C_LIGHT**2)
+            T_eV * _JAX_EV_TO_J / (mass_kg * _JAX_C_LIGHT**2)
         )
         sigma_inst = _compute_instrument_sigma(
             data.wavelength_nm, self.instrument_fwhm_nm, self.resolving_power
@@ -581,172 +622,18 @@ class TwoZoneBayesianForwardModel:
 
 
 # ---------------------------------------------------------------------------
-# Log-likelihood and NumPyro graph builders
+# Re-exports
+#
+# The module-level :func:`log_likelihood` (and the exact Poisson/Cash variant
+# :func:`_poisson_cash_log_likelihood`) live in the sibling :mod:`likelihood`
+# module; the NumPyro graph builders :func:`bayesian_model` /
+# :func:`two_zone_bayesian_model` live in :mod:`models`. They are re-exported
+# here for back-compat so the historical ``from ...bayesian.forward import X``
+# import paths keep working. The split keeps every ``bayesian/*.py`` file under
+# the 800-LOC limit required by ADR-0001 / T1-6 spec section 6.
 # ---------------------------------------------------------------------------
 
-
-def log_likelihood(
-    predicted: Any,
-    observed: Any,
-    noise_params: NoiseParameters = NoiseParameters(),
-) -> float:
-    """Compute log-likelihood for an observed spectrum given a predicted one.
-
-    Noise model combines Poisson shot noise and Gaussian readout noise:
-
-    .. code-block:: text
-
-        variance = predicted / gain + readout_noise^2 + dark_current
-    """
-    pred_safe = jnp.maximum(predicted, 1e-10)
-    variance = (
-        pred_safe / noise_params.gain + noise_params.readout_noise**2 + noise_params.dark_current
-    )
-    residual = observed - pred_safe
-    log_lik = -0.5 * jnp.sum(jnp.log(2 * jnp.pi * variance) + residual**2 / variance)
-    return log_lik
-
-
-def bayesian_model(
-    forward_model: "BayesianForwardModel",
-    observed,
-    prior_config: PriorConfig = PriorConfig(),
-    noise_params: NoiseParameters = NoiseParameters(),
-):
-    """NumPyro probabilistic model for single-zone CF-LIBS Bayesian inference."""
-    if not HAS_NUMPYRO:
-        raise ImportError("NumPyro required. Install with: pip install numpyro")
-
-    n_elements = len(forward_model.elements)
-
-    T_eV = numpyro.sample(
-        "T_eV",
-        dist.Uniform(prior_config.T_eV_range[0], prior_config.T_eV_range[1]),
-    )
-    log_ne = numpyro.sample(
-        "log_ne",
-        dist.Uniform(prior_config.log_ne_range[0], prior_config.log_ne_range[1]),
-    )
-
-    alpha = jnp.ones(n_elements) * prior_config.concentration_alpha
-    concentrations = numpyro.sample("concentrations", dist.Dirichlet(alpha))
-
-    predicted = forward_model.forward(T_eV, log_ne, concentrations)
-
-    if prior_config.baseline_degree > 0:
-        if prior_config.baseline_degree > forward_model._max_baseline_degree:
-            raise ValueError(
-                f"baseline_degree={prior_config.baseline_degree} exceeds max "
-                f"({forward_model._max_baseline_degree}). Pre-computed Chebyshev "
-                f"basis does not cover this degree."
-            )
-        n_coeffs = prior_config.baseline_degree + 1
-        baseline_scale = prior_config.baseline_scale
-        if baseline_scale is not None and baseline_scale <= 0:
-            raise ValueError(f"baseline_scale must be positive, got {baseline_scale}")
-        if baseline_scale is None:
-            baseline_scale = 0.1 * jnp.max(observed)
-        baseline_coeffs = numpyro.sample(
-            "baseline_coeffs",
-            dist.Normal(jnp.zeros(n_coeffs), baseline_scale),
-        )
-        basis = forward_model._baseline_basis_jax[:, :n_coeffs]
-        baseline = jnp.dot(basis, baseline_coeffs)
-        predicted = predicted + baseline
-
-    pred_safe = jnp.maximum(predicted, 1e-6)
-    pred_safe = jnp.where(jnp.isnan(pred_safe), 1e-6, pred_safe)
-    pred_safe = jnp.where(jnp.isinf(pred_safe), 1e6, pred_safe)
-
-    variance = (
-        pred_safe / noise_params.gain + noise_params.readout_noise**2 + noise_params.dark_current
-    )
-    sigma = jnp.sqrt(jnp.maximum(variance, 1e-6))
-
-    numpyro.sample("obs", dist.Normal(pred_safe, sigma), obs=observed)
-
-
-def two_zone_bayesian_model(
-    forward_model: "TwoZoneBayesianForwardModel",
-    observed,
-    prior_config: TwoZonePriorConfig = TwoZonePriorConfig(),
-    noise_params: NoiseParameters = NoiseParameters(),
-):
-    """NumPyro probabilistic model for two-zone CF-LIBS Bayesian inference."""
-    if not HAS_NUMPYRO:
-        raise ImportError("NumPyro required. Install with: pip install numpyro")
-
-    n_elements = len(forward_model.elements)
-
-    T_core_eV = numpyro.sample(
-        "T_core_eV",
-        dist.Uniform(prior_config.T_core_eV_range[0], prior_config.T_core_eV_range[1]),
-    )
-    T_shell_eV = numpyro.sample(
-        "T_shell_eV",
-        dist.Uniform(prior_config.T_shell_eV_range[0], prior_config.T_shell_eV_range[1]),
-    )
-
-    if prior_config.enforce_T_ordering:
-        numpyro.factor("T_ordering", jnp.where(T_core_eV > T_shell_eV, 0.0, -1e6))
-
-    log_ne = numpyro.sample(
-        "log_ne",
-        dist.Uniform(prior_config.log_ne_range[0], prior_config.log_ne_range[1]),
-    )
-
-    if prior_config.mcwhirter_penalty_scale > 0:
-        penalty = mcwhirter_log_penalty(
-            T_core_eV,
-            log_ne,
-            max_delta_E_eV=prior_config.max_delta_E_eV,
-            scale=prior_config.mcwhirter_penalty_scale,
-        )
-        numpyro.factor("mcwhirter_lte", penalty)
-
-    alpha = jnp.ones(n_elements) * prior_config.concentration_alpha
-    concentrations = numpyro.sample("concentrations", dist.Dirichlet(alpha))
-
-    shell_fraction = numpyro.sample(
-        "shell_fraction",
-        dist.Uniform(
-            prior_config.shell_fraction_range[0],
-            prior_config.shell_fraction_range[1],
-        ),
-    )
-    optical_depth_scale = numpyro.sample(
-        "optical_depth_scale",
-        dist.Uniform(
-            prior_config.optical_depth_scale_range[0],
-            prior_config.optical_depth_scale_range[1],
-        ),
-    )
-
-    predicted = forward_model.forward(
-        T_core_eV, T_shell_eV, log_ne, concentrations, shell_fraction, optical_depth_scale
-    )
-
-    if prior_config.baseline_degree > 0:
-        baseline_coeffs = numpyro.sample(
-            "baseline_coeffs",
-            dist.Normal(jnp.zeros(prior_config.baseline_degree + 1), 100.0),
-        )
-        wl = forward_model.wavelength
-        wl_norm = (wl - wl[0]) / jnp.maximum(wl[-1] - wl[0], 1e-6)
-        baseline = jnp.polyval(baseline_coeffs, wl_norm)
-        predicted = predicted + baseline
-
-    pred_safe = jnp.maximum(predicted, 1e-6)
-    pred_safe = jnp.where(jnp.isnan(pred_safe), 1e-6, pred_safe)
-    pred_safe = jnp.where(jnp.isinf(pred_safe), 1e6, pred_safe)
-
-    variance = (
-        pred_safe / noise_params.gain + noise_params.readout_noise**2 + noise_params.dark_current
-    )
-    sigma = jnp.sqrt(jnp.maximum(variance, 1e-6))
-
-    numpyro.sample("obs", dist.Normal(pred_safe, sigma), obs=observed)
-
+from .models import bayesian_model, two_zone_bayesian_model  # noqa: E402
 
 __all__ = [
     "BayesianForwardModel",

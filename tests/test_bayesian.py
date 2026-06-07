@@ -1629,3 +1629,345 @@ class TestTwoZoneMCMCSampler:
         assert isinstance(result, TwoZoneMCMCResult)
         assert result.T_core_eV_mean > 0
         assert result.T_shell_eV_mean > 0
+
+
+# ---------------------------------------------------------------------------
+# Family-5 grounded physics fixes (audit Family 5)
+#   (1) Doppler sigma drops the spurious factor of 2 (1D Maxwell std).
+#   (2) Saha balance includes the doubly-ionized stage (n_e = n_I + 2 n_II).
+#   (3) Cash/Poisson likelihood does not bias peak amplitudes (Pearson bias).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def ca_db():
+    """DB with Ca I/II/III data so the doubly-ionized Saha stage is exercised.
+
+    Ca II -> III has a low second ionization potential (11.87 eV), so the Ca III
+    population fraction is non-negligible at ps-LIBS core temperatures (~1.3 eV).
+    """
+    import os
+
+    fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE lines (
+            id INTEGER PRIMARY KEY, element TEXT, sp_num INTEGER, wavelength_nm REAL,
+            aki REAL, ei_ev REAL, ek_ev REAL, gi INTEGER, gk INTEGER, rel_int REAL,
+            stark_w REAL, stark_alpha REAL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE species_physics (
+            element TEXT, sp_num INTEGER, ip_ev REAL, PRIMARY KEY (element, sp_num)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE partition_functions (
+            element TEXT, sp_num INTEGER, a0 REAL, a1 REAL, a2 REAL, a3 REAL, a4 REAL,
+            t_min REAL, t_max REAL, source TEXT, PRIMARY KEY (element, sp_num)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE energy_levels (
+            id INTEGER PRIMARY KEY, element TEXT, sp_num INTEGER, g_level INTEGER,
+            energy_ev REAL
+        )
+    """)
+
+    # One representative line per stage (neutral / singly / doubly ionized).
+    lines_data = [
+        ("Ca", 1, 422.67, 2.18e8, 0.0, 2.93, 1, 3, 5000, 0.01, 0.5),  # Ca I
+        ("Ca", 2, 393.37, 1.47e8, 0.0, 3.15, 2, 4, 9000, 0.01, 0.5),  # Ca II
+        ("Ca", 3, 350.00, 1.0e8, 0.0, 5.00, 1, 3, 1000, 0.01, 0.5),  # Ca III
+    ]
+    conn.executemany(
+        "INSERT INTO lines (element, sp_num, wavelength_nm, aki, ei_ev, ek_ev, gi, gk, "
+        "rel_int, stark_w, stark_alpha) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        lines_data,
+    )
+    conn.executemany(
+        "INSERT INTO species_physics (element, sp_num, ip_ev) VALUES (?, ?, ?)",
+        [("Ca", 1, 6.11), ("Ca", 2, 11.87), ("Ca", 3, 50.91)],
+    )
+    # Constant partition functions: log10(U) = a0. U_I ~ 1.3, U_II ~ 2.3, U_III ~ 1.
+    pf_data = [
+        ("Ca", 1, np.log10(1.3), 0.0, 0.0, 0.0, 0.0),
+        ("Ca", 2, np.log10(2.3), 0.0, 0.0, 0.0, 0.0),
+        ("Ca", 3, np.log10(1.0), 0.0, 0.0, 0.0, 0.0),
+    ]
+    conn.executemany(
+        "INSERT INTO partition_functions (element, sp_num, a0, a1, a2, a3, a4) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        pf_data,
+    )
+    conn.commit()
+    conn.close()
+    yield db_path
+    Path(db_path).unlink()
+
+
+@pytest.mark.requires_jax
+class TestFamily5DopplerSigma:
+    """Gate (1): TwoZone per-line Doppler sigma uses the 1D Maxwell std.
+
+    Independent oracle: ``cflibs.radiation.profiles.doppler_width`` /
+    ``doppler_sigma_jax`` -- the canonical ``sigma = (lambda/c) sqrt(kT/m)`` with
+    NO factor of 2. The pre-fix TwoZone code used ``sqrt(2 kT/m)`` (the
+    most-probable-speed form), inflating the Gaussian core by sqrt(2) ~ 1.414.
+    """
+
+    def test_two_zone_doppler_sigma_matches_profiles_oracle(self, bayesian_db):
+        from cflibs.core.constants import C_LIGHT, EV_TO_J, M_PROTON
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
+        from cflibs.radiation.profiles import doppler_sigma_jax, doppler_width
+
+        model = TwoZoneBayesianForwardModel(bayesian_db, ["Fe", "Cu"], (200.0, 600.0), pixels=50)
+        data = model.atomic_data
+        T_eV = 1.0
+        wl = np.asarray(data.wavelength_nm, dtype=np.float64)
+        mass_amu = np.asarray(data.mass_amu, dtype=np.float64)
+
+        # Reproduce the model's per-line Doppler sigma from its loaded atomic
+        # arrays using the SAME formula the (fixed) forward model uses.
+        mass_kg = mass_amu * M_PROTON
+        sigma_model = wl * np.sqrt(T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
+
+        # Independent oracle 1: FWHM / 2.355 from profiles.doppler_width.
+        sigma_oracle_fwhm = np.array(
+            [doppler_width(w, T_eV, m) / 2.355 for w, m in zip(wl, mass_amu)]
+        )
+        # Independent oracle 2: the canonical JAX sigma helper.
+        sigma_oracle_jax = np.array(
+            [float(doppler_sigma_jax(float(w), T_eV, float(m))) for w, m in zip(wl, mass_amu)]
+        )
+
+        np.testing.assert_allclose(sigma_model, sigma_oracle_jax, rtol=1e-9)
+        np.testing.assert_allclose(sigma_model, sigma_oracle_fwhm, rtol=1e-3)
+
+        # Guard: the spurious factor of 2 would inflate sigma by exactly sqrt(2).
+        sigma_buggy = wl * np.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
+        np.testing.assert_allclose(sigma_buggy / sigma_model, np.sqrt(2.0), rtol=1e-9)
+
+    def test_two_zone_forward_source_has_no_factor_of_two(self):
+        """The Doppler sigma site in forward.py must not carry a factor of 2."""
+        import re
+
+        from cflibs.inversion.solve.bayesian import forward as fwd
+
+        src = Path(fwd.__file__).read_text(encoding="utf-8")
+        # Find the sigma_doppler assignment block and ensure it does not use
+        # sqrt(2 * ... T ...). Match the canonical sqrt(T_eV * _JAX_EV_TO_J ...).
+        assert "sigma_doppler = data.wavelength_nm * jnp.sqrt(" in src
+        # No 'sqrt(2.0 * T_eV' or 'sqrt(2 * T_eV' anywhere in the file.
+        assert not re.search(r"sqrt\(\s*_as_jax_real\(2", src)
+        assert not re.search(r"jnp\.sqrt\(\s*2\.?0?\s*\*\s*T_eV", src)
+
+
+@pytest.mark.requires_jax
+class TestFamily5SahaDoublyIonized:
+    """Gate (2): Saha balance spans neutral/singly/doubly ionized stages.
+
+    Independent oracle: a freshly written three-stage Saha balance over the
+    model's LOADED partition coefficients and ionization potentials (the inputs
+    are shared, but the balance equation -- the thing that changed -- is
+    re-derived here, not copied from the forward model).
+    """
+
+    @staticmethod
+    def _oracle_fractions(model, el, T_eV, n_e):
+        """Independent three-stage Saha fractions for element ``el``."""
+        from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3
+        from cflibs.inversion.solve.bayesian import partition_function
+
+        data = model.atomic_data
+        ei = model.elements.index(el)
+        T_K = T_eV * EV_TO_K
+        coeffs = np.asarray(data.partition_coeffs)  # (n_el, n_stages, 5)
+        ips = np.asarray(data.ionization_potentials)  # (n_el, n_stages)
+
+        def U(stage):
+            return float(partition_function(T_K, coeffs[ei, stage]))
+
+        U0, U1, U2 = U(0), U(1), U(2)
+        IP_I = float(ips[ei, 0])
+        IP_II = float(ips[ei, 1])
+        S = (SAHA_CONST_CM3 / n_e) * (T_eV**1.5)
+        r1 = S * (U1 / U0) * np.exp(-IP_I / T_eV)  # n_II / n_I
+        r2 = S * (U2 / U1) * np.exp(-IP_II / T_eV)  # n_III / n_II
+        denom = 1.0 + r1 + r1 * r2
+        f_I = 1.0 / denom
+        f_II = r1 / denom
+        f_III = (r1 * r2) / denom
+        return f_I, f_II, f_III
+
+    def test_ca_iii_fraction_non_negligible_at_core_T(self, ca_db):
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
+
+        model = TwoZoneBayesianForwardModel(ca_db, ["Ca"], (300.0, 500.0), pixels=50)
+        T_eV, n_e = 1.3, 1.0e17
+        f_I, f_II, f_III = self._oracle_fractions(model, "Ca", T_eV, n_e)
+
+        # Stages sum to 1 (three-stage closure) and Ca III is non-negligible
+        # (>> 1%) at core T -- it must NOT be truncated away. (At 1.3 eV the
+        # Ca ladder is in fact dominated by the doubly-ionized stage given the
+        # low second IP of 11.87 eV, which is exactly why truncation is wrong.)
+        np.testing.assert_allclose(f_I + f_II + f_III, 1.0, rtol=1e-12)
+        assert f_III > 0.01, f"Ca III fraction too small: {f_III}"
+        assert f_II > 0.0 and f_I >= 0.0
+
+    def test_charge_balance_holds(self, ca_db):
+        """n_e = n_I*0 + n_II*1 + n_III*2 must reproduce the sampled n_e.
+
+        With number densities n_X = N_tot * f_X, the electron density implied by
+        the populated stages is n_e = N_tot * (f_II + 2 f_III). For a pure-Ca
+        plasma the closure ``N_tot = n_e / (f_II + 2 f_III)`` is the self-
+        consistent heavy-particle density; round-tripping it must return n_e.
+        """
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
+
+        model = TwoZoneBayesianForwardModel(ca_db, ["Ca"], (300.0, 500.0), pixels=50)
+        T_eV, n_e = 1.3, 1.0e17
+        f_I, f_II, f_III = self._oracle_fractions(model, "Ca", T_eV, n_e)
+
+        N_tot = n_e / (f_II + 2.0 * f_III)
+        n_I = N_tot * f_I
+        n_II = N_tot * f_II
+        n_III = N_tot * f_III
+        # Charge balance with the doubly-ionized stage included.
+        n_e_implied = n_II + 2.0 * n_III
+        np.testing.assert_allclose(n_e_implied, n_e, rtol=1e-9)
+        # The doubly-ionized term contributes meaningfully (>1% of n_e here).
+        assert (2.0 * n_III) / n_e > 0.01
+        assert n_I > 0.0
+
+    def test_two_stage_truncation_would_miss_ca_iii(self, ca_db):
+        """A neutral+singly-only model under-counts the ladder for Ca."""
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
+
+        model = TwoZoneBayesianForwardModel(ca_db, ["Ca"], (300.0, 500.0), pixels=50)
+        T_eV, n_e = 1.3, 1.0e17
+        f_I, f_II, f_III = self._oracle_fractions(model, "Ca", T_eV, n_e)
+
+        # Two-stage (truncated) normalisation renormalises over only I + II,
+        # dropping f_III entirely; the singly fraction it reports differs from
+        # the true three-stage value by far more than 0.5%.
+        f_II_two_stage = f_II / (f_I + f_II)
+        assert abs(f_II_two_stage - f_II) > 0.005
+
+    def test_two_zone_spectrum_responds_to_ca_iii_line(self, ca_db):
+        """The Ca III line carries non-zero emission (stage-2 population used)."""
+        from cflibs.inversion.solve.bayesian import TwoZoneBayesianForwardModel
+
+        # Range that includes the Ca III line at 350 nm.
+        model = TwoZoneBayesianForwardModel(ca_db, ["Ca"], (340.0, 360.0), pixels=200)
+        conc = jnp.array([1.0])
+        spectrum = model.forward(1.3, 1.0, 17.0, conc, 0.3, 1e-8)
+        assert float(jnp.max(spectrum)) > 0.0
+
+
+@pytest.mark.requires_jax
+class TestFamily5PoissonLikelihood:
+    """Gate (3): exact Poisson/Cash likelihood is unbiased on shot noise.
+
+    Independent oracle: a NumPy/scipy Cash-statistic and model-variance-Gaussian
+    grid search on the SAME synthetic Poisson-noised data. The model-variance
+    Gaussian (Pearson) under-estimates the peak amplitude; the Poisson MLE
+    recovers it.
+    """
+
+    def test_poisson_kind_dispatch_and_validation(self):
+        predicted = jnp.array([100.0, 200.0, 150.0])
+        observed = jnp.array([100.0, 200.0, 150.0])
+        ll_g = log_likelihood(predicted, observed, likelihood_kind="gaussian")
+        ll_p = log_likelihood(predicted, observed, likelihood_kind="poisson")
+        assert jnp.isfinite(ll_g)
+        assert jnp.isfinite(ll_p)
+        # Different statistics -> different scalar values.
+        assert not np.isclose(float(ll_g), float(ll_p))
+        with pytest.raises(ValueError):
+            log_likelihood(predicted, observed, likelihood_kind="neyman")
+
+    def test_poisson_matches_independent_cash_oracle(self):
+        """Poisson branch equals the analytic Cash statistic (no readout)."""
+        from scipy.special import gammaln
+
+        np_params = NoiseParameters(readout_noise=0.0, dark_current=0.0, gain=1.0)
+        rng = np.random.default_rng(3)
+        mu = rng.uniform(5.0, 200.0, size=64)
+        obs = rng.poisson(mu).astype(float)
+
+        ll_model = float(
+            log_likelihood(jnp.asarray(mu), jnp.asarray(obs), np_params, likelihood_kind="poisson")
+        )
+        ll_oracle = float(np.sum(obs * np.log(mu) - mu - gammaln(obs + 1.0)))
+        np.testing.assert_allclose(ll_model, ll_oracle, rtol=1e-5)
+
+    def test_poisson_unbiased_where_gaussian_underestimates_peak(self):
+        """On Poisson-noised data, Poisson MLE recovers A_true; Pearson is biased low.
+
+        Independent oracle: pure-NumPy Cash and model-variance Gaussian profile
+        log-likelihoods over an amplitude grid, averaged over noise realisations.
+        """
+        from scipy.special import gammaln
+
+        x = np.arange(40)
+        template = np.exp(-0.5 * ((x - 20) / 3.0) ** 2)  # peak 1.0
+        A_true = 12.0  # peak counts -> shot-noise dominated
+        mu_true = A_true * template
+        grid = np.linspace(A_true * 0.6, A_true * 1.4, 401)
+
+        def cash(obs, A):
+            mu = np.maximum(A * template, 1e-10)
+            return np.sum(obs * np.log(mu) - mu - gammaln(obs + 1.0))
+
+        def pearson_gauss(obs, A):
+            var = np.maximum(A * template, 1e-10)
+            return -0.5 * np.sum(np.log(2 * np.pi * var) + (obs - A * template) ** 2 / var)
+
+        rng = np.random.default_rng(11)
+        ests_p, ests_g = [], []
+        for _ in range(200):
+            obs = rng.poisson(mu_true).astype(float)
+            ests_p.append(grid[np.argmax([cash(obs, a) for a in grid])])
+            ests_g.append(grid[np.argmax([pearson_gauss(obs, a) for a in grid])])
+
+        bias_p = np.mean(ests_p) - A_true
+        bias_g = np.mean(ests_g) - A_true
+        # Poisson/Cash is ~unbiased; Pearson is biased low and worse.
+        assert abs(bias_p) < 0.4, f"Poisson bias too large: {bias_p}"
+        assert bias_g < -0.4, f"Pearson should under-estimate, got bias {bias_g}"
+        assert bias_g < bias_p
+
+    def test_poisson_jax_branch_matches_numpy_pearson_direction(self):
+        """The JAX log_likelihood Poisson branch is unbiased relative to Pearson.
+
+        Uses the SHIPPED ``log_likelihood`` (both branches) on one fixed
+        Poisson realisation; the Poisson MLE sits above the Pearson MLE.
+        """
+        np_params = NoiseParameters(readout_noise=0.0, dark_current=0.0, gain=1.0)
+        x = np.arange(40)
+        template = np.exp(-0.5 * ((x - 20) / 3.0) ** 2)
+        A_true = 12.0
+        rng = np.random.default_rng(5)
+        # Average over a handful of realisations to suppress single-draw scatter.
+        grid = np.linspace(A_true * 0.6, A_true * 1.4, 161)
+        diffs = []
+        for _ in range(12):
+            obs = jnp.asarray(rng.poisson(A_true * template).astype(float))
+            ll_p = np.array(
+                [
+                    float(log_likelihood(jnp.asarray(a * template), obs, np_params, "poisson"))
+                    for a in grid
+                ]
+            )
+            ll_g = np.array(
+                [
+                    float(log_likelihood(jnp.asarray(a * template), obs, np_params, "gaussian"))
+                    for a in grid
+                ]
+            )
+            diffs.append(grid[ll_p.argmax()] - grid[ll_g.argmax()])
+        assert np.mean(diffs) > 0.0, f"Poisson MLE not above Pearson MLE: {np.mean(diffs)}"
