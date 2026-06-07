@@ -487,6 +487,283 @@ class CombShiftSummary(TypedDict):
     total_f1: float
 
 
+def _empty_line_detection_result(warning: str) -> LineDetectionResult:
+    """Empty :class:`LineDetectionResult` carrying a single warning code."""
+    return LineDetectionResult(
+        observations=[],
+        resonance_lines=set(),
+        total_peaks=0,
+        matched_peaks=0,
+        unmatched_peaks=0,
+        applied_shift_nm=0.0,
+        warnings=[warning],
+    )
+
+
+def _resolve_adaptive_tolerances(
+    wavelength_tolerance_nm: Optional[float],
+    peak_width_nm: Optional[float],
+    wl_step: float,
+    lambda_mid: float,
+    resolving_power: Optional[float],
+) -> Tuple[float, float]:
+    """Resolve adaptive ``wavelength_tolerance_nm`` / ``peak_width_nm`` defaults.
+
+    When the caller leaves either unset (``None``), derive R-aware defaults: one
+    FWHM at the band midpoint when ``resolving_power`` is provided, else the
+    legacy fixed constants (0.1 and 0.2 nm) so existing callers see
+    byte-identical behaviour (CF-LIBS-improved-s1qr.2).
+    """
+    if wavelength_tolerance_nm is None:
+        if resolving_power is not None and resolving_power > 0:
+            wavelength_tolerance_nm = max(2.0 * wl_step, lambda_mid / resolving_power)
+        else:
+            wavelength_tolerance_nm = 0.1
+    if peak_width_nm is None:
+        if resolving_power is not None and resolving_power > 0:
+            peak_width_nm = max(2.0 * wl_step, lambda_mid / resolving_power)
+        else:
+            peak_width_nm = 0.2
+    return wavelength_tolerance_nm, peak_width_nm
+
+
+def _select_accepted_elements(
+    best_shift_summary: Optional[CombShiftSummary],
+    fallback_shift_summary: Optional[CombShiftSummary],
+    comb_fallback_to_nearest: bool,
+    comb_min_matches: int,
+    comb_fallback_max_elements: int,
+    warnings: List[str],
+) -> Tuple[float, Dict[str, CombScore], List[str]]:
+    """Pick the applied shift, element scores, and accepted elements.
+
+    Mirrors the comb-pass / comb-fallback selection exactly; appends the same
+    ``comb_no_elements_passed`` / ``comb_fallback_disabled`` warnings as the
+    inline code did.
+    """
+    if best_shift_summary is not None and best_shift_summary["passed_elements"]:
+        applied_shift_nm = float(best_shift_summary["shift_nm"])
+        element_scores = best_shift_summary["scores"]
+        accepted_elements = list(best_shift_summary["passed_elements"])
+        return applied_shift_nm, element_scores, accepted_elements
+
+    warnings.append("comb_no_elements_passed")
+    if not (comb_fallback_to_nearest and fallback_shift_summary is not None):
+        warnings.append("comb_fallback_disabled")
+        return 0.0, {}, []
+
+    applied_shift_nm = float(fallback_shift_summary["shift_nm"])
+    element_scores = fallback_shift_summary["scores"]
+    accepted_elements = [
+        element
+        for element, score in element_scores.items()
+        if score.matched_lines >= max(1, comb_min_matches)
+    ]
+    if not accepted_elements:
+        accepted_elements = [
+            element
+            for element, score in sorted(
+                element_scores.items(),
+                key=lambda item: item[1].matched_lines,
+                reverse=True,
+            )[:comb_fallback_max_elements]
+            if score.matched_lines > 0
+        ]
+    return applied_shift_nm, element_scores, accepted_elements
+
+
+def _run_deconvolution(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    peaks: List[Tuple[int, float]],
+    peak_width_nm: float,
+) -> Optional[Dict[float, "VoigtFitResult"]]:
+    """Voigt-deconvolve detected peaks, mapping fits to nearest peak wavelength.
+
+    Returns ``None`` when deconvolution is not applicable or fails (the caller
+    then falls back to the trapezoid line builder), matching the inline
+    behaviour exactly.
+    """
+    try:
+        from cflibs.inversion.deconvolution import deconvolve_peaks
+
+        # Collect all peak wavelengths for deconvolution
+        peak_wl_arr = np.array([pw for _, pw in peaks], dtype=float)
+        if len(peak_wl_arr) == 0:
+            return None
+        from cflibs.inversion.preprocess.preprocessing import estimate_baseline
+
+        baseline = estimate_baseline(wavelength, intensity)
+        baseline_subtracted = intensity - baseline
+        deconv = deconvolve_peaks(
+            wavelength,
+            baseline_subtracted,
+            peak_wl_arr,
+            fwhm_estimate=peak_width_nm,
+        )
+        # Map fit results to nearest original peak wavelength
+        deconv_results_by_wl: Dict[float, "VoigtFitResult"] = {}
+        for fr in deconv.fit_results:
+            best_peak_wl = float(peak_wl_arr[np.argmin(np.abs(peak_wl_arr - fr.center_nm))])
+            deconv_results_by_wl[round(best_peak_wl, 4)] = fr
+        logger.debug(
+            "Deconvolution produced %d fit results for %d peaks",
+            len(deconv.fit_results),
+            len(peak_wl_arr),
+        )
+        return deconv_results_by_wl
+    except Exception as exc:
+        logger.warning("Deconvolution failed, falling back to trapezoid: %s", exc)
+        return None
+
+
+@dataclass
+class _ObservationBuildContext:
+    """Constant inputs shared by the per-match observation builders."""
+
+    wavelength: np.ndarray
+    intensity: np.ndarray
+    half_width_px: int
+    wl_step: float
+    ground_state_threshold_ev: float
+    poisson_floor_scale: float
+    deconv_results_by_wl: Optional[Dict[float, "VoigtFitResult"]]
+
+
+def _build_observation_for_match(
+    ctx: _ObservationBuildContext,
+    transition: Transition,
+    peak_idx: int,
+    peak_wl: float,
+) -> Optional[Tuple[LineObservation, bool]]:
+    """Build one observation, preferring the deconvolution fit when available.
+
+    Identical dispatch to the inline ``if deconv_results_by_wl ... else ...``
+    blocks: a Voigt-fit observation when this peak has a deconvolution result,
+    otherwise the trapezoid builder.
+    """
+    rounded_wl = round(peak_wl, 4)
+    if ctx.deconv_results_by_wl is not None and rounded_wl in ctx.deconv_results_by_wl:
+        return _build_observation_from_fit(
+            transition,
+            ctx.deconv_results_by_wl[rounded_wl],
+            ctx.ground_state_threshold_ev,
+            wl_step=ctx.wl_step,
+            poisson_floor_scale=ctx.poisson_floor_scale,
+        )
+    return _build_observation(
+        transition,
+        peak_idx,
+        ctx.wavelength,
+        ctx.intensity,
+        ctx.half_width_px,
+        ctx.wl_step,
+        ctx.ground_state_threshold_ev,
+    )
+
+
+def _register_observation(
+    ctx: _ObservationBuildContext,
+    transition: Transition,
+    peak_idx: int,
+    peak_wl: float,
+    seen_keys: Set[Tuple[str, int, float]],
+    matched_peak_indices: Set[int],
+    observations: List[LineObservation],
+    resonance_lines: Set[Tuple[str, int, float]],
+) -> None:
+    """Dedup, build, and append one observation for a (transition, peak) match.
+
+    Captures the shared body of the two inner loops in
+    :func:`detect_line_observations` verbatim: key dedup against ``seen_keys``,
+    recording the matched peak, building the observation, and appending it plus
+    any resonance key.
+    """
+    key = (transition.element, transition.ionization_stage, transition.wavelength_nm)
+    if key in seen_keys:
+        return
+    seen_keys.add(key)
+    matched_peak_indices.add(peak_idx)
+
+    result = _build_observation_for_match(ctx, transition, peak_idx, peak_wl)
+    if result is None:
+        return
+    obs, is_resonance = result
+    observations.append(obs)
+    if is_resonance:
+        resonance_lines.add(key)
+
+
+def _collect_observations(
+    ctx: _ObservationBuildContext,
+    accepted_elements: List[str],
+    element_scores: Dict[str, CombScore],
+    comb_transitions_by_element: Dict[str, List[Transition]],
+    peaks: List[Tuple[int, float]],
+    wavelength_tolerance_nm: float,
+    applied_shift_nm: float,
+    seen_keys: Set[Tuple[str, int, float]],
+    matched_peak_indices: Set[int],
+    observations: List[LineObservation],
+    resonance_lines: Set[Tuple[str, int, float]],
+) -> None:
+    """Build observations for every accepted element (in-place accumulation).
+
+    Reproduces the ``if accepted_elements:`` block exactly: sort accepted
+    elements by (f1, matched_lines) descending, then for each element run the
+    comb-transition matcher followed by the per-peak nearest matcher, building
+    one observation per unique line key.
+    """
+
+    def _score_key(element: str) -> Tuple[float, int]:
+        score = element_scores.get(element)
+        if score is None:
+            return (0.0, 0)
+        return (score.f1_score, score.matched_lines)
+
+    accepted_elements.sort(key=_score_key, reverse=True)
+
+    used_peaks: Set[int] = set()
+    for element in accepted_elements:
+        transitions = comb_transitions_by_element.get(element, [])
+        if not transitions:
+            continue
+        matches = _match_transitions_to_peaks(
+            peaks=peaks,
+            transitions=transitions,
+            tolerance_nm=wavelength_tolerance_nm,
+            shift_nm=applied_shift_nm,
+            used_peaks=used_peaks,
+        )
+        for transition, peak_idx, peak_wl, _delta in matches:
+            _register_observation(
+                ctx,
+                transition,
+                peak_idx,
+                peak_wl,
+                seen_keys,
+                matched_peak_indices,
+                observations,
+                resonance_lines,
+            )
+        for peak_idx, peak_wl in peaks:
+            transition = _match_transition(
+                peak_wl + applied_shift_nm, transitions, wavelength_tolerance_nm
+            )
+            if transition is None:
+                continue
+            _register_observation(
+                ctx,
+                transition,
+                peak_idx,
+                peak_wl,
+                seen_keys,
+                matched_peak_indices,
+                observations,
+                resonance_lines,
+            )
+
+
 def detect_line_observations(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -641,29 +918,13 @@ def detect_line_observations(
         Detected line observations and resonance set
     """
     if wavelength.size == 0 or intensity.size == 0:
-        return LineDetectionResult(
-            observations=[],
-            resonance_lines=set(),
-            total_peaks=0,
-            matched_peaks=0,
-            unmatched_peaks=0,
-            applied_shift_nm=0.0,
-            warnings=["empty_spectrum"],
-        )
+        return _empty_line_detection_result("empty_spectrum")
 
     if wavelength.size != intensity.size:
         raise ValueError("Wavelength and intensity arrays must be the same length")
 
     if not elements:
-        return LineDetectionResult(
-            observations=[],
-            resonance_lines=set(),
-            total_peaks=0,
-            matched_peaks=0,
-            unmatched_peaks=0,
-            applied_shift_nm=0.0,
-            warnings=["no_elements_specified"],
-        )
+        return _empty_line_detection_result("no_elements_specified")
 
     wl_min = float(np.min(wavelength))
     wl_max = float(np.max(wavelength))
@@ -680,16 +941,13 @@ def detect_line_observations(
     # ambiguous-catalog noise (CF-LIBS-improved-s1qr.2).
     wl_step = _estimate_wl_step(wavelength)
     lambda_mid = 0.5 * (wl_min + wl_max)
-    if wavelength_tolerance_nm is None:
-        if resolving_power is not None and resolving_power > 0:
-            wavelength_tolerance_nm = max(2.0 * wl_step, lambda_mid / resolving_power)
-        else:
-            wavelength_tolerance_nm = 0.1
-    if peak_width_nm is None:
-        if resolving_power is not None and resolving_power > 0:
-            peak_width_nm = max(2.0 * wl_step, lambda_mid / resolving_power)
-        else:
-            peak_width_nm = 0.2
+    wavelength_tolerance_nm, peak_width_nm = _resolve_adaptive_tolerances(
+        wavelength_tolerance_nm,
+        peak_width_nm,
+        wl_step,
+        lambda_mid,
+        resolving_power,
+    )
 
     transitions = _load_transitions(
         atomic_db,
@@ -701,15 +959,7 @@ def detect_line_observations(
     )
 
     if not transitions:
-        return LineDetectionResult(
-            observations=[],
-            resonance_lines=set(),
-            total_peaks=0,
-            matched_peaks=0,
-            unmatched_peaks=0,
-            applied_shift_nm=0.0,
-            warnings=["no_transitions_found"],
-        )
+        return _empty_line_detection_result("no_transitions_found")
 
     peaks = _find_peaks(
         wavelength,
@@ -728,15 +978,7 @@ def detect_line_observations(
     warnings: List[str] = []
     total_peaks = len(peaks)
     if total_peaks == 0:
-        return LineDetectionResult(
-            observations=[],
-            resonance_lines=set(),
-            total_peaks=0,
-            matched_peaks=0,
-            unmatched_peaks=0,
-            applied_shift_nm=0.0,
-            warnings=["no_peaks_detected"],
-        )
+        return _empty_line_detection_result("no_peaks_detected")
 
     transitions_by_element: Dict[str, List[Transition]] = {}
     for transition in transitions:
@@ -783,36 +1025,14 @@ def detect_line_observations(
         comb_max_missing_fraction=comb_max_missing_fraction,
     )
 
-    applied_shift_nm = 0.0
-    element_scores: Dict[str, CombScore] = {}
-    accepted_elements: List[str] = []
-
-    if best_shift_summary is not None and best_shift_summary["passed_elements"]:
-        applied_shift_nm = float(best_shift_summary["shift_nm"])
-        element_scores = best_shift_summary["scores"]
-        accepted_elements = list(best_shift_summary["passed_elements"])
-    else:
-        warnings.append("comb_no_elements_passed")
-        if comb_fallback_to_nearest and fallback_shift_summary is not None:
-            applied_shift_nm = float(fallback_shift_summary["shift_nm"])
-            element_scores = fallback_shift_summary["scores"]
-            accepted_elements = [
-                element
-                for element, score in element_scores.items()
-                if score.matched_lines >= max(1, comb_min_matches)
-            ]
-            if not accepted_elements:
-                accepted_elements = [
-                    element
-                    for element, score in sorted(
-                        element_scores.items(),
-                        key=lambda item: item[1].matched_lines,
-                        reverse=True,
-                    )[:comb_fallback_max_elements]
-                    if score.matched_lines > 0
-                ]
-        else:
-            warnings.append("comb_fallback_disabled")
+    applied_shift_nm, element_scores, accepted_elements = _select_accepted_elements(
+        best_shift_summary,
+        fallback_shift_summary,
+        comb_fallback_to_nearest,
+        comb_min_matches,
+        comb_fallback_max_elements,
+        warnings,
+    )
 
     # Shift-coherence veto: drop accepted elements whose matched comb lines do
     # not agree on the single instrument residual shift (random-coincidence
@@ -838,130 +1058,31 @@ def detect_line_observations(
     # Optionally run deconvolution on matched peaks
     deconv_results_by_wl: Optional[Dict[float, VoigtFitResult]] = None
     if use_deconvolution:
-        try:
-            from cflibs.inversion.deconvolution import deconvolve_peaks
-
-            # Collect all peak wavelengths for deconvolution
-            peak_wl_arr = np.array([pw for _, pw in peaks], dtype=float)
-            if len(peak_wl_arr) > 0:
-                from cflibs.inversion.preprocess.preprocessing import estimate_baseline
-
-                baseline = estimate_baseline(wavelength, intensity)
-                baseline_subtracted = intensity - baseline
-                deconv = deconvolve_peaks(
-                    wavelength,
-                    baseline_subtracted,
-                    peak_wl_arr,
-                    fwhm_estimate=peak_width_nm,
-                )
-                # Map fit results to nearest original peak wavelength
-                deconv_results_by_wl = {}
-                for fr in deconv.fit_results:
-                    best_peak_wl = float(peak_wl_arr[np.argmin(np.abs(peak_wl_arr - fr.center_nm))])
-                    deconv_results_by_wl[round(best_peak_wl, 4)] = fr
-                logger.debug(
-                    "Deconvolution produced %d fit results for %d peaks",
-                    len(deconv.fit_results),
-                    len(peak_wl_arr),
-                )
-        except Exception as exc:
-            logger.warning("Deconvolution failed, falling back to trapezoid: %s", exc)
-            deconv_results_by_wl = None
+        deconv_results_by_wl = _run_deconvolution(wavelength, intensity, peaks, peak_width_nm)
 
     if accepted_elements:
-
-        def _score_key(element: str) -> Tuple[float, int]:
-            score = element_scores.get(element)
-            if score is None:
-                return (0.0, 0)
-            return (score.f1_score, score.matched_lines)
-
-        accepted_elements.sort(key=_score_key, reverse=True)
-
-        used_peaks: Set[int] = set()
-        for element in accepted_elements:
-            transitions = comb_transitions_by_element.get(element, [])
-            if not transitions:
-                continue
-            matches = _match_transitions_to_peaks(
-                peaks=peaks,
-                transitions=transitions,
-                tolerance_nm=wavelength_tolerance_nm,
-                shift_nm=applied_shift_nm,
-                used_peaks=used_peaks,
-            )
-            for transition, peak_idx, peak_wl, _delta in matches:
-                key = (transition.element, transition.ionization_stage, transition.wavelength_nm)
-                if key in seen_keys:
-                    continue
-                seen_keys.add(key)
-                matched_peak_indices.add(peak_idx)
-
-                # Use deconvolution result if available
-                rounded_wl = round(peak_wl, 4)
-                if deconv_results_by_wl is not None and rounded_wl in deconv_results_by_wl:
-                    result = _build_observation_from_fit(
-                        transition,
-                        deconv_results_by_wl[rounded_wl],
-                        ground_state_threshold_ev,
-                        wl_step=wl_step,
-                        poisson_floor_scale=poisson_floor_scale,
-                    )
-                else:
-                    result = _build_observation(
-                        transition,
-                        peak_idx,
-                        wavelength,
-                        intensity,
-                        half_width_px,
-                        wl_step,
-                        ground_state_threshold_ev,
-                    )
-                if result is None:
-                    continue
-                obs, is_resonance = result
-                observations.append(obs)
-                if is_resonance:
-                    resonance_lines.add(key)
-            for peak_idx, peak_wl in peaks:
-                transition = _match_transition(
-                    peak_wl + applied_shift_nm, transitions, wavelength_tolerance_nm
-                )
-                if transition is None:
-                    continue
-
-                key = (transition.element, transition.ionization_stage, transition.wavelength_nm)
-                if key in seen_keys:
-                    continue
-                seen_keys.add(key)
-                matched_peak_indices.add(peak_idx)
-
-                # Use deconvolution result if available
-                rounded_wl = round(peak_wl, 4)
-                if deconv_results_by_wl is not None and rounded_wl in deconv_results_by_wl:
-                    result = _build_observation_from_fit(
-                        transition,
-                        deconv_results_by_wl[rounded_wl],
-                        ground_state_threshold_ev,
-                        wl_step=wl_step,
-                        poisson_floor_scale=poisson_floor_scale,
-                    )
-                else:
-                    result = _build_observation(
-                        transition,
-                        peak_idx,
-                        wavelength,
-                        intensity,
-                        half_width_px,
-                        wl_step,
-                        ground_state_threshold_ev,
-                    )
-                if result is None:
-                    continue
-                obs, is_resonance = result
-                observations.append(obs)
-                if is_resonance:
-                    resonance_lines.add(key)
+        build_ctx = _ObservationBuildContext(
+            wavelength=wavelength,
+            intensity=intensity,
+            half_width_px=half_width_px,
+            wl_step=wl_step,
+            ground_state_threshold_ev=ground_state_threshold_ev,
+            poisson_floor_scale=poisson_floor_scale,
+            deconv_results_by_wl=deconv_results_by_wl,
+        )
+        _collect_observations(
+            build_ctx,
+            accepted_elements,
+            element_scores,
+            comb_transitions_by_element,
+            peaks,
+            wavelength_tolerance_nm,
+            applied_shift_nm,
+            seen_keys,
+            matched_peak_indices,
+            observations,
+            resonance_lines,
+        )
 
     matched_peaks = len(matched_peak_indices)
     unmatched_peaks = max(total_peaks - matched_peaks, 0)
@@ -1257,6 +1378,104 @@ def _scan_comb_shifts_dispatch_rust(
     return best, fallback
 
 
+@dataclass
+class _ShiftScore:
+    """Per-shift comb scoring aggregate for the pure-Python scan path."""
+
+    scores: Dict[str, CombScore]
+    total_f1: float
+    total_matches_pass: int
+    total_matches_all: int
+    passed_elements: List[str]
+
+
+def _score_comb_shift(
+    shift_nm: float,
+    peaks: List[Tuple[int, float]],
+    transitions_by_element: Dict[str, List[Transition]],
+    total_peaks: int,
+    wavelength_tolerance_nm: float,
+    comb_min_matches: int,
+    comb_min_precision: float,
+    comb_min_recall: float,
+    comb_max_missing_fraction: float,
+) -> _ShiftScore:
+    """Score every element at a single shift (the inner element loop)."""
+    scores: Dict[str, CombScore] = {}
+    total_f1 = 0.0
+    total_matches_pass = 0
+    total_matches_all = 0
+    passed_elements: List[str] = []
+
+    for element, transitions in transitions_by_element.items():
+        if not transitions:
+            continue
+        score = _score_comb_for_element(
+            peaks=peaks,
+            transitions=transitions,
+            shift_nm=shift_nm,
+            total_peaks=total_peaks,
+            wavelength_tolerance_nm=wavelength_tolerance_nm,
+            comb_min_matches=comb_min_matches,
+            comb_min_precision=comb_min_precision,
+            comb_min_recall=comb_min_recall,
+            comb_max_missing_fraction=comb_max_missing_fraction,
+        )
+        score.element = element
+        scores[element] = score
+        total_matches_all += score.matched_lines
+        if score.passes:
+            passed_elements.append(element)
+            total_f1 += score.f1_score
+            total_matches_pass += score.matched_lines
+
+    return _ShiftScore(
+        scores=scores,
+        total_f1=total_f1,
+        total_matches_pass=total_matches_pass,
+        total_matches_all=total_matches_all,
+        passed_elements=passed_elements,
+    )
+
+
+def _fallback_summary_improves(
+    shift_nm: float,
+    total_matches_all: int,
+    current: CombShiftSummary,
+) -> bool:
+    """Whether the current shift beats the existing fallback summary.
+
+    Higher total match count wins; ties broken by smaller absolute shift.
+    """
+    prev_matches = current["total_matches"]
+    return total_matches_all > prev_matches or (
+        total_matches_all == prev_matches and abs(shift_nm) < abs(float(current["shift_nm"]))
+    )
+
+
+def _best_summary_improves(
+    shift_nm: float,
+    total_f1: float,
+    total_matches_pass: int,
+    current: CombShiftSummary,
+) -> bool:
+    """Whether the current shift beats the existing best summary.
+
+    Higher total F1 wins; on (np.isclose) F1 ties, higher passing-match count
+    wins; on a further tie, smaller absolute shift wins.
+    """
+    prev_f1 = current["total_f1"]
+    prev_matches = current["total_matches"]
+    if total_f1 > prev_f1:
+        return True
+    if np.isclose(total_f1, prev_f1):
+        if total_matches_pass > prev_matches:
+            return True
+        if total_matches_pass == prev_matches and abs(shift_nm) < abs(float(current["shift_nm"])):
+            return True
+    return False
+
+
 def _scan_comb_shifts(
     peaks: List[Tuple[int, float]],
     transitions_by_element: Dict[str, List[Transition]],
@@ -1288,85 +1507,39 @@ def _scan_comb_shifts(
     fallback_summary: Optional[CombShiftSummary] = None
 
     for shift_nm in shift_grid:
-        scores: Dict[str, CombScore] = {}
-        total_f1 = 0.0
-        total_matches_pass = 0
-        total_matches_all = 0
-        passed_elements: List[str] = []
+        ss = _score_comb_shift(
+            shift_nm=shift_nm,
+            peaks=peaks,
+            transitions_by_element=transitions_by_element,
+            total_peaks=total_peaks,
+            wavelength_tolerance_nm=wavelength_tolerance_nm,
+            comb_min_matches=comb_min_matches,
+            comb_min_precision=comb_min_precision,
+            comb_min_recall=comb_min_recall,
+            comb_max_missing_fraction=comb_max_missing_fraction,
+        )
 
-        for element, transitions in transitions_by_element.items():
-            if not transitions:
-                continue
-            score = _score_comb_for_element(
-                peaks=peaks,
-                transitions=transitions,
-                shift_nm=shift_nm,
-                total_peaks=total_peaks,
-                wavelength_tolerance_nm=wavelength_tolerance_nm,
-                comb_min_matches=comb_min_matches,
-                comb_min_precision=comb_min_precision,
-                comb_min_recall=comb_min_recall,
-                comb_max_missing_fraction=comb_max_missing_fraction,
-            )
-            score.element = element
-            scores[element] = score
-            total_matches_all += score.matched_lines
-            if score.passes:
-                passed_elements.append(element)
-                total_f1 += score.f1_score
-                total_matches_pass += score.matched_lines
-
-        if fallback_summary is None:
+        if fallback_summary is None or _fallback_summary_improves(
+            shift_nm, ss.total_matches_all, fallback_summary
+        ):
             fallback_summary = {
                 "shift_nm": float(shift_nm),
-                "scores": scores,
-                "total_matches": total_matches_all,
-                "passed_elements": passed_elements,
-                "total_f1": total_f1,
+                "scores": ss.scores,
+                "total_matches": ss.total_matches_all,
+                "passed_elements": ss.passed_elements,
+                "total_f1": ss.total_f1,
             }
-        else:
-            prev_matches = fallback_summary["total_matches"]
-            if total_matches_all > prev_matches or (
-                total_matches_all == prev_matches
-                and abs(shift_nm) < abs(float(fallback_summary["shift_nm"]))
-            ):
-                fallback_summary = {
-                    "shift_nm": float(shift_nm),
-                    "scores": scores,
-                    "total_matches": total_matches_all,
-                    "passed_elements": passed_elements,
-                    "total_f1": total_f1,
-                }
 
-        if best_summary is None:
+        if best_summary is None or _best_summary_improves(
+            shift_nm, ss.total_f1, ss.total_matches_pass, best_summary
+        ):
             best_summary = {
                 "shift_nm": float(shift_nm),
-                "scores": scores,
-                "total_matches": total_matches_pass,
-                "passed_elements": passed_elements,
-                "total_f1": total_f1,
+                "scores": ss.scores,
+                "total_matches": ss.total_matches_pass,
+                "passed_elements": ss.passed_elements,
+                "total_f1": ss.total_f1,
             }
-        else:
-            prev_f1 = best_summary["total_f1"]
-            prev_matches = best_summary["total_matches"]
-            better = False
-            if total_f1 > prev_f1:
-                better = True
-            elif np.isclose(total_f1, prev_f1):
-                if total_matches_pass > prev_matches:
-                    better = True
-                elif total_matches_pass == prev_matches and abs(shift_nm) < abs(
-                    float(best_summary["shift_nm"])
-                ):
-                    better = True
-            if better:
-                best_summary = {
-                    "shift_nm": float(shift_nm),
-                    "scores": scores,
-                    "total_matches": total_matches_pass,
-                    "passed_elements": passed_elements,
-                    "total_f1": total_f1,
-                }
 
     return best_summary, fallback_summary
 
@@ -1410,6 +1583,103 @@ def _match_transitions_to_peaks(
     return matches
 
 
+def _kdet_dispatch_rust(
+    peak_wavelengths: np.ndarray,
+    transitions_by_element: Dict[str, List[Transition]],
+    shift_grid: np.ndarray,
+    wavelength_tolerance_nm: float,
+    kdet_min_score: float,
+    kdet_min_candidates: int,
+    kdet_rarity_power: float,
+    kdet_weight_clip: Tuple[float, float],
+    warnings: List[str],
+) -> Optional[Dict[str, List[Transition]]]:
+    """Run the Rust kdet filter; return ``None`` to fall through to Python.
+
+    Appends ``kdet_filtered_elements`` to ``warnings`` exactly as the inline
+    path did. Returns ``None`` only when the Rust call raises (caller then runs
+    the pure-NumPy path).
+    """
+    try:
+        element_names = list(transitions_by_element.keys())
+        transition_wls = [
+            sorted([t.wavelength_nm for t in transitions_by_element[el]]) for el in element_names
+        ]
+        passed_names = list(
+            _kdet_filter_elements_rust(
+                np.asarray(peak_wavelengths, dtype=np.float64),
+                transition_wls,
+                element_names,
+                np.asarray(shift_grid, dtype=np.float64),
+                wavelength_tolerance_nm,
+                kdet_min_score,
+                kdet_min_candidates,
+                kdet_rarity_power,
+                kdet_weight_clip,
+            )
+        )
+        filtered = {el: transitions_by_element[el] for el in passed_names}
+        if filtered and len(filtered) < len(transitions_by_element):
+            warnings.append("kdet_filtered_elements")
+        return filtered
+    except Exception as e:
+        logger.warning(f"Rust kdet filter failed, falling back to Python: {e}")
+        return None
+
+
+def _kdet_best_candidates(
+    peak_wavelengths: np.ndarray,
+    transitions_wl: np.ndarray,
+    shift_grid: np.ndarray,
+    wavelength_tolerance_nm: float,
+    use_jax: bool,
+) -> int:
+    """Max in-tolerance candidate count across the shift grid for one element."""
+    if use_jax and _HAS_JAX:
+        # Single vmapped call across the entire shift grid replaces the
+        # Python loop below. Behaviorally identical: we take the max of
+        # the per-shift candidate counts.
+        counts = _kdet_candidate_counts_jax(
+            peak_wavelengths, transitions_wl, shift_grid, wavelength_tolerance_nm
+        )
+        return int(counts.max()) if counts.size > 0 else 0
+    best_candidates = 0
+    for shift_nm in shift_grid:
+        shifted_peaks = peak_wavelengths + shift_nm
+        candidate_mask = _peaks_within_tolerance(
+            shifted_peaks, transitions_wl, wavelength_tolerance_nm
+        )
+        candidate_count = int(np.sum(candidate_mask))
+        if candidate_count > best_candidates:
+            best_candidates = candidate_count
+    return best_candidates
+
+
+def _kdet_element_passes(
+    best_candidates: int,
+    kdet_fraction: float,
+    element_density: float,
+    median_density: float,
+    kdet_rarity_power: float,
+    kdet_weight_clip: Tuple[float, float],
+    kdet_min_score: float,
+    kdet_min_candidates: int,
+    shift_coherence: bool,
+    coherence_min_lines: int,
+) -> bool:
+    """Whether an element survives the kdet filter (coherence or density score)."""
+    rarity_weight = (median_density / max(element_density, 1e-6)) ** kdet_rarity_power
+    rarity_weight = float(np.clip(rarity_weight, kdet_weight_clip[0], kdet_weight_clip[1]))
+    kdet_score = kdet_fraction * rarity_weight
+    if shift_coherence:
+        # Coherence mode: keep any element with enough candidate matches and
+        # do NOT apply the density-scaled score (which wrongly drops sparse
+        # real majors). The authoritative shift-coherence veto downstream
+        # rejects the incoherent confounders this admits.
+        return best_candidates >= max(kdet_min_candidates, coherence_min_lines)
+    return best_candidates >= kdet_min_candidates and kdet_score >= kdet_min_score
+
+
 def _kdet_filter_elements(
     peaks: List[Tuple[int, float]],
     transitions_by_element: Dict[str, List[Transition]],
@@ -1448,31 +1718,19 @@ def _kdet_filter_elements(
     # residuals coherence needs), so we route through the pure-NumPy path when
     # coherence is requested to keep both backends behaviourally identical.
     if HAS_RUST_CORE and not shift_coherence:
-        try:
-            element_names = list(transitions_by_element.keys())
-            transition_wls = [
-                sorted([t.wavelength_nm for t in transitions_by_element[el]])
-                for el in element_names
-            ]
-            passed_names = list(
-                _kdet_filter_elements_rust(
-                    np.asarray(peak_wavelengths, dtype=np.float64),
-                    transition_wls,
-                    element_names,
-                    np.asarray(shift_grid, dtype=np.float64),
-                    wavelength_tolerance_nm,
-                    kdet_min_score,
-                    kdet_min_candidates,
-                    kdet_rarity_power,
-                    kdet_weight_clip,
-                )
-            )
-            filtered = {el: transitions_by_element[el] for el in passed_names}
-            if filtered and len(filtered) < len(transitions_by_element):
-                warnings.append("kdet_filtered_elements")
-            return filtered, warnings
-        except Exception as e:
-            logger.warning(f"Rust kdet filter failed, falling back to Python: {e}")
+        rust_filtered = _kdet_dispatch_rust(
+            peak_wavelengths,
+            transitions_by_element,
+            shift_grid,
+            wavelength_tolerance_nm,
+            kdet_min_score,
+            kdet_min_candidates,
+            kdet_rarity_power,
+            kdet_weight_clip,
+            warnings,
+        )
+        if rust_filtered is not None:
+            return rust_filtered, warnings
 
     densities = []
     element_density: Dict[str, float] = {}
@@ -1490,37 +1748,23 @@ def _kdet_filter_elements(
         transitions_wl = np.array([t.wavelength_nm for t in transitions], dtype=float)
         transitions_wl.sort()
 
-        if use_jax and _HAS_JAX:
-            # Single vmapped call across the entire shift grid replaces the
-            # Python loop below. Behaviorally identical: we take the max of
-            # the per-shift candidate counts.
-            counts = _kdet_candidate_counts_jax(
-                peak_wavelengths, transitions_wl, shift_grid, wavelength_tolerance_nm
-            )
-            best_candidates = int(counts.max()) if counts.size > 0 else 0
-        else:
-            best_candidates = 0
-            for shift_nm in shift_grid:
-                shifted_peaks = peak_wavelengths + shift_nm
-                candidate_mask = _peaks_within_tolerance(
-                    shifted_peaks, transitions_wl, wavelength_tolerance_nm
-                )
-                candidate_count = int(np.sum(candidate_mask))
-                if candidate_count > best_candidates:
-                    best_candidates = candidate_count
+        best_candidates = _kdet_best_candidates(
+            peak_wavelengths, transitions_wl, shift_grid, wavelength_tolerance_nm, use_jax
+        )
         kdet_fraction = best_candidates / total_peaks
         density = element_density.get(element, median_density)
-        rarity_weight = (median_density / max(density, 1e-6)) ** kdet_rarity_power
-        rarity_weight = float(np.clip(rarity_weight, kdet_weight_clip[0], kdet_weight_clip[1]))
-        kdet_score = kdet_fraction * rarity_weight
-        if shift_coherence:
-            # Coherence mode: keep any element with enough candidate matches and
-            # do NOT apply the density-scaled score (which wrongly drops sparse
-            # real majors). The authoritative shift-coherence veto downstream
-            # rejects the incoherent confounders this admits.
-            if best_candidates >= max(kdet_min_candidates, coherence_min_lines):
-                filtered[element] = transitions
-        elif best_candidates >= kdet_min_candidates and kdet_score >= kdet_min_score:
+        if _kdet_element_passes(
+            best_candidates,
+            kdet_fraction,
+            density,
+            median_density,
+            kdet_rarity_power,
+            kdet_weight_clip,
+            kdet_min_score,
+            kdet_min_candidates,
+            shift_coherence,
+            coherence_min_lines,
+        ):
             filtered[element] = transitions
 
     if filtered and len(filtered) < len(transitions_by_element):
