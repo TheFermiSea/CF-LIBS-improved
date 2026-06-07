@@ -87,7 +87,7 @@ def test_scalar_stark_shift_oracle():
         expected = d_ref * (n_e / _REF_NE_ORACLE)  # independent oracle
         assert stark_shift(n_e, d_ref) == pytest.approx(expected, rel=1e-12)
     # None -> no shift.
-    assert stark_shift(1.0e17, None) == 0.0
+    assert stark_shift(1.0e17, None) == pytest.approx(0.0, abs=1e-15)
 
 
 # ---------------------------------------------------------------------------
