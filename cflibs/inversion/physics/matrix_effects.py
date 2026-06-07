@@ -517,35 +517,7 @@ class MatrixEffectCorrector:
 
         # Significant oxygen + silicon -> OXIDE or GEOLOGICAL or GLASS
         if o_fraction > 0.30 and si_fraction > 0.15:
-            # Glass: very high Si + O, low other geological elements
-            al_fraction = norm_conc.get("Al", 0)
-            ca_fraction = norm_conc.get("Ca", 0)
-
-            if si_fraction > 0.25 and (al_fraction + ca_fraction) < 0.10:
-                return MatrixClassificationResult(
-                    matrix_type=MatrixType.GLASS,
-                    confidence=0.7,
-                    evidence=evidence,
-                    notes=f"High Si ({si_fraction:.1%}) + O, low Al+Ca suggests glass",
-                )
-
-            # Geological: multiple major elements present
-            major_count = sum(1 for el in self.GEOLOGICAL_MAJORS if norm_conc.get(el, 0) > 0.02)
-            if major_count >= 4:
-                return MatrixClassificationResult(
-                    matrix_type=MatrixType.GEOLOGICAL,
-                    confidence=0.8,
-                    evidence=evidence,
-                    notes=f"Multiple geological majors present ({major_count} elements >2%)",
-                )
-
-            # Default to OXIDE
-            return MatrixClassificationResult(
-                matrix_type=MatrixType.OXIDE,
-                confidence=0.7,
-                evidence=evidence,
-                notes=f"Significant oxygen ({o_fraction:.1%}) + Si content",
-            )
+            return self._classify_oxygen_silicon(norm_conc, evidence, o_fraction, si_fraction)
 
         # High Fe + moderate O -> could be iron oxide or steel
         if fe_fraction > 0.50 and o_fraction > 0.10:
@@ -557,6 +529,56 @@ class MatrixEffectCorrector:
             )
 
         # Default: highest fraction determines type
+        return self._classify_default(
+            evidence, metallic_fraction, organic_fraction, geological_fraction
+        )
+
+    def _classify_oxygen_silicon(
+        self,
+        norm_conc: Dict[str, float],
+        evidence: Dict[str, float],
+        o_fraction: float,
+        si_fraction: float,
+    ) -> MatrixClassificationResult:
+        """Classify the significant oxygen + silicon branch (glass/geological/oxide)."""
+        # Glass: very high Si + O, low other geological elements
+        al_fraction = norm_conc.get("Al", 0)
+        ca_fraction = norm_conc.get("Ca", 0)
+
+        if si_fraction > 0.25 and (al_fraction + ca_fraction) < 0.10:
+            return MatrixClassificationResult(
+                matrix_type=MatrixType.GLASS,
+                confidence=0.7,
+                evidence=evidence,
+                notes=f"High Si ({si_fraction:.1%}) + O, low Al+Ca suggests glass",
+            )
+
+        # Geological: multiple major elements present
+        major_count = sum(1 for el in self.GEOLOGICAL_MAJORS if norm_conc.get(el, 0) > 0.02)
+        if major_count >= 4:
+            return MatrixClassificationResult(
+                matrix_type=MatrixType.GEOLOGICAL,
+                confidence=0.8,
+                evidence=evidence,
+                notes=f"Multiple geological majors present ({major_count} elements >2%)",
+            )
+
+        # Default to OXIDE
+        return MatrixClassificationResult(
+            matrix_type=MatrixType.OXIDE,
+            confidence=0.7,
+            evidence=evidence,
+            notes=f"Significant oxygen ({o_fraction:.1%}) + Si content",
+        )
+
+    def _classify_default(
+        self,
+        evidence: Dict[str, float],
+        metallic_fraction: float,
+        organic_fraction: float,
+        geological_fraction: float,
+    ) -> MatrixClassificationResult:
+        """Default tie-break classification based on the dominant category fraction."""
         if metallic_fraction >= organic_fraction and metallic_fraction >= geological_fraction:
             return MatrixClassificationResult(
                 matrix_type=MatrixType.METALLIC,
