@@ -310,7 +310,7 @@ class CDSBPlotter:
         CDSBResult
             Fitting result with corrected temperature and column density
         """
-        warnings = []
+        warnings: list[str] = []
 
         if len(observations) < 3:
             logger.warning("Fewer than 3 lines provided for CD-SB fit")
