@@ -365,6 +365,125 @@ def _fit_group_scipy(
 # ---------------------------------------------------------------------------
 
 
+def _validate_deconvolve_inputs(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    fwhm_estimate: float,
+    grouping_factor: float,
+    margin_factor: float,
+) -> None:
+    """Validate ``deconvolve_peaks`` arguments, raising ``ValueError`` on failure."""
+    if wavelength.ndim != 1 or intensity.ndim != 1 or wavelength.shape != intensity.shape:
+        raise ValueError("wavelength and intensity must be 1-D arrays of equal length")
+    if fwhm_estimate <= 0:
+        raise ValueError(f"fwhm_estimate must be > 0, got {fwhm_estimate}")
+    if grouping_factor <= 0:
+        raise ValueError(f"grouping_factor must be > 0, got {grouping_factor}")
+    if margin_factor <= 0:
+        raise ValueError(f"margin_factor must be > 0, got {margin_factor}")
+
+
+def _empty_deconvolution_result(
+    wavelength: np.ndarray, intensity: np.ndarray
+) -> DeconvolutionResult:
+    """Build the empty/no-op result for degenerate (no-data, no-peak) inputs."""
+    return DeconvolutionResult(
+        fit_results=[],
+        wavelength=wavelength,
+        fitted_spectrum=np.zeros_like(wavelength),
+        residuals=intensity.copy() if len(intensity) > 0 else np.array([]),
+        rms_residual=0.0,
+    )
+
+
+def _select_backend(use_jax: Optional[bool]) -> bool:
+    """Resolve the JAX-vs-SciPy backend choice; raise if neither is available."""
+    if use_jax is None:
+        backend_jax = HAS_JAX
+    else:
+        backend_jax = use_jax and HAS_JAX
+
+    if not backend_jax and not HAS_SCIPY:
+        raise ImportError(
+            "Voigt deconvolution requires JAX or SciPy. "
+            "Install one with: pip install jax  or  pip install scipy"
+        )
+    return backend_jax
+
+
+def _evaluate_group_model(
+    wl_seg: np.ndarray,
+    group_results: List[VoigtFitResult],
+    backend_jax: bool,
+) -> np.ndarray:
+    """Reconstruct the fitted spectrum for one group from its per-peak results."""
+    params_flat: List[float] = []
+    for r in group_results:
+        params_flat.extend(
+            [
+                r.center_nm,
+                r.sigma_gaussian,
+                r.gamma_lorentzian,
+                r.amplitude,
+            ]
+        )
+
+    if backend_jax and HAS_JAX:
+        params_arr = jnp.asarray(params_flat)
+        return np.asarray(_multi_voigt_jax(jnp.asarray(wl_seg), params_arr, len(group_results)))
+    return _multi_voigt_scipy(wl_seg, *params_flat)
+
+
+def _deconvolve_group(
+    group: List[int],
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    peak_wl: np.ndarray,
+    fwhm_estimate: float,
+    margin_factor: float,
+    sigma_init: float,
+    gamma_init: float,
+    fit_func,
+    backend_jax: bool,
+    fitted_spectrum: np.ndarray,
+) -> List[VoigtFitResult]:
+    """Fit one peak group and accumulate its model into ``fitted_spectrum``.
+
+    Returns the per-peak fit results for the group (empty if the group is
+    skipped for too few data points or a failed fit).
+    """
+    centers = peak_wl[group]
+    margin = margin_factor * fwhm_estimate
+
+    wl_lo = float(np.min(centers)) - margin
+    wl_hi = float(np.max(centers)) + margin
+    mask = (wavelength >= wl_lo) & (wavelength <= wl_hi)
+
+    if np.sum(mask) < 4:
+        logger.debug(
+            "Skipping group at %.2f nm: too few data points (%d)",
+            float(np.mean(centers)),
+            int(np.sum(mask)),
+        )
+        return []
+
+    wl_seg = wavelength[mask]
+    int_seg = intensity[mask]
+
+    try:
+        group_results = fit_func(wl_seg, int_seg, centers, sigma_init, gamma_init)
+    except Exception as exc:
+        logger.warning(
+            "Deconvolution failed for group at %.2f nm: %s",
+            float(np.mean(centers)),
+            exc,
+        )
+        return []
+
+    fitted_spectrum[mask] += _evaluate_group_model(wl_seg, group_results, backend_jax)
+    return group_results
+
+
 def deconvolve_peaks(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -405,23 +524,12 @@ def deconvolve_peaks(
     DeconvolutionResult
         Aggregated fitting results across all peak groups.
     """
-    if wavelength.ndim != 1 or intensity.ndim != 1 or wavelength.shape != intensity.shape:
-        raise ValueError("wavelength and intensity must be 1-D arrays of equal length")
-    if fwhm_estimate <= 0:
-        raise ValueError(f"fwhm_estimate must be > 0, got {fwhm_estimate}")
-    if grouping_factor <= 0:
-        raise ValueError(f"grouping_factor must be > 0, got {grouping_factor}")
-    if margin_factor <= 0:
-        raise ValueError(f"margin_factor must be > 0, got {margin_factor}")
+    _validate_deconvolve_inputs(
+        wavelength, intensity, fwhm_estimate, grouping_factor, margin_factor
+    )
 
     if len(wavelength) == 0 or len(peak_wavelengths) == 0:
-        return DeconvolutionResult(
-            fit_results=[],
-            wavelength=wavelength,
-            fitted_spectrum=np.zeros_like(wavelength),
-            residuals=intensity.copy() if len(intensity) > 0 else np.array([]),
-            rms_residual=0.0,
-        )
+        return _empty_deconvolution_result(wavelength, intensity)
 
     peak_wl = np.asarray(peak_wavelengths, dtype=float)
     groups = group_peaks(peak_wl, fwhm_estimate, grouping_factor)
@@ -430,84 +538,28 @@ def deconvolve_peaks(
     sigma_init = fwhm_estimate / 2.355  # Gaussian sigma from FWHM
     gamma_init = fwhm_estimate / 2.0  # Lorentzian HWHM from FWHM
 
-    # Choose backend
-    if use_jax is None:
-        backend_jax = HAS_JAX
-    else:
-        backend_jax = use_jax and HAS_JAX
-
-    if not backend_jax and not HAS_SCIPY:
-        raise ImportError(
-            "Voigt deconvolution requires JAX or SciPy. "
-            "Install one with: pip install jax  or  pip install scipy"
-        )
-
+    backend_jax = _select_backend(use_jax)
     fit_func = _fit_group_jax if backend_jax else _fit_group_scipy
 
     all_results: List[VoigtFitResult] = []
     fitted_spectrum = np.zeros_like(wavelength, dtype=float)
 
     for group in groups:
-        centers = peak_wl[group]
-        margin = margin_factor * fwhm_estimate
-
-        wl_lo = float(np.min(centers)) - margin
-        wl_hi = float(np.max(centers)) + margin
-        mask = (wavelength >= wl_lo) & (wavelength <= wl_hi)
-
-        if np.sum(mask) < 4:
-            logger.debug(
-                "Skipping group at %.2f nm: too few data points (%d)",
-                float(np.mean(centers)),
-                int(np.sum(mask)),
+        all_results.extend(
+            _deconvolve_group(
+                group,
+                wavelength,
+                intensity,
+                peak_wl,
+                fwhm_estimate,
+                margin_factor,
+                sigma_init,
+                gamma_init,
+                fit_func,
+                backend_jax,
+                fitted_spectrum,
             )
-            continue
-
-        wl_seg = wavelength[mask]
-        int_seg = intensity[mask]
-
-        try:
-            group_results = fit_func(wl_seg, int_seg, centers, sigma_init, gamma_init)
-        except Exception as exc:
-            logger.warning(
-                "Deconvolution failed for group at %.2f nm: %s",
-                float(np.mean(centers)),
-                exc,
-            )
-            continue
-
-        all_results.extend(group_results)
-
-        # Accumulate the fitted spectrum
-        if backend_jax and HAS_JAX:
-            params_flat = []
-            for r in group_results:
-                params_flat.extend(
-                    [
-                        r.center_nm,
-                        r.sigma_gaussian,
-                        r.gamma_lorentzian,
-                        r.amplitude,
-                    ]
-                )
-            params_arr = jnp.asarray(params_flat)
-            fitted_seg = np.asarray(
-                _multi_voigt_jax(jnp.asarray(wl_seg), params_arr, len(group_results))
-            )
-        else:
-            params_flat = []
-            for r in group_results:
-                params_flat.extend(
-                    [
-                        r.center_nm,
-                        r.sigma_gaussian,
-                        r.gamma_lorentzian,
-                        r.amplitude,
-                    ]
-                )
-            fitted_seg = _multi_voigt_scipy(wl_seg, *params_flat)
-
-        fitted_spectrum[mask] += fitted_seg
+        )
 
     residuals = intensity - fitted_spectrum
     rms = float(np.sqrt(np.mean(residuals**2))) if len(residuals) > 0 else 0.0
