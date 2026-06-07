@@ -180,6 +180,26 @@ class _CommonSlopeFit:
     r_squared: float = 0.0
 
 
+class _PythonIterationResult(NamedTuple):
+    """Carried state produced by one ``_solve_python`` iteration step.
+
+    ``should_break`` signals the ``common_fit is None`` early exit (before the
+    history append); ``converged`` is the per-iteration convergence verdict.
+    """
+
+    T_K: float
+    n_e: float
+    T_corona: Optional[float]
+    concentrations: Dict[str, float]
+    last_common_fit: Optional[_CommonSlopeFit]
+    last_max_tau: float
+    boltzmann_degenerate: bool
+    closure_degenerate: bool
+    ne_from_stark: bool
+    converged: bool
+    should_break: bool
+
+
 # ---------------------------------------------------------------------------
 # T1-3: jax.lax.while_loop iterative solver helpers (ADR-0001 spec §3-§6)
 # ---------------------------------------------------------------------------
@@ -213,6 +233,138 @@ class LoopState(NamedTuple):
     intercepts: Any
     concentrations: Any
     r_squared: Any
+
+
+def _snapshot_record_levels(
+    g_arr: np.ndarray,
+    E_arr: np.ndarray,
+    ip_ev: float,
+    stage: int,
+    i: int,
+    g_I: List[np.ndarray],
+    E_I: List[np.ndarray],
+    ip_I: np.ndarray,
+    g_II: List[np.ndarray],
+    E_II: List[np.ndarray],
+    ip_II: np.ndarray,
+) -> None:
+    """Record direct-sum level arrays for one element/stage (``from_solver`` helper)."""
+    if stage == 1:
+        g_I.append(np.asarray(g_arr, dtype=np.float64))
+        E_I.append(np.asarray(E_arr, dtype=np.float64))
+        ip_I[i] = float(ip_ev)
+    else:
+        g_II.append(np.asarray(g_arr, dtype=np.float64))
+        E_II.append(np.asarray(E_arr, dtype=np.float64))
+        ip_II[i] = float(ip_ev)
+
+
+def _snapshot_append_empty_levels(
+    stage: int,
+    g_I: List[np.ndarray],
+    E_I: List[np.ndarray],
+    g_II: List[np.ndarray],
+    E_II: List[np.ndarray],
+) -> None:
+    """Append empty level arrays for one element/stage (``from_solver`` helper)."""
+    if stage == 1:
+        g_I.append(np.zeros(0, dtype=np.float64))
+        E_I.append(np.zeros(0, dtype=np.float64))
+    else:
+        g_II.append(np.zeros(0, dtype=np.float64))
+        E_II.append(np.zeros(0, dtype=np.float64))
+
+
+def _snapshot_record_coeffs(
+    coeffs: np.ndarray,
+    stage: int,
+    i: int,
+    coeffs_I: np.ndarray,
+    coeffs_II: np.ndarray,
+) -> None:
+    """Record padded polynomial coefficients for one element/stage (``from_solver`` helper)."""
+    # Pad/truncate to 5 coefficients
+    n = min(coeffs.size, 5)
+    if stage == 1:
+        coeffs_I[i, :n] = coeffs[:n]
+    else:
+        coeffs_II[i, :n] = coeffs[:n]
+
+
+def _snapshot_fetch_element_stage(
+    solver: "IterativeCFLIBSSolver",
+    el: str,
+    stage: int,
+    stage_idx: int,
+    i: int,
+    use_direct: np.ndarray,
+    g_I: List[np.ndarray],
+    E_I: List[np.ndarray],
+    ip_I: np.ndarray,
+    g_II: List[np.ndarray],
+    E_II: List[np.ndarray],
+    ip_II: np.ndarray,
+    coeffs_I: np.ndarray,
+    coeffs_II: np.ndarray,
+) -> None:
+    """Populate snapshot arrays for a single ``(element, stage)`` (``from_solver`` helper).
+
+    Mirrors the per-stage branch of :meth:`_AtomicSnapshot.from_solver` exactly:
+    direct-sum levels when available, else polynomial coefficients, else empty
+    level arrays plus a NaN sentinel marking the scalar-fallback regime.
+    """
+    from cflibs.plasma.partition import get_levels_for_species
+
+    lev = get_levels_for_species(solver.atomic_db, el, stage)
+    if lev is not None:
+        g_arr, E_arr, ip_ev = lev
+        _snapshot_record_levels(g_arr, E_arr, ip_ev, stage, i, g_I, E_I, ip_I, g_II, E_II, ip_II)
+        use_direct[i, stage_idx] = True
+        return
+    # Polynomial fallback
+    pf = solver.atomic_db.get_partition_coefficients(el, stage)
+    if pf:
+        coeffs = np.asarray(pf.coefficients, dtype=np.float64)
+        _snapshot_record_coeffs(coeffs, stage, i, coeffs_I, coeffs_II)
+        use_direct[i, stage_idx] = False
+        _snapshot_append_empty_levels(stage, g_I, E_I, g_II, E_II)
+    else:
+        # No data at all — record the empty level arrays and rely on
+        # ``fallback_U_*`` per-element scalars at evaluation time.
+        _snapshot_append_empty_levels(stage, g_I, E_I, g_II, E_II)
+        use_direct[i, stage_idx] = False
+        # coeffs already zeros — eval_poly will return exp(0)=1; we
+        # use fallback in that case. Mark via NaN sentinel below.
+        if stage == 1 and not pf:
+            coeffs_I[i, :] = np.nan
+        elif stage == 2 and not pf:
+            coeffs_II[i, :] = np.nan
+
+
+def _pad_ragged_arrays(arrays: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+    """Pad ragged per-element level arrays to a uniform width (``from_solver`` helper)."""
+    counts = [int(a.size) for a in arrays]
+    n_max = max(counts) if counts else 0
+    if n_max == 0:
+        # Provide a length-1 dummy column so JAX accepts the shape.
+        n_max = 1
+    padded = np.zeros((len(arrays), n_max), dtype=np.float64)
+    mask = np.zeros((len(arrays), n_max), dtype=bool)
+    for j, arr in enumerate(arrays):
+        k = arr.size
+        if k:
+            padded[j, :k] = arr
+            mask[j, :k] = True
+    return padded, mask
+
+
+def _align_E_width(E_pad: np.ndarray, g_pad: np.ndarray) -> np.ndarray:
+    """Re-pad an E array to match the g array's width (``from_solver`` helper)."""
+    if E_pad.shape[1] == g_pad.shape[1]:
+        return E_pad
+    new_E = np.zeros_like(g_pad)
+    new_E[:, : E_pad.shape[1]] = E_pad
+    return new_E
 
 
 @dataclass(frozen=True)
@@ -272,8 +424,6 @@ class _AtomicSnapshot:
         polynomial coefficients. No further SQLite calls happen inside
         ``_solve_lax``; the resulting arrays feed the JAX while-loop body.
         """
-        from cflibs.plasma.partition import get_levels_for_species
-
         E = len(elements)
         ip0 = np.zeros(E, dtype=np.float64)
         use_direct = np.zeros((E, 2), dtype=bool)
@@ -298,82 +448,31 @@ class _AtomicSnapshot:
 
             # Try direct-sum levels (stage I and II)
             for stage_idx, stage in enumerate((1, 2)):
-                lev = get_levels_for_species(solver.atomic_db, el, stage)
-                if lev is not None:
-                    g_arr, E_arr, ip_ev = lev
-                    if stage == 1:
-                        g_I.append(np.asarray(g_arr, dtype=np.float64))
-                        E_I.append(np.asarray(E_arr, dtype=np.float64))
-                        ip_I[i] = float(ip_ev)
-                    else:
-                        g_II.append(np.asarray(g_arr, dtype=np.float64))
-                        E_II.append(np.asarray(E_arr, dtype=np.float64))
-                        ip_II[i] = float(ip_ev)
-                    use_direct[i, stage_idx] = True
-                    continue
-                # Polynomial fallback
-                pf = solver.atomic_db.get_partition_coefficients(el, stage)
-                if pf:
-                    coeffs = np.asarray(pf.coefficients, dtype=np.float64)
-                    # Pad/truncate to 5 coefficients
-                    n = min(coeffs.size, 5)
-                    if stage == 1:
-                        coeffs_I[i, :n] = coeffs[:n]
-                    else:
-                        coeffs_II[i, :n] = coeffs[:n]
-                    use_direct[i, stage_idx] = False
-                    if stage == 1:
-                        g_I.append(np.zeros(0, dtype=np.float64))
-                        E_I.append(np.zeros(0, dtype=np.float64))
-                    else:
-                        g_II.append(np.zeros(0, dtype=np.float64))
-                        E_II.append(np.zeros(0, dtype=np.float64))
-                else:
-                    # No data at all — record the empty level arrays and rely on
-                    # ``fallback_U_*`` per-element scalars at evaluation time.
-                    if stage == 1:
-                        g_I.append(np.zeros(0, dtype=np.float64))
-                        E_I.append(np.zeros(0, dtype=np.float64))
-                    else:
-                        g_II.append(np.zeros(0, dtype=np.float64))
-                        E_II.append(np.zeros(0, dtype=np.float64))
-                    use_direct[i, stage_idx] = False
-                    # coeffs already zeros — eval_poly will return exp(0)=1; we
-                    # use fallback in that case. Mark via NaN sentinel below.
-                    if stage == 1 and not pf:
-                        coeffs_I[i, :] = np.nan
-                    elif stage == 2 and not pf:
-                        coeffs_II[i, :] = np.nan
+                _snapshot_fetch_element_stage(
+                    solver,
+                    el,
+                    stage,
+                    stage_idx,
+                    i,
+                    use_direct,
+                    g_I,
+                    E_I,
+                    ip_I,
+                    g_II,
+                    E_II,
+                    ip_II,
+                    coeffs_I,
+                    coeffs_II,
+                )
 
         # Pad ragged level arrays per stage
-        def _pad_ragged(arrays: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-            counts = [int(a.size) for a in arrays]
-            n_max = max(counts) if counts else 0
-            if n_max == 0:
-                # Provide a length-1 dummy column so JAX accepts the shape.
-                n_max = 1
-            padded = np.zeros((len(arrays), n_max), dtype=np.float64)
-            mask = np.zeros((len(arrays), n_max), dtype=bool)
-            for j, arr in enumerate(arrays):
-                k = arr.size
-                if k:
-                    padded[j, :k] = arr
-                    mask[j, :k] = True
-            return padded, mask
-
-        gI_pad, mI = _pad_ragged(g_I)
-        EI_pad, _ = _pad_ragged(E_I)
+        gI_pad, mI = _pad_ragged_arrays(g_I)
+        EI_pad, _ = _pad_ragged_arrays(E_I)
         # Re-pad EI to the same width as gI by reading mI shape
-        if EI_pad.shape[1] != gI_pad.shape[1]:
-            new_E = np.zeros_like(gI_pad)
-            new_E[:, : EI_pad.shape[1]] = EI_pad
-            EI_pad = new_E
-        gII_pad, mII = _pad_ragged(g_II)
-        EII_pad, _ = _pad_ragged(E_II)
-        if EII_pad.shape[1] != gII_pad.shape[1]:
-            new_E2 = np.zeros_like(gII_pad)
-            new_E2[:, : EII_pad.shape[1]] = EII_pad
-            EII_pad = new_E2
+        EI_pad = _align_E_width(EI_pad, gI_pad)
+        gII_pad, mII = _pad_ragged_arrays(g_II)
+        EII_pad, _ = _pad_ragged_arrays(E_II)
+        EII_pad = _align_E_width(EII_pad, gII_pad)
 
         return cls(
             elements=tuple(elements),
@@ -1454,38 +1553,7 @@ class IterativeCFLIBSSolver:
         ln_S = float(np.log((SAHA_CONST_CM3 / safe_ne) * (T_eV**1.5)))
 
         # Collect shifted (x, y, w) rows per element across ALL species/stages.
-        #
-        # WEIGHTING: the validated SB-graph (Aguilera & Aragon 2004; the probe in
-        # scripts/probe_saha_boltzmann_graph.py) uses an UNWEIGHTED global lstsq.
-        # That is essential to the method: with inverse-variance (≈ intensity)
-        # weighting the single brightest line of each element dominates its
-        # intercept dummy, lifting bright-resonance elements (Fe) by ~2 in
-        # ln-space (≈ 7x in C) and re-creating the over-attribution the global
-        # fit is meant to cure (Fe 16.7 -> 18.5 intercept; RMSE 8 -> 14 on real
-        # ChemCam BHVO-2). The pooled global geometry already conditions every
-        # intercept jointly via the shifted ion lines, so per-line weighting is
-        # neither needed nor helpful here. ``boltzmann_weight_cap`` is therefore
-        # not applied on this path. Lines are still inverse-variance *screened*
-        # for validity (finite, positive y-uncertainty -> usable) but contribute
-        # with unit weight.
-        per_el_x: Dict[str, List[float]] = defaultdict(list)
-        per_el_y: Dict[str, List[float]] = defaultdict(list)
-        per_el_w: Dict[str, List[float]] = defaultdict(list)
-        for el, obs_list in obs_by_element.items():
-            ip = ips.get(el, 15.0)
-            for obs in obs_list:
-                if obs.A_ki <= 0 or obs.g_k <= 0 or obs.intensity <= 0:
-                    continue
-                y = obs.y_value
-                z = obs.ionization_stage
-                x = obs.E_k_ev + (ip * (z - 1) if z > 1 else 0.0)
-                if z > 1:
-                    y = y - ln_S * (z - 1)
-                if not (np.isfinite(x) and np.isfinite(y)):
-                    continue
-                per_el_x[el].append(x)
-                per_el_y[el].append(y)
-                per_el_w[el].append(1.0)  # unweighted (validated SB-graph)
+        per_el_x, per_el_y, per_el_w = _collect_sb_graph_rows(obs_by_element, ips, ln_S)
 
         elements: List[str] = [el for el in obs_by_element.keys() if per_el_x.get(el)]
         if not elements:
@@ -1495,76 +1563,16 @@ class IterativeCFLIBSSolver:
         # the weighted normal equations once. Columns: 0 = shared slope,
         # 1..E = per-element intercepts.
         el_index = {el: i for i, el in enumerate(elements)}
-        rows_x: List[float] = []
-        rows_y: List[float] = []
-        rows_w: List[float] = []
-        rows_el: List[int] = []
-        for el in elements:
-            rows_x.extend(per_el_x[el])
-            rows_y.extend(per_el_y[el])
-            rows_w.extend(per_el_w[el])
-            rows_el.extend([el_index[el]] * len(per_el_x[el]))
-
-        n_rows = len(rows_x)
-        E = len(elements)
-        if n_rows < 3 or n_rows < (1 + E):
+        solved = _solve_sb_graph_lstsq(elements, el_index, per_el_x, per_el_y, per_el_w)
+        if solved is None:
             # Under-determined global system; let the caller fall back.
             return None
-
-        x_vec = np.asarray(rows_x, dtype=float)
-        y_vec = np.asarray(rows_y, dtype=float)
-        w_vec = np.asarray(rows_w, dtype=float)
-        el_vec = np.asarray(rows_el, dtype=int)
-
-        A = np.zeros((n_rows, 1 + E), dtype=float)
-        A[:, 0] = x_vec
-        A[np.arange(n_rows), 1 + el_vec] = 1.0
-
-        # Weighted least squares via sqrt(w) row scaling -> ordinary lstsq.
-        sw = np.sqrt(w_vec)
-        Aw = A * sw[:, None]
-        yw = y_vec * sw
-        coef, *_ = np.linalg.lstsq(Aw, yw, rcond=None)
-        slope = float(coef[0])
-
-        # Global weighted R^2 of the pooled fit.
-        y_pred = A @ coef
-        resid = y_vec - y_pred
-        ss_res = float(np.sum(w_vec * resid**2))
-        y_wmean = float(np.average(y_vec, weights=w_vec))
-        ss_tot = float(np.sum(w_vec * (y_vec - y_wmean) ** 2))
-        r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 1.0
-
-        # Slope variance from the weighted normal-equation covariance.
-        dof = max(n_rows - (1 + E), 1)
-        sigma2 = ss_res / dof
-        slope_variance = float("nan")
-        try:
-            cov = np.linalg.inv(Aw.T @ Aw) * sigma2
-            slope_variance = float(cov[0, 0])
-        except np.linalg.LinAlgError:
-            slope_variance = float("nan")
-        if not np.isfinite(slope_variance) or slope_variance <= 0.0:
-            denom = float(np.sum(w_vec * (x_vec - np.average(x_vec, weights=w_vec)) ** 2))
-            slope_variance = 1.0 / denom if denom > 0.0 else 1.0
-
-        intercepts = {el: float(coef[1 + el_index[el]]) for el in elements}
+        slope, slope_variance, r_squared, intercepts = solved
 
         # Per-element stats on the SHIFTED (neutral-plane) coordinates so that
         # ``solve_with_uncertainty`` and any consumer of ``element_stats`` see
         # the same x/y values the global fit used.
-        element_stats: Dict[str, _CommonSlopeElementStats] = {}
-        for el in elements:
-            xs = np.asarray(per_el_x[el], dtype=float)
-            ys = np.asarray(per_el_y[el], dtype=float)
-            ws = np.asarray(per_el_w[el], dtype=float)
-            element_stats[el] = _CommonSlopeElementStats(
-                x_values=xs,
-                y_values=ys,
-                weights=ws,
-                x_mean=float(np.average(xs, weights=ws)),
-                y_mean=float(np.average(ys, weights=ws)),
-            )
+        element_stats = _build_sb_graph_element_stats(elements, per_el_x, per_el_y, per_el_w)
 
         return _CommonSlopeFit(
             slope=slope,
@@ -1635,33 +1643,8 @@ class IterativeCFLIBSSolver:
             observations, closure_mode, stark_diagnostic=stark_diagnostic, **closure_kwargs
         )
 
-    def _solve_python(
-        self,
-        observations: List[LineObservation],
-        closure_mode: str = "standard",
-        stark_diagnostic: Optional["StarkDiagnosticLine"] = None,
-        **closure_kwargs,
-    ) -> CFLIBSResult:
-        """Reference Python ``for``-loop implementation of :meth:`solve`.
-
-        Bit-for-bit equivalent to the pre-T1-3 ``solve`` body; the public
-        :meth:`solve` routes through here when ``CFLIBS_USE_LAX_WHILE_LOOP`` is
-        unset (default) or when JAX is unavailable.
-        """
-        # 1. Initialization
-        T_K = 10000.0
-        T_corona = None
-        n_e = 1.0e17
-
-        # Cache static data (IPs, atomic data)
-        # Group observations by element
-        obs_by_element = defaultdict(list)
-        for obs in observations:
-            obs_by_element[obs.element].append(obs)
-
-        elements = list(obs_by_element.keys())
-
-        # Pre-fetch Ionization Potentials
+    def _prefetch_ips_python(self, elements: List[str]) -> Dict[str, float]:
+        """Pre-fetch first ionization potentials for ``elements`` (``_solve_python`` helper)."""
         ips = {}
         for el in elements:
             # Need IP of neutral (I -> II)
@@ -1670,250 +1653,374 @@ class IterativeCFLIBSSolver:
                 logger.warning(f"No IP for {el} I, assuming high")
                 ip = 15.0  # Fallback
             ips[el] = ip
+        return ips
 
-        # Iteration loop
-        converged = False
-        history = []
-        concentrations: Dict[str, float] = {}  # Initialize before loop
-        last_common_fit: Optional[_CommonSlopeFit] = None
-        last_max_tau = 0.0
-        # Diagnostics tracked across iterations for the post-loop quality_metrics
-        # (also guards against an early break leaving them unbound).
-        boltzmann_degenerate = True  # until a clean fit proves otherwise
-        closure_degenerate = False
-        ne_from_stark = False
+    def _evaluate_partition_functions(
+        self, elements: List[str], T_K: float
+    ) -> Tuple[Dict[str, float], Dict[str, float]]:
+        """Evaluate stage-I and stage-II partition functions for ``elements`` at ``T_K``."""
+        partition_funcs = {}  # U_I for each element
+        partition_funcs_II = {}
+        for el in elements:
+            partition_funcs[el] = self._evaluate_partition_function(el, 1, T_K)
+            partition_funcs_II[el] = self._evaluate_partition_function(el, 2, T_K)
+        return partition_funcs, partition_funcs_II
 
-        for _ in range(1, self.max_iterations + 1):
-            T_prev = T_K
-            ne_prev = n_e
+    def _select_common_fit(
+        self,
+        sa_obs_by_element: Dict[str, List[LineObservation]],
+        T_K: float,
+        n_e: float,
+        effective_ips: Dict[str, float],
+    ) -> Optional[_CommonSlopeFit]:
+        """Choose the intercept-extraction mode and run it (``_solve_python`` helper).
 
-            T_eV = T_K / EV_TO_K
-            if T_eV < 0.1:
-                T_eV = 0.1  # clamp
+        Saha-Boltzmann graph (opt-in) vs. the default common-slope plane (with
+        ionic lines pre-mapped to the neutral plane). Both yield per-element
+        neutral intercepts feeding the same closure step.
+        """
+        if self.saha_boltzmann_graph:
+            return self._fit_saha_boltzmann_graph(sa_obs_by_element, T_K, n_e, effective_ips)
+        # Map ionic lines to the neutral energy plane, then fit.
+        corrected_obs_map = self._apply_saha_correction(sa_obs_by_element, T_K, n_e, effective_ips)
+        return self._fit_common_boltzmann_plane(corrected_obs_map)
 
-            # 2. Calculate Partition Functions & Saha Corrections
-            partition_funcs = {}  # U_I for each element
-            partition_funcs_II = {}
+    def _dispatch_closure(
+        self,
+        closure_mode: str,
+        intercepts: Dict[str, float],
+        partition_funcs: Dict[str, float],
+        abundance_multipliers: Dict[str, float],
+        closure_kwargs: Dict[str, Any],
+    ):
+        """Apply the selected closure equation (``_solve_python`` helper).
 
-            for el in elements:
-                partition_funcs[el] = self._evaluate_partition_function(el, 1, T_K)
-                partition_funcs_II[el] = self._evaluate_partition_function(el, 2, T_K)
-
-            effective_ips = self._compute_effective_ips(ips, n_e, T_K)
-
-            # 2b. Self-absorption correction (Bulajic 2002; physics-audit B1).
-            # Recompute tau from the *current* plasma state and divide observed
-            # intensities by the curve-of-growth escape factor before the
-            # Boltzmann/closure fit. No-op on iteration 1 (concentrations empty).
-            #
-            # Column density: the optical depth scales with the absorbing heavy-
-            # particle column n_heavy * L. We anchor it to a LIBS-realistic
-            # reference (``self_absorption_column_density_cm3``, default 1e16)
-            # rather than the solver's STP pressure-balance n_e (~1e18), which
-            # would push every strong major line into uniform saturation and
-            # erase the per-line discrimination the correction needs. See the
-            # extended note in ``__init__``. Per-element number fractions
-            # (``concentrations``) still modulate τ inside the corrector.
-            sa_obs_by_element = obs_by_element
-            if self.apply_self_absorption:
-                sa_obs_by_element = self._apply_self_absorption_correction(
-                    obs_by_element,
-                    T_K,
-                    concentrations,
-                    self.self_absorption_column_density_cm3,
-                    partition_funcs,
-                )
-                last_max_tau = self._last_sa_max_tau
-
-            # 3. Multi-species Boltzmann Fit.
-            #
-            # Two intercept-extraction modes (both yield per-element neutral
-            # intercepts q_s = ln(n_I/U_I) that feed the SAME closure step):
-            #   * common-slope plane (default): per-element centered WLS with
-            #     ionic lines pre-mapped to the neutral plane by _apply_saha_-
-            #     correction, then centered points pooled for ONE slope.
-            #   * Saha-Boltzmann graph (opt-in, self.saha_boltzmann_graph):
-            #     a single GLOBAL regression over all lines of all species at
-            #     once (shared slope + per-element intercept dummies), the ion
-            #     shift applied inside _fit_saha_boltzmann_graph. The high-x
-            #     shifted ion lines give the lever arm that stabilises every
-            #     intercept jointly (see __init__ note).
-            if self.saha_boltzmann_graph:
-                common_fit = self._fit_saha_boltzmann_graph(
-                    sa_obs_by_element, T_K, n_e, effective_ips
-                )
-            else:
-                # Map ionic lines to the neutral energy plane, then fit.
-                corrected_obs_map = self._apply_saha_correction(
-                    sa_obs_by_element, T_K, n_e, effective_ips
-                )
-                common_fit = self._fit_common_boltzmann_plane(corrected_obs_map)
-            if common_fit is None:
-                logger.warning("Insufficient points for fit")
-                break
-
-            last_common_fit = common_fit
-            slope = common_fit.slope
-            fit_r2 = float(getattr(common_fit, "r_squared", 0.0))
-
-            # Update T — gated on Boltzmann-plot quality (see __init__ note).
-            #
-            # A non-negative slope is unphysical (the populations would *rise*
-            # with E_k) and a low-R^2 fit means the slope is not estimable. In
-            # either case the legacy "T_new = 50000" clamp is what triggers the
-            # keystone collapse, so instead we hold T at the prior value and flag
-            # the fit as degenerate. Holding T (rather than clamping high) keeps
-            # the Boltzmann factor exp(-E_k/kT) discriminating between lines so
-            # the intercepts stay physically meaningful for the closure step.
-            boltzmann_degenerate = slope >= 0 or fit_r2 < self.min_boltzmann_r2
-            if boltzmann_degenerate:
-                T_new = T_prev  # hold at prior; slope carries no usable T
-            else:
-                T_new = -1.0 / (slope * KB_EV)
-
-            # Damping
-            T_K = 0.5 * T_prev + 0.5 * T_new
-
-            if self.two_region:
-                # Empirical two-region DOF reduction: take the cooler outer/corona
-                # zone at ~0.8 of the core temperature. The 0.8 is a common
-                # stabilization choice for two-region LTE fits; it has NO specific
-                # literature attribution (it is not a Hermann 2017 value).
-                T_corona = 0.8 * T_K
-
-            # Calculate Intercepts
-            intercepts = common_fit.intercepts
-
-            abundance_multipliers = self._compute_abundance_multipliers(
-                list(intercepts.keys()),
-                T_K,
-                n_e,
+        Identical dispatch to the inline if/elif chain it replaces; numerics
+        are unchanged.
+        """
+        if closure_mode == "matrix":
+            return ClosureEquation.apply_matrix_mode(
+                intercepts,
                 partition_funcs,
-                partition_funcs_II,
-                effective_ips,
-                T_corona=T_corona,
+                abundance_multipliers=abundance_multipliers,
+                **closure_kwargs,
+            )
+        elif closure_mode == "oxide":
+            return ClosureEquation.apply_oxide_mode(
+                intercepts,
+                partition_funcs,
+                abundance_multipliers=abundance_multipliers,
+                **closure_kwargs,
+            )
+        elif closure_mode == "ilr":
+            return ClosureEquation.apply_ilr(
+                intercepts,
+                partition_funcs,
+                abundance_multipliers=abundance_multipliers,
+            )
+        elif closure_mode == "pwlr":
+            return ClosureEquation.apply_pwlr(
+                intercepts,
+                partition_funcs,
+                abundance_multipliers=abundance_multipliers,
+                **closure_kwargs,
+            )
+        elif closure_mode == "dirichlet_residual":
+            return ClosureEquation.apply_dirichlet_residual(
+                intercepts,
+                partition_funcs,
+                abundance_multipliers=abundance_multipliers,
+                **closure_kwargs,
+            )
+        else:
+            return ClosureEquation.apply_standard(
+                intercepts,
+                partition_funcs,
+                abundance_multipliers=abundance_multipliers,
             )
 
-            # 4. Closure
-            if closure_mode == "matrix":
-                closure_res = ClosureEquation.apply_matrix_mode(
-                    intercepts,
-                    partition_funcs,
-                    abundance_multipliers=abundance_multipliers,
-                    **closure_kwargs,
-                )
-            elif closure_mode == "oxide":
-                closure_res = ClosureEquation.apply_oxide_mode(
-                    intercepts,
-                    partition_funcs,
-                    abundance_multipliers=abundance_multipliers,
-                    **closure_kwargs,
-                )
-            elif closure_mode == "ilr":
-                closure_res = ClosureEquation.apply_ilr(
-                    intercepts,
-                    partition_funcs,
-                    abundance_multipliers=abundance_multipliers,
-                )
-            elif closure_mode == "pwlr":
-                closure_res = ClosureEquation.apply_pwlr(
-                    intercepts,
-                    partition_funcs,
-                    abundance_multipliers=abundance_multipliers,
-                    **closure_kwargs,
-                )
-            elif closure_mode == "dirichlet_residual":
-                closure_res = ClosureEquation.apply_dirichlet_residual(
-                    intercepts,
-                    partition_funcs,
-                    abundance_multipliers=abundance_multipliers,
-                    **closure_kwargs,
-                )
-            else:
-                closure_res = ClosureEquation.apply_standard(
-                    intercepts,
-                    partition_funcs,
-                    abundance_multipliers=abundance_multipliers,
-                )
+    def _pressure_balance_ne(
+        self,
+        concentrations: Dict[str, float],
+        T_K: float,
+        n_e: float,
+        partition_funcs: Dict[str, float],
+        partition_funcs_II: Dict[str, float],
+        effective_ips: Dict[str, float],
+    ) -> float:
+        """Isobaric 1-atm pressure-balance ``n_e`` fallback (``_solve_python`` helper).
 
-            concentrations = closure_res.concentrations
+        Physically non-standard for LIBS — used only when no usable Stark
+        diagnostic is available. Numerics identical to the inline fallback.
+        """
+        # Calculate avg_Z based on Saha ratios.
+        # eps_s = n_II / (n_I + n_II) = S / (1+S) (electrons per atom).
+        total_eps = 0.0
+        for el, C_s in concentrations.items():
+            U_I = partition_funcs.get(el, 25.0)
+            U_II = partition_funcs_II.get(el, 15.0)
+            S = self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el])
+            eps_s = S / (1.0 + S)
+            total_eps += C_s * eps_s
 
-            # 5. Update electron density.
-            #
-            # PRIMARY: Stark broadening of a measured isolated line is the
-            # canonical n_e diagnostic in LIBS (Tognoni 2010; Aragón & Aguilera
-            # 2010, Spectrochim. Acta B 65, 395 — Hα / Fe I / Si II). When a
-            # usable Stark line is supplied we invert the electron-impact width
-            # law for n_e (instrument + Doppler deconvolved) and use it directly.
-            #
-            # FALLBACK: the isobaric 1-atm (STP) pressure balance. This is
-            # *physically invalid* for a LIBS plasma — the laser-induced plasma
-            # is a hypersonic shock at ~1e11 Pa initially and is NEVER at static
-            # 1 atm in the analysis window — so it is demoted to a last resort
-            # and emits a warning whenever it drives the n_e update.
-            ne_stark = self._estimate_ne_from_stark(stark_diagnostic, T_K)
-            if ne_stark is not None:
-                ne_new = ne_stark
-                ne_from_stark = True
-            else:
-                if stark_diagnostic is not None:
-                    logger.warning(
-                        "Stark diagnostic line supplied but yielded no usable n_e "
-                        "(width fully accounted for by instrument+Doppler, or no "
-                        "reference Stark width); falling back to 1-atm pressure balance."
-                    )
-                logger.warning(
-                    "No usable Stark n_e diagnostic; using the isobaric 1-atm "
-                    "(STP) pressure-balance fallback for n_e. This is physically "
-                    "non-standard for LIBS (hypersonic shock, never static 1 atm) "
-                    "and should be treated as a coarse last-resort estimate."
-                )
-                # Calculate avg_Z based on Saha ratios.
-                # eps_s = n_II / (n_I + n_II) = S / (1+S) (electrons per atom).
-                total_eps = 0.0
-                for el, C_s in concentrations.items():
-                    U_I = partition_funcs.get(el, 25.0)
-                    U_II = partition_funcs_II.get(el, 15.0)
-                    S = self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el])
-                    eps_s = S / (1.0 + S)
-                    total_eps += C_s * eps_s
+        avg_Z = total_eps
+        # n_tot = P / (k T (1 + avg_Z));  n_e = avg_Z * n_tot
+        n_tot = self.pressure_pa / (KB * T_K * (1.0 + avg_Z))
+        n_tot_cm3 = n_tot * 1e-6  # m^-3 -> cm^-3
+        return avg_Z * n_tot_cm3
 
-                avg_Z = total_eps
-                # n_tot = P / (k T (1 + avg_Z));  n_e = avg_Z * n_tot
-                n_tot = self.pressure_pa / (KB * T_K * (1.0 + avg_Z))
-                n_tot_cm3 = n_tot * 1e-6  # m^-3 -> cm^-3
-                ne_new = avg_Z * n_tot_cm3
-                ne_from_stark = False
+    def _update_ne_python(
+        self,
+        stark_diagnostic: Optional["StarkDiagnosticLine"],
+        T_K: float,
+        n_e: float,
+        concentrations: Dict[str, float],
+        partition_funcs: Dict[str, float],
+        partition_funcs_II: Dict[str, float],
+        effective_ips: Dict[str, float],
+    ) -> Tuple[float, bool]:
+        """Compute the next ``n_e`` and its provenance flag (``_solve_python`` helper).
 
-            # Damping
-            n_e = 0.5 * ne_prev + 0.5 * ne_new
+        PRIMARY: Stark-width diagnostic (canonical LIBS n_e). FALLBACK: the
+        physically-invalid isobaric 1-atm pressure balance, which logs a warning.
+        Returns ``(ne_new, ne_from_stark)``.
+        """
+        ne_stark = self._estimate_ne_from_stark(stark_diagnostic, T_K)
+        if ne_stark is not None:
+            return ne_stark, True
+        if stark_diagnostic is not None:
+            logger.warning(
+                "Stark diagnostic line supplied but yielded no usable n_e "
+                "(width fully accounted for by instrument+Doppler, or no "
+                "reference Stark width); falling back to 1-atm pressure balance."
+            )
+        logger.warning(
+            "No usable Stark n_e diagnostic; using the isobaric 1-atm "
+            "(STP) pressure-balance fallback for n_e. This is physically "
+            "non-standard for LIBS (hypersonic shock, never static 1 atm) "
+            "and should be treated as a coarse last-resort estimate."
+        )
+        ne_new = self._pressure_balance_ne(
+            concentrations, T_K, n_e, partition_funcs, partition_funcs_II, effective_ips
+        )
+        return ne_new, False
 
-            history.append((T_K, n_e))
+    def _run_python_iteration(
+        self,
+        elements: List[str],
+        obs_by_element: Dict[str, List[LineObservation]],
+        ips: Dict[str, float],
+        closure_mode: str,
+        stark_diagnostic: Optional["StarkDiagnosticLine"],
+        closure_kwargs: Dict[str, Any],
+        *,
+        T_K: float,
+        n_e: float,
+        T_corona: Optional[float],
+        concentrations: Dict[str, float],
+        last_common_fit: Optional[_CommonSlopeFit],
+        last_max_tau: float,
+    ) -> _PythonIterationResult:
+        """Run one self-consistent CF-LIBS iteration (``_solve_python`` loop body).
 
-            # Composition degeneracy gate (supersedes PR #220, which only
-            # *reported* the flag). A single element soaking >80% of the closure
-            # mass with >1 element present is the "keystone collapse" signature:
-            # the closure has lost discriminating power and the composition is
-            # untrustworthy. Acting on it (not just reporting) means such a solve
-            # can NEVER be flagged converged.
-            closure_degenerate = ClosureEquation.validate_degeneracy(concentrations)
+        Byte-for-byte equivalent to the original inline loop body: partition
+        functions, optional self-absorption, Boltzmann fit, T update, closure,
+        n_e update, and the convergence verdict. Returns the carried state for
+        the next iteration plus the ``should_break`` / ``converged`` flags.
+        """
+        T_prev = T_K
+        ne_prev = n_e
 
-            # Check convergence. A degenerate Boltzmann fit holds T at the prior,
-            # which would otherwise satisfy |ΔT| < tol spuriously — so a
-            # degenerate fit can never be reported as converged. Likewise a
-            # degenerate composition is never reported as converged. The False
-            # flag tells callers (and round-trip/NIST tooling) to treat T and C
-            # as unconstrained.
-            if (
-                not boltzmann_degenerate
-                and not closure_degenerate
-                and abs(T_K - T_prev) < self.t_tolerance_k
-                and abs(n_e - ne_prev) / ne_prev < self.ne_tolerance_frac
-            ):
-                converged = True
-                break
-            converged = False
+        T_eV = T_K / EV_TO_K
+        if T_eV < 0.1:
+            T_eV = 0.1  # clamp
 
+        # 2. Calculate Partition Functions & Saha Corrections
+        partition_funcs, partition_funcs_II = self._evaluate_partition_functions(elements, T_K)
+
+        effective_ips = self._compute_effective_ips(ips, n_e, T_K)
+
+        # 2b. Self-absorption correction (Bulajic 2002; physics-audit B1).
+        # Recompute tau from the *current* plasma state and divide observed
+        # intensities by the curve-of-growth escape factor before the
+        # Boltzmann/closure fit. No-op on iteration 1 (concentrations empty).
+        #
+        # Column density: the optical depth scales with the absorbing heavy-
+        # particle column n_heavy * L. We anchor it to a LIBS-realistic
+        # reference (``self_absorption_column_density_cm3``, default 1e16)
+        # rather than the solver's STP pressure-balance n_e (~1e18), which
+        # would push every strong major line into uniform saturation and
+        # erase the per-line discrimination the correction needs. See the
+        # extended note in ``__init__``. Per-element number fractions
+        # (``concentrations``) still modulate τ inside the corrector.
+        sa_obs_by_element = obs_by_element
+        if self.apply_self_absorption:
+            sa_obs_by_element = self._apply_self_absorption_correction(
+                obs_by_element,
+                T_K,
+                concentrations,
+                self.self_absorption_column_density_cm3,
+                partition_funcs,
+            )
+            last_max_tau = self._last_sa_max_tau
+
+        # 3. Multi-species Boltzmann Fit.
+        #
+        # Two intercept-extraction modes (both yield per-element neutral
+        # intercepts q_s = ln(n_I/U_I) that feed the SAME closure step):
+        #   * common-slope plane (default): per-element centered WLS with
+        #     ionic lines pre-mapped to the neutral plane by _apply_saha_-
+        #     correction, then centered points pooled for ONE slope.
+        #   * Saha-Boltzmann graph (opt-in, self.saha_boltzmann_graph):
+        #     a single GLOBAL regression over all lines of all species at
+        #     once (shared slope + per-element intercept dummies), the ion
+        #     shift applied inside _fit_saha_boltzmann_graph. The high-x
+        #     shifted ion lines give the lever arm that stabilises every
+        #     intercept jointly (see __init__ note).
+        common_fit = self._select_common_fit(sa_obs_by_element, T_K, n_e, effective_ips)
+        if common_fit is None:
+            logger.warning("Insufficient points for fit")
+            return _PythonIterationResult(
+                T_K=T_K,
+                n_e=n_e,
+                T_corona=T_corona,
+                concentrations=concentrations,
+                last_common_fit=last_common_fit,
+                last_max_tau=last_max_tau,
+                boltzmann_degenerate=True,
+                closure_degenerate=False,
+                ne_from_stark=False,
+                converged=False,
+                should_break=True,
+            )
+
+        last_common_fit = common_fit
+        slope = common_fit.slope
+        fit_r2 = float(getattr(common_fit, "r_squared", 0.0))
+
+        # Update T — gated on Boltzmann-plot quality (see __init__ note).
+        #
+        # A non-negative slope is unphysical (the populations would *rise*
+        # with E_k) and a low-R^2 fit means the slope is not estimable. In
+        # either case the legacy "T_new = 50000" clamp is what triggers the
+        # keystone collapse, so instead we hold T at the prior value and flag
+        # the fit as degenerate. Holding T (rather than clamping high) keeps
+        # the Boltzmann factor exp(-E_k/kT) discriminating between lines so
+        # the intercepts stay physically meaningful for the closure step.
+        boltzmann_degenerate = slope >= 0 or fit_r2 < self.min_boltzmann_r2
+        if boltzmann_degenerate:
+            T_new = T_prev  # hold at prior; slope carries no usable T
+        else:
+            T_new = -1.0 / (slope * KB_EV)
+
+        # Damping
+        T_K = 0.5 * T_prev + 0.5 * T_new
+
+        if self.two_region:
+            # Empirical two-region DOF reduction: take the cooler outer/corona
+            # zone at ~0.8 of the core temperature. The 0.8 is a common
+            # stabilization choice for two-region LTE fits; it has NO specific
+            # literature attribution (it is not a Hermann 2017 value).
+            T_corona = 0.8 * T_K
+
+        # Calculate Intercepts
+        intercepts = common_fit.intercepts
+
+        abundance_multipliers = self._compute_abundance_multipliers(
+            list(intercepts.keys()),
+            T_K,
+            n_e,
+            partition_funcs,
+            partition_funcs_II,
+            effective_ips,
+            T_corona=T_corona,
+        )
+
+        # 4. Closure
+        closure_res = self._dispatch_closure(
+            closure_mode,
+            intercepts,
+            partition_funcs,
+            abundance_multipliers,
+            closure_kwargs,
+        )
+
+        concentrations = closure_res.concentrations
+
+        # 5. Update electron density.
+        #
+        # PRIMARY: Stark broadening of a measured isolated line is the
+        # canonical n_e diagnostic in LIBS (Tognoni 2010; Aragón & Aguilera
+        # 2010, Spectrochim. Acta B 65, 395 — Hα / Fe I / Si II). When a
+        # usable Stark line is supplied we invert the electron-impact width
+        # law for n_e (instrument + Doppler deconvolved) and use it directly.
+        #
+        # FALLBACK: the isobaric 1-atm (STP) pressure balance. This is
+        # *physically invalid* for a LIBS plasma — the laser-induced plasma
+        # is a hypersonic shock at ~1e11 Pa initially and is NEVER at static
+        # 1 atm in the analysis window — so it is demoted to a last resort
+        # and emits a warning whenever it drives the n_e update.
+        ne_new, ne_from_stark = self._update_ne_python(
+            stark_diagnostic,
+            T_K,
+            n_e,
+            concentrations,
+            partition_funcs,
+            partition_funcs_II,
+            effective_ips,
+        )
+
+        # Damping
+        n_e = 0.5 * ne_prev + 0.5 * ne_new
+
+        # Composition degeneracy gate (supersedes PR #220, which only
+        # *reported* the flag). A single element soaking >80% of the closure
+        # mass with >1 element present is the "keystone collapse" signature:
+        # the closure has lost discriminating power and the composition is
+        # untrustworthy. Acting on it (not just reporting) means such a solve
+        # can NEVER be flagged converged.
+        closure_degenerate = ClosureEquation.validate_degeneracy(concentrations)
+
+        # Check convergence. A degenerate Boltzmann fit holds T at the prior,
+        # which would otherwise satisfy |ΔT| < tol spuriously — so a
+        # degenerate fit can never be reported as converged. Likewise a
+        # degenerate composition is never reported as converged. The False
+        # flag tells callers (and round-trip/NIST tooling) to treat T and C
+        # as unconstrained.
+        converged = (
+            not boltzmann_degenerate
+            and not closure_degenerate
+            and abs(T_K - T_prev) < self.t_tolerance_k
+            and abs(n_e - ne_prev) / ne_prev < self.ne_tolerance_frac
+        )
+
+        return _PythonIterationResult(
+            T_K=T_K,
+            n_e=n_e,
+            T_corona=T_corona,
+            concentrations=concentrations,
+            last_common_fit=last_common_fit,
+            last_max_tau=last_max_tau,
+            boltzmann_degenerate=boltzmann_degenerate,
+            closure_degenerate=closure_degenerate,
+            ne_from_stark=ne_from_stark,
+            converged=converged,
+            should_break=False,
+        )
+
+    def _build_python_quality_metrics(
+        self,
+        observations: List[LineObservation],
+        T_K: float,
+        n_e: float,
+        concentrations: Dict[str, float],
+        last_common_fit: Optional[_CommonSlopeFit],
+        last_max_tau: float,
+        boltzmann_degenerate: bool,
+        closure_degenerate: bool,
+        ne_from_stark: bool,
+    ) -> Dict[str, float]:
+        """Assemble the post-loop ``quality_metrics`` dict (``_solve_python`` helper)."""
         # LTE validity check
         from cflibs.plasma.lte_validator import LTEValidator
 
@@ -1945,6 +2052,100 @@ class IterativeCFLIBSSolver:
         # correction pass (0.0 when SA is disabled or never fired).
         quality_metrics["self_absorption_applied"] = float(self.apply_self_absorption)
         quality_metrics["self_absorption_max_tau"] = float(last_max_tau)
+        return quality_metrics
+
+    def _solve_python(
+        self,
+        observations: List[LineObservation],
+        closure_mode: str = "standard",
+        stark_diagnostic: Optional["StarkDiagnosticLine"] = None,
+        **closure_kwargs,
+    ) -> CFLIBSResult:
+        """Reference Python ``for``-loop implementation of :meth:`solve`.
+
+        Bit-for-bit equivalent to the pre-T1-3 ``solve`` body; the public
+        :meth:`solve` routes through here when ``CFLIBS_USE_LAX_WHILE_LOOP`` is
+        unset (default) or when JAX is unavailable.
+        """
+        # 1. Initialization
+        T_K = 10000.0
+        T_corona = None
+        n_e = 1.0e17
+
+        # Cache static data (IPs, atomic data)
+        # Group observations by element
+        obs_by_element = defaultdict(list)
+        for obs in observations:
+            obs_by_element[obs.element].append(obs)
+
+        elements = list(obs_by_element.keys())
+
+        # Pre-fetch Ionization Potentials
+        ips = self._prefetch_ips_python(elements)
+
+        # Iteration loop
+        converged = False
+        history = []
+        concentrations: Dict[str, float] = {}  # Initialize before loop
+        last_common_fit: Optional[_CommonSlopeFit] = None
+        last_max_tau = 0.0
+        # Diagnostics tracked across iterations for the post-loop quality_metrics
+        # (also guards against an early break leaving them unbound).
+        boltzmann_degenerate = True  # until a clean fit proves otherwise
+        closure_degenerate = False
+        ne_from_stark = False
+
+        for _ in range(1, self.max_iterations + 1):
+            step = self._run_python_iteration(
+                elements,
+                obs_by_element,
+                ips,
+                closure_mode,
+                stark_diagnostic,
+                closure_kwargs,
+                T_K=T_K,
+                n_e=n_e,
+                T_corona=T_corona,
+                concentrations=concentrations,
+                last_common_fit=last_common_fit,
+                last_max_tau=last_max_tau,
+            )
+            if step.should_break:
+                # Mirror the original loop: the self-absorption block (which sets
+                # last_max_tau) runs BEFORE the ``common_fit is None`` break, so
+                # carry that in-iteration update out; all other carried state was
+                # only assigned after the None check and is left untouched.
+                last_max_tau = step.last_max_tau
+                break
+
+            T_K = step.T_K
+            n_e = step.n_e
+            T_corona = step.T_corona
+            concentrations = step.concentrations
+            last_common_fit = step.last_common_fit
+            last_max_tau = step.last_max_tau
+            boltzmann_degenerate = step.boltzmann_degenerate
+            closure_degenerate = step.closure_degenerate
+            ne_from_stark = step.ne_from_stark
+
+            history.append((T_K, n_e))
+
+            if step.converged:
+                converged = True
+                break
+            converged = False
+
+        quality_metrics = self._build_python_quality_metrics(
+            observations,
+            T_K,
+            n_e,
+            concentrations,
+            last_common_fit,
+            last_max_tau,
+            boltzmann_degenerate,
+            closure_degenerate,
+            ne_from_stark,
+        )
 
         # Defensive: a degenerate Boltzmann slope (non-physical T) or a
         # collapsed composition must never report converged, even if an early
@@ -2104,6 +2305,154 @@ class IterativeCFLIBSSolver:
             boltzmann_covariance=None,
         )
 
+    def _build_uncertainty_abundance_multipliers(
+        self,
+        elements: List[str],
+        T_K: float,
+        n_e: float,
+        n_e_relative_uncertainty: float,
+        partition_funcs: Dict[str, float],
+        partition_funcs_II: Dict[str, float],
+        effective_ips: Dict[str, float],
+        T_corona: Optional[float],
+    ):
+        """Build abundance multipliers, optionally as UFloats (``solve_with_uncertainty`` helper).
+
+        When ``n_e_relative_uncertainty > 0`` the neutral-plane multipliers
+        ``(1 + n_II/n_I)`` are rebuilt as UFloats so the n_e variance propagates
+        through closure into sigma_C. Numerics identical to the inline block.
+        """
+        abundance_multipliers = self._compute_abundance_multipliers(
+            elements,
+            T_K,
+            n_e,
+            partition_funcs,
+            partition_funcs_II,
+            effective_ips,
+            T_corona=T_corona,
+        )
+
+        # When an n_e uncertainty is supplied, rebuild the neutral-plane
+        # multipliers (1 + n_II/n_I) as UFloats so the n_e variance propagates
+        # through closure into sigma_C. The Saha ratio scales as 1/n_e, so a
+        # UFloat n_e carries its relative uncertainty into each multiplier.
+        if n_e_relative_uncertainty and n_e_relative_uncertainty > 0.0:
+            abundance_multipliers = self._compute_abundance_multipliers_uncertain(
+                elements,
+                T_K,
+                n_e,
+                n_e_relative_uncertainty,
+                partition_funcs,
+                partition_funcs_II,
+                effective_ips,
+                T_corona=T_corona,
+            )
+        return abundance_multipliers
+
+    @staticmethod
+    def _build_intercept_covariances(common_fit: _CommonSlopeFit):
+        """Build per-element UFloat intercepts and covariances (``solve_with_uncertainty`` helper).
+
+        Returns ``(intercepts_u, covariances, slope_err, slope_u)`` using the
+        same common-slope model as :meth:`solve`. Numerics unchanged.
+        """
+        from uncertainties import ufloat
+
+        intercepts_u = {}
+        covariances = {}
+        slope_err = (
+            float(np.sqrt(common_fit.slope_variance))
+            if np.isfinite(common_fit.slope_variance) and common_fit.slope_variance > 0.0
+            else 0.0
+        )
+        slope_u = ufloat(common_fit.slope, slope_err)
+
+        for el, stats in common_fit.element_stats.items():
+            weight_sum = float(np.sum(stats.weights))
+            y_mean_err = np.sqrt(1.0 / weight_sum) if weight_sum > 0.0 else 0.0
+            y_mean_u = ufloat(stats.y_mean, y_mean_err)
+            intercept_u = y_mean_u - slope_u * stats.x_mean
+            intercepts_u[el] = intercept_u
+
+            intercept_var = y_mean_err**2 + (stats.x_mean**2) * common_fit.slope_variance
+            covariances[el] = np.array(
+                [
+                    [common_fit.slope_variance, -stats.x_mean * common_fit.slope_variance],
+                    [-stats.x_mean * common_fit.slope_variance, intercept_var],
+                ],
+                dtype=float,
+            )
+        return intercepts_u, covariances, slope_err, slope_u
+
+    @staticmethod
+    def _propagate_closure_uncertainty(
+        closure_mode: str,
+        intercepts_u: Dict[str, Any],
+        partition_funcs: Dict[str, float],
+        abundance_multipliers,
+        closure_kwargs: Dict[str, Any],
+    ):
+        """Propagate intercept uncertainties through closure (``solve_with_uncertainty`` helper).
+
+        Identical dispatch to the inline if/elif chain it replaces.
+        """
+        from cflibs.inversion.physics.uncertainty import (
+            propagate_through_closure_oxide,
+            propagate_through_closure_standard,
+            propagate_through_closure_matrix,
+        )
+
+        if closure_mode == "matrix" and "matrix_element" in closure_kwargs:
+            return propagate_through_closure_matrix(
+                intercepts_u,
+                partition_funcs,
+                closure_kwargs["matrix_element"],
+                closure_kwargs.get("matrix_fraction", 0.9),
+                abundance_multipliers=abundance_multipliers,
+            )
+        elif closure_mode == "oxide":
+            return propagate_through_closure_oxide(
+                intercepts_u,
+                partition_funcs,
+                closure_kwargs.get("oxide_stoichiometry", {}),
+                abundance_multipliers=abundance_multipliers,
+            )
+        elif closure_mode in {"ilr", "pwlr", "dirichlet_residual"}:
+            return propagate_through_closure_standard(
+                intercepts_u,
+                partition_funcs,
+                abundance_multipliers=abundance_multipliers,
+            )
+        else:
+            return propagate_through_closure_standard(
+                intercepts_u,
+                partition_funcs,
+                abundance_multipliers=abundance_multipliers,
+            )
+
+    @staticmethod
+    def _select_boltzmann_covariance(
+        covariances: Dict[str, np.ndarray],
+        closure_mode: str,
+        closure_kwargs: Dict[str, Any],
+    ) -> Tuple[Optional[np.ndarray], Optional[str]]:
+        """Pick the representative slope/intercept covariance (``solve_with_uncertainty`` helper).
+
+        Returns ``(selected_covariance, covariance_element)``; numerics unchanged.
+        """
+        selected_covariance = None
+        covariance_element = None
+        if covariances:
+            preferred_element = (
+                closure_kwargs.get("matrix_element") if closure_mode == "matrix" else None
+            )
+            if preferred_element in covariances:
+                covariance_element = preferred_element
+            else:
+                covariance_element = sorted(covariances)[0]
+            selected_covariance = covariances[covariance_element]
+        return selected_covariance, covariance_element
+
     def solve_with_uncertainty(
         self,
         observations: List[LineObservation],
@@ -2141,14 +2490,11 @@ class IterativeCFLIBSSolver:
         # First run the standard solver to convergence
         result = self.solve(observations, closure_mode, **closure_kwargs)
 
-        # Import uncertainty utilities (will raise ImportError if not available)
-        from cflibs.inversion.physics.uncertainty import (
-            propagate_through_closure_oxide,
-            propagate_through_closure_standard,
-            propagate_through_closure_matrix,
-            extract_values_and_uncertainties,
-        )
-        from uncertainties import ufloat
+        # Import uncertainty utilities (will raise ImportError if not available).
+        # The closure-propagation and ufloat helpers are imported inside the
+        # private helpers below; importing this module here preserves the
+        # documented early ImportError when the uncertainties stack is missing.
+        from cflibs.inversion.physics.uncertainty import extract_values_and_uncertainties
 
         # Group observations by element
         obs_by_element: Dict[str, list] = defaultdict(list)
@@ -2175,37 +2521,18 @@ class IterativeCFLIBSSolver:
         corrected_obs_map = self._apply_saha_correction(obs_by_element, T_K, n_e, effective_ips)
 
         # Get partition functions at converged T
-        partition_funcs = {}
-        partition_funcs_II = {}
-        for el in elements:
-            partition_funcs[el] = self._evaluate_partition_function(el, 1, T_K)
-            partition_funcs_II[el] = self._evaluate_partition_function(el, 2, T_K)
+        partition_funcs, partition_funcs_II = self._evaluate_partition_functions(elements, T_K)
 
-        abundance_multipliers = self._compute_abundance_multipliers(
+        abundance_multipliers = self._build_uncertainty_abundance_multipliers(
             elements,
             T_K,
             n_e,
+            n_e_relative_uncertainty,
             partition_funcs,
             partition_funcs_II,
             effective_ips,
-            T_corona=result.temperature_corona_K,
+            result.temperature_corona_K,
         )
-
-        # When an n_e uncertainty is supplied, rebuild the neutral-plane
-        # multipliers (1 + n_II/n_I) as UFloats so the n_e variance propagates
-        # through closure into sigma_C. The Saha ratio scales as 1/n_e, so a
-        # UFloat n_e carries its relative uncertainty into each multiplier.
-        if n_e_relative_uncertainty and n_e_relative_uncertainty > 0.0:
-            abundance_multipliers = self._compute_abundance_multipliers_uncertain(
-                elements,
-                T_K,
-                n_e,
-                n_e_relative_uncertainty,
-                partition_funcs,
-                partition_funcs_II,
-                effective_ips,
-                T_corona=result.temperature_corona_K,
-            )
 
         if self.saha_boltzmann_graph:
             common_fit = self._fit_saha_boltzmann_graph(obs_by_element, T_K, n_e, effective_ips)
@@ -2215,59 +2542,18 @@ class IterativeCFLIBSSolver:
             return result
 
         # Propagate the same common-slope model used by solve()
-        intercepts_u = {}
-        covariances = {}
-        slope_err = (
-            float(np.sqrt(common_fit.slope_variance))
-            if np.isfinite(common_fit.slope_variance) and common_fit.slope_variance > 0.0
-            else 0.0
+        intercepts_u, covariances, slope_err, slope_u = self._build_intercept_covariances(
+            common_fit
         )
-        slope_u = ufloat(common_fit.slope, slope_err)
-
-        for el, stats in common_fit.element_stats.items():
-            weight_sum = float(np.sum(stats.weights))
-            y_mean_err = np.sqrt(1.0 / weight_sum) if weight_sum > 0.0 else 0.0
-            y_mean_u = ufloat(stats.y_mean, y_mean_err)
-            intercept_u = y_mean_u - slope_u * stats.x_mean
-            intercepts_u[el] = intercept_u
-
-            intercept_var = y_mean_err**2 + (stats.x_mean**2) * common_fit.slope_variance
-            covariances[el] = np.array(
-                [
-                    [common_fit.slope_variance, -stats.x_mean * common_fit.slope_variance],
-                    [-stats.x_mean * common_fit.slope_variance, intercept_var],
-                ],
-                dtype=float,
-            )
 
         # Propagate through closure
-        if closure_mode == "matrix" and "matrix_element" in closure_kwargs:
-            concentrations_u = propagate_through_closure_matrix(
-                intercepts_u,
-                partition_funcs,
-                closure_kwargs["matrix_element"],
-                closure_kwargs.get("matrix_fraction", 0.9),
-                abundance_multipliers=abundance_multipliers,
-            )
-        elif closure_mode == "oxide":
-            concentrations_u = propagate_through_closure_oxide(
-                intercepts_u,
-                partition_funcs,
-                closure_kwargs.get("oxide_stoichiometry", {}),
-                abundance_multipliers=abundance_multipliers,
-            )
-        elif closure_mode in {"ilr", "pwlr", "dirichlet_residual"}:
-            concentrations_u = propagate_through_closure_standard(
-                intercepts_u,
-                partition_funcs,
-                abundance_multipliers=abundance_multipliers,
-            )
-        else:
-            concentrations_u = propagate_through_closure_standard(
-                intercepts_u,
-                partition_funcs,
-                abundance_multipliers=abundance_multipliers,
-            )
+        concentrations_u = self._propagate_closure_uncertainty(
+            closure_mode,
+            intercepts_u,
+            partition_funcs,
+            abundance_multipliers,
+            closure_kwargs,
+        )
 
         # Extract nominal values and uncertainties
         conc_nominal, conc_uncert = extract_values_and_uncertainties(concentrations_u)
@@ -2280,17 +2566,9 @@ class IterativeCFLIBSSolver:
             T_K_u = temperature_from_slope(slope_u)
             T_err = float(T_K_u.std_dev) if np.isfinite(T_K_u.std_dev) else 0.0
 
-        selected_covariance = None
-        covariance_element = None
-        if covariances:
-            preferred_element = (
-                closure_kwargs.get("matrix_element") if closure_mode == "matrix" else None
-            )
-            if preferred_element in covariances:
-                covariance_element = preferred_element
-            else:
-                covariance_element = sorted(covariances)[0]
-            selected_covariance = covariances[covariance_element]
+        selected_covariance, covariance_element = self._select_boltzmann_covariance(
+            covariances, closure_mode, closure_kwargs
+        )
 
         quality_metrics = dict(result.quality_metrics)
         if covariance_element is not None:
@@ -2419,6 +2697,141 @@ if HAS_JAX:
         }
 
 
+def _collect_sb_graph_rows(
+    obs_by_element: Dict[str, List[LineObservation]],
+    ips: Dict[str, float],
+    ln_S: float,
+) -> Tuple[Dict[str, List[float]], Dict[str, List[float]], Dict[str, List[float]]]:
+    """Collect shifted ``(x, y, w)`` rows per element (``_fit_saha_boltzmann_graph`` helper).
+
+    WEIGHTING: the validated SB-graph (Aguilera & Aragon 2004; the probe in
+    scripts/probe_saha_boltzmann_graph.py) uses an UNWEIGHTED global lstsq.
+    That is essential to the method: with inverse-variance (≈ intensity)
+    weighting the single brightest line of each element dominates its
+    intercept dummy, lifting bright-resonance elements (Fe) by ~2 in
+    ln-space (≈ 7x in C) and re-creating the over-attribution the global
+    fit is meant to cure (Fe 16.7 -> 18.5 intercept; RMSE 8 -> 14 on real
+    ChemCam BHVO-2). The pooled global geometry already conditions every
+    intercept jointly via the shifted ion lines, so per-line weighting is
+    neither needed nor helpful here. ``boltzmann_weight_cap`` is therefore
+    not applied on this path. Lines are still inverse-variance *screened*
+    for validity (finite, positive y-uncertainty -> usable) but contribute
+    with unit weight.
+    """
+    per_el_x: Dict[str, List[float]] = defaultdict(list)
+    per_el_y: Dict[str, List[float]] = defaultdict(list)
+    per_el_w: Dict[str, List[float]] = defaultdict(list)
+    for el, obs_list in obs_by_element.items():
+        ip = ips.get(el, 15.0)
+        for obs in obs_list:
+            if obs.A_ki <= 0 or obs.g_k <= 0 or obs.intensity <= 0:
+                continue
+            y = obs.y_value
+            z = obs.ionization_stage
+            x = obs.E_k_ev + (ip * (z - 1) if z > 1 else 0.0)
+            if z > 1:
+                y = y - ln_S * (z - 1)
+            if not (np.isfinite(x) and np.isfinite(y)):
+                continue
+            per_el_x[el].append(x)
+            per_el_y[el].append(y)
+            per_el_w[el].append(1.0)  # unweighted (validated SB-graph)
+    return per_el_x, per_el_y, per_el_w
+
+
+def _solve_sb_graph_lstsq(
+    elements: List[str],
+    el_index: Dict[str, int],
+    per_el_x: Dict[str, List[float]],
+    per_el_y: Dict[str, List[float]],
+    per_el_w: Dict[str, List[float]],
+) -> Optional[Tuple[float, float, float, Dict[str, float]]]:
+    """Solve the pooled SB-graph WLS system (``_fit_saha_boltzmann_graph`` helper).
+
+    Assembles the global design matrix ``A = [x | element-dummies]``, solves
+    the weighted normal equations, and returns
+    ``(slope, slope_variance, r_squared, intercepts)`` — or ``None`` when the
+    global system is under-determined. Numerics identical to the inline block.
+    """
+    rows_x: List[float] = []
+    rows_y: List[float] = []
+    rows_w: List[float] = []
+    rows_el: List[int] = []
+    for el in elements:
+        rows_x.extend(per_el_x[el])
+        rows_y.extend(per_el_y[el])
+        rows_w.extend(per_el_w[el])
+        rows_el.extend([el_index[el]] * len(per_el_x[el]))
+
+    n_rows = len(rows_x)
+    E = len(elements)
+    if n_rows < 3 or n_rows < (1 + E):
+        # Under-determined global system; let the caller fall back.
+        return None
+
+    x_vec = np.asarray(rows_x, dtype=float)
+    y_vec = np.asarray(rows_y, dtype=float)
+    w_vec = np.asarray(rows_w, dtype=float)
+    el_vec = np.asarray(rows_el, dtype=int)
+
+    A = np.zeros((n_rows, 1 + E), dtype=float)
+    A[:, 0] = x_vec
+    A[np.arange(n_rows), 1 + el_vec] = 1.0
+
+    # Weighted least squares via sqrt(w) row scaling -> ordinary lstsq.
+    sw = np.sqrt(w_vec)
+    Aw = A * sw[:, None]
+    yw = y_vec * sw
+    coef, *_ = np.linalg.lstsq(Aw, yw, rcond=None)
+    slope = float(coef[0])
+
+    # Global weighted R^2 of the pooled fit.
+    y_pred = A @ coef
+    resid = y_vec - y_pred
+    ss_res = float(np.sum(w_vec * resid**2))
+    y_wmean = float(np.average(y_vec, weights=w_vec))
+    ss_tot = float(np.sum(w_vec * (y_vec - y_wmean) ** 2))
+    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 1.0
+
+    # Slope variance from the weighted normal-equation covariance.
+    dof = max(n_rows - (1 + E), 1)
+    sigma2 = ss_res / dof
+    slope_variance = float("nan")
+    try:
+        cov = np.linalg.inv(Aw.T @ Aw) * sigma2
+        slope_variance = float(cov[0, 0])
+    except np.linalg.LinAlgError:
+        slope_variance = float("nan")
+    if not np.isfinite(slope_variance) or slope_variance <= 0.0:
+        denom = float(np.sum(w_vec * (x_vec - np.average(x_vec, weights=w_vec)) ** 2))
+        slope_variance = 1.0 / denom if denom > 0.0 else 1.0
+
+    intercepts = {el: float(coef[1 + el_index[el]]) for el in elements}
+    return slope, slope_variance, r_squared, intercepts
+
+
+def _build_sb_graph_element_stats(
+    elements: List[str],
+    per_el_x: Dict[str, List[float]],
+    per_el_y: Dict[str, List[float]],
+    per_el_w: Dict[str, List[float]],
+) -> Dict[str, "_CommonSlopeElementStats"]:
+    """Build per-element shifted-coordinate stats (``_fit_saha_boltzmann_graph`` helper)."""
+    element_stats: Dict[str, _CommonSlopeElementStats] = {}
+    for el in elements:
+        xs = np.asarray(per_el_x[el], dtype=float)
+        ys = np.asarray(per_el_y[el], dtype=float)
+        ws = np.asarray(per_el_w[el], dtype=float)
+        element_stats[el] = _CommonSlopeElementStats(
+            x_values=xs,
+            y_values=ys,
+            weights=ws,
+            x_mean=float(np.average(xs, weights=ws)),
+            y_mean=float(np.average(ys, weights=ws)),
+        )
+    return element_stats
+
+
 def _cap_boltzmann_weights(weights: np.ndarray, cap: float) -> np.ndarray:
     """Clip a single element's inverse-variance weights to ``cap`` × their median.
 
@@ -2455,6 +2868,45 @@ def _cap_boltzmann_weights(weights: np.ndarray, cap: float) -> np.ndarray:
     return np.minimum(weights, cap * med)
 
 
+def _fill_obs_row(
+    i: int,
+    el: str,
+    obs_by_element: Dict[str, List[LineObservation]],
+    x: np.ndarray,
+    y: np.ndarray,
+    w: np.ndarray,
+    stage: np.ndarray,
+    mask: np.ndarray,
+    weight_cap: float,
+) -> None:
+    """Fill row ``i`` of the padded arrays for element ``el`` (``_build_padded_arrays_from_obs`` helper).
+
+    Mirrors the inner observation loop exactly: per-line x/y/weight/stage and a
+    finite, positive-weight validity mask, then the optional per-element weight
+    dynamic-range cap. Numerics unchanged.
+    """
+    for j, obs in enumerate(obs_by_element[el]):
+        x[i, j] = obs.E_k_ev
+        y[i, j] = obs.y_value
+        sigma = obs.y_uncertainty
+        w[i, j] = 1.0 / (sigma**2) if sigma > 0 else 1.0
+        stage[i, j] = obs.ionization_stage
+        mask[i, j] = (
+            np.isfinite(obs.y_value)
+            and np.isfinite(obs.E_k_ev)
+            and np.isfinite(w[i, j])
+            and w[i, j] > 0.0
+        )
+    # Bound the per-element weight dynamic range using ONLY this row's valid
+    # weights for the median (padded zeros excluded by the mask), matching
+    # the numpy host path in _fit_common_boltzmann_plane so the lax kernel
+    # receives identically-capped weights.
+    if weight_cap > 0.0:
+        row_mask = mask[i]
+        if row_mask.any():
+            w[i, row_mask] = _cap_boltzmann_weights(w[i, row_mask], weight_cap)
+
+
 def _build_padded_arrays_from_obs(
     obs_by_element: Dict[str, List[LineObservation]],
     weight_cap: float = 0.0,
@@ -2484,26 +2936,7 @@ def _build_padded_arrays_from_obs(
     stage = np.ones((E, n_max), dtype=np.int32)
     mask = np.zeros((E, n_max), dtype=bool)
     for i, el in enumerate(elements):
-        for j, obs in enumerate(obs_by_element[el]):
-            x[i, j] = obs.E_k_ev
-            y[i, j] = obs.y_value
-            sigma = obs.y_uncertainty
-            w[i, j] = 1.0 / (sigma**2) if sigma > 0 else 1.0
-            stage[i, j] = obs.ionization_stage
-            mask[i, j] = (
-                np.isfinite(obs.y_value)
-                and np.isfinite(obs.E_k_ev)
-                and np.isfinite(w[i, j])
-                and w[i, j] > 0.0
-            )
-        # Bound the per-element weight dynamic range using ONLY this row's valid
-        # weights for the median (padded zeros excluded by the mask), matching
-        # the numpy host path in _fit_common_boltzmann_plane so the lax kernel
-        # receives identically-capped weights.
-        if weight_cap > 0.0:
-            row_mask = mask[i]
-            if row_mask.any():
-                w[i, row_mask] = _cap_boltzmann_weights(w[i, row_mask], weight_cap)
+        _fill_obs_row(i, el, obs_by_element, x, y, w, stage, mask, weight_cap)
     # Zero-out invalid entries in x/y/w so masked sums are clean
     x = np.where(mask, x, 0.0)
     y = np.where(mask, y, 0.0)
