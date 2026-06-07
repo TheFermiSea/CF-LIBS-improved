@@ -13,6 +13,7 @@ not derived from the (previously unconstrained) optimizer.
 """
 
 import numpy as np
+import pytest
 
 from cflibs.inversion.solve.spectral_refiner import (
     CLOSURE_TOLERANCE,
@@ -125,5 +126,5 @@ def test_refiner_single_element_trivial_closure():
         concentrations_init={"Fe": 1.0},
     )
 
-    assert result.concentrations["Fe"] == 1.0
+    assert result.concentrations["Fe"] == pytest.approx(1.0)
     assert result.closure_residual <= CLOSURE_TOLERANCE
