@@ -449,6 +449,14 @@ class AtomicSnapshot:
         rows without any kernel-side branching.
     line_natural_w : ndarray, shape (N_lines,)
         Natural broadening width; 0.0 when missing.
+    line_stark_d : ndarray, shape (N_lines,)
+        Signed Stark **shift** of the line center at ``REF_NE = 1e17 cm^-3``
+        (nm); 0.0 when missing. Scales linearly with density:
+        ``delta_lambda = line_stark_d * (n_e / REF_NE)`` (see
+        :func:`cflibs.radiation.stark.stark_shift` and
+        :func:`cflibs.radiation.kernels._per_line_stark_shift`). Applied to
+        line centers BEFORE broadening when ``apply_stark`` is on; lines
+        without a catalogued shift carry ``0.0`` and are left unmoved.
     partition_coeffs : ndarray, shape (N_species, N_poly_order)
         Polynomial coefficients for ``log U(T)``.
     ionization_potential_ev : ndarray, shape (N_species,)
@@ -493,6 +501,12 @@ class AtomicSnapshot:
     partition_t_max: Any = None
     partition_g0: Any = None
 
+    # Per-line signed Stark shift of the line center at REF_NE = 1e17 cm^-3
+    # (nm). Optional / nullable so snapshots built before the Stark-shift
+    # rollout (and the many lines lacking a catalogued shift) remain valid;
+    # ``None`` is treated as "all-zero" by the forward kernel, i.e. no shift.
+    line_stark_d: Any = None
+
 
 # Register AtomicSnapshot as a pytree so it can flow through jit/vmap.
 if HAS_JAX:
@@ -507,6 +521,7 @@ if HAS_JAX:
         "line_stark_w",
         "line_stark_alpha",
         "line_natural_w",
+        "line_stark_d",
         "partition_coeffs",
         "ionization_potential_ev",
         "level_g",

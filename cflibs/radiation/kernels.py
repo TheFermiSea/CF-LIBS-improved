@@ -412,6 +412,36 @@ def _per_line_stark_gamma(snapshot, n_e, T_eV):
     return 0.5 * stark_w * (n_e / _STARK_REF_NE) * factor_T
 
 
+def _per_line_stark_shift(snapshot, line_wl_nm, n_e):
+    """Per-line Stark-shifted line centers (nm).
+
+    ``snapshot.line_stark_d`` is the stored signed Stark **shift** of the
+    line center at ``REF_NE = 1e17 cm^-3`` (nm). The shift scales **linearly**
+    with electron density (single source of truth:
+    :func:`cflibs.radiation.stark.stark_shift`)::
+
+        delta_lambda = line_stark_d * (n_e / REF_NE)
+        lambda_c     = lambda_0 + delta_lambda
+
+    Ion broadening (Griem A-term, R_D) is intentionally **not** applied: at
+    ps-LIBS densities (n_e <= 1e17 cm^-3) it is a <2-5% correction and is
+    dropped following John et al. 2023 and Stetzler et al. 2020. Only the
+    Stark shift — flagged in the corpus as a real line-identification error
+    source (Noel 2025) — is carried here.
+
+    Lines without a catalogued shift carry ``line_stark_d = 0.0`` (the
+    :meth:`AtomicDatabase.snapshot` default), so they are left unmoved. A
+    snapshot with ``line_stark_d is None`` (built before the shift rollout)
+    is also treated as "no shift" — the original centers are returned
+    unchanged.
+    """
+    stark_d = getattr(snapshot, "line_stark_d", None)
+    if stark_d is None:
+        return line_wl_nm
+    stark_d = jnp.asarray(stark_d)
+    return line_wl_nm + stark_d * (n_e / _STARK_REF_NE)
+
+
 # ---------------------------------------------------------------------------
 # Profile kernels (broadening modes)
 # ---------------------------------------------------------------------------
@@ -563,16 +593,23 @@ def forward_model(
     T_eV = jnp.asarray(plasma_state.T_e_eV)
     n_e = jnp.asarray(plasma_state.n_e)
 
+    # Stark line-center shift (linear in n_e). Applied to the profile centers
+    # only — the hc/4pi*lambda emissivity prefactor keeps the unshifted
+    # transition wavelength. Off when apply_stark is False (returns lambda_0).
+    line_centers = (
+        _per_line_stark_shift(atomic_snapshot, line_wl_nm, n_e) if apply_stark else line_wl_nm
+    )
+
     if broadening_mode == BroadeningMode.LEGACY:
         # Legacy: single scalar sigma; outer-product Gaussian sum.
         sigma_scalar = 0.01 * jnp.sqrt(jnp.maximum(T_eV, 1e-12) / 0.86)
         sigma_per_line = jnp.full(line_wl_nm.shape, sigma_scalar, dtype=line_wl_nm.dtype)
-        emissivity = _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line, sigma_per_line)
+        emissivity = _gaussian_sum_per_line(wl, line_centers, epsilon_line, sigma_per_line)
     elif broadening_mode == BroadeningMode.NIST_PARITY:
         # Per-line instrument sigma from resolving power, evaluated at each
         # line center inline (spec §5 row "Bayesian approach wins").
         sigma_per_line = _per_line_instrument_sigma(atomic_snapshot, instrument)
-        emissivity = _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line, sigma_per_line)
+        emissivity = _gaussian_sum_per_line(wl, line_centers, epsilon_line, sigma_per_line)
     elif broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
         line_mass_amu = _species_mass_array(atomic_snapshot)[
             np.asarray(atomic_snapshot.line_species_index)
@@ -587,10 +624,10 @@ def forward_model(
             gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
             sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
             emissivity = _voigt_sum_per_line(
-                wl, line_wl_nm, epsilon_line, sigma_per_line, gamma_per_line
+                wl, line_centers, epsilon_line, sigma_per_line, gamma_per_line
             )
         else:
-            emissivity = _gaussian_sum_per_line(wl, line_wl_nm, epsilon_line, sigma_per_line)
+            emissivity = _gaussian_sum_per_line(wl, line_centers, epsilon_line, sigma_per_line)
     elif broadening_mode == BroadeningMode.LDM_GAUSSIAN:
         from cflibs.radiation.ldm import ldm_broaden
 
@@ -601,7 +638,7 @@ def forward_model(
             _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu), 1e-12
         )
         emissivity = ldm_broaden(
-            line_wavelengths=line_wl_nm,
+            line_wavelengths=line_centers,
             line_intensities=epsilon_line,
             line_sigmas=sigma_per_line,
             wavelength_grid=wl,
@@ -988,6 +1025,13 @@ def forward_model_chunked(
     T_eV = jnp.asarray(plasma_state.T_e_eV)
     n_e = jnp.asarray(plasma_state.n_e)
 
+    # Stark line-center shift (linear in n_e), profile-centers only. Hoisted
+    # out of the scan body since it depends only on snapshot / n_e, not the
+    # chunk. Off (== lambda_0) when apply_stark is False.
+    line_centers = (
+        _per_line_stark_shift(atomic_snapshot, line_wl_nm, n_e) if apply_stark else line_wl_nm
+    )
+
     gamma_per_line = None
     if broadening_mode == BroadeningMode.LEGACY:
         sigma_scalar = 0.01 * jnp.sqrt(jnp.maximum(T_eV, 1e-12) / 0.86)
@@ -1022,7 +1066,7 @@ def forward_model_chunked(
         epsilon_masked = epsilon_line_base * chunk_mask.astype(epsilon_line_base.dtype)
         emissivity = _broaden_chunk(
             chunk_wl,
-            line_wl_nm,
+            line_centers,
             epsilon_masked,
             sigma_per_line,
             gamma_per_line,
