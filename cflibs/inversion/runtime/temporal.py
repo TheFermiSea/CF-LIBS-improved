@@ -1141,103 +1141,31 @@ class TemporalSelfAbsorptionCorrector:
         if lower_level_energies is None:
             lower_level_energies = {}
 
-        corrected_obs = []
+        corrected_obs: List[LineObservation] = []
         optical_depths: Dict[float, Dict[float, float]] = {}
         correction_factors: Dict[float, Dict[float, float]] = {}
         time_averaged_tau: Dict[float, float] = {}
-        warnings = []
+        warnings: List[str] = []
 
         # Sample times for detailed analysis
         sample_times = np.linspace(gate.delay_ns, gate.end_ns, 5)
 
         for obs in observations:
-            E_lower = lower_level_energies.get(obs.wavelength_nm, 0.0)
-            C_s = concentrations.get(obs.element, 0.0)
-
-            # Create partition function wrapper for this element
-            def U_func(T_K: float, el=obs.element, stage=obs.ionization_stage) -> float:
-                return partition_func_callable(el, stage, T_K)
-
-            # Calculate gate-averaged optical depth
-            tau_avg = self.gate_averaged_optical_depth(
+            self._correct_one_observation(
+                obs,
                 gate,
-                obs.wavelength_nm,
-                obs.A_ki,
-                obs.g_k,
-                E_lower,
-                C_s,
+                concentrations,
                 total_number_density_cm3,
-                U_func,
+                partition_func_callable,
+                lower_level_energies,
+                mask_threshold,
+                sample_times,
+                corrected_obs,
+                optical_depths,
+                correction_factors,
+                time_averaged_tau,
+                warnings,
             )
-
-            time_averaged_tau[obs.wavelength_nm] = tau_avg
-
-            # Calculate tau at each sample time for detailed analysis
-            tau_at_times: Dict[float, float] = {}
-            for t in sample_times:
-                T_K = self.model.temperature(t)
-                U_T = U_func(T_K)
-                tau_t = self.optical_depth_at_time(
-                    t,
-                    obs.wavelength_nm,
-                    obs.A_ki,
-                    obs.g_k,
-                    E_lower,
-                    C_s,
-                    total_number_density_cm3,
-                    U_T,
-                )
-                tau_at_times[float(t)] = tau_t
-
-            optical_depths[obs.wavelength_nm] = tau_at_times
-
-            # Calculate correction factor
-            if tau_avg > mask_threshold:
-                warnings.append(
-                    f"Line {obs.wavelength_nm:.2f} nm masked: " f"time-averaged tau={tau_avg:.2f}"
-                )
-                correction_factors[obs.wavelength_nm] = {t: 0.0 for t in sample_times}
-                continue
-
-            if tau_avg < 0.1:
-                # Optically thin - no correction needed
-                corrected_obs.append(obs)
-                correction_factors[obs.wavelength_nm] = {t: 1.0 for t in sample_times}
-            else:
-                # Apply correction: f(tau) = (1 - exp(-tau)) / tau
-                if tau_avg > 50:
-                    f_tau = 1.0 / tau_avg
-                else:
-                    f_tau = (1.0 - np.exp(-tau_avg)) / tau_avg
-
-                correction = 1.0 / f_tau
-                corrected_intensity = obs.intensity * correction
-
-                corrected_obs.append(
-                    LineObservation(
-                        wavelength_nm=obs.wavelength_nm,
-                        intensity=corrected_intensity,
-                        intensity_uncertainty=obs.intensity_uncertainty * correction,
-                        element=obs.element,
-                        ionization_stage=obs.ionization_stage,
-                        E_k_ev=obs.E_k_ev,
-                        g_k=obs.g_k,
-                        A_ki=obs.A_ki,
-                    )
-                )
-
-                # Calculate correction factor at each time
-                factors_at_times: Dict[float, float] = {}
-                for t, tau_t in tau_at_times.items():
-                    if tau_t < 0.1:
-                        factors_at_times[t] = 1.0
-                    elif tau_t > 50:
-                        factors_at_times[t] = tau_t
-                    else:
-                        f_t = (1.0 - np.exp(-tau_t)) / tau_t
-                        factors_at_times[t] = 1.0 / f_t
-
-                correction_factors[obs.wavelength_nm] = factors_at_times
 
         return TemporalSelfAbsorptionResult(
             corrected_observations=corrected_obs,
@@ -1246,6 +1174,200 @@ class TemporalSelfAbsorptionCorrector:
             time_averaged_tau=time_averaged_tau,
             warnings=warnings,
         )
+
+    def _correct_one_observation(
+        self,
+        obs: LineObservation,
+        gate: TemporalGateConfig,
+        concentrations: Dict[str, float],
+        total_number_density_cm3: float,
+        partition_func_callable: Callable[[str, int, float], float],
+        lower_level_energies: Dict[float, float],
+        mask_threshold: float,
+        sample_times: np.ndarray,
+        corrected_obs: List[LineObservation],
+        optical_depths: Dict[float, Dict[float, float]],
+        correction_factors: Dict[float, Dict[float, float]],
+        time_averaged_tau: Dict[float, float],
+        warnings: List[str],
+    ) -> None:
+        """
+        Apply temporal self-absorption correction to a single observation.
+
+        Mutates the shared result accumulators in place (``corrected_obs``,
+        ``optical_depths``, ``correction_factors``, ``time_averaged_tau`` and
+        ``warnings``) exactly as the inlined loop body did.
+
+        Parameters
+        ----------
+        obs : LineObservation
+            Observation to correct
+        gate : TemporalGateConfig
+            Gate timing used for acquisition
+        concentrations : Dict[str, float]
+            Element concentrations
+        total_number_density_cm3 : float
+            Total number density
+        partition_func_callable : Callable
+            Function(element, ion_stage, T_K) -> U(T)
+        lower_level_energies : Dict[float, float]
+            Lower level energies by wavelength (nm -> eV)
+        mask_threshold : float
+            Optical depth above which to mask line
+        sample_times : np.ndarray
+            Sample times for detailed analysis
+        corrected_obs : List[LineObservation]
+            Accumulator for corrected observations
+        optical_depths : Dict[float, Dict[float, float]]
+            Accumulator for per-time optical depths
+        correction_factors : Dict[float, Dict[float, float]]
+            Accumulator for per-time correction factors
+        time_averaged_tau : Dict[float, float]
+            Accumulator for gate-averaged optical depth
+        warnings : List[str]
+            Accumulator for warning messages
+        """
+        E_lower = lower_level_energies.get(obs.wavelength_nm, 0.0)
+        C_s = concentrations.get(obs.element, 0.0)
+
+        # Create partition function wrapper for this element
+        def U_func(T_K: float, el=obs.element, stage=obs.ionization_stage) -> float:
+            return partition_func_callable(el, stage, T_K)
+
+        # Calculate gate-averaged optical depth
+        tau_avg = self.gate_averaged_optical_depth(
+            gate,
+            obs.wavelength_nm,
+            obs.A_ki,
+            obs.g_k,
+            E_lower,
+            C_s,
+            total_number_density_cm3,
+            U_func,
+        )
+
+        time_averaged_tau[obs.wavelength_nm] = tau_avg
+
+        # Calculate tau at each sample time for detailed analysis
+        tau_at_times = self._sample_optical_depths(
+            obs, E_lower, C_s, total_number_density_cm3, U_func, sample_times
+        )
+        optical_depths[obs.wavelength_nm] = tau_at_times
+
+        # Calculate correction factor
+        if tau_avg > mask_threshold:
+            warnings.append(
+                f"Line {obs.wavelength_nm:.2f} nm masked: " f"time-averaged tau={tau_avg:.2f}"
+            )
+            correction_factors[obs.wavelength_nm] = {t: 0.0 for t in sample_times}
+            return
+
+        if tau_avg < 0.1:
+            # Optically thin - no correction needed
+            corrected_obs.append(obs)
+            correction_factors[obs.wavelength_nm] = {t: 1.0 for t in sample_times}
+        else:
+            # Apply correction: f(tau) = (1 - exp(-tau)) / tau
+            if tau_avg > 50:
+                f_tau = 1.0 / tau_avg
+            else:
+                f_tau = (1.0 - np.exp(-tau_avg)) / tau_avg
+
+            correction = 1.0 / f_tau
+            corrected_intensity = obs.intensity * correction
+
+            corrected_obs.append(
+                LineObservation(
+                    wavelength_nm=obs.wavelength_nm,
+                    intensity=corrected_intensity,
+                    intensity_uncertainty=obs.intensity_uncertainty * correction,
+                    element=obs.element,
+                    ionization_stage=obs.ionization_stage,
+                    E_k_ev=obs.E_k_ev,
+                    g_k=obs.g_k,
+                    A_ki=obs.A_ki,
+                )
+            )
+
+            # Calculate correction factor at each time
+            correction_factors[obs.wavelength_nm] = self._correction_factors_from_taus(tau_at_times)
+
+    def _sample_optical_depths(
+        self,
+        obs: LineObservation,
+        E_lower: float,
+        C_s: float,
+        total_number_density_cm3: float,
+        U_func: Callable[[float], float],
+        sample_times: np.ndarray,
+    ) -> Dict[float, float]:
+        """
+        Compute optical depth at each sample time for one observation.
+
+        Parameters
+        ----------
+        obs : LineObservation
+            Observation whose line is evaluated
+        E_lower : float
+            Lower level energy (eV)
+        C_s : float
+            Species concentration (mass fraction)
+        total_number_density_cm3 : float
+            Total number density (cm^-3)
+        U_func : Callable
+            Function U(T_K) returning the partition function
+        sample_times : np.ndarray
+            Times at which to evaluate optical depth (ns)
+
+        Returns
+        -------
+        Dict[float, float]
+            Optical depth keyed by sample time (ns)
+        """
+        tau_at_times: Dict[float, float] = {}
+        for t in sample_times:
+            T_K = self.model.temperature(t)
+            U_T = U_func(T_K)
+            tau_t = self.optical_depth_at_time(
+                t,
+                obs.wavelength_nm,
+                obs.A_ki,
+                obs.g_k,
+                E_lower,
+                C_s,
+                total_number_density_cm3,
+                U_T,
+            )
+            tau_at_times[float(t)] = tau_t
+        return tau_at_times
+
+    @staticmethod
+    def _correction_factors_from_taus(
+        tau_at_times: Dict[float, float],
+    ) -> Dict[float, float]:
+        """
+        Convert per-time optical depths into per-time correction factors.
+
+        Parameters
+        ----------
+        tau_at_times : Dict[float, float]
+            Optical depth keyed by sample time (ns)
+
+        Returns
+        -------
+        Dict[float, float]
+            Correction factor keyed by sample time (ns)
+        """
+        factors_at_times: Dict[float, float] = {}
+        for t, tau_t in tau_at_times.items():
+            if tau_t < 0.1:
+                factors_at_times[t] = 1.0
+            elif tau_t > 50:
+                factors_at_times[t] = tau_t
+            else:
+                f_t = (1.0 - np.exp(-tau_t)) / tau_t
+                factors_at_times[t] = 1.0 / f_t
+        return factors_at_times
 
 
 # =============================================================================
@@ -1398,12 +1520,93 @@ class TimeResolvedCFLIBSSolver:
         spectra = sorted(spectra, key=lambda s: s.gate.delay_ns)
 
         # Solve each gate
-        per_gate_results = {}
+        per_gate_results = self._solve_all_gates(spectra, closure_mode, **solver_kwargs)
+
+        # Extract temperature and density profiles
+        temp_profile, density_profile = self._extract_profiles(per_gate_results)
+
+        # Fit evolution model if not provided
+        self._fit_evolution_model_if_needed(temp_profile, density_profile)
+
+        # Compute weights
+        gate_weights = self._compute_gate_weights(per_gate_results, weighting)
+
+        # Weighted average of concentrations
+        concentrations, concentration_uncertainties = self._combine_concentrations(
+            per_gate_results, gate_weights
+        )
+
+        # Find best gate
+        best_delay = max(gate_weights.keys(), key=lambda k: gate_weights[k])
+        best_spec = next(s for s in spectra if s.gate.delay_ns == best_delay)
+
+        # Quality metric: average weight
+        combined_quality = np.mean(list(gate_weights.values()))
+
+        logger.info(
+            f"Multi-gate CF-LIBS: {len(spectra)} gates, "
+            f"best={best_delay:.0f} ns, quality={combined_quality:.3f}"
+        )
+
+        return TimeResolvedCFLIBSResult(
+            concentrations=concentrations,
+            concentration_uncertainties=concentration_uncertainties,
+            temperature_profile=temp_profile,
+            density_profile=density_profile,
+            gate_weights=gate_weights,
+            per_gate_results=per_gate_results,
+            combined_quality=combined_quality,
+            optimal_gate=best_spec.gate,
+        )
+
+    def _solve_all_gates(
+        self,
+        spectra: List[TimeResolvedSpectrum],
+        closure_mode: str,
+        **solver_kwargs,
+    ) -> Dict[float, Dict]:
+        """
+        Solve CF-LIBS independently for each gate spectrum.
+
+        Parameters
+        ----------
+        spectra : List[TimeResolvedSpectrum]
+            Time-resolved spectra at different gates (assumed pre-sorted)
+        closure_mode : str
+            Closure mode for solver
+        solver_kwargs : dict
+            Additional solver arguments
+
+        Returns
+        -------
+        Dict[float, Dict]
+            Per-gate results keyed by gate delay (ns)
+        """
+        per_gate_results: Dict[float, Dict] = {}
         for spec in spectra:
             result = self.solve_single_gate(spec, closure_mode, **solver_kwargs)
             per_gate_results[spec.gate.delay_ns] = result
+        return per_gate_results
 
-        # Extract temperature and density profiles
+    @staticmethod
+    def _extract_profiles(
+        per_gate_results: Dict[float, Dict],
+    ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
+        """
+        Extract temperature and density vs time profiles from converged gates.
+
+        Parameters
+        ----------
+        per_gate_results : Dict[float, Dict]
+            Per-gate results keyed by gate delay
+
+        Returns
+        -------
+        temp_profile : List[Tuple[float, float]]
+            Temperature vs time: [(time_ns, T_K), ...]
+        density_profile : List[Tuple[float, float]]
+            Electron density vs time: [(time_ns, n_e), ...]
+        """
         temp_profile = [
             (r["gate_delay_ns"], r["temperature_K"])
             for r in per_gate_results.values()
@@ -1414,44 +1617,147 @@ class TimeResolvedCFLIBSSolver:
             for r in per_gate_results.values()
             if r["converged"]
         ]
+        return temp_profile, density_profile
 
-        # Fit evolution model if not provided
+    def _fit_evolution_model_if_needed(
+        self,
+        temp_profile: List[Tuple[float, float]],
+        density_profile: List[Tuple[float, float]],
+    ) -> None:
+        """
+        Fit an evolution model from the gate profiles when one is not set.
+
+        Parameters
+        ----------
+        temp_profile : List[Tuple[float, float]]
+            Temperature vs time
+        density_profile : List[Tuple[float, float]]
+            Electron density vs time
+        """
         if self.evolution_model is None and len(temp_profile) >= 2:
             times = np.array([t[0] for t in temp_profile])
             temps = np.array([t[1] for t in temp_profile])
             densities = np.array([d[1] for d in density_profile])
             self.evolution_model = PlasmaEvolutionModel.from_measurements(times, temps, densities)
 
-        # Compute weights
+    def _compute_gate_weights(
+        self,
+        per_gate_results: Dict[float, Dict],
+        weighting: str,
+    ) -> Dict[float, float]:
+        """
+        Compute normalized per-gate weights using the requested scheme.
+
+        Parameters
+        ----------
+        per_gate_results : Dict[float, Dict]
+            Per-gate results keyed by gate delay
+        weighting : str
+            Gate weighting method: "quality", "uniform", or "snr"
+
+        Returns
+        -------
+        Dict[float, float]
+            Normalized weight per gate delay
+        """
         gate_weights: Dict[float, float] = {}
         for delay, result in per_gate_results.items():
-            if weighting == "uniform":
-                gate_weights[delay] = 1.0 if result["converged"] else 0.0
-            elif weighting == "snr":
-                gate_weights[delay] = result.get("snr", 50.0) if result["converged"] else 0.0
-            else:  # quality weighting
-                if self.evolution_model is not None:
-                    expected_T = self.evolution_model.temperature(delay)
-                    expected_ne = self.evolution_model.electron_density(delay)
-                else:
-                    expected_T = result["temperature_K"]
-                    expected_ne = result["electron_density_cm3"]
-                gate_weights[delay] = self._compute_gate_weight(result, expected_T, expected_ne)
+            gate_weights[delay] = self._raw_gate_weight(delay, result, weighting)
 
-        # Normalize weights
+        return self._normalize_gate_weights(gate_weights, per_gate_results)
+
+    def _raw_gate_weight(
+        self,
+        delay: float,
+        result: Dict,
+        weighting: str,
+    ) -> float:
+        """
+        Compute the unnormalized weight for a single gate.
+
+        Parameters
+        ----------
+        delay : float
+            Gate delay (ns)
+        result : Dict
+            Single-gate result
+        weighting : str
+            Gate weighting method: "quality", "uniform", or "snr"
+
+        Returns
+        -------
+        float
+            Unnormalized gate weight
+        """
+        if weighting == "uniform":
+            return 1.0 if result["converged"] else 0.0
+        if weighting == "snr":
+            return result.get("snr", 50.0) if result["converged"] else 0.0
+
+        # quality weighting
+        if self.evolution_model is not None:
+            expected_T = self.evolution_model.temperature(delay)
+            expected_ne = self.evolution_model.electron_density(delay)
+        else:
+            expected_T = result["temperature_K"]
+            expected_ne = result["electron_density_cm3"]
+        return self._compute_gate_weight(result, expected_T, expected_ne)
+
+    @staticmethod
+    def _normalize_gate_weights(
+        gate_weights: Dict[float, float],
+        per_gate_results: Dict[float, Dict],
+    ) -> Dict[float, float]:
+        """
+        Normalize gate weights, falling back to uniform when all weights vanish.
+
+        Parameters
+        ----------
+        gate_weights : Dict[float, float]
+            Unnormalized weights per gate delay
+        per_gate_results : Dict[float, Dict]
+            Per-gate results keyed by gate delay
+
+        Returns
+        -------
+        Dict[float, float]
+            Normalized weights per gate delay
+        """
         total_weight = sum(gate_weights.values())
         if total_weight > 0:
-            gate_weights = {k: v / total_weight for k, v in gate_weights.items()}
-        else:
-            # Fallback to uniform weighting
-            n_converged = sum(1 for r in per_gate_results.values() if r["converged"])
-            if n_converged > 0:
-                gate_weights = {
-                    k: 1.0 / n_converged if r["converged"] else 0.0
-                    for k, r in per_gate_results.items()
-                }
+            return {k: v / total_weight for k, v in gate_weights.items()}
 
-        # Weighted average of concentrations
+        # Fallback to uniform weighting
+        n_converged = sum(1 for r in per_gate_results.values() if r["converged"])
+        if n_converged > 0:
+            return {
+                k: 1.0 / n_converged if r["converged"] else 0.0 for k, r in per_gate_results.items()
+            }
+        return gate_weights
+
+    @staticmethod
+    def _combine_concentrations(
+        per_gate_results: Dict[float, Dict],
+        gate_weights: Dict[float, float],
+    ) -> Tuple[Dict[str, float], Dict[str, float]]:
+        """
+        Combine per-gate concentrations into a weighted mean and uncertainty.
+
+        Parameters
+        ----------
+        per_gate_results : Dict[float, Dict]
+            Per-gate results keyed by gate delay
+        gate_weights : Dict[float, float]
+            Normalized weights per gate delay
+
+        Returns
+        -------
+        concentrations : Dict[str, float]
+            Normalized weighted-mean concentrations
+        concentration_uncertainties : Dict[str, float]
+            Uncertainties (standard deviation from weighted spread)
+        """
+        # Collect elements from converged gates
         elements = set()
         for result in per_gate_results.values():
             if result["converged"]:
@@ -1489,28 +1795,7 @@ class TimeResolvedCFLIBSSolver:
         if total_c > 0 and abs(total_c - 1.0) > 0.01:
             concentrations = {el: c / total_c for el, c in concentrations.items()}
 
-        # Find best gate
-        best_delay = max(gate_weights.keys(), key=lambda k: gate_weights[k])
-        best_spec = next(s for s in spectra if s.gate.delay_ns == best_delay)
-
-        # Quality metric: average weight
-        combined_quality = np.mean(list(gate_weights.values()))
-
-        logger.info(
-            f"Multi-gate CF-LIBS: {len(spectra)} gates, "
-            f"best={best_delay:.0f} ns, quality={combined_quality:.3f}"
-        )
-
-        return TimeResolvedCFLIBSResult(
-            concentrations=concentrations,
-            concentration_uncertainties=concentration_uncertainties,
-            temperature_profile=temp_profile,
-            density_profile=density_profile,
-            gate_weights=gate_weights,
-            per_gate_results=per_gate_results,
-            combined_quality=combined_quality,
-            optimal_gate=best_spec.gate,
-        )
+        return concentrations, concentration_uncertainties
 
 
 # =============================================================================
