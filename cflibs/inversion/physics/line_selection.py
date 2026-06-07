@@ -195,7 +195,7 @@ class LineSelector:
         if atomic_uncertainties is None:
             atomic_uncertainties = {}
 
-        warnings = []
+        warnings: list[str] = []
 
         # Score all lines
         scores = [
