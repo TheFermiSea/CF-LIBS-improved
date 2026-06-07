@@ -578,6 +578,106 @@ class ManifoldGenerator:
         return n_upper
 
     @staticmethod
+    def _calculate_stark_hwhm(
+        T_eV: float,
+        n_e: float,
+        l_wl: jnp.ndarray,
+        l_ek: jnp.ndarray,
+        l_ip: jnp.ndarray,
+        l_z: jnp.ndarray,
+        l_stark_w: jnp.ndarray,
+        l_stark_alpha: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Compute the Stark Lorentzian HWHM (gamma) for every line.
+
+        ``l_stark_w`` (and the ``w_est`` fallback) is the stored
+        electron-impact FWHM at REF_NE = 1e17 cm^-3, T = 10000 K (see the
+        convention note in cflibs/radiation/stark.py). The Voigt profile needs
+        a HWHM, so scale to live n_e and halve::
+
+            gamma_hwhm = 0.5 * w_fwhm * (n_e / 1e17) * (T / T_ref)^(-alpha)
+
+        The earlier (n_e/1e16) with no 0.5 over-broadened by x20 (A4-CONV-2).
+        Lines without a database value use a binding-energy estimate
+        (binding energy = IP - E_upper).
+        """
+        REF_NE = 1.0e17
+        REF_T_EV = 0.86173  # 10000 K in eV
+
+        # Estimate Stark w_ref for lines without database values
+        # Use binding energy = IP - E_upper
+        binding_energy = jnp.maximum(l_ip - l_ek, 0.1)
+        n_eff = (l_z + 1) * jnp.sqrt(13.605 / binding_energy)
+        w_est = 2.0e-5 * (l_wl / 500.0) ** 2 * (n_eff**4)
+        w_est = jnp.clip(w_est, 0.0001, 0.5)
+
+        # Use database value if available, else estimate
+        w_ref = jnp.where(jnp.isnan(l_stark_w), w_est, l_stark_w)
+
+        # Stark HWHM calculation (w_ref is a FWHM at REF_NE; 0.5 -> HWHM)
+        factor_ne = n_e / REF_NE
+        factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -l_stark_alpha)
+        return 0.5 * w_ref * factor_ne * factor_T
+
+    @staticmethod
+    def _humlicek_w4(z: jnp.ndarray) -> jnp.ndarray:
+        """Humlicek W4 Faddeeva approximation w(z) (no complex erfc needed).
+
+        Evaluates the complex error function via the four-region Humlicek W4
+        rational approximation, selecting per element with nested
+        :func:`jnp.where` so the whole evaluation stays jit/vmap-friendly.
+        """
+        x_h = jnp.real(z)
+        y_h = jnp.abs(jnp.imag(z))
+        s = jnp.abs(x_h) + y_h
+        t = y_h - 1j * x_h
+
+        # Region 1: s >= 15 (asymptotic)
+        w_r1 = t * 0.5641896 / (0.5 + t * t)
+
+        # Region 2: 5.5 <= s < 15
+        u = t * t
+        w_r2 = t * (1.410474 + u * 0.5641896) / (0.75 + u * (3.0 + u))
+
+        # Region 3: s < 5.5 and y >= 0.195 * |x| - 0.176
+        w_r3 = (16.4955 + t * (20.20933 + t * (11.96482 + t * (3.778987 + t * 0.5642236)))) / (
+            16.4955 + t * (38.82363 + t * (39.27121 + t * (21.69274 + t * (6.699398 + t))))
+        )
+
+        # Region 4: s < 5.5 and y < 0.195 * |x| - 0.176
+        w_r4 = jnp.exp(u) - t * (
+            36183.31
+            - u
+            * (
+                3321.9905
+                - u * (1540.787 - u * (219.0313 - u * (35.76683 - u * (1.320522 - u * 0.56419))))
+            )
+        ) / (
+            32066.6
+            - u
+            * (
+                24322.84
+                - u
+                * (9022.228 - u * (2186.181 - u * (364.2191 - u * (61.57037 - u * (1.841439 - u)))))
+            )
+        )
+
+        # Select region based on conditions
+        return jnp.where(
+            s >= 15.0,
+            w_r1,
+            jnp.where(
+                s >= 5.5,
+                w_r2,
+                jnp.where(
+                    y_h >= 0.195 * jnp.abs(x_h) - 0.176,
+                    w_r3,
+                    w_r4,
+                ),
+            ),
+        )
+
+    @staticmethod
     @jit
     def _compute_spectrum_snapshot(
         wl_grid: jnp.ndarray,
@@ -678,29 +778,16 @@ class ManifoldGenerator:
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
         # Stark broadening: Lorentzian gamma (HWHM).
-        # ``l_stark_w`` (and the w_est fallback) is the stored electron-impact
-        # FWHM at REF_NE = 1e17 cm^-3, T = 10000 K (see the convention note in
-        # cflibs/radiation/stark.py). The Voigt profile needs a HWHM, so scale
-        # to live n_e and halve:
-        #   gamma_hwhm = 0.5 * w_fwhm * (n_e / 1e17) * (T / T_ref)^(-alpha)
-        # The earlier (n_e/1e16) with no 0.5 over-broadened by x20 (A4-CONV-2).
-        REF_NE = 1.0e17
-        REF_T_EV = 0.86173  # 10000 K in eV
-
-        # Estimate Stark w_ref for lines without database values
-        # Use binding energy = IP - E_upper
-        binding_energy = jnp.maximum(l_ip - l_ek, 0.1)
-        n_eff = (l_z + 1) * jnp.sqrt(13.605 / binding_energy)
-        w_est = 2.0e-5 * (l_wl / 500.0) ** 2 * (n_eff**4)
-        w_est = jnp.clip(w_est, 0.0001, 0.5)
-
-        # Use database value if available, else estimate
-        w_ref = jnp.where(jnp.isnan(l_stark_w), w_est, l_stark_w)
-
-        # Stark HWHM calculation (w_ref is a FWHM at REF_NE; 0.5 -> HWHM)
-        factor_ne = n_e / REF_NE
-        factor_T = jnp.power(jnp.maximum(T_eV, 0.1) / REF_T_EV, -l_stark_alpha)
-        gamma_stark = 0.5 * w_ref * factor_ne * factor_T
+        gamma_stark = ManifoldGenerator._calculate_stark_hwhm(
+            T_eV,
+            n_e,
+            l_wl,
+            l_ek,
+            l_ip,
+            l_z,
+            l_stark_w,
+            l_stark_alpha,
+        )
 
         # --- Voigt Profile Rendering (Humlicek W4 approximation) ---
         # For each wavelength point, compute Voigt profile contribution from all lines
@@ -711,57 +798,7 @@ class ManifoldGenerator:
 
         # Compute Voigt profile using Humlicek W4 approximation
         z = (diff + 1j * gamma_stark) / (sigma_total * jnp.sqrt(2.0))
-
-        # Humlicek W4 Faddeeva approximation (no complex erfc needed)
-        x_h = jnp.real(z)
-        y_h = jnp.abs(jnp.imag(z))
-        s = jnp.abs(x_h) + y_h
-        t = y_h - 1j * x_h
-
-        # Region 1: s >= 15 (asymptotic)
-        w_r1 = t * 0.5641896 / (0.5 + t * t)
-
-        # Region 2: 5.5 <= s < 15
-        u = t * t
-        w_r2 = t * (1.410474 + u * 0.5641896) / (0.75 + u * (3.0 + u))
-
-        # Region 3: s < 5.5 and y >= 0.195 * |x| - 0.176
-        w_r3 = (16.4955 + t * (20.20933 + t * (11.96482 + t * (3.778987 + t * 0.5642236)))) / (
-            16.4955 + t * (38.82363 + t * (39.27121 + t * (21.69274 + t * (6.699398 + t))))
-        )
-
-        # Region 4: s < 5.5 and y < 0.195 * |x| - 0.176
-        w_r4 = jnp.exp(u) - t * (
-            36183.31
-            - u
-            * (
-                3321.9905
-                - u * (1540.787 - u * (219.0313 - u * (35.76683 - u * (1.320522 - u * 0.56419))))
-            )
-        ) / (
-            32066.6
-            - u
-            * (
-                24322.84
-                - u
-                * (9022.228 - u * (2186.181 - u * (364.2191 - u * (61.57037 - u * (1.841439 - u)))))
-            )
-        )
-
-        # Select region based on conditions
-        w_z = jnp.where(
-            s >= 15.0,
-            w_r1,
-            jnp.where(
-                s >= 5.5,
-                w_r2,
-                jnp.where(
-                    y_h >= 0.195 * jnp.abs(x_h) - 0.176,
-                    w_r3,
-                    w_r4,
-                ),
-            ),
-        )
+        w_z = ManifoldGenerator._humlicek_w4(z)
 
         profile = jnp.real(w_z) / (sigma_total * jnp.sqrt(2.0 * jnp.pi))
 
@@ -968,21 +1005,20 @@ class ManifoldGenerator:
 
         return spectrum_accum
 
-    def generate_manifold(
-        self,
-        progress_callback: Optional[Callable[[int, int, float], None]] = None,
-    ) -> None:
-        """
-        Generate the complete spectral manifold.
+    def _build_param_grid(self) -> np.ndarray:
+        """Build the ``[T, ne, C_el1, ...]`` parameter grid for the sweep.
 
-        Parameters
-        ----------
-        progress_callback : callable, optional
-            Callback function(completed, total, percentage) for progress updates
-        """
-        logger.info("Starting manifold generation...")
+        Sweeps temperature linearly and electron density geometrically, then
+        takes the Cartesian product with a per-system concentration grid: a
+        simplex over Al/V (Ti = remainder) for the 4-element Ti-Al-V-Fe
+        system, else a single-element ramp. Negative-Ti simplex points are
+        skipped. Emits the same grid-size logging the inline build did.
 
-        # Build parameter grid
+        Returns
+        -------
+        ndarray, shape (n_samples, n_elements + 2)
+            Float32 parameter rows consumed by the batch loop.
+        """
         T_grid = np.linspace(
             self.config.temperature_range[0],
             self.config.temperature_range[1],
@@ -1028,6 +1064,157 @@ class ManifoldGenerator:
         logger.info(
             f"  Concentrations: {len(params_list) // (len(T_grid) * len(ne_grid))} combinations"
         )
+        return params_arr
+
+    def _compute_instrument_sigma(self) -> Tuple[float, float]:
+        """Resolve the instrument Gaussian σ (nm) from the configured FWHM.
+
+        Uses the exact ``2*sqrt(2 ln 2)`` factor (not the legacy 2.355
+        approximation). Falls back to the historical 0.05 nm FWHM with a
+        one-time WARN if the field is missing or non-positive, so the
+        silent-drop bug stays visible to anyone running malformed configs
+        (D3 fix).
+
+        Returns
+        -------
+        tuple of float
+            ``(fwhm_nm, sigma_inst)`` — the (possibly defaulted) FWHM and the
+            derived Gaussian σ in nm.
+        """
+        fwhm_nm = self.config.instrument_fwhm_nm
+        if fwhm_nm is None or not (fwhm_nm > 0):
+            logger.warning(
+                "ManifoldConfig.instrument_fwhm_nm is missing or non-positive "
+                "(got %r); falling back to 0.05 nm FWHM. This used to be the "
+                "silent hardcoded default — set instrument_fwhm_nm explicitly "
+                "to silence this warning.",
+                fwhm_nm,
+            )
+            fwhm_nm = 0.05
+        sigma_inst = float(fwhm_nm / (2.0 * np.sqrt(2.0 * np.log(2.0))))
+        return fwhm_nm, sigma_inst
+
+    def _create_storage_backend(
+        self,
+        storage_format: str,
+        output_path: Path,
+        n_samples: int,
+        chunk_rows: int,
+        wl_grid: jnp.ndarray,
+    ) -> Tuple:
+        """Open the output store and create its spectra/params/wavelength sets.
+
+        Dispatches on ``storage_format`` to the HDF5 or Zarr backend, raising
+        :class:`ImportError` if the required dependency is unavailable and
+        :class:`ValueError` for unknown formats.
+
+        Returns
+        -------
+        tuple
+            ``(output_root, dset_spec, dset_param, attrs)`` — the open root
+            handle, the two writable datasets, and the attribute mapping.
+        """
+        if storage_format == "hdf5":
+            if not HAS_H5PY:
+                raise ImportError(
+                    "h5py is required for HDF5 manifold generation. Install with: pip install h5py"
+                )
+            output_root = h5py.File(output_path, "w")
+            dset_spec = output_root.create_dataset(
+                "spectra",
+                (n_samples, self.config.pixels),
+                dtype="f4",
+                chunks=(chunk_rows, self.config.pixels),
+                compression="gzip",
+                compression_opts=4,
+            )
+            dset_param = output_root.create_dataset(
+                "params",
+                (n_samples, len(self.config.elements) + 2),
+                dtype="f4",
+                chunks=(chunk_rows, len(self.config.elements) + 2),
+            )
+            output_root.create_dataset("wavelength", data=np.asarray(wl_grid, dtype=np.float32))
+            attrs = output_root.attrs
+        elif storage_format == "zarr":
+            if not HAS_ZARR:
+                raise ImportError(
+                    "zarr is required for Zarr manifold generation. Install with: pip install zarr"
+                )
+            output_root = zarr.open_group(str(output_path), mode="w")
+            dset_spec = output_root.create_array(
+                "spectra",
+                shape=(n_samples, self.config.pixels),
+                chunks=(chunk_rows, self.config.pixels),
+                dtype="f4",
+                overwrite=True,
+            )
+            dset_param = output_root.create_array(
+                "params",
+                shape=(n_samples, len(self.config.elements) + 2),
+                chunks=(chunk_rows, len(self.config.elements) + 2),
+                dtype="f4",
+                overwrite=True,
+            )
+            output_root.create_array(
+                "wavelength",
+                data=np.asarray(wl_grid, dtype=np.float32),
+                dtype="f4",
+                overwrite=True,
+            )
+            attrs = output_root.attrs
+        else:
+            raise ValueError(f"Unsupported manifold storage format: {storage_format}")
+        return output_root, dset_spec, dset_param, attrs
+
+    def _write_batches(
+        self,
+        params_arr: np.ndarray,
+        n_samples: int,
+        batch_spectrum: Callable[[jnp.ndarray], jnp.ndarray],
+        dset_spec,
+        dset_param,
+        progress_callback: Optional[Callable[[int, int, float], None]],
+    ) -> None:
+        """Generate spectra batch-by-batch and write them to the datasets.
+
+        Iterates the parameter grid in ``config.batch_size`` chunks, evaluates
+        ``batch_spectrum`` per chunk, writes spectra + params into the open
+        datasets, and reports progress via the callback (or periodic logging).
+        """
+        for i in range(0, n_samples, self.config.batch_size):
+            batch = params_arr[i : i + self.config.batch_size]
+            batch_jax = jnp.array(batch)
+
+            spectra = batch_spectrum(batch_jax)
+            spectra_np = np.array(spectra, dtype=np.float32)
+
+            end_idx = min(i + self.config.batch_size, n_samples)
+            dset_spec[i:end_idx] = spectra_np
+            dset_param[i:end_idx] = batch
+
+            if progress_callback:
+                progress_callback(i + len(batch), n_samples, (i + len(batch)) / n_samples)
+            elif i % (self.config.batch_size * 10) == 0:
+                logger.info(f"Generated {i}/{n_samples} ({i / n_samples:.1%})")
+
+    def generate_manifold(
+        self,
+        progress_callback: Optional[Callable[[int, int, float], None]] = None,
+    ) -> None:
+        """
+        Generate the complete spectral manifold.
+
+        Parameters
+        ----------
+        progress_callback : callable, optional
+            Callback function(completed, total, percentage) for progress updates
+        """
+        logger.info("Starting manifold generation...")
+
+        # Build parameter grid
+        params_arr = self._build_param_grid()
+        n_samples = len(params_arr)
 
         # Create wavelength grid
         wl_grid = jnp.linspace(
@@ -1045,22 +1232,8 @@ class ManifoldGenerator:
         # endpoints; LDM clips out-of-grid lines to the boundary layers.
         broadening_mode = self.config.broadening_mode
 
-        # Instrument Gaussian σ from configured FWHM (D3 fix). Use the exact
-        # 2*sqrt(2 ln 2) factor instead of the legacy 2.355 approximation.
-        # Fall back to the historical 0.05 nm FWHM with a one-time WARN if
-        # the field is None or non-positive, so the silent-drop bug stays
-        # visible to anyone running with malformed configs.
-        fwhm_nm = self.config.instrument_fwhm_nm
-        if fwhm_nm is None or not (fwhm_nm > 0):
-            logger.warning(
-                "ManifoldConfig.instrument_fwhm_nm is missing or non-positive "
-                "(got %r); falling back to 0.05 nm FWHM. This used to be the "
-                "silent hardcoded default — set instrument_fwhm_nm explicitly "
-                "to silence this warning.",
-                fwhm_nm,
-            )
-            fwhm_nm = 0.05
-        sigma_inst = float(fwhm_nm / (2.0 * np.sqrt(2.0 * np.log(2.0))))
+        # Instrument Gaussian σ from configured FWHM (D3 fix).
+        fwhm_nm, sigma_inst = self._compute_instrument_sigma()
 
         if broadening_mode is BroadeningMode.LDM_GAUSSIAN:
             sigma_grid_arr = self._build_ldm_sigma_grid(sigma_inst)
@@ -1114,57 +1287,9 @@ class ManifoldGenerator:
 
         start_time = time.time()
 
-        if storage_format == "hdf5":
-            if not HAS_H5PY:
-                raise ImportError(
-                    "h5py is required for HDF5 manifold generation. Install with: pip install h5py"
-                )
-            output_root = h5py.File(output_path, "w")
-            dset_spec = output_root.create_dataset(
-                "spectra",
-                (n_samples, self.config.pixels),
-                dtype="f4",
-                chunks=(chunk_rows, self.config.pixels),
-                compression="gzip",
-                compression_opts=4,
-            )
-            dset_param = output_root.create_dataset(
-                "params",
-                (n_samples, len(self.config.elements) + 2),
-                dtype="f4",
-                chunks=(chunk_rows, len(self.config.elements) + 2),
-            )
-            output_root.create_dataset("wavelength", data=np.asarray(wl_grid, dtype=np.float32))
-            attrs = output_root.attrs
-        elif storage_format == "zarr":
-            if not HAS_ZARR:
-                raise ImportError(
-                    "zarr is required for Zarr manifold generation. Install with: pip install zarr"
-                )
-            output_root = zarr.open_group(str(output_path), mode="w")
-            dset_spec = output_root.create_array(
-                "spectra",
-                shape=(n_samples, self.config.pixels),
-                chunks=(chunk_rows, self.config.pixels),
-                dtype="f4",
-                overwrite=True,
-            )
-            dset_param = output_root.create_array(
-                "params",
-                shape=(n_samples, len(self.config.elements) + 2),
-                chunks=(chunk_rows, len(self.config.elements) + 2),
-                dtype="f4",
-                overwrite=True,
-            )
-            output_root.create_array(
-                "wavelength",
-                data=np.asarray(wl_grid, dtype=np.float32),
-                dtype="f4",
-                overwrite=True,
-            )
-            attrs = output_root.attrs
-        else:
-            raise ValueError(f"Unsupported manifold storage format: {storage_format}")
+        output_root, dset_spec, dset_param, attrs = self._create_storage_backend(
+            storage_format, output_path, n_samples, chunk_rows, wl_grid
+        )
 
         try:
             attrs["elements"] = list(self.config.elements)
@@ -1176,21 +1301,14 @@ class ManifoldGenerator:
             attrs["use_stark_broadening"] = self.config.use_stark_broadening
             attrs["instrument_fwhm_nm"] = self.config.instrument_fwhm_nm
 
-            for i in range(0, n_samples, self.config.batch_size):
-                batch = params_arr[i : i + self.config.batch_size]
-                batch_jax = jnp.array(batch)
-
-                spectra = batch_spectrum(batch_jax)
-                spectra_np = np.array(spectra, dtype=np.float32)
-
-                end_idx = min(i + self.config.batch_size, n_samples)
-                dset_spec[i:end_idx] = spectra_np
-                dset_param[i:end_idx] = batch
-
-                if progress_callback:
-                    progress_callback(i + len(batch), n_samples, (i + len(batch)) / n_samples)
-                elif i % (self.config.batch_size * 10) == 0:
-                    logger.info(f"Generated {i}/{n_samples} ({i / n_samples:.1%})")
+            self._write_batches(
+                params_arr,
+                n_samples,
+                batch_spectrum,
+                dset_spec,
+                dset_param,
+                progress_callback,
+            )
         finally:
             if storage_format == "hdf5":
                 output_root.close()
