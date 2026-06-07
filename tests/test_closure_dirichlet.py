@@ -356,6 +356,79 @@ class TestGammaResidualReporting:
 # ---------------------------------------------------------------------------
 
 
+class TestScaleInvariance:
+    """Validation gate (c): the Dirichlet-residual closure diagnostic and
+    residual must be invariant to a global intensity rescaling.
+
+    Scaling all line intensities by a constant ``k`` shifts every Boltzmann
+    intercept ``q_s`` by ``ln(k)`` (so every ``rel_C_s`` scales by ``k``) and
+    scales the data-derived experimental factor ``F`` by ``k`` as well.  The
+    calibrated raw sum ``rho = sum(rel_C_s) / F`` — and hence the deficit,
+    residual, and closure diagnostic — must not change.
+    """
+
+    def test_diagnostic_unchanged_when_intensities_scaled(self):
+        detected = {"Fe": 0.6, "Cu": 0.2, "Al": 0.1}  # raw_sum = 0.9, deficit 0.1
+        intercepts, pfs = _make_intercepts_and_pfs(detected, F=1.0)
+
+        base = ClosureEquation.apply_dirichlet_residual(
+            intercepts, pfs, mode="simple", experimental_factor=1.0
+        )
+
+        k = 1.0e3
+        scaled_intercepts = {el: q + math.log(k) for el, q in intercepts.items()}
+        scaled = ClosureEquation.apply_dirichlet_residual(
+            scaled_intercepts, pfs, mode="simple", experimental_factor=k
+        )
+
+        assert scaled.closure_diagnostic == pytest.approx(base.closure_diagnostic, rel=1e-9)
+        assert scaled.residual_fraction == pytest.approx(base.residual_fraction, rel=1e-9)
+        for el in detected:
+            assert scaled.concentrations[el] == pytest.approx(base.concentrations[el], rel=1e-9)
+
+    def test_diagnostic_unchanged_dirichlet_mode_scaled(self):
+        detected = {"Fe": 0.6, "Cu": 0.2, "Al": 0.1}
+        intercepts, pfs = _make_intercepts_and_pfs(detected, F=1.0)
+
+        base = ClosureEquation.apply_dirichlet_residual(
+            intercepts, pfs, mode="dirichlet", experimental_factor=1.0
+        )
+
+        k = 1.0e3
+        scaled_intercepts = {el: q + math.log(k) for el, q in intercepts.items()}
+        scaled = ClosureEquation.apply_dirichlet_residual(
+            scaled_intercepts, pfs, mode="dirichlet", experimental_factor=k
+        )
+
+        assert scaled.closure_diagnostic == pytest.approx(base.closure_diagnostic, rel=1e-9)
+        assert scaled.residual_fraction == pytest.approx(base.residual_fraction, rel=1e-9)
+
+    def test_naive_reference_would_break_without_factor(self):
+        """Without passing the rescaled experimental_factor the diagnostic
+        would change — this documents that the calibration factor is what
+        provides scale-invariance (and that the default F=1 path is the
+        unit-calibrated convention)."""
+        detected = {"Fe": 0.6, "Cu": 0.2, "Al": 0.1}
+        intercepts, pfs = _make_intercepts_and_pfs(detected, F=1.0)
+        k = 1.0e3
+        scaled_intercepts = {el: q + math.log(k) for el, q in intercepts.items()}
+
+        # Passing F=1 with 1e3-scaled intensities is a calibration mismatch:
+        # raw_sum ~ 900 >> 1, so the diagnostic blows up.
+        mismatched = ClosureEquation.apply_dirichlet_residual(
+            scaled_intercepts, pfs, mode="simple", experimental_factor=1.0
+        )
+        assert mismatched.closure_diagnostic > 100.0
+
+    def test_invalid_experimental_factor_raises(self):
+        intercepts, pfs = _make_intercepts_and_pfs({"Fe": 0.6, "Cu": 0.2}, F=1.0)
+        for bad in (0.0, -1.0, float("nan"), float("inf")):
+            with pytest.raises(ValueError, match="experimental_factor"):
+                ClosureEquation.apply_dirichlet_residual(
+                    intercepts, pfs, mode="simple", experimental_factor=bad
+                )
+
+
 class TestThreshold:
     """Verify residual_threshold gating in simple mode."""
 

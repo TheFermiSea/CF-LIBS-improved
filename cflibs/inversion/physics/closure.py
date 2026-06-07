@@ -2,14 +2,24 @@
 Closure equation implementation for CF-LIBS.
 
 Includes standard, matrix, oxide, ILR (Isometric Log-Ratio), and PWLR
-(pairwise/pivot log-ratio) closure modes. The ILR/PWLR modes map
-compositions from the D-simplex to R^(D-1), enabling unconstrained
-optimization in coordinate space.
+(pivot log-ratio) closure modes. The ILR/PWLR modes map compositions
+from the D-simplex to R^(D-1), enabling unconstrained optimization in
+coordinate space.
+
+The PWLR mode uses *isometric pivot coordinates* (Hron et al. 2012), a
+true orthonormal balance basis built around a chosen pivot part. These
+are distinct from the additive log-ratio (ALR), which is not isometric
+(the ALR contrast matrix is not orthonormal, so Euclidean distances in
+ALR space do not equal Aitchison distances). Both transforms are exposed
+separately so callers can pick the geometry they need.
 
 References
 ----------
 Egozcue, J.J. et al. (2003). "Isometric Logratio Transformations for
 Compositional Data Analysis." Mathematical Geology 35(3), 279-300.
+Hron, K., Filzmoser, P., Thompson, K. (2012). "Linear regression with
+compositional explanatory variables." Journal of Applied Statistics
+39(5), 1115-1128. (Pivot/isometric log-ratio coordinates.)
 """
 
 from dataclasses import dataclass
@@ -203,25 +213,62 @@ def _pivot_permutation(D: int, pivot_index: int) -> np.ndarray:
     return np.array([pivot_index, *keep], dtype=int)
 
 
-def plr_transform(composition: np.ndarray, pivot_index: int = 0) -> np.ndarray:
-    """
-    Pivot log-ratio (PLR) transform (a form of ALR).
+def _pivot_contrast(D: int) -> np.ndarray:
+    """Hron 2012 isometric pivot-coordinate contrast matrix (D-1, D).
 
-    Uses a pivot element (default first element). Maps a D-part composition
-    to (D-1) log-ratio coordinates.
+    Row ``i`` (1-based, ``i = 1 .. D-1``) contrasts the ``i``-th permuted
+    part against the geometric mean of the remaining ``D - i`` parts:
+
+        psi_i = sqrt((D - i) / (D - i + 1)) *
+                ( e_i - (1 / (D - i)) * sum_{j > i} e_j )
+
+    The rows are orthonormal (``Psi @ Psi.T == I_{D-1}``) and each row sums
+    to zero, so the resulting coordinates form an *isometric* log-ratio
+    (ILR) basis in CLR space — Euclidean distances between coordinate
+    vectors equal Aitchison distances between compositions.
+
+    Parameters
+    ----------
+    D : int
+        Number of compositional parts (must be >= 2). Parts are assumed
+        already permuted so the pivot occupies position 0.
+
+    Returns
+    -------
+    np.ndarray
+        Contrast matrix of shape (D-1, D).
+    """
+    if D < 2:
+        raise ValueError("pivot contrast requires D >= 2")
+    Psi = np.zeros((D - 1, D))
+    for i in range(1, D):
+        coef = np.sqrt((D - i) / (D - i + 1))
+        Psi[i - 1, i - 1] = coef
+        Psi[i - 1, i:] = -coef / (D - i)
+    return Psi
+
+
+def alr_transform(composition: np.ndarray, pivot_index: int = 0) -> np.ndarray:
+    """
+    Additive log-ratio (ALR) transform against a pivot/reference part.
+
+    Maps a D-part composition to (D-1) plain log-ratio coordinates
+    ``ln(x_j / x_pivot)``. ALR is *not* isometric (the implied contrast
+    matrix is not orthonormal), so Euclidean distance in ALR space does
+    not equal Aitchison distance — use :func:`plr_transform` (isometric
+    pivot coordinates) or :func:`ilr_transform` when isometry matters.
 
     Parameters
     ----------
     composition : np.ndarray
         Composition vector(s) on the simplex, shape (D,) or (N, D).
-
     pivot_index : int, optional
-        Index of the pivot component.
+        Index of the reference (denominator) component.
 
     Returns
     -------
     np.ndarray
-        PLR coordinates, shape (D-1,) or (N, D-1).
+        ALR coordinates, shape (D-1,) or (N, D-1).
     """
     D = composition.shape[-1]
     perm = _pivot_permutation(D, pivot_index)
@@ -229,19 +276,19 @@ def plr_transform(composition: np.ndarray, pivot_index: int = 0) -> np.ndarray:
     return log_comp[..., 1:] - log_comp[..., :1]
 
 
-def plr_inverse(coords: np.ndarray, D: Optional[int] = None, pivot_index: int = 0) -> np.ndarray:
+def alr_inverse(coords: np.ndarray, D: Optional[int] = None, pivot_index: int = 0) -> np.ndarray:
     """
-    Inverse PLR transform: map from R^(D-1) back to the D-simplex.
+    Inverse ALR transform: map from R^(D-1) back to the D-simplex.
 
     Parameters
     ----------
     coords : np.ndarray
-        PLR coordinates, shape (D-1,) or (N, D-1).
-
+        ALR coordinates, shape (D-1,) or (N, D-1).
     D : int, optional
-        Number of compositional parts. If omitted, inferred as ``coords.shape[-1] + 1``.
+        Number of compositional parts. If omitted, inferred as
+        ``coords.shape[-1] + 1``.
     pivot_index : int, optional
-        Index of the pivot component in output composition.
+        Index of the reference component in the output composition.
 
     Returns
     -------
@@ -259,6 +306,79 @@ def plr_inverse(coords: np.ndarray, D: Optional[int] = None, pivot_index: int = 
     perm = _pivot_permutation(D, pivot_index)
     inv_perm = np.argsort(perm)
     return simplex_perm[..., inv_perm]
+
+
+def plr_transform(composition: np.ndarray, pivot_index: int = 0) -> np.ndarray:
+    """
+    Pivot log-ratio (PLR) transform — true isometric pivot coordinates.
+
+    Implements the Hron et al. (2012) isometric pivot coordinates. After
+    moving the pivot to the first position, the ``i``-th coordinate is the
+    balance between the ``i``-th part and the geometric mean of all
+    subsequent parts:
+
+        z_i = sqrt((D - i) / (D - i + 1)) *
+              ln( x_i / geomean(x_{i+1}, ..., x_D) ),   i = 1 .. D-1
+
+    For example, with ``x = [0.7, 0.2, 0.1]`` and ``pivot_index = 0``:
+
+        z_1 = sqrt(2/3) * ln(0.7 / sqrt(0.2 * 0.1)).
+
+    Unlike the additive log-ratio (:func:`alr_transform`), this transform
+    is isometric: Euclidean distances between coordinate vectors equal
+    Aitchison distances between compositions.
+
+    Parameters
+    ----------
+    composition : np.ndarray
+        Composition vector(s) on the simplex, shape (D,) or (N, D).
+    pivot_index : int, optional
+        Index of the pivot component.
+
+    Returns
+    -------
+    np.ndarray
+        PLR coordinates, shape (D-1,) or (N, D-1).
+    """
+    comp = np.asarray(composition, dtype=np.float64)
+    D = comp.shape[-1]
+    perm = _pivot_permutation(D, pivot_index)
+    log_comp = np.log(np.clip(comp[..., perm], LOGRATIO_CLIP_FLOOR, None))
+    Psi = _pivot_contrast(D)
+    return log_comp @ Psi.T
+
+
+def plr_inverse(coords: np.ndarray, D: Optional[int] = None, pivot_index: int = 0) -> np.ndarray:
+    """
+    Inverse PLR transform: map isometric pivot coordinates back to the
+    D-simplex.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        PLR coordinates, shape (D-1,) or (N, D-1).
+    D : int, optional
+        Number of compositional parts. If omitted, inferred as
+        ``coords.shape[-1] + 1``.
+    pivot_index : int, optional
+        Index of the pivot component in the output composition.
+
+    Returns
+    -------
+    np.ndarray
+        Composition on the simplex (sums to 1), shape (D,) or (N, D).
+    """
+    coords = np.asarray(coords, dtype=np.float64)
+    if D is None:
+        D = coords.shape[-1] + 1
+    Psi = _pivot_contrast(D)
+    clr = coords @ Psi  # (D-1,) @ (D-1, D) -> (D,)
+    comp_perm = np.exp(clr)
+    comp_perm = comp_perm / np.sum(comp_perm, axis=-1, keepdims=True)
+
+    perm = _pivot_permutation(D, pivot_index)
+    inv_perm = np.argsort(perm)
+    return comp_perm[..., inv_perm]
 
 
 def optimize_pwlr_coordinates(
@@ -736,6 +856,7 @@ class ClosureEquation:
         alpha_residual: float = 2.0,
         alpha_detected: float = 1.0,
         residual_threshold: float = 0.05,
+        experimental_factor: float = 1.0,
     ) -> "DirichletResidualResult":
         """
         Apply closure with a latent dark-element residual category.
@@ -746,10 +867,25 @@ class ClosureEquation:
         residual category ``gamma_residual`` so that
         ``sum(C_detected) + gamma_residual = 1``.
 
+        The raw relative concentrations ``rel_C_s = M_s · U_s · exp(q_s)`` are
+        only known up to the experimental factor *F* (the global multiplicative
+        constant eliminated by the closure condition; see
+        :class:`ClosureResult`).  The "missing mass" is therefore measured in
+        *calibrated* space, ``rho_s = rel_C_s / F``: the deficit and the
+        closure diagnostic compare ``sum(rho_s)`` against unity, not the bare
+        ``sum(rel_C_s)``.  Because ``F`` carries the same intensity units as
+        ``rel_C_s``, scaling all line intensities by a constant *k* (which
+        scales every ``rel_C_s`` and the data-derived ``F`` by *k*) leaves the
+        residual and diagnostic unchanged — i.e. the closure is
+        **scale-invariant** (Egozcue et al. 2003: compositional information is
+        scale-free).  The default ``F = 1`` reproduces the convention where
+        intercepts are already on a unit-calibrated scale.
+
         Two estimation modes are supported:
 
-        * **simple** -- ``gamma_residual = max(0, 1 - sum(C_raw))`` when the
-          raw sum falls below ``1 - residual_threshold``; otherwise 0.
+        * **simple** -- ``gamma_residual = max(0, 1 - sum(rho_s))`` when the
+          calibrated raw sum falls below ``1 - residual_threshold``;
+          otherwise 0.
         * **dirichlet** -- MAP estimate under a Dirichlet prior
           ``Dir(alpha_1, ..., alpha_D, alpha_residual)`` where the prior on
           the residual category controls how much mass it can absorb.
@@ -773,12 +909,21 @@ class ClosureEquation:
             ``'dirichlet'`` mode).  Default is 1.0 (uniform / non-informative).
         residual_threshold : float
             In ``'simple'`` mode the residual is only activated when
-            ``1 - sum(C_raw) > residual_threshold``.
+            ``1 - sum(rho_s) > residual_threshold``.
+        experimental_factor : float
+            The intensity calibration scale *F* used to map raw relative
+            concentrations onto the calibrated scale ``rho_s = rel_C_s / F``.
+            Must be finite and positive.  Pass the same intensity-derived
+            factor that scales the line intensities to keep the diagnostic
+            scale-invariant; the default ``1.0`` assumes unit calibration.
 
         Returns
         -------
         DirichletResidualResult
         """
+        if not np.isfinite(experimental_factor) or experimental_factor <= 0.0:
+            raise ValueError("experimental_factor must be finite and positive")
+
         # --- 1. Compute raw (un-normalized) concentrations ----------------
         raw_concentrations: Dict[str, float] = {}
         for element, q_s in intercepts.items():
@@ -802,24 +947,30 @@ class ClosureEquation:
                 closure_diagnostic=1.0,
                 mode=mode,
                 alpha_residual=alpha_residual,
-                experimental_factor=0.0,
+                experimental_factor=experimental_factor,
             )
 
-        closure_diagnostic = abs(raw_sum - 1.0)
+        # Calibrated raw sum: rho_s = rel_C_s / F.  Comparing this against 1
+        # (rather than the bare raw_sum against the literal 1.0) makes the
+        # deficit/diagnostic invariant to a global intensity rescaling, since
+        # F carries the same intensity units as rel_C_s and scales with it.
+        # With the default F = 1 this reproduces the unit-calibrated behavior.
+        calibrated_sum = raw_sum / experimental_factor
+        closure_diagnostic = abs(calibrated_sum - 1.0)
 
         # --- 2. Estimate residual fraction --------------------------------
         if mode == "dirichlet":
             n_detected = len(raw_concentrations)
             sum_alpha_detected = n_detected * (alpha_detected - 1.0)
             alpha_res_minus_one = max(alpha_residual - 1.0, 0.0)
-            denom = raw_sum + sum_alpha_detected + alpha_res_minus_one
+            denom = calibrated_sum + sum_alpha_detected + alpha_res_minus_one
             if denom > 0:
                 residual = alpha_res_minus_one / denom
             else:
                 residual = 0.0
             residual = max(0.0, min(residual, 1.0))
         else:
-            deficit = 1.0 - raw_sum
+            deficit = 1.0 - calibrated_sum
             if deficit > residual_threshold:
                 residual = max(0.0, deficit)
             else:

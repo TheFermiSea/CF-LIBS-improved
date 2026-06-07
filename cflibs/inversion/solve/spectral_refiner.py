@@ -25,6 +25,14 @@ logger = get_logger("inversion.spectral_refiner")
 _T_BOUNDS_K = (3000.0, 30000.0)
 _LOG_NE_BOUNDS = (14.0, 19.0)
 _CONC_BOUNDS = (0.0, 1.0)
+# log10 bounds for the global amplitude (intensity scale) parameter.  The
+# amplitude carries spectral intensity so the composition parameters can be
+# normalized to the closure simplex (sum = 1) independently of intensity.
+_LOG_AMP_BOUNDS = (-12.0, 12.0)
+
+#: Closure constraint tolerance.  Returned concentrations satisfy
+#: ``|sum(C_s) - 1| <= CLOSURE_TOLERANCE``.
+CLOSURE_TOLERANCE = 1e-6
 
 
 @dataclass
@@ -38,7 +46,17 @@ class RefinementResult:
     ne_cm3 : float
         Optimized electron density in cm^-3.
     concentrations : Dict[str, float]
-        Optimized element concentrations (keyed by element symbol).
+        Optimized element concentrations (keyed by element symbol).  These
+        satisfy the CF-LIBS closure condition ``sum(C_s) = 1`` to within
+        :data:`CLOSURE_TOLERANCE`; the overall spectral intensity is carried
+        by the separate ``amplitude`` parameter so composition is never
+        conflated with intensity scale.
+    amplitude : float
+        Fitted global intensity scale (the eliminated experimental factor).
+        The forward model is ``amplitude * (C_s @ basis)`` with ``sum(C_s)=1``.
+    closure_residual : float
+        Closure diagnostic ``|sum(C_s) - 1|`` of the returned (normalized)
+        concentrations.  Always ``<= CLOSURE_TOLERANCE`` for a non-empty fit.
     residual_norm : float
         L2 norm of the final residual vector.
     n_iterations : int
@@ -59,6 +77,8 @@ class RefinementResult:
     converged: bool
     chi_squared: float
     chi_squared_reduced: float
+    amplitude: float = 1.0
+    closure_residual: float = 0.0
 
 
 class SpectralRefiner:
@@ -127,6 +147,7 @@ class SpectralRefiner:
         self,
         T_init_K: float,
         ne_init_cm3: float,
+        amplitude_init: float,
         concentrations_init: Dict[str, float],
         elements_used: List[str],
         n_elements: int,
@@ -135,11 +156,59 @@ class SpectralRefiner:
         x0 = np.empty(n_params, dtype=np.float64)
         x0[0] = np.clip(T_init_K, *_T_BOUNDS_K)
         x0[1] = np.clip(np.log10(max(ne_init_cm3, 1.0)), *_LOG_NE_BOUNDS)
-        for i, el in enumerate(elements_used):
-            x0[2 + i] = np.clip(concentrations_init.get(el, 1.0 / n_elements), *_CONC_BOUNDS)
+        x0[2] = np.clip(np.log10(max(amplitude_init, 1e-30)), *_LOG_AMP_BOUNDS)
+        # Seed normalized initial concentrations (closure simplex).
+        raw_init = np.array(
+            [max(concentrations_init.get(el, 1.0 / n_elements), 0.0) for el in elements_used],
+            dtype=np.float64,
+        )
+        total = float(np.sum(raw_init))
+        if total > 0.0:
+            raw_init = raw_init / total
+        else:
+            raw_init = np.full(n_elements, 1.0 / n_elements)
+        for i in range(n_elements):
+            x0[3 + i] = np.clip(raw_init[i], *_CONC_BOUNDS)
 
-        bounds = [_T_BOUNDS_K, _LOG_NE_BOUNDS] + [_CONC_BOUNDS] * n_elements
+        bounds = [_T_BOUNDS_K, _LOG_NE_BOUNDS, _LOG_AMP_BOUNDS] + [_CONC_BOUNDS] * n_elements
         return x0, bounds
+
+    def _estimate_initial_amplitude(
+        self,
+        obs: np.ndarray,
+        element_indices: List[int],
+        elements_used: List[str],
+        concentrations_init: Dict[str, float],
+        T_init_K: float,
+        ne_init_cm3: float,
+    ) -> float:
+        """Least-squares estimate of the initial intensity amplitude.
+
+        Given the normalized initial composition, the optimal scalar
+        amplitude that fits the observed spectrum is the closed-form 1-D WLS
+        solution ``a* = <obs, m> / <m, m>`` where ``m`` is the unit-amplitude
+        model.  Falls back to ``1.0`` for a degenerate (zero-norm) model.
+        """
+        raw = np.array(
+            [
+                max(concentrations_init.get(el, 1.0 / len(elements_used)), 0.0)
+                for el in elements_used
+            ]
+        )
+        total = float(np.sum(raw))
+        if total <= 0.0:
+            raw = np.full(len(elements_used), 1.0 / len(elements_used))
+            total = 1.0
+        norm_conc = raw / total
+
+        basis = self.basis_library.get_basis_matrix_interp(T_init_K, ne_init_cm3)
+        selected = np.array(basis[element_indices, :])
+        model = norm_conc @ selected
+        denom = float(np.dot(model, model))
+        if denom <= 0.0:
+            return 1.0
+        amp = float(np.dot(obs, model) / denom)
+        return amp if amp > 0.0 else 1.0
 
     def _unpack_result(
         self,
@@ -153,27 +222,45 @@ class SpectralRefiner:
         xopt = result.x
         T_opt = float(xopt[0])
         ne_opt = 10.0 ** float(xopt[1])
-        conc_opt = {el: float(xopt[2 + i]) for i, el in enumerate(elements_used)}
+        amp_raw = 10.0 ** float(xopt[2])
+
+        # Enforce closure: normalize the box-bounded concentration parameters
+        # onto the simplex (sum = 1) and fold their total into the amplitude so
+        # the forward model intensity is preserved.  Composition is thereby
+        # decoupled from the global intensity scale.
+        raw_conc = np.array([float(xopt[3 + i]) for i in range(len(elements_used))])
+        conc_sum = float(np.sum(raw_conc))
+        if conc_sum > 0.0:
+            norm_conc = raw_conc / conc_sum
+            amplitude = amp_raw * conc_sum
+        else:
+            norm_conc = np.full(len(elements_used), 1.0 / len(elements_used))
+            amplitude = amp_raw
+        conc_opt = {el: float(norm_conc[i]) for i, el in enumerate(elements_used)}
+        closure_residual = abs(float(np.sum(norm_conc)) - 1.0)
 
         chi2 = float(result.fun)
         dof = max(n_pixels - n_params, 1)
         chi2_red = chi2 / dof
 
-        # Residual norm
+        # Residual norm (model = amplitude * normalized-composition @ basis)
         basis = self.basis_library.get_basis_matrix_interp(T_opt, ne_opt)
         selected = np.array(basis[element_indices, :])
-        model = np.array([conc_opt[el] for el in elements_used]) @ selected
+        model = amplitude * (norm_conc @ selected)
         residual_norm = float(np.linalg.norm(obs - model))
 
         n_iter = result.nit if hasattr(result, "nit") else 0
 
         logger.info(
-            "Refinement %s in %d iterations: T=%.0f K, ne=%.2e cm^-3, chi2_red=%.3f",
+            "Refinement %s in %d iterations: T=%.0f K, ne=%.2e cm^-3, "
+            "amp=%.3e, chi2_red=%.3f, closure_residual=%.2e",
             "converged" if result.success else "did not converge",
             n_iter,
             T_opt,
             ne_opt,
+            amplitude,
             chi2_red,
+            closure_residual,
         )
 
         return RefinementResult(
@@ -185,6 +272,8 @@ class SpectralRefiner:
             converged=bool(result.success),
             chi_squared=chi2,
             chi_squared_reduced=chi2_red,
+            amplitude=amplitude,
+            closure_residual=closure_residual,
         )
 
     def refine(
@@ -232,6 +321,8 @@ class SpectralRefiner:
                 converged=True,
                 chi_squared=0.0,
                 chi_squared_reduced=0.0,
+                amplitude=1.0,
+                closure_residual=0.0,
             )
 
         obs = self._prepare_observed_spectrum(wavelength, observed)
@@ -249,13 +340,26 @@ class SpectralRefiner:
                 converged=True,
                 chi_squared=0.0,
                 chi_squared_reduced=0.0,
+                amplitude=1.0,
+                closure_residual=0.0,
             )
 
         n_elements = len(elements_used)
-        n_params = 2 + n_elements
+        # Parameters: [T, log10(ne), log10(amplitude), C_0 ... C_{n-1}]
+        n_params = 3 + n_elements
+
+        amplitude_init = self._estimate_initial_amplitude(
+            obs, element_indices, elements_used, concentrations_init, T_init_K, ne_init_cm3
+        )
 
         x0, bounds = self._pack_initial_vector(
-            T_init_K, ne_init_cm3, concentrations_init, elements_used, n_elements, n_params
+            T_init_K,
+            ne_init_cm3,
+            amplitude_init,
+            concentrations_init,
+            elements_used,
+            n_elements,
+            n_params,
         )
 
         inv_sigma2 = 1.0 / sigma**2
@@ -263,12 +367,23 @@ class SpectralRefiner:
         def objective(x: np.ndarray) -> float:
             T_K = x[0]
             ne_cm3 = 10.0 ** x[1]
-            conc = x[2:]
+            amplitude = 10.0 ** x[2]
+            conc = x[3:]
+
+            # Enforce the closure constraint inside the objective: the
+            # composition is the normalized simplex projection of the
+            # box-bounded parameters, and the global intensity is carried by
+            # the separate amplitude.  This prevents the optimizer from
+            # trading composition against intensity scale.
+            conc_total = np.sum(conc)
+            if conc_total <= 0.0:
+                return float(np.sum(obs**2 * inv_sigma2))
+            norm_conc = conc / conc_total
 
             basis = self.basis_library.get_basis_matrix_interp(T_K, ne_cm3)
             selected = np.array(basis[element_indices, :])
 
-            model = conc @ selected
+            model = amplitude * (norm_conc @ selected)
             residual = obs - model
             return float(np.sum(residual**2 * inv_sigma2))
 
