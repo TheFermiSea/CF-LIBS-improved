@@ -488,80 +488,134 @@ class CorrelationIdentifier:
                     coverage.record_peak_matches(element, 0)
                 continue
 
-            # Compute correlations for each (T, n_e) point
-            # Paper (Labutin et al. 2013): correlate only in peak regions, not full spectrum
-            if self.use_jax_classic:
-                # JAX fast path: vectorize the whole (T, n_e) grid + line
-                # sum + peak-region masked Pearson in one fused kernel.
-                correlations = self._classic_correlations_jax(
-                    wavelength, intensity, element, transitions, T_grid, n_e_grid
+            element_scores.append(
+                self._classic_score_element(
+                    element,
+                    transitions,
+                    wavelength,
+                    intensity,
+                    peaks,
+                    T_grid,
+                    n_e_grid,
+                    coverage,
                 )
-                # Match lines to experimental peaks (unchanged).
-                matched_lines, unmatched_lines = self._match_lines_to_peaks(
-                    element, transitions, wavelength, intensity, peaks
-                )
-                # L3 -- per-element peak match.
-                if coverage is not None:
-                    coverage.record_peak_matches(element, len(matched_lines))
-                best_corr = float(np.max(correlations)) if len(correlations) else 0.0
-                score = float(np.clip(best_corr, 0.0, 1.0))
-                confidence = score
-                element_scores.append((element, score, confidence, matched_lines, unmatched_lines))
-                continue
+            )
 
-            correlations = []
-            for T_K in T_grid:
-                T_eV = T_K * KB_EV
-                for n_e in n_e_grid:
-                    model_spectrum = self._generate_model_spectrum(
-                        intensity, element, transitions, wavelength, T_eV, n_e
-                    )
-                    # Peak-region mask: correlate only where BOTH spectra have significant
-                    # signal to avoid baseline-dominated correlations.
-                    i_min, i_max = intensity.min(), intensity.max()
-                    m_min, m_max = model_spectrum.min(), model_spectrum.max()
-                    sigma_threshold = float(self.peak_region_threshold)
-                    if (i_max - i_min) > 1e-10 and (m_max - m_min) > 1e-10:
-                        exp_norm = (intensity - i_min) / (i_max - i_min)
-                        mod_norm = (model_spectrum - m_min) / (m_max - m_min)
-                        peak_mask = (exp_norm >= sigma_threshold) & (mod_norm >= sigma_threshold)
-                        # Fallback: if AND is too restrictive, use OR.
-                        if np.sum(peak_mask) < self.peak_region_min_points:
-                            peak_mask = (exp_norm >= sigma_threshold) | (
-                                mod_norm >= sigma_threshold
-                            )
-                    else:
-                        peak_mask = np.ones(len(intensity), dtype=bool)
+        return element_scores
 
-                    # Pearson correlation on peak regions only
-                    exp_peaks = intensity[peak_mask]
-                    mod_peaks = model_spectrum[peak_mask]
-                    if (
-                        len(exp_peaks) > 2
-                        and np.std(mod_peaks) > 1e-10
-                        and np.std(exp_peaks) > 1e-10
-                    ):
-                        corr, _ = pearsonr(exp_peaks, mod_peaks)
-                        correlations.append(corr)
-                    else:
-                        correlations.append(0.0)
+    def _classic_score_element(
+        self,
+        element: str,
+        transitions: List[Transition],
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        peaks: List[Tuple],
+        T_grid: np.ndarray,
+        n_e_grid: np.ndarray,
+        coverage: Optional[CoverageTracker],
+    ) -> Tuple[str, float, float, List[IdentifiedLine], List[Transition]]:
+        """Score a single element in classic mode (JAX or CPU grid path).
 
+        Pure extraction of the per-element body of ``_identify_classic``;
+        chooses the JAX fast path or CPU grid loop, matches lines, records
+        L3 coverage, and returns the element-score tuple.
+        """
+        # Compute correlations for each (T, n_e) point.
+        # Paper (Labutin et al. 2013): correlate only in peak regions, not full spectrum.
+        if self.use_jax_classic:
+            # JAX fast path: vectorize the whole (T, n_e) grid + line
+            # sum + peak-region masked Pearson in one fused kernel.
+            correlations = self._classic_correlations_jax(
+                wavelength, intensity, element, transitions, T_grid, n_e_grid
+            )
+            best_corr = float(np.max(correlations)) if len(correlations) else 0.0
+            score: Any = float(np.clip(best_corr, 0.0, 1.0))
+        else:
+            correlations = self._classic_grid_correlations(
+                element, transitions, wavelength, intensity, T_grid, n_e_grid
+            )
             # Best correlation = element score
             best_corr = max(correlations) if correlations else 0.0
             score = np.clip(best_corr, 0.0, 1.0)
-            confidence = score  # Simple mapping for now
+        confidence = score  # Simple mapping for now
 
-            # Match lines to experimental peaks
-            matched_lines, unmatched_lines = self._match_lines_to_peaks(
-                element, transitions, wavelength, intensity, peaks
-            )
-            # L3 -- per-element peak match.
-            if coverage is not None:
-                coverage.record_peak_matches(element, len(matched_lines))
+        # Match lines to experimental peaks (unchanged).
+        matched_lines, unmatched_lines = self._match_lines_to_peaks(
+            element, transitions, wavelength, intensity, peaks
+        )
+        # L3 -- per-element peak match.
+        if coverage is not None:
+            coverage.record_peak_matches(element, len(matched_lines))
 
-            element_scores.append((element, score, confidence, matched_lines, unmatched_lines))
+        return (element, score, confidence, matched_lines, unmatched_lines)
 
-        return element_scores
+    def _classic_grid_correlations(
+        self,
+        element: str,
+        transitions: List[Transition],
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        T_grid: np.ndarray,
+        n_e_grid: np.ndarray,
+    ) -> List[float]:
+        """CPU ``(T, n_e)`` grid Pearson correlations for one element.
+
+        Mirrors the inner T-outer/n_e-inner loop of ``_identify_classic``
+        exactly, returning the list of per-grid-point correlations.
+        """
+        correlations: List[float] = []
+        for T_K in T_grid:
+            T_eV = T_K * KB_EV
+            for n_e in n_e_grid:
+                model_spectrum = self._generate_model_spectrum(
+                    intensity, element, transitions, wavelength, T_eV, n_e
+                )
+                correlations.append(
+                    self._classic_peak_region_correlation(intensity, model_spectrum)
+                )
+        return correlations
+
+    def _classic_peak_region_correlation(
+        self, intensity: np.ndarray, model_spectrum: np.ndarray
+    ) -> float:
+        """Masked Pearson correlation between intensity and model spectrum.
+
+        Pure extraction of the single-grid-point body: build the
+        peak-region mask, then correlate only on masked points.
+        """
+        peak_mask = self._classic_peak_region_mask(intensity, model_spectrum)
+
+        # Pearson correlation on peak regions only
+        exp_peaks = intensity[peak_mask]
+        mod_peaks = model_spectrum[peak_mask]
+        if len(exp_peaks) > 2 and np.std(mod_peaks) > 1e-10 and np.std(exp_peaks) > 1e-10:
+            corr, _ = pearsonr(exp_peaks, mod_peaks)
+            return corr
+        return 0.0
+
+    def _classic_peak_region_mask(
+        self, intensity: np.ndarray, model_spectrum: np.ndarray
+    ) -> np.ndarray:
+        """Build the peak-region boolean mask for masked Pearson.
+
+        Correlate only where BOTH spectra have significant signal to
+        avoid baseline-dominated correlations; fall back from AND to OR
+        when the AND mask is too restrictive, or to all-ones when neither
+        spectrum has dynamic range.
+        """
+        i_min, i_max = intensity.min(), intensity.max()
+        m_min, m_max = model_spectrum.min(), model_spectrum.max()
+        sigma_threshold = float(self.peak_region_threshold)
+        if (i_max - i_min) > 1e-10 and (m_max - m_min) > 1e-10:
+            exp_norm = (intensity - i_min) / (i_max - i_min)
+            mod_norm = (model_spectrum - m_min) / (m_max - m_min)
+            peak_mask = (exp_norm >= sigma_threshold) & (mod_norm >= sigma_threshold)
+            # Fallback: if AND is too restrictive, use OR.
+            if np.sum(peak_mask) < self.peak_region_min_points:
+                peak_mask = (exp_norm >= sigma_threshold) | (mod_norm >= sigma_threshold)
+        else:
+            peak_mask = np.ones(len(intensity), dtype=bool)
+        return peak_mask
 
     def _identify_vector(
         self,
@@ -601,31 +655,11 @@ class CorrelationIdentifier:
         query_embedding = np.asarray(self.vector_embedder.transform(np.asarray(intensity)[None, :]))
         distances, indices = self.vector_index.search(query_embedding, k=self.top_k)
 
-        library_metadata = self.library_metadata or []
-        candidate_weights: Dict[str, float] = defaultdict(float)
-        candidate_counts: Dict[str, int] = defaultdict(int)
-        candidate_best_distance: Dict[str, float] = {}
-
-        for distance, neighbor_idx in zip(np.ravel(distances), np.ravel(indices)):
-            idx = int(neighbor_idx)
-            if idx < 0 or idx >= len(library_metadata):
-                continue
-
-            similarity = 1.0 / (1.0 + max(float(distance), 0.0))
-            if self.library_spectra is not None and idx < len(self.library_spectra):
-                candidate_spectrum = np.asarray(self.library_spectra[idx], dtype=np.float64)
-                if candidate_spectrum.shape == intensity.shape:
-                    if np.std(candidate_spectrum) > 1e-12 and np.std(intensity) > 1e-12:
-                        corr, _ = pearsonr(intensity, candidate_spectrum)
-                        similarity = 0.5 * similarity + 0.5 * np.clip((corr + 1.0) / 2.0, 0.0, 1.0)
-
-            for element in self._metadata_elements(library_metadata[idx]):
-                if self.elements is not None and element not in self.elements:
-                    continue
-                candidate_weights[element] += similarity
-                candidate_counts[element] += 1
-                best_distance = candidate_best_distance.get(element, float("inf"))
-                candidate_best_distance[element] = min(best_distance, float(distance))
+        (
+            candidate_weights,
+            candidate_counts,
+            candidate_best_distance,
+        ) = self._vector_accumulate_candidates(intensity, distances, indices)
 
         if self.elements is not None:
             elements_to_search = list(self.elements)
@@ -640,31 +674,119 @@ class CorrelationIdentifier:
         element_scores: List[Tuple[str, float, float, List[Any], List[Any]]] = []
 
         for element in elements_to_search:
-            score = candidate_weights.get(element, 0.0) / max(total_weight, 1e-12)
-            count_weight = candidate_counts.get(element, 0) / max(self.top_k, 1)
-            best_similarity = 0.0
-            if element in candidate_best_distance:
-                best_similarity = 1.0 / (1.0 + max(candidate_best_distance[element], 0.0))
-            confidence = np.clip(0.4 * score + 0.4 * count_weight + 0.2 * best_similarity, 0.0, 1.0)
-            transitions = self._get_transitions_for_element(element, wl_min, wl_max)
-            # L2 -- per-element line presence in DB (vector path).
-            if coverage is not None:
-                coverage.record_db_lines(element, len(transitions))
-            matched_lines, unmatched_lines = self._match_lines_to_peaks(
-                element, transitions, wavelength, intensity, peaks
+            element_scores.append(
+                self._vector_score_element(
+                    element,
+                    candidate_weights,
+                    candidate_counts,
+                    candidate_best_distance,
+                    total_weight,
+                    wavelength,
+                    intensity,
+                    peaks,
+                    wl_min,
+                    wl_max,
+                    coverage,
+                )
             )
 
-            if score <= 0.0:
-                matched_lines = []
-                unmatched_lines = transitions
-
-            # L3 -- per-element peak match (after the score==0 reset).
-            if coverage is not None:
-                coverage.record_peak_matches(element, len(matched_lines))
-
-            element_scores.append((element, score, confidence, matched_lines, unmatched_lines))
-
         return element_scores
+
+    def _vector_accumulate_candidates(
+        self,
+        intensity: np.ndarray,
+        distances: np.ndarray,
+        indices: np.ndarray,
+    ) -> Tuple[Dict[str, float], Dict[str, int], Dict[str, float]]:
+        """Accumulate per-element ANN consensus weights from neighbors.
+
+        Pure extraction of the neighbor loop in ``_identify_vector``;
+        returns ``(candidate_weights, candidate_counts,
+        candidate_best_distance)``.
+        """
+        library_metadata = self.library_metadata or []
+        candidate_weights: Dict[str, float] = defaultdict(float)
+        candidate_counts: Dict[str, int] = defaultdict(int)
+        candidate_best_distance: Dict[str, float] = {}
+
+        for distance, neighbor_idx in zip(np.ravel(distances), np.ravel(indices)):
+            idx = int(neighbor_idx)
+            if idx < 0 or idx >= len(library_metadata):
+                continue
+
+            similarity = self._vector_neighbor_similarity(idx, float(distance), intensity)
+
+            for element in self._metadata_elements(library_metadata[idx]):
+                if self.elements is not None and element not in self.elements:
+                    continue
+                candidate_weights[element] += similarity
+                candidate_counts[element] += 1
+                best_distance = candidate_best_distance.get(element, float("inf"))
+                candidate_best_distance[element] = min(best_distance, float(distance))
+
+        return candidate_weights, candidate_counts, candidate_best_distance
+
+    def _vector_neighbor_similarity(
+        self, idx: int, distance: float, intensity: np.ndarray
+    ) -> float:
+        """Compute the (optionally spectrum-refined) similarity of a neighbor.
+
+        Pure extraction of the per-neighbor similarity computation in
+        ``_identify_vector``.
+        """
+        similarity = 1.0 / (1.0 + max(distance, 0.0))
+        if self.library_spectra is not None and idx < len(self.library_spectra):
+            candidate_spectrum = np.asarray(self.library_spectra[idx], dtype=np.float64)
+            if candidate_spectrum.shape == intensity.shape:
+                if np.std(candidate_spectrum) > 1e-12 and np.std(intensity) > 1e-12:
+                    corr, _ = pearsonr(intensity, candidate_spectrum)
+                    similarity = 0.5 * similarity + 0.5 * np.clip((corr + 1.0) / 2.0, 0.0, 1.0)
+        return similarity
+
+    def _vector_score_element(
+        self,
+        element: str,
+        candidate_weights: Dict[str, float],
+        candidate_counts: Dict[str, int],
+        candidate_best_distance: Dict[str, float],
+        total_weight: float,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        peaks: List[Tuple],
+        wl_min: float,
+        wl_max: float,
+        coverage: Optional[CoverageTracker],
+    ) -> Tuple[str, float, float, List[IdentifiedLine], List[Transition]]:
+        """Score a single element in vector mode.
+
+        Pure extraction of the per-element body of ``_identify_vector``;
+        computes the consensus score/confidence, matches lines, applies
+        the ``score <= 0`` reset, records L2/L3 coverage, and returns the
+        element-score tuple.
+        """
+        score = candidate_weights.get(element, 0.0) / max(total_weight, 1e-12)
+        count_weight = candidate_counts.get(element, 0) / max(self.top_k, 1)
+        best_similarity = 0.0
+        if element in candidate_best_distance:
+            best_similarity = 1.0 / (1.0 + max(candidate_best_distance[element], 0.0))
+        confidence = np.clip(0.4 * score + 0.4 * count_weight + 0.2 * best_similarity, 0.0, 1.0)
+        transitions = self._get_transitions_for_element(element, wl_min, wl_max)
+        # L2 -- per-element line presence in DB (vector path).
+        if coverage is not None:
+            coverage.record_db_lines(element, len(transitions))
+        matched_lines, unmatched_lines = self._match_lines_to_peaks(
+            element, transitions, wavelength, intensity, peaks
+        )
+
+        if score <= 0.0:
+            matched_lines = []
+            unmatched_lines = transitions
+
+        # L3 -- per-element peak match (after the score==0 reset).
+        if coverage is not None:
+            coverage.record_peak_matches(element, len(matched_lines))
+
+        return (element, score, confidence, matched_lines, unmatched_lines)
 
     def _has_vector_workflow(self) -> bool:
         """Return True when the full vector-mode workflow is configured."""
@@ -932,37 +1054,75 @@ class CorrelationIdentifier:
         peak_wavelengths = np.array([p[1] for p in peaks])
         peak_intensities = np.array([intensity[p[0]] for p in peaks])
 
-        # Build candidate matches: (distance, peak_idx, trans_idx)
-        #
-        # Stark-aware per-line tolerance — only WIDENS the config default,
-        # never tightens. Picking `max(config, helper)` is deliberate:
-        # naive replacement with the helper value would tighten tolerance
-        # for short-lambda lines (e.g. 200 nm at R=10000 → 0.02 nm, vs
-        # the 0.1 default), tanking correlation's already-low recall
-        # (baseline 0.10). Stark-broadened lines (omega_stark > 0) get
-        # genuinely wider windows; non-Stark lines stay at the config
-        # default. PR #133 added the helper, PR #151 wired it into alias,
-        # PR #153 into comb. See CF-LIBS-improved-orej.
-        candidates = []
+        candidates = self._match_build_candidates(transitions, peak_wavelengths)
+
+        matched_lines, claimed_trans = self._match_greedy_assign(
+            candidates, transitions, peak_wavelengths, peak_intensities, element
+        )
+
+        unmatched_lines = [
+            transitions[i] for i in range(len(transitions)) if i not in claimed_trans
+        ]
+
+        return matched_lines, unmatched_lines
+
+    def _match_line_tolerance(self, trans: Transition) -> float:
+        """Per-line matching tolerance in nm.
+
+        Stark-aware per-line tolerance — only WIDENS the config default,
+        never tightens. Picking ``max(config, helper)`` is deliberate:
+        naive replacement with the helper value would tighten tolerance
+        for short-lambda lines (e.g. 200 nm at R=10000 → 0.02 nm, vs
+        the 0.1 default), tanking correlation's already-low recall
+        (baseline 0.10). Stark-broadened lines (omega_stark > 0) get
+        genuinely wider windows; non-Stark lines stay at the config
+        default. PR #133 added the helper, PR #151 wired it into alias,
+        PR #153 into comb. See CF-LIBS-improved-orej.
+        """
+        if self.resolving_power:
+            return max(
+                self.wavelength_tolerance_nm,
+                get_wavelength_tolerance(
+                    trans.wavelength_nm,
+                    transition=trans,
+                    resolving_power=self.resolving_power,
+                    fallback=self.wavelength_tolerance_nm,
+                    T_K=self.reference_temperature,
+                ),
+            )
+        return self.wavelength_tolerance_nm
+
+    def _match_build_candidates(
+        self, transitions: List[Transition], peak_wavelengths: np.ndarray
+    ) -> List[Tuple[float, int, int]]:
+        """Build candidate ``(distance, peak_idx, trans_idx)`` matches.
+
+        Pure extraction of the candidate-building loop in
+        ``_match_lines_to_peaks``.
+        """
+        candidates: List[Tuple[float, int, int]] = []
         for t_idx, trans in enumerate(transitions):
             distances = np.abs(peak_wavelengths - trans.wavelength_nm)
-            if self.resolving_power:
-                tol = max(
-                    self.wavelength_tolerance_nm,
-                    get_wavelength_tolerance(
-                        trans.wavelength_nm,
-                        transition=trans,
-                        resolving_power=self.resolving_power,
-                        fallback=self.wavelength_tolerance_nm,
-                        T_K=self.reference_temperature,
-                    ),
-                )
-            else:
-                tol = self.wavelength_tolerance_nm
+            tol = self._match_line_tolerance(trans)
             for p_idx in range(len(peak_wavelengths)):
                 if distances[p_idx] <= tol:
                     candidates.append((distances[p_idx], p_idx, t_idx))
+        return candidates
 
+    def _match_greedy_assign(
+        self,
+        candidates: List[Tuple[float, int, int]],
+        transitions: List[Transition],
+        peak_wavelengths: np.ndarray,
+        peak_intensities: np.ndarray,
+        element: str,
+    ) -> Tuple[List[IdentifiedLine], set]:
+        """Greedy one-to-one assignment of candidate matches.
+
+        Pure extraction of the greedy-assignment loop in
+        ``_match_lines_to_peaks``; returns ``(matched_lines,
+        claimed_trans)``.
+        """
         # Greedy one-to-one: sort by distance, assign first-come
         candidates.sort(key=lambda c: c[0])
         claimed_peaks: set = set()
@@ -990,8 +1150,4 @@ class CorrelationIdentifier:
                 )
             )
 
-        unmatched_lines = [
-            transitions[i] for i in range(len(transitions)) if i not in claimed_trans
-        ]
-
-        return matched_lines, unmatched_lines
+        return matched_lines, claimed_trans
