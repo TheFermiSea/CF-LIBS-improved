@@ -72,6 +72,22 @@ class CDSBConvergenceStatus(Enum):
 
 
 @dataclass
+class _CDSBIterationOutcome:
+    """Outcome of a single CD-SB correction iteration (internal).
+
+    ``stop`` indicates the iteration loop should terminate; ``status`` carries
+    the terminal :class:`CDSBConvergenceStatus` for that case. ``tau_values``
+    and ``temperature_K`` are the (possibly updated) plasma-state estimates the
+    driver should carry into the next iteration or the final fit.
+    """
+
+    tau_values: Dict[float, float]
+    temperature_K: float
+    stop: bool
+    status: Optional[CDSBConvergenceStatus] = None
+
+
+@dataclass
 class LineOpticalDepth:
     """Optical depth information for a single line."""
 
@@ -309,14 +325,7 @@ class CDSBPlotter:
         # Uncorrected Boltzmann fit
         uncorrected_result = self._boltzmann_fitter.fit(base_observations)
 
-        if initial_T_K is None:
-            if uncorrected_result.temperature_K <= 0 or not np.isfinite(
-                uncorrected_result.temperature_K
-            ):
-                initial_T_K = 10000.0  # Default fallback
-                warnings.append("Initial T from standard fit invalid, using 10000 K")
-            else:
-                initial_T_K = uncorrected_result.temperature_K
+        initial_T_K = self._resolve_initial_temperature(initial_T_K, uncorrected_result, warnings)
 
         # Initialize partition functions
         if partition_funcs is None:
@@ -344,56 +353,145 @@ class CDSBPlotter:
         for iteration in range(self.max_iterations):
             n_iterations = iteration + 1
 
-            # Apply tau corrections to get modified y-values
-            corrected_obs = self._apply_tau_correction(observations, tau_values)
-
-            if len(corrected_obs) < 2:
-                warnings.append(f"Iteration {iteration}: Too few lines after tau masking")
-                convergence_status = CDSBConvergenceStatus.INSUFFICIENT_LINES
+            outcome = self._run_cdsb_iteration(
+                iteration,
+                observations,
+                tau_values,
+                current_T_K,
+                n_e,
+                partition_funcs,
+                tau_history,
+                temp_history,
+                warnings,
+            )
+            tau_values = outcome.tau_values
+            current_T_K = outcome.temperature_K
+            if outcome.stop:
+                convergence_status = outcome.status
                 break
 
-            # Fit corrected Boltzmann plot
-            corrected_result = self._boltzmann_fitter.fit(corrected_obs)
+        return self._finalize_cdsb_result(
+            observations,
+            tau_values,
+            partition_funcs,
+            uncorrected_result,
+            convergence_status,
+            n_iterations,
+            tau_history,
+            temp_history,
+            warnings,
+        )
 
-            if corrected_result.temperature_K <= 0 or not np.isfinite(
-                corrected_result.temperature_K
-            ):
-                warnings.append(f"Iteration {iteration}: Invalid temperature from fit")
-                convergence_status = CDSBConvergenceStatus.UNSTABLE
-                break
+    def _resolve_initial_temperature(
+        self,
+        initial_T_K: Optional[float],
+        uncorrected_result: BoltzmannFitResult,
+        warnings: List[str],
+    ) -> float:
+        """Resolve the starting temperature for the CD-SB iteration.
 
-            new_T_K = corrected_result.temperature_K
-            temp_history.append(new_T_K)
+        When ``initial_T_K`` is supplied it is used verbatim. Otherwise the
+        uncorrected Boltzmann-fit temperature is adopted, falling back to a
+        10000 K default (with a warning) when that fit is non-positive or
+        non-finite. Behavior matches the original inline block exactly.
+        """
+        if initial_T_K is not None:
+            return initial_T_K
 
-            # Update tau estimates with new temperature
-            new_tau_values = self._update_tau_estimates(
-                observations, tau_values, current_T_K, new_T_K, n_e, partition_funcs
+        if uncorrected_result.temperature_K <= 0 or not np.isfinite(
+            uncorrected_result.temperature_K
+        ):
+            warnings.append("Initial T from standard fit invalid, using 10000 K")
+            return 10000.0  # Default fallback
+
+        return uncorrected_result.temperature_K
+
+    def _run_cdsb_iteration(
+        self,
+        iteration: int,
+        observations: List[CDSBLineObservation],
+        tau_values: Dict[float, float],
+        current_T_K: float,
+        n_e: float,
+        partition_funcs: Dict[str, float],
+        tau_history: List[float],
+        temp_history: List[float],
+        warnings: List[str],
+    ) -> _CDSBIterationOutcome:
+        """Run one CD-SB correction iteration.
+
+        Mutates ``tau_history``/``temp_history``/``warnings`` in place exactly
+        as the original inline loop body did and returns an
+        :class:`_CDSBIterationOutcome` describing whether the loop should stop
+        and the carried-forward ``tau_values``/``temperature_K``.
+        """
+        # Apply tau corrections to get modified y-values
+        corrected_obs = self._apply_tau_correction(observations, tau_values)
+
+        if len(corrected_obs) < 2:
+            warnings.append(f"Iteration {iteration}: Too few lines after tau masking")
+            return _CDSBIterationOutcome(
+                tau_values, current_T_K, True, CDSBConvergenceStatus.INSUFFICIENT_LINES
             )
 
-            # Check for divergence
-            mean_new_tau = np.mean(list(new_tau_values.values()))
-            if mean_new_tau > 100 * tau_history[0]:
-                warnings.append(f"Iteration {iteration}: tau diverging")
-                convergence_status = CDSBConvergenceStatus.UNSTABLE
-                break
+        # Fit corrected Boltzmann plot
+        corrected_result = self._boltzmann_fitter.fit(corrected_obs)
 
-            tau_history.append(mean_new_tau)
+        if corrected_result.temperature_K <= 0 or not np.isfinite(corrected_result.temperature_K):
+            warnings.append(f"Iteration {iteration}: Invalid temperature from fit")
+            return _CDSBIterationOutcome(
+                tau_values, current_T_K, True, CDSBConvergenceStatus.UNSTABLE
+            )
 
-            # Check convergence
-            if tau_history[-2] > 0:
-                rel_change = abs(mean_new_tau - tau_history[-2]) / tau_history[-2]
-            else:
-                rel_change = abs(mean_new_tau - tau_history[-2])
+        new_T_K = corrected_result.temperature_K
+        temp_history.append(new_T_K)
 
-            if rel_change < self.convergence_tolerance:
-                convergence_status = CDSBConvergenceStatus.CONVERGED
-                tau_values = new_tau_values
-                current_T_K = new_T_K
-                break
+        # Update tau estimates with new temperature
+        new_tau_values = self._update_tau_estimates(
+            observations, tau_values, current_T_K, new_T_K, n_e, partition_funcs
+        )
 
-            tau_values = new_tau_values
-            current_T_K = new_T_K
+        # Check for divergence
+        mean_new_tau = np.mean(list(new_tau_values.values()))
+        if mean_new_tau > 100 * tau_history[0]:
+            warnings.append(f"Iteration {iteration}: tau diverging")
+            return _CDSBIterationOutcome(
+                tau_values, current_T_K, True, CDSBConvergenceStatus.UNSTABLE
+            )
 
+        tau_history.append(mean_new_tau)
+
+        # Check convergence
+        if tau_history[-2] > 0:
+            rel_change = abs(mean_new_tau - tau_history[-2]) / tau_history[-2]
+        else:
+            rel_change = abs(mean_new_tau - tau_history[-2])
+
+        if rel_change < self.convergence_tolerance:
+            return _CDSBIterationOutcome(
+                new_tau_values, new_T_K, True, CDSBConvergenceStatus.CONVERGED
+            )
+
+        return _CDSBIterationOutcome(new_tau_values, new_T_K, False)
+
+    def _finalize_cdsb_result(
+        self,
+        observations: List[CDSBLineObservation],
+        tau_values: Dict[float, float],
+        partition_funcs: Dict[str, float],
+        uncorrected_result: BoltzmannFitResult,
+        convergence_status: CDSBConvergenceStatus,
+        n_iterations: int,
+        tau_history: List[float],
+        temp_history: List[float],
+        warnings: List[str],
+    ) -> CDSBResult:
+        """Run the final corrected fit and assemble the :class:`CDSBResult`.
+
+        Mirrors the original tail of ``fit`` byte-for-byte: final tau
+        correction, insufficient-line guard, final Boltzmann fit, optical-depth
+        info, and column-density estimate from the intercept.
+        """
         # Final fit with converged tau values
         final_corrected_obs = self._apply_tau_correction(observations, tau_values)
         if len(final_corrected_obs) < 2:
