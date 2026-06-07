@@ -394,44 +394,115 @@ def _warm_start(
     comp_init = np.full(len(elements), 1.0 / len(elements))
 
     if need_per_gate:
-        if base_solver is None and atomic_db is None:
-            # No warm-start data and no way to build it: use defaults.
-            logger.info(
-                "joint_multi_gate_fit: no atomic_db/base_solver supplied; "
-                "using neutral defaults (T=10000 K, ne=1e17, uniform composition)"
-            )
-        else:
-            solver = base_solver
-            if solver is None:
-                from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+        T_init, ne_init, comp_init = _per_gate_warm_start(
+            gate_observations,
+            elements,
+            base_solver,
+            atomic_db,
+            closure_mode,
+            T_init,
+            ne_init,
+            comp_init,
+        )
 
-                solver = IterativeCFLIBSSolver(atomic_db)
+    return _apply_user_warm_start(
+        elements,
+        n_gates,
+        T_init_user,
+        ne_init_user,
+        comp_init_user,
+        T_init,
+        ne_init,
+        comp_init,
+    )
 
-            running_comp = np.zeros(len(elements))
-            comp_weight = 0.0
-            for g_idx, obs_list in enumerate(gate_observations):
-                if not obs_list:
-                    continue
-                try:
-                    res = solver.solve(list(obs_list), closure_mode=closure_mode)
-                except Exception as exc:  # noqa: BLE001 — fall back to defaults
-                    logger.warning(
-                        "Per-gate warm start failed for gate %d (%s); using defaults",
-                        g_idx,
-                        exc,
-                    )
-                    continue
-                T_init[g_idx] = float(res.temperature_K)
-                ne_init[g_idx] = float(res.electron_density_cm3)
-                gate_vec = np.array(
-                    [res.concentrations.get(el, 0.0) for el in elements], dtype=float
-                )
-                if gate_vec.sum() > 0:
-                    running_comp += gate_vec / gate_vec.sum()
-                    comp_weight += 1.0
-            if comp_weight > 0:
-                comp_init = running_comp / comp_weight
 
+def _resolve_warm_start_solver(base_solver, atomic_db):
+    """Return the supplied warm-start solver, or build an ``IterativeCFLIBSSolver``."""
+    if base_solver is not None:
+        return base_solver
+    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+
+    return IterativeCFLIBSSolver(atomic_db)
+
+
+def _per_gate_warm_start(
+    gate_observations: Sequence[Sequence[LineObservation]],
+    elements: Sequence[str],
+    base_solver,
+    atomic_db,
+    closure_mode: str,
+    T_init: np.ndarray,
+    ne_init: np.ndarray,
+    comp_init: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Seed ``(T, n_e, composition)`` by running the per-gate iterative CF-LIBS
+    solver. When no solver can be constructed, the supplied defaults are
+    returned unchanged.
+    """
+    if base_solver is None and atomic_db is None:
+        # No warm-start data and no way to build it: use defaults.
+        logger.info(
+            "joint_multi_gate_fit: no atomic_db/base_solver supplied; "
+            "using neutral defaults (T=10000 K, ne=1e17, uniform composition)"
+        )
+        return T_init, ne_init, comp_init
+
+    solver = _resolve_warm_start_solver(base_solver, atomic_db)
+
+    running_comp = np.zeros(len(elements))
+    comp_weight = 0.0
+    for g_idx, obs_list in enumerate(gate_observations):
+        res = _solve_single_gate(solver, obs_list, closure_mode, g_idx)
+        if res is None:
+            continue
+        T_init[g_idx] = float(res.temperature_K)
+        ne_init[g_idx] = float(res.electron_density_cm3)
+        gate_vec = np.array([res.concentrations.get(el, 0.0) for el in elements], dtype=float)
+        if gate_vec.sum() > 0:
+            running_comp += gate_vec / gate_vec.sum()
+            comp_weight += 1.0
+    if comp_weight > 0:
+        comp_init = running_comp / comp_weight
+
+    return T_init, ne_init, comp_init
+
+
+def _solve_single_gate(solver, obs_list, closure_mode: str, g_idx: int):
+    """
+    Run the iterative solver on one gate's observations.
+
+    Returns the solver result, or ``None`` when the gate is empty or the
+    solve raises (in which case defaults are kept for that gate).
+    """
+    if not obs_list:
+        return None
+    try:
+        return solver.solve(list(obs_list), closure_mode=closure_mode)
+    except Exception as exc:  # noqa: BLE001 — fall back to defaults
+        logger.warning(
+            "Per-gate warm start failed for gate %d (%s); using defaults",
+            g_idx,
+            exc,
+        )
+        return None
+
+
+def _apply_user_warm_start(
+    elements: Sequence[str],
+    n_gates: int,
+    T_init_user: Optional[Sequence[float]],
+    ne_init_user: Optional[Sequence[float]],
+    comp_init_user: Optional[Dict[str, float]],
+    T_init: np.ndarray,
+    ne_init: np.ndarray,
+    comp_init: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Override the seeded warm start with any caller-supplied values, then apply
+    the ILR safety floor / renormalisation to the composition.
+    """
     if T_init_user is not None:
         T_arr = np.asarray(T_init_user, dtype=float)
         if T_arr.size != n_gates:
