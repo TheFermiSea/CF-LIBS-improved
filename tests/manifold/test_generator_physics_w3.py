@@ -235,9 +235,9 @@ class TestCoolingTrailConfig:
             output_path=str(tmp_path / "out.h5"),
             elements=["Fe"],
         )
-        assert config.cooling_t0_s == 1e-6
-        assert config.cooling_temperature_exponent == -0.5
-        assert config.cooling_density_exponent == -1.0
+        assert config.cooling_t0_s == pytest.approx(1e-6)
+        assert config.cooling_temperature_exponent == pytest.approx(-0.5)
+        assert config.cooling_density_exponent == pytest.approx(-1.0)
 
     def test_yaml_round_trips_cooling_fields(self, tmp_path):
         """Cooling-trail fields parse from YAML (ps-LIBS regime example)."""
@@ -269,9 +269,9 @@ manifold:
   elements: [Fe]
 """)
         config = ManifoldConfig.from_file(cfg_path)
-        assert config.cooling_t0_s == 1e-6
-        assert config.cooling_temperature_exponent == -0.5
-        assert config.cooling_density_exponent == -1.0
+        assert config.cooling_t0_s == pytest.approx(1e-6)
+        assert config.cooling_temperature_exponent == pytest.approx(-0.5)
+        assert config.cooling_density_exponent == pytest.approx(-1.0)
 
     def test_validate_rejects_nonpositive_t0(self, tmp_path):
         """A non-positive ``cooling_t0_s`` is rejected (1 + t/t0 singular)."""
