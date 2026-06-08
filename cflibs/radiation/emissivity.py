@@ -55,6 +55,88 @@ def calculate_line_emissivity(
     return epsilon
 
 
+def _collect_line_contributions(
+    transitions: List[Transition],
+    populations: Dict[Tuple[str, int, float], float],
+) -> Tuple[List[float], List[float]]:
+    """Collect line wavelengths and emissivities for transitions with known populations.
+
+    Returns
+    -------
+    Tuple[List[float], List[float]]
+        Parallel lists of line wavelengths (nm) and line-integrated emissivities.
+    """
+    line_wavelengths: List[float] = []
+    line_emissivities: List[float] = []
+
+    for trans in transitions:
+        # Find population for upper level
+        key = (trans.element, trans.ionization_stage, round(trans.E_k_ev, 8))
+        if key in populations:
+            n_k = populations[key]
+            epsilon = calculate_line_emissivity(trans, n_k)
+            line_wavelengths.append(trans.wavelength_nm)
+            line_emissivities.append(epsilon)
+        else:
+            logger.debug(
+                f"No population found for {trans.element} {trans.ionization_stage} "
+                f"E_k={trans.E_k_ev:.3f} eV"
+            )
+
+    return line_wavelengths, line_emissivities
+
+
+def _validate_scalar_sigma(sigma_nm: Union[float, np.ndarray]) -> None:
+    """Validate that a scalar broadening width is finite and positive."""
+    sigma_scalar = float(sigma_nm)
+    if not np.isfinite(sigma_scalar) or sigma_scalar <= 0:
+        raise ValueError(f"scalar sigma_nm must be finite and positive; got {sigma_scalar!r}")
+
+
+def _broaden_with_jax(
+    wavelength_grid: np.ndarray,
+    line_wavelengths_arr: np.ndarray,
+    line_emissivities_arr: np.ndarray,
+    sigma_nm: Union[float, np.ndarray],
+) -> np.ndarray:
+    """Apply Gaussian broadening using the JAX kernel (scalar sigma only)."""
+    from cflibs.core.jax_runtime import HAS_JAX, jnp
+
+    if not HAS_JAX:
+        raise ImportError("JAX is not installed. Install with: pip install jax jaxlib")
+    from cflibs.radiation.profiles import apply_gaussian_broadening_jax
+
+    spectrum = apply_gaussian_broadening_jax(
+        jnp.asarray(wavelength_grid),
+        jnp.asarray(line_wavelengths_arr),
+        jnp.asarray(line_emissivities_arr),
+        float(sigma_nm),
+    )
+    return np.array(spectrum)
+
+
+def _broaden_with_numpy(
+    wavelength_grid: np.ndarray,
+    line_wavelengths_arr: np.ndarray,
+    line_emissivities_arr: np.ndarray,
+    sigma_nm: Union[float, np.ndarray],
+    is_per_line: bool,
+) -> np.ndarray:
+    """Apply Gaussian broadening using the NumPy implementation (per-line or scalar)."""
+    from cflibs.radiation.profiles import (
+        apply_gaussian_broadening,
+        apply_gaussian_broadening_per_line,
+    )
+
+    if is_per_line:
+        return apply_gaussian_broadening_per_line(
+            wavelength_grid, line_wavelengths_arr, line_emissivities_arr, sigma_nm
+        )
+    return apply_gaussian_broadening(
+        wavelength_grid, line_wavelengths_arr, line_emissivities_arr, float(sigma_nm)
+    )
+
+
 def calculate_spectrum_emissivity(
     transitions: List[Transition],
     populations: Dict[Tuple[str, int, float], float],
@@ -85,27 +167,7 @@ def calculate_spectrum_emissivity(
     array
         Spectral emissivity in W m^-3 nm^-1
     """
-    from cflibs.radiation.profiles import (
-        apply_gaussian_broadening,
-        apply_gaussian_broadening_per_line,
-    )
-
-    line_wavelengths = []
-    line_emissivities = []
-
-    for trans in transitions:
-        # Find population for upper level
-        key = (trans.element, trans.ionization_stage, round(trans.E_k_ev, 8))
-        if key in populations:
-            n_k = populations[key]
-            epsilon = calculate_line_emissivity(trans, n_k)
-            line_wavelengths.append(trans.wavelength_nm)
-            line_emissivities.append(epsilon)
-        else:
-            logger.debug(
-                f"No population found for {trans.element} {trans.ionization_stage} "
-                f"E_k={trans.E_k_ev:.3f} eV"
-            )
+    line_wavelengths, line_emissivities = _collect_line_contributions(transitions, populations)
 
     if not line_wavelengths:
         return np.zeros_like(wavelength_grid)
@@ -116,9 +178,7 @@ def calculate_spectrum_emissivity(
     is_per_line = isinstance(sigma_nm, np.ndarray) and sigma_nm.ndim >= 1
 
     if not is_per_line:
-        sigma_scalar = float(sigma_nm)
-        if not np.isfinite(sigma_scalar) or sigma_scalar <= 0:
-            raise ValueError(f"scalar sigma_nm must be finite and positive; got {sigma_scalar!r}")
+        _validate_scalar_sigma(sigma_nm)
 
     if use_jax:
         if is_per_line:
@@ -129,27 +189,14 @@ def calculate_spectrum_emissivity(
                 "falling back to NumPy per-line broadening"
             )
         else:
-            from cflibs.core.jax_runtime import HAS_JAX, jnp
-
-            if not HAS_JAX:
-                raise ImportError("JAX is not installed. Install with: pip install jax jaxlib")
-            from cflibs.radiation.profiles import apply_gaussian_broadening_jax
-
-            spectrum = apply_gaussian_broadening_jax(
-                jnp.asarray(wavelength_grid),
-                jnp.asarray(line_wavelengths_arr),
-                jnp.asarray(line_emissivities_arr),
-                float(sigma_nm),
+            return _broaden_with_jax(
+                wavelength_grid, line_wavelengths_arr, line_emissivities_arr, sigma_nm
             )
-            return np.array(spectrum)
 
-    if is_per_line:
-        spectrum = apply_gaussian_broadening_per_line(
-            wavelength_grid, line_wavelengths_arr, line_emissivities_arr, sigma_nm
-        )
-    else:
-        spectrum = apply_gaussian_broadening(
-            wavelength_grid, line_wavelengths_arr, line_emissivities_arr, float(sigma_nm)
-        )
-
-    return spectrum
+    return _broaden_with_numpy(
+        wavelength_grid,
+        line_wavelengths_arr,
+        line_emissivities_arr,
+        sigma_nm,
+        is_per_line,
+    )
