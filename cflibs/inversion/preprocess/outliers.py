@@ -903,25 +903,35 @@ class MADOutlierDetector:
         cleaned = spectra.copy()
 
         if replacement == "median":
-            # Broadcast median to match outlier positions
-            for i in range(spectra.shape[0]):
-                mask = result.outlier_mask[i]
-                cleaned[i, mask] = result.median[mask]
+            self._replace_with_median(cleaned, result)
         elif replacement == "nan":
             cleaned[result.outlier_mask] = np.nan
         else:  # interpolate
-            for i in range(spectra.shape[0]):
-                mask = result.outlier_mask[i]
-                if np.any(mask):
-                    good_idx = np.where(~mask)[0]
-                    bad_idx = np.where(mask)[0]
-                    if len(good_idx) >= 2:
-                        cleaned[i, bad_idx] = np.interp(bad_idx, good_idx, cleaned[i, good_idx])
-                    else:
-                        # Not enough good points for interpolation
-                        cleaned[i, bad_idx] = result.median[bad_idx]
+            self._replace_with_interpolation(cleaned, result)
 
         return cleaned, result
+
+    @staticmethod
+    def _replace_with_median(cleaned: np.ndarray, result: MADResult) -> None:
+        """Replace outlier channel values in-place with the channel median."""
+        # Broadcast median to match outlier positions
+        for i in range(cleaned.shape[0]):
+            mask = result.outlier_mask[i]
+            cleaned[i, mask] = result.median[mask]
+
+    @staticmethod
+    def _replace_with_interpolation(cleaned: np.ndarray, result: MADResult) -> None:
+        """Replace outlier channel values in-place via linear interpolation."""
+        for i in range(cleaned.shape[0]):
+            mask = result.outlier_mask[i]
+            if np.any(mask):
+                good_idx = np.where(~mask)[0]
+                bad_idx = np.where(mask)[0]
+                if len(good_idx) >= 2:
+                    cleaned[i, bad_idx] = np.interp(bad_idx, good_idx, cleaned[i, good_idx])
+                else:
+                    # Not enough good points for interpolation
+                    cleaned[i, bad_idx] = result.median[bad_idx]
 
 
 def mad_outliers_1d(
