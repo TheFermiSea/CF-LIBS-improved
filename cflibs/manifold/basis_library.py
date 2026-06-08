@@ -20,11 +20,56 @@ except ImportError:
     HAS_H5PY = False
 
 from cflibs.atomic.database import AtomicDatabase
+from cflibs.atomic.structures import Transition
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
+from cflibs.radiation.profiles import doppler_width, voigt_profile
+from cflibs.radiation.stark import estimate_stark_parameter, stark_hwhm
 
 logger = get_logger("manifold.basis_library")
+
+# FWHM -> Gaussian sigma conversion factor: 2 * sqrt(2 * ln 2).
+_FWHM_TO_SIGMA = 2.3548200450309493
+
+# Modest atomic-mass fallback (amu) for the Doppler width when the database
+# carries no ``atomic_mass`` column for the element. Values are NIST standard
+# atomic weights. Doppler sigma scales as 1/sqrt(M), so a coarse mass is
+# adequate; the generic 50 amu fallback matches ManifoldGenerator's default.
+_STANDARD_MASSES_AMU = {
+    "H": 1.008,
+    "He": 4.003,
+    "Li": 6.941,
+    "Be": 9.012,
+    "B": 10.81,
+    "C": 12.01,
+    "N": 14.01,
+    "O": 16.00,
+    "Na": 22.99,
+    "Mg": 24.31,
+    "Al": 26.98,
+    "Si": 28.09,
+    "P": 30.97,
+    "S": 32.07,
+    "Cl": 35.45,
+    "K": 39.10,
+    "Ca": 40.08,
+    "Ti": 47.87,
+    "V": 50.94,
+    "Cr": 52.00,
+    "Mn": 54.94,
+    "Fe": 55.85,
+    "Co": 58.93,
+    "Ni": 58.69,
+    "Cu": 63.55,
+    "Zn": 65.38,
+    "Sr": 87.62,
+    "Ba": 137.3,
+    "W": 183.8,
+    "Au": 197.0,
+    "Pb": 207.2,
+}
+_DEFAULT_MASS_AMU = 50.0  # generic fallback (matches ManifoldGenerator)
 
 
 @dataclass
@@ -90,12 +135,15 @@ class BasisLibraryGenerator:
     def _build_grids(
         cfg: BasisLibraryConfig,
     ) -> Tuple[np.ndarray, float, np.ndarray]:
-        """Build wavelength grid, Gaussian sigma, and parameter grid.
+        """Build wavelength grid, instrument Gaussian sigma, and parameter grid.
 
         Returns
         -------
         wl_grid : ndarray of shape (pixels,)
-        sigma : float
+        sigma_inst : float
+            Instrument-only Gaussian sigma in nm. The per-line Doppler width
+            (wavelength- and temperature-dependent) is added in quadrature at
+            render time, so this is no longer the total per-line sigma.
         params : ndarray of shape (n_grid, 2)
         """
         wl_min, wl_max = cfg.wavelength_range
@@ -113,17 +161,68 @@ class BasisLibraryGenerator:
                 params[idx, 1] = ne
                 idx += 1
 
-        sigma = cfg.instrument_fwhm_nm / 2.3548200450309493  # FWHM -> sigma
-        return wl_grid, sigma, params
+        sigma_inst = cfg.instrument_fwhm_nm / _FWHM_TO_SIGMA  # FWHM -> sigma
+        return wl_grid, sigma_inst, params
+
+    def _element_mass_amu(self, element: str) -> float:
+        """Resolve the atomic mass (amu) for *element* for the Doppler width.
+
+        Prefers the database ``atomic_mass`` column, then a NIST standard-weight
+        fallback table, then a generic 50 amu default (matching
+        :class:`~cflibs.manifold.generator.ManifoldGenerator`).
+        """
+        db_mass = self.atomic_db.get_atomic_mass(element)
+        if db_mass is not None and db_mass > 0.0:
+            return float(db_mass)
+        if element in _STANDARD_MASSES_AMU:
+            return _STANDARD_MASSES_AMU[element]
+        logger.debug("No atomic mass for %s; using fallback %.1f amu", element, _DEFAULT_MASS_AMU)
+        return _DEFAULT_MASS_AMU
+
+    def _stark_w_ref(self, trans: Transition, ip_cache: dict) -> float:
+        """Return the Stark reference FWHM (nm) at REF_NE for *trans*.
+
+        Uses the database value when present, otherwise the same binding-energy
+        estimate the manifold generator uses
+        (:func:`cflibs.radiation.stark.estimate_stark_parameter`), so the basis
+        fingerprints carry a Stark Lorentzian even for lines lacking tabulated
+        widths — matching the forward model they approximate.
+        """
+        if trans.stark_w is not None and trans.stark_w > 0.0:
+            return float(trans.stark_w)
+        key = (trans.element, trans.ionization_stage)
+        if key not in ip_cache:
+            ip_cache[key] = self.atomic_db.get_ionization_potential(
+                trans.element, trans.ionization_stage
+            )
+        return estimate_stark_parameter(
+            trans.wavelength_nm,
+            trans.E_k_ev,
+            ip_cache[key],
+            trans.ionization_stage,
+        )
 
     def _compute_element_spectra(
         self,
         element: str,
         wl_grid: np.ndarray,
-        sigma: float,
+        sigma_inst: float,
         params: np.ndarray,
     ) -> np.ndarray:
         """Compute area-normalised spectra for *element* at every grid point.
+
+        Line shapes are rendered with the SAME Voigt model the full manifold
+        generator uses (single source of truth: :func:`doppler_width`,
+        :func:`stark_hwhm`, :func:`voigt_profile`), so the basis fingerprints
+        match the forward model they approximate:
+
+        * Doppler Gaussian sigma is per-line and wavelength/temperature
+          dependent — canonical ``sigma = (lambda / c) * sqrt(kT / m)`` (the
+          factor inside :func:`doppler_width`), NOT the spurious ``sqrt(2kT/m)``.
+        * The instrument Gaussian sigma adds in quadrature.
+        * An ``n_e``-dependent Stark Lorentzian HWHM is folded in, scaled as
+          ``0.5 * stark_w_ref * (n_e / REF_NE) * (T / T_ref)^(-alpha)`` with
+          ``REF_NE = 1e17`` (:func:`stark_hwhm`).
 
         Returns
         -------
@@ -150,6 +249,17 @@ class BasisLibraryGenerator:
             logger.debug("No transitions for %s in %.1f-%.1f nm", element, wl_min, wl_max)
             return out
 
+        mass_amu = self._element_mass_amu(element)
+        # Per-line static quantities (mass/IP do not vary across the grid).
+        ip_cache: dict = {}
+        stark_w_refs = np.array(
+            [self._stark_w_ref(t, ip_cache) for t in transitions], dtype=np.float64
+        )
+        stark_alphas = np.array(
+            [t.stark_alpha if t.stark_alpha is not None else 0.5 for t in transitions],
+            dtype=np.float64,
+        )
+
         for grid_idx in range(n_grid):
             T_K = params[grid_idx, 0]
             ne = params[grid_idx, 1]
@@ -161,7 +271,7 @@ class BasisLibraryGenerator:
 
             spectrum = np.zeros(n_pix, dtype=np.float64)
 
-            for trans in transitions:
+            for li, trans in enumerate(transitions):
                 stage_density = stage_densities.get(trans.ionization_stage, 0.0)
                 if stage_density <= 0.0:
                     continue
@@ -176,7 +286,27 @@ class BasisLibraryGenerator:
                 # it varies per line and does not cancel in area normalization.
                 eps = trans.A_ki * n_k / trans.wavelength_nm
 
-                spectrum += eps * np.exp(-0.5 * ((wl_grid - trans.wavelength_nm) / sigma) ** 2)
+                # Doppler Gaussian sigma (canonical λ·sqrt(kT/m)/c form, via the
+                # shared doppler_width FWHM helper) ⊕ instrument sigma.
+                sigma_dopp = doppler_width(trans.wavelength_nm, T_eV, mass_amu) / _FWHM_TO_SIGMA
+                sigma_total = float(np.hypot(sigma_dopp, sigma_inst))
+
+                # n_e-dependent Stark Lorentzian HWHM (REF_NE = 1e17), same law
+                # as the generator's _calculate_stark_hwhm.
+                gamma_stark = stark_hwhm(
+                    ne,
+                    T_K,
+                    float(stark_w_refs[li]),
+                    float(stark_alphas[li]),
+                )
+
+                spectrum += voigt_profile(
+                    wl_grid,
+                    trans.wavelength_nm,
+                    sigma_total,
+                    gamma_stark,
+                    eps,
+                )
 
             area = np.sum(spectrum)
             if area > 1e-100:
@@ -205,7 +335,7 @@ class BasisLibraryGenerator:
         cfg = self.config
         cfg.validate()
 
-        wl_grid, sigma, params = self._build_grids(cfg)
+        wl_grid, sigma_inst, params = self._build_grids(cfg)
         elements = self.atomic_db.get_available_elements()
         n_el = len(elements)
         n_grid = params.shape[0]
@@ -213,7 +343,9 @@ class BasisLibraryGenerator:
 
         for el_idx, element in enumerate(elements):
             logger.info("Generating basis for %s (%d/%d)", element, el_idx + 1, n_el)
-            spectra[el_idx, :, :] = self._compute_element_spectra(element, wl_grid, sigma, params)
+            spectra[el_idx, :, :] = self._compute_element_spectra(
+                element, wl_grid, sigma_inst, params
+            )
             if progress_callback is not None:
                 progress_callback(el_idx + 1, n_el)
 
@@ -255,10 +387,31 @@ class BasisLibrary:
         return np.array(self._spectra[:, grid_idx, :])
 
     def _nearest_grid_idx(self, T_K: float, ne_cm3: float) -> int:
-        """Return the index of the nearest grid point."""
-        dists = (self._params[:, 0] - T_K) ** 2 / self._T_vals[-1] ** 2 + (
-            np.log10(self._params[:, 1]) - np.log10(ne_cm3)
-        ) ** 2 / np.log10(self._ne_vals[-1] / self._ne_vals[0]) ** 2
+        """Return the index of the nearest grid point.
+
+        Both axes are normalised by their own *span* (T by ``(T_max - T_min)``,
+        log10(n_e) by ``(log10 n_e_max - log10 n_e_min)``) so the distance is
+        dimensionless and symmetric: equal fractional offsets along T and n_e
+        contribute equally. The previous form normalised T by the absolute
+        T_max (not the span) while n_e used the log10 range, biasing the
+        nearest-neighbour pick toward the temperature axis.
+        """
+        # Span guards: a single grid value along an axis carries no information,
+        # so that axis contributes zero distance (avoids divide-by-zero).
+        T_span = self._T_vals[-1] - self._T_vals[0]
+        log_ne_span = np.log10(self._ne_vals[-1]) - np.log10(self._ne_vals[0])
+
+        if T_span > 0.0:
+            t_term = ((self._params[:, 0] - T_K) / T_span) ** 2
+        else:
+            t_term = np.zeros(self._params.shape[0], dtype=np.float64)
+
+        if log_ne_span > 0.0:
+            ne_term = ((np.log10(self._params[:, 1]) - np.log10(ne_cm3)) / log_ne_span) ** 2
+        else:
+            ne_term = np.zeros(self._params.shape[0], dtype=np.float64)
+
+        dists = t_term + ne_term
         return int(np.argmin(dists))
 
     def get_basis_matrix_interp(self, T_K: float, ne_cm3: float) -> np.ndarray:

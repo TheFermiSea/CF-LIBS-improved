@@ -5,6 +5,7 @@ Wraps SpectralEmbedder + VectorIndex with element/T/ne metadata to enable
 neighbor voting for rapid (T, ne) estimation from an observed spectrum.
 """
 
+from collections import Counter
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -148,9 +149,20 @@ class BasisIndex:
         self,
         spectrum: np.ndarray,
         k: int = 50,
+        elements: Optional[List[str]] = None,
     ) -> Tuple[float, float, dict]:
         """
         Estimate plasma (T, ne) from an observed spectrum via neighbor voting.
+
+        The vote is **restricted to a single element family** before the
+        weighted-median over (T, ne). Each indexed vector is a *single-element*
+        fingerprint, so a raw k-NN bag mixes neighbors from chemically distinct
+        elements whose (T, ne) optima differ — averaging across them biases the
+        estimate. Instead we (1) over-fetch candidates, (2) select the target
+        element(s) — the caller's identified elements, or the dominant element
+        by vote when none are supplied — and (3) compute a per-element
+        weighted-median and aggregate (median across elements when several are
+        given).
 
         Parameters
         ----------
@@ -158,7 +170,11 @@ class BasisIndex:
             Observed spectrum, shape (n_pixels,).  Should be baseline-corrected
             and on the same wavelength grid as the basis library.
         k : int
-            Number of nearest neighbors to use for voting (default: 50).
+            Number of nearest neighbors (within the selected element family) to
+            use for voting (default: 50).
+        elements : list of str, optional
+            Identified element(s) to restrict the vote to. When ``None``, the
+            dominant element among the nearest neighbors is used.
 
         Returns
         -------
@@ -168,7 +184,8 @@ class BasisIndex:
             Estimated electron density in cm^-3.
         details : dict
             Diagnostic information including neighbor elements, distances,
-            and per-neighbor (T, ne) values.
+            per-neighbor (T, ne) values, and the element(s) the vote was
+            restricted to.
 
         Raises
         ------
@@ -189,10 +206,18 @@ class BasisIndex:
         spec_2d = spectrum.reshape(1, -1)
         embedding = self.embedder.transform(spec_2d)
 
-        # Search
-        distances, indices = self.vector_index.search(embedding, k=k)
-        distances = distances[0]  # (k,)
-        indices = indices[0]  # (k,)
+        # Over-fetch so that, after restricting to the target element family,
+        # roughly k neighbors of that element remain. Cap at the index size.
+        n_total = self.vector_index.index.ntotal
+        n_fetch = int(min(max(k * 4, k + 1), n_total))
+        distances, indices = self.vector_index.search(embedding, k=n_fetch)
+        distances = distances[0]  # (n_fetch,)
+        indices = indices[0]  # (n_fetch,)
+
+        # FAISS pads with -1 when fewer than n_fetch results exist; drop those.
+        valid = indices >= 0
+        distances = distances[valid]
+        indices = indices[valid]
 
         # Gather metadata for neighbors
         neighbor_elements = [self._elements[self._element_indices[i]] for i in indices]
@@ -200,29 +225,76 @@ class BasisIndex:
         neighbor_T = self._params[neighbor_grid_idx, 0]
         neighbor_ne = self._params[neighbor_grid_idx, 1]
 
-        # Weighted median (weight = 1 / (distance + epsilon))
-        weights = 1.0 / (distances + 1e-10)
-        weights /= np.sum(weights)
-
-        T_est = float(_weighted_median(neighbor_T, weights))
-        ne_est = float(_weighted_median(neighbor_ne, weights))
-
-        # Element vote counts
-        from collections import Counter
-
         element_votes = Counter(neighbor_elements)
+
+        # Resolve the element family to vote within.
+        target_elements = self._resolve_target_elements(elements, element_votes)
+
+        # Per-element weighted-median, then aggregate across the requested
+        # elements (median of per-element estimates) so no single element with
+        # many neighbors dominates a multi-element request.
+        per_element_est: dict = {}
+        T_used: List[float] = []
+        ne_used: List[float] = []
+        for el in target_elements:
+            mask = np.array([e == el for e in neighbor_elements], dtype=bool)
+            if not np.any(mask):
+                continue
+            sel_T = neighbor_T[mask][:k]
+            sel_ne = neighbor_ne[mask][:k]
+            sel_dist = distances[mask][:k]
+            w = 1.0 / (sel_dist + 1e-10)
+            w /= np.sum(w)
+            T_el = float(_weighted_median(sel_T, w))
+            ne_el = float(_weighted_median(sel_ne, w))
+            per_element_est[el] = (T_el, ne_el)
+            T_used.append(T_el)
+            ne_used.append(ne_el)
+
+        if not T_used:
+            # Defensive fallback: target element(s) absent from the neighbor
+            # bag — fall back to the unrestricted weighted median so we still
+            # return a usable estimate rather than raising.
+            w = 1.0 / (distances + 1e-10)
+            w /= np.sum(w)
+            T_est = float(_weighted_median(neighbor_T, w))
+            ne_est = float(_weighted_median(neighbor_ne, w))
+        else:
+            T_est = float(np.median(T_used))
+            ne_est = float(np.median(ne_used))
 
         details = {
             "neighbor_elements": neighbor_elements,
             "neighbor_T_K": neighbor_T.tolist(),
             "neighbor_ne_cm3": neighbor_ne.tolist(),
             "distances": distances.tolist(),
-            "weights": weights.tolist(),
             "element_votes": dict(element_votes.most_common()),
+            "target_elements": target_elements,
+            "per_element_estimate": per_element_est,
             "k": k,
+            "n_fetched": int(len(indices)),
         }
 
         return T_est, ne_est, details
+
+    @staticmethod
+    def _resolve_target_elements(
+        elements: Optional[List[str]],
+        element_votes: Counter,
+    ) -> List[str]:
+        """Pick the element family to vote within.
+
+        Uses the caller-provided ``elements`` (filtered to those actually
+        present among the neighbors), else the single dominant element by
+        neighbor vote count.
+        """
+        if elements:
+            present = [el for el in elements if element_votes.get(el, 0) > 0]
+            if present:
+                return present
+        if element_votes:
+            return [element_votes.most_common(1)[0][0]]
+        return []
 
     def save(self, path: str) -> None:
         """

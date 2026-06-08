@@ -104,7 +104,17 @@ class TestBasisIndex:
         # Details should have the right keys
         assert "neighbor_elements" in details
         assert "element_votes" in details
-        assert len(details["neighbor_elements"]) == 10
+        # Per-element voting fix (#8c): estimate_plasma_params now OVER-fetches
+        # candidates (~4*k, capped at the index size) and reports the fetched
+        # candidate bag in ``neighbor_elements``, NOT exactly k entries. The
+        # old assertion ``len == k`` encoded the pre-fix raw-k-NN behavior; the
+        # corrected contract is that the bag is bounded by the index size and
+        # never exceeds the over-fetch ceiling. This small library has only 6
+        # non-zero (Fe) vectors, so the bag is capped at 6.
+        assert 0 < len(details["neighbor_elements"]) <= built_index.n_vectors
+        assert len(details["neighbor_elements"]) == details["n_fetched"]
+        # The vote was restricted to a single element family (Fe here).
+        assert details["target_elements"] == ["Fe"]
 
     def test_element_votes(self, built_index, small_library):
         # Query with Fe spectrum — Fe should be a top vote
