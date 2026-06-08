@@ -6,7 +6,7 @@ for efficient approximate nearest neighbor search on pre-computed model spectra.
 """
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Tuple
 import numpy as np
 from pathlib import Path
 
@@ -296,32 +296,103 @@ class VectorIndex:
             self.index.add(embeddings)
 
         elif self.config.index_type == "ivf_flat":
-            # IVF with flat quantizer
-            quantizer = faiss.IndexFlatL2(self.dimension)
-            self.index = faiss.IndexIVFFlat(
-                quantizer, self.dimension, self.config.n_lists, faiss.METRIC_L2
-            )
-            # Train with sample (or all data if small)
-            self.index.train(embeddings)
-            self.index.add(embeddings)
-            self.index.nprobe = self.config.n_probe
+            n_lists = self._guarded_n_lists(n_vectors)
+            if n_lists is None:
+                # Too few training vectors for any IVF cell count — fall back
+                # to an exact flat index.
+                self.index = faiss.IndexFlatL2(self.dimension)
+                self.index.add(embeddings)
+            else:
+                quantizer = faiss.IndexFlatL2(self.dimension)
+                self.index = faiss.IndexIVFFlat(quantizer, self.dimension, n_lists, faiss.METRIC_L2)
+                self.index.train(embeddings)
+                self.index.add(embeddings)
+                self.index.nprobe = min(self.config.n_probe, n_lists)
 
         elif self.config.index_type == "ivf_pq":
-            # IVF with product quantization
-            quantizer = faiss.IndexFlatL2(self.dimension)
-            self.index = faiss.IndexIVFPQ(
-                quantizer,
-                self.dimension,
-                self.config.n_lists,
-                self.config.pq_m,
-                self.config.pq_bits,
-            )
-            # Train with sample (or all data if small)
-            self.index.train(embeddings)
-            self.index.add(embeddings)
-            self.index.nprobe = self.config.n_probe
+            n_lists = self._guarded_n_lists(n_vectors)
+            # IVF_PQ trains TWO quantizers: the IVF coarse quantizer (guarded
+            # above) AND the product quantizer, whose k-means needs at least
+            # 2**pq_bits training points. If either cannot be trained, fall
+            # back to an exact flat index.
+            pq_clusters = 2**self.config.pq_bits
+            if n_lists is None or n_vectors < pq_clusters:
+                if n_lists is not None and n_vectors < pq_clusters:
+                    logger.warning(
+                        "ivf_pq index requires >= 2**pq_bits = %d training "
+                        "vectors for the product quantizer but only %d are "
+                        "available; falling back to exact IndexFlatL2.",
+                        pq_clusters,
+                        n_vectors,
+                    )
+                self.index = faiss.IndexFlatL2(self.dimension)
+                self.index.add(embeddings)
+            else:
+                quantizer = faiss.IndexFlatL2(self.dimension)
+                self.index = faiss.IndexIVFPQ(
+                    quantizer,
+                    self.dimension,
+                    n_lists,
+                    self.config.pq_m,
+                    self.config.pq_bits,
+                )
+                self.index.train(embeddings)
+                self.index.add(embeddings)
+                self.index.nprobe = min(self.config.n_probe, n_lists)
 
         logger.info(f"Index built: {self.index.ntotal} vectors indexed")
+
+    def _guarded_n_lists(self, n_train: int) -> Optional[int]:
+        """Return a safe IVF ``n_lists`` for ``n_train`` training vectors.
+
+        Faiss trains the IVF coarse quantizer by k-means over ``n_lists``
+        centroids and emits a ``WARNING clustering ... please provide at least
+        ... training points`` (and degenerate, near-empty cells) when there are
+        far fewer points than centroids. The Faiss rule of thumb is at least
+        ``~39 * n_lists`` training points (``MIN_POINTS_PER_CENTROID = 39``).
+
+        With the configured ``n_lists`` too large for ``n_train`` this:
+
+        * reduces ``n_lists`` to ``n_train // MIN_POINTS_PER_CENTROID`` (logged),
+          keeping an IVF index when at least one well-populated cell fits; or
+        * returns ``None`` to signal the caller to fall back to ``IndexFlatL2``
+          (logged) when not even one cell can be trained.
+
+        Returns
+        -------
+        int or None
+            The guarded ``n_lists`` to use, or ``None`` to fall back to a flat
+            (exact) index.
+        """
+        min_per_centroid = 39  # Faiss MIN_POINTS_PER_CENTROID rule of thumb
+        requested = self.config.n_lists
+        if n_train >= min_per_centroid * requested:
+            return requested
+
+        safe = n_train // min_per_centroid
+        if safe < 1:
+            logger.warning(
+                "%s index requested but only %d training vectors available "
+                "(< %d needed for a single IVF cell at %d points/centroid); "
+                "falling back to exact IndexFlatL2.",
+                self.config.index_type,
+                n_train,
+                min_per_centroid,
+                min_per_centroid,
+            )
+            return None
+
+        logger.warning(
+            "%s index: %d training vectors too few for n_lists=%d "
+            "(Faiss wants >= %d * n_lists = %d); reducing n_lists to %d.",
+            self.config.index_type,
+            n_train,
+            requested,
+            min_per_centroid,
+            min_per_centroid * requested,
+            safe,
+        )
+        return safe
 
     def search(self, query_embeddings: np.ndarray, k: int = 10) -> Tuple[np.ndarray, np.ndarray]:
         """
