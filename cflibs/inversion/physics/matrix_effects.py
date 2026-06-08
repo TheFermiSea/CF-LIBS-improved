@@ -32,7 +32,7 @@ References
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Dict, Optional, Tuple, Set
+from typing import ClassVar, Dict, Optional, Tuple, Set, Union
 import json
 from pathlib import Path
 
@@ -40,6 +40,78 @@ from cflibs.core.logging_config import get_logger
 from cflibs.inversion.solve.iterative import CFLIBSResult
 
 logger = get_logger("inversion.matrix_effects")
+
+
+class AblationRegime(Enum):
+    """
+    Laser ablation regime governing the empirical matrix-correction factor set.
+
+    The default empirical correction factors in :class:`CorrectionFactorDB` were
+    derived from *nanosecond*-pulse LIBS, where thermal/differential ablation
+    drives strongly element-dependent, non-stoichiometric mass removal (e.g. the
+    ~15% carbon loss baked into ``METALLIC.C = 0.85``). These factors are not
+    physically appropriate for ultrashort-pulse regimes.
+
+    Attributes
+    ----------
+    NS : auto
+        Nanosecond-pulse LIBS (default). Uses the historical empirical
+        ns-derived correction factors. Behavior is unchanged from prior
+        versions of this module.
+    PS : auto
+        Picosecond / ultrashort-pulse LIBS. Ablation is much closer to
+        stoichiometric (negligible thermal/differential ablation), so the
+        generic default factors collapse to 1.0 for every element. Supply a
+        calibrated :class:`CorrectionFactorDB` (or load one from JSON / add
+        factors) when matrix-matched ps calibration data is available.
+
+    Notes
+    -----
+    Picosecond ablation is *more* stoichiometric than nanosecond ablation, but
+    it is not perfectly so for every matrix; the 1.0 ps defaults are an
+    explicit "no generic correction known" placeholder rather than a claim of
+    perfect stoichiometry. See Hahn & Omenetto (2010), Cremers & Radziemski
+    (2013) for the ns empirical basis and the regime dependence of ablation.
+
+    References
+    ----------
+    - Hahn & Omenetto (2010): LIBS Part I. Fundamentals and Diagnostics.
+    - Cremers & Radziemski (2013): Handbook of LIBS, Chapter 6.
+    - Russo et al. (2002): Femtosecond vs nanosecond laser ablation —
+      reduced fractionation / more stoichiometric removal at ultrashort pulses.
+    """
+
+    NS = auto()
+    PS = auto()
+
+    @classmethod
+    def coerce(cls, value: "Union[AblationRegime, str]") -> "AblationRegime":
+        """
+        Coerce a string or :class:`AblationRegime` into an :class:`AblationRegime`.
+
+        Accepts the enum directly or a case-insensitive string ('ns', 'ps').
+
+        Parameters
+        ----------
+        value : AblationRegime or str
+            Regime specifier.
+
+        Returns
+        -------
+        AblationRegime
+
+        Raises
+        ------
+        ValueError
+            If a string value does not name a known regime.
+        """
+        if isinstance(value, cls):
+            return value
+        try:
+            return cls[str(value).strip().upper()]
+        except KeyError as exc:
+            valid = ", ".join(repr(r.name.lower()) for r in cls)
+            raise ValueError(f"Unknown ablation_regime {value!r}; expected one of {valid}") from exc
 
 
 class MatrixType(Enum):
@@ -170,9 +242,23 @@ class CorrectionFactorDB:
     >>> db.add_factor(CorrectionFactor("Fe", MatrixType.METALLIC, 1.05))
     >>> factor = db.get_factor("Fe", MatrixType.METALLIC)
     >>> corrected, uncert = factor.apply(0.50)
+
+    Notes
+    -----
+    The built-in ``_DEFAULT_FACTORS`` were derived from *nanosecond* LIBS and
+    encode element-dependent, non-stoichiometric ablation (see
+    :class:`AblationRegime`). For ``ablation_regime=AblationRegime.PS`` the
+    generic defaults collapse to 1.0 (no correction) because ultrashort-pulse
+    ablation is approximately stoichiometric; provide calibrated factors when
+    available.
     """
 
+    # Process-level record of which (uncalibrated) default regimes have already
+    # emitted the generic-defaults warning, so it fires at most once per regime.
+    _warned_default_regimes: ClassVar[Set[AblationRegime]] = set()
+
     # Default correction factors: matrix_type -> {element: (multiplicative, uncertainty)}
+    # NANOSECOND-regime empirical factors (the historical default).
     _DEFAULT_FACTORS: Dict[MatrixType, Dict[str, Tuple[float, float]]] = {
         MatrixType.METALLIC: {
             "Fe": (1.0, 0.05),
@@ -217,22 +303,85 @@ class CorrectionFactorDB:
         },
     }
 
-    def __init__(self) -> None:
-        """Initialize correction factor database with defaults."""
+    def __init__(
+        self,
+        ablation_regime: Union[AblationRegime, str] = AblationRegime.NS,
+    ) -> None:
+        """
+        Initialize correction factor database with regime-appropriate defaults.
+
+        Parameters
+        ----------
+        ablation_regime : AblationRegime or str, optional
+            Laser ablation regime selecting the default factor set. Defaults to
+            :attr:`AblationRegime.NS` (nanosecond), which reproduces the
+            historical empirical factors exactly (no behavior change). Use
+            ``AblationRegime.PS`` (or ``"ps"``) for picosecond / ultrashort-pulse
+            data, which uses stoichiometric (1.0) generic defaults; override with
+            calibrated factors via :meth:`add_factor` / :meth:`load_from_json`
+            when matrix-matched ps calibration is available.
+        """
+        self.ablation_regime = AblationRegime.coerce(ablation_regime)
         self._factors: Dict[MatrixType, Dict[str, CorrectionFactor]] = {mt: {} for mt in MatrixType}
         self._populate_defaults()
 
+    def _default_factors_for_regime(self) -> Dict[MatrixType, Dict[str, Tuple[float, float]]]:
+        """
+        Return the default ``{matrix_type: {element: (mult, uncert)}}`` factor
+        table for the active ablation regime.
+
+        For NS this is the historical ns-empirical table. For PS the factor set
+        is *stoichiometric*: every element covered by the ns defaults maps to a
+        multiplicative factor of exactly 1.0 (no generic correction). We mirror
+        the ns element coverage rather than inventing ps-specific numbers, since
+        ps ablation is approximately stoichiometric and no validated generic ps
+        correction factors exist in the cited literature.
+        """
+        if self.ablation_regime is AblationRegime.NS:
+            return self._DEFAULT_FACTORS
+        # PS: stoichiometric generic defaults (1.0). Carry the ns uncertainty so
+        # the placeholder still propagates a finite, regime-honest uncertainty.
+        return {
+            matrix_type: {el: (1.0, uncert) for el, (_mult, uncert) in elements.items()}
+            for matrix_type, elements in self._DEFAULT_FACTORS.items()
+        }
+
     def _populate_defaults(self) -> None:
-        """Populate database with default correction factors from literature."""
-        for matrix_type, elements in self._DEFAULT_FACTORS.items():
+        """Populate database with default correction factors for the active regime."""
+        self._maybe_warn_uncalibrated_defaults()
+        source = f"default_{self.ablation_regime.name.lower()}_generic"
+        for matrix_type, elements in self._default_factors_for_regime().items():
             for el, (mult, uncert) in elements.items():
                 self._factors[matrix_type][el] = CorrectionFactor(
                     element=el,
                     matrix_type=matrix_type,
                     multiplicative=mult,
                     uncertainty=uncert,
-                    source="default_literature",
+                    source=source,
                 )
+
+    def _maybe_warn_uncalibrated_defaults(self) -> None:
+        """Emit a one-time warning (per regime) that generic, uncalibrated defaults are in use."""
+        regime = self.ablation_regime
+        if regime in CorrectionFactorDB._warned_default_regimes:
+            return
+        CorrectionFactorDB._warned_default_regimes.add(regime)
+        if regime is AblationRegime.PS:
+            detail = (
+                "ps-LIBS ablation is approximately stoichiometric; generic defaults "
+                "are 1.0 (no correction). Override with calibrated factors when available."
+            )
+        else:
+            detail = (
+                "these are nanosecond-pulse empirical factors and may bias non-ns data. "
+                "Pass ablation_regime='ps' for ultrashort-pulse data, or supply calibrated factors."
+            )
+        logger.warning(
+            "CorrectionFactorDB using uncalibrated generic %s-regime matrix-correction "
+            "defaults: %s",
+            regime.name.lower(),
+            detail,
+        )
 
     def add_factor(self, factor: CorrectionFactor) -> None:
         """
@@ -424,6 +573,7 @@ class MatrixEffectCorrector:
         self,
         correction_db: Optional[CorrectionFactorDB] = None,
         renormalize: bool = True,
+        ablation_regime: Union[AblationRegime, str] = AblationRegime.NS,
     ) -> None:
         """
         Initialize the matrix effect corrector.
@@ -431,11 +581,28 @@ class MatrixEffectCorrector:
         Parameters
         ----------
         correction_db : CorrectionFactorDB, optional
-            Database of correction factors. If None, uses default database.
+            Database of correction factors. If None, a default database is built
+            for ``ablation_regime``.
         renormalize : bool
             Whether to renormalize concentrations to sum to 1 after correction
+        ablation_regime : AblationRegime or str, optional
+            Laser ablation regime for the default correction database. Defaults
+            to :attr:`AblationRegime.NS` (nanosecond), preserving prior behavior.
+            Ignored when an explicit ``correction_db`` is supplied (the database
+            carries its own regime); a mismatch logs an informational note.
         """
-        self.correction_db = correction_db or CorrectionFactorDB()
+        self.ablation_regime = AblationRegime.coerce(ablation_regime)
+        if correction_db is None:
+            self.correction_db = CorrectionFactorDB(ablation_regime=self.ablation_regime)
+        else:
+            self.correction_db = correction_db
+            if correction_db.ablation_regime is not self.ablation_regime:
+                logger.info(
+                    "MatrixEffectCorrector ablation_regime=%s but supplied correction_db "
+                    "was built for %s; using the database's factors as given.",
+                    self.ablation_regime.name.lower(),
+                    correction_db.ablation_regime.name.lower(),
+                )
         self.renormalize = renormalize
 
     def classify(
@@ -900,6 +1067,7 @@ def combine_corrections(
     standard_concentration: Optional[float] = None,
     matrix_type: Optional[MatrixType] = None,
     correction_db: Optional[CorrectionFactorDB] = None,
+    ablation_regime: Union[AblationRegime, str] = AblationRegime.NS,
 ) -> Dict[str, float]:
     """
     Convenience function to apply both internal standardization and matrix corrections.
@@ -920,6 +1088,10 @@ def combine_corrections(
         Matrix type for corrections
     correction_db : CorrectionFactorDB, optional
         Custom correction factor database
+    ablation_regime : AblationRegime or str, optional
+        Laser ablation regime for the default correction database. Defaults to
+        :attr:`AblationRegime.NS` (nanosecond), preserving prior behavior. Use
+        ``"ps"`` for ultrashort-pulse data (stoichiometric generic defaults).
 
     Returns
     -------
@@ -952,6 +1124,7 @@ def combine_corrections(
     corrector = MatrixEffectCorrector(
         correction_db=correction_db,
         renormalize=True,
+        ablation_regime=ablation_regime,
     )
     matrix_result = corrector.correct(result, matrix_type)
 
