@@ -232,6 +232,114 @@ class SpectrumModel:
 
         return np.array(sigmas) if sigmas else np.array([])
 
+    def _build_n_upper_per_line(self, snapshot, populations: dict, n_lines: int) -> np.ndarray:
+        """Convert dict-based populations -> per-line ``n_upper`` array.
+
+        Lets the kernel consume Saha-Boltzmann populations without re-running
+        the solver. Mirrors the legacy per-line population lookup exactly.
+        """
+        n_upper_per_line = np.zeros(n_lines, dtype=np.float64)
+        if n_lines:
+            line_E_k = np.asarray(snapshot.line_E_k_ev)
+            line_sp_idx = np.asarray(snapshot.line_species_index)
+            for li in range(n_lines):
+                el, stage = snapshot.species[int(line_sp_idx[li])]
+                key = (el, stage, round(float(line_E_k[li]), 8))
+                n_upper_per_line[li] = populations.get(key, 0.0)
+        return n_upper_per_line
+
+    def _build_ldm_sigma_grid(self, snapshot, n_lines: int):
+        """Build the optional LDM sigma_grid (only for ``LDM_GAUSSIAN`` dispatch).
+
+        Returns ``None`` for any other broadening mode or when there are no
+        lines, matching the legacy guard.
+        """
+        if not (self.broadening_mode == BroadeningMode.LDM_GAUSSIAN and n_lines):
+            return None
+
+        from cflibs.radiation.ldm import build_sigma_grid
+
+        line_mass_amu = np.array(
+            [self._get_element_mass(el) for el, _stage in snapshot.species],
+            dtype=np.float64,
+        )[np.asarray(snapshot.line_species_index)]
+        T_eV = self.plasma.T_e_eV
+        wl_nm = np.asarray(snapshot.line_wavelengths_nm)
+        sigma_D = wl_nm * np.sqrt(
+            (T_eV * 1.602176634e-19) / (line_mass_amu * 1.67262192369e-27 * (2.99792458e8) ** 2)
+        )
+        sigma_D = np.maximum(sigma_D, 1e-6)
+        return build_sigma_grid(sigma_D)
+
+    def _run_forward_kernel(
+        self, snapshot, n_lines: int, sigma_grid, n_upper_per_line: np.ndarray
+    ) -> np.ndarray:
+        """Run the unified kernel (or emit the empty-band fallback).
+
+        The four broadening modes map to:
+          LEGACY            -> scalar Gaussian sigma; downstream conv.
+          NIST_PARITY       -> per-line instrument sigma; no downstream.
+          PHYSICAL_DOPPLER  -> per-line Doppler sigma; no Stark; no fold;
+                              downstream conv.
+          LDM_GAUSSIAN      -> LDM/DIT Gaussian path; downstream conv.
+        """
+        from cflibs.radiation.kernels import forward_model
+
+        wl_jnp = jnp.asarray(self.wavelength, dtype=jnp.float64) if HAS_JAX else self.wavelength
+        if n_lines:
+            intensity = forward_model(
+                self.plasma,
+                snapshot,
+                self.instrument,
+                wl_jnp,
+                sigma_grid=sigma_grid,
+                broadening_mode=self.broadening_mode,
+                path_length_m=self.path_length_m,
+                apply_self_absorption=True,
+                fold_instrument_sigma=(self.broadening_mode == BroadeningMode.NIST_PARITY),
+                apply_stark=self.apply_stark,
+                _precomputed_n_upper_per_line=n_upper_per_line,
+            )
+            return np.asarray(intensity)
+
+        # No transitions in band: emit zeros, then optionally Planck-RT-
+        # squelch through the same RT step. Path matches legacy behaviour.
+        intensity = np.zeros_like(self.wavelength)
+        if self.path_length_m > 0:
+            B_lambda = planck_radiance(self.wavelength, self.plasma.T_e_eV)
+            intensity = B_lambda * 0.0
+        return intensity
+
+    def _downstream_convolution_sigma(self) -> float:
+        """Pick the scalar instrument sigma for the downstream convolution step."""
+        if self.instrument.is_resolving_power_mode:
+            mid_wl = 0.5 * (self.lambda_min + self.lambda_max)
+            return self.instrument.sigma_at_wavelength(mid_wl)
+        return self.instrument.resolution_sigma_nm
+
+    def _apply_downstream_convolution(self, intensity: np.ndarray) -> np.ndarray:
+        """Apply downstream instrument convolution for the modes that need it.
+
+        NIST_PARITY folds instrument broadening into the per-line sigma, so it
+        skips this step entirely. The selected backend (JAX vs scipy) matches
+        ``self.use_jax``.
+        """
+        if self.broadening_mode == BroadeningMode.NIST_PARITY:
+            logger.debug("Skipping instrument convolution (NIST_PARITY mode)")
+            return intensity
+
+        sigma_conv = self._downstream_convolution_sigma()
+        if sigma_conv <= 0:
+            logger.debug("Skipping instrument convolution (sigma=0)")
+            return intensity
+
+        logger.debug("Applying instrument function (sigma=%.4f nm)...", sigma_conv)
+        if self.use_jax:
+            from cflibs.instrument.convolution import apply_instrument_function_jax
+
+            return apply_instrument_function_jax(self.wavelength, intensity, sigma_conv)
+        return apply_instrument_function(self.wavelength, intensity, sigma_conv)
+
     def compute_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute synthetic spectrum.
@@ -258,8 +366,6 @@ class SpectrumModel:
         PHYSICAL_DOPPLER / LDM_GAUSSIAN modes (NIST_PARITY folds instrument
         broadening into the per-line sigma).
         """
-        from cflibs.radiation.kernels import forward_model
-
         # Validate plasma
         self.plasma.validate()
 
@@ -280,61 +386,13 @@ class SpectrumModel:
 
         # 3. Convert dict-based populations -> per-line n_upper array so the
         #    kernel can consume them without re-running Saha-Boltzmann.
-        n_upper_per_line = np.zeros(n_lines, dtype=np.float64)
-        if n_lines:
-            line_E_k = np.asarray(snapshot.line_E_k_ev)
-            line_sp_idx = np.asarray(snapshot.line_species_index)
-            for li in range(n_lines):
-                el, stage = snapshot.species[int(line_sp_idx[li])]
-                key = (el, stage, round(float(line_E_k[li]), 8))
-                n_upper_per_line[li] = populations.get(key, 0.0)
+        n_upper_per_line = self._build_n_upper_per_line(snapshot, populations, n_lines)
 
         # 4. Optional LDM sigma_grid (only for LDM_GAUSSIAN dispatch).
-        sigma_grid = None
-        if self.broadening_mode == BroadeningMode.LDM_GAUSSIAN and n_lines:
-            from cflibs.radiation.ldm import build_sigma_grid
+        sigma_grid = self._build_ldm_sigma_grid(snapshot, n_lines)
 
-            line_mass_amu = np.array(
-                [self._get_element_mass(el) for el, _stage in snapshot.species],
-                dtype=np.float64,
-            )[np.asarray(snapshot.line_species_index)]
-            T_eV = self.plasma.T_e_eV
-            wl_nm = np.asarray(snapshot.line_wavelengths_nm)
-            sigma_D = wl_nm * np.sqrt(
-                (T_eV * 1.602176634e-19) / (line_mass_amu * 1.67262192369e-27 * (2.99792458e8) ** 2)
-            )
-            sigma_D = np.maximum(sigma_D, 1e-6)
-            sigma_grid = build_sigma_grid(sigma_D)
-
-        # 5. Run the unified kernel. The four broadening modes map to:
-        #      LEGACY            -> scalar Gaussian sigma; downstream conv.
-        #      NIST_PARITY       -> per-line instrument sigma; no downstream.
-        #      PHYSICAL_DOPPLER  -> per-line Doppler sigma; no Stark; no fold;
-        #                          downstream conv.
-        #      LDM_GAUSSIAN      -> LDM/DIT Gaussian path; downstream conv.
-        wl_jnp = jnp.asarray(self.wavelength, dtype=jnp.float64) if HAS_JAX else self.wavelength
-        if n_lines:
-            intensity = forward_model(
-                self.plasma,
-                snapshot,
-                self.instrument,
-                wl_jnp,
-                sigma_grid=sigma_grid,
-                broadening_mode=self.broadening_mode,
-                path_length_m=self.path_length_m,
-                apply_self_absorption=True,
-                fold_instrument_sigma=(self.broadening_mode == BroadeningMode.NIST_PARITY),
-                apply_stark=self.apply_stark,
-                _precomputed_n_upper_per_line=n_upper_per_line,
-            )
-            intensity = np.asarray(intensity)
-        else:
-            # No transitions in band: emit zeros, then optionally Planck-RT-
-            # squelch through the same RT step. Path matches legacy behaviour.
-            intensity = np.zeros_like(self.wavelength)
-            if self.path_length_m > 0:
-                B_lambda = planck_radiance(self.wavelength, self.plasma.T_e_eV)
-                intensity = B_lambda * 0.0
+        # 5. Run the unified kernel (or empty-band fallback).
+        intensity = self._run_forward_kernel(snapshot, n_lines, sigma_grid, n_upper_per_line)
 
         # 6. Apply instrument response curve (host-side multiplication; not
         #    part of the kernel because it is data-driven).
@@ -342,30 +400,8 @@ class SpectrumModel:
             logger.debug("Applying instrument response...")
             intensity = self.instrument.apply_response(self.wavelength, intensity)
 
-        # 7. Apply downstream instrument convolution for the modes that need
-        #    it (NIST_PARITY folds instrument broadening into per-line sigma,
-        #    so it skips this step).
-        if self.broadening_mode != BroadeningMode.NIST_PARITY:
-            if self.instrument.is_resolving_power_mode:
-                mid_wl = 0.5 * (self.lambda_min + self.lambda_max)
-                sigma_conv = self.instrument.sigma_at_wavelength(mid_wl)
-            else:
-                sigma_conv = self.instrument.resolution_sigma_nm
-
-            if sigma_conv > 0:
-                logger.debug("Applying instrument function (sigma=%.4f nm)...", sigma_conv)
-                if self.use_jax:
-                    from cflibs.instrument.convolution import apply_instrument_function_jax
-
-                    intensity = apply_instrument_function_jax(
-                        self.wavelength, intensity, sigma_conv
-                    )
-                else:
-                    intensity = apply_instrument_function(self.wavelength, intensity, sigma_conv)
-            else:
-                logger.debug("Skipping instrument convolution (sigma=0)")
-        else:
-            logger.debug("Skipping instrument convolution (NIST_PARITY mode)")
+        # 7. Apply downstream instrument convolution for the modes that need it.
+        intensity = self._apply_downstream_convolution(intensity)
 
         logger.info("Spectrum computation complete")
 
