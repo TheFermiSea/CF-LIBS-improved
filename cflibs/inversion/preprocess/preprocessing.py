@@ -414,6 +414,113 @@ def _select_auto_baseline_method(
     return BaselineMethod.MEDIAN
 
 
+def _compute_min_peak_distance(
+    wavelength: np.ndarray,
+    resolving_power: Optional[float],
+    min_distance_px: Optional[int],
+) -> int:
+    """Resolve the minimum inter-peak distance (in pixels) for ``find_peaks``.
+
+    Mirrors the precedence used by :func:`detect_peaks`: an explicit
+    ``min_distance_px`` overrides the resolving-power-derived value, which in
+    turn overrides the default of 3 pixels.
+
+    Parameters
+    ----------
+    wavelength : np.ndarray
+        Wavelength array in nm (used to derive pixel spacing).
+    resolving_power : float, optional
+        Instrument resolving power R = lambda/delta_lambda.
+    min_distance_px : int, optional
+        Explicit minimum peak distance in pixels.
+
+    Returns
+    -------
+    int
+        Minimum distance between peaks in pixels.
+    """
+    if min_distance_px is not None:
+        return max(1, int(min_distance_px))
+    if resolving_power is not None and resolving_power > 0:
+        mean_wl = float(np.mean(wavelength))
+        spacing = float(np.median(np.abs(np.diff(wavelength))))
+        resolution_nm = mean_wl / resolving_power
+        return max(3, int(resolution_nm / max(spacing, 1e-9)))
+    return 3
+
+
+def _filter_peaks_by_fwhm(
+    corrected: np.ndarray,
+    peak_indices: np.ndarray,
+    min_fwhm_pixels: float,
+) -> np.ndarray:
+    """Reject peaks narrower than ``min_fwhm_pixels`` (cosmic ray filter).
+
+    Parameters
+    ----------
+    corrected : np.ndarray
+        Baseline-subtracted intensity array.
+    peak_indices : np.ndarray
+        Candidate peak indices.
+    min_fwhm_pixels : float
+        Minimum peak FWHM in pixels.
+
+    Returns
+    -------
+    np.ndarray
+        Peak indices passing the FWHM filter.  Returns the input unchanged if
+        ``peak_widths`` fails.
+    """
+    try:
+        widths_result = peak_widths(corrected, peak_indices, rel_height=0.5)
+        fwhm_pixels = widths_result[0]
+        width_mask = fwhm_pixels >= min_fwhm_pixels
+        return peak_indices[width_mask]
+    except (ValueError, RuntimeError) as exc:
+        logger.debug("peak_widths failed for %d peaks: %s", len(peak_indices), exc)
+        return peak_indices
+
+
+def _confirm_peaks_second_derivative(
+    wavelength: np.ndarray,
+    corrected: np.ndarray,
+    peak_indices: np.ndarray,
+) -> np.ndarray:
+    """Confirm peaks via positive second-derivative curvature.
+
+    Peaks must have positive curvature (-d2I/dlambda2 > 0) within a +/-2 pixel
+    neighborhood.  Short arrays (< 3 points) are returned unchanged because
+    ``edge_order=2`` requires at least 3 points.
+
+    Parameters
+    ----------
+    wavelength : np.ndarray
+        Wavelength array in nm.
+    corrected : np.ndarray
+        Baseline-subtracted intensity array.
+    peak_indices : np.ndarray
+        Candidate peak indices.
+
+    Returns
+    -------
+    np.ndarray
+        Confirmed peak indices.
+    """
+    if wavelength.size < 3:  # edge_order=2 requires >= 3 points
+        return peak_indices  # skip second-derivative filtering for short arrays
+    spacing = float(np.median(np.abs(np.diff(wavelength))))
+    d1 = np.gradient(corrected, spacing, edge_order=2)
+    d2 = -np.gradient(d1, spacing, edge_order=2)
+    d2[d2 < 0] = 0.0
+    confirmed = []
+    for idx in peak_indices:
+        lo = max(0, idx - 2)
+        hi = min(len(d2), idx + 3)
+        if np.max(d2[lo:hi]) > 0:
+            confirmed.append(idx)
+    return np.array(confirmed, dtype=int) if confirmed else np.array([], dtype=int)
+
+
 def detect_peaks(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -483,15 +590,7 @@ def detect_peaks(
     prominence = noise * prominence_factor
 
     # Minimum distance between peaks
-    if min_distance_px is not None:
-        min_distance = max(1, int(min_distance_px))
-    elif resolving_power is not None and resolving_power > 0:
-        mean_wl = float(np.mean(wavelength))
-        spacing = float(np.median(np.abs(np.diff(wavelength))))
-        resolution_nm = mean_wl / resolving_power
-        min_distance = max(3, int(resolution_nm / max(spacing, 1e-9)))
-    else:
-        min_distance = 3
+    min_distance = _compute_min_peak_distance(wavelength, resolving_power, min_distance_px)
 
     peak_indices, _ = find_peaks(
         corrected,
@@ -505,32 +604,14 @@ def detect_peaks(
 
     # Cosmic ray rejection: filter by minimum FWHM
     if min_fwhm_pixels > 0:
-        try:
-            widths_result = peak_widths(corrected, peak_indices, rel_height=0.5)
-            fwhm_pixels = widths_result[0]
-            width_mask = fwhm_pixels >= min_fwhm_pixels
-            peak_indices = peak_indices[width_mask]
-        except (ValueError, RuntimeError) as exc:
-            logger.debug("peak_widths failed for %d peaks: %s", len(peak_indices), exc)
+        peak_indices = _filter_peaks_by_fwhm(corrected, peak_indices, min_fwhm_pixels)
 
     if len(peak_indices) == 0:
         return []
 
     # Second-derivative confirmation
     if use_second_derivative and len(peak_indices) > 0:
-        if wavelength.size >= 3:  # edge_order=2 requires >= 3 points
-            spacing = float(np.median(np.abs(np.diff(wavelength))))
-            d1 = np.gradient(corrected, spacing, edge_order=2)
-            d2 = -np.gradient(d1, spacing, edge_order=2)
-            d2[d2 < 0] = 0.0
-            confirmed = []
-            for idx in peak_indices:
-                lo = max(0, idx - 2)
-                hi = min(len(d2), idx + 3)
-                if np.max(d2[lo:hi]) > 0:
-                    confirmed.append(idx)
-            peak_indices = np.array(confirmed, dtype=int) if confirmed else np.array([], dtype=int)
-        # else: skip second-derivative filtering for short arrays
+        peak_indices = _confirm_peaks_second_derivative(wavelength, corrected, peak_indices)
 
     return [(int(idx), float(wavelength[idx])) for idx in peak_indices]
 
