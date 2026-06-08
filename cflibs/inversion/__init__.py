@@ -128,6 +128,7 @@ _ATTRIBUTE_EXPORT_GROUPS = {
         "mad_clean_channels",
     ],
     "cflibs.inversion.physics.matrix_effects": [
+        "AblationRegime",
         "MatrixType",
         "MatrixClassificationResult",
         "CorrectionFactor",
@@ -300,6 +301,7 @@ __all__ = [
     "mad_outliers_1d",
     "mad_outliers_spectra",
     "mad_clean_channels",
+    "AblationRegime",
     "MatrixType",
     "MatrixClassificationResult",
     "CorrectionFactor",

@@ -3,6 +3,7 @@ Tests for matrix effect correction framework.
 
 Tests cover:
 - MatrixType enum
+- AblationRegime enum and ns/ps regime gating of default factors
 - MatrixEffectCorrector classification and correction
 - InternalStandardizer normalization
 - CorrectionFactorDB storage and retrieval
@@ -10,12 +11,14 @@ Tests cover:
 """
 
 import json
+import logging
 import tempfile
 from pathlib import Path
 
 import pytest
 
 from cflibs.inversion.matrix_effects import (
+    AblationRegime,
     MatrixType,
     CorrectionFactor,
     CorrectionFactorDB,
@@ -53,6 +56,166 @@ class TestMatrixType:
         """Test invalid name raises KeyError."""
         with pytest.raises(KeyError):
             _ = MatrixType["INVALID"]
+
+
+# ============================================================================
+# AblationRegime / ps-regime gating Tests (#13a)
+# ============================================================================
+
+
+class TestAblationRegime:
+    """Tests for the AblationRegime enum and regime coercion."""
+
+    def test_regimes_defined(self):
+        """ns (default) and ps regimes must exist."""
+        assert {r.name for r in AblationRegime} == {"NS", "PS"}
+
+    def test_coerce_from_enum(self):
+        assert AblationRegime.coerce(AblationRegime.PS) is AblationRegime.PS
+
+    def test_coerce_from_string_case_insensitive(self):
+        assert AblationRegime.coerce("ps") is AblationRegime.PS
+        assert AblationRegime.coerce("NS") is AblationRegime.NS
+        assert AblationRegime.coerce(" Ns ") is AblationRegime.NS
+
+    def test_coerce_invalid_raises(self):
+        with pytest.raises(ValueError, match="Unknown ablation_regime"):
+            AblationRegime.coerce("femtosecond")
+
+
+class TestPsRegimeGating:
+    """
+    ps-LIBS regime gating of empirical matrix-correction factors (#13a).
+
+    The historical ``_DEFAULT_FACTORS`` are nanosecond-pulse empirical factors
+    (e.g. METALLIC.C = 0.85, ~15% carbon loss from differential ns ablation).
+    Picosecond ablation is approximately stoichiometric (Russo et al. 2002),
+    so the generic ps default factor set must collapse to 1.0 for every element
+    rather than reusing the biasing ns numbers.
+    """
+
+    def test_default_regime_is_ns(self):
+        """Default constructor preserves the historical (ns) behavior."""
+        db = CorrectionFactorDB()
+        assert db.ablation_regime is AblationRegime.NS
+
+    def test_ns_defaults_unchanged(self):
+        """ns regime must reproduce the historical empirical factors exactly."""
+        db = CorrectionFactorDB(ablation_regime=AblationRegime.NS)
+        # The canonical ns carbon-loss factor and a couple of others.
+        assert db.get_factor("C", MatrixType.METALLIC).multiplicative == pytest.approx(0.85)
+        assert db.get_factor("Mn", MatrixType.METALLIC).multiplicative == pytest.approx(1.05)
+        assert db.get_factor("C", MatrixType.ORGANIC).multiplicative == pytest.approx(0.70)
+        assert db.get_factor("Si", MatrixType.OXIDE).multiplicative == pytest.approx(1.10)
+
+    def test_ps_defaults_are_stoichiometric(self):
+        """ps regime: every generic default multiplicative factor is exactly 1.0."""
+        db_ps = CorrectionFactorDB(ablation_regime="ps")
+        assert db_ps.ablation_regime is AblationRegime.PS
+        for matrix_type in db_ps._factors:
+            for el, cf in db_ps._factors[matrix_type].items():
+                assert cf.multiplicative == pytest.approx(
+                    1.0
+                ), f"ps default for {el} in {matrix_type.name} must be 1.0"
+
+    def test_ps_covers_same_elements_as_ns(self):
+        """ps default coverage mirrors ns (no invented or dropped elements)."""
+        db_ns = CorrectionFactorDB(ablation_regime=AblationRegime.NS)
+        db_ps = CorrectionFactorDB(ablation_regime=AblationRegime.PS)
+        assert db_ps.elements == db_ns.elements
+        for mt in MatrixType:
+            assert set(db_ps.get_factors_for_matrix(mt)) == set(db_ns.get_factors_for_matrix(mt))
+
+    def test_ps_differs_from_ns_defaults(self):
+        """ps and ns default factor sets must genuinely differ for biased elements."""
+        db_ns = CorrectionFactorDB(ablation_regime=AblationRegime.NS)
+        db_ps = CorrectionFactorDB(ablation_regime=AblationRegime.PS)
+        ns_c = db_ns.get_factor("C", MatrixType.METALLIC).multiplicative
+        ps_c = db_ps.get_factor("C", MatrixType.METALLIC).multiplicative
+        assert ns_c != pytest.approx(ps_c)
+        assert ns_c == pytest.approx(0.85)
+        assert ps_c == pytest.approx(1.0)
+
+    def test_ps_correction_is_identity(self):
+        """A ps corrector must leave (already-normalized) composition unchanged."""
+        result = CFLIBSResult(
+            temperature_K=8000.0,
+            temperature_uncertainty_K=300.0,
+            electron_density_cm3=1e17,
+            concentrations={"Fe": 0.70, "Cr": 0.18, "Ni": 0.07, "C": 0.05},
+            concentration_uncertainties={},
+            iterations=3,
+            converged=True,
+        )
+        corrector = MatrixEffectCorrector(ablation_regime="ps")
+        corrected = corrector.correct(result, matrix_type=MatrixType.METALLIC)
+        for el, c in result.concentrations.items():
+            assert corrected.corrected_concentrations[el] == pytest.approx(c, rel=1e-9)
+
+    def test_ns_correction_alters_carbon(self):
+        """For contrast: the ns corrector applies the carbon-loss factor (behavior preserved)."""
+        result = CFLIBSResult(
+            temperature_K=8000.0,
+            temperature_uncertainty_K=300.0,
+            electron_density_cm3=1e17,
+            concentrations={"Fe": 0.95, "C": 0.05},
+            concentration_uncertainties={},
+            iterations=3,
+            converged=True,
+        )
+        # renormalize=False isolates the raw multiplicative effect.
+        corrector = MatrixEffectCorrector(ablation_regime="ns", renormalize=False)
+        corrected = corrector.correct(result, matrix_type=MatrixType.METALLIC)
+        assert corrected.corrected_concentrations["C"] == pytest.approx(0.05 * 0.85, rel=1e-9)
+
+    def test_warning_emitted_on_uncalibrated_ps_defaults(self, caplog):
+        """A one-time warning must fire when generic uncalibrated ps defaults are used."""
+        # Reset the process-level dedupe set so the warning is observable here.
+        CorrectionFactorDB._warned_default_regimes.discard(AblationRegime.PS)
+        with caplog.at_level(logging.WARNING, logger="cflibs.inversion.matrix_effects"):
+            CorrectionFactorDB(ablation_regime="ps")
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("ps" in m and "uncalibrated" in m for m in messages), messages
+
+    def test_warning_emitted_on_uncalibrated_ns_defaults(self, caplog):
+        """The generic ns defaults also warn once (they are uncalibrated/generic)."""
+        CorrectionFactorDB._warned_default_regimes.discard(AblationRegime.NS)
+        with caplog.at_level(logging.WARNING, logger="cflibs.inversion.matrix_effects"):
+            CorrectionFactorDB(ablation_regime=AblationRegime.NS)
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("ns" in m and "uncalibrated" in m for m in messages), messages
+
+    def test_warning_is_one_time_per_regime(self, caplog):
+        """The uncalibrated-defaults warning must not repeat for the same regime."""
+        CorrectionFactorDB._warned_default_regimes.discard(AblationRegime.PS)
+        with caplog.at_level(logging.WARNING, logger="cflibs.inversion.matrix_effects"):
+            CorrectionFactorDB(ablation_regime="ps")
+            first_count = sum(
+                1
+                for r in caplog.records
+                if "uncalibrated" in r.getMessage() and "ps" in r.getMessage()
+            )
+            CorrectionFactorDB(ablation_regime="ps")
+            CorrectionFactorDB(ablation_regime="ps")
+            second_count = sum(
+                1
+                for r in caplog.records
+                if "uncalibrated" in r.getMessage() and "ps" in r.getMessage()
+            )
+        assert first_count == 1
+        assert second_count == 1
+
+    def test_corrector_mismatched_db_regime_logs_info(self, caplog):
+        """Supplying a db whose regime differs from the corrector's logs an info note."""
+        db_ns = CorrectionFactorDB(ablation_regime=AblationRegime.NS)
+        with caplog.at_level(logging.INFO, logger="cflibs.inversion.matrix_effects"):
+            corrector = MatrixEffectCorrector(correction_db=db_ns, ablation_regime="ps")
+        # The supplied database's factors are used as-given (ns numbers here).
+        assert corrector.correction_db is db_ns
+        assert any(
+            "ablation_regime" in r.getMessage() and "supplied correction_db" in r.getMessage()
+            for r in caplog.records
+        )
 
 
 # ============================================================================
