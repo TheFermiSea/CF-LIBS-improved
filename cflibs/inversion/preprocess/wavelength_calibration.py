@@ -253,24 +253,20 @@ def _select_sample_indices(
     return None
 
 
-def _ransac_fit(
+def _ransac_search(
     model: CalibrationModel,
     x: np.ndarray,
     y: np.ndarray,
     peak_ids: np.ndarray,
     line_ids: np.ndarray,
     weights: np.ndarray,
-    n_peaks_total: int,
+    probs: np.ndarray,
+    rng: np.random.Generator,
+    min_pts: int,
     inlier_tolerance_nm: float,
     iterations: int,
-    seed: int,
-) -> Optional[_ModelFit]:
-    min_pts = _model_min_points(model)
-    if x.size < min_pts:
-        return None
-
-    rng = np.random.default_rng(seed + _model_param_count(model))
-    probs = weights / np.sum(weights)
+) -> Tuple[Optional[Tuple[float, ...]], np.ndarray]:
+    """Run the RANSAC sampling loop, returning the best coefficients/inliers."""
     best_coef: Optional[Tuple[float, ...]] = None
     best_inliers: np.ndarray = np.array([], dtype=int)
     best_score = (-1, np.inf)  # maximize n_inliers, then minimize median residual
@@ -297,10 +293,21 @@ def _ransac_fit(
             best_coef = coef
             best_inliers = selected
 
-    if best_coef is None or best_inliers.size < min_pts:
-        return None
+    return best_coef, best_inliers
 
-    # Refit on robust inliers
+
+def _refine_robust_inliers(
+    model: CalibrationModel,
+    x: np.ndarray,
+    y: np.ndarray,
+    peak_ids: np.ndarray,
+    line_ids: np.ndarray,
+    weights: np.ndarray,
+    best_inliers: np.ndarray,
+    min_pts: int,
+    inlier_tolerance_nm: float,
+) -> Optional[np.ndarray]:
+    """Refit on best inliers and recompute the robust inlier set."""
     refit_coef = _fit_model(x[best_inliers], y[best_inliers], model, weights=weights[best_inliers])
     if refit_coef is None:
         return None
@@ -312,8 +319,19 @@ def _ransac_fit(
 
     if robust_inliers.size < min_pts:
         return None
+    return robust_inliers
 
-    # Final refine
+
+def _build_model_fit(
+    model: CalibrationModel,
+    x: np.ndarray,
+    y: np.ndarray,
+    peak_ids: np.ndarray,
+    weights: np.ndarray,
+    robust_inliers: np.ndarray,
+    n_peaks_total: int,
+) -> Optional[_ModelFit]:
+    """Final refine on robust inliers and assemble the :class:`_ModelFit`."""
     final_coef = _fit_model(
         x[robust_inliers], y[robust_inliers], model, weights=weights[robust_inliers]
     )
@@ -336,6 +354,50 @@ def _ransac_fit(
         inlier_indices=robust_inliers,
         matched_peak_fraction=matched_peak_fraction,
     )
+
+
+def _ransac_fit(
+    model: CalibrationModel,
+    x: np.ndarray,
+    y: np.ndarray,
+    peak_ids: np.ndarray,
+    line_ids: np.ndarray,
+    weights: np.ndarray,
+    n_peaks_total: int,
+    inlier_tolerance_nm: float,
+    iterations: int,
+    seed: int,
+) -> Optional[_ModelFit]:
+    min_pts = _model_min_points(model)
+    if x.size < min_pts:
+        return None
+
+    rng = np.random.default_rng(seed + _model_param_count(model))
+    probs = weights / np.sum(weights)
+
+    best_coef, best_inliers = _ransac_search(
+        model,
+        x,
+        y,
+        peak_ids,
+        line_ids,
+        weights,
+        probs,
+        rng,
+        min_pts,
+        inlier_tolerance_nm,
+        iterations,
+    )
+    if best_coef is None or best_inliers.size < min_pts:
+        return None
+
+    robust_inliers = _refine_robust_inliers(
+        model, x, y, peak_ids, line_ids, weights, best_inliers, min_pts, inlier_tolerance_nm
+    )
+    if robust_inliers is None:
+        return None
+
+    return _build_model_fit(model, x, y, peak_ids, weights, robust_inliers, n_peaks_total)
 
 
 def _build_reference_line_pool(
@@ -374,6 +436,155 @@ def _build_reference_line_pool(
         return np.array([], dtype=float), np.array([], dtype=float)
 
     return np.asarray(line_wl, dtype=float), np.asarray(line_strength, dtype=float)
+
+
+def _build_candidate_pairs(
+    peak_wl: np.ndarray,
+    peak_amp: np.ndarray,
+    line_wl: np.ndarray,
+    line_strength: np.ndarray,
+    max_pair_window_nm: float,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Build the candidate peak-line pair pool as parallel numpy arrays."""
+    cand_x: List[float] = []
+    cand_y: List[float] = []
+    cand_peak_id: List[int] = []
+    cand_line_id: List[int] = []
+    cand_weight: List[float] = []
+
+    line_strength_n = line_strength / max(np.max(line_strength), 1e-12)
+    peak_amp_n = peak_amp / max(np.max(peak_amp), 1e-12)
+
+    for p_i, (pw, pa) in enumerate(zip(peak_wl, peak_amp_n, strict=False)):
+        delta = np.abs(line_wl - pw)
+        hit = np.where(delta <= max_pair_window_nm)[0]
+        for l_i in hit:
+            cand_x.append(float(pw))
+            cand_y.append(float(line_wl[l_i]))
+            cand_peak_id.append(int(p_i))
+            cand_line_id.append(int(l_i))
+            # Blend peak prominence and line observability.
+            w = np.sqrt(max(float(pa), 1e-6) * max(float(line_strength_n[l_i]), 1e-6))
+            cand_weight.append(w)
+
+    return (
+        np.asarray(cand_x, dtype=float),
+        np.asarray(cand_y, dtype=float),
+        np.asarray(cand_peak_id, dtype=int),
+        np.asarray(cand_line_id, dtype=int),
+        np.asarray(cand_weight, dtype=float),
+    )
+
+
+def _fit_candidate_models(
+    models: List[CalibrationModel],
+    x: np.ndarray,
+    y: np.ndarray,
+    peak_ids: np.ndarray,
+    line_ids: np.ndarray,
+    weights: np.ndarray,
+    wavelength: np.ndarray,
+    n_peaks_total: int,
+    inlier_tolerance_nm: float,
+    ransac_iterations: int,
+    random_seed: int,
+) -> List[_ModelFit]:
+    """RANSAC-fit each candidate model, keeping only monotonic fits."""
+    fits: List[_ModelFit] = []
+    for m in models:
+        fit = _ransac_fit(
+            model=m,
+            x=x,
+            y=y,
+            peak_ids=peak_ids,
+            line_ids=line_ids,
+            weights=weights,
+            n_peaks_total=n_peaks_total,
+            inlier_tolerance_nm=inlier_tolerance_nm,
+            iterations=ransac_iterations,
+            seed=random_seed,
+        )
+        if fit is None:
+            continue
+        if not _is_monotonic_on_grid(m, fit.coefficients, wavelength):
+            logger.debug("Rejected non-monotonic %s calibration fit: %s", m, fit.coefficients)
+            continue
+        fits.append(fit)
+    return fits
+
+
+def _assemble_calibration_result(
+    fits: List[_ModelFit],
+    best: _ModelFit,
+    wavelength: np.ndarray,
+    peak_wl: np.ndarray,
+    line_wl: np.ndarray,
+    peak_ids: np.ndarray,
+    x: np.ndarray,
+    apply_quality_gate: bool,
+    quality_min_inliers: int,
+    quality_min_peak_match_fraction: float,
+    quality_max_rmse_nm: float,
+    quality_min_inlier_span_fraction: float,
+    quality_max_abs_correction_nm: float,
+) -> WavelengthCalibrationResult:
+    """Run the quality gate, build diagnostics, and assemble the final result."""
+    quality_passed = True
+    quality_reason = "passed"
+    quality_metrics: Dict[str, float] = {}
+    if apply_quality_gate:
+        quality_passed, quality_reason, quality_metrics = _quality_gate_check(
+            fit=best,
+            wavelength=wavelength,
+            peak_wl=peak_wl,
+            peak_ids=peak_ids,
+            min_inliers=quality_min_inliers,
+            min_peak_match_fraction=quality_min_peak_match_fraction,
+            max_rmse_nm=quality_max_rmse_nm,
+            min_inlier_span_fraction=quality_min_inlier_span_fraction,
+            max_abs_correction_nm=quality_max_abs_correction_nm,
+        )
+
+    corrected = (
+        _eval_model(wavelength, best.model, best.coefficients)
+        if quality_passed
+        else wavelength.copy()
+    )
+    details = {
+        "peak_count": float(peak_wl.size),
+        "line_pool_size": float(line_wl.size),
+        "candidate_count": float(x.size),
+        "selected_model_bic": float(best.bic),
+        "quality_gate_enabled": bool(apply_quality_gate),
+        "quality_passed": bool(quality_passed),
+        "quality_reason": quality_reason,
+        "quality_min_inliers": float(quality_min_inliers),
+        "quality_min_peak_match_fraction": float(quality_min_peak_match_fraction),
+        "quality_max_rmse_nm": float(quality_max_rmse_nm),
+        "quality_min_inlier_span_fraction": float(quality_min_inlier_span_fraction),
+        "quality_max_abs_correction_nm": float(quality_max_abs_correction_nm),
+    }
+    for fit in fits:
+        details[f"{fit.model}_bic"] = float(fit.bic)
+        details[f"{fit.model}_rmse_nm"] = float(fit.rmse_nm)
+        details[f"{fit.model}_n_inliers"] = float(fit.n_inliers)
+    details.update(quality_metrics)
+
+    return WavelengthCalibrationResult(
+        success=True,
+        model=best.model,
+        coefficients=best.coefficients,
+        corrected_wavelength=corrected,
+        bic=float(best.bic),
+        rmse_nm=float(best.rmse_nm),
+        n_inliers=int(best.n_inliers),
+        n_peaks=int(peak_wl.size),
+        n_candidates=int(x.size),
+        matched_peak_fraction=float(best.matched_peak_fraction),
+        quality_passed=quality_passed,
+        quality_reason=quality_reason,
+        details=details,
+    )
 
 
 def calibrate_wavelength_axis(
@@ -526,28 +737,11 @@ def calibrate_wavelength_axis(
         )
 
     # Build candidate pair pool
-    cand_x: List[float] = []
-    cand_y: List[float] = []
-    cand_peak_id: List[int] = []
-    cand_line_id: List[int] = []
-    cand_weight: List[float] = []
+    x, y, peak_ids, line_ids, weights = _build_candidate_pairs(
+        peak_wl, peak_amp, line_wl, line_strength, max_pair_window_nm
+    )
 
-    line_strength_n = line_strength / max(np.max(line_strength), 1e-12)
-    peak_amp_n = peak_amp / max(np.max(peak_amp), 1e-12)
-
-    for p_i, (pw, pa) in enumerate(zip(peak_wl, peak_amp_n, strict=False)):
-        delta = np.abs(line_wl - pw)
-        hit = np.where(delta <= max_pair_window_nm)[0]
-        for l_i in hit:
-            cand_x.append(float(pw))
-            cand_y.append(float(line_wl[l_i]))
-            cand_peak_id.append(int(p_i))
-            cand_line_id.append(int(l_i))
-            # Blend peak prominence and line observability.
-            w = np.sqrt(max(float(pa), 1e-6) * max(float(line_strength_n[l_i]), 1e-6))
-            cand_weight.append(w)
-
-    if not cand_x:
+    if x.size == 0:
         return WavelengthCalibrationResult(
             success=False,
             model="none",
@@ -564,37 +758,24 @@ def calibrate_wavelength_axis(
             details={"reason": "no_candidate_pairs"},
         )
 
-    x = np.asarray(cand_x, dtype=float)
-    y = np.asarray(cand_y, dtype=float)
-    peak_ids = np.asarray(cand_peak_id, dtype=int)
-    line_ids = np.asarray(cand_line_id, dtype=int)
-    weights = np.asarray(cand_weight, dtype=float)
-
     if mode == "auto":
         models = [m for m in candidate_models if m in {"shift", "affine", "quadratic"}]
     else:
         models = [mode]
 
-    fits: List[_ModelFit] = []
-    for m in models:
-        fit = _ransac_fit(
-            model=m,
-            x=x,
-            y=y,
-            peak_ids=peak_ids,
-            line_ids=line_ids,
-            weights=weights,
-            n_peaks_total=int(peak_wl.size),
-            inlier_tolerance_nm=inlier_tolerance_nm,
-            iterations=ransac_iterations,
-            seed=random_seed,
-        )
-        if fit is None:
-            continue
-        if not _is_monotonic_on_grid(m, fit.coefficients, wavelength):
-            logger.debug("Rejected non-monotonic %s calibration fit: %s", m, fit.coefficients)
-            continue
-        fits.append(fit)
+    fits = _fit_candidate_models(
+        models=models,
+        x=x,
+        y=y,
+        peak_ids=peak_ids,
+        line_ids=line_ids,
+        weights=weights,
+        wavelength=wavelength,
+        n_peaks_total=int(peak_wl.size),
+        inlier_tolerance_nm=inlier_tolerance_nm,
+        ransac_iterations=ransac_iterations,
+        random_seed=random_seed,
+    )
 
     if not fits:
         return WavelengthCalibrationResult(
@@ -616,61 +797,20 @@ def calibrate_wavelength_axis(
     fits.sort(key=lambda f: f.bic)
     best = fits[0]
 
-    quality_passed = True
-    quality_reason = "passed"
-    quality_metrics: Dict[str, float] = {}
-    if apply_quality_gate:
-        quality_passed, quality_reason, quality_metrics = _quality_gate_check(
-            fit=best,
-            wavelength=wavelength,
-            peak_wl=peak_wl,
-            peak_ids=peak_ids,
-            min_inliers=quality_min_inliers,
-            min_peak_match_fraction=quality_min_peak_match_fraction,
-            max_rmse_nm=quality_max_rmse_nm,
-            min_inlier_span_fraction=quality_min_inlier_span_fraction,
-            max_abs_correction_nm=quality_max_abs_correction_nm,
-        )
-
-    corrected = (
-        _eval_model(wavelength, best.model, best.coefficients)
-        if quality_passed
-        else wavelength.copy()
-    )
-    details = {
-        "peak_count": float(peak_wl.size),
-        "line_pool_size": float(line_wl.size),
-        "candidate_count": float(x.size),
-        "selected_model_bic": float(best.bic),
-        "quality_gate_enabled": bool(apply_quality_gate),
-        "quality_passed": bool(quality_passed),
-        "quality_reason": quality_reason,
-        "quality_min_inliers": float(quality_min_inliers),
-        "quality_min_peak_match_fraction": float(quality_min_peak_match_fraction),
-        "quality_max_rmse_nm": float(quality_max_rmse_nm),
-        "quality_min_inlier_span_fraction": float(quality_min_inlier_span_fraction),
-        "quality_max_abs_correction_nm": float(quality_max_abs_correction_nm),
-    }
-    for fit in fits:
-        details[f"{fit.model}_bic"] = float(fit.bic)
-        details[f"{fit.model}_rmse_nm"] = float(fit.rmse_nm)
-        details[f"{fit.model}_n_inliers"] = float(fit.n_inliers)
-    details.update(quality_metrics)
-
-    return WavelengthCalibrationResult(
-        success=True,
-        model=best.model,
-        coefficients=best.coefficients,
-        corrected_wavelength=corrected,
-        bic=float(best.bic),
-        rmse_nm=float(best.rmse_nm),
-        n_inliers=int(best.n_inliers),
-        n_peaks=int(peak_wl.size),
-        n_candidates=int(x.size),
-        matched_peak_fraction=float(best.matched_peak_fraction),
-        quality_passed=quality_passed,
-        quality_reason=quality_reason,
-        details=details,
+    return _assemble_calibration_result(
+        fits=fits,
+        best=best,
+        wavelength=wavelength,
+        peak_wl=peak_wl,
+        line_wl=line_wl,
+        peak_ids=peak_ids,
+        x=x,
+        apply_quality_gate=apply_quality_gate,
+        quality_min_inliers=quality_min_inliers,
+        quality_min_peak_match_fraction=quality_min_peak_match_fraction,
+        quality_max_rmse_nm=quality_max_rmse_nm,
+        quality_min_inlier_span_fraction=quality_min_inlier_span_fraction,
+        quality_max_abs_correction_nm=quality_max_abs_correction_nm,
     )
 
 
@@ -752,6 +892,260 @@ def _no_op_result(wavelength: np.ndarray, reason: str) -> WavelengthCalibrationR
         quality_passed=False,
         quality_reason=reason,
         details={"reason": reason},
+    )
+
+
+@dataclass
+class _SegmentOutcome:
+    status: str
+    diag: Dict[str, Any]
+    n_inliers: int
+    rmse_nm: Optional[float]
+
+
+def _fit_one_segment(
+    index: int,
+    a: int,
+    b: int,
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    corrected: np.ndarray,
+    global_offset: np.ndarray,
+    atomic_db: AtomicDatabase,
+    elements: Sequence[str],
+    *,
+    min_segment_points: int,
+    sparse_segment_points: int,
+    sparse_segment_max_models: Sequence[CalibrationModel],
+    candidate_models: Sequence[CalibrationModel],
+    inlier_tolerance_nm: float,
+    max_pair_window_nm: float,
+    segment_min_inliers: int,
+    segment_max_rmse_nm: float,
+    random_seed: int,
+    calibrate_kwargs: Dict[str, Any],
+) -> _SegmentOutcome:
+    """Calibrate one segment, writing its correction into ``corrected[a:b]``."""
+    seg_wl = wavelength[a:b]
+    seg_in = intensity[a:b]
+    n_pts = int(seg_wl.size)
+    status = "global"
+    seg_model = "none"
+    seg_n_in = 0
+    seg_rmse = float("inf")
+    accepted_inliers = 0
+    accepted_rmse: Optional[float] = None
+
+    if n_pts >= min_segment_points:
+        models = sparse_segment_max_models if n_pts < sparse_segment_points else candidate_models
+        seg_cal = calibrate_wavelength_axis(
+            wavelength=seg_wl,
+            intensity=seg_in,
+            atomic_db=atomic_db,
+            elements=elements,
+            mode="auto",
+            candidate_models=tuple(models),
+            inlier_tolerance_nm=inlier_tolerance_nm,
+            max_pair_window_nm=max_pair_window_nm,
+            apply_quality_gate=False,
+            random_seed=random_seed + index,
+            **calibrate_kwargs,
+        )
+        seg_model = seg_cal.model
+        seg_n_in = int(seg_cal.n_inliers)
+        seg_rmse = float(seg_cal.rmse_nm)
+        trusted = (
+            seg_cal.success
+            and seg_cal.model != "none"
+            and seg_n_in >= segment_min_inliers
+            and seg_rmse <= segment_max_rmse_nm
+        )
+        if trusted:
+            corrected[a:b] = seg_cal.corrected_wavelength
+            status = "fit"
+            accepted_inliers = seg_n_in
+            accepted_rmse = seg_rmse
+
+    if status != "fit":
+        # Fallback 1: global single-axis correction over this segment.
+        corrected[a:b] = seg_wl + global_offset[a:b]
+
+    diag = {
+        "index": index,
+        "wl_min": float(seg_wl.min()) if n_pts else 0.0,
+        "wl_max": float(seg_wl.max()) if n_pts else 0.0,
+        "n_points": n_pts,
+        "model": seg_model,
+        "n_inliers": seg_n_in,
+        "rmse_nm": seg_rmse,
+        "status": status,
+    }
+    return _SegmentOutcome(
+        status=status, diag=diag, n_inliers=accepted_inliers, rmse_nm=accepted_rmse
+    )
+
+
+def _run_segments(
+    bounds: List[int],
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    corrected: np.ndarray,
+    global_offset: np.ndarray,
+    atomic_db: AtomicDatabase,
+    elements: Sequence[str],
+    *,
+    min_segment_points: int,
+    sparse_segment_points: int,
+    sparse_segment_max_models: Sequence[CalibrationModel],
+    candidate_models: Sequence[CalibrationModel],
+    inlier_tolerance_nm: float,
+    max_pair_window_nm: float,
+    segment_min_inliers: int,
+    segment_max_rmse_nm: float,
+    random_seed: int,
+    calibrate_kwargs: Dict[str, Any],
+) -> Tuple[List[Dict[str, Any]], List[str], int, List[float]]:
+    """Calibrate every segment, accumulating diagnostics and inlier stats."""
+    seg_diag: List[Dict[str, Any]] = []
+    seg_status: List[str] = []  # "fit" | "global" | "neighbor" per segment
+    total_inliers = 0
+    rmse_accum: List[float] = []
+
+    for i in range(len(bounds) - 1):
+        a, b = bounds[i], bounds[i + 1]
+        outcome = _fit_one_segment(
+            i,
+            a,
+            b,
+            wavelength,
+            intensity,
+            corrected,
+            global_offset,
+            atomic_db,
+            elements,
+            min_segment_points=min_segment_points,
+            sparse_segment_points=sparse_segment_points,
+            sparse_segment_max_models=sparse_segment_max_models,
+            candidate_models=candidate_models,
+            inlier_tolerance_nm=inlier_tolerance_nm,
+            max_pair_window_nm=max_pair_window_nm,
+            segment_min_inliers=segment_min_inliers,
+            segment_max_rmse_nm=segment_max_rmse_nm,
+            random_seed=random_seed,
+            calibrate_kwargs=calibrate_kwargs,
+        )
+        if outcome.status == "fit":
+            total_inliers += outcome.n_inliers
+            if outcome.rmse_nm is not None:
+                rmse_accum.append(outcome.rmse_nm)
+        seg_diag.append(outcome.diag)
+        seg_status.append(outcome.status)
+
+    return seg_diag, seg_status, total_inliers, rmse_accum
+
+
+def _apply_neighbor_fallback(
+    bounds: List[int],
+    wavelength: np.ndarray,
+    corrected: np.ndarray,
+    seg_diag: List[Dict[str, Any]],
+    seg_status: List[str],
+) -> None:
+    """Fallback 2: borrow the nearest accepted-fit neighbour's median offset."""
+    fit_idx = [i for i, s in enumerate(seg_status) if s == "fit"]
+    if not fit_idx:
+        return
+    for i, s in enumerate(seg_status):
+        if s == "fit":
+            continue
+        nearest = min(fit_idx, key=lambda j: abs(j - i))
+        a, b = bounds[i], bounds[i + 1]
+        na, nb = bounds[nearest], bounds[nearest + 1]
+        neighbor_offset = float(np.median(corrected[na:nb] - wavelength[na:nb]))
+        corrected[a:b] = wavelength[a:b] + neighbor_offset
+        seg_diag[i]["status"] = "neighbor"
+        seg_status[i] = "neighbor"
+
+
+def _restore_seam_monotonicity(
+    bounds: List[int], corrected: np.ndarray
+) -> Tuple[int, float, float]:
+    """Shift downstream segments up to remove seam-boundary overlaps."""
+    n_clamped = 0
+    max_clamp_nm = 0.0
+    cumulative_shift = 0.0
+    for k in range(1, len(bounds) - 1):
+        prev_end = bounds[k] - 1  # last sample of previous segment
+        cur_start = bounds[k]  # first sample of this segment
+        deficit = corrected[prev_end] - corrected[cur_start]
+        if deficit >= 0:
+            shift = deficit + 1e-6
+            cumulative_shift += shift
+            corrected[bounds[k] : bounds[k + 1]] += shift
+            max_clamp_nm = max(max_clamp_nm, shift)
+            n_clamped += 1
+    return n_clamped, max_clamp_nm, cumulative_shift
+
+
+def _revert_segmented_to_global(
+    global_result: WavelengthCalibrationResult,
+    bounds: List[int],
+    seams: np.ndarray,
+    reason: str,
+) -> WavelengthCalibrationResult:
+    """Tag ``global_result`` with revert diagnostics and return it."""
+    global_result.details["segments"] = len(bounds) - 1
+    global_result.details["seam_count"] = int(seams.size)
+    global_result.details["segmented_reverted"] = reason
+    return global_result
+
+
+def _build_segmented_result(
+    global_result: WavelengthCalibrationResult,
+    corrected: np.ndarray,
+    bounds: List[int],
+    seams: np.ndarray,
+    seg_diag: List[Dict[str, Any]],
+    seg_status: List[str],
+    total_inliers: int,
+    rmse_accum: List[float],
+    n_clamped: int,
+    max_clamp_nm: float,
+    segment_min_inliers: int,
+    segment_max_rmse_nm: float,
+) -> WavelengthCalibrationResult:
+    """Assemble the aggregate segmented calibration result."""
+    n_fit = sum(1 for s in seg_status if s == "fit")
+    n_seg = len(bounds) - 1
+    agg_rmse = float(np.mean(rmse_accum)) if rmse_accum else global_result.rmse_nm
+    details = {
+        "segments": n_seg,
+        "seam_count": int(seams.size),
+        "n_segments_fit": n_fit,
+        "n_segments_fallback": n_seg - n_fit,
+        "global_model": global_result.model,
+        "global_rmse_nm": float(global_result.rmse_nm),
+        "segment_min_inliers": float(segment_min_inliers),
+        "segment_max_rmse_nm": float(segment_max_rmse_nm),
+        "seam_boundary_clamps": int(n_clamped),
+        "max_seam_clamp_nm": float(max_clamp_nm),
+        "segment_diagnostics": seg_diag,
+    }
+
+    return WavelengthCalibrationResult(
+        success=True,
+        model="segmented",
+        coefficients=(),
+        corrected_wavelength=corrected,
+        bic=float(global_result.bic),
+        rmse_nm=agg_rmse,
+        n_inliers=int(total_inliers),
+        n_peaks=int(global_result.n_peaks),
+        n_candidates=int(global_result.n_candidates),
+        matched_peak_fraction=float(global_result.matched_peak_fraction),
+        quality_passed=(n_fit > 0),
+        quality_reason="segmented_passed" if n_fit > 0 else "segmented_all_fallback",
+        details=details,
     )
 
 
@@ -871,88 +1265,32 @@ def calibrate_wavelength_axis_segmented(
     )
     global_offset = global_corrected - wavelength
 
-    seg_diag: List[Dict[str, Any]] = []
-    seg_status: List[str] = []  # "fit" | "global" | "neighbor" per segment
-    total_inliers = 0
-    rmse_accum: List[float] = []
-
-    for i in range(len(bounds) - 1):
-        a, b = bounds[i], bounds[i + 1]
-        seg_wl = wavelength[a:b]
-        seg_in = intensity[a:b]
-        n_pts = int(seg_wl.size)
-        status = "global"
-        seg_model = "none"
-        seg_n_in = 0
-        seg_rmse = float("inf")
-
-        if n_pts >= min_segment_points:
-            models = (
-                sparse_segment_max_models if n_pts < sparse_segment_points else candidate_models
-            )
-            seg_cal = calibrate_wavelength_axis(
-                wavelength=seg_wl,
-                intensity=seg_in,
-                atomic_db=atomic_db,
-                elements=elements,
-                mode="auto",
-                candidate_models=tuple(models),
-                inlier_tolerance_nm=inlier_tolerance_nm,
-                max_pair_window_nm=max_pair_window_nm,
-                apply_quality_gate=False,
-                random_seed=random_seed + i,
-                **calibrate_kwargs,
-            )
-            seg_model = seg_cal.model
-            seg_n_in = int(seg_cal.n_inliers)
-            seg_rmse = float(seg_cal.rmse_nm)
-            trusted = (
-                seg_cal.success
-                and seg_cal.model != "none"
-                and seg_n_in >= segment_min_inliers
-                and seg_rmse <= segment_max_rmse_nm
-            )
-            if trusted:
-                corrected[a:b] = seg_cal.corrected_wavelength
-                status = "fit"
-                total_inliers += seg_n_in
-                rmse_accum.append(seg_rmse)
-
-        if status != "fit":
-            # Fallback 1: global single-axis correction over this segment.
-            corrected[a:b] = seg_wl + global_offset[a:b]
-
-        seg_diag.append(
-            {
-                "index": i,
-                "wl_min": float(seg_wl.min()) if n_pts else 0.0,
-                "wl_max": float(seg_wl.max()) if n_pts else 0.0,
-                "n_points": n_pts,
-                "model": seg_model,
-                "n_inliers": seg_n_in,
-                "rmse_nm": seg_rmse,
-                "status": status,
-            }
-        )
-        seg_status.append(status)
+    seg_diag, seg_status, total_inliers, rmse_accum = _run_segments(
+        bounds,
+        wavelength,
+        intensity,
+        corrected,
+        global_offset,
+        atomic_db,
+        elements,
+        min_segment_points=min_segment_points,
+        sparse_segment_points=sparse_segment_points,
+        sparse_segment_max_models=sparse_segment_max_models,
+        candidate_models=candidate_models,
+        inlier_tolerance_nm=inlier_tolerance_nm,
+        max_pair_window_nm=max_pair_window_nm,
+        segment_min_inliers=segment_min_inliers,
+        segment_max_rmse_nm=segment_max_rmse_nm,
+        random_seed=random_seed,
+        calibrate_kwargs=calibrate_kwargs,
+    )
 
     # Fallback 2: if the global fit was unavailable (offset all zero) for a
     # segment that also failed its own fit, borrow the median per-sample offset
     # of the nearest accepted-fit neighbour so no channel is left uncorrected
     # while its neighbours are shifted (which would tear lines across the seam).
     if not (global_result.success and fallback_to_global):
-        fit_idx = [i for i, s in enumerate(seg_status) if s == "fit"]
-        if fit_idx:
-            for i, s in enumerate(seg_status):
-                if s == "fit":
-                    continue
-                nearest = min(fit_idx, key=lambda j: abs(j - i))
-                a, b = bounds[i], bounds[i + 1]
-                na, nb = bounds[nearest], bounds[nearest + 1]
-                neighbor_offset = float(np.median(corrected[na:nb] - wavelength[na:nb]))
-                corrected[a:b] = wavelength[a:b] + neighbor_offset
-                seg_diag[i]["status"] = "neighbor"
-                seg_status[i] = "neighbor"
+        _apply_neighbor_fallback(bounds, wavelength, corrected, seg_diag, seg_status)
 
     # Each accepted per-segment model is monotonic on its own grid (the
     # underlying calibrator rejects non-monotonic fits), so within a segment the
@@ -963,19 +1301,7 @@ def calibrate_wavelength_axis_segmented(
     # *entire* offending downstream segment up by a constant deficit (which
     # preserves its internal sample spacing exactly) rather than discarding the
     # per-channel correction or reordering samples. The shift cascades forward.
-    n_clamped = 0
-    max_clamp_nm = 0.0
-    cumulative_shift = 0.0
-    for k in range(1, len(bounds) - 1):
-        prev_end = bounds[k] - 1  # last sample of previous segment
-        cur_start = bounds[k]  # first sample of this segment
-        deficit = corrected[prev_end] - corrected[cur_start]
-        if deficit >= 0:
-            shift = deficit + 1e-6
-            cumulative_shift += shift
-            corrected[bounds[k] : bounds[k + 1]] += shift
-            max_clamp_nm = max(max_clamp_nm, shift)
-            n_clamped += 1
+    n_clamped, max_clamp_nm, cumulative_shift = _restore_seam_monotonicity(bounds, corrected)
 
     # If restoring monotonicity required a large cumulative shift, the segments
     # genuinely disagree (not just touch at seams) and the segmentation is
@@ -986,10 +1312,7 @@ def calibrate_wavelength_axis_segmented(
             "(%.3f nm); reverting to global single-model fit.",
             cumulative_shift,
         )
-        global_result.details["segments"] = len(bounds) - 1
-        global_result.details["seam_count"] = int(seams.size)
-        global_result.details["segmented_reverted"] = "large_seam_shift"
-        return global_result
+        return _revert_segmented_to_global(global_result, bounds, seams, "large_seam_shift")
 
     # Sanity: a residual intra-segment non-monotonicity should be impossible.
     if not bool(np.all(np.diff(corrected) > 0)):
@@ -997,40 +1320,19 @@ def calibrate_wavelength_axis_segmented(
             "Segmented calibration left a non-monotonic axis after seam "
             "alignment; reverting to global single-model fit."
         )
-        global_result.details["segments"] = len(bounds) - 1
-        global_result.details["seam_count"] = int(seams.size)
-        global_result.details["segmented_reverted"] = "residual_non_monotonic"
-        return global_result
+        return _revert_segmented_to_global(global_result, bounds, seams, "residual_non_monotonic")
 
-    n_fit = sum(1 for s in seg_status if s == "fit")
-    n_seg = len(bounds) - 1
-    agg_rmse = float(np.mean(rmse_accum)) if rmse_accum else global_result.rmse_nm
-    details = {
-        "segments": n_seg,
-        "seam_count": int(seams.size),
-        "n_segments_fit": n_fit,
-        "n_segments_fallback": n_seg - n_fit,
-        "global_model": global_result.model,
-        "global_rmse_nm": float(global_result.rmse_nm),
-        "segment_min_inliers": float(segment_min_inliers),
-        "segment_max_rmse_nm": float(segment_max_rmse_nm),
-        "seam_boundary_clamps": int(n_clamped),
-        "max_seam_clamp_nm": float(max_clamp_nm),
-        "segment_diagnostics": seg_diag,
-    }
-
-    return WavelengthCalibrationResult(
-        success=True,
-        model="segmented",
-        coefficients=(),
-        corrected_wavelength=corrected,
-        bic=float(global_result.bic),
-        rmse_nm=agg_rmse,
-        n_inliers=int(total_inliers),
-        n_peaks=int(global_result.n_peaks),
-        n_candidates=int(global_result.n_candidates),
-        matched_peak_fraction=float(global_result.matched_peak_fraction),
-        quality_passed=(n_fit > 0),
-        quality_reason="segmented_passed" if n_fit > 0 else "segmented_all_fallback",
-        details=details,
+    return _build_segmented_result(
+        global_result,
+        corrected,
+        bounds,
+        seams,
+        seg_diag,
+        seg_status,
+        total_inliers,
+        rmse_accum,
+        n_clamped,
+        max_clamp_nm,
+        segment_min_inliers,
+        segment_max_rmse_nm,
     )
