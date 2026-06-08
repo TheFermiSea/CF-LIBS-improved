@@ -496,8 +496,13 @@ class HybridInverter:
                 boltzmann = jnp.exp(-E_k / (KB_EV * T_eV * EV_TO_K))
                 intensity = c * boltzmann * 1000.0
 
-                # Doppler width
-                sigma = center * jnp.sqrt(2.0 * T_eV * EV_TO_J / (50.0 * 1.67e-27 * C_LIGHT**2))
+                # Doppler width: 1-D Maxwell std sigma = lambda/c * sqrt(kT/m).
+                # NB: this is a PLACEHOLDER/demo forward model, not the
+                # production path (see note above) — but kept consistent with
+                # the canonical profiles.doppler_sigma_jax form. The previous
+                # spurious factor of 2 under the sqrt computed the
+                # most-probable speed, not the standard deviation (~1.41x wide).
+                sigma = center * jnp.sqrt(T_eV * EV_TO_J / (50.0 * 1.67e-27 * C_LIGHT**2))
                 sigma = jnp.maximum(sigma, 0.01)
 
                 # Add Gaussian

@@ -242,13 +242,17 @@ class TestGeneratorDispatch:
         # tests because ``batch_spectrum`` is a fresh closure each call.
         calls = {"ldm": 0, "voigt": 0}
 
-        # Signatures updated for D3 fix: time-integrated paths now accept
-        # ``sigma_inst`` so ``ManifoldConfig.instrument_fwhm_nm`` is honored.
-        def fake_ldm_time_int(wl_grid, p, ad, sigma_grid, gate_width_s, time_steps, sigma_inst):
+        # Signatures updated for D3 fix (sigma_inst) and the Wave-3 cooling-trail
+        # config fix (#13b): time-integrated paths now also accept the three
+        # cooling-trail parameters (t0, T-exponent, ne-exponent) from
+        # ``ManifoldConfig`` so ps-LIBS regimes can be configured.
+        def fake_ldm_time_int(
+            wl_grid, p, ad, sigma_grid, gate_width_s, time_steps, sigma_inst, *cooling
+        ):
             calls["ldm"] += 1
             return jnp.zeros_like(wl_grid)
 
-        def fake_voigt_time_int(wl_grid, p, ad, gate_width_s, time_steps, sigma_inst):
+        def fake_voigt_time_int(wl_grid, p, ad, gate_width_s, time_steps, sigma_inst, *cooling):
             calls["voigt"] += 1
             return jnp.zeros_like(wl_grid)
 
@@ -329,13 +333,17 @@ class TestGeneratorDispatch:
 
         calls = {"ldm": 0, "voigt": 0}
 
-        # Signatures updated for D3 fix: time-integrated paths now accept
-        # ``sigma_inst`` so ``ManifoldConfig.instrument_fwhm_nm`` is honored.
-        def fake_ldm_time_int(wl_grid, p, ad, sigma_grid, gate_width_s, time_steps, sigma_inst):
+        # Signatures updated for D3 fix (sigma_inst) and the Wave-3 cooling-trail
+        # config fix (#13b): time-integrated paths now also accept the three
+        # cooling-trail parameters (t0, T-exponent, ne-exponent) from
+        # ``ManifoldConfig`` so ps-LIBS regimes can be configured.
+        def fake_ldm_time_int(
+            wl_grid, p, ad, sigma_grid, gate_width_s, time_steps, sigma_inst, *cooling
+        ):
             calls["ldm"] += 1
             return jnp.zeros_like(wl_grid)
 
-        def fake_voigt_time_int(wl_grid, p, ad, gate_width_s, time_steps, sigma_inst):
+        def fake_voigt_time_int(wl_grid, p, ad, gate_width_s, time_steps, sigma_inst, *cooling):
             calls["voigt"] += 1
             return jnp.zeros_like(wl_grid)
 

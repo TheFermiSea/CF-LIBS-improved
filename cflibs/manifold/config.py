@@ -76,6 +76,18 @@ class ManifoldConfig:
         Number of time steps for integration
     batch_size : int
         Batch size for GPU processing
+    cooling_t0_s : float
+        Cooling-trail reference timescale ``t0`` in seconds. The
+        time-integration model decays plasma parameters as
+        ``X(t) = X_max * (1 + t / t0) ** exponent``. The default 1e-6 s
+        reproduces the historical hardcoded ns-ICCD value; for ps-LIBS
+        regimes (e.g. 1 ps Yb:fiber) a much smaller ``t0`` is appropriate.
+    cooling_temperature_exponent : float
+        Power-law exponent for the temperature cooling trail (default -0.5,
+        i.e. ``T ~ (1 + t/t0)**-0.5``).
+    cooling_density_exponent : float
+        Power-law exponent for the electron-density cooling trail (default
+        -1.0, i.e. ``n_e ~ (1 + t/t0)**-1``).
     """
 
     db_path: str
@@ -96,6 +108,14 @@ class ManifoldConfig:
     gate_width_s: float = 5e-6
     time_steps: int = 20
     batch_size: int = 1000
+
+    # Cooling-trail (time-integration) laws. Defaults reproduce the historical
+    # hardcoded ns-ICCD values so existing manifolds are byte-for-byte
+    # unchanged; ps-LIBS regimes (1 ps Yb:fiber, T ~ 0.5-1.3 eV) need a much
+    # smaller ``cooling_t0_s``. Model: X(t) = X_max * (1 + t/t0) ** exponent.
+    cooling_t0_s: float = 1e-6
+    cooling_temperature_exponent: float = -0.5
+    cooling_density_exponent: float = -1.0
 
     # Phase 2 physics options
     use_voigt_profile: bool = True
@@ -165,6 +185,11 @@ class ManifoldConfig:
             gate_width_s=float(manifold_config.get("gate_width_s", 5e-6)),
             time_steps=manifold_config.get("time_steps", 20),
             batch_size=manifold_config.get("batch_size", 1000),
+            cooling_t0_s=float(manifold_config.get("cooling_t0_s", 1e-6)),
+            cooling_temperature_exponent=float(
+                manifold_config.get("cooling_temperature_exponent", -0.5)
+            ),
+            cooling_density_exponent=float(manifold_config.get("cooling_density_exponent", -1.0)),
             use_voigt_profile=manifold_config.get("use_voigt_profile", True),
             use_stark_broadening=manifold_config.get("use_stark_broadening", True),
             instrument_fwhm_nm=float(manifold_config.get("instrument_fwhm_nm", 0.05)),
@@ -209,6 +234,11 @@ class ManifoldConfig:
 
         if self.pixels < 10:
             raise ValueError("pixels must be >= 10")
+
+        # Cooling-trail reference timescale appears as (1 + t/t0); t0 <= 0
+        # produces a singular or sign-flipped trail.
+        if self.cooling_t0_s <= 0:
+            raise ValueError(f"cooling_t0_s must be positive; got {self.cooling_t0_s!r}")
 
         # Nyquist / instrument-FWHM sampling guard.
         # The Robertson 2017 (arXiv:1707.06455) / Magnier 2025 (arXiv:2501.17163)

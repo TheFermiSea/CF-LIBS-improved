@@ -38,7 +38,16 @@ manifold:
   gate_delay_s: 3.0e-7    # 300 ns
   gate_width_s: 5.0e-6    # 5 us
   time_steps: 20          # Integration resolution
-  
+
+  # Cooling-trail laws for the time-integration model:
+  #   X(t) = X_max * (1 + t / cooling_t0_s) ** exponent
+  # Defaults below reproduce the historical hardcoded ns-ICCD behaviour.
+  # For a ps regime (e.g. 1 ps Yb:fiber at 1040 nm, T ~ 0.5-1.3 eV) use a
+  # much smaller cooling_t0_s (e.g. ~1e-11 s).
+  cooling_t0_s: 1.0e-6                  # cooling reference timescale (s)
+  cooling_temperature_exponent: -0.5   # T ~ (1 + t/t0)^-0.5
+  cooling_density_exponent: -1.0       # n_e ~ (1 + t/t0)^-1
+
   # GPU batch size (adjust based on VRAM)
   batch_size: 1000
 

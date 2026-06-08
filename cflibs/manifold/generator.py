@@ -36,7 +36,7 @@ from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
 from cflibs.plasma.partition import polynomial_partition_function_jax
 from cflibs.radiation.ldm import DEFAULT_N_SIGMA, build_sigma_grid
-from cflibs.radiation.profiles import BroadeningMode
+from cflibs.radiation.profiles import BroadeningMode, doppler_sigma_jax
 
 jit = jit_if_available
 vmap = vmap_if_available
@@ -434,14 +434,17 @@ class ManifoldGenerator:
             raise ValueError("Cannot build LDM sigma grid: atomic line catalog is empty.")
 
         T_lo, T_hi = self.config.temperature_range
-        # Doppler σ scales as λ * sqrt(2 k T / m c^2); evaluate at the
-        # extremes of the (λ, m, T) Cartesian product to bracket the sweep.
+        # Doppler σ is the 1-D Maxwell std: λ * sqrt(k T / m c^2). This is the
+        # numpy twin of profiles.doppler_sigma_jax (the single source of truth);
+        # evaluate at the extremes of the (λ, m, T) Cartesian product to bracket
+        # the sweep. The previous spurious factor of 2 under the sqrt computed
+        # the most-probable speed, not the standard deviation (~1.41x too wide).
         wl_lo, wl_hi = lines_wl_np.min(), lines_wl_np.max()
         m_lo, m_hi = lines_mass_np.min(), lines_mass_np.max()
 
         def _doppler_sigma_nm(wl_nm: float, mass_amu: float, T_eV: float) -> float:
             mass_kg = mass_amu * M_PROTON
-            return float(wl_nm * np.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2)))
+            return float(wl_nm * np.sqrt(T_eV * EV_TO_J / (mass_kg * C_LIGHT**2)))
 
         sigma_dop_min = _doppler_sigma_nm(wl_lo, m_hi, T_lo)
         sigma_dop_max = _doppler_sigma_nm(wl_hi, m_lo, T_hi)
@@ -765,10 +768,12 @@ class ManifoldGenerator:
 
         # --- Proper Voigt Broadening (Phase 2) ---
 
-        # Doppler width: sigma = lambda/c * sqrt(2kT/m)
-        # Using JAX-compatible doppler_sigma_jax
-        mass_kg = l_mass_amu * M_PROTON
-        sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
+        # Doppler width: 1-D Maxwell std sigma = lambda/c * sqrt(kT/m).
+        # Delegate to the canonical profiles.doppler_sigma_jax so there is a
+        # single source of truth (it does mass_amu -> kg internally). The
+        # previous open-coded form carried a spurious factor of 2 under the
+        # sqrt (most-probable speed, not std dev), inflating widths ~1.41x.
+        sigma_doppler = doppler_sigma_jax(l_wl, T_eV, l_mass_amu)
 
         # Instrument broadening (Gaussian sigma). Threaded in from
         # ``ManifoldConfig.instrument_fwhm_nm`` via ``generate_manifold``
@@ -886,8 +891,10 @@ class ManifoldGenerator:
         # Doppler sigma + instrument floor. ``sigma_inst`` is threaded in
         # from ``ManifoldConfig.instrument_fwhm_nm`` (D3 fix; previously the
         # FWHM 0.05 nm was hardcoded and silently dropped configured values).
-        mass_kg = l_mass_amu * M_PROTON
-        sigma_doppler = l_wl * jnp.sqrt(2.0 * T_eV * EV_TO_J / (mass_kg * C_LIGHT**2))
+        # Doppler is the 1-D Maxwell std via the canonical doppler_sigma_jax
+        # (single source of truth); the previous open-coded form carried a
+        # spurious factor of 2 under the sqrt (~1.41x too wide).
+        sigma_doppler = doppler_sigma_jax(l_wl, T_eV, l_mass_amu)
         sigma_total = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
 
         return ldm_broaden(
@@ -908,6 +915,9 @@ class ManifoldGenerator:
         gate_width_s: float,
         time_steps: int,
         sigma_inst: float,
+        cooling_t0_s: float,
+        cooling_T_exponent: float,
+        cooling_ne_exponent: float,
     ) -> jnp.ndarray:
         """Time-integrated spectrum via the LDM Gaussian broadening path.
 
@@ -916,6 +926,11 @@ class ManifoldGenerator:
         the Line Distribution Method (van den Bekerom & Pannier 2021) instead
         of per-line Voigt broadcasting. The ``sigma_grid`` is closed-over
         (built once at manifold init) so it stays jit-static.
+
+        The cooling-trail laws ``T(t) = T_max*(1 + t/t0)**T_exp`` and
+        ``n_e(t) = ne_max*(1 + t/t0)**ne_exp`` are parameterised via
+        ``ManifoldConfig`` (defaults reproduce the historical ns-ICCD
+        constants) so ps-LIBS regimes can be configured.
         """
         T_max = params[0]
         ne_max = params[1]
@@ -924,9 +939,8 @@ class ManifoldGenerator:
         times = jnp.linspace(0, gate_width_s, time_steps)
         dt = times[1] - times[0]
 
-        t0 = 1e-6
-        T_trail = T_max * (1 + times / t0) ** (-0.5)
-        ne_trail = ne_max * (1 + times / t0) ** (-1.0)
+        T_trail = T_max * (1 + times / cooling_t0_s) ** cooling_T_exponent
+        ne_trail = ne_max * (1 + times / cooling_t0_s) ** cooling_ne_exponent
 
         def step_fn(carry, inputs):
             T, ne = inputs
@@ -953,6 +967,9 @@ class ManifoldGenerator:
         gate_width_s: float,
         time_steps: int,
         sigma_inst: float,
+        cooling_t0_s: float,
+        cooling_T_exponent: float,
+        cooling_ne_exponent: float,
     ) -> jnp.ndarray:
         """
         Compute time-integrated spectrum for cooling plasma.
@@ -969,6 +986,14 @@ class ManifoldGenerator:
             Gate width in seconds
         time_steps : int
             Number of integration steps
+        sigma_inst : float
+            Instrument Gaussian sigma (nm).
+        cooling_t0_s : float
+            Cooling-trail reference timescale ``t0`` in seconds.
+        cooling_T_exponent : float
+            Power-law exponent for the temperature cooling trail.
+        cooling_ne_exponent : float
+            Power-law exponent for the electron-density cooling trail.
 
         Returns
         -------
@@ -983,10 +1008,12 @@ class ManifoldGenerator:
         times = jnp.linspace(0, gate_width_s, time_steps)
         dt = times[1] - times[0]
 
-        # Cooling laws (power law decay)
-        t0 = 1e-6
-        T_trail = T_max * (1 + times / t0) ** (-0.5)
-        ne_trail = ne_max * (1 + times / t0) ** (-1.0)
+        # Cooling laws (power-law decay). Parameterised via ManifoldConfig;
+        # the defaults (t0=1e-6 s, T_exp=-0.5, ne_exp=-1.0) reproduce the
+        # historical hardcoded ns-ICCD values so existing manifolds are
+        # unchanged, while ps-LIBS regimes can configure a smaller t0.
+        T_trail = T_max * (1 + times / cooling_t0_s) ** cooling_T_exponent
+        ne_trail = ne_max * (1 + times / cooling_t0_s) ** cooling_ne_exponent
 
         # Integrate over time
         def step_fn(carry, inputs):
@@ -1005,14 +1032,71 @@ class ManifoldGenerator:
 
         return spectrum_accum
 
+    @staticmethod
+    def _build_composition_grid(n_elements: int, concentration_steps: int) -> np.ndarray:
+        """Build a D-dimensional simplex of valid composition rows.
+
+        Every returned row satisfies the CF-LIBS closure constraint
+        ``Σ C_s = 1`` exactly (to float64 precision) and contains **no
+        identically-zero element**, so the manifold sweep never emits a
+        composition that violates Saha-Boltzmann mass conservation (the
+        previous ``[c1] + [0.0]*(D-1)`` generic branch summed to ``c1``,
+        not 1, for any element count ≠ 4).
+
+        The sampler is a deterministic, seeded symmetric-Dirichlet draw
+        (one fixed seed → reproducible grids across runs). A small positive
+        floor is added before renormalisation to guarantee strict positivity
+        even on the (measure-zero) chance of a zero draw, then each row is
+        renormalised so it sums to exactly 1.0.
+
+        ``concentration_steps`` keeps its "resolution of the concentration
+        grid" semantics: it is the number of composition rows sampled.
+
+        Parameters
+        ----------
+        n_elements : int
+            Number of elements ``D`` (simplex dimension).
+        concentration_steps : int
+            Number of composition rows to sample (>= 1).
+
+        Returns
+        -------
+        ndarray, shape (n_rows, n_elements)
+            Composition rows, each summing to 1.0 with all entries > 0.
+        """
+        n_rows = max(1, int(concentration_steps))
+
+        if n_elements <= 1:
+            # Single element: the only valid closed composition is [1.0].
+            return np.ones((n_rows, 1), dtype=np.float64)
+
+        # Deterministic symmetric-Dirichlet draws. alpha=1.0 gives a uniform
+        # distribution over the simplex interior; the fixed seed makes the
+        # grid reproducible. The first row is pinned to the barycentre
+        # (1/D, ..., 1/D) so the grid always contains the maximally-mixed
+        # composition regardless of seed/draw count.
+        rng = np.random.default_rng(20240601)
+        alpha = np.ones(n_elements, dtype=np.float64)
+        draws = rng.dirichlet(alpha, size=n_rows)
+        draws[0, :] = 1.0 / n_elements
+
+        # Floor away exact zeros (Dirichlet is a.s. positive, but float
+        # underflow at large D can produce exact 0.0) and renormalise so
+        # each row sums to exactly 1.0.
+        floor = 1e-6
+        draws = draws + floor
+        draws = draws / draws.sum(axis=1, keepdims=True)
+        return draws
+
     def _build_param_grid(self) -> np.ndarray:
         """Build the ``[T, ne, C_el1, ...]`` parameter grid for the sweep.
 
         Sweeps temperature linearly and electron density geometrically, then
-        takes the Cartesian product with a per-system concentration grid: a
-        simplex over Al/V (Ti = remainder) for the 4-element Ti-Al-V-Fe
-        system, else a single-element ramp. Negative-Ti simplex points are
-        skipped. Emits the same grid-size logging the inline build did.
+        takes the Cartesian product with a D-dimensional simplex of
+        compositions from :meth:`_build_composition_grid`. Every composition
+        row sums to 1.0 (CF-LIBS closure) with no identically-zero element,
+        for *any* element count — the same sampler now drives the formerly
+        special-cased 4-element Ti-Al-V-Fe branch.
 
         Returns
         -------
@@ -1028,32 +1112,17 @@ class ManifoldGenerator:
             self.config.density_range[0], self.config.density_range[1], self.config.density_steps
         )
 
-        # Build concentration grid (simplex for multi-element)
-        # For now, simple grid for Ti-Al-V system
+        # Single D-dimensional simplex sampler for all element counts. Every
+        # row sums to 1.0 with no zero element (CF-LIBS closure Σ C_s = 1).
+        comp_grid = self._build_composition_grid(
+            len(self.config.elements), self.config.concentration_steps
+        )
+
         params_list = []
-
-        if len(self.config.elements) == 4:  # Ti-Al-V-Fe system
-            al_range = np.linspace(0, 0.12, self.config.concentration_steps)
-            v_range = np.linspace(0, 0.12, self.config.concentration_steps)
-
-            for T in T_grid:
-                for ne in ne_grid:
-                    for al in al_range:
-                        for v in v_range:
-                            ti = 1.0 - (al + v)
-                            if ti < 0:
-                                continue
-                            # [T, ne, Ti, Al, V, Fe]
-                            params_list.append([T, ne, ti, al, v, 0.002])
-        else:
-            # Generic: vary first element concentration
-            conc_range = np.linspace(0.5, 1.0, self.config.concentration_steps)
-            for T in T_grid:
-                for ne in ne_grid:
-                    for c1 in conc_range:
-                        # Simple case: one varying element
-                        concs = [c1] + [0.0] * (len(self.config.elements) - 1)
-                        params_list.append([T, ne] + concs)
+        for T in T_grid:
+            for ne in ne_grid:
+                for comp in comp_grid:
+                    params_list.append([T, ne, *comp.tolist()])
 
         params_arr = np.array(params_list, dtype=np.float32)
         n_samples = len(params_arr)
@@ -1061,9 +1130,7 @@ class ManifoldGenerator:
         logger.info(f"Parameter grid: {n_samples} spectra to generate")
         logger.info(f"  Temperature: {len(T_grid)} points")
         logger.info(f"  Density: {len(ne_grid)} points")
-        logger.info(
-            f"  Concentrations: {len(params_list) // (len(T_grid) * len(ne_grid))} combinations"
-        )
+        logger.info(f"  Concentrations: {len(comp_grid)} combinations")
         return params_arr
 
     def _compute_instrument_sigma(self) -> Tuple[float, float]:
@@ -1256,6 +1323,9 @@ class ManifoldGenerator:
                         self.config.gate_width_s,
                         self.config.time_steps,
                         sigma_inst,
+                        self.config.cooling_t0_s,
+                        self.config.cooling_temperature_exponent,
+                        self.config.cooling_density_exponent,
                     ),
                     in_axes=0,
                 )(batch_params)
@@ -1276,6 +1346,9 @@ class ManifoldGenerator:
                         self.config.gate_width_s,
                         self.config.time_steps,
                         sigma_inst,
+                        self.config.cooling_t0_s,
+                        self.config.cooling_temperature_exponent,
+                        self.config.cooling_density_exponent,
                     ),
                     in_axes=0,
                 )(batch_params)
