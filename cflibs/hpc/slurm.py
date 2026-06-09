@@ -340,6 +340,19 @@ class SlurmJobManager:
             return SlurmJobStatus(job_id=job_id, state=SlurmJobState.COMPLETED, exit_code=0)
 
         # Try squeue first (for running/pending jobs)
+        squeue_status = self._status_from_squeue(job_id)
+        if squeue_status is not None:
+            return squeue_status
+
+        # Try sacct for completed jobs
+        sacct_status = self._status_from_sacct(job_id)
+        if sacct_status is not None:
+            return sacct_status
+
+        return SlurmJobStatus(job_id=job_id, state=SlurmJobState.UNKNOWN)
+
+    def _status_from_squeue(self, job_id: str) -> Optional[SlurmJobStatus]:
+        """Query job status via ``squeue`` (running/pending jobs)."""
         cmd = ["squeue", "-j", job_id, "-h", "-o", "%T"]
         returncode, stdout, stderr = self._run_command(cmd)
 
@@ -348,7 +361,10 @@ class SlurmJobManager:
             state = self._parse_state(state_str)
             return SlurmJobStatus(job_id=job_id, state=state)
 
-        # Try sacct for completed jobs
+        return None
+
+    def _status_from_sacct(self, job_id: str) -> Optional[SlurmJobStatus]:
+        """Query job status via ``sacct`` (completed jobs)."""
         cmd = [
             "sacct",
             "-j",
@@ -366,25 +382,30 @@ class SlurmJobManager:
                 # Take first line (main job, not steps)
                 parts = lines[0].split("|")
                 if len(parts) >= 5:
-                    state = self._parse_state(parts[0].strip())
-                    submit_time = parts[1].strip() or None
-                    start_time = parts[2].strip() or None
-                    end_time = parts[3].strip() or None
-                    exit_code_str = parts[4].strip()
-                    exit_code = None
-                    if exit_code_str and ":" in exit_code_str:
-                        exit_code = int(exit_code_str.split(":")[0])
+                    return self._parse_sacct_parts(job_id, parts)
 
-                    return SlurmJobStatus(
-                        job_id=job_id,
-                        state=state,
-                        submit_time=submit_time,
-                        start_time=start_time,
-                        end_time=end_time,
-                        exit_code=exit_code,
-                    )
+        return None
 
-        return SlurmJobStatus(job_id=job_id, state=SlurmJobState.UNKNOWN)
+    @staticmethod
+    def _parse_sacct_parts(job_id: str, parts: List[str]) -> SlurmJobStatus:
+        """Build a :class:`SlurmJobStatus` from parsed ``sacct`` fields."""
+        state = SlurmJobManager._parse_state(parts[0].strip())
+        submit_time = parts[1].strip() or None
+        start_time = parts[2].strip() or None
+        end_time = parts[3].strip() or None
+        exit_code_str = parts[4].strip()
+        exit_code = None
+        if exit_code_str and ":" in exit_code_str:
+            exit_code = int(exit_code_str.split(":")[0])
+
+        return SlurmJobStatus(
+            job_id=job_id,
+            state=state,
+            submit_time=submit_time,
+            start_time=start_time,
+            end_time=end_time,
+            exit_code=exit_code,
+        )
 
     def wait(
         self, job_id: str, poll_interval: float = 10.0, timeout: float = 3600.0
