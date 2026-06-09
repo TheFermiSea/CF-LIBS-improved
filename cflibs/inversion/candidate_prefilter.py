@@ -75,12 +75,24 @@ def _collect_nnls_results(
 
     # Step 2: Multi-T robustness — run at T ± offsets
     if multi_t_offsets:
+        # Read the base (T, ne) the identifier solved at from its RESULT — the
+        # deep-module seam: ``SpectralNNLSIdentifier`` now returns ``estimated_T_K``
+        # / ``estimated_ne_cm3`` as typed result fields, so we no longer reach
+        # into its private cached ``_estimated_T`` / ``_estimated_ne`` state. The
+        # values are identical (same T_est/ne_est the identify() call computed).
+        #
+        # Fallback to the identifier's cached attribute when the result does not
+        # carry an estimate (identifiers that don't estimate (T, ne), or older
+        # result shapes), then to ``fallback_T_K`` / ``fallback_ne_cm3``.
+        #
         # Use explicit is-not-None checks: a valid numeric estimate of exactly
         # 0.0 is falsy, so `or fallback` would silently discard it. Preserve
         # None -> fallback behavior; only stop treating 0.0 as missing.
-        _est_T = getattr(identifier, "_estimated_T", None)
+        _res_T = getattr(base_result, "estimated_T_K", None)
+        _est_T = _res_T if _res_T is not None else getattr(identifier, "_estimated_T", None)
         base_T = _est_T if _est_T is not None else identifier.fallback_T_K
-        _est_ne = getattr(identifier, "_estimated_ne", None)
+        _res_ne = getattr(base_result, "estimated_ne_cm3", None)
+        _est_ne = _res_ne if _res_ne is not None else getattr(identifier, "_estimated_ne", None)
         base_ne = _est_ne if _est_ne is not None else identifier.fallback_ne_cm3
 
         for offset in multi_t_offsets:
