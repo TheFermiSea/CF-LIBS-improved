@@ -20,6 +20,11 @@ except ImportError:
     HAS_H5PY = False
 
 from cflibs.atomic.database import AtomicDatabase
+from cflibs.atomic.masses import (
+    DEFAULT_ATOMIC_MASS_AMU,
+    STANDARD_ATOMIC_MASSES,
+    resolve_element_mass,
+)
 from cflibs.atomic.structures import Transition
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
@@ -36,40 +41,46 @@ _FWHM_TO_SIGMA = 2.3548200450309493
 # carries no ``atomic_mass`` column for the element. Values are NIST standard
 # atomic weights. Doppler sigma scales as 1/sqrt(M), so a coarse mass is
 # adequate; the generic 50 amu fallback matches ManifoldGenerator's default.
-_STANDARD_MASSES_AMU = {
-    "H": 1.008,
-    "He": 4.003,
-    "Li": 6.941,
-    "Be": 9.012,
-    "B": 10.81,
-    "C": 12.01,
-    "N": 14.01,
-    "O": 16.00,
-    "Na": 22.99,
-    "Mg": 24.31,
-    "Al": 26.98,
-    "Si": 28.09,
-    "P": 30.97,
-    "S": 32.07,
-    "Cl": 35.45,
-    "K": 39.10,
-    "Ca": 40.08,
-    "Ti": 47.87,
-    "V": 50.94,
-    "Cr": 52.00,
-    "Mn": 54.94,
-    "Fe": 55.85,
-    "Co": 58.93,
-    "Ni": 58.69,
-    "Cu": 63.55,
-    "Zn": 65.38,
-    "Sr": 87.62,
-    "Ba": 137.3,
-    "W": 183.8,
-    "Au": 197.0,
-    "Pb": 207.2,
-}
-_DEFAULT_MASS_AMU = 50.0  # generic fallback (matches ManifoldGenerator)
+#
+# This is the historical strict subset of the canonical
+# :data:`cflibs.atomic.masses.STANDARD_ATOMIC_MASSES`; deriving it (rather than
+# the full table) preserves the exact table-miss behaviour for the table-only
+# fallback path. Every value is byte-identical to the canonical table.
+_BASIS_FALLBACK_ELEMENTS = (
+    "H",
+    "He",
+    "Li",
+    "Be",
+    "B",
+    "C",
+    "N",
+    "O",
+    "Na",
+    "Mg",
+    "Al",
+    "Si",
+    "P",
+    "S",
+    "Cl",
+    "K",
+    "Ca",
+    "Ti",
+    "V",
+    "Cr",
+    "Mn",
+    "Fe",
+    "Co",
+    "Ni",
+    "Cu",
+    "Zn",
+    "Sr",
+    "Ba",
+    "W",
+    "Au",
+    "Pb",
+)
+_STANDARD_MASSES_AMU = {el: STANDARD_ATOMIC_MASSES[el] for el in _BASIS_FALLBACK_ELEMENTS}
+_DEFAULT_MASS_AMU = DEFAULT_ATOMIC_MASS_AMU  # generic fallback (matches ManifoldGenerator)
 
 
 @dataclass
@@ -167,17 +178,25 @@ class BasisLibraryGenerator:
     def _element_mass_amu(self, element: str) -> float:
         """Resolve the atomic mass (amu) for *element* for the Doppler width.
 
-        Prefers the database ``atomic_mass`` column, then a NIST standard-weight
-        fallback table, then a generic 50 amu default (matching
+        Prefers the database ``atomic_mass`` column, then the NIST standard-weight
+        fallback subset, then a generic 50 amu default (matching
         :class:`~cflibs.manifold.generator.ManifoldGenerator`).
+
+        Delegates to :func:`cflibs.atomic.masses.resolve_element_mass` with the
+        ``require_positive=True`` policy and the historical
+        :data:`_STANDARD_MASSES_AMU` subset, preserving the exact prior result.
         """
         db_mass = self.atomic_db.get_atomic_mass(element)
-        if db_mass is not None and db_mass > 0.0:
-            return float(db_mass)
-        if element in _STANDARD_MASSES_AMU:
-            return _STANDARD_MASSES_AMU[element]
-        logger.debug("No atomic mass for %s; using fallback %.1f amu", element, _DEFAULT_MASS_AMU)
-        return _DEFAULT_MASS_AMU
+        if (db_mass is None or db_mass <= 0.0) and element not in _STANDARD_MASSES_AMU:
+            logger.debug(
+                "No atomic mass for %s; using fallback %.1f amu", element, _DEFAULT_MASS_AMU
+            )
+        return resolve_element_mass(
+            element,
+            self.atomic_db,
+            require_positive=True,
+            table=_STANDARD_MASSES_AMU,
+        )
 
     def _stark_w_ref(self, trans: Transition, ip_cache: dict) -> float:
         """Return the Stark reference FWHM (nm) at REF_NE for *trans*.

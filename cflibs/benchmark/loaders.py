@@ -166,15 +166,7 @@ def _save_json(dataset: "BenchmarkDataset", path: Path) -> None:
 
 def _load_hdf5(path: Path) -> "BenchmarkDataset":
     """Load dataset from HDF5 file."""
-    from cflibs.benchmark.dataset import (
-        BenchmarkDataset,
-        BenchmarkSpectrum,
-        InstrumentalConditions,
-        SampleMetadata,
-        SampleType,
-        MatrixType,
-        DataSplit,
-    )
+    from cflibs.benchmark.dataset import BenchmarkDataset
 
     try:
         import h5py
@@ -195,122 +187,15 @@ def _load_hdf5(path: Path) -> "BenchmarkDataset":
         # Read spectra
         spectra = []
         spectra_group = f["spectra"]
-
         for spec_id in spectra_group.keys():
-            spec_group = spectra_group[spec_id]
-
-            # Read arrays
-            wavelength_nm = spec_group["wavelength_nm"][:]
-            intensity = spec_group["intensity"][:]
-            intensity_uncertainty = None
-            if "intensity_uncertainty" in spec_group:
-                intensity_uncertainty = spec_group["intensity_uncertainty"][:]
-
-            # Read composition
-            comp_group = spec_group["composition"]
-            true_composition = {}
-            composition_uncertainty = {}
-            for elem in comp_group.attrs.get("elements", []):
-                elem_str = elem.decode() if isinstance(elem, bytes) else elem
-                true_composition[elem_str] = comp_group.attrs[f"{elem_str}_value"]
-                if f"{elem_str}_uncertainty" in comp_group.attrs:
-                    composition_uncertainty[elem_str] = comp_group.attrs[f"{elem_str}_uncertainty"]
-
-            # Read instrumental conditions
-            cond_group = spec_group["conditions"]
-            conditions = InstrumentalConditions(
-                laser_wavelength_nm=cond_group.attrs["laser_wavelength_nm"],
-                laser_energy_mj=cond_group.attrs["laser_energy_mj"],
-                laser_pulse_width_ns=cond_group.attrs.get("laser_pulse_width_ns", 10.0),
-                repetition_rate_hz=cond_group.attrs.get("repetition_rate_hz", 10.0),
-                spot_diameter_um=cond_group.attrs.get("spot_diameter_um", 100.0),
-                fluence_j_cm2=cond_group.attrs.get("fluence_j_cm2"),
-                gate_delay_us=cond_group.attrs.get("gate_delay_us", 1.0),
-                gate_width_us=cond_group.attrs.get("gate_width_us", 10.0),
-                spectrometer_type=_decode_string(
-                    cond_group.attrs.get("spectrometer_type", "Echelle")
-                ),
-                spectral_range_nm=tuple(cond_group.attrs.get("spectral_range_nm", [200.0, 900.0])),
-                spectral_resolution_nm=cond_group.attrs.get("spectral_resolution_nm", 0.05),
-                detector_type=_decode_string(cond_group.attrs.get("detector_type", "ICCD")),
-                accumulations=cond_group.attrs.get("accumulations", 1),
-                atmosphere=_decode_string(cond_group.attrs.get("atmosphere", "air")),
-                pressure_mbar=cond_group.attrs.get("pressure_mbar", 1013.25),
-                standoff_distance_m=cond_group.attrs.get("standoff_distance_m"),
-                notes=_decode_string(cond_group.attrs.get("notes", "")),
-            )
-
-            # Read sample metadata
-            meta_group = spec_group["metadata"]
-            metadata = SampleMetadata(
-                sample_id=_decode_string(meta_group.attrs["sample_id"]),
-                sample_type=SampleType(_decode_string(meta_group.attrs.get("sample_type", "crm"))),
-                matrix_type=MatrixType(
-                    _decode_string(meta_group.attrs.get("matrix_type", "metal_alloy"))
-                ),
-                crm_name=_decode_string_optional(meta_group.attrs.get("crm_name")),
-                crm_source=_decode_string_optional(meta_group.attrs.get("crm_source")),
-                preparation=_decode_string(meta_group.attrs.get("preparation", "polished")),
-                surface_condition=_decode_string(
-                    meta_group.attrs.get("surface_condition", "polished")
-                ),
-                measurement_date=_decode_string_optional(meta_group.attrs.get("measurement_date")),
-                laboratory=_decode_string_optional(meta_group.attrs.get("laboratory")),
-                doi=_decode_string_optional(meta_group.attrs.get("doi")),
-                provenance=_decode_string(meta_group.attrs.get("provenance", "")),
-            )
-
-            spectrum = BenchmarkSpectrum(
-                spectrum_id=spec_id,
-                wavelength_nm=wavelength_nm,
-                intensity=intensity,
-                intensity_uncertainty=intensity_uncertainty,
-                true_composition=true_composition,
-                composition_uncertainty=composition_uncertainty,
-                conditions=conditions,
-                metadata=metadata,
-                plasma_temperature_K=spec_group.attrs.get("plasma_temperature_K"),
-                electron_density_cm3=spec_group.attrs.get("electron_density_cm3"),
-                quality_flag=spec_group.attrs.get("quality_flag", 0),
-                dataset_id=_decode_string_optional(spec_group.attrs.get("dataset_id")),
-                group_id=_decode_string_optional(spec_group.attrs.get("group_id")),
-                specimen_id=_decode_string_optional(spec_group.attrs.get("specimen_id")),
-                instrument_id=_decode_string_optional(spec_group.attrs.get("instrument_id")),
-                truth_type=_decode_string(
-                    spec_group.attrs.get("truth_type", TruthType.ASSAY.value)
-                ),
-                rp_estimate=spec_group.attrs.get("rp_estimate"),
-                label_cardinality=spec_group.attrs.get("label_cardinality"),
-                spectrum_kind=_decode_string_optional(spec_group.attrs.get("spectrum_kind")),
-                annotations=json.loads(
-                    _decode_string(spec_group.attrs.get("annotations_json", "{}"))
-                ),
-            )
-            spectra.append(spectrum)
+            spectra.append(_read_hdf5_spectrum(spec_id, spectra_group[spec_id]))
 
         # Read splits
         splits = {}
         if "splits" in f:
             splits_group = f["splits"]
             for split_name in splits_group.keys():
-                split_group = splits_group[split_name]
-                train_ids = [_decode_string(s) for s in split_group["train_ids"][:]]
-                test_ids = [_decode_string(s) for s in split_group["test_ids"][:]]
-                validation_ids = None
-                if "validation_ids" in split_group:
-                    validation_ids = [_decode_string(s) for s in split_group["validation_ids"][:]]
-
-                splits[split_name] = DataSplit(
-                    name=split_name,
-                    train_ids=train_ids,
-                    test_ids=test_ids,
-                    validation_ids=validation_ids,
-                    description=_decode_string(split_group.attrs.get("description", "")),
-                    random_seed=split_group.attrs.get("random_seed"),
-                    metadata=json.loads(
-                        _decode_string(split_group.attrs.get("metadata_json", "{}"))
-                    ),
-                )
+                splits[split_name] = _read_hdf5_split(split_name, splits_group[split_name])
 
     return BenchmarkDataset(
         name=name,
@@ -323,6 +208,122 @@ def _load_hdf5(path: Path) -> "BenchmarkDataset":
         license=license_,
         created_date=created_date,
         contributors=contributors,
+    )
+
+
+def _read_hdf5_composition(comp_group) -> tuple[dict, dict]:
+    """Read true composition and uncertainty dicts from a composition group."""
+    true_composition = {}
+    composition_uncertainty = {}
+    for elem in comp_group.attrs.get("elements", []):
+        elem_str = elem.decode() if isinstance(elem, bytes) else elem
+        true_composition[elem_str] = comp_group.attrs[f"{elem_str}_value"]
+        if f"{elem_str}_uncertainty" in comp_group.attrs:
+            composition_uncertainty[elem_str] = comp_group.attrs[f"{elem_str}_uncertainty"]
+    return true_composition, composition_uncertainty
+
+
+def _read_hdf5_conditions(cond_group):
+    """Read instrumental conditions from a conditions group."""
+    from cflibs.benchmark.dataset import InstrumentalConditions
+
+    return InstrumentalConditions(
+        laser_wavelength_nm=cond_group.attrs["laser_wavelength_nm"],
+        laser_energy_mj=cond_group.attrs["laser_energy_mj"],
+        laser_pulse_width_ns=cond_group.attrs.get("laser_pulse_width_ns", 10.0),
+        repetition_rate_hz=cond_group.attrs.get("repetition_rate_hz", 10.0),
+        spot_diameter_um=cond_group.attrs.get("spot_diameter_um", 100.0),
+        fluence_j_cm2=cond_group.attrs.get("fluence_j_cm2"),
+        gate_delay_us=cond_group.attrs.get("gate_delay_us", 1.0),
+        gate_width_us=cond_group.attrs.get("gate_width_us", 10.0),
+        spectrometer_type=_decode_string(cond_group.attrs.get("spectrometer_type", "Echelle")),
+        spectral_range_nm=tuple(cond_group.attrs.get("spectral_range_nm", [200.0, 900.0])),
+        spectral_resolution_nm=cond_group.attrs.get("spectral_resolution_nm", 0.05),
+        detector_type=_decode_string(cond_group.attrs.get("detector_type", "ICCD")),
+        accumulations=cond_group.attrs.get("accumulations", 1),
+        atmosphere=_decode_string(cond_group.attrs.get("atmosphere", "air")),
+        pressure_mbar=cond_group.attrs.get("pressure_mbar", 1013.25),
+        standoff_distance_m=cond_group.attrs.get("standoff_distance_m"),
+        notes=_decode_string(cond_group.attrs.get("notes", "")),
+    )
+
+
+def _read_hdf5_metadata(meta_group):
+    """Read sample metadata from a metadata group."""
+    from cflibs.benchmark.dataset import MatrixType, SampleMetadata, SampleType
+
+    return SampleMetadata(
+        sample_id=_decode_string(meta_group.attrs["sample_id"]),
+        sample_type=SampleType(_decode_string(meta_group.attrs.get("sample_type", "crm"))),
+        matrix_type=MatrixType(_decode_string(meta_group.attrs.get("matrix_type", "metal_alloy"))),
+        crm_name=_decode_string_optional(meta_group.attrs.get("crm_name")),
+        crm_source=_decode_string_optional(meta_group.attrs.get("crm_source")),
+        preparation=_decode_string(meta_group.attrs.get("preparation", "polished")),
+        surface_condition=_decode_string(meta_group.attrs.get("surface_condition", "polished")),
+        measurement_date=_decode_string_optional(meta_group.attrs.get("measurement_date")),
+        laboratory=_decode_string_optional(meta_group.attrs.get("laboratory")),
+        doi=_decode_string_optional(meta_group.attrs.get("doi")),
+        provenance=_decode_string(meta_group.attrs.get("provenance", "")),
+    )
+
+
+def _read_hdf5_spectrum(spec_id, spec_group):
+    """Read a single BenchmarkSpectrum from its HDF5 group."""
+    from cflibs.benchmark.dataset import BenchmarkSpectrum
+
+    # Read arrays
+    wavelength_nm = spec_group["wavelength_nm"][:]
+    intensity = spec_group["intensity"][:]
+    intensity_uncertainty = None
+    if "intensity_uncertainty" in spec_group:
+        intensity_uncertainty = spec_group["intensity_uncertainty"][:]
+
+    true_composition, composition_uncertainty = _read_hdf5_composition(spec_group["composition"])
+    conditions = _read_hdf5_conditions(spec_group["conditions"])
+    metadata = _read_hdf5_metadata(spec_group["metadata"])
+
+    return BenchmarkSpectrum(
+        spectrum_id=spec_id,
+        wavelength_nm=wavelength_nm,
+        intensity=intensity,
+        intensity_uncertainty=intensity_uncertainty,
+        true_composition=true_composition,
+        composition_uncertainty=composition_uncertainty,
+        conditions=conditions,
+        metadata=metadata,
+        plasma_temperature_K=spec_group.attrs.get("plasma_temperature_K"),
+        electron_density_cm3=spec_group.attrs.get("electron_density_cm3"),
+        quality_flag=spec_group.attrs.get("quality_flag", 0),
+        dataset_id=_decode_string_optional(spec_group.attrs.get("dataset_id")),
+        group_id=_decode_string_optional(spec_group.attrs.get("group_id")),
+        specimen_id=_decode_string_optional(spec_group.attrs.get("specimen_id")),
+        instrument_id=_decode_string_optional(spec_group.attrs.get("instrument_id")),
+        truth_type=_decode_string(spec_group.attrs.get("truth_type", TruthType.ASSAY.value)),
+        rp_estimate=spec_group.attrs.get("rp_estimate"),
+        label_cardinality=spec_group.attrs.get("label_cardinality"),
+        spectrum_kind=_decode_string_optional(spec_group.attrs.get("spectrum_kind")),
+        annotations=json.loads(_decode_string(spec_group.attrs.get("annotations_json", "{}"))),
+    )
+
+
+def _read_hdf5_split(split_name, split_group):
+    """Read a single DataSplit from its HDF5 group."""
+    from cflibs.benchmark.dataset import DataSplit
+
+    train_ids = [_decode_string(s) for s in split_group["train_ids"][:]]
+    test_ids = [_decode_string(s) for s in split_group["test_ids"][:]]
+    validation_ids = None
+    if "validation_ids" in split_group:
+        validation_ids = [_decode_string(s) for s in split_group["validation_ids"][:]]
+
+    return DataSplit(
+        name=split_name,
+        train_ids=train_ids,
+        test_ids=test_ids,
+        validation_ids=validation_ids,
+        description=_decode_string(split_group.attrs.get("description", "")),
+        random_seed=split_group.attrs.get("random_seed"),
+        metadata=json.loads(_decode_string(split_group.attrs.get("metadata_json", "{}"))),
     )
 
 
@@ -339,131 +340,155 @@ def _save_hdf5(
         raise ImportError("h5py required for HDF5 support. Install with: pip install h5py") from e
 
     with h5py.File(path, "w") as f:
-        # Write dataset-level metadata
-        f.attrs["name"] = dataset.name
-        f.attrs["version"] = dataset.version
-        f.attrs["elements"] = dataset.elements
-        f.attrs["description"] = dataset.description
-        f.attrs["citation"] = dataset.citation
-        f.attrs["license"] = dataset.license
-        f.attrs["created_date"] = dataset.created_date
-        f.attrs["contributors"] = dataset.contributors
+        _write_dataset_attrs(f, dataset)
 
         # Write spectra
         spectra_group = f.create_group("spectra")
-
         for spectrum in dataset.spectra:
             spec_group = spectra_group.create_group(spectrum.spectrum_id)
-
-            # Write arrays with optional compression
-            _create_dataset(
-                spec_group, "wavelength_nm", spectrum.wavelength_nm, compression, compression_level
-            )
-            _create_dataset(
-                spec_group, "intensity", spectrum.intensity, compression, compression_level
-            )
-            if spectrum.intensity_uncertainty is not None:
-                _create_dataset(
-                    spec_group,
-                    "intensity_uncertainty",
-                    spectrum.intensity_uncertainty,
-                    compression,
-                    compression_level,
-                )
-
-            # Write scalar attributes
-            if spectrum.plasma_temperature_K is not None:
-                spec_group.attrs["plasma_temperature_K"] = spectrum.plasma_temperature_K
-            if spectrum.electron_density_cm3 is not None:
-                spec_group.attrs["electron_density_cm3"] = spectrum.electron_density_cm3
-            spec_group.attrs["quality_flag"] = spectrum.quality_flag
-            if spectrum.dataset_id is not None:
-                spec_group.attrs["dataset_id"] = spectrum.dataset_id
-            if spectrum.group_id is not None:
-                spec_group.attrs["group_id"] = spectrum.group_id
-            if spectrum.specimen_id is not None:
-                spec_group.attrs["specimen_id"] = spectrum.specimen_id
-            if spectrum.instrument_id is not None:
-                spec_group.attrs["instrument_id"] = spectrum.instrument_id
-            spec_group.attrs["truth_type"] = spectrum.truth_type.value
-            if spectrum.rp_estimate is not None:
-                spec_group.attrs["rp_estimate"] = spectrum.rp_estimate
-            if spectrum.label_cardinality is not None:
-                spec_group.attrs["label_cardinality"] = spectrum.label_cardinality
-            if spectrum.spectrum_kind is not None:
-                spec_group.attrs["spectrum_kind"] = spectrum.spectrum_kind
-            if spectrum.annotations:
-                spec_group.attrs["annotations_json"] = json.dumps(spectrum.annotations)
-
-            # Write composition
-            comp_group = spec_group.create_group("composition")
-            comp_group.attrs["elements"] = list(spectrum.true_composition.keys())
-            for elem, value in spectrum.true_composition.items():
-                comp_group.attrs[f"{elem}_value"] = value
-                if elem in spectrum.composition_uncertainty:
-                    comp_group.attrs[f"{elem}_uncertainty"] = spectrum.composition_uncertainty[elem]
-
-            # Write conditions
-            cond_group = spec_group.create_group("conditions")
-            cond = spectrum.conditions
-            cond_group.attrs["laser_wavelength_nm"] = cond.laser_wavelength_nm
-            cond_group.attrs["laser_energy_mj"] = cond.laser_energy_mj
-            cond_group.attrs["laser_pulse_width_ns"] = cond.laser_pulse_width_ns
-            cond_group.attrs["repetition_rate_hz"] = cond.repetition_rate_hz
-            cond_group.attrs["spot_diameter_um"] = cond.spot_diameter_um
-            if cond.fluence_j_cm2 is not None:
-                cond_group.attrs["fluence_j_cm2"] = cond.fluence_j_cm2
-            cond_group.attrs["gate_delay_us"] = cond.gate_delay_us
-            cond_group.attrs["gate_width_us"] = cond.gate_width_us
-            cond_group.attrs["spectrometer_type"] = cond.spectrometer_type
-            cond_group.attrs["spectral_range_nm"] = list(cond.spectral_range_nm)
-            cond_group.attrs["spectral_resolution_nm"] = cond.spectral_resolution_nm
-            cond_group.attrs["detector_type"] = cond.detector_type
-            cond_group.attrs["accumulations"] = cond.accumulations
-            cond_group.attrs["atmosphere"] = cond.atmosphere
-            cond_group.attrs["pressure_mbar"] = cond.pressure_mbar
-            if cond.standoff_distance_m is not None:
-                cond_group.attrs["standoff_distance_m"] = cond.standoff_distance_m
-            cond_group.attrs["notes"] = cond.notes
-
-            # Write metadata
-            meta_group = spec_group.create_group("metadata")
-            meta = spectrum.metadata
-            meta_group.attrs["sample_id"] = meta.sample_id
-            meta_group.attrs["sample_type"] = meta.sample_type.value
-            meta_group.attrs["matrix_type"] = meta.matrix_type.value
-            if meta.crm_name is not None:
-                meta_group.attrs["crm_name"] = meta.crm_name
-            if meta.crm_source is not None:
-                meta_group.attrs["crm_source"] = meta.crm_source
-            meta_group.attrs["preparation"] = meta.preparation
-            meta_group.attrs["surface_condition"] = meta.surface_condition
-            if meta.measurement_date is not None:
-                meta_group.attrs["measurement_date"] = meta.measurement_date
-            if meta.laboratory is not None:
-                meta_group.attrs["laboratory"] = meta.laboratory
-            if meta.doi is not None:
-                meta_group.attrs["doi"] = meta.doi
-            meta_group.attrs["provenance"] = meta.provenance
+            _write_spectrum_arrays(spec_group, spectrum, compression, compression_level)
+            _write_spectrum_scalar_attrs(spec_group, spectrum)
+            _write_spectrum_composition(spec_group, spectrum)
+            _write_spectrum_conditions(spec_group, spectrum)
+            _write_spectrum_metadata(spec_group, spectrum)
 
         # Write splits
         if dataset.splits:
-            splits_group = f.create_group("splits")
-            for name, split in dataset.splits.items():
-                split_group = splits_group.create_group(name)
-                # Use variable-length strings
-                dt = h5py.string_dtype(encoding="utf-8")
-                split_group.create_dataset("train_ids", data=split.train_ids, dtype=dt)
-                split_group.create_dataset("test_ids", data=split.test_ids, dtype=dt)
-                if split.validation_ids:
-                    split_group.create_dataset(
-                        "validation_ids", data=split.validation_ids, dtype=dt
-                    )
-                split_group.attrs["description"] = split.description
-                if split.random_seed is not None:
-                    split_group.attrs["random_seed"] = split.random_seed
-                if split.metadata:
-                    split_group.attrs["metadata_json"] = json.dumps(split.metadata)
+            _write_splits(f, dataset, h5py)
+
+
+def _write_dataset_attrs(f, dataset: "BenchmarkDataset") -> None:
+    """Write dataset-level metadata attributes."""
+    f.attrs["name"] = dataset.name
+    f.attrs["version"] = dataset.version
+    f.attrs["elements"] = dataset.elements
+    f.attrs["description"] = dataset.description
+    f.attrs["citation"] = dataset.citation
+    f.attrs["license"] = dataset.license
+    f.attrs["created_date"] = dataset.created_date
+    f.attrs["contributors"] = dataset.contributors
+
+
+def _write_spectrum_arrays(
+    spec_group,
+    spectrum,
+    compression: Optional[str],
+    compression_level: int,
+) -> None:
+    """Write spectrum arrays with optional compression."""
+    _create_dataset(
+        spec_group, "wavelength_nm", spectrum.wavelength_nm, compression, compression_level
+    )
+    _create_dataset(spec_group, "intensity", spectrum.intensity, compression, compression_level)
+    if spectrum.intensity_uncertainty is not None:
+        _create_dataset(
+            spec_group,
+            "intensity_uncertainty",
+            spectrum.intensity_uncertainty,
+            compression,
+            compression_level,
+        )
+
+
+def _write_spectrum_scalar_attrs(spec_group, spectrum) -> None:
+    """Write spectrum scalar attributes."""
+    if spectrum.plasma_temperature_K is not None:
+        spec_group.attrs["plasma_temperature_K"] = spectrum.plasma_temperature_K
+    if spectrum.electron_density_cm3 is not None:
+        spec_group.attrs["electron_density_cm3"] = spectrum.electron_density_cm3
+    spec_group.attrs["quality_flag"] = spectrum.quality_flag
+    if spectrum.dataset_id is not None:
+        spec_group.attrs["dataset_id"] = spectrum.dataset_id
+    if spectrum.group_id is not None:
+        spec_group.attrs["group_id"] = spectrum.group_id
+    if spectrum.specimen_id is not None:
+        spec_group.attrs["specimen_id"] = spectrum.specimen_id
+    if spectrum.instrument_id is not None:
+        spec_group.attrs["instrument_id"] = spectrum.instrument_id
+    spec_group.attrs["truth_type"] = spectrum.truth_type.value
+    if spectrum.rp_estimate is not None:
+        spec_group.attrs["rp_estimate"] = spectrum.rp_estimate
+    if spectrum.label_cardinality is not None:
+        spec_group.attrs["label_cardinality"] = spectrum.label_cardinality
+    if spectrum.spectrum_kind is not None:
+        spec_group.attrs["spectrum_kind"] = spectrum.spectrum_kind
+    if spectrum.annotations:
+        spec_group.attrs["annotations_json"] = json.dumps(spectrum.annotations)
+
+
+def _write_spectrum_composition(spec_group, spectrum) -> None:
+    """Write spectrum composition group."""
+    comp_group = spec_group.create_group("composition")
+    comp_group.attrs["elements"] = list(spectrum.true_composition.keys())
+    for elem, value in spectrum.true_composition.items():
+        comp_group.attrs[f"{elem}_value"] = value
+        if elem in spectrum.composition_uncertainty:
+            comp_group.attrs[f"{elem}_uncertainty"] = spectrum.composition_uncertainty[elem]
+
+
+def _write_spectrum_conditions(spec_group, spectrum) -> None:
+    """Write spectrum instrumental conditions group."""
+    cond_group = spec_group.create_group("conditions")
+    cond = spectrum.conditions
+    cond_group.attrs["laser_wavelength_nm"] = cond.laser_wavelength_nm
+    cond_group.attrs["laser_energy_mj"] = cond.laser_energy_mj
+    cond_group.attrs["laser_pulse_width_ns"] = cond.laser_pulse_width_ns
+    cond_group.attrs["repetition_rate_hz"] = cond.repetition_rate_hz
+    cond_group.attrs["spot_diameter_um"] = cond.spot_diameter_um
+    if cond.fluence_j_cm2 is not None:
+        cond_group.attrs["fluence_j_cm2"] = cond.fluence_j_cm2
+    cond_group.attrs["gate_delay_us"] = cond.gate_delay_us
+    cond_group.attrs["gate_width_us"] = cond.gate_width_us
+    cond_group.attrs["spectrometer_type"] = cond.spectrometer_type
+    cond_group.attrs["spectral_range_nm"] = list(cond.spectral_range_nm)
+    cond_group.attrs["spectral_resolution_nm"] = cond.spectral_resolution_nm
+    cond_group.attrs["detector_type"] = cond.detector_type
+    cond_group.attrs["accumulations"] = cond.accumulations
+    cond_group.attrs["atmosphere"] = cond.atmosphere
+    cond_group.attrs["pressure_mbar"] = cond.pressure_mbar
+    if cond.standoff_distance_m is not None:
+        cond_group.attrs["standoff_distance_m"] = cond.standoff_distance_m
+    cond_group.attrs["notes"] = cond.notes
+
+
+def _write_spectrum_metadata(spec_group, spectrum) -> None:
+    """Write spectrum sample metadata group."""
+    meta_group = spec_group.create_group("metadata")
+    meta = spectrum.metadata
+    meta_group.attrs["sample_id"] = meta.sample_id
+    meta_group.attrs["sample_type"] = meta.sample_type.value
+    meta_group.attrs["matrix_type"] = meta.matrix_type.value
+    if meta.crm_name is not None:
+        meta_group.attrs["crm_name"] = meta.crm_name
+    if meta.crm_source is not None:
+        meta_group.attrs["crm_source"] = meta.crm_source
+    meta_group.attrs["preparation"] = meta.preparation
+    meta_group.attrs["surface_condition"] = meta.surface_condition
+    if meta.measurement_date is not None:
+        meta_group.attrs["measurement_date"] = meta.measurement_date
+    if meta.laboratory is not None:
+        meta_group.attrs["laboratory"] = meta.laboratory
+    if meta.doi is not None:
+        meta_group.attrs["doi"] = meta.doi
+    meta_group.attrs["provenance"] = meta.provenance
+
+
+def _write_splits(f, dataset: "BenchmarkDataset", h5py) -> None:
+    """Write dataset splits group."""
+    splits_group = f.create_group("splits")
+    for name, split in dataset.splits.items():
+        split_group = splits_group.create_group(name)
+        # Use variable-length strings
+        dt = h5py.string_dtype(encoding="utf-8")
+        split_group.create_dataset("train_ids", data=split.train_ids, dtype=dt)
+        split_group.create_dataset("test_ids", data=split.test_ids, dtype=dt)
+        if split.validation_ids:
+            split_group.create_dataset("validation_ids", data=split.validation_ids, dtype=dt)
+        split_group.attrs["description"] = split.description
+        if split.random_seed is not None:
+            split_group.attrs["random_seed"] = split.random_seed
+        if split.metadata:
+            split_group.attrs["metadata_json"] = json.dumps(split.metadata)
 
 
 def _create_dataset(
@@ -827,6 +852,134 @@ def apply_dataset_shard(
     )
 
 
+def _read_vrabel_compositions(support_path, openpyxl):
+    """Read certified compositions from the Vrabel MIXED_composition sheet.
+
+    Returns ``(elements, sample_compositions, sample_class)``.  Values in the
+    sheet are weight-percent; divide by 100 for mass fraction.
+    """
+    # row = sample ID (1..100), columns = Class ID, Al, Ca, Cr, Cu, Fe, K, Mg, Na, Pb, Si.
+    wb = openpyxl.load_workbook(support_path, read_only=True, data_only=True)
+    ws = wb["MIXED_composition"]
+    rows = list(ws.iter_rows(values_only=True))
+    header = list(rows[0])
+    element_cols = {h: i for i, h in enumerate(header) if h not in ("Sample ID", "Class ID")}
+    elements = sorted(element_cols.keys())
+
+    sample_compositions: Dict[int, Dict[str, float]] = {}
+    sample_class: Dict[int, int] = {}
+    for row in rows[1:]:
+        if not row or row[0] is None:
+            continue
+        sample_id = int(row[0])
+        sample_class[sample_id] = int(row[1])
+        comp = {
+            el: float(row[idx]) / 100.0 if row[idx] is not None else 0.0
+            for el, idx in element_cols.items()
+        }
+        sample_compositions[sample_id] = comp
+    wb.close()
+    return elements, sample_compositions, sample_class
+
+
+def _make_vrabel_spectrum(
+    sample_id, comp, cls, conditions, wavelength_nm, intensity, shot_idx, n_load, n_shots
+):
+    """Build a single Vrabel BenchmarkSpectrum for one shot."""
+    from cflibs.benchmark.dataset import (
+        BenchmarkSpectrum,
+        MatrixType,
+        SampleMetadata,
+        SampleType,
+    )
+
+    metadata = SampleMetadata(
+        sample_id=f"vrabel_sample_{sample_id:03d}",
+        sample_type=SampleType.CRM,
+        matrix_type=MatrixType.GEOLOGICAL,
+        crm_name=f"vrabel2020_sample_{sample_id:03d}",
+        crm_source="Vrabel 2020 Sci Data benchmark",
+        preparation="pressed pellet",
+        surface_condition="prepared",
+        provenance=(
+            f"Vrabel et al. 2020 Sci Data 7:175; sample {sample_id}, "
+            f"shot {shot_idx + 1}/{n_load} (of {n_shots} available); "
+            "composition: support_tables.xlsx MIXED_composition sheet"
+        ),
+    )
+    return BenchmarkSpectrum(
+        spectrum_id=f"vrabel2020_s{sample_id:03d}_shot{shot_idx:03d}",
+        wavelength_nm=wavelength_nm,
+        intensity=intensity,
+        true_composition=comp,
+        conditions=conditions,
+        metadata=metadata,
+        dataset_id="vrabel2020_soil_benchmark",
+        group_id=f"vrabel_sample_{sample_id:03d}",
+        specimen_id=f"vrabel_sample_{sample_id:03d}",
+        instrument_id="vrabel2020_echelle_iccd",
+        truth_type=TruthType.ASSAY,
+        spectrum_kind="geostandard",
+        annotations={
+            "vrabel_sample_id": sample_id,
+            "vrabel_class_id": cls,
+            "shot_index": shot_idx,
+            "n_shots_total": n_shots,
+        },
+    )
+
+
+def _build_vrabel_sample_spectra(
+    arr,
+    sample_id,
+    comp,
+    cls,
+    wavelength_nm,
+    spectral_range,
+    max_spectra_per_sample,
+):
+    """Build all BenchmarkSpectrum objects for one Vrabel sample group."""
+    from cflibs.benchmark.dataset import InstrumentalConditions
+
+    n_shots = arr.shape[1]  # arr shape (40002, N_shots)
+    if max_spectra_per_sample is not None:
+        n_load = min(max_spectra_per_sample, n_shots)
+    else:
+        n_load = n_shots
+
+    # Load the per-shot intensities (40002, n_load) once and slice per shot.
+    shots = np.asarray(arr[:, :n_load], dtype=float)
+
+    conditions = InstrumentalConditions(
+        laser_wavelength_nm=1064.0,
+        laser_energy_mj=0.0,
+        spectral_range_nm=spectral_range,
+        spectral_resolution_nm=0.02,
+        spectrometer_type="echelle",
+        detector_type="ICCD",
+        atmosphere="air",
+        notes=(
+            "Vrabel et al. 2020 Sci Data benchmark; mixed soil/ore samples; "
+            f"sample {sample_id} (class {cls})"
+        ),
+    )
+
+    return [
+        _make_vrabel_spectrum(
+            sample_id,
+            comp,
+            cls,
+            conditions,
+            wavelength_nm,
+            shots[:, shot_idx],
+            shot_idx,
+            n_load,
+            n_shots,
+        )
+        for shot_idx in range(n_load)
+    ]
+
+
 def _load_vrabel2020_soils(
     data_dir: Optional[Path] = None,
     max_spectra_per_sample: Optional[int] = 50,
@@ -877,13 +1030,7 @@ def _load_vrabel2020_soils(
     BenchmarkDataset or None
         Returns ``None`` if the Vrabel data is not present in tree.
     """
-    from cflibs.benchmark.dataset import (
-        BenchmarkSpectrum,
-        InstrumentalConditions,
-        MatrixType,
-        SampleMetadata,
-        SampleType,
-    )
+    from cflibs.benchmark.dataset import BenchmarkDataset
 
     if data_dir is None:
         data_dir = _REPO_DATA_DIR
@@ -905,29 +1052,7 @@ def _load_vrabel2020_soils(
         logger.warning("Vrabel loader needs h5py + openpyxl: %s", exc)
         return None
 
-    # Read certified compositions from the MIXED_composition sheet:
-    # row = sample ID (1..100), columns = Class ID, Al, Ca, Cr, Cu, Fe, K, Mg, Na, Pb, Si.
-    # Values are weight-percent; divide by 100 for mass fraction.
-    wb = openpyxl.load_workbook(support_path, read_only=True, data_only=True)
-    ws = wb["MIXED_composition"]
-    rows = list(ws.iter_rows(values_only=True))
-    header = list(rows[0])
-    element_cols = {h: i for i, h in enumerate(header) if h not in ("Sample ID", "Class ID")}
-    elements = sorted(element_cols.keys())
-
-    sample_compositions: Dict[int, Dict[str, float]] = {}
-    sample_class: Dict[int, int] = {}
-    for row in rows[1:]:
-        if not row or row[0] is None:
-            continue
-        sample_id = int(row[0])
-        sample_class[sample_id] = int(row[1])
-        comp = {
-            el: float(row[idx]) / 100.0 if row[idx] is not None else 0.0
-            for el, idx in element_cols.items()
-        }
-        sample_compositions[sample_id] = comp
-    wb.close()
+    elements, sample_compositions, sample_class = _read_vrabel_compositions(support_path, openpyxl)
 
     spectra = []
     with h5py.File(train_path, "r") as f:
@@ -944,71 +1069,17 @@ def _load_vrabel2020_soils(
             if sample_id not in sample_compositions:
                 logger.debug("Vrabel sample %d has no composition; skipped", sample_id)
                 continue
-
-            arr = spectra_grp[sk]  # shape (40002, N_shots)
-            n_shots = arr.shape[1]
-            if max_spectra_per_sample is not None:
-                n_load = min(max_spectra_per_sample, n_shots)
-            else:
-                n_load = n_shots
-
-            # Load the per-shot intensities (40002, n_load) once and slice per shot.
-            shots = np.asarray(arr[:, :n_load], dtype=float)
-
-            comp = sample_compositions[sample_id]
-            cls = sample_class.get(sample_id, 0)
-
-            conditions = InstrumentalConditions(
-                laser_wavelength_nm=1064.0,
-                laser_energy_mj=0.0,
-                spectral_range_nm=spectral_range,
-                spectral_resolution_nm=0.02,
-                spectrometer_type="echelle",
-                detector_type="ICCD",
-                atmosphere="air",
-                notes=(
-                    "Vrabel et al. 2020 Sci Data benchmark; mixed soil/ore samples; "
-                    f"sample {sample_id} (class {cls})"
-                ),
+            spectra.extend(
+                _build_vrabel_sample_spectra(
+                    spectra_grp[sk],
+                    sample_id,
+                    sample_compositions[sample_id],
+                    sample_class.get(sample_id, 0),
+                    wavelength_nm,
+                    spectral_range,
+                    max_spectra_per_sample,
+                )
             )
-
-            for shot_idx in range(n_load):
-                metadata = SampleMetadata(
-                    sample_id=f"vrabel_sample_{sample_id:03d}",
-                    sample_type=SampleType.CRM,
-                    matrix_type=MatrixType.GEOLOGICAL,
-                    crm_name=f"vrabel2020_sample_{sample_id:03d}",
-                    crm_source="Vrabel 2020 Sci Data benchmark",
-                    preparation="pressed pellet",
-                    surface_condition="prepared",
-                    provenance=(
-                        f"Vrabel et al. 2020 Sci Data 7:175; sample {sample_id}, "
-                        f"shot {shot_idx + 1}/{n_load} (of {n_shots} available); "
-                        "composition: support_tables.xlsx MIXED_composition sheet"
-                    ),
-                )
-                spectra.append(
-                    BenchmarkSpectrum(
-                        spectrum_id=f"vrabel2020_s{sample_id:03d}_shot{shot_idx:03d}",
-                        wavelength_nm=wavelength_nm,
-                        intensity=shots[:, shot_idx],
-                        true_composition=comp,
-                        conditions=conditions,
-                        metadata=metadata,
-                        dataset_id="vrabel2020_soil_benchmark",
-                        group_id=f"vrabel_sample_{sample_id:03d}",
-                        specimen_id=f"vrabel_sample_{sample_id:03d}",
-                        instrument_id="vrabel2020_echelle_iccd",
-                        truth_type=TruthType.ASSAY,
-                        spectrum_kind="geostandard",
-                        annotations={
-                            "vrabel_sample_id": sample_id,
-                            "vrabel_class_id": cls,
-                            "shot_index": shot_idx,
-                            "n_shots_total": n_shots,
-                        },
-                    )
-                )
 
     if not spectra:
         return None

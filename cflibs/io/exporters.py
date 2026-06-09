@@ -601,7 +601,7 @@ class CSVExporter(Exporter):
 
     def _export_dict(self, data: Dict[str, Any]) -> List[str]:
         """Export generic dictionary to CSV lines."""
-        lines = []
+        lines: List[str] = []
 
         if self.include_header:
             lines.append(self.delimiter.join(["key", "value"]))
@@ -612,23 +612,31 @@ class CSVExporter(Exporter):
                 continue
             elif isinstance(value, dict):
                 # Flatten nested dicts
-                for subkey, subval in value.items():
-                    if not isinstance(subval, (list, dict, np.ndarray)):
-                        lines.append(
-                            self.delimiter.join(
-                                [
-                                    f"{key}.{subkey}",
-                                    str(subval),
-                                ]
-                            )
-                        )
+                self._export_dict_nested(lines, key, value)
             else:
-                if isinstance(value, float):
-                    lines.append(self.delimiter.join([key, self.float_format % value]))
-                else:
-                    lines.append(self.delimiter.join([key, str(value)]))
+                self._export_dict_scalar(lines, key, value)
 
         return lines
+
+    def _export_dict_nested(self, lines: List[str], key: str, value: Dict[str, Any]) -> None:
+        """Append flattened scalar entries from a nested dict to CSV lines."""
+        for subkey, subval in value.items():
+            if not isinstance(subval, (list, dict, np.ndarray)):
+                lines.append(
+                    self.delimiter.join(
+                        [
+                            f"{key}.{subkey}",
+                            str(subval),
+                        ]
+                    )
+                )
+
+    def _export_dict_scalar(self, lines: List[str], key: str, value: Any) -> None:
+        """Append a single scalar key-value entry to CSV lines."""
+        if isinstance(value, float):
+            lines.append(self.delimiter.join([key, self.float_format % value]))
+        else:
+            lines.append(self.delimiter.join([key, str(value)]))
 
 
 class HDF5Exporter(Exporter):
@@ -831,6 +839,20 @@ class HDF5Exporter(Exporter):
                 summary.attrs["convergence_status"] = str(status)
 
         # Concentrations
+        self._export_mcmc_concentrations_hdf5(f, data)
+
+        # Convergence diagnostics
+        self._export_mcmc_diagnostics_hdf5(f, data)
+
+        # Samples (large arrays - use compression)
+        if "samples" in data and data["samples"]:
+            samples_group = f.create_group("samples")
+            for key, value in data["samples"].items():
+                arr = np.asarray(value)
+                self._create_dataset(samples_group, key, arr)
+
+    def _export_mcmc_concentrations_hdf5(self, f, data: Dict[str, Any]) -> None:
+        """Export MCMC concentration mean/std/quantiles to an HDF5 group."""
         conc_group = f.create_group("concentrations")
         conc_mean = data.get("concentrations_mean", {})
         conc_std = data.get("concentrations_std", {})
@@ -851,7 +873,8 @@ class HDF5Exporter(Exporter):
                 "q975", data=np.array([conc_q975.get(el, 0) for el in elements])
             )
 
-        # Convergence diagnostics
+    def _export_mcmc_diagnostics_hdf5(self, f, data: Dict[str, Any]) -> None:
+        """Export MCMC convergence diagnostics (r_hat, ess) to an HDF5 group."""
         if "r_hat" in data and data["r_hat"]:
             diag = f.create_group("diagnostics")
             params = list(data["r_hat"].keys())
@@ -859,13 +882,6 @@ class HDF5Exporter(Exporter):
             diag.create_dataset("r_hat", data=np.array([data["r_hat"][p] for p in params]))
             if "ess" in data:
                 diag.create_dataset("ess", data=np.array([data["ess"].get(p, 0) for p in params]))
-
-        # Samples (large arrays - use compression)
-        if "samples" in data and data["samples"]:
-            samples_group = f.create_group("samples")
-            for key, value in data["samples"].items():
-                arr = np.asarray(value)
-                self._create_dataset(samples_group, key, arr)
 
     def _export_nested_sampling_result_hdf5(self, f, data: Dict[str, Any]) -> None:
         """Export NestedSamplingResult to HDF5."""
@@ -921,15 +937,19 @@ class HDF5Exporter(Exporter):
                     arr = arr.astype("S")
                 self._create_dataset(f, key, arr)
             elif isinstance(value, dict):
-                group = f.create_group(key)
-                for subkey, subval in value.items():
-                    if isinstance(subval, (int, float, bool, str)):
-                        group.attrs[subkey] = subval
-                    elif isinstance(subval, (np.ndarray, list)):
-                        arr = np.asarray(subval)
-                        self._create_dataset(group, subkey, arr)
+                self._export_dict_hdf5_nested(f, key, value)
             elif isinstance(value, (int, float, bool, str)):
                 f.attrs[key] = value
+
+    def _export_dict_hdf5_nested(self, f, key: str, value: Dict[str, Any]) -> None:
+        """Export a nested dict as an HDF5 group with scalar attrs and array datasets."""
+        group = f.create_group(key)
+        for subkey, subval in value.items():
+            if isinstance(subval, (int, float, bool, str)):
+                group.attrs[subkey] = subval
+            elif isinstance(subval, (np.ndarray, list)):
+                arr = np.asarray(subval)
+                self._create_dataset(group, subkey, arr)
 
 
 class JSONExporter(Exporter):

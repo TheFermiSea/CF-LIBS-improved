@@ -116,6 +116,93 @@ def _solve_nnls_subset(
     return coeffs, predicted
 
 
+def _empty_selection_result(
+    observed: np.ndarray,
+    element_list: List[str],
+    n_continuum: int,
+) -> ModelSelectionResult:
+    """Build the result returned when no elements have nonzero coefficients."""
+    return ModelSelectionResult(
+        selected_elements=[],
+        removed_elements=list(element_list),
+        concentrations={},
+        bic_final=_compute_bic(observed, np.zeros_like(observed), n_continuum),
+        bic_initial=_compute_bic(observed, np.zeros_like(observed), n_continuum),
+    )
+
+
+def _compute_prebatch_predictions(
+    observed: np.ndarray,
+    basis_matrix: np.ndarray,
+    active_mask: np.ndarray,
+    sorted_indices: np.ndarray,
+    n_continuum: int,
+    jax_nnls_max_iter: int,
+) -> Dict[int, np.ndarray]:
+    """Pre-compute every cumulative leave-one-out trial in one vmapped call.
+
+    Builds the sequence of full-component masks corresponding to
+    "cumulatively remove sorted_indices[:k]" for k=1..len. Pads row-mask
+    space to the full n_components (= n_elements + n_continuum) so we can
+    call :func:`nnls_jax_batch` on *basis_matrix* directly.
+    """
+    cum_masks = np.tile(active_mask, (len(sorted_indices), 1)).astype(np.float64)
+    for k, idx in enumerate(sorted_indices):
+        cum_masks[k:, idx] = 0.0  # remove this element from all subsequent trials
+    full_masks = np.concatenate(
+        [cum_masks, np.ones((len(sorted_indices), n_continuum), dtype=np.float64)],
+        axis=1,
+    )
+    _coeffs_batch, _ = nnls_jax_batch(
+        basis_matrix,
+        observed,
+        full_masks,
+        max_iter=jax_nnls_max_iter,
+    )
+    # predicted_b = sum_j coeffs[b, j] * basis_matrix[j, :]
+    return {
+        int(sorted_indices[k]): _coeffs_batch[k] @ basis_matrix for k in range(len(sorted_indices))
+    }
+
+
+def _trial_prediction(
+    observed: np.ndarray,
+    basis_matrix: np.ndarray,
+    trial_mask: np.ndarray,
+    idx: int,
+    n_elements: int,
+    prebatch_predictions: Optional[Dict[int, np.ndarray]],
+    prebatch_valid: bool,
+    use_jax_nnls: bool,
+    jax_nnls_max_iter: int,
+) -> np.ndarray:
+    """Reconstruct the predicted spectrum for a single leave-one-out trial."""
+    if prebatch_predictions is not None and prebatch_valid:
+        return prebatch_predictions[int(idx)]
+    _, predicted_trial = _solve_nnls_subset(
+        observed,
+        basis_matrix,
+        trial_mask,
+        n_elements,
+        use_jax_nnls=use_jax_nnls,
+        jax_nnls_max_iter=jax_nnls_max_iter,
+    )
+    return predicted_trial
+
+
+def _build_concentrations(
+    final_coeffs: np.ndarray,
+    active_elements: List[str],
+    n_active_elements: int,
+) -> Dict[str, float]:
+    """Normalize element coefficients into a concentration dict."""
+    el_final_coeffs = final_coeffs[:n_active_elements]
+    total = float(np.sum(el_final_coeffs))
+    if total > 0.0:
+        return {el: float(c / total) for el, c in zip(active_elements, el_final_coeffs)}
+    return {el: 0.0 for el in active_elements}
+
+
 def bic_prune_elements(
     observed: np.ndarray,
     basis_matrix: np.ndarray,
@@ -185,13 +272,7 @@ def bic_prune_elements(
 
     # If no elements are active, return empty result
     if not np.any(active_mask):
-        return ModelSelectionResult(
-            selected_elements=[],
-            removed_elements=list(element_list),
-            concentrations={},
-            bic_final=_compute_bic(observed, np.zeros_like(observed), n_continuum),
-            bic_initial=_compute_bic(observed, np.zeros_like(observed), n_continuum),
-        )
+        return _empty_selection_result(observed, element_list, n_continuum)
 
     # Step 2: compute initial BIC with all active elements
     k_initial = int(np.sum(active_mask)) + n_continuum
@@ -224,29 +305,14 @@ def bic_prune_elements(
     # per-trial path for the remainder of the loop.
     prebatch_predictions: Optional[Dict[int, np.ndarray]] = None
     if use_jax_nnls and jax_batch_trials and len(sorted_indices) > 0:
-        # Build the sequence of full-component masks corresponding to
-        # "cumulatively remove sorted_indices[:k]" for k=1..len. Pad
-        # row-mask space to the full n_components (= n_elements +
-        # n_continuum) so we can call nnls_jax_batch on basis_matrix
-        # directly.
-        cum_masks = np.tile(active_mask, (len(sorted_indices), 1)).astype(np.float64)
-        for k, idx in enumerate(sorted_indices):
-            cum_masks[k:, idx] = 0.0  # remove this element from all subsequent trials
-        full_masks = np.concatenate(
-            [cum_masks, np.ones((len(sorted_indices), n_continuum), dtype=np.float64)],
-            axis=1,
-        )
-        _coeffs_batch, _ = nnls_jax_batch(
-            basis_matrix,
+        prebatch_predictions = _compute_prebatch_predictions(
             observed,
-            full_masks,
-            max_iter=jax_nnls_max_iter,
+            basis_matrix,
+            active_mask,
+            sorted_indices,
+            n_continuum,
+            jax_nnls_max_iter,
         )
-        # predicted_b = sum_j coeffs[b, j] * basis_matrix[j, :]
-        prebatch_predictions = {
-            int(sorted_indices[k]): _coeffs_batch[k] @ basis_matrix
-            for k in range(len(sorted_indices))
-        }
 
     removed = []
     prebatch_valid = True  # becomes False after first rejected removal
@@ -263,17 +329,17 @@ def bic_prune_elements(
 
         k_trial = int(np.sum(trial_mask)) + n_continuum
 
-        if prebatch_predictions is not None and prebatch_valid:
-            predicted_trial = prebatch_predictions[int(idx)]
-        else:
-            _, predicted_trial = _solve_nnls_subset(
-                observed,
-                basis_matrix,
-                trial_mask,
-                n_elements,
-                use_jax_nnls=use_jax_nnls,
-                jax_nnls_max_iter=jax_nnls_max_iter,
-            )
+        predicted_trial = _trial_prediction(
+            observed,
+            basis_matrix,
+            trial_mask,
+            idx,
+            n_elements,
+            prebatch_predictions,
+            prebatch_valid,
+            use_jax_nnls,
+            jax_nnls_max_iter,
+        )
         bic_trial = _compute_bic(observed, predicted_trial, k_trial)
 
         if bic_trial < bic_current:
@@ -317,14 +383,8 @@ def bic_prune_elements(
 
     # Build concentrations dict (element coefficients only, normalized)
     n_active_elements = int(np.sum(active_mask))
-    el_final_coeffs = final_coeffs[:n_active_elements]
-    total = float(np.sum(el_final_coeffs))
     active_elements = [element_list[i] for i in range(n_elements) if active_mask[i]]
-
-    if total > 0.0:
-        concentrations = {el: float(c / total) for el, c in zip(active_elements, el_final_coeffs)}
-    else:
-        concentrations = {el: 0.0 for el in active_elements}
+    concentrations = _build_concentrations(final_coeffs, active_elements, n_active_elements)
 
     # Elements that were inactive from the start (zero coefficient)
     initially_inactive = [element_list[i] for i in range(n_elements) if el_coeffs[i] <= 0.0]

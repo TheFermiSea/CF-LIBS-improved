@@ -231,58 +231,77 @@ class BenchmarkCorpus:
         for comp in self.compositions:
             for T in self.temperatures_K:
                 for ne in self.electron_densities_cm3:
-                    base_wl, base_int = generator(T, ne, comp)
-                    base_label = self._make_label(T, ne, comp, snr=None)
-                    ground_truth = {
-                        "temperature_K": T,
-                        "electron_density_cm3": ne,
-                        "concentrations": dict(comp),
-                    }
-                    for snr in self.snr_values:
-                        if snr is None:
-                            spectra.append(
-                                BenchmarkSpectrum(
-                                    wavelength=base_wl.copy(),
-                                    intensity=base_int.copy(),
-                                    ground_truth=ground_truth,
-                                    label=base_label,
-                                    snr=None,
-                                )
-                            )
-                        else:
-                            noisy = self._add_noise(base_int, snr, rng)
-                            spectra.append(
-                                BenchmarkSpectrum(
-                                    wavelength=base_wl.copy(),
-                                    intensity=noisy,
-                                    ground_truth=ground_truth,
-                                    label=self._make_label(T, ne, comp, snr),
-                                    snr=snr,
-                                )
-                            )
+                    spectra.extend(self._sweep_point_spectra(generator, T, ne, comp, rng))
 
         # Dark-element spectra
         for comp in self.missing_element_specs:
-            T = self.temperatures_K[len(self.temperatures_K) // 2]
-            ne = self.electron_densities_cm3[len(self.electron_densities_cm3) // 2]
-            base_wl, base_int = generator(T, ne, comp)
-            ground_truth = {
-                "temperature_K": T,
-                "electron_density_cm3": ne,
-                "concentrations": dict(comp),
-                "dark_element_test": True,
-            }
-            spectra.append(
-                BenchmarkSpectrum(
-                    wavelength=base_wl.copy(),
-                    intensity=base_int.copy(),
-                    ground_truth=ground_truth,
-                    label=f"dark_elem_{'-'.join(sorted(comp.keys()))}",
-                    metadata={"dark_element_test": True},
-                )
-            )
+            spectra.append(self._dark_element_spectrum(generator, comp))
 
         return spectra
+
+    def _sweep_point_spectra(
+        self,
+        generator,
+        T: float,
+        ne: float,
+        comp: Dict[str, float],
+        rng: np.random.Generator,
+    ) -> List[BenchmarkSpectrum]:
+        """Build clean + noisy spectra for a single (T, ne, composition) point."""
+        base_wl, base_int = generator(T, ne, comp)
+        base_label = self._make_label(T, ne, comp, snr=None)
+        ground_truth = {
+            "temperature_K": T,
+            "electron_density_cm3": ne,
+            "concentrations": dict(comp),
+        }
+        out: List[BenchmarkSpectrum] = []
+        for snr in self.snr_values:
+            if snr is None:
+                out.append(
+                    BenchmarkSpectrum(
+                        wavelength=base_wl.copy(),
+                        intensity=base_int.copy(),
+                        ground_truth=ground_truth,
+                        label=base_label,
+                        snr=None,
+                    )
+                )
+            else:
+                noisy = self._add_noise(base_int, snr, rng)
+                out.append(
+                    BenchmarkSpectrum(
+                        wavelength=base_wl.copy(),
+                        intensity=noisy,
+                        ground_truth=ground_truth,
+                        label=self._make_label(T, ne, comp, snr),
+                        snr=snr,
+                    )
+                )
+        return out
+
+    def _dark_element_spectrum(
+        self,
+        generator,
+        comp: Dict[str, float],
+    ) -> BenchmarkSpectrum:
+        """Build a single dark-element test spectrum for ``comp``."""
+        T = self.temperatures_K[len(self.temperatures_K) // 2]
+        ne = self.electron_densities_cm3[len(self.electron_densities_cm3) // 2]
+        base_wl, base_int = generator(T, ne, comp)
+        ground_truth = {
+            "temperature_K": T,
+            "electron_density_cm3": ne,
+            "concentrations": dict(comp),
+            "dark_element_test": True,
+        }
+        return BenchmarkSpectrum(
+            wavelength=base_wl.copy(),
+            intensity=base_int.copy(),
+            ground_truth=ground_truth,
+            label=f"dark_elem_{'-'.join(sorted(comp.keys()))}",
+            metadata={"dark_element_test": True},
+        )
 
     # ------------------------------------------------------------------
     # Generation backends

@@ -206,6 +206,80 @@ def _polynomial_partition_function_jax(T_K, coeffs, t_min=None, t_max=None, g0=N
     return U
 
 
+def _saha_species_index_maps(species_list):
+    """Host-side (static) species/element index maps for the Saha block.
+
+    Returns
+    -------
+    elements_in_snapshot : list[str]
+        Distinct element symbols in first-seen order (padded rows excluded).
+    species_to_element_idx : np.ndarray (N_species,) int32
+        Per-species-row element index (sentinel 0 for padded rows).
+    sp_idx_I, sp_idx_II : np.ndarray (N_elements,) int32
+        Per-element species-row index for stage I / stage II (sentinel -1).
+    stage_per_species : np.ndarray (N_species,) int32
+        Ionization stage per species row.
+    """
+    elements_in_snapshot: list[str] = []
+    for el, _stage in species_list:
+        if el and el not in elements_in_snapshot:
+            elements_in_snapshot.append(el)
+
+    # Map each species row -> element-row index (sentinel 0 for padded rows).
+    species_to_element_idx = np.array(
+        [
+            elements_in_snapshot.index(el) if el in elements_in_snapshot else 0
+            for el, _ in species_list
+        ],
+        dtype=np.int32,
+    )
+    # Map element-row -> species-row index for stage I / stage II (sentinel -1).
+    n_elements = len(elements_in_snapshot)
+    sp_idx_I = -np.ones(n_elements, dtype=np.int32)
+    sp_idx_II = -np.ones(n_elements, dtype=np.int32)
+    for sp_idx, (el, stage) in enumerate(species_list):
+        if not el:
+            continue
+        el_idx = elements_in_snapshot.index(el)
+        if stage == 1:
+            sp_idx_I[el_idx] = sp_idx
+        elif stage == 2:
+            sp_idx_II[el_idx] = sp_idx
+    stage_per_species = np.array([int(s) for _, s in species_list], dtype=np.int32)
+    return (
+        elements_in_snapshot,
+        species_to_element_idx,
+        sp_idx_I,
+        sp_idx_II,
+        stage_per_species,
+    )
+
+
+def _saha_partition_functions(snapshot, T_K, dtype):
+    """Per-species partition functions ``U`` (traced), floored at 1e-30.
+
+    Per-species bounds + g0 routed through the encapsulated provider
+    (arch candidate 4).  Older snapshots produced before the candidate-4
+    rollout leave these fields as ``None`` — fall back to the legacy
+    unclamped evaluation so we don't break callers that build their
+    own snapshots without the bounds arrays.
+    """
+    pf_all = jnp.asarray(snapshot.partition_coeffs, dtype=dtype)
+    if snapshot.partition_t_min is not None and snapshot.partition_t_max is not None:
+        tmin_arr = jnp.asarray(snapshot.partition_t_min, dtype=dtype)
+        tmax_arr = jnp.asarray(snapshot.partition_t_max, dtype=dtype)
+        g0_arr = (
+            jnp.asarray(snapshot.partition_g0, dtype=dtype)
+            if snapshot.partition_g0 is not None
+            else None
+        )
+        return jnp.maximum(
+            _polynomial_partition_function_jax(T_K, pf_all, tmin_arr, tmax_arr, g0_arr),
+            1e-30,
+        )
+    return jnp.maximum(_polynomial_partition_function_jax(T_K, pf_all), 1e-30)
+
+
 def _saha_two_stage_populations(plasma_state, snapshot):
     """Two-stage (I, II) Saha-Boltzmann populations per snapshot line.
 
@@ -233,32 +307,14 @@ def _saha_two_stage_populations(plasma_state, snapshot):
     species_list = snapshot.species
 
     # ---- Host-side index maps (static) ----
-    elements_in_snapshot: list[str] = []
-    for el, _stage in species_list:
-        if el and el not in elements_in_snapshot:
-            elements_in_snapshot.append(el)
-
-    # Map each species row -> element-row index (sentinel 0 for padded rows).
-    species_to_element_idx = np.array(
-        [
-            elements_in_snapshot.index(el) if el in elements_in_snapshot else 0
-            for el, _ in species_list
-        ],
-        dtype=np.int32,
-    )
-    # Map element-row -> species-row index for stage I / stage II (sentinel -1).
+    (
+        elements_in_snapshot,
+        species_to_element_idx,
+        sp_idx_I,
+        sp_idx_II,
+        stage_per_species,
+    ) = _saha_species_index_maps(species_list)
     n_elements = len(elements_in_snapshot)
-    sp_idx_I = -np.ones(n_elements, dtype=np.int32)
-    sp_idx_II = -np.ones(n_elements, dtype=np.int32)
-    for sp_idx, (el, stage) in enumerate(species_list):
-        if not el:
-            continue
-        el_idx = elements_in_snapshot.index(el)
-        if stage == 1:
-            sp_idx_I[el_idx] = sp_idx
-        elif stage == 2:
-            sp_idx_II[el_idx] = sp_idx
-    stage_per_species = np.array([int(s) for _, s in species_list], dtype=np.int32)
 
     # ---- Per-element density and concentration (traced under vmap) ----
     # Pull each element's density as a jnp scalar via ``species[el]``; this
@@ -276,27 +332,8 @@ def _saha_two_stage_populations(plasma_state, snapshot):
     )
 
     # ---- Partition functions for every species row (traced) ----
-    pf_all = jnp.asarray(snapshot.partition_coeffs, dtype=dtype)
     ip_all = jnp.asarray(snapshot.ionization_potential_ev, dtype=dtype)
-    # Per-species bounds + g0 routed through the encapsulated provider
-    # (arch candidate 4).  Older snapshots produced before the candidate-4
-    # rollout leave these fields as ``None`` — fall back to the legacy
-    # unclamped evaluation so we don't break callers that build their
-    # own snapshots without the bounds arrays.
-    if snapshot.partition_t_min is not None and snapshot.partition_t_max is not None:
-        tmin_arr = jnp.asarray(snapshot.partition_t_min, dtype=dtype)
-        tmax_arr = jnp.asarray(snapshot.partition_t_max, dtype=dtype)
-        g0_arr = (
-            jnp.asarray(snapshot.partition_g0, dtype=dtype)
-            if snapshot.partition_g0 is not None
-            else None
-        )
-        U_per_species = jnp.maximum(
-            _polynomial_partition_function_jax(T_K, pf_all, tmin_arr, tmax_arr, g0_arr),
-            1e-30,
-        )
-    else:
-        U_per_species = jnp.maximum(_polynomial_partition_function_jax(T_K, pf_all), 1e-30)
+    U_per_species = _saha_partition_functions(snapshot, T_K, dtype)
 
     # Gather stage-I / stage-II values per element. For missing-stage
     # elements (sentinel -1) we fall back to species 0 then zero out the
@@ -475,6 +512,89 @@ def _voigt_sum_per_line(wavelength_grid, line_centers, line_intensities, sigmas,
 # ---------------------------------------------------------------------------
 
 
+def _apply_self_absorption(emissivity, wl, T_eV, path_length_m):
+    """Optical-slab self-absorption: ``I = B * (1 - exp(-kappa * L))``.
+
+    Numerically identical to the inline radiative-transfer block shared by
+    :func:`forward_model` and the :func:`forward_model_chunked` scan body.
+    """
+    wl_m = wl * 1.0e-9
+    T_K = T_eV * EV_TO_K
+    exponent = (H_PLANCK * C_LIGHT) / (wl_m * KB * T_K)
+    exponent = jnp.minimum(exponent, 700.0)
+    B_m3 = (2.0 * H_PLANCK * C_LIGHT**2 / (wl_m**5)) / (jnp.exp(exponent) - 1.0)
+    B_lambda = B_m3 * 1.0e-9  # W m^-2 nm^-1 sr^-1
+    kappa = emissivity / (B_lambda + 1e-100)
+    return B_lambda * (-jnp.expm1(-kappa * path_length_m))
+
+
+def _forward_emissivity(
+    wl,
+    line_centers,
+    epsilon_line,
+    atomic_snapshot,
+    instrument,
+    T_eV,
+    n_e,
+    sigma_grid,
+    *,
+    broadening_mode: BroadeningMode,
+    fold_instrument_sigma: bool,
+    apply_stark: bool,
+):
+    """Mode-dispatched per-line broadening for :func:`forward_model`.
+
+    Returns the broadened emissivity on ``wl``. Splits the static
+    broadening-mode dispatch out of :func:`forward_model` verbatim — every
+    width formula and conditional matches the pre-extraction inline body.
+    """
+    if broadening_mode == BroadeningMode.LEGACY:
+        # Legacy: single scalar sigma; outer-product Gaussian sum.
+        sigma_scalar = 0.01 * jnp.sqrt(jnp.maximum(T_eV, 1e-12) / 0.86)
+        line_wl_nm = jnp.asarray(atomic_snapshot.line_wavelengths_nm)
+        sigma_per_line = jnp.full(line_wl_nm.shape, sigma_scalar, dtype=line_wl_nm.dtype)
+        return _gaussian_sum_per_line(wl, line_centers, epsilon_line, sigma_per_line)
+    if broadening_mode == BroadeningMode.NIST_PARITY:
+        # Per-line instrument sigma from resolving power, evaluated at each
+        # line center inline (spec §5 row "Bayesian approach wins").
+        sigma_per_line = _per_line_instrument_sigma(atomic_snapshot, instrument)
+        return _gaussian_sum_per_line(wl, line_centers, epsilon_line, sigma_per_line)
+    if broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
+        line_mass_amu = _species_mass_array(atomic_snapshot)[
+            np.asarray(atomic_snapshot.line_species_index)
+        ]
+        sigma_doppler = _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu)
+        if fold_instrument_sigma:
+            sigma_inst = _per_line_instrument_sigma(atomic_snapshot, instrument)
+            sigma_per_line = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
+        else:
+            sigma_per_line = sigma_doppler
+        if apply_stark:
+            gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
+            sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
+            return _voigt_sum_per_line(
+                wl, line_centers, epsilon_line, sigma_per_line, gamma_per_line
+            )
+        return _gaussian_sum_per_line(wl, line_centers, epsilon_line, sigma_per_line)
+    if broadening_mode == BroadeningMode.LDM_GAUSSIAN:
+        from cflibs.radiation.ldm import ldm_broaden
+
+        line_mass_amu = _species_mass_array(atomic_snapshot)[
+            np.asarray(atomic_snapshot.line_species_index)
+        ]
+        sigma_per_line = jnp.maximum(
+            _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu), 1e-12
+        )
+        return ldm_broaden(
+            line_wavelengths=line_centers,
+            line_intensities=epsilon_line,
+            line_sigmas=sigma_per_line,
+            wavelength_grid=wl,
+            sigma_grid=jnp.asarray(sigma_grid),
+        )
+    raise ValueError(f"Unsupported broadening_mode: {broadening_mode!r}")
+
+
 def forward_model(
     plasma_state: "SingleZoneLTEPlasma",
     atomic_snapshot: "AtomicSnapshot",
@@ -600,65 +720,25 @@ def forward_model(
         _per_line_stark_shift(atomic_snapshot, line_wl_nm, n_e) if apply_stark else line_wl_nm
     )
 
-    if broadening_mode == BroadeningMode.LEGACY:
-        # Legacy: single scalar sigma; outer-product Gaussian sum.
-        sigma_scalar = 0.01 * jnp.sqrt(jnp.maximum(T_eV, 1e-12) / 0.86)
-        sigma_per_line = jnp.full(line_wl_nm.shape, sigma_scalar, dtype=line_wl_nm.dtype)
-        emissivity = _gaussian_sum_per_line(wl, line_centers, epsilon_line, sigma_per_line)
-    elif broadening_mode == BroadeningMode.NIST_PARITY:
-        # Per-line instrument sigma from resolving power, evaluated at each
-        # line center inline (spec §5 row "Bayesian approach wins").
-        sigma_per_line = _per_line_instrument_sigma(atomic_snapshot, instrument)
-        emissivity = _gaussian_sum_per_line(wl, line_centers, epsilon_line, sigma_per_line)
-    elif broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
-        line_mass_amu = _species_mass_array(atomic_snapshot)[
-            np.asarray(atomic_snapshot.line_species_index)
-        ]
-        sigma_doppler = _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu)
-        if fold_instrument_sigma:
-            sigma_inst = _per_line_instrument_sigma(atomic_snapshot, instrument)
-            sigma_per_line = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
-        else:
-            sigma_per_line = sigma_doppler
-        if apply_stark:
-            gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
-            sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
-            emissivity = _voigt_sum_per_line(
-                wl, line_centers, epsilon_line, sigma_per_line, gamma_per_line
-            )
-        else:
-            emissivity = _gaussian_sum_per_line(wl, line_centers, epsilon_line, sigma_per_line)
-    elif broadening_mode == BroadeningMode.LDM_GAUSSIAN:
-        from cflibs.radiation.ldm import ldm_broaden
-
-        line_mass_amu = _species_mass_array(atomic_snapshot)[
-            np.asarray(atomic_snapshot.line_species_index)
-        ]
-        sigma_per_line = jnp.maximum(
-            _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu), 1e-12
-        )
-        emissivity = ldm_broaden(
-            line_wavelengths=line_centers,
-            line_intensities=epsilon_line,
-            line_sigmas=sigma_per_line,
-            wavelength_grid=wl,
-            sigma_grid=jnp.asarray(sigma_grid),
-        )
-    else:
-        raise ValueError(f"Unsupported broadening_mode: {broadening_mode!r}")
+    emissivity = _forward_emissivity(
+        wl,
+        line_centers,
+        epsilon_line,
+        atomic_snapshot,
+        instrument,
+        T_eV,
+        n_e,
+        sigma_grid,
+        broadening_mode=broadening_mode,
+        fold_instrument_sigma=fold_instrument_sigma,
+        apply_stark=apply_stark,
+    )
 
     if not apply_self_absorption:
         return emissivity
 
     # ---- Optical-slab self-absorption: I = B * (1 - exp(-kappa * L)) ----
-    wl_m = wl * 1.0e-9
-    T_K = T_eV * EV_TO_K
-    exponent = (H_PLANCK * C_LIGHT) / (wl_m * KB * T_K)
-    exponent = jnp.minimum(exponent, 700.0)
-    B_m3 = (2.0 * H_PLANCK * C_LIGHT**2 / (wl_m**5)) / (jnp.exp(exponent) - 1.0)
-    B_lambda = B_m3 * 1.0e-9  # W m^-2 nm^-1 sr^-1
-    kappa = emissivity / (B_lambda + 1e-100)
-    return B_lambda * (-jnp.expm1(-kappa * path_length_m))
+    return _apply_self_absorption(emissivity, wl, T_eV, path_length_m)
 
 
 # ---------------------------------------------------------------------------
@@ -815,6 +895,91 @@ def _resolve_checkpoint_policy():
         # missing. ``everything_saveable`` is slower but always correct.
         or getattr(policies, "everything_saveable", None)
     )
+
+
+def _chunk_per_line_widths(
+    atomic_snapshot,
+    instrument,
+    line_wl_nm,
+    T_eV,
+    n_e,
+    *,
+    broadening_mode: BroadeningMode,
+    fold_instrument_sigma: bool,
+    apply_stark: bool,
+):
+    """Chunk-invariant per-line broadening widths for the chunked scan.
+
+    Hoisted verbatim from :func:`forward_model_chunked`'s pre-scan block
+    (q278). Returns ``(sigma_per_line, gamma_per_line)`` where
+    ``gamma_per_line`` is ``None`` unless ``PHYSICAL_DOPPLER`` with
+    ``apply_stark=True``.
+    """
+    gamma_per_line = None
+    if broadening_mode == BroadeningMode.LEGACY:
+        sigma_scalar = 0.01 * jnp.sqrt(jnp.maximum(T_eV, 1e-12) / 0.86)
+        sigma_per_line = jnp.full(line_wl_nm.shape, sigma_scalar, dtype=line_wl_nm.dtype)
+    elif broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
+        line_mass_amu = _species_mass_array(atomic_snapshot)[
+            np.asarray(atomic_snapshot.line_species_index)
+        ]
+        sigma_doppler = _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu)
+        if fold_instrument_sigma:
+            sigma_inst = _per_line_instrument_sigma(atomic_snapshot, instrument)
+            sigma_per_line = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
+        else:
+            sigma_per_line = sigma_doppler
+        if apply_stark:
+            gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
+            sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
+    elif broadening_mode == BroadeningMode.LDM_GAUSSIAN:
+        line_mass_amu = _species_mass_array(atomic_snapshot)[
+            np.asarray(atomic_snapshot.line_species_index)
+        ]
+        sigma_per_line = jnp.maximum(
+            _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu), 1e-12
+        )
+    else:  # pragma: no cover - NIST_PARITY rejected above; defensive
+        sigma_per_line = _per_line_instrument_sigma(atomic_snapshot, instrument)
+    return sigma_per_line, gamma_per_line
+
+
+def _validate_chunked_inputs(
+    broadening_mode,
+    chunk_wavelength_grids,
+    line_masks,
+    output_length,
+):
+    """Validate the ``nstitch > 1`` chunked-path preconditions.
+
+    Raises the same errors, in the same order, as the inline guards in
+    :func:`forward_model_chunked`.
+    """
+    if broadening_mode == BroadeningMode.NIST_PARITY:
+        # Spec §7: lines too sparse for chunked OLA to help.
+        raise ValueError(
+            "BroadeningMode.NIST_PARITY does not support chunked scan; "
+            "lines are sparse and per-line Voigt is already cheap. Pass "
+            "nstitch=1 or switch to PHYSICAL_DOPPLER / LDM_GAUSSIAN."
+        )
+
+    if chunk_wavelength_grids is None or line_masks is None or output_length is None:
+        raise ValueError(
+            "forward_model_chunked with nstitch>1 requires "
+            "chunk_wavelength_grids, line_masks, and output_length. "
+            "Use cflibs.radiation.host.build_chunk_metadata to construct them."
+        )
+
+    if not HAS_JAX:
+        # forward_model_chunked is JAX-only by design: _forward_model_per_chunk
+        # uses jnp ops throughout, which would explode against the numpy
+        # fallback in cflibs.core.jax_runtime.jnp. The un-chunked forward_model
+        # is similarly JAX-only; nstitch=1 dispatch above is the supported
+        # no-JAX path.
+        raise RuntimeError(
+            "forward_model_chunked requires JAX; nstitch=1 dispatches to "
+            "forward_model which is also JAX-required."
+        )
 
 
 def _forward_model_per_chunk(
@@ -975,31 +1140,7 @@ def forward_model_chunked(
             apply_stark=apply_stark,
         )
 
-    if broadening_mode == BroadeningMode.NIST_PARITY:
-        # Spec §7: lines too sparse for chunked OLA to help.
-        raise ValueError(
-            "BroadeningMode.NIST_PARITY does not support chunked scan; "
-            "lines are sparse and per-line Voigt is already cheap. Pass "
-            "nstitch=1 or switch to PHYSICAL_DOPPLER / LDM_GAUSSIAN."
-        )
-
-    if chunk_wavelength_grids is None or line_masks is None or output_length is None:
-        raise ValueError(
-            "forward_model_chunked with nstitch>1 requires "
-            "chunk_wavelength_grids, line_masks, and output_length. "
-            "Use cflibs.radiation.host.build_chunk_metadata to construct them."
-        )
-
-    if not HAS_JAX:
-        # forward_model_chunked is JAX-only by design: _forward_model_per_chunk
-        # uses jnp ops throughout, which would explode against the numpy
-        # fallback in cflibs.core.jax_runtime.jnp. The un-chunked forward_model
-        # is similarly JAX-only; nstitch=1 dispatch above is the supported
-        # no-JAX path.
-        raise RuntimeError(
-            "forward_model_chunked requires JAX; nstitch=1 dispatches to "
-            "forward_model which is also JAX-required."
-        )
+    _validate_chunked_inputs(broadening_mode, chunk_wavelength_grids, line_masks, output_length)
 
     import jax  # noqa: PLC0415
 
@@ -1032,32 +1173,16 @@ def forward_model_chunked(
         _per_line_stark_shift(atomic_snapshot, line_wl_nm, n_e) if apply_stark else line_wl_nm
     )
 
-    gamma_per_line = None
-    if broadening_mode == BroadeningMode.LEGACY:
-        sigma_scalar = 0.01 * jnp.sqrt(jnp.maximum(T_eV, 1e-12) / 0.86)
-        sigma_per_line = jnp.full(line_wl_nm.shape, sigma_scalar, dtype=line_wl_nm.dtype)
-    elif broadening_mode == BroadeningMode.PHYSICAL_DOPPLER:
-        line_mass_amu = _species_mass_array(atomic_snapshot)[
-            np.asarray(atomic_snapshot.line_species_index)
-        ]
-        sigma_doppler = _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu)
-        if fold_instrument_sigma:
-            sigma_inst = _per_line_instrument_sigma(atomic_snapshot, instrument)
-            sigma_per_line = jnp.sqrt(sigma_doppler**2 + sigma_inst**2)
-        else:
-            sigma_per_line = sigma_doppler
-        if apply_stark:
-            gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
-            sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
-    elif broadening_mode == BroadeningMode.LDM_GAUSSIAN:
-        line_mass_amu = _species_mass_array(atomic_snapshot)[
-            np.asarray(atomic_snapshot.line_species_index)
-        ]
-        sigma_per_line = jnp.maximum(
-            _per_line_doppler_sigma(atomic_snapshot, T_eV, line_mass_amu), 1e-12
-        )
-    else:  # pragma: no cover - NIST_PARITY rejected above; defensive
-        sigma_per_line = _per_line_instrument_sigma(atomic_snapshot, instrument)
+    sigma_per_line, gamma_per_line = _chunk_per_line_widths(
+        atomic_snapshot,
+        instrument,
+        line_wl_nm,
+        T_eV,
+        n_e,
+        broadening_mode=broadening_mode,
+        fold_instrument_sigma=fold_instrument_sigma,
+        apply_stark=apply_stark,
+    )
 
     policy = _resolve_checkpoint_policy()
 
@@ -1076,14 +1201,7 @@ def forward_model_chunked(
         )
         if not apply_self_absorption:
             return emissivity
-        wl_m = chunk_wl * 1.0e-9
-        T_K = T_eV * EV_TO_K
-        exponent = (H_PLANCK * C_LIGHT) / (wl_m * KB * T_K)
-        exponent = jnp.minimum(exponent, 700.0)
-        B_m3 = (2.0 * H_PLANCK * C_LIGHT**2 / (wl_m**5)) / (jnp.exp(exponent) - 1.0)
-        B_lambda = B_m3 * 1.0e-9
-        kappa = emissivity / (B_lambda + 1e-100)
-        return B_lambda * (-jnp.expm1(-kappa * path_length_m))
+        return _apply_self_absorption(emissivity, chunk_wl, T_eV, path_length_m)
 
     if policy is not None:
         body = jax.checkpoint(_body_uncheckpointed, policy=policy)

@@ -450,3 +450,87 @@ def test_feature_flag_default_off(mock_db, monkeypatch):
     monkeypatch.setattr(solver, "_solve_lax", _bomb)
     res = solver.solve(obs)
     assert res.iterations > 0
+
+
+# ---------------------------------------------------------------------------
+# 7. JAX-path selectors on the interface (arch review c5-solver-flags)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("env_value", "expected"),
+    [(None, False), ("0", False), ("1", True)],
+)
+def test_use_lax_while_loop_seeds_from_env_by_default(mock_db, monkeypatch, env_value, expected):
+    """Default-construction seeds ``use_lax_while_loop`` from the env var.
+
+    This is the byte-identical-default guarantee: with the constructor flag
+    left as ``None`` (the default), ``self.use_lax_while_loop`` reproduces
+    exactly the historical ``_lax_while_loop_enabled()`` env read.
+    """
+    if env_value is None:
+        monkeypatch.delenv("CFLIBS_USE_LAX_WHILE_LOOP", raising=False)
+    else:
+        monkeypatch.setenv("CFLIBS_USE_LAX_WHILE_LOOP", env_value)
+
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=20)
+    assert solver.use_lax_while_loop is expected
+    assert solver.use_lax_while_loop == iterative_mod._lax_while_loop_enabled()
+
+
+@pytest.mark.parametrize(
+    ("env_value", "expected"),
+    [(None, False), ("0", False), ("1", True)],
+)
+def test_use_jax_boltzmann_seeds_from_env_by_default(mock_db, monkeypatch, env_value, expected):
+    """Default-construction seeds ``use_jax_boltzmann`` from the env var."""
+    if env_value is None:
+        monkeypatch.delenv("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", raising=False)
+    else:
+        monkeypatch.setenv("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", env_value)
+
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=20)
+    assert solver.use_jax_boltzmann is expected
+    assert solver.use_jax_boltzmann == iterative_mod._jax_boltzmann_composition_enabled()
+    # The selector is plumbed all the way into the Boltzmann fitter.
+    assert solver.boltzmann_fitter.use_jax == expected
+
+
+def test_constructor_flag_overrides_env_lax(mock_db, monkeypatch):
+    """An explicit ``use_lax_while_loop`` is authoritative over the env var.
+
+    Env says enable (``1``) but the explicit ``False`` wins: the dispatcher
+    must take the Python path and never touch ``_solve_lax``.
+    """
+    monkeypatch.setenv("CFLIBS_USE_LAX_WHILE_LOOP", "1")
+    assert iterative_mod._lax_while_loop_enabled() is True
+
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=20, use_lax_while_loop=False)
+    assert solver.use_lax_while_loop is False
+
+    def _bomb(*args, **kwargs):
+        raise AssertionError("Explicit use_lax_while_loop=False must not route to _solve_lax")
+
+    monkeypatch.setattr(solver, "_solve_lax", _bomb)
+    res = solver.solve(_make_two_element_obs())
+    assert res.iterations > 0
+
+
+def test_constructor_flag_overrides_env_jax_boltzmann(mock_db, monkeypatch):
+    """An explicit ``use_jax_boltzmann`` is authoritative over the env var.
+
+    Env unset (default ``False``) but explicit ``True`` wins, and vice-versa.
+    """
+    monkeypatch.delenv("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", raising=False)
+    assert iterative_mod._jax_boltzmann_composition_enabled() is False
+
+    solver_on = IterativeCFLIBSSolver(mock_db, max_iterations=20, use_jax_boltzmann=True)
+    assert solver_on.use_jax_boltzmann is True
+    assert solver_on.boltzmann_fitter.use_jax is True
+
+    monkeypatch.setenv("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", "1")
+    assert iterative_mod._jax_boltzmann_composition_enabled() is True
+
+    solver_off = IterativeCFLIBSSolver(mock_db, max_iterations=20, use_jax_boltzmann=False)
+    assert solver_off.use_jax_boltzmann is False
+    assert solver_off.boltzmann_fitter.use_jax is False

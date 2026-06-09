@@ -15,8 +15,6 @@ from cflibs.core.constants import (
     SAHA_CONST_CM3,
     STP_PRESSURE,
     EV_TO_K,
-    H_PLANCK_EV,
-    C_LIGHT,
 )
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.radiation.stark import estimate_ne_from_stark
@@ -24,6 +22,10 @@ from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFit
 from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy
 from cflibs.inversion.physics.self_absorption import SelfAbsorptionCorrector
+from cflibs.inversion.physics.self_absorption_inputs import (
+    evaluate_partition_function as _build_evaluate_partition_function,
+    lower_level_energy_ev as _build_lower_level_energy_ev,
+)
 from cflibs.core.logging_config import get_logger
 
 
@@ -870,7 +872,33 @@ class IterativeCFLIBSSolver:
         min_boltzmann_r2: float = 0.3,
         boltzmann_weight_cap: float = 5.0,
         saha_boltzmann_graph: bool = False,
+        use_jax_boltzmann: Optional[bool] = None,
+        use_lax_while_loop: Optional[bool] = None,
     ):
+        # JAX numerical-path selectors lifted onto the interface (arch review
+        # c5-solver-flags). These two flags choose between the CPU reference
+        # path and an opt-in JAX kernel for, respectively, the inner Boltzmann
+        # sigma-clip WLS step (``use_jax_boltzmann``) and the whole iterative
+        # solve loop via ``jax.lax.while_loop`` (``use_lax_while_loop``, T1-3 /
+        # ADR-0001). They were previously read silently from the process
+        # environment (``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION`` /
+        # ``CFLIBS_USE_LAX_WHILE_LOOP``) at construction/solve time, which made
+        # the active numerical path invisible to callers and to tests.
+        #
+        # Default ``None`` SEEDS each flag from its env var, so default
+        # construction is byte-identical to the historical env-driven behavior
+        # and every existing ``CFLIBS_USE_*`` invocation is unchanged. Passing
+        # an explicit ``True``/``False`` is AUTHORITATIVE and overrides the env
+        # var. ``solve`` and the Boltzmann-fitter wiring read ``self.use_*``
+        # instead of touching ``os.environ`` directly.
+        self.use_jax_boltzmann = (
+            _jax_boltzmann_composition_enabled()
+            if use_jax_boltzmann is None
+            else bool(use_jax_boltzmann)
+        )
+        self.use_lax_while_loop = (
+            _lax_while_loop_enabled() if use_lax_while_loop is None else bool(use_lax_while_loop)
+        )
         self.atomic_db = atomic_db
         self.max_iterations = max_iterations
         self.t_tolerance_k = t_tolerance_k
@@ -1036,7 +1064,7 @@ class IterativeCFLIBSSolver:
         self.closure: ClosureStrategy = closure
         self.boltzmann_fitter = BoltzmannPlotFitter(
             outlier_sigma=2.5,
-            use_jax=_jax_boltzmann_composition_enabled(),
+            use_jax=self.use_jax_boltzmann,
         )
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
@@ -1069,33 +1097,14 @@ class IterativeCFLIBSSolver:
         polynomial) — the same fallback ladder this method used before the
         provider unification, and mirroring the guard in
         :meth:`SahaBoltzmannSolver.calculate_partition_function`.
+
+        The fallback-ladder implementation was moved verbatim to
+        :func:`cflibs.inversion.physics.self_absorption_inputs.evaluate_partition_function`
+        so the solver and the self-absorption tooling scripts share one
+        partition-function policy; this method delegates to it with
+        ``self.atomic_db``, preserving byte-identical behavior.
         """
-        if hasattr(self.atomic_db, "partition_function_for"):
-            provider = self.atomic_db.partition_function_for(element, ionization_stage)
-            if provider is not None:
-                return float(provider.at(T_K))
-        else:
-            # ABC-only backend: reproduce the pre-unification fallback ladder
-            # (direct sum over energy levels, then the stored polynomial).
-            from cflibs.plasma.partition import (
-                PartitionFunctionEvaluator,
-                get_levels_for_species,
-            )
-
-            levels = get_levels_for_species(self.atomic_db, element, ionization_stage)
-            if levels is not None:
-                g_arr, E_arr, ip_ev = levels
-                return PartitionFunctionEvaluator.evaluate_direct(T_K, g_arr, E_arr, ip_ev)
-
-            pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
-            if pf:
-                return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
-
-        if ionization_stage == 1:
-            return 25.0
-        if ionization_stage == 2:
-            return 15.0
-        return 2.0
+        return _build_evaluate_partition_function(self.atomic_db, element, ionization_stage, T_K)
 
     def _compute_saha_ratio(
         self,
@@ -1311,18 +1320,14 @@ class IterativeCFLIBSSolver:
     def _lower_level_energy_ev(obs: LineObservation) -> float:
         """Lower-level energy ``E_i`` of a line, in eV.
 
-        ``LineObservation`` carries only the upper-level energy ``E_k`` and the
-        wavelength, but the curve-of-growth optical-depth estimate needs the
-        *lower*-level energy (the absorbing level). Energy conservation for the
-        transition gives ``E_i = E_k - hc/lambda`` exactly, so we recover it
-        rather than defaulting every line to the ground state (which would make
-        every line look like a maximally self-absorbed resonance line).
-
-        Clamped to be non-negative to absorb small wavelength/energy rounding in
-        the atomic data.
+        Thin delegate to
+        :func:`cflibs.inversion.physics.self_absorption_inputs.lower_level_energy_ev`,
+        which owns the canonical ``E_i = E_k - hc/lambda`` derivation (moved
+        there verbatim so the solver, the ablation script, and the experiment
+        harness all share one implementation). Kept as a method for the
+        existing call site and backward compatibility.
         """
-        photon_ev = (H_PLANCK_EV * C_LIGHT) / (obs.wavelength_nm * 1e-9)
-        return max(0.0, obs.E_k_ev - photon_ev)
+        return _build_lower_level_energy_ev(obs)
 
     def _apply_self_absorption_correction(
         self,
@@ -1593,8 +1598,10 @@ class IterativeCFLIBSSolver:
         Estimate plasma temperature, electron density, and elemental concentrations from spectral line observations using the iterative CF-LIBS algorithm.
 
         Routes to ``_solve_lax`` (``jax.lax.while_loop`` path, T1-3) when both
-        :func:`_lax_while_loop_enabled` and ``HAS_JAX`` are true; otherwise
-        runs the Python ``for``-loop reference path in ``_solve_python``.
+        ``self.use_lax_while_loop`` (seeded from
+        :func:`_lax_while_loop_enabled` at construction, overridable via the
+        constructor) and ``HAS_JAX`` are true; otherwise runs the Python
+        ``for``-loop reference path in ``_solve_python``.
 
         Parameters:
             observations (List[LineObservation]): Spectral line observations to invert; lines are grouped by element.
@@ -1627,7 +1634,7 @@ class IterativeCFLIBSSolver:
         # supplied stark_diagnostic forces the Python path.
         if (
             HAS_JAX
-            and _lax_while_loop_enabled()
+            and self.use_lax_while_loop
             and not self.apply_self_absorption
             and not self.saha_boltzmann_graph
             and stark_diagnostic is None

@@ -104,13 +104,9 @@ def _residual_check_applies(workflow: str) -> bool:
     return any(workflow.startswith(p) for p in RESIDUAL_NORM_WORKFLOW_PREFIXES)
 
 
-def _classify_row(row: pd.Series) -> list[str]:
-    """Return the list of failure modes a single row triggers."""
+def _annotation_modes(ann: dict, workflow: str) -> list[str]:
+    """Failure modes derived purely from the ``annotations`` payload."""
     modes: list[str] = []
-    ann = _parse_json_cell(row.get("annotations"))
-    workflow = str(row.get("workflow_name") or "")
-    predicted = _parse_list_cell(row.get("predicted_elements"))
-    true = _parse_list_cell(row.get("true_elements"))
 
     fwhm = ann.get("basis_fwhm_mismatch_nm")
     if isinstance(fwhm, (int, float)) and fwhm > THRESH_BASIS_FWHM_NM:
@@ -125,20 +121,44 @@ def _classify_row(row: pd.Series) -> list[str]:
     if isinstance(n_detected, (int, float)) and n_detected < THRESH_MIN_LINES:
         modes.append("no_lines_detected")
 
+    return modes
+
+
+def _f1_is_zero(f1: object) -> bool:
+    """True iff the ``f1`` cell parses to exactly 0.0."""
+    try:
+        f1_val = float(f1) if f1 is not None else None
+    except (TypeError, ValueError):
+        f1_val = None
+    return f1_val == 0.0
+
+
+def _element_modes(predicted: list, true: list, f1: object) -> list[str]:
+    """Failure modes derived from predicted/true element lists and ``f1``."""
+    modes: list[str] = []
+
     if not predicted and true:
         modes.append("empty_predicted_elements")
 
     if (len(predicted) - len(true)) > THRESH_OVERPRED_DELTA:
         modes.append("large_overprediction")
 
-    f1 = row.get("f1")
-    try:
-        f1_val = float(f1) if f1 is not None else None
-    except (TypeError, ValueError):
-        f1_val = None
-    if f1_val == 0.0 and true:
+    if _f1_is_zero(f1) and true:
         modes.append("zero_f1")
 
+    return modes
+
+
+def _classify_row(row: pd.Series) -> list[str]:
+    """Return the list of failure modes a single row triggers."""
+    ann = _parse_json_cell(row.get("annotations"))
+    workflow = str(row.get("workflow_name") or "")
+    predicted = _parse_list_cell(row.get("predicted_elements"))
+    true = _parse_list_cell(row.get("true_elements"))
+
+    modes: list[str] = []
+    modes += _annotation_modes(ann, workflow)
+    modes += _element_modes(predicted, true, row.get("f1"))
     return modes
 
 

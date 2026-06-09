@@ -241,54 +241,58 @@ class ThompsonAllocator:
             ``posterior_mean``, ``posterior_var``, ``observed_mean``,
             ``observed_var``, ``prob_best``.
         """
-        summaries: List[dict] = []
-        for idx, arm in enumerate(self._arms):
-            mu_n, kappa_n, alpha_n, beta_n = self._posterior_params(arm)
-            # Mode of inverse-gamma is β / (α + 1); fall back to mean
-            # β / (α − 1) when α > 1 since that is more familiar.
-            if alpha_n > 1.0:
-                post_var_mean = beta_n / (alpha_n - 1.0)
-            else:
-                post_var_mean = float("nan")
-            # Unbiased sample variance for the observed data.
-            if arm.n >= 2:
-                obs_var = arm.m2 / (arm.n - 1)
-            else:
-                obs_var = float("nan")
-            summaries.append(
-                {
-                    "arm": idx,
-                    "n_pulls": arm.n,
-                    "posterior_mean": float(mu_n),
-                    "posterior_var": float(post_var_mean),
-                    "observed_mean": float(arm.mean) if arm.n > 0 else float("nan"),
-                    "observed_var": float(obs_var),
-                    "prob_best": None,
-                }
-            )
+        summaries: List[dict] = [self._arm_summary(idx, arm) for idx, arm in enumerate(self._arms)]
 
         if prob_best_samples > 0 and self.n_arms > 0:
-            counts = np.zeros(self.n_arms, dtype=np.int64)
-            # Use a *separate* short-lived generator so prob_best
-            # estimation does not consume self._rng entropy (and so
-            # the allocator's selection sequence stays deterministic
-            # whether or not summaries are inspected).
-            rng = np.random.default_rng(self._rng.integers(0, 2**31 - 1))
-            for _ in range(int(prob_best_samples)):
-                samples = np.empty(self.n_arms)
-                for i, arm in enumerate(self._arms):
-                    mu_n, kappa_n, alpha_n, beta_n = self._posterior_params(arm)
-                    sigma2 = 1.0 / max(rng.gamma(alpha_n, 1.0 / beta_n), 1e-300)
-                    samples[i] = rng.normal(mu_n, np.sqrt(sigma2 / kappa_n))
-                if self.lower_is_better:
-                    counts[int(np.argmin(samples))] += 1
-                else:
-                    counts[int(np.argmax(samples))] += 1
-            probs = counts / float(prob_best_samples)
+            probs = self._estimate_prob_best(int(prob_best_samples))
             for i, summary in enumerate(summaries):
                 summary["prob_best"] = float(probs[i])
 
         return summaries
+
+    def _arm_summary(self, idx: int, arm: _ArmState) -> dict:
+        """Build the (prob_best=None) summary dict for a single arm."""
+        mu_n, kappa_n, alpha_n, beta_n = self._posterior_params(arm)
+        # Mode of inverse-gamma is β / (α + 1); fall back to mean
+        # β / (α − 1) when α > 1 since that is more familiar.
+        if alpha_n > 1.0:
+            post_var_mean = beta_n / (alpha_n - 1.0)
+        else:
+            post_var_mean = float("nan")
+        # Unbiased sample variance for the observed data.
+        if arm.n >= 2:
+            obs_var = arm.m2 / (arm.n - 1)
+        else:
+            obs_var = float("nan")
+        return {
+            "arm": idx,
+            "n_pulls": arm.n,
+            "posterior_mean": float(mu_n),
+            "posterior_var": float(post_var_mean),
+            "observed_mean": float(arm.mean) if arm.n > 0 else float("nan"),
+            "observed_var": float(obs_var),
+            "prob_best": None,
+        }
+
+    def _estimate_prob_best(self, prob_best_samples: int) -> np.ndarray:
+        """Monte-Carlo estimate of P(arm is optimal) for each arm."""
+        counts = np.zeros(self.n_arms, dtype=np.int64)
+        # Use a *separate* short-lived generator so prob_best
+        # estimation does not consume self._rng entropy (and so
+        # the allocator's selection sequence stays deterministic
+        # whether or not summaries are inspected).
+        rng = np.random.default_rng(self._rng.integers(0, 2**31 - 1))
+        for _ in range(prob_best_samples):
+            samples = np.empty(self.n_arms)
+            for i, arm in enumerate(self._arms):
+                mu_n, kappa_n, alpha_n, beta_n = self._posterior_params(arm)
+                sigma2 = 1.0 / max(rng.gamma(alpha_n, 1.0 / beta_n), 1e-300)
+                samples[i] = rng.normal(mu_n, np.sqrt(sigma2 / kappa_n))
+            if self.lower_is_better:
+                counts[int(np.argmin(samples))] += 1
+            else:
+                counts[int(np.argmax(samples))] += 1
+        return counts / float(prob_best_samples)
 
     def n_pulls(self, arm_idx: Optional[int] = None) -> int | List[int]:
         """Pull counts: total per-arm list, or for a single arm if specified."""

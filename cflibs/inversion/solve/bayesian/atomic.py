@@ -38,6 +38,7 @@ from cflibs.core.constants import (
     MCWHIRTER_CONST,
     SAHA_CONST_CM3,
 )
+from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES, resolve_element_mass
 from cflibs.core.jax_runtime import jax_default_real_dtype
 from cflibs.core.logging_config import get_logger
 
@@ -97,38 +98,47 @@ else:  # pragma: no cover - JAX not installed
     _JAX_M_PROTON = M_PROTON
 
 
-# Standard atomic masses for fallback [amu]
+# Standard atomic masses for fallback [amu].
+#
+# Historically a 30-element literal (H..Zn). It is the value-identical contiguous
+# prefix of the canonical :data:`cflibs.atomic.masses.STANDARD_ATOMIC_MASSES`, so
+# it is derived from that table to remove the duplicated literal while keeping
+# this public symbol's exact keys/values (and thus its ``.get(el, 50.0)``
+# table-miss behaviour) byte-identical to before.
+_BAYESIAN_FALLBACK_ELEMENTS = (
+    "H",
+    "He",
+    "Li",
+    "Be",
+    "B",
+    "C",
+    "N",
+    "O",
+    "F",
+    "Ne",
+    "Na",
+    "Mg",
+    "Al",
+    "Si",
+    "P",
+    "S",
+    "Cl",
+    "Ar",
+    "K",
+    "Ca",
+    "Sc",
+    "Ti",
+    "V",
+    "Cr",
+    "Mn",
+    "Fe",
+    "Co",
+    "Ni",
+    "Cu",
+    "Zn",
+)
 STANDARD_MASSES: Dict[str, float] = {
-    "H": 1.008,
-    "He": 4.003,
-    "Li": 6.941,
-    "Be": 9.012,
-    "B": 10.81,
-    "C": 12.01,
-    "N": 14.01,
-    "O": 16.00,
-    "F": 19.00,
-    "Ne": 20.18,
-    "Na": 22.99,
-    "Mg": 24.31,
-    "Al": 26.98,
-    "Si": 28.09,
-    "P": 30.97,
-    "S": 32.07,
-    "Cl": 35.45,
-    "Ar": 39.95,
-    "K": 39.10,
-    "Ca": 40.08,
-    "Sc": 44.96,
-    "Ti": 47.87,
-    "V": 50.94,
-    "Cr": 52.00,
-    "Mn": 54.94,
-    "Fe": 55.85,
-    "Co": 58.93,
-    "Ni": 58.69,
-    "Cu": 63.55,
-    "Zn": 65.38,
+    el: STANDARD_ATOMIC_MASSES[el] for el in _BAYESIAN_FALLBACK_ELEMENTS
 }
 
 
@@ -178,6 +188,157 @@ def _compute_instrument_sigma(
 # ---------------------------------------------------------------------------
 
 
+def _build_lines_dataframe(
+    conn: Any,
+    elements: List[str],
+    wavelength_range: Tuple[float, float],
+    placeholders: str,
+) -> Tuple[Any, Dict[str, int]]:
+    """Read the per-line atomic dataframe and attach element/mass columns.
+
+    Returns the populated dataframe and the ``element -> index`` map.
+    """
+    import pandas as pd
+
+    query = f"""
+            SELECT
+                l.id, l.element, l.sp_num, l.wavelength_nm, l.aki, l.ek_ev, l.gk,
+                sp.ip_ev, l.stark_w, l.stark_alpha, l.ei_ev
+            FROM lines l
+            JOIN species_physics sp ON l.element = sp.element AND l.sp_num = sp.sp_num
+            WHERE l.wavelength_nm BETWEEN ? AND ?
+            AND l.element IN ({placeholders})
+            ORDER BY l.wavelength_nm, l.id
+        """
+    params = [wavelength_range[0], wavelength_range[1]] + list(elements)
+    df = pd.read_sql_query(query, conn, params=params)
+
+    if df.empty:
+        raise ValueError(f"No atomic data for elements {elements} in range {wavelength_range}")
+
+    el_map = {el: i for i, el in enumerate(elements)}
+    df["el_idx"] = df["element"].map(el_map)
+
+    element_masses = {}
+    for el in elements:
+        if el not in STANDARD_MASSES:
+            logger.warning(f"No mass for {el}, using fallback 50 amu")
+        # Table-only ladder (no DB lookup): table -> 50.0 amu generic fallback.
+        element_masses[el] = resolve_element_mass(el, table=STANDARD_MASSES)
+    df["mass_amu"] = df["element"].map(element_masses)
+
+    return df, el_map
+
+
+def _init_partition_arrays(
+    n_elements: int,
+    max_stages: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Build the default partition coeff/ip and ``[t_min, t_max]`` + ``g0`` guards.
+
+    The validity window matches the canonical ``[2000, 25000] K`` fit band; ``g0``
+    defaults to the stage's placeholder ground-state weight.  These are the
+    *static* arrays the guarded JAX evaluator clamps / floors with, so no Python
+    provider call is needed inside the trace.
+    """
+    coeffs = np.zeros((n_elements, max_stages, 5), dtype=np.float32)
+    ips = np.zeros((n_elements, max_stages), dtype=np.float32)
+
+    coeffs[:, 0, 0] = np.log(25.0)
+    coeffs[:, 1, 0] = np.log(15.0)
+    coeffs[:, 2, 0] = np.log(10.0)
+
+    t_min = np.full((n_elements, max_stages), 2000.0, dtype=np.float32)
+    t_max = np.full((n_elements, max_stages), 25000.0, dtype=np.float32)
+    g0 = np.exp(coeffs[:, :, 0]).astype(np.float32)
+    return coeffs, ips, t_min, t_max, g0
+
+
+def _load_ionization_potentials(
+    cursor: Any,
+    elements: List[str],
+    placeholders: str,
+    el_map: Dict[str, int],
+    ips: np.ndarray,
+    max_stages: int,
+) -> None:
+    """Fill ``ips`` in place from the ``species_physics`` table."""
+    cursor.execute(
+        f"SELECT element, sp_num, ip_ev FROM species_physics " f"WHERE element IN ({placeholders})",
+        elements,
+    )
+    for row in cursor.fetchall():
+        el, sp_num, ip_ev = row
+        if el in el_map and ip_ev is not None:
+            el_idx = el_map[el]
+            stage_idx = sp_num - 1
+            if 0 <= stage_idx < max_stages:
+                ips[el_idx, stage_idx] = ip_ev
+
+
+def _apply_partition_factory_overrides(
+    db_path: str,
+    el_map: Dict[str, int],
+    max_stages: int,
+    coeffs: np.ndarray,
+    t_min: np.ndarray,
+    t_max: np.ndarray,
+    g0: np.ndarray,
+) -> None:
+    """Override coeffs/bounds/g0 in place from the ONE partition-function factory.
+
+    ``partition_spec_for`` applies the locked policy in a single place — *prefer
+    the direct-sum FIT over energy levels when present; otherwise the stored
+    polynomial fallback; and always carry ``[t_min, t_max]`` + ``g0``* — and
+    caches the (expensive) per-species fit so it is compute-once (Invariant #5).
+    The Bayesian JAX adapter therefore bakes the SAME static arrays the manifold
+    snapshot bakes; the guarded JAX evaluator in the forward model clamps/floors
+    with the bounds, so jit / vmap are unaffected (the fit is a build-time
+    concern).
+    """
+    from cflibs.atomic.database import AtomicDatabase
+
+    try:
+        factory_db = AtomicDatabase(db_path)
+        for el, el_idx in el_map.items():
+            for stage in (1, 2, 3):
+                stage_idx = stage - 1
+                if stage_idx >= max_stages:
+                    continue
+                spec = factory_db.partition_spec_for(el, stage)
+                if spec is None:
+                    continue
+                spec_coeffs = (list(spec.coefficients) + [0.0] * 5)[:5]
+                coeffs[el_idx, stage_idx] = spec_coeffs
+                t_min[el_idx, stage_idx] = spec.t_min
+                t_max[el_idx, stage_idx] = spec.t_max
+                g0[el_idx, stage_idx] = spec.g0
+    except Exception as exc:  # pragma: no cover - DB shape fallback
+        logger.debug(f"Partition factory override skipped: {exc}")
+
+
+def _load_physics_arrays(
+    db_path: str,
+    conn: Any,
+    elements: List[str],
+    placeholders: str,
+    el_map: Dict[str, int],
+    max_stages: int,
+    ips: np.ndarray,
+    coeffs: np.ndarray,
+    t_min: np.ndarray,
+    t_max: np.ndarray,
+    g0: np.ndarray,
+) -> None:
+    """Load IPs + factory partition overrides in place, guarded as a unit."""
+    try:
+        cursor = conn.cursor()
+        _load_ionization_potentials(cursor, elements, placeholders, el_map, ips, max_stages)
+        _apply_partition_factory_overrides(db_path, el_map, max_stages, coeffs, t_min, t_max, g0)
+    except Exception as e:
+        logger.warning(f"Failed to load physics data: {e}")
+
+
 def _query_atomic_data(
     db_path: str,
     elements: List[str],
@@ -200,103 +361,27 @@ def _query_atomic_data(
     """
     import sqlite3
 
-    import pandas as pd
-
     with sqlite3.connect(db_path) as conn:
         placeholders = ",".join(["?"] * len(elements))
-        query = f"""
-            SELECT
-                l.id, l.element, l.sp_num, l.wavelength_nm, l.aki, l.ek_ev, l.gk,
-                sp.ip_ev, l.stark_w, l.stark_alpha, l.ei_ev
-            FROM lines l
-            JOIN species_physics sp ON l.element = sp.element AND l.sp_num = sp.sp_num
-            WHERE l.wavelength_nm BETWEEN ? AND ?
-            AND l.element IN ({placeholders})
-            ORDER BY l.wavelength_nm, l.id
-        """
-        params = [wavelength_range[0], wavelength_range[1]] + list(elements)
-        df = pd.read_sql_query(query, conn, params=params)
-
-        if df.empty:
-            raise ValueError(f"No atomic data for elements {elements} in range {wavelength_range}")
-
-        el_map = {el: i for i, el in enumerate(elements)}
-        df["el_idx"] = df["element"].map(el_map)
-
-        element_masses = {}
-        for el in elements:
-            if el in STANDARD_MASSES:
-                element_masses[el] = STANDARD_MASSES[el]
-            else:
-                element_masses[el] = 50.0
-                logger.warning(f"No mass for {el}, using fallback 50 amu")
-        df["mass_amu"] = df["element"].map(element_masses)
+        df, el_map = _build_lines_dataframe(conn, elements, wavelength_range, placeholders)
 
         max_stages = 3
         n_elements = len(elements)
-        coeffs = np.zeros((n_elements, max_stages, 5), dtype=np.float32)
-        ips = np.zeros((n_elements, max_stages), dtype=np.float32)
+        coeffs, ips, t_min, t_max, g0 = _init_partition_arrays(n_elements, max_stages)
 
-        coeffs[:, 0, 0] = np.log(25.0)
-        coeffs[:, 1, 0] = np.log(15.0)
-        coeffs[:, 2, 0] = np.log(10.0)
-
-        # Default guard arrays.  The validity window matches the canonical
-        # ``[2000, 25000] K`` fit band; ``g0`` defaults to the stage's
-        # placeholder ground-state weight above.  These are the *static*
-        # ``[t_min, t_max]`` + ``g0`` arrays the guarded JAX evaluator clamps /
-        # floors with, so no Python provider call is needed inside the trace.
-        t_min = np.full((n_elements, max_stages), 2000.0, dtype=np.float32)
-        t_max = np.full((n_elements, max_stages), 25000.0, dtype=np.float32)
-        g0 = np.exp(coeffs[:, :, 0]).astype(np.float32)
-
-        try:
-            cursor = conn.cursor()
-
-            cursor.execute(
-                f"SELECT element, sp_num, ip_ev FROM species_physics "
-                f"WHERE element IN ({placeholders})",
-                elements,
-            )
-            for row in cursor.fetchall():
-                el, sp_num, ip_ev = row
-                if el in el_map and ip_ev is not None:
-                    el_idx = el_map[el]
-                    stage_idx = sp_num - 1
-                    if 0 <= stage_idx < max_stages:
-                        ips[el_idx, stage_idx] = ip_ev
-
-            # Coefficients + bounds + g0 from the ONE partition-function factory
-            # (PF-3/PF-4 unification).  ``partition_spec_for`` applies the locked
-            # policy in a single place — *prefer the direct-sum FIT over energy
-            # levels when present; otherwise the stored polynomial fallback; and
-            # always carry ``[t_min, t_max]`` + ``g0``* — and caches the
-            # (expensive) per-species fit so it is compute-once (Invariant #5).
-            # The Bayesian JAX adapter therefore bakes the SAME static arrays the
-            # manifold snapshot bakes; the guarded JAX evaluator in the forward
-            # model clamps/floors with the bounds, so jit / vmap are unaffected
-            # (the fit is a build-time concern).
-            from cflibs.atomic.database import AtomicDatabase
-
-            try:
-                factory_db = AtomicDatabase(db_path)
-                for el, el_idx in el_map.items():
-                    for stage in (1, 2, 3):
-                        stage_idx = stage - 1
-                        if stage_idx >= max_stages:
-                            continue
-                        spec = factory_db.partition_spec_for(el, stage)
-                        if spec is None:
-                            continue
-                        spec_coeffs = (list(spec.coefficients) + [0.0] * 5)[:5]
-                        coeffs[el_idx, stage_idx] = spec_coeffs
-                        t_min[el_idx, stage_idx] = spec.t_min
-                        t_max[el_idx, stage_idx] = spec.t_max
-                        g0[el_idx, stage_idx] = spec.g0
-            except Exception as exc:  # pragma: no cover - DB shape fallback
-                logger.debug(f"Partition factory override skipped: {exc}")
-        except Exception as e:
-            logger.warning(f"Failed to load physics data: {e}")
+        _load_physics_arrays(
+            db_path,
+            conn,
+            elements,
+            placeholders,
+            el_map,
+            max_stages,
+            ips,
+            coeffs,
+            t_min,
+            t_max,
+            g0,
+        )
 
     return df, coeffs, ips, t_min, t_max, g0
 
@@ -545,7 +630,7 @@ class AtomicDataArrays:
             el, stage = snapshot.species[int(sp_idx[li])]
             line_element_idx[li] = element_to_idx.get(el, 0)
             line_ion_stage[li] = max(int(stage) - 1, 0)
-            line_mass_amu[li] = STANDARD_MASSES.get(el, 50.0)
+            line_mass_amu[li] = resolve_element_mass(el, table=STANDARD_MASSES)
             line_ip_ev[li] = float(ip_arr[int(sp_idx[li])])
 
         if HAS_JAX:

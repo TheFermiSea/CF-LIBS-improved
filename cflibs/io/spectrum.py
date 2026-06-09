@@ -12,6 +12,56 @@ from cflibs.core.logging_config import get_logger
 logger = get_logger("io.spectrum")
 
 
+def _find_column(df: pd.DataFrame, candidates: list[str], kind: str) -> str:
+    """Return the first candidate column present in ``df`` or raise.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Loaded CSV data.
+    candidates : list of str
+        Candidate column names, in priority order.
+    kind : str
+        Human-readable column kind used in the error message.
+    """
+    for col in candidates:
+        if col in df.columns:
+            return col
+    raise ValueError(f"Could not find {kind} column in CSV")
+
+
+def _load_spectrum_csv(path: Path) -> Tuple[np.ndarray, np.ndarray]:
+    """Load a spectrum from a CSV file by resolving common column names."""
+    df = pd.read_csv(path, comment="#")
+    # Try common column names
+    wl_col = _find_column(
+        df, ["wavelength", "wavelength_nm", "wl", "lambda", "lambda_nm"], "wavelength"
+    )
+    int_col = _find_column(
+        df,
+        [
+            "intensity",
+            "intensity_W_m2_nm_sr",
+            "I",
+            "counts",
+            "signal",
+            "spectrum",
+            "flux",
+        ],
+        "intensity",
+    )
+    return df[wl_col].values, df[int_col].values
+
+
+def _load_spectrum_text(path: Path) -> Tuple[np.ndarray, np.ndarray]:
+    """Load a spectrum from a whitespace-delimited text file via numpy."""
+    # Try numpy loadtxt as fallback
+    data = np.loadtxt(path)
+    if data.ndim == 1:
+        raise ValueError("Spectrum file must have at least 2 columns")
+    return data[:, 0], data[:, 1]
+
+
 def load_spectrum(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load spectrum from file.
@@ -33,44 +83,9 @@ def load_spectrum(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
     path = Path(file_path)
 
     if path.suffix.lower() == ".csv":
-        df = pd.read_csv(path, comment="#")
-        # Try common column names
-        wl_col = None
-        for col in ["wavelength", "wavelength_nm", "wl", "lambda", "lambda_nm"]:
-            if col in df.columns:
-                wl_col = col
-                break
-
-        if wl_col is None:
-            raise ValueError("Could not find wavelength column in CSV")
-
-        int_col = None
-        for col in [
-            "intensity",
-            "intensity_W_m2_nm_sr",
-            "I",
-            "counts",
-            "signal",
-            "spectrum",
-            "flux",
-        ]:
-            if col in df.columns:
-                int_col = col
-                break
-
-        if int_col is None:
-            raise ValueError("Could not find intensity column in CSV")
-
-        wavelength = df[wl_col].values
-        intensity = df[int_col].values
-
+        wavelength, intensity = _load_spectrum_csv(path)
     else:
-        # Try numpy loadtxt as fallback
-        data = np.loadtxt(path)
-        if data.ndim == 1:
-            raise ValueError("Spectrum file must have at least 2 columns")
-        wavelength = data[:, 0]
-        intensity = data[:, 1]
+        wavelength, intensity = _load_spectrum_text(path)
 
     logger.info(f"Loaded spectrum from {path}: {len(wavelength)} points")
     return wavelength, intensity

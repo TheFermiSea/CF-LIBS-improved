@@ -291,6 +291,79 @@ class SpectrumBuffer:
         self._dropped_count = 0
         self._closed = False
 
+    def _wait_until_not_full(self, timeout: Optional[float]) -> bool:
+        """Block on the not-full condition until space is available or closed.
+
+        Must be called while holding ``self._lock``. Returns True if the wait
+        timed out (deadline reached with the buffer still full), False
+        otherwise (space available or buffer closed).
+        """
+        if timeout is not None:
+            deadline = time.time() + timeout
+        while len(self._buffer) >= self.max_size and not self._closed:
+            if timeout is not None:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    return True
+                self._not_full.wait(timeout=remaining)
+            else:
+                self._not_full.wait()
+        return False
+
+    def _wait_until_not_empty(self, timeout: Optional[float]) -> bool:
+        """Block on the not-empty condition until a spectrum arrives or closed.
+
+        Must be called while holding ``self._lock``. Returns True if the wait
+        timed out (deadline reached with the buffer still empty), False
+        otherwise (a spectrum is available or buffer closed).
+        """
+        if timeout is not None:
+            deadline = time.time() + timeout
+        while len(self._buffer) == 0 and not self._closed:
+            if timeout is not None:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    return True
+                self._not_empty.wait(timeout=remaining)
+            else:
+                self._not_empty.wait()
+        return False
+
+    def _build_packet(
+        self,
+        wavelength: np.ndarray,
+        intensity: np.ndarray,
+        timestamp: Optional[float],
+        metadata: Optional[Dict[str, Any]],
+    ) -> SpectrumPacket:
+        """Construct a SpectrumPacket, defaulting timestamp to current time."""
+        if timestamp is None:
+            timestamp = time.time()
+
+        return SpectrumPacket(
+            wavelength=wavelength.copy(),
+            intensity=intensity.copy(),
+            timestamp=timestamp,
+            metadata=metadata or {},
+            sequence_id=self._sequence_counter,
+        )
+
+    def _push_blocking(self, packet: SpectrumPacket, timeout: Optional[float]) -> bool:
+        """Append a packet, waiting for space when the buffer is full.
+
+        Must be called while holding ``self._lock``. Returns True on success,
+        False on timeout or closed buffer.
+        """
+        if self._wait_until_not_full(timeout):
+            return False
+
+        if self._closed:
+            return False
+
+        self._buffer.append(packet)
+        self._not_empty.notify()
+        return True
+
     def push(
         self,
         wavelength: np.ndarray,
@@ -322,16 +395,7 @@ class SpectrumBuffer:
         if self._closed:
             return False
 
-        if timestamp is None:
-            timestamp = time.time()
-
-        packet = SpectrumPacket(
-            wavelength=wavelength.copy(),
-            intensity=intensity.copy(),
-            timestamp=timestamp,
-            metadata=metadata or {},
-            sequence_id=self._sequence_counter,
-        )
+        packet = self._build_packet(wavelength, intensity, timestamp, metadata)
 
         with self._lock:
             self._sequence_counter += 1
@@ -345,23 +409,7 @@ class SpectrumBuffer:
                 return True
             else:
                 # Blocking buffer: wait for space
-                if timeout is not None:
-                    deadline = time.time() + timeout
-                while len(self._buffer) >= self.max_size and not self._closed:
-                    if timeout is not None:
-                        remaining = deadline - time.time()
-                        if remaining <= 0:
-                            return False
-                        self._not_full.wait(timeout=remaining)
-                    else:
-                        self._not_full.wait()
-
-                if self._closed:
-                    return False
-
-                self._buffer.append(packet)
-                self._not_empty.notify()
-                return True
+                return self._push_blocking(packet, timeout)
 
     def pop(self, timeout: Optional[float] = None) -> Optional[SpectrumPacket]:
         """Pop a spectrum from the buffer.
@@ -377,16 +425,7 @@ class SpectrumBuffer:
             The spectrum packet, or None if timeout/closed
         """
         with self._not_empty:
-            if timeout is not None:
-                deadline = time.time() + timeout
-            while len(self._buffer) == 0 and not self._closed:
-                if timeout is not None:
-                    remaining = deadline - time.time()
-                    if remaining <= 0:
-                        return None
-                    self._not_empty.wait(timeout=remaining)
-                else:
-                    self._not_empty.wait()
+            self._wait_until_not_empty(timeout)
 
             if len(self._buffer) == 0:
                 return None
@@ -412,16 +451,7 @@ class SpectrumBuffer:
         """
         with self._not_empty:
             # Wait for at least one spectrum
-            if timeout is not None:
-                deadline = time.time() + timeout
-            while len(self._buffer) == 0 and not self._closed:
-                if timeout is not None:
-                    remaining = deadline - time.time()
-                    if remaining <= 0:
-                        return []
-                    self._not_empty.wait(timeout=remaining)
-                else:
-                    self._not_empty.wait()
+            self._wait_until_not_empty(timeout)
 
             if len(self._buffer) == 0:
                 return []

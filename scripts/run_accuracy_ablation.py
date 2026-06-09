@@ -59,8 +59,13 @@ from cflibs.inversion.physics.boltzmann import (  # noqa: E402
     FitMethod,
     LineObservation,
 )
-from cflibs.inversion.physics.cdsb import CDSBLineObservation, CDSBPlotter  # noqa: E402
 from cflibs.inversion.physics.closure import ClosureEquation  # noqa: E402
+from cflibs.inversion.physics.self_absorption import (  # noqa: E402
+    SelfAbsorptionCorrector,
+)
+from cflibs.inversion.physics.self_absorption_inputs import (  # noqa: E402
+    build_self_absorption_inputs,
+)
 from cflibs.inversion.line_detection import detect_line_observations  # noqa: E402
 from cflibs.inversion.solve.iterative import CFLIBSResult, IterativeCFLIBSSolver  # noqa: E402
 
@@ -492,70 +497,73 @@ def apply_cdsb_correction(
     n_e: float = 1e17,
     initial_T_K: float = 10000.0,
 ) -> List[LineObservation]:
-    """Apply CD-SB self-absorption correction to line observations.
+    """Apply self-absorption correction to line observations.
 
-    Converts LineObservation to CDSBLineObservation (using DB transitions for
-    lower-level info), runs the CD-SB correction, and returns corrected
-    LineObservation list.
+    Uses the production :class:`SelfAbsorptionCorrector` (the same curve-of-
+    growth escape-factor correction the shipped iterative solver applies). The
+    legacy ``CDSBPlotter`` this used to call was dead, audit-buggy code (bugs
+    #14b/#14c/#13c); the numbers produced here may therefore differ from the
+    historical ablation runs — that is expected and intended.
+
+    Argument mapping (mirrors the shipped solver's call in
+    ``IterativeCFLIBSSolver._apply_self_absorption_correction``):
+
+    * ``temperature_K`` = ``initial_T_K`` (this correction runs *before* the
+      solver, so no fitted temperature is available yet).
+    * ``concentrations`` = UNIFORM mass fractions over the detected elements.
+      Self-absorption here precedes solving, so no composition is known; a flat
+      prior is the only unbiased choice (the corrector renormalises internally).
+    * ``total_number_density_cm3`` anchored to a LIBS-realistic heavy-particle
+      column (1e16), exactly as the shipped solver does — feeding the STP
+      ``n_e`` (~1e18) saturates every strong line and erases per-line
+      discrimination. ``n_e`` is retained in the signature for call-site
+      compatibility but is intentionally not used as the absorbing column.
+    * ``partition_funcs`` = stage-I U(T) from the atomic DB at ``initial_T_K``.
+    * ``lower_level_energies`` = ``{wavelength_nm: E_i_ev}`` per line.
+
+    Both physics-derived inputs now come from the single
+    :func:`~cflibs.inversion.physics.self_absorption_inputs.build_self_absorption_inputs`
+    builder — the SAME derivation the shipped solver uses. This replaces the
+    prior ad-hoc derivation (a fuzzy ±0.05 nm DB lookup for ``E_i`` and a
+    non-canonical ``U(T)=1.0`` fallback), so the self-absorption numbers change
+    intentionally (CF-LIBS-improved-4bgt): ``E_i`` is now exact
+    (``E_i = E_k - hc/lambda``) and ``U(T)`` follows the canonical
+    direct-sum-preferred policy with the 25.0 / 15.0 / 2.0 fallback ladder.
     """
     if len(observations) < 3:
         return observations
 
-    cdsb_obs: List[CDSBLineObservation] = []
-    for obs in observations:
-        # Query transition for lower-level info
-        transitions = atomic_db.get_transitions(
-            obs.element,
-            wavelength_min=obs.wavelength_nm - 0.05,
-            wavelength_max=obs.wavelength_nm + 0.05,
-        )
-        # Find best matching transition
-        E_i_ev = 0.0
-        g_i = 1
-        is_resonance = False
-        if transitions:
-            best = min(transitions, key=lambda t: abs(t.wavelength_nm - obs.wavelength_nm))
-            E_i_ev = best.E_i_ev
-            g_i = best.g_i
-            is_resonance = E_i_ev < 0.1
+    elements: Set[str] = {obs.element for obs in observations}
+    if not elements:
+        return observations
 
-        cdsb_obs.append(
-            CDSBLineObservation(
-                wavelength_nm=obs.wavelength_nm,
-                intensity=obs.intensity,
-                intensity_uncertainty=obs.intensity_uncertainty,
-                element=obs.element,
-                ionization_stage=obs.ionization_stage,
-                E_k_ev=obs.E_k_ev,
-                g_k=obs.g_k,
-                A_ki=obs.A_ki,
-                E_i_ev=E_i_ev,
-                g_i=g_i,
-                is_resonance=is_resonance,
-            )
-        )
+    # Uniform mass-fraction prior over detected elements (no composition known
+    # before solving). LIBS-realistic absorbing column (see docstring;
+    # deliberately not n_e).
+    concentrations: Dict[str, float] = {el: 1.0 / len(elements) for el in elements}
 
     try:
-        plotter = CDSBPlotter(
-            plasma_length_cm=0.1,
+        inputs = build_self_absorption_inputs(
+            observations,
+            temperature_K=initial_T_K,
+            concentrations=concentrations,
+            total_number_density_cm3=1e16,
+            atomic_db=atomic_db,
+        )
+        corrector = SelfAbsorptionCorrector(
+            optical_depth_threshold=0.1,
+            mask_threshold=3.0,
             max_iterations=10,
             convergence_tolerance=0.02,
+            plasma_length_cm=0.1,
         )
-        result = plotter.fit(cdsb_obs, n_e=n_e, initial_T_K=initial_T_K)
-
-        if result.n_points < 2:
-            return observations
-
-        # The CD-SB plotter returns corrected observations internally via
-        # _apply_tau_correction. We re-apply the final tau corrections to get
-        # corrected LineObservations.
-        tau_values = {od.wavelength_nm: od.tau_final for od in result.optical_depths}
-        corrected = plotter._apply_tau_correction(cdsb_obs, tau_values)
+        result = corrector.correct(observations, **inputs.as_correct_kwargs())
+        corrected = result.corrected_observations
         if len(corrected) >= 2:
             return corrected
         return observations
     except Exception as exc:
-        logger.warning("CD-SB correction failed: %s", exc)
+        logger.warning("Self-absorption correction failed: %s", exc)
         return observations
 
 
