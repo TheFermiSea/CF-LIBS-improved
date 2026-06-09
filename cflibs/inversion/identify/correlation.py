@@ -368,17 +368,70 @@ class CorrelationIdentifier:
             raise ValueError(f"Unknown mode: {mode}")
 
         # Relative score filter: require score to stand out from median
-        # Only apply when comparing 3+ elements (fewer can't form a noise floor)
+        relative_threshold = self._relative_threshold(element_scores)
+
+        # Build result
+        detected_elements, rejected_elements = self._build_element_identifications(
+            element_scores, relative_threshold, coverage
+        )
+
+        # Count matched peaks
+        n_matched_peaks = self._count_matched_peaks(detected_elements)
+        n_unmatched_peaks = len(experimental_peaks) - n_matched_peaks
+
+        # Detection-coverage finalisation -- additive telemetry only.
+        coverage.emit_summary()
+
+        base_parameters = {
+            "mode": mode,
+            "wavelength_tolerance_nm": self.wavelength_tolerance_nm,
+            "min_confidence": self.min_confidence,
+            "peak_region_threshold": self.peak_region_threshold,
+            "peak_region_min_points": float(self.peak_region_min_points),
+        }
+
+        return ElementIdentificationResult(
+            detected_elements=detected_elements,
+            rejected_elements=rejected_elements,
+            all_elements=detected_elements + rejected_elements,
+            experimental_peaks=experimental_peaks,
+            n_peaks=len(experimental_peaks),
+            n_matched_peaks=n_matched_peaks,
+            n_unmatched_peaks=n_unmatched_peaks,
+            algorithm="correlation",
+            parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
+        )
+
+    def _relative_threshold(
+        self,
+        element_scores: List[Tuple[str, float, float, List[Any], List[Any]]],
+    ) -> float:
+        """Adaptive relative-score floor from the median non-zero score.
+
+        Pure extraction of the relative-threshold block in ``identify``.
+        Only applies when comparing 3+ elements (fewer can't form a noise
+        floor); otherwise returns ``0.0``.
+        """
         non_zero_scores = [s for _, s, _, _, _ in element_scores if s > 0]
         if len(non_zero_scores) >= 3:
             median_score = np.median(non_zero_scores)
-            relative_threshold = min(1.0, self.relative_threshold_scale * median_score)
-        else:
-            relative_threshold = 0.0
+            return min(1.0, self.relative_threshold_scale * median_score)
+        return 0.0
 
-        # Build result
-        detected_elements = []
-        rejected_elements = []
+    def _build_element_identifications(
+        self,
+        element_scores: List[Tuple[str, float, float, List[Any], List[Any]]],
+        relative_threshold: float,
+        coverage: CoverageTracker,
+    ) -> Tuple[List[ElementIdentification], List[ElementIdentification]]:
+        """Build detected/rejected ``ElementIdentification`` lists.
+
+        Pure extraction of the result-building loop in ``identify``;
+        records L4 fingerprint coverage and partitions elements by the
+        ``detected`` flag.
+        """
+        detected_elements: List[ElementIdentification] = []
+        rejected_elements: List[ElementIdentification] = []
 
         for element, score, confidence, matched_lines, unmatched_lines in element_scores:
             detected_flag = confidence >= self.min_confidence and confidence >= relative_threshold
@@ -409,37 +462,18 @@ class CorrelationIdentifier:
             else:
                 rejected_elements.append(elem_id)
 
-        # Count matched peaks
+        return detected_elements, rejected_elements
+
+    def _count_matched_peaks(self, detected_elements: List[ElementIdentification]) -> int:
+        """Count distinct experimental peak wavelengths matched by detections.
+
+        Pure extraction of the matched-peak-count block in ``identify``.
+        """
         matched_peak_wavelengths = set()
         for elem in detected_elements:
             for line in elem.matched_lines:
                 matched_peak_wavelengths.add(line.wavelength_exp_nm)
-
-        n_matched_peaks = len(matched_peak_wavelengths)
-        n_unmatched_peaks = len(experimental_peaks) - n_matched_peaks
-
-        # Detection-coverage finalisation -- additive telemetry only.
-        coverage.emit_summary()
-
-        base_parameters = {
-            "mode": mode,
-            "wavelength_tolerance_nm": self.wavelength_tolerance_nm,
-            "min_confidence": self.min_confidence,
-            "peak_region_threshold": self.peak_region_threshold,
-            "peak_region_min_points": float(self.peak_region_min_points),
-        }
-
-        return ElementIdentificationResult(
-            detected_elements=detected_elements,
-            rejected_elements=rejected_elements,
-            all_elements=detected_elements + rejected_elements,
-            experimental_peaks=experimental_peaks,
-            n_peaks=len(experimental_peaks),
-            n_matched_peaks=n_matched_peaks,
-            n_unmatched_peaks=n_unmatched_peaks,
-            algorithm="correlation",
-            parameters=merge_coverage_into_parameters(base_parameters, coverage.build_payload()),
-        )
+        return len(matched_peak_wavelengths)
 
     def _identify_classic(
         self,
