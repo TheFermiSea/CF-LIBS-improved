@@ -96,6 +96,110 @@ def _flatten_attribute(node: ast.AST) -> str | None:
     return None
 
 
+def _scan_import(node: ast.Import) -> list[BlocklistViolation]:
+    """Flag every forbidden alias in an ``import a, b`` statement."""
+    violations: list[BlocklistViolation] = []
+    for alias in node.names:
+        if _match_forbidden(alias.name):
+            violations.append(
+                BlocklistViolation(
+                    module=alias.name,
+                    lineno=node.lineno,
+                    col_offset=node.col_offset,
+                    kind="import",
+                )
+            )
+    return violations
+
+
+def _scan_import_from(node: ast.ImportFrom) -> BlocklistViolation | None:
+    """Flag a ``from X import Y`` statement that references a forbidden name."""
+    module = node.module or ""
+    matched: str | None = module if _match_forbidden(module) else None
+    if matched is None:
+        for alias in node.names:
+            combined = f"{module}.{alias.name}" if module else alias.name
+            if _match_forbidden(combined):
+                matched = combined
+                break
+    if matched is None:
+        return None
+    return BlocklistViolation(
+        module=matched,
+        lineno=node.lineno,
+        col_offset=node.col_offset,
+        kind="import_from",
+    )
+
+
+def _scan_attribute(node: ast.Attribute) -> BlocklistViolation | None:
+    """Flag a forbidden attribute access chain (e.g. ``jax.nn.relu``)."""
+    flat = _flatten_attribute(node)
+    if flat and _match_forbidden(flat):
+        return BlocklistViolation(
+            module=flat,
+            lineno=node.lineno,
+            col_offset=node.col_offset,
+            kind="attribute",
+        )
+    return None
+
+
+def _scan_call(node: ast.Call) -> BlocklistViolation | None:
+    """Flag dynamic-import smuggling via :data:`DYNAMIC_IMPORT_CALLS`.
+
+    Detects ``__import__("sklearn")``, ``importlib.import_module("torch")``,
+    etc. Evolved candidates never need runtime-resolved imports, so any
+    occurrence is rejected regardless of the string argument.
+    """
+    func = node.func
+    called: str | None = None
+    if isinstance(func, ast.Name):
+        called = func.id
+    elif isinstance(func, ast.Attribute):
+        called = _flatten_attribute(func)
+    if called is not None and called in DYNAMIC_IMPORT_CALLS:
+        return BlocklistViolation(
+            module=called,
+            lineno=node.lineno,
+            col_offset=node.col_offset,
+            kind="dynamic_import",
+        )
+    return None
+
+
+def _scan_node(node: ast.AST) -> list[BlocklistViolation]:
+    """Return every blocklist violation contributed by a single AST node."""
+    if isinstance(node, ast.Import):
+        return _scan_import(node)
+    if isinstance(node, ast.ImportFrom):
+        violation = _scan_import_from(node)
+    elif isinstance(node, ast.Attribute):
+        violation = _scan_attribute(node)
+    elif isinstance(node, ast.Call):
+        violation = _scan_call(node)
+    else:
+        return []
+    return [] if violation is None else [violation]
+
+
+def _dedupe_by_location(raw: Iterable[BlocklistViolation]) -> list[BlocklistViolation]:
+    """Drop duplicate violations sharing a source location and kind.
+
+    Deduplicates attribute-chain hits that fire at every nesting depth
+    (e.g. walking ``jax.nn.relu`` visits both the outer and inner Attribute).
+    """
+    seen: set[tuple[int, int, str]] = set()
+    deduped: list[BlocklistViolation] = []
+    for v in raw:
+        key = (v.lineno, v.col_offset, v.kind)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(v)
+    return deduped
+
+
 def scan_source(source: str) -> list[BlocklistViolation]:
     """Parse ``source`` and return every blocklist violation found.
 
@@ -114,80 +218,9 @@ def scan_source(source: str) -> list[BlocklistViolation]:
     """
     tree = ast.parse(source)
     raw: list[BlocklistViolation] = []
-
     for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if _match_forbidden(alias.name):
-                    raw.append(
-                        BlocklistViolation(
-                            module=alias.name,
-                            lineno=node.lineno,
-                            col_offset=node.col_offset,
-                            kind="import",
-                        )
-                    )
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            matched: str | None = module if _match_forbidden(module) else None
-            if matched is None:
-                for alias in node.names:
-                    combined = f"{module}.{alias.name}" if module else alias.name
-                    if _match_forbidden(combined):
-                        matched = combined
-                        break
-            if matched is not None:
-                raw.append(
-                    BlocklistViolation(
-                        module=matched,
-                        lineno=node.lineno,
-                        col_offset=node.col_offset,
-                        kind="import_from",
-                    )
-                )
-        elif isinstance(node, ast.Attribute):
-            flat = _flatten_attribute(node)
-            if flat and _match_forbidden(flat):
-                raw.append(
-                    BlocklistViolation(
-                        module=flat,
-                        lineno=node.lineno,
-                        col_offset=node.col_offset,
-                        kind="attribute",
-                    )
-                )
-        elif isinstance(node, ast.Call):
-            # Detect dynamic-import smuggling: __import__("sklearn"),
-            # importlib.import_module("torch"), etc. Evolved candidates never
-            # need runtime-resolved imports, so any occurrence is rejected
-            # regardless of the string argument.
-            func = node.func
-            called: str | None = None
-            if isinstance(func, ast.Name):
-                called = func.id
-            elif isinstance(func, ast.Attribute):
-                called = _flatten_attribute(func)
-            if called is not None and called in DYNAMIC_IMPORT_CALLS:
-                raw.append(
-                    BlocklistViolation(
-                        module=called,
-                        lineno=node.lineno,
-                        col_offset=node.col_offset,
-                        kind="dynamic_import",
-                    )
-                )
-
-    # Deduplicate attribute-chain hits that fire at every nesting depth
-    # (e.g. walking ``jax.nn.relu`` visits both the outer and inner Attribute).
-    seen: set[tuple[int, int, str]] = set()
-    deduped: list[BlocklistViolation] = []
-    for v in raw:
-        key = (v.lineno, v.col_offset, v.kind)
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(v)
-    return deduped
+        raw.extend(_scan_node(node))
+    return _dedupe_by_location(raw)
 
 
 def assert_physics_only(source: str) -> None:
