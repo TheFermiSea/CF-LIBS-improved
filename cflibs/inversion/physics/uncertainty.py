@@ -970,36 +970,13 @@ class MonteCarloUQ:
 
             # Perturb intensity
             if perturbation_type in (PerturbationType.SPECTRAL_NOISE, PerturbationType.COMBINED):
-                if noise_model is NoiseModel.POISSON:
-                    # Shot noise: E[Poisson(I)] = I exactly (no upward bias even
-                    # at 10-50 counts). noise_fraction is ignored by design.
-                    if intensity > 0:
-                        intensity = float(rng.poisson(intensity))
-                else:
-                    if noise_fraction is not None:
-                        sigma = noise_fraction * intensity
-                    else:
-                        sigma = obs.intensity_uncertainty
-
-                    if sigma > 0:
-                        intensity = intensity + rng.normal(0, sigma)
-                        # Clip to the physical floor (0). The previous hard
-                        # floor at 1.0 truncated only downward excursions and
-                        # biased the mean upward for low-count lines; clip at 0
-                        # keeps the additive noise centred at the true mean for
-                        # any line with mean >> sigma, and at worst introduces a
-                        # negligible bias far smaller than the +1.0 floor.
-                        intensity = max(intensity, 0.0)
+                intensity = self._perturb_intensity(
+                    obs, intensity, rng, noise_fraction, noise_model
+                )
 
             # Perturb A_ki
             if perturbation_type in (PerturbationType.ATOMIC_DATA, PerturbationType.COMBINED):
-                if atomic_uncertainty is not None:
-                    frac_err = atomic_uncertainty.get_uncertainty(obs.wavelength_nm)
-                    sigma_A = frac_err * A_ki
-                    A_ki = A_ki + rng.normal(0, sigma_A)
-                    # Ensure positive A_ki (A_ki is an atomic constant, not a
-                    # count — a small positive floor avoids non-physical <=0).
-                    A_ki = max(A_ki, 1.0)
+                A_ki = self._perturb_A_ki(obs, A_ki, rng, atomic_uncertainty)
 
             perturbed.append(
                 LineObservation(
@@ -1015,6 +992,61 @@ class MonteCarloUQ:
             )
 
         return perturbed
+
+    def _perturb_intensity(
+        self,
+        obs: Any,
+        intensity: float,
+        rng: np.random.Generator,
+        noise_fraction: Optional[float],
+        noise_model: NoiseModel,
+    ) -> float:
+        """Apply spectral-noise perturbation to a single observation intensity.
+
+        GAUSSIAN (additive) or POISSON (shot-noise resample). POISSON is
+        unbiased for low-count lines; GAUSSIAN clips negatives to 0 without
+        an upward-biasing floor.
+        """
+        if noise_model is NoiseModel.POISSON:
+            # Shot noise: E[Poisson(I)] = I exactly (no upward bias even
+            # at 10-50 counts). noise_fraction is ignored by design.
+            if intensity > 0:
+                intensity = float(rng.poisson(intensity))
+        else:
+            if noise_fraction is not None:
+                sigma = noise_fraction * intensity
+            else:
+                sigma = obs.intensity_uncertainty
+
+            if sigma > 0:
+                intensity = intensity + rng.normal(0, sigma)
+                # Clip to the physical floor (0). The previous hard
+                # floor at 1.0 truncated only downward excursions and
+                # biased the mean upward for low-count lines; clip at 0
+                # keeps the additive noise centred at the true mean for
+                # any line with mean >> sigma, and at worst introduces a
+                # negligible bias far smaller than the +1.0 floor.
+                intensity = max(intensity, 0.0)
+
+        return intensity
+
+    def _perturb_A_ki(
+        self,
+        obs: Any,
+        A_ki: float,
+        rng: np.random.Generator,
+        atomic_uncertainty: Optional[AtomicDataUncertainty],
+    ) -> float:
+        """Apply atomic-data perturbation to a single observation's A_ki."""
+        if atomic_uncertainty is not None:
+            frac_err = atomic_uncertainty.get_uncertainty(obs.wavelength_nm)
+            sigma_A = frac_err * A_ki
+            A_ki = A_ki + rng.normal(0, sigma_A)
+            # Ensure positive A_ki (A_ki is an atomic constant, not a
+            # count — a small positive floor avoids non-physical <=0).
+            A_ki = max(A_ki, 1.0)
+
+        return A_ki
 
     def _run_single(
         self,
