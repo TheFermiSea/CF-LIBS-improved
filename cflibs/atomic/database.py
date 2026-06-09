@@ -957,50 +957,31 @@ class AtomicDatabase(AtomicDataSource):
                 species_keys.append((element, stage))
                 ip_list.append(float(ip))
 
-                # Direct-sum-preferred partition coefficients (PF-3/PF-4 fix),
-                # via the SINGLE factory `partition_spec_for`.  The JAX manifold
-                # / Bayesian kernels can only consume a polynomial (they vmap
-                # over plasma parameters and cannot hold a per-species
-                # variable-length level sum), so "prefer direct-sum" is a
-                # BUILD-TIME choice here: the factory fits the direct-sum to an
-                # ln-polynomial when energy levels exist (cached, compute-once),
-                # and only falls back to the stored polynomial when the level
-                # table is missing rows.  Baking the SAME spec the CPU scalar
-                # adapter uses (`partition_function_for`) into these static
-                # arrays is what makes the two adapters provably agree.  The
-                # kernel still evaluates the same guarded polynomial form, so
-                # jit / vmap are unaffected.
-                spec = self.partition_spec_for(element, stage)
-                if spec is not None:
-                    partition_rows.append([float(c) for c in spec.coefficients])
-                    partition_t_min_list.append(float(spec.t_min))
-                    partition_t_max_list.append(float(spec.t_max))
-                    partition_g0_list.append(float(spec.g0))
-                else:
-                    # Neither energy levels nor a stored polynomial row: use the
-                    # conservative U = 2 placeholder and default window so the
-                    # snapshot stays serializable and consumers always receive
-                    # concrete bounds.
-                    partition_rows.append([float(np.log(2.0)), 0.0, 0.0, 0.0, 0.0])
-                    partition_t_min_list.append(2000.0)
-                    partition_t_max_list.append(25000.0)
-                    partition_g0_list.append(1.0)
+                self._append_species_partition_row(
+                    element,
+                    stage,
+                    partition_rows,
+                    partition_t_min_list,
+                    partition_t_max_list,
+                    partition_g0_list,
+                )
                 if include_levels:
                     stage_levels = self.get_energy_levels(element, stage)
                     level_g_rows.append([float(lev.g) for lev in stage_levels])
                     level_E_rows.append([float(lev.energy_ev) for lev in stage_levels])
 
-        if pad_to_n_elements is not None and pad_to_n_elements > len(species_keys):
-            pad = pad_to_n_elements - len(species_keys)
-            species_keys.extend([("", 0)] * pad)
-            ip_list.extend([0.0] * pad)
-            partition_rows.extend([[0.0] * 5 for _ in range(pad)])
-            partition_t_min_list.extend([2000.0] * pad)
-            partition_t_max_list.extend([25000.0] * pad)
-            partition_g0_list.extend([1.0] * pad)
-            if include_levels:
-                level_g_rows.extend([[] for _ in range(pad)])
-                level_E_rows.extend([[] for _ in range(pad)])
+        self._pad_species_partitions(
+            pad_to_n_elements,
+            include_levels,
+            species_keys,
+            ip_list,
+            partition_rows,
+            partition_t_min_list,
+            partition_t_max_list,
+            partition_g0_list,
+            level_g_rows,
+            level_E_rows,
+        )
 
         return (
             species_keys,
@@ -1012,6 +993,75 @@ class AtomicDatabase(AtomicDataSource):
             level_g_rows,
             level_E_rows,
         )
+
+    def _append_species_partition_row(
+        self,
+        element: str,
+        stage: int,
+        partition_rows: list[list[float]],
+        partition_t_min_list: list[float],
+        partition_t_max_list: list[float],
+        partition_g0_list: list[float],
+    ) -> None:
+        """Append one species' partition-polynomial row for :meth:`snapshot`.
+
+        Direct-sum-preferred partition coefficients (PF-3/PF-4 fix), via the
+        SINGLE factory ``partition_spec_for``.  The JAX manifold / Bayesian
+        kernels can only consume a polynomial (they vmap over plasma parameters
+        and cannot hold a per-species variable-length level sum), so "prefer
+        direct-sum" is a BUILD-TIME choice here: the factory fits the direct-sum
+        to an ln-polynomial when energy levels exist (cached, compute-once), and
+        only falls back to the stored polynomial when the level table is missing
+        rows.  Baking the SAME spec the CPU scalar adapter uses
+        (``partition_function_for``) into these static arrays is what makes the
+        two adapters provably agree.  The kernel still evaluates the same guarded
+        polynomial form, so jit / vmap are unaffected.
+        """
+        spec = self.partition_spec_for(element, stage)
+        if spec is not None:
+            partition_rows.append([float(c) for c in spec.coefficients])
+            partition_t_min_list.append(float(spec.t_min))
+            partition_t_max_list.append(float(spec.t_max))
+            partition_g0_list.append(float(spec.g0))
+        else:
+            # Neither energy levels nor a stored polynomial row: use the
+            # conservative U = 2 placeholder and default window so the
+            # snapshot stays serializable and consumers always receive
+            # concrete bounds.
+            partition_rows.append([float(np.log(2.0)), 0.0, 0.0, 0.0, 0.0])
+            partition_t_min_list.append(2000.0)
+            partition_t_max_list.append(25000.0)
+            partition_g0_list.append(1.0)
+
+    def _pad_species_partitions(
+        self,
+        pad_to_n_elements: int | None,
+        include_levels: bool,
+        species_keys: list[tuple[str, int]],
+        ip_list: list[float],
+        partition_rows: list[list[float]],
+        partition_t_min_list: list[float],
+        partition_t_max_list: list[float],
+        partition_g0_list: list[float],
+        level_g_rows: list[list[float]],
+        level_E_rows: list[list[float]],
+    ) -> None:
+        """Zero-pad the species-axis accumulators up to ``pad_to_n_elements``.
+
+        Mutates the supplied lists in place; no-op when padding is not requested
+        or the species axis already meets the target size.
+        """
+        if pad_to_n_elements is not None and pad_to_n_elements > len(species_keys):
+            pad = pad_to_n_elements - len(species_keys)
+            species_keys.extend([("", 0)] * pad)
+            ip_list.extend([0.0] * pad)
+            partition_rows.extend([[0.0] * 5 for _ in range(pad)])
+            partition_t_min_list.extend([2000.0] * pad)
+            partition_t_max_list.extend([25000.0] * pad)
+            partition_g0_list.extend([1.0] * pad)
+            if include_levels:
+                level_g_rows.extend([[] for _ in range(pad)])
+                level_E_rows.extend([[] for _ in range(pad)])
 
     def _collect_line_arrays(
         self,
