@@ -8,8 +8,8 @@ production :class:`cflibs.inversion.physics.self_absorption.SelfAbsorptionCorrec
 the legacy ``CDSBPlotter`` algorithm was removed (it carried physics-audit
 defects #14b/#14c/#13c).
 
-Theory
-------
+Overview
+--------
 The CD-SB data model captures resonance lines with significant
 self-absorption, which cause standard Boltzmann plots to fail.
 
