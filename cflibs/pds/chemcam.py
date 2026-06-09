@@ -113,46 +113,13 @@ class ChemCamParser:
         lines = text.strip().split("\n")
 
         metadata: Dict = {"source_file": str(path)}
-        data_start = 0
         product_id = path.stem
 
         # Parse header lines (lines starting with # or containing metadata)
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("#") or stripped.startswith('"'):
-                self._parse_header_line(stripped, metadata)
-                data_start = i + 1
-            elif "," in stripped:
-                # Check if this is a header row with column names
-                parts = stripped.split(",")
-                try:
-                    float(parts[0])
-                    # It's numeric data
-                    data_start = i
-                    break
-                except ValueError:
-                    # Column header row
-                    data_start = i + 1
-            else:
-                data_start = i + 1
+        data_start = self._parse_header_lines(lines, metadata)
 
         # Parse the numeric data
-        wavelengths = []
-        intensities = []
-
-        for line in lines[data_start:]:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            parts = stripped.split(",")
-            if len(parts) >= 2:
-                try:
-                    wl = float(parts[0])
-                    intensity = float(parts[1])
-                    wavelengths.append(wl)
-                    intensities.append(intensity)
-                except ValueError:
-                    continue
+        wavelengths, intensities = self._parse_data_lines(lines[data_start:])
 
         if not wavelengths:
             raise ValueError(f"No spectral data found in {path}")
@@ -190,6 +157,54 @@ class ChemCamParser:
             sol,
         )
         return spectrum
+
+    def _parse_header_lines(self, lines: List[str], metadata: Dict) -> int:
+        """Parse header lines and return the index where numeric data starts.
+
+        Lines starting with ``#`` or ``"`` are metadata header lines. The first
+        comma-separated line whose first field parses as a float marks the start
+        of the numeric data; a non-numeric comma-separated line is treated as a
+        column-header row.
+        """
+        data_start = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith('"'):
+                self._parse_header_line(stripped, metadata)
+                data_start = i + 1
+            elif "," in stripped:
+                # Check if this is a header row with column names
+                parts = stripped.split(",")
+                try:
+                    float(parts[0])
+                    # It's numeric data
+                    data_start = i
+                    break
+                except ValueError:
+                    # Column header row
+                    data_start = i + 1
+            else:
+                data_start = i + 1
+        return data_start
+
+    def _parse_data_lines(self, data_lines: List[str]) -> Tuple[List[float], List[float]]:
+        """Parse numeric ``wavelength,intensity`` rows from the data section."""
+        wavelengths: List[float] = []
+        intensities: List[float] = []
+        for line in data_lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            parts = stripped.split(",")
+            if len(parts) >= 2:
+                try:
+                    wl = float(parts[0])
+                    intensity = float(parts[1])
+                    wavelengths.append(wl)
+                    intensities.append(intensity)
+                except ValueError:
+                    continue
+        return wavelengths, intensities
 
     def _parse_header_line(self, line: str, metadata: Dict) -> None:
         """Extract metadata from a header line."""
