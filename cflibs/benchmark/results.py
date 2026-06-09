@@ -209,6 +209,60 @@ def _kv_struct_list(
     return rows
 
 
+def _posterior_scalar(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        try:
+            return max(float(v) for v in value if v is not None)
+        except (TypeError, ValueError):
+            return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _posterior_scalar_min(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        try:
+            return min(float(v) for v in value if v is not None)
+        except (TypeError, ValueError):
+            return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _posterior_scalar_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_posterior_payload(
+    annotations: Mapping[str, Any],
+) -> Optional[Mapping[str, Any]]:
+    """Locate the posterior summary dict within a record's ``annotations``."""
+    posterior = annotations.get("posterior")
+    if posterior is None:
+        # Fall back to looking for flat fields directly on annotations.
+        posterior = {
+            k: annotations[k]
+            for k in ("rhat", "ess_bulk", "k_hat", "divergent", "coverage")
+            if k in annotations
+        }
+    if not posterior:
+        return None
+    return posterior
+
+
 def _posterior_from_annotations(
     annotations: Optional[Mapping[str, Any]],
 ) -> Optional[Dict[str, Any]]:
@@ -222,59 +276,20 @@ def _posterior_from_annotations(
     """
     if not annotations:
         return None
-    posterior = annotations.get("posterior")
+    posterior = _resolve_posterior_payload(annotations)
     if posterior is None:
-        # Fall back to looking for flat fields directly on annotations.
-        posterior = {
-            k: annotations[k]
-            for k in ("rhat", "ess_bulk", "k_hat", "divergent", "coverage")
-            if k in annotations
-        }
-    if not posterior:
         return None
 
-    def _scalar(value: Any) -> Optional[float]:
-        if value is None:
-            return None
-        if isinstance(value, (list, tuple)):
-            try:
-                return max(float(v) for v in value if v is not None)
-            except (TypeError, ValueError):
-                return None
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    def _scalar_min(value: Any) -> Optional[float]:
-        if value is None:
-            return None
-        if isinstance(value, (list, tuple)):
-            try:
-                return min(float(v) for v in value if v is not None)
-            except (TypeError, ValueError):
-                return None
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    def _scalar_int(value: Any) -> Optional[int]:
-        if value is None:
-            return None
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
-
     return {
-        "rhat_max": _scalar(posterior.get("rhat_max", posterior.get("rhat"))),
-        "ess_bulk_min": _scalar_min(posterior.get("ess_bulk_min", posterior.get("ess_bulk"))),
-        "k_hat_max": _scalar(posterior.get("k_hat_max", posterior.get("k_hat"))),
-        "divergent_count": _scalar_int(
+        "rhat_max": _posterior_scalar(posterior.get("rhat_max", posterior.get("rhat"))),
+        "ess_bulk_min": _posterior_scalar_min(
+            posterior.get("ess_bulk_min", posterior.get("ess_bulk"))
+        ),
+        "k_hat_max": _posterior_scalar(posterior.get("k_hat_max", posterior.get("k_hat"))),
+        "divergent_count": _posterior_scalar_int(
             posterior.get("divergent_count", posterior.get("divergent"))
         ),
-        "coverage": _scalar(posterior.get("coverage")),
+        "coverage": _posterior_scalar(posterior.get("coverage")),
     }
 
 
