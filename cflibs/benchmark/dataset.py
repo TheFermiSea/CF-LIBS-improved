@@ -655,15 +655,17 @@ class BenchmarkDataset:
         # Validate splits reference valid spectrum IDs
         valid_ids = set(self._id_to_spectrum.keys())
         for split_name, split in self.splits.items():
-            for id_ in split.train_ids + split.test_ids:
+            self._validate_split_ids(split_name, split, valid_ids)
+
+    def _validate_split_ids(self, split_name: str, split: DataSplit, valid_ids: set[str]) -> None:
+        """Ensure a split only references known spectrum IDs."""
+        for id_ in split.train_ids + split.test_ids:
+            if id_ not in valid_ids:
+                raise ValueError(f"Split '{split_name}' references unknown spectrum ID: {id_}")
+        if split.validation_ids:
+            for id_ in split.validation_ids:
                 if id_ not in valid_ids:
                     raise ValueError(f"Split '{split_name}' references unknown spectrum ID: {id_}")
-            if split.validation_ids:
-                for id_ in split.validation_ids:
-                    if id_ not in valid_ids:
-                        raise ValueError(
-                            f"Split '{split_name}' references unknown spectrum ID: {id_}"
-                        )
 
     @property
     def n_spectra(self) -> int:
