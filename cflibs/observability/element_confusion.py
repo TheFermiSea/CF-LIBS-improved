@@ -87,6 +87,154 @@ def _f1(precision: float, recall: float) -> float:
     return 2.0 * precision * recall / denom
 
 
+_PER_ELEMENT_COLS = [
+    "workflow",
+    "dataset",
+    "element",
+    "support",
+    "tp",
+    "fp",
+    "fn",
+    "precision",
+    "recall",
+    "f1",
+    "n_spectra",
+]
+_OVERPRED_COLS = [
+    "workflow",
+    "dataset",
+    "n_spectra",
+    "overpred_rate",
+    "top_overpredicted_elements",
+]
+
+
+def _empty_result() -> dict[str, pd.DataFrame]:
+    """Result skeleton returned when no usable input rows exist."""
+    return {
+        "per_element": pd.DataFrame(columns=_PER_ELEMENT_COLS),
+        "cross_workflow": pd.DataFrame(columns=["element"]),
+        "overpred_per_dataset": pd.DataFrame(columns=_OVERPRED_COLS),
+    }
+
+
+def _prepare_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize key columns and parse the predicted/true list cells in-place."""
+    for col in ("workflow_name", "dataset_id"):
+        if col not in df.columns:
+            df[col] = ""
+        df[col] = df[col].astype("string").fillna("")
+
+    df["_predicted"] = df.get("predicted_elements", pd.Series([None] * len(df))).map(
+        _parse_list_cell
+    )
+    df["_true"] = df.get("true_elements", pd.Series([None] * len(df))).map(_parse_list_cell)
+    return df
+
+
+def _count_cell(group: pd.DataFrame) -> tuple[dict[str, int], dict[str, int], dict[str, int], int]:
+    """Accumulate per-element tp/fp/fn and overpredicted-spectrum count for one cell."""
+    tp: dict[str, int] = {}
+    fp: dict[str, int] = {}
+    fn: dict[str, int] = {}
+    n_overpred_spectra = 0
+    for _, row in group.iterrows():
+        pred = set(row["_predicted"])
+        true = set(row["_true"])
+        if pred - true:
+            n_overpred_spectra += 1
+        for el in pred & true:
+            tp[el] = tp.get(el, 0) + 1
+        for el in pred - true:
+            fp[el] = fp.get(el, 0) + 1
+        for el in true - pred:
+            fn[el] = fn.get(el, 0) + 1
+    return tp, fp, fn, n_overpred_spectra
+
+
+def _element_records(
+    wf: object,
+    ds: object,
+    tp: dict[str, int],
+    fp: dict[str, int],
+    fn: dict[str, int],
+    n_spectra: int,
+) -> list[dict]:
+    """Build one record per element observed in a (workflow, dataset) cell."""
+    records: list[dict] = []
+    all_elements = sorted(set(tp) | set(fp) | set(fn))
+    for el in all_elements:
+        tp_c = tp.get(el, 0)
+        fp_c = fp.get(el, 0)
+        fn_c = fn.get(el, 0)
+        precision = _safe_div(tp_c, tp_c + fp_c)
+        recall = _safe_div(tp_c, tp_c + fn_c)
+        records.append(
+            {
+                "workflow": wf,
+                "dataset": ds,
+                "element": el,
+                "support": tp_c + fn_c,
+                "tp": tp_c,
+                "fp": fp_c,
+                "fn": fn_c,
+                "precision": precision,
+                "recall": recall,
+                "f1": _f1(precision, recall),
+                "n_spectra": n_spectra,
+            }
+        )
+    return records
+
+
+def _overpred_row(
+    wf: object,
+    ds: object,
+    fp: dict[str, int],
+    n_spectra: int,
+    n_overpred_spectra: int,
+) -> dict:
+    """Build the overprediction rollup row for a (workflow, dataset) cell."""
+    overpred_rate = _safe_div(n_overpred_spectra, n_spectra)
+    # Top-3 elements by FP count within this cell.
+    cell_fps = [(el, c) for el, c in fp.items() if c > 0]
+    cell_fps.sort(key=lambda x: x[1], reverse=True)
+    top3 = cell_fps[:3]
+    top_str = ", ".join(f"{el} ({(c / n_spectra) * 100:.1f}%)" for el, c in top3) if top3 else ""
+    return {
+        "workflow": wf,
+        "dataset": ds,
+        "n_spectra": n_spectra,
+        "overpred_rate": overpred_rate,
+        "top_overpredicted_elements": top_str,
+    }
+
+
+def _build_records(df: pd.DataFrame) -> tuple[list[dict], list[dict]]:
+    """Walk each (workflow, dataset) cell, producing element + overprediction rows."""
+    records: list[dict] = []
+    overpred_rows: list[dict] = []
+    for (wf, ds), group in df.groupby(["workflow_name", "dataset_id"]):
+        tp, fp, fn, n_overpred_spectra = _count_cell(group)
+        n_spectra = len(group)
+        records.extend(_element_records(wf, ds, tp, fp, fn, n_spectra))
+        overpred_rows.append(_overpred_row(wf, ds, fp, n_spectra, n_overpred_spectra))
+    return records, overpred_rows
+
+
+def _cross_workflow(per_element: pd.DataFrame) -> pd.DataFrame:
+    """Top-10 elements by total FP, pivoted to one ``<workflow>_fp`` column each."""
+    if per_element.empty:
+        return pd.DataFrame(columns=["element"])
+    total_fp_by_el = per_element.groupby("element")["fp"].sum().sort_values(ascending=False)
+    top_elements = list(total_fp_by_el.head(10).index)
+    pivot = per_element.groupby(["element", "workflow"])["fp"].sum().unstack(fill_value=0)
+    cross = pivot.loc[top_elements].copy().reset_index()
+    # Suffix workflow columns with _fp for clarity, preserve column ordering.
+    rename_map = {c: f"{c}_fp" for c in cross.columns if c != "element"}
+    return cross.rename(columns=rename_map)
+
+
 def aggregate_confusion(csv_paths: Iterable[Path]) -> dict[str, pd.DataFrame]:
     """Aggregate per-element confusion across the given id_records CSVs.
 
@@ -117,138 +265,30 @@ def aggregate_confusion(csv_paths: Iterable[Path]) -> dict[str, pd.DataFrame]:
     paths = [Path(p) for p in csv_paths]
     df = _load_csvs(paths)
 
-    per_element_cols = [
-        "workflow",
-        "dataset",
-        "element",
-        "support",
-        "tp",
-        "fp",
-        "fn",
-        "precision",
-        "recall",
-        "f1",
-        "n_spectra",
-    ]
-    overpred_cols = [
-        "workflow",
-        "dataset",
-        "n_spectra",
-        "overpred_rate",
-        "top_overpredicted_elements",
-    ]
-
     if df.empty:
-        return {
-            "per_element": pd.DataFrame(columns=per_element_cols),
-            "cross_workflow": pd.DataFrame(columns=["element"]),
-            "overpred_per_dataset": pd.DataFrame(columns=overpred_cols),
-        }
+        return _empty_result()
 
-    for col in ("workflow_name", "dataset_id"):
-        if col not in df.columns:
-            df[col] = ""
-        df[col] = df[col].astype("string").fillna("")
-
-    df["_predicted"] = df.get("predicted_elements", pd.Series([None] * len(df))).map(
-        _parse_list_cell
-    )
-    df["_true"] = df.get("true_elements", pd.Series([None] * len(df))).map(_parse_list_cell)
-
-    # Per (workflow, dataset) spectrum count + tracking of overprediction.
-    per_wd_counts = df.groupby(["workflow_name", "dataset_id"]).size().rename("n_spectra")
+    df = _prepare_frame(df)
 
     # Build per-element accumulator by exploding into a long row-per-element-per-spectrum table.
     # For each spectrum, the union of predicted+true elements is the set of elements with non-zero tp/fp/fn contribution.
-    records: list[dict] = []
-    overpred_rows: list[dict] = []
-    for (wf, ds), group in df.groupby(["workflow_name", "dataset_id"]):
-        # Aggregate counts per element.
-        tp: dict[str, int] = {}
-        fp: dict[str, int] = {}
-        fn: dict[str, int] = {}
-        n_spectra = len(group)
-        n_overpred_spectra = 0
-        for _, row in group.iterrows():
-            pred = set(row["_predicted"])
-            true = set(row["_true"])
-            if pred - true:
-                n_overpred_spectra += 1
-            for el in pred & true:
-                tp[el] = tp.get(el, 0) + 1
-            for el in pred - true:
-                fp[el] = fp.get(el, 0) + 1
-            for el in true - pred:
-                fn[el] = fn.get(el, 0) + 1
+    records, overpred_rows = _build_records(df)
 
-        all_elements = sorted(set(tp) | set(fp) | set(fn))
-        for el in all_elements:
-            tp_c = tp.get(el, 0)
-            fp_c = fp.get(el, 0)
-            fn_c = fn.get(el, 0)
-            precision = _safe_div(tp_c, tp_c + fp_c)
-            recall = _safe_div(tp_c, tp_c + fn_c)
-            records.append(
-                {
-                    "workflow": wf,
-                    "dataset": ds,
-                    "element": el,
-                    "support": tp_c + fn_c,
-                    "tp": tp_c,
-                    "fp": fp_c,
-                    "fn": fn_c,
-                    "precision": precision,
-                    "recall": recall,
-                    "f1": _f1(precision, recall),
-                    "n_spectra": n_spectra,
-                }
-            )
-
-        # Overprediction rollup for this (workflow, dataset).
-        overpred_rate = _safe_div(n_overpred_spectra, n_spectra)
-        # Top-3 elements by FP count within this cell.
-        cell_fps = [(el, c) for el, c in fp.items() if c > 0]
-        cell_fps.sort(key=lambda x: x[1], reverse=True)
-        top3 = cell_fps[:3]
-        top_str = (
-            ", ".join(f"{el} ({(c / n_spectra) * 100:.1f}%)" for el, c in top3) if top3 else ""
-        )
-        overpred_rows.append(
-            {
-                "workflow": wf,
-                "dataset": ds,
-                "n_spectra": n_spectra,
-                "overpred_rate": overpred_rate,
-                "top_overpredicted_elements": top_str,
-            }
-        )
-
-    per_element = pd.DataFrame(records, columns=per_element_cols)
+    per_element = pd.DataFrame(records, columns=_PER_ELEMENT_COLS)
     if not per_element.empty:
         per_element = per_element.sort_values(
             ["fp", "workflow", "dataset", "element"], ascending=[False, True, True, True]
         ).reset_index(drop=True)
 
-    overpred_per_dataset = pd.DataFrame(overpred_rows, columns=overpred_cols)
+    overpred_per_dataset = pd.DataFrame(overpred_rows, columns=_OVERPRED_COLS)
     if not overpred_per_dataset.empty:
         overpred_per_dataset = overpred_per_dataset.sort_values(
             ["overpred_rate", "workflow", "dataset"], ascending=[False, True, True]
         ).reset_index(drop=True)
 
     # Cross-workflow comparison: top-10 elements by total FP across workflows.
-    if per_element.empty:
-        cross = pd.DataFrame(columns=["element"])
-    else:
-        total_fp_by_el = per_element.groupby("element")["fp"].sum().sort_values(ascending=False)
-        top_elements = list(total_fp_by_el.head(10).index)
-        pivot = per_element.groupby(["element", "workflow"])["fp"].sum().unstack(fill_value=0)
-        cross = pivot.loc[top_elements].copy().reset_index()
-        # Suffix workflow columns with _fp for clarity, preserve column ordering.
-        rename_map = {c: f"{c}_fp" for c in cross.columns if c != "element"}
-        cross = cross.rename(columns=rename_map)
+    cross = _cross_workflow(per_element)
 
-    # Reference per_wd_counts to silence unused-variable lint; the value is already inlined.
-    _ = per_wd_counts
     return {
         "per_element": per_element,
         "cross_workflow": cross,
@@ -268,6 +308,68 @@ def _fmt_float(v: object) -> str:
     return f"{f:.3f}"
 
 
+def _render_per_element(per_element: pd.DataFrame, top_n_per_element: int) -> list[str]:
+    """Markdown for section A) per (workflow, dataset, element)."""
+    lines: list[str] = [
+        f"## A) Per (workflow, dataset, element) — top {top_n_per_element} by FP",
+        "",
+    ]
+    if per_element.empty:
+        lines += ["_No element confusion data._", ""]
+        return lines
+    lines += [
+        "| workflow | dataset | element | support | tp | fp | fn | precision | recall | f1 |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for _, row in per_element.head(top_n_per_element).iterrows():
+        lines.append(
+            f"| {row['workflow']} | {row['dataset']} | {row['element']} "
+            f"| {int(row['support'])} | {int(row['tp'])} | {int(row['fp'])} | {int(row['fn'])} "
+            f"| {_fmt_float(row['precision'])} | {_fmt_float(row['recall'])} | {_fmt_float(row['f1'])} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _render_cross_workflow(cross_workflow: pd.DataFrame) -> list[str]:
+    """Markdown for section B) cross-workflow comparison."""
+    lines: list[str] = ["## B) Cross-workflow comparison (top-10 elements by total FP)", ""]
+    if cross_workflow.empty:
+        lines += ["_No cross-workflow data._", ""]
+        return lines
+    cols = list(cross_workflow.columns)
+    lines += [
+        "| " + " | ".join(cols) + " |",
+        "|" + "|".join(["---"] * len(cols)) + "|",
+    ]
+    for _, row in cross_workflow.iterrows():
+        cells = [str(row[c]) if c == "element" else str(int(row[c])) for c in cols]
+        lines.append("| " + " | ".join(cells) + " |")
+    lines.append("")
+    return lines
+
+
+def _render_overpred(overpred_per_dataset: pd.DataFrame) -> list[str]:
+    """Markdown for section C) per (workflow, dataset) over-prediction rate."""
+    lines: list[str] = ["## C) Per (workflow, dataset) over-prediction rate", ""]
+    if overpred_per_dataset.empty:
+        lines += ["_No over-prediction data._", ""]
+        return lines
+    lines += [
+        "| workflow | dataset | n_spectra | overpred_rate | top_overpredicted_elements |",
+        "|---|---|---|---|---|",
+    ]
+    for _, row in overpred_per_dataset.iterrows():
+        rate = row["overpred_rate"]
+        rate_str = f"{rate * 100:.1f}%" if rate == rate else "n/a"  # NaN guard
+        lines.append(
+            f"| {row['workflow']} | {row['dataset']} | {int(row['n_spectra'])} "
+            f"| {rate_str} | {row['top_overpredicted_elements']} |"
+        )
+    lines.append("")
+    return lines
+
+
 def render_markdown(
     result: dict[str, pd.DataFrame],
     *,
@@ -283,54 +385,8 @@ def render_markdown(
     if source_count is not None:
         lines += [f"Parsed **{source_count}** `id_records.csv` file(s).", ""]
 
-    lines += [
-        f"## A) Per (workflow, dataset, element) — top {top_n_per_element} by FP",
-        "",
-    ]
-    if per_element.empty:
-        lines += ["_No element confusion data._", ""]
-    else:
-        lines += [
-            "| workflow | dataset | element | support | tp | fp | fn | precision | recall | f1 |",
-            "|---|---|---|---|---|---|---|---|---|---|",
-        ]
-        for _, row in per_element.head(top_n_per_element).iterrows():
-            lines.append(
-                f"| {row['workflow']} | {row['dataset']} | {row['element']} "
-                f"| {int(row['support'])} | {int(row['tp'])} | {int(row['fp'])} | {int(row['fn'])} "
-                f"| {_fmt_float(row['precision'])} | {_fmt_float(row['recall'])} | {_fmt_float(row['f1'])} |"
-            )
-        lines.append("")
-
-    lines += ["## B) Cross-workflow comparison (top-10 elements by total FP)", ""]
-    if cross_workflow.empty:
-        lines += ["_No cross-workflow data._", ""]
-    else:
-        cols = list(cross_workflow.columns)
-        lines += [
-            "| " + " | ".join(cols) + " |",
-            "|" + "|".join(["---"] * len(cols)) + "|",
-        ]
-        for _, row in cross_workflow.iterrows():
-            cells = [str(row[c]) if c == "element" else str(int(row[c])) for c in cols]
-            lines.append("| " + " | ".join(cells) + " |")
-        lines.append("")
-
-    lines += ["## C) Per (workflow, dataset) over-prediction rate", ""]
-    if overpred_per_dataset.empty:
-        lines += ["_No over-prediction data._", ""]
-    else:
-        lines += [
-            "| workflow | dataset | n_spectra | overpred_rate | top_overpredicted_elements |",
-            "|---|---|---|---|---|",
-        ]
-        for _, row in overpred_per_dataset.iterrows():
-            rate = row["overpred_rate"]
-            rate_str = f"{rate * 100:.1f}%" if rate == rate else "n/a"  # NaN guard
-            lines.append(
-                f"| {row['workflow']} | {row['dataset']} | {int(row['n_spectra'])} "
-                f"| {rate_str} | {row['top_overpredicted_elements']} |"
-            )
-        lines.append("")
+    lines += _render_per_element(per_element, top_n_per_element)
+    lines += _render_cross_workflow(cross_workflow)
+    lines += _render_overpred(overpred_per_dataset)
 
     return "\n".join(lines)
