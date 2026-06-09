@@ -195,10 +195,11 @@ class HybridConsensusIdentifier:
     # ------------------------------------------------------------------ #
     # Internals                                                          #
     # ------------------------------------------------------------------ #
-    def _aggregate(
-        self,
+    @staticmethod
+    def _build_lookups(
         per_results: Sequence[ElementIdentificationResult],
-    ) -> ElementIdentificationResult:
+    ) -> Tuple[List[Set[str]], List[Dict[str, float]], List[Dict[str, ElementIdentification]]]:
+        """Build per-identifier detection sets and score/eid lookup tables."""
         # Per-identifier detection sets keyed by element symbol
         per_detected: List[Set[str]] = [
             {eid.element for eid in r.detected_elements} for r in per_results
@@ -216,110 +217,168 @@ class HybridConsensusIdentifier:
             per_score.append(score_map)
             per_eid.append(eid_map)
 
-        all_element_ids: List[ElementIdentification] = []
-        for element in self.elements:
-            votes_by: Dict[str, bool] = {}
-            for name, detected_set in zip(self.names, per_detected):
-                votes_by[name] = element in detected_set
-            vote_count = sum(1 for v in votes_by.values() if v)
-            if self.voter_weights is not None:
-                # Weighted-confidence rule (bead jbfg follow-up). Each
-                # voter contributes its configured weight only when it
-                # votes yes; threshold is absolute (not normalized) so
-                # one strong voter (e.g. NNLS at w=0.46) can pass alone
-                # if its weight already meets ``weight_threshold``.
-                weighted_score = sum(
-                    self.voter_weights.get(name, 0.0) for name, voted in votes_by.items() if voted
+        return per_detected, per_score, per_eid
+
+    def _weighted_score(self, votes_by: Dict[str, bool]) -> float:
+        """Sum of configured weights over voters that voted yes."""
+        assert self.voter_weights is not None
+        return sum(self.voter_weights.get(name, 0.0) for name, voted in votes_by.items() if voted)
+
+    def _decide_detection(self, votes_by: Dict[str, bool], vote_count: int) -> bool:
+        """Apply the weighted-confidence or binary majority detection rule."""
+        if self.voter_weights is not None:
+            # Weighted-confidence rule (bead jbfg follow-up). Each
+            # voter contributes its configured weight only when it
+            # votes yes; threshold is absolute (not normalized) so
+            # one strong voter (e.g. NNLS at w=0.46) can pass alone
+            # if its weight already meets ``weight_threshold``.
+            return self._weighted_score(votes_by) >= self.weight_threshold
+        return vote_count >= self.min_agreeing
+
+    @staticmethod
+    def _merge_voting_lines(
+        element: str,
+        voting_indices: List[int],
+        per_eid: List[Dict[str, ElementIdentification]],
+    ) -> Tuple[list, list, int, int]:
+        """Union matched lines across voting identifiers; first voter's unmatched."""
+        matched_lines: list = []
+        unmatched_lines: list = []
+        n_matched = 0
+        n_total = 0
+        seen = set()
+        for i in voting_indices:
+            eid = per_eid[i].get(element)
+            if eid is None:
+                continue
+            for line in eid.matched_lines:
+                key = (
+                    line.element,
+                    line.ionization_stage,
+                    line.wavelength_th_nm,
                 )
-                detected = weighted_score >= self.weight_threshold
-            else:
-                detected = vote_count >= self.min_agreeing
+                if key in seen:
+                    continue
+                seen.add(key)
+                matched_lines.append(line)
+            # Track the *largest* observed line counts to give the
+            # downstream consumer a representative summary.
+            n_matched = max(n_matched, eid.n_matched_lines)
+            n_total = max(n_total, eid.n_total_lines)
+        # Use the first voting identifier's unmatched lines verbatim
+        # — these are theoretical, not experimental, so deduping is
+        # unnecessary.
+        first_eid = per_eid[voting_indices[0]].get(element)
+        if first_eid is not None:
+            unmatched_lines = list(first_eid.unmatched_lines)
+        return matched_lines, unmatched_lines, n_matched, n_total
 
-            # Mean score across *voting* identifiers; 0 when none voted yes.
-            voting_scores = [
-                per_score[i].get(element, 0.0) for i, voted in enumerate(votes_by.values()) if voted
-            ]
-            score = float(np.mean(voting_scores)) if voting_scores else 0.0
+    @staticmethod
+    def _fallback_lines(
+        element: str,
+        per_eid: List[Dict[str, ElementIdentification]],
+    ) -> Tuple[list, list, int, int]:
+        """Pull metadata from identifier 0 when nothing voted detected."""
+        matched_lines: list = []
+        unmatched_lines: list = []
+        n_matched = 0
+        n_total = 0
+        # No identifier voted detected. Pull metadata from id 0 if
+        # available so the rejected-elements section stays
+        # informative.
+        eid = per_eid[0].get(element)
+        if eid is not None:
+            matched_lines = list(eid.matched_lines)
+            unmatched_lines = list(eid.unmatched_lines)
+            n_matched = eid.n_matched_lines
+            n_total = eid.n_total_lines
+        return matched_lines, unmatched_lines, n_matched, n_total
 
-            # Matched lines = union across voting identifiers; falls back to
-            # the first identifier's entry when nothing voted yes (so the
-            # downstream consumer still gets *some* line metadata for
-            # rejected elements).
-            matched_lines = []
-            unmatched_lines = []
-            n_matched = 0
-            n_total = 0
-            voting_indices = [i for i, v in enumerate(votes_by.values()) if v]
-            if voting_indices:
-                seen = set()
-                for i in voting_indices:
-                    eid = per_eid[i].get(element)
-                    if eid is None:
-                        continue
-                    for line in eid.matched_lines:
-                        key = (
-                            line.element,
-                            line.ionization_stage,
-                            line.wavelength_th_nm,
-                        )
-                        if key in seen:
-                            continue
-                        seen.add(key)
-                        matched_lines.append(line)
-                    # Track the *largest* observed line counts to give the
-                    # downstream consumer a representative summary.
-                    n_matched = max(n_matched, eid.n_matched_lines)
-                    n_total = max(n_total, eid.n_total_lines)
-                # Use the first voting identifier's unmatched lines verbatim
-                # — these are theoretical, not experimental, so deduping is
-                # unnecessary.
-                first_eid = per_eid[voting_indices[0]].get(element)
-                if first_eid is not None:
-                    unmatched_lines = list(first_eid.unmatched_lines)
-            else:
-                # No identifier voted detected. Pull metadata from id 0 if
-                # available so the rejected-elements section stays
-                # informative.
-                eid = per_eid[0].get(element)
-                if eid is not None:
-                    matched_lines = list(eid.matched_lines)
-                    unmatched_lines = list(eid.unmatched_lines)
-                    n_matched = eid.n_matched_lines
-                    n_total = eid.n_total_lines
+    def _build_metadata(
+        self,
+        element: str,
+        votes_by: Dict[str, bool],
+        vote_count: int,
+        per_score: List[Dict[str, float]],
+    ) -> dict:
+        """Assemble the per-element ``votes_by`` / weighting metadata mapping."""
+        metadata: dict = {
+            "consensus_mode": (
+                f"weighted_w{self.weight_threshold:.2f}"
+                if self.voter_weights is not None
+                else f"{self.min_agreeing}_of_{len(self.identifiers)}"
+            ),
+            "votes_by": dict(votes_by),
+            "vote_count": vote_count,
+            "min_agreeing": self.min_agreeing,
+            "scores_by": {
+                name: per_score[i].get(element, 0.0) for i, name in enumerate(self.names)
+            },
+        }
+        if self.voter_weights is not None:
+            metadata["voter_weights"] = dict(self.voter_weights)
+            metadata["weight_threshold"] = self.weight_threshold
+            metadata["weighted_score"] = self._weighted_score(votes_by)
+        return metadata
 
-            metadata = {
-                "consensus_mode": (
-                    f"weighted_w{self.weight_threshold:.2f}"
-                    if self.voter_weights is not None
-                    else f"{self.min_agreeing}_of_{len(self.identifiers)}"
-                ),
-                "votes_by": dict(votes_by),
-                "vote_count": vote_count,
-                "min_agreeing": self.min_agreeing,
-                "scores_by": {
-                    name: per_score[i].get(element, 0.0) for i, name in enumerate(self.names)
-                },
-            }
-            if self.voter_weights is not None:
-                metadata["voter_weights"] = dict(self.voter_weights)
-                metadata["weight_threshold"] = self.weight_threshold
-                metadata["weighted_score"] = sum(
-                    self.voter_weights.get(name, 0.0) for name, voted in votes_by.items() if voted
-                )
+    def _aggregate_element(
+        self,
+        element: str,
+        per_detected: List[Set[str]],
+        per_score: List[Dict[str, float]],
+        per_eid: List[Dict[str, ElementIdentification]],
+    ) -> ElementIdentification:
+        """Build the consensus :class:`ElementIdentification` for one element."""
+        votes_by: Dict[str, bool] = {}
+        for name, detected_set in zip(self.names, per_detected):
+            votes_by[name] = element in detected_set
+        vote_count = sum(1 for v in votes_by.values() if v)
+        detected = self._decide_detection(votes_by, vote_count)
 
-            all_element_ids.append(
-                ElementIdentification(
-                    element=element,
-                    detected=detected,
-                    score=score,
-                    confidence=score,
-                    n_matched_lines=n_matched,
-                    n_total_lines=n_total,
-                    matched_lines=matched_lines,
-                    unmatched_lines=unmatched_lines,
-                    metadata=metadata,
-                )
+        # Mean score across *voting* identifiers; 0 when none voted yes.
+        voting_scores = [
+            per_score[i].get(element, 0.0) for i, voted in enumerate(votes_by.values()) if voted
+        ]
+        score = float(np.mean(voting_scores)) if voting_scores else 0.0
+
+        # Matched lines = union across voting identifiers; falls back to
+        # the first identifier's entry when nothing voted yes (so the
+        # downstream consumer still gets *some* line metadata for
+        # rejected elements).
+        voting_indices = [i for i, v in enumerate(votes_by.values()) if v]
+        if voting_indices:
+            matched_lines, unmatched_lines, n_matched, n_total = self._merge_voting_lines(
+                element, voting_indices, per_eid
             )
+        else:
+            matched_lines, unmatched_lines, n_matched, n_total = self._fallback_lines(
+                element, per_eid
+            )
+
+        metadata = self._build_metadata(element, votes_by, vote_count, per_score)
+
+        return ElementIdentification(
+            element=element,
+            detected=detected,
+            score=score,
+            confidence=score,
+            n_matched_lines=n_matched,
+            n_total_lines=n_total,
+            matched_lines=matched_lines,
+            unmatched_lines=unmatched_lines,
+            metadata=metadata,
+        )
+
+    def _aggregate(
+        self,
+        per_results: Sequence[ElementIdentificationResult],
+    ) -> ElementIdentificationResult:
+        per_detected, per_score, per_eid = self._build_lookups(per_results)
+
+        all_element_ids: List[ElementIdentification] = [
+            self._aggregate_element(element, per_detected, per_score, per_eid)
+            for element in self.elements
+        ]
 
         detected_elements = [e for e in all_element_ids if e.detected]
         rejected_elements = [e for e in all_element_ids if not e.detected]
