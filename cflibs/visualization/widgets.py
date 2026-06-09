@@ -469,16 +469,7 @@ class BoltzmannPlotWidget:
             fig = go.FigureWidget()
 
         # Hover text with line info
-        hover_text = []
-        for i, o in enumerate(obs):
-            status = "Rejected" if i in rejected_set else "Included"
-            hover_text.append(
-                f"<b>{o.element} {o.ionization_stage}</b><br>"
-                f"lambda: {o.wavelength_nm:.2f} nm<br>"
-                f"E_k: {o.E_k_ev:.3f} eV<br>"
-                f"gA: {o.g_k * o.A_ki:.2e} s^-1<br>"
-                f"Status: {status}"
-            )
+        hover_text = self._build_hover_text(obs, rejected_set)
 
         # Plot inliers
         fig.add_trace(
@@ -548,47 +539,7 @@ class BoltzmannPlotWidget:
 
         # Add residuals subplot
         if self.show_residuals:
-            y_pred = result.slope * x_all + result.intercept
-            residuals = y_all - y_pred
-
-            fig.add_trace(
-                go.Scatter(
-                    x=x_all[inlier_mask],
-                    y=residuals[inlier_mask],
-                    mode="markers",
-                    name="Residuals",
-                    marker=dict(size=6, color="#1f77b4"),
-                    showlegend=False,
-                ),
-                row=2,
-                col=1,
-            )
-
-            if np.any(~inlier_mask):
-                fig.add_trace(
-                    go.Scatter(
-                        x=x_all[~inlier_mask],
-                        y=residuals[~inlier_mask],
-                        mode="markers",
-                        name="Outlier Residuals",
-                        marker=dict(size=6, color="#d62728", symbol="x"),
-                        showlegend=False,
-                    ),
-                    row=2,
-                    col=1,
-                )
-
-            # Add zero line
-            fig.add_hline(
-                y=0,
-                line_dash="dot",
-                line_color="gray",
-                row=2,
-                col=1,
-            )
-
-            fig.update_yaxes(title_text="Residuals", row=2, col=1)
-            fig.update_xaxes(title_text="Upper Level Energy E_k (eV)", row=2, col=1)
+            self._add_residuals_subplot(fig, x_all, y_all, inlier_mask, result)
 
         # Update layout
         fig.update_layout(
@@ -617,6 +568,72 @@ class BoltzmannPlotWidget:
         if isinstance(fig, go.FigureWidget):
             return fig
         return go.FigureWidget(fig)
+
+    @staticmethod
+    def _build_hover_text(obs: List[Any], rejected_set: set) -> List[str]:
+        """Build per-observation hover text strings for the Boltzmann plot."""
+        hover_text: List[str] = []
+        for i, o in enumerate(obs):
+            status = "Rejected" if i in rejected_set else "Included"
+            hover_text.append(
+                f"<b>{o.element} {o.ionization_stage}</b><br>"
+                f"lambda: {o.wavelength_nm:.2f} nm<br>"
+                f"E_k: {o.E_k_ev:.3f} eV<br>"
+                f"gA: {o.g_k * o.A_ki:.2e} s^-1<br>"
+                f"Status: {status}"
+            )
+        return hover_text
+
+    def _add_residuals_subplot(
+        self,
+        fig: "go.FigureWidget",
+        x_all: np.ndarray,
+        y_all: np.ndarray,
+        inlier_mask: np.ndarray,
+        result: Any,
+    ) -> None:
+        """Add the residuals subplot (row 2) to the Boltzmann plot figure."""
+        y_pred = result.slope * x_all + result.intercept
+        residuals = y_all - y_pred
+
+        fig.add_trace(
+            go.Scatter(
+                x=x_all[inlier_mask],
+                y=residuals[inlier_mask],
+                mode="markers",
+                name="Residuals",
+                marker=dict(size=6, color="#1f77b4"),
+                showlegend=False,
+            ),
+            row=2,
+            col=1,
+        )
+
+        if np.any(~inlier_mask):
+            fig.add_trace(
+                go.Scatter(
+                    x=x_all[~inlier_mask],
+                    y=residuals[~inlier_mask],
+                    mode="markers",
+                    name="Outlier Residuals",
+                    marker=dict(size=6, color="#d62728", symbol="x"),
+                    showlegend=False,
+                ),
+                row=2,
+                col=1,
+            )
+
+        # Add zero line
+        fig.add_hline(
+            y=0,
+            line_dash="dot",
+            line_color="gray",
+            row=2,
+            col=1,
+        )
+
+        fig.update_yaxes(title_text="Residuals", row=2, col=1)
+        fig.update_xaxes(title_text="Upper Level Energy E_k (eV)", row=2, col=1)
 
     def show(self) -> "go.FigureWidget":
         """
@@ -1020,20 +1037,34 @@ class PosteriorViewer:
 
         for i, pi in enumerate(params):
             for j, pj in enumerate(params):
-                row, col = i + 1, j + 1
-                if i == j:
-                    self._add_diagonal_plot(fig, pi, row, col, weights)
-                elif i > j:
-                    self._add_lower_triangle_plot(fig, pi, pj, row, col, weights)
-
-                # Axis labels
-                if i == n_params - 1:
-                    fig.update_xaxes(title_text=self._param_labels.get(pj, pj), row=row, col=col)
-                if j == 0 and i > 0:
-                    fig.update_yaxes(title_text=self._param_labels.get(pi, pi), row=row, col=col)
+                self._add_corner_cell(fig, params, n_params, i, j, pi, pj, weights)
 
         fig.update_layout(title=self.title, height=self.height, width=self.width, showlegend=False)
         return go.FigureWidget(fig)
+
+    def _add_corner_cell(
+        self,
+        fig: "go.FigureWidget",
+        params: List[str],
+        n_params: int,
+        i: int,
+        j: int,
+        pi: str,
+        pj: str,
+        weights: Optional[np.ndarray],
+    ) -> None:
+        """Populate a single (i, j) cell of the corner plot, including axis labels."""
+        row, col = i + 1, j + 1
+        if i == j:
+            self._add_diagonal_plot(fig, pi, row, col, weights)
+        elif i > j:
+            self._add_lower_triangle_plot(fig, pi, pj, row, col, weights)
+
+        # Axis labels
+        if i == n_params - 1:
+            fig.update_xaxes(title_text=self._param_labels.get(pj, pj), row=row, col=col)
+        if j == 0 and i > 0:
+            fig.update_yaxes(title_text=self._param_labels.get(pi, pi), row=row, col=col)
 
     def show(self, params: Optional[List[str]] = None) -> "go.FigureWidget":
         """
