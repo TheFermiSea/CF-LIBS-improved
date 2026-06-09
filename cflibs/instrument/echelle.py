@@ -177,20 +177,40 @@ class EchelleExtractor:
 
             # Background subtraction (simple: use median of nearby pixels)
             if background_subtract:
-                # Use pixels outside the extraction window
-                bg_y_min = max(0, y_center - 2 * self.extraction_window)
-                bg_y_max = min(height, y_center + 2 * self.extraction_window + 1)
-                bg_mask = np.ones(bg_y_max - bg_y_min, dtype=bool)
-                if y_min - bg_y_min > 0:
-                    bg_mask[y_min - bg_y_min : y_max - bg_y_min] = False
-                if bg_y_max - y_max > 0:
-                    bg_mask[y_max - bg_y_min : bg_y_max - bg_y_min] = False
-
-                if np.any(bg_mask):
-                    bg_pixels = image_2d[bg_y_min:bg_y_max, x][bg_mask]
-                    flux[i] -= np.median(bg_pixels) * (y_max - y_min)
+                flux[i] -= self._estimate_column_background(
+                    image_2d, height, x, y_center, y_min, y_max
+                )
 
         return wl_trace, flux
+
+    def _estimate_column_background(
+        self,
+        image_2d: np.ndarray,
+        height: int,
+        x: int,
+        y_center: int,
+        y_min: int,
+        y_max: int,
+    ) -> float:
+        """
+        Estimate background contribution for a single extracted column.
+
+        Uses the median of pixels outside the extraction window, scaled by the
+        number of summed pixels. Returns 0.0 when no background pixels remain.
+        """
+        # Use pixels outside the extraction window
+        bg_y_min = max(0, y_center - 2 * self.extraction_window)
+        bg_y_max = min(height, y_center + 2 * self.extraction_window + 1)
+        bg_mask = np.ones(bg_y_max - bg_y_min, dtype=bool)
+        if y_min - bg_y_min > 0:
+            bg_mask[y_min - bg_y_min : y_max - bg_y_min] = False
+        if bg_y_max - y_max > 0:
+            bg_mask[y_max - bg_y_min : bg_y_max - bg_y_min] = False
+
+        if np.any(bg_mask):
+            bg_pixels = image_2d[bg_y_min:bg_y_max, x][bg_mask]
+            return float(np.median(bg_pixels) * (y_max - y_min))
+        return 0.0
 
     def extract_spectrum(
         self,
@@ -243,6 +263,57 @@ class EchelleExtractor:
             )
 
         # Extract all orders
+        extracted_orders = self._extract_valid_orders(image_2d, min_valid_pixels)
+
+        if not extracted_orders:
+            raise ValueError("No orders could be extracted")
+
+        # Create master wavelength grid
+        all_wls = np.concatenate([o[0] for o in extracted_orders])
+        min_wl = np.min(all_wls)
+        max_wl = np.max(all_wls)
+
+        master_grid = np.arange(min_wl, max_wl + wavelength_step_nm, wavelength_step_nm)
+        master_flux = np.zeros_like(master_grid)
+        weights = np.zeros_like(master_grid)
+
+        # Interpolate each order onto master grid
+        for wl_arr, flux_arr in extracted_orders:
+            self._merge_order_onto_grid(
+                wl_arr,
+                flux_arr,
+                master_grid,
+                master_flux,
+                weights,
+                merge_method,
+                min_valid_pixels,
+            )
+
+        # Normalize
+        if merge_method in ["weighted_average", "simple_average"]:
+            weights[weights == 0] = 1.0  # Avoid division by zero
+            final_spectrum = master_flux / weights
+        else:  # max
+            final_spectrum = master_flux
+
+        logger.info(
+            f"Extracted spectrum: {len(master_grid)} points, "
+            f"λ=[{min_wl:.1f}, {max_wl:.1f}] nm, "
+            f"{len(extracted_orders)} orders merged"
+        )
+
+        return master_grid, final_spectrum
+
+    def _extract_valid_orders(
+        self, image_2d: np.ndarray, min_valid_pixels: int
+    ) -> List[Tuple[np.ndarray, np.ndarray]]:
+        """
+        Extract every calibrated order, keeping only those with enough valid pixels.
+
+        Orders are processed in sorted name order. Orders that raise during
+        extraction, or that have fewer than ``min_valid_pixels`` positive-flux
+        pixels, are skipped.
+        """
         extracted_orders: List[Tuple[np.ndarray, np.ndarray]] = []
 
         for order_name in sorted(self.orders.keys()):
@@ -261,61 +332,50 @@ class EchelleExtractor:
                 logger.warning(f"Failed to extract order {order_name}: {e}")
                 continue
 
-        if not extracted_orders:
-            raise ValueError("No orders could be extracted")
+        return extracted_orders
 
-        # Create master wavelength grid
-        all_wls = np.concatenate([o[0] for o in extracted_orders])
-        min_wl = np.min(all_wls)
-        max_wl = np.max(all_wls)
+    def _merge_order_onto_grid(
+        self,
+        wl_arr: np.ndarray,
+        flux_arr: np.ndarray,
+        master_grid: np.ndarray,
+        master_flux: np.ndarray,
+        weights: np.ndarray,
+        merge_method: str,
+        min_valid_pixels: int,
+    ) -> None:
+        """
+        Resample a single order onto the master grid and accumulate it in place.
 
-        master_grid = np.arange(min_wl, max_wl + wavelength_step_nm, wavelength_step_nm)
-        master_flux = np.zeros_like(master_grid)
-        weights = np.zeros_like(master_grid)
+        Mutates ``master_flux`` and ``weights`` according to ``merge_method``.
+        Orders with too few valid pixels, or that fail to interpolate, are skipped.
+        """
+        # Only interpolate where flux is valid
+        mask = flux_arr > 0
+        if np.sum(mask) < min_valid_pixels:
+            return
 
-        # Interpolate each order onto master grid
-        for wl_arr, flux_arr in extracted_orders:
-            # Only interpolate where flux is valid
-            mask = flux_arr > 0
-            if np.sum(mask) < min_valid_pixels:
-                continue
+        try:
+            interp_func = interp1d(
+                wl_arr[mask], flux_arr[mask], kind="linear", bounds_error=False, fill_value=0.0
+            )
+            resampled_flux = interp_func(master_grid)
 
-            try:
-                interp_func = interp1d(
-                    wl_arr[mask], flux_arr[mask], kind="linear", bounds_error=False, fill_value=0.0
+            # Apply merge method
+            if merge_method in ("weighted_average", "simple_average"):
+                order_weight = (resampled_flux > 0).astype(float)
+                master_flux += resampled_flux
+                weights += order_weight
+            elif merge_method == "max":
+                # Take maximum where multiple orders contribute
+                mask_overlap = resampled_flux > 0
+                master_flux[mask_overlap] = np.maximum(
+                    master_flux[mask_overlap], resampled_flux[mask_overlap]
                 )
-                resampled_flux = interp_func(master_grid)
-
-                # Apply merge method
-                if merge_method in ("weighted_average", "simple_average"):
-                    order_weight = (resampled_flux > 0).astype(float)
-                    master_flux += resampled_flux
-                    weights += order_weight
-                elif merge_method == "max":
-                    # Take maximum where multiple orders contribute
-                    mask_overlap = resampled_flux > 0
-                    master_flux[mask_overlap] = np.maximum(
-                        master_flux[mask_overlap], resampled_flux[mask_overlap]
-                    )
-                    weights[mask_overlap] = np.maximum(weights[mask_overlap], 1.0)
-            except Exception as e:
-                logger.warning(f"Failed to interpolate order: {e}")
-                continue
-
-        # Normalize
-        if merge_method in ["weighted_average", "simple_average"]:
-            weights[weights == 0] = 1.0  # Avoid division by zero
-            final_spectrum = master_flux / weights
-        else:  # max
-            final_spectrum = master_flux
-
-        logger.info(
-            f"Extracted spectrum: {len(master_grid)} points, "
-            f"λ=[{min_wl:.1f}, {max_wl:.1f}] nm, "
-            f"{len(extracted_orders)} orders merged"
-        )
-
-        return master_grid, final_spectrum
+                weights[mask_overlap] = np.maximum(weights[mask_overlap], 1.0)
+        except Exception as e:
+            logger.warning(f"Failed to interpolate order: {e}")
+            return
 
     def create_mock_calibration(
         self,
