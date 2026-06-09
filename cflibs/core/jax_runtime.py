@@ -22,6 +22,9 @@ import numpy as _np
 
 if TYPE_CHECKING:
     from jax.typing import DTypeLike
+
+    from cflibs.instrument.model import InstrumentModel
+    from cflibs.plasma.state import SingleZoneLTEPlasma
 else:
     DTypeLike = Any
 
@@ -208,6 +211,43 @@ def jit_if_available(*jit_args: Any, **jit_kwargs: Any) -> Any:
     return _decorator
 
 
+def _resolve_vmap_axes(in_axes: Any, n_args: int) -> tuple:
+    """Normalise ``in_axes`` to a per-positional-argument tuple."""
+    if isinstance(in_axes, tuple):
+        return in_axes
+    return tuple(in_axes if i < n_args else None for i in range(n_args))
+
+
+def _infer_vmap_batch_size(args: tuple, axes: tuple) -> int | None:
+    """Return the batch length from the first non-``None`` axis, or ``None``."""
+    for arg, axis in zip(args, axes):
+        if axis is None:
+            continue
+        arr = _np.asarray(arg)
+        if arr.ndim == 0:
+            raise ValueError("vmap_if_available fallback requires array-like batched arguments")
+        return arr.shape[axis]
+    return None
+
+
+def _slice_vmap_args(args: tuple, axes: tuple, i: int) -> list:
+    """Slice batched arguments at index ``i`` along their mapped axis."""
+    sliced = []
+    for arg, axis in zip(args, axes):
+        if axis is None:
+            sliced.append(arg)
+        else:
+            sliced.append(_np.take(_np.asarray(arg), i, axis=axis))
+    return sliced
+
+
+def _stack_vmap_outputs(outputs: list, out_axes: Any) -> Any:
+    """Stack per-element fallback outputs along ``out_axes``."""
+    if isinstance(outputs[0], tuple):
+        return tuple(_np.stack(parts, axis=out_axes) for parts in zip(*outputs))
+    return _np.stack(outputs, axis=out_axes)
+
+
 def _vmap_decorator(
     func: F,
     in_axes: Any = 0,
@@ -219,34 +259,13 @@ def _vmap_decorator(
 
     @functools.wraps(func)
     def _wrapper(*args: Any, **kwargs: Any) -> Any:
-        if isinstance(in_axes, tuple):
-            axes = in_axes
-        else:
-            axes = tuple(in_axes if i < len(args) else None for i in range(len(args)))
-        n_batch: int | None = None
-        for arg, axis in zip(args, axes):
-            if axis is None:
-                continue
-            arr = _np.asarray(arg)
-            if arr.ndim == 0:
-                raise ValueError("vmap_if_available fallback requires array-like batched arguments")
-            n_batch = arr.shape[axis]
-            break
+        axes = _resolve_vmap_axes(in_axes, len(args))
+        n_batch = _infer_vmap_batch_size(args, axes)
         if n_batch is None:
             return func(*args, **kwargs)
 
-        outputs = []
-        for i in range(n_batch):
-            sliced = []
-            for arg, axis in zip(args, axes):
-                if axis is None:
-                    sliced.append(arg)
-                else:
-                    sliced.append(_np.take(_np.asarray(arg), i, axis=axis))
-            outputs.append(func(*sliced, **kwargs))
-        if isinstance(outputs[0], tuple):
-            return tuple(_np.stack(parts, axis=out_axes) for parts in zip(*outputs))
-        return _np.stack(outputs, axis=out_axes)
+        outputs = [func(*_slice_vmap_args(args, axes, i), **kwargs) for i in range(n_batch)]
+        return _stack_vmap_outputs(outputs, out_axes)
 
     return _wrapper  # type: ignore[return-value]
 
@@ -553,92 +572,86 @@ if HAS_JAX:
 # ---------------------------------------------------------------------------
 
 
+def _as_leaf(value: Any, dtype: Any) -> Any:
+    """Pass arrays through unchanged; box Python scalars as ``jnp`` leaves."""
+    return value if hasattr(value, "shape") else jnp.asarray(float(value), dtype=dtype)
+
+
+def _plasma_flatten(plasma: "SingleZoneLTEPlasma"):
+    elements = tuple(plasma.species.keys())
+    dtype = jax_default_real_dtype()
+    # Emit one leaf per species so tree_map(stack, plasma) cleanly batches
+    # the species dict instead of collapsing it into a 2-D array.
+    density_leaves = tuple(_as_leaf(plasma.species[e], dtype) for e in elements)
+    T_e = _as_leaf(plasma.T_e, dtype)
+    n_e = _as_leaf(plasma.n_e, dtype)
+    children = (T_e, n_e, *density_leaves)
+    aux = (
+        elements,
+        float(plasma.T_g) if plasma.T_g is not None else None,
+        float(plasma.pressure) if plasma.pressure is not None else None,
+    )
+    return children, aux
+
+
+def _plasma_unflatten(aux: tuple, children: tuple) -> "SingleZoneLTEPlasma":
+    from cflibs.plasma.state import SingleZoneLTEPlasma
+
+    elements, T_g, pressure = aux
+    T_e = children[0]
+    n_e = children[1]
+    density_leaves = children[2:]
+    # Bypass __init__ — it logs an f-string format on T_e which fails on
+    # batched/traced arrays. Reconstruct via object.__new__ + field set.
+    instance = object.__new__(SingleZoneLTEPlasma)
+    species = dict(zip(elements, density_leaves))
+    instance.T_e = T_e
+    instance.n_e = n_e
+    instance.species = species
+    instance.T_g = T_g
+    instance.pressure = pressure
+    return instance
+
+
+def _instrument_flatten(instrument: "InstrumentModel"):
+    dtype = jax_default_real_dtype()
+    fwhm = _as_leaf(instrument.resolution_fwhm_nm, dtype)
+    if instrument.response_curve is not None:
+        response = jnp.asarray(instrument.response_curve, dtype=dtype)
+    else:
+        response = jnp.zeros((0, 2), dtype=dtype)
+    if instrument.resolving_power is not None:
+        R = _as_leaf(instrument.resolving_power, dtype)
+    else:
+        R = jnp.asarray(0.0, dtype=dtype)
+    children = (fwhm, response, R)
+    aux = (
+        instrument.wavelength_calibration,
+        instrument.response_curve is not None,
+        instrument.resolving_power is not None,
+    )
+    return children, aux
+
+
+def _instrument_unflatten(aux: tuple, children: tuple) -> "InstrumentModel":
+    from cflibs.instrument.model import InstrumentModel
+
+    fwhm, response, R = children
+    calibration, has_response, has_R = aux
+    instance = object.__new__(InstrumentModel)
+    instance.resolution_fwhm_nm = fwhm
+    instance.response_curve = response if has_response else None
+    instance.wavelength_calibration = calibration
+    instance.resolving_power = R if has_R else None
+    return instance
+
+
 def _register_cflibs_pytrees() -> None:
     if not HAS_JAX:
         return
 
     from cflibs.plasma.state import SingleZoneLTEPlasma
     from cflibs.instrument.model import InstrumentModel
-
-    def _plasma_flatten(plasma: "SingleZoneLTEPlasma"):
-        elements = tuple(plasma.species.keys())
-        dtype = jax_default_real_dtype()
-        # Emit one leaf per species so tree_map(stack, plasma) cleanly batches
-        # the species dict instead of collapsing it into a 2-D array.
-        density_leaves = tuple(
-            v if hasattr(v, "shape") else jnp.asarray(float(v), dtype=dtype)
-            for v in (plasma.species[e] for e in elements)
-        )
-        T_e = (
-            plasma.T_e
-            if hasattr(plasma.T_e, "shape")
-            else jnp.asarray(float(plasma.T_e), dtype=dtype)
-        )
-        n_e = (
-            plasma.n_e
-            if hasattr(plasma.n_e, "shape")
-            else jnp.asarray(float(plasma.n_e), dtype=dtype)
-        )
-        children = (T_e, n_e, *density_leaves)
-        aux = (
-            elements,
-            float(plasma.T_g) if plasma.T_g is not None else None,
-            float(plasma.pressure) if plasma.pressure is not None else None,
-        )
-        return children, aux
-
-    def _plasma_unflatten(aux: tuple, children: tuple) -> "SingleZoneLTEPlasma":
-        elements, T_g, pressure = aux
-        T_e = children[0]
-        n_e = children[1]
-        density_leaves = children[2:]
-        # Bypass __init__ — it logs an f-string format on T_e which fails on
-        # batched/traced arrays. Reconstruct via object.__new__ + field set.
-        instance = object.__new__(SingleZoneLTEPlasma)
-        species = dict(zip(elements, density_leaves))
-        instance.T_e = T_e
-        instance.n_e = n_e
-        instance.species = species
-        instance.T_g = T_g
-        instance.pressure = pressure
-        return instance
-
-    def _instrument_flatten(instrument: "InstrumentModel"):
-        dtype = jax_default_real_dtype()
-        fwhm = (
-            instrument.resolution_fwhm_nm
-            if hasattr(instrument.resolution_fwhm_nm, "shape")
-            else jnp.asarray(float(instrument.resolution_fwhm_nm), dtype=dtype)
-        )
-        if instrument.response_curve is not None:
-            response = jnp.asarray(instrument.response_curve, dtype=dtype)
-        else:
-            response = jnp.zeros((0, 2), dtype=dtype)
-        if instrument.resolving_power is not None:
-            R = (
-                instrument.resolving_power
-                if hasattr(instrument.resolving_power, "shape")
-                else jnp.asarray(float(instrument.resolving_power), dtype=dtype)
-            )
-        else:
-            R = jnp.asarray(0.0, dtype=dtype)
-        children = (fwhm, response, R)
-        aux = (
-            instrument.wavelength_calibration,
-            instrument.response_curve is not None,
-            instrument.resolving_power is not None,
-        )
-        return children, aux
-
-    def _instrument_unflatten(aux: tuple, children: tuple) -> "InstrumentModel":
-        fwhm, response, R = children
-        calibration, has_response, has_R = aux
-        instance = object.__new__(InstrumentModel)
-        instance.resolution_fwhm_nm = fwhm
-        instance.response_curve = response if has_response else None
-        instance.wavelength_calibration = calibration
-        instance.resolving_power = R if has_R else None
-        return instance
 
     jax.tree_util.register_pytree_node(SingleZoneLTEPlasma, _plasma_flatten, _plasma_unflatten)
     jax.tree_util.register_pytree_node(InstrumentModel, _instrument_flatten, _instrument_unflatten)
