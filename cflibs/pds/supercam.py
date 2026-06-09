@@ -107,43 +107,13 @@ class SuperCamParser:
         lines = text.strip().split("\n")
 
         metadata: Dict = {"source_file": str(path)}
-        data_start = 0
         product_id = path.stem
 
         # Parse header
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("#") or stripped.startswith('"'):
-                self._parse_header_line(stripped, metadata)
-                data_start = i + 1
-            elif "," in stripped:
-                parts = stripped.split(",")
-                try:
-                    float(parts[0])
-                    data_start = i
-                    break
-                except ValueError:
-                    data_start = i + 1
-            else:
-                data_start = i + 1
+        data_start = self._parse_header(lines, metadata)
 
         # Parse numeric data
-        wavelengths = []
-        intensities = []
-
-        for line in lines[data_start:]:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            parts = stripped.split(",")
-            if len(parts) >= 2:
-                try:
-                    wl = float(parts[0])
-                    intensity = float(parts[1])
-                    wavelengths.append(wl)
-                    intensities.append(intensity)
-                except ValueError:
-                    continue
+        wavelengths, intensities = self._parse_numeric_data(lines, data_start)
 
         if not wavelengths:
             raise ValueError(f"No spectral data found in {path}")
@@ -175,6 +145,49 @@ class SuperCamParser:
             sol,
         )
         return spectrum
+
+    def _parse_header(self, lines: List[str], metadata: Dict) -> int:
+        """Parse header lines into ``metadata`` and return the data start index."""
+        data_start = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith('"'):
+                self._parse_header_line(stripped, metadata)
+                data_start = i + 1
+            elif "," in stripped:
+                parts = stripped.split(",")
+                try:
+                    float(parts[0])
+                    data_start = i
+                    break
+                except ValueError:
+                    data_start = i + 1
+            else:
+                data_start = i + 1
+        return data_start
+
+    def _parse_numeric_data(
+        self, lines: List[str], data_start: int
+    ) -> Tuple[List[float], List[float]]:
+        """Parse numeric wavelength/intensity rows starting at ``data_start``."""
+        wavelengths: List[float] = []
+        intensities: List[float] = []
+
+        for line in lines[data_start:]:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            parts = stripped.split(",")
+            if len(parts) >= 2:
+                try:
+                    wl = float(parts[0])
+                    intensity = float(parts[1])
+                    wavelengths.append(wl)
+                    intensities.append(intensity)
+                except ValueError:
+                    continue
+
+        return wavelengths, intensities
 
     def _parse_header_line(self, line: str, metadata: Dict) -> None:
         """Extract metadata from a header line."""
