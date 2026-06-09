@@ -343,28 +343,8 @@ def _detect_and_select_lines(
     return selection.selected_lines
 
 
-def invert_cmd(args):
-    """
-    Inversion command.
-
-    Runs classic CF-LIBS inversion using detected spectral lines.
-    """
-    from cflibs.atomic.database import AtomicDatabase
-    from cflibs.core.config import load_config
-    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
-    from cflibs.io.exporters import create_exporter
-    from cflibs.io.spectrum import load_spectrum
-
-    logger.info("Inversion command (classic CF-LIBS)")
-    logger.info(f"Spectrum file: {args.spectrum}")
-    logger.info(f"Config file: {args.config}")
-
-    config = {}
-    if args.config:
-        config = load_config(args.config)
-
-    analysis_cfg = config.get("analysis", {}) if isinstance(config, dict) else {}
-
+def _resolve_invert_elements(args, config: dict, analysis_cfg: dict):
+    """Resolve the element list for ``invert`` from CLI args then config fallbacks."""
     cli_elements = getattr(args, "elements", None)
     config_elements = config.get("elements") if isinstance(config, dict) else None
     elements = cli_elements or analysis_cfg.get("elements") or config_elements
@@ -375,14 +355,11 @@ def invert_cmd(args):
         )
     if isinstance(elements, str):
         elements = [elements]
+    return elements
 
-    db_path = _resolve_db_path(config.get("atomic_database"), relative_to=args.config)
-    if not db_path.exists():
-        raise FileNotFoundError(_missing_db_message(db_path))
 
-    wavelength, intensity = load_spectrum(args.spectrum)
-    atomic_db = AtomicDatabase(db_path)
-
+def _resolve_invert_line_params(args, analysis_cfg: dict) -> tuple[float, float, float]:
+    """Resolve wavelength tolerance and peak detection params (CLI overrides config)."""
     cli_tolerance = getattr(args, "tolerance_nm", None)
     cli_min_peak_height = getattr(args, "min_peak_height", None)
     cli_peak_width_nm = getattr(args, "peak_width_nm", None)
@@ -400,6 +377,85 @@ def invert_cmd(args):
         cli_peak_width_nm
         if cli_peak_width_nm is not None
         else analysis_cfg.get("peak_width_nm", 0.2)
+    )
+    return wavelength_tolerance, min_peak_height, peak_width_nm
+
+
+def _build_invert_closure_kwargs(analysis_cfg: dict, closure_mode: str, observations) -> dict:
+    """Build closure kwargs for ``invert``, applying matrix/oxide defaults."""
+    closure_kwargs = dict(analysis_cfg.get("closure_kwargs", {}))
+    if closure_mode == "matrix" and "matrix_element" in analysis_cfg:
+        closure_kwargs.setdefault("matrix_element", analysis_cfg["matrix_element"])
+    if closure_mode == "oxide":
+        if "oxide_elements" in analysis_cfg:
+            closure_kwargs.setdefault("oxide_elements", analysis_cfg["oxide_elements"])
+        # Default geological molar-oxygen stoichiometry (O atoms per cation) when
+        # the config does not supply an explicit oxide_stoichiometry map.
+        if "oxide_stoichiometry" not in closure_kwargs:
+            from cflibs.inversion.physics.closure import default_oxide_stoichiometry
+
+            els = [o.element for o in observations]
+            closure_kwargs["oxide_stoichiometry"] = default_oxide_stoichiometry(els)
+    return closure_kwargs
+
+
+def _output_invert_result(result, args) -> None:
+    """Export or print the ``invert`` result depending on ``args.output``."""
+    from cflibs.io.exporters import create_exporter
+
+    if args.output:
+        output_path = Path(args.output)
+        ext = output_path.suffix.lower().lstrip(".")
+        if ext not in {"csv", "json", "h5", "hdf5"}:
+            ext = "json"
+            output_path = output_path.with_suffix(".json")
+
+        exporter = create_exporter(ext)
+        exporter.export(result, str(output_path))
+        print(f"Inversion results saved to {output_path}")
+        return
+
+    print("CF-LIBS inversion results:")
+    print(f"  Temperature: {result.temperature_K:.0f} ± {result.temperature_uncertainty_K:.0f} K")
+    print(f"  Electron density: {result.electron_density_cm3:.3e} cm^-3")
+    print("  Concentrations:")
+    for element, concentration in result.concentrations.items():
+        unc = result.concentration_uncertainties.get(element, 0.0)
+        print(f"    {element}: {concentration:.4f} ± {unc:.4f}")
+
+
+def invert_cmd(args):
+    """
+    Inversion command.
+
+    Runs classic CF-LIBS inversion using detected spectral lines.
+    """
+    from cflibs.atomic.database import AtomicDatabase
+    from cflibs.core.config import load_config
+    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+    from cflibs.io.spectrum import load_spectrum
+
+    logger.info("Inversion command (classic CF-LIBS)")
+    logger.info(f"Spectrum file: {args.spectrum}")
+    logger.info(f"Config file: {args.config}")
+
+    config = {}
+    if args.config:
+        config = load_config(args.config)
+
+    analysis_cfg = config.get("analysis", {}) if isinstance(config, dict) else {}
+
+    elements = _resolve_invert_elements(args, config, analysis_cfg)
+
+    db_path = _resolve_db_path(config.get("atomic_database"), relative_to=args.config)
+    if not db_path.exists():
+        raise FileNotFoundError(_missing_db_message(db_path))
+
+    wavelength, intensity = load_spectrum(args.spectrum)
+    atomic_db = AtomicDatabase(db_path)
+
+    wavelength_tolerance, min_peak_height, peak_width_nm = _resolve_invert_line_params(
+        args, analysis_cfg
     )
     # Default to a non-None relative-intensity floor (physics-audit /
     # composition-pipeline-diagnosis: IDENT-RYDBERG). With no floor, weak
@@ -479,41 +535,11 @@ def invert_cmd(args):
     )
 
     closure_mode = analysis_cfg.get("closure_mode", "standard")
-    closure_kwargs = dict(analysis_cfg.get("closure_kwargs", {}))
-    if closure_mode == "matrix" and "matrix_element" in analysis_cfg:
-        closure_kwargs.setdefault("matrix_element", analysis_cfg["matrix_element"])
-    if closure_mode == "oxide":
-        if "oxide_elements" in analysis_cfg:
-            closure_kwargs.setdefault("oxide_elements", analysis_cfg["oxide_elements"])
-        # Default geological molar-oxygen stoichiometry (O atoms per cation) when
-        # the config does not supply an explicit oxide_stoichiometry map.
-        if "oxide_stoichiometry" not in closure_kwargs:
-            from cflibs.inversion.physics.closure import default_oxide_stoichiometry
-
-            els = [o.element for o in observations]
-            closure_kwargs["oxide_stoichiometry"] = default_oxide_stoichiometry(els)
+    closure_kwargs = _build_invert_closure_kwargs(analysis_cfg, closure_mode, observations)
 
     result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
 
-    if args.output:
-        output_path = Path(args.output)
-        ext = output_path.suffix.lower().lstrip(".")
-        if ext not in {"csv", "json", "h5", "hdf5"}:
-            ext = "json"
-            output_path = output_path.with_suffix(".json")
-
-        exporter = create_exporter(ext)
-        exporter.export(result, str(output_path))
-        print(f"Inversion results saved to {output_path}")
-        return
-
-    print("CF-LIBS inversion results:")
-    print(f"  Temperature: {result.temperature_K:.0f} ± {result.temperature_uncertainty_K:.0f} K")
-    print(f"  Electron density: {result.electron_density_cm3:.3e} cm^-3")
-    print("  Concentrations:")
-    for element, concentration in result.concentrations.items():
-        unc = result.concentration_uncertainties.get(element, 0.0)
-        print(f"    {element}: {concentration:.4f} ± {unc:.4f}")
+    _output_invert_result(result, args)
 
 
 def analyze_cmd(args):
@@ -579,9 +605,21 @@ def analyze_cmd(args):
         closure_kwargs["oxide_stoichiometry"] = default_oxide_stoichiometry(els)
 
     uncertainty_mode = getattr(args, "uncertainty", "none")
+    result = _solve_analyze_result(
+        solver, observations, closure_mode, closure_kwargs, uncertainty_mode
+    )
+
+    fmt = getattr(args, "output_format", "table")
+    _output_analyze_result(result, fmt)
+
+
+def _solve_analyze_result(
+    solver, observations, closure_mode: str, closure_kwargs: dict, uncertainty_mode: str
+):
+    """Run the solver for ``analyze`` honouring the requested uncertainty mode."""
     if uncertainty_mode == "analytical":
         try:
-            result = solver.solve_with_uncertainty(
+            return solver.solve_with_uncertainty(
                 observations, closure_mode=closure_mode, **closure_kwargs
             )
         except ImportError:
@@ -589,14 +627,14 @@ def analyze_cmd(args):
                 "uncertainties package not installed; falling back to solve() without UQ. "
                 "Install with: pip install uncertainties"
             )
-            result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
+            return solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
     elif uncertainty_mode == "mc":
         from cflibs.inversion.physics.uncertainty import MonteCarloUQ
 
         mc = MonteCarloUQ(solver, n_samples=200)
         mc_result = mc.run(observations)
         result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
-        result = result.__class__(
+        return result.__class__(
             temperature_K=mc_result.T_mean,
             temperature_uncertainty_K=mc_result.T_std,
             electron_density_cm3=mc_result.ne_mean,
@@ -607,9 +645,11 @@ def analyze_cmd(args):
             quality_metrics=result.quality_metrics,
         )
     else:
-        result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
+        return solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
 
-    fmt = getattr(args, "output_format", "table")
+
+def _output_analyze_result(result, fmt: str) -> None:
+    """Print the ``analyze`` result in the requested format (json/csv/table)."""
     if fmt == "json":
         import json
 
