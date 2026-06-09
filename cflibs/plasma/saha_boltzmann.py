@@ -214,17 +214,34 @@ class SahaBoltzmannSolver(SolverStrategy):
         levels = self.atomic_db.get_energy_levels(element, ionization_stage)
 
         if not levels:
-            key = (element, ionization_stage)
-            with _MISSING_LEVEL_WARNED_LOCK:
-                should_warn = key not in _MISSING_LEVEL_WARNED
-                if should_warn:
-                    _MISSING_LEVEL_WARNED.add(key)
-            if should_warn:
-                logger.warning(
-                    "No energy levels for %s %s, using approximation", element, ionization_stage
-                )
+            self._warn_missing_levels(element, ionization_stage)
             return 2.0
 
+        return self._direct_sum_energy_levels(
+            levels, element, ionization_stage, T_e_eV, max_energy_ev
+        )
+
+    def _warn_missing_levels(self, element: str, ionization_stage: int) -> None:
+        """Emit a warn-once (thread-safe) message for a species with no levels."""
+        key = (element, ionization_stage)
+        with _MISSING_LEVEL_WARNED_LOCK:
+            should_warn = key not in _MISSING_LEVEL_WARNED
+            if should_warn:
+                _MISSING_LEVEL_WARNED.add(key)
+        if should_warn:
+            logger.warning(
+                "No energy levels for %s %s, using approximation", element, ionization_stage
+            )
+
+    def _direct_sum_energy_levels(
+        self,
+        levels,
+        element: str,
+        ionization_stage: int,
+        T_e_eV: float,
+        max_energy_ev: float | None,
+    ) -> float:
+        """Boltzmann direct sum over ``EnergyLevel`` rows with IP-derived cutoff."""
         if max_energy_ev is None:
             ip = self.atomic_db.get_ionization_potential(element, ionization_stage)
             max_energy_ev = ip * 0.98 if ip else 50.0
@@ -581,32 +598,53 @@ class SahaBoltzmannSolverJax(SolverStrategy):
             # Fall back to the polynomial / energy-level NumPy path used by
             # the original solver. This is intentionally NOT jit-compiled
             # because it depends on optional database fields.
-            T_K = T_e_eV * EV_TO_K
-            if hasattr(self.atomic_db, "get_partition_coefficients"):
-                pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
-                if pf is not None:
-                    from cflibs.plasma.partition import get_ground_state_g
+            return self._partition_function_numpy_fallback(
+                element, ionization_stage, T_e_eV, max_energy_ev
+            )
 
-                    g0 = get_ground_state_g(self.atomic_db, element, ionization_stage)
-                    return PartitionFunctionEvaluator.evaluate(
-                        T_K,
-                        pf.coefficients,
-                        t_min=pf.t_min,
-                        t_max=pf.t_max,
-                        g0=g0,
-                    )
-            energy_levels = self.atomic_db.get_energy_levels(element, ionization_stage)
-            if not energy_levels:
-                return 2.0
-            if max_energy_ev is None:
-                ip = self.atomic_db.get_ionization_potential(element, ionization_stage)
-                max_energy_ev = ip * 0.98 if ip else 50.0
-            U = 0.0
-            for level in energy_levels:
-                if level.energy_ev <= max_energy_ev:
-                    U += level.g * np.exp(-level.energy_ev / T_e_eV)
-            return float(U)
+        return self._partition_function_jax_directsum(levels, T_e_eV, max_energy_ev)
 
+    def _partition_function_numpy_fallback(
+        self,
+        element: str,
+        ionization_stage: int,
+        T_e_eV: float,
+        max_energy_ev: float | None,
+    ) -> float:
+        """Polynomial / energy-level NumPy partition path (no JAX, no jit)."""
+        T_K = T_e_eV * EV_TO_K
+        if hasattr(self.atomic_db, "get_partition_coefficients"):
+            pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
+            if pf is not None:
+                from cflibs.plasma.partition import get_ground_state_g
+
+                g0 = get_ground_state_g(self.atomic_db, element, ionization_stage)
+                return PartitionFunctionEvaluator.evaluate(
+                    T_K,
+                    pf.coefficients,
+                    t_min=pf.t_min,
+                    t_max=pf.t_max,
+                    g0=g0,
+                )
+        energy_levels = self.atomic_db.get_energy_levels(element, ionization_stage)
+        if not energy_levels:
+            return 2.0
+        if max_energy_ev is None:
+            ip = self.atomic_db.get_ionization_potential(element, ionization_stage)
+            max_energy_ev = ip * 0.98 if ip else 50.0
+        U = 0.0
+        for level in energy_levels:
+            if level.energy_ev <= max_energy_ev:
+                U += level.g * np.exp(-level.energy_ev / T_e_eV)
+        return float(U)
+
+    def _partition_function_jax_directsum(
+        self,
+        levels,
+        T_e_eV: float,
+        max_energy_ev: float | None,
+    ) -> float:
+        """JAX direct-sum partition function over prepared ``(g, E, ip)`` arrays."""
         g_jnp, E_jnp, ip_ev = levels
         if max_energy_ev is None:
             max_energy_ev = ip_ev * 0.98
