@@ -110,38 +110,12 @@ def build_bayesian_sparse_predictor(
             MCMCSampler,
             PriorConfig,
         )
-        from cflibs.inversion.candidate_prefilter import select_candidate_elements
-        from cflibs.inversion.common.element_id import (
-            ElementIdentification,
-            ElementIdentificationResult,
-        )
-        from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
 
         t_start = time.perf_counter()
 
         # --- Step 1: Prefilter via NNLS ---
         basis, basis_fwhm, mismatch = context.basis_for_rp(spectrum.rp_estimate)
-        nnls_identifier = SpectralNNLSIdentifier(
-            basis_library=basis,
-            detection_snr=3.0,
-            continuum_degree=3,
-            fallback_T_K=8000.0,
-            fallback_ne_cm3=1e17,
-        )
-
-        k_max = int(config.get("k_max", 15))
-        prefiltered = select_candidate_elements(
-            identifier=nnls_identifier,
-            wavelength=spectrum.wavelength_nm,
-            intensity=spectrum.intensity,
-            force_include=[],
-            k_max=k_max,
-            k_min=3,
-        )
-
-        if not prefiltered:
-            logger.warning("Prefilter returned empty set; using full candidates")
-            prefiltered = list(candidate_elements)[:k_max]
+        prefiltered = _run_prefilter(spectrum, config, candidate_elements, basis)
 
         t_prefilter = time.perf_counter() - t_start
 
@@ -152,12 +126,7 @@ def build_bayesian_sparse_predictor(
         )
 
         # Pass the spectrum's instrument broadening to match the prefilter basis
-        rp_estimate = getattr(spectrum, "rp_estimate", None)
-        fm_kwargs: dict = {}
-        if rp_estimate and rp_estimate > 0:
-            fm_kwargs["resolving_power"] = float(rp_estimate)
-        else:
-            fm_kwargs["instrument_fwhm_nm"] = basis_fwhm
+        fm_kwargs = _build_forward_model_kwargs(spectrum, basis_fwhm)
 
         try:
             forward_model = BayesianForwardModel(
@@ -198,118 +167,236 @@ def build_bayesian_sparse_predictor(
         presence_floor = float(config.get("presence_floor", 0.01))
         prob_threshold = float(config.get("posterior_prob_threshold", 0.90))
 
-        conc_samples = mcmc_result.samples.get("concentrations", None)
-        conc_mean = mcmc_result.concentrations_mean
-        conc_q025 = mcmc_result.concentrations_q025
-        conc_q975 = mcmc_result.concentrations_q975
-
-        all_element_ids: List[ElementIdentification] = []
-
-        for i, element in enumerate(prefiltered):
-            # concentrations_mean/q025/q975 are Dict[str, float] keyed by element name
-            mean_c = float(conc_mean.get(element, 0.0))
-            q025 = float(conc_q025.get(element, 0.0))
-            q975 = float(conc_q975.get(element, 0.0))
-
-            # Compute detection probability: P(c_i > presence_floor)
-            # samples["concentrations"] is a 2D array (n_samples, n_elements)
-            # indexed by position matching forward_model.elements order
-            if conc_samples is not None and i < conc_samples.shape[1]:
-                samples_i = conc_samples[:, i]
-                prob_present = float(np.mean(samples_i > presence_floor))
-            else:
-                # Fallback: use mean
-                prob_present = 1.0 if mean_c > presence_floor else 0.0
-
-            detected = prob_present >= prob_threshold
-
-            element_id = ElementIdentification(
-                element=element,
-                detected=detected,
-                score=prob_present,
-                confidence=prob_present,
-                n_matched_lines=0,
-                n_total_lines=0,
-                matched_lines=[],
-                unmatched_lines=[],
-                metadata={
-                    "posterior_mean_concentration": mean_c,
-                    "posterior_q025": q025,
-                    "posterior_q975": q975,
-                    "prob_above_floor": prob_present,
-                    "presence_floor": presence_floor,
-                    "posterior_prob_threshold": prob_threshold,
-                },
-            )
-            all_element_ids.append(element_id)
+        all_element_ids = _build_prefiltered_identifications(
+            prefiltered, mcmc_result, presence_floor, prob_threshold
+        )
 
         # Also mark non-prefiltered candidate elements as rejected
         prefiltered_set = set(prefiltered)
-        for element in candidate_elements:
-            if element not in prefiltered_set:
-                all_element_ids.append(
-                    ElementIdentification(
-                        element=element,
-                        detected=False,
-                        score=0.0,
-                        confidence=0.0,
-                        n_matched_lines=0,
-                        n_total_lines=0,
-                        matched_lines=[],
-                        unmatched_lines=[],
-                        metadata={"excluded_by_prefilter": True},
-                    )
-                )
+        all_element_ids.extend(_build_rejected_identifications(candidate_elements, prefiltered_set))
 
         t_total = time.perf_counter() - t_start
 
         # --- Step 5: Build result with diagnostics ---
-        detected_elements = [e for e in all_element_ids if e.detected]
-        rejected_elements = [e for e in all_element_ids if not e.detected]
-
-        # Convergence diagnostics (r_hat, ess, convergence_status are
-        # guaranteed fields on MCMCResult — no hasattr needed)
-        max_r_hat = max(mcmc_result.r_hat.values()) if mcmc_result.r_hat else float("nan")
-        min_ess = min(mcmc_result.ess.values()) if mcmc_result.ess else float("nan")
-        convergence_status = mcmc_result.convergence_status.value
-
-        # Posterior predictive check (optional method on MCMCSampler)
-        ppc_p_value = float("nan")
-        try:
-            ppc = sampler.posterior_predictive_check(mcmc_result, spectrum.intensity, n_samples=100)
-            ppc_p_value = ppc.get("p_value", float("nan"))
-        except (AttributeError, Exception):
-            pass
-
-        result = ElementIdentificationResult(
-            detected_elements=detected_elements,
-            rejected_elements=rejected_elements,
-            all_elements=all_element_ids,
-            experimental_peaks=[],
-            n_peaks=0,
-            n_matched_peaks=0,
-            n_unmatched_peaks=0,
-            algorithm="bayesian_sparse",
-            parameters={
-                "config": config,
-                "prefiltered_elements": prefiltered,
-                "candidate_elements": list(candidate_elements),
-                "n_prefiltered": len(prefiltered),
-                "max_r_hat": max_r_hat,
-                "min_ess": min_ess,
-                "posterior_predictive_p_value": ppc_p_value,
-                "convergence_status": convergence_status,
-                "mcmc_wall_seconds": t_mcmc,
-                "prefilter_wall_seconds": t_prefilter,
-                "total_wall_seconds": t_total,
-                "T_eV_mean": mcmc_result.T_eV_mean,
-                "log_ne_mean": mcmc_result.log_ne_mean,
-                "basis_fwhm_nm": basis_fwhm,
-            },
+        return _build_result(
+            all_element_ids=all_element_ids,
+            mcmc_result=mcmc_result,
+            sampler=sampler,
+            spectrum=spectrum,
+            config=config,
+            prefiltered=prefiltered,
+            candidate_elements=candidate_elements,
+            basis_fwhm=basis_fwhm,
+            t_mcmc=t_mcmc,
+            t_prefilter=t_prefilter,
+            t_total=t_total,
         )
-        return result
 
     return predictor
+
+
+def _run_prefilter(
+    spectrum: Any,
+    config: Dict[str, Any],
+    candidate_elements: List[str],
+    basis: Any,
+) -> List[str]:
+    """Run the NNLS prefilter, falling back to truncated candidates if empty."""
+    from cflibs.inversion.candidate_prefilter import select_candidate_elements
+    from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
+
+    nnls_identifier = SpectralNNLSIdentifier(
+        basis_library=basis,
+        detection_snr=3.0,
+        continuum_degree=3,
+        fallback_T_K=8000.0,
+        fallback_ne_cm3=1e17,
+    )
+
+    k_max = int(config.get("k_max", 15))
+    prefiltered = select_candidate_elements(
+        identifier=nnls_identifier,
+        wavelength=spectrum.wavelength_nm,
+        intensity=spectrum.intensity,
+        force_include=[],
+        k_max=k_max,
+        k_min=3,
+    )
+
+    if not prefiltered:
+        logger.warning("Prefilter returned empty set; using full candidates")
+        prefiltered = list(candidate_elements)[:k_max]
+
+    return prefiltered
+
+
+def _build_forward_model_kwargs(spectrum: Any, basis_fwhm: Any) -> dict:
+    """Build BayesianForwardModel broadening kwargs from the spectrum's RP."""
+    rp_estimate = getattr(spectrum, "rp_estimate", None)
+    fm_kwargs: dict = {}
+    if rp_estimate and rp_estimate > 0:
+        fm_kwargs["resolving_power"] = float(rp_estimate)
+    else:
+        fm_kwargs["instrument_fwhm_nm"] = basis_fwhm
+    return fm_kwargs
+
+
+def _build_prefiltered_identifications(
+    prefiltered: List[str],
+    mcmc_result: Any,
+    presence_floor: float,
+    prob_threshold: float,
+) -> list:
+    """Build ElementIdentification entries for the prefiltered elements."""
+    from cflibs.inversion.common.element_id import ElementIdentification
+
+    conc_samples = mcmc_result.samples.get("concentrations", None)
+    conc_mean = mcmc_result.concentrations_mean
+    conc_q025 = mcmc_result.concentrations_q025
+    conc_q975 = mcmc_result.concentrations_q975
+
+    all_element_ids: List[ElementIdentification] = []
+
+    for i, element in enumerate(prefiltered):
+        # concentrations_mean/q025/q975 are Dict[str, float] keyed by element name
+        mean_c = float(conc_mean.get(element, 0.0))
+        q025 = float(conc_q025.get(element, 0.0))
+        q975 = float(conc_q975.get(element, 0.0))
+
+        prob_present = _compute_prob_present(conc_samples, i, mean_c, presence_floor)
+
+        detected = prob_present >= prob_threshold
+
+        element_id = ElementIdentification(
+            element=element,
+            detected=detected,
+            score=prob_present,
+            confidence=prob_present,
+            n_matched_lines=0,
+            n_total_lines=0,
+            matched_lines=[],
+            unmatched_lines=[],
+            metadata={
+                "posterior_mean_concentration": mean_c,
+                "posterior_q025": q025,
+                "posterior_q975": q975,
+                "prob_above_floor": prob_present,
+                "presence_floor": presence_floor,
+                "posterior_prob_threshold": prob_threshold,
+            },
+        )
+        all_element_ids.append(element_id)
+
+    return all_element_ids
+
+
+def _compute_prob_present(
+    conc_samples: Any,
+    i: int,
+    mean_c: float,
+    presence_floor: float,
+) -> float:
+    """Compute the posterior detection probability P(c_i > presence_floor)."""
+    # Compute detection probability: P(c_i > presence_floor)
+    # samples["concentrations"] is a 2D array (n_samples, n_elements)
+    # indexed by position matching forward_model.elements order
+    if conc_samples is not None and i < conc_samples.shape[1]:
+        samples_i = conc_samples[:, i]
+        return float(np.mean(samples_i > presence_floor))
+    # Fallback: use mean
+    return 1.0 if mean_c > presence_floor else 0.0
+
+
+def _build_rejected_identifications(
+    candidate_elements: List[str],
+    prefiltered_set: set,
+) -> list:
+    """Build rejected ElementIdentification entries for non-prefiltered elements."""
+    from cflibs.inversion.common.element_id import ElementIdentification
+
+    rejected: List[ElementIdentification] = []
+    for element in candidate_elements:
+        if element not in prefiltered_set:
+            rejected.append(
+                ElementIdentification(
+                    element=element,
+                    detected=False,
+                    score=0.0,
+                    confidence=0.0,
+                    n_matched_lines=0,
+                    n_total_lines=0,
+                    matched_lines=[],
+                    unmatched_lines=[],
+                    metadata={"excluded_by_prefilter": True},
+                )
+            )
+    return rejected
+
+
+def _compute_ppc_p_value(sampler: Any, mcmc_result: Any, spectrum: Any) -> float:
+    """Compute the posterior predictive p-value, defaulting to NaN on failure."""
+    # Posterior predictive check (optional method on MCMCSampler)
+    try:
+        ppc = sampler.posterior_predictive_check(mcmc_result, spectrum.intensity, n_samples=100)
+        return ppc.get("p_value", float("nan"))
+    except (AttributeError, Exception):
+        return float("nan")
+
+
+def _build_result(
+    *,
+    all_element_ids: list,
+    mcmc_result: Any,
+    sampler: Any,
+    spectrum: Any,
+    config: Dict[str, Any],
+    prefiltered: List[str],
+    candidate_elements: List[str],
+    basis_fwhm: Any,
+    t_mcmc: float,
+    t_prefilter: float,
+    t_total: float,
+) -> Any:
+    """Assemble the ElementIdentificationResult with convergence diagnostics."""
+    from cflibs.inversion.common.element_id import ElementIdentificationResult
+
+    detected_elements = [e for e in all_element_ids if e.detected]
+    rejected_elements = [e for e in all_element_ids if not e.detected]
+
+    # Convergence diagnostics (r_hat, ess, convergence_status are
+    # guaranteed fields on MCMCResult — no hasattr needed)
+    max_r_hat = max(mcmc_result.r_hat.values()) if mcmc_result.r_hat else float("nan")
+    min_ess = min(mcmc_result.ess.values()) if mcmc_result.ess else float("nan")
+    convergence_status = mcmc_result.convergence_status.value
+
+    ppc_p_value = _compute_ppc_p_value(sampler, mcmc_result, spectrum)
+
+    return ElementIdentificationResult(
+        detected_elements=detected_elements,
+        rejected_elements=rejected_elements,
+        all_elements=all_element_ids,
+        experimental_peaks=[],
+        n_peaks=0,
+        n_matched_peaks=0,
+        n_unmatched_peaks=0,
+        algorithm="bayesian_sparse",
+        parameters={
+            "config": config,
+            "prefiltered_elements": prefiltered,
+            "candidate_elements": list(candidate_elements),
+            "n_prefiltered": len(prefiltered),
+            "max_r_hat": max_r_hat,
+            "min_ess": min_ess,
+            "posterior_predictive_p_value": ppc_p_value,
+            "convergence_status": convergence_status,
+            "mcmc_wall_seconds": t_mcmc,
+            "prefilter_wall_seconds": t_prefilter,
+            "total_wall_seconds": t_total,
+            "T_eV_mean": mcmc_result.T_eV_mean,
+            "log_ne_mean": mcmc_result.log_ne_mean,
+            "basis_fwhm_nm": basis_fwhm,
+        },
+    )
 
 
 def _empty_result(
