@@ -292,6 +292,27 @@ def per_element_error(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_protocol_path(protocol_path: Optional[Path]) -> Optional[Path]:
+    """Resolve the protocol.yaml path, walking upward when not given explicitly."""
+    if protocol_path is not None:
+        return Path(protocol_path)
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        guess = parent / "validation" / "protocol.yaml"
+        if guess.is_file():
+            return guess
+    return None
+
+
+def _parse_subcompositional_pairs(raw_pairs: Any) -> List[Tuple[str, str]]:
+    """Convert raw YAML pair entries into validated ``(num, den)`` tuples."""
+    pairs: List[Tuple[str, str]] = []
+    for entry in raw_pairs:
+        if isinstance(entry, (list, tuple)) and len(entry) == 2:
+            pairs.append((str(entry[0]), str(entry[1])))
+    return pairs
+
+
 def load_subcompositional_pairs(
     protocol_path: Optional[Path] = None,
 ) -> List[Tuple[str, str]]:
@@ -317,16 +338,7 @@ def load_subcompositional_pairs(
     list[tuple[str, str]]
         Ordered ``(numerator, denominator)`` pairs.
     """
-    candidate: Optional[Path] = None
-    if protocol_path is not None:
-        candidate = Path(protocol_path)
-    else:
-        here = Path(__file__).resolve()
-        for parent in here.parents:
-            guess = parent / "validation" / "protocol.yaml"
-            if guess.is_file():
-                candidate = guess
-                break
+    candidate = _resolve_protocol_path(protocol_path)
 
     if candidate is None or not candidate.is_file():
         return list(_DEFAULT_SUBCOMPOSITIONAL_PAIRS)
@@ -342,10 +354,7 @@ def load_subcompositional_pairs(
     if not raw_pairs:
         return list(_DEFAULT_SUBCOMPOSITIONAL_PAIRS)
 
-    pairs: List[Tuple[str, str]] = []
-    for entry in raw_pairs:
-        if isinstance(entry, (list, tuple)) and len(entry) == 2:
-            pairs.append((str(entry[0]), str(entry[1])))
+    pairs = _parse_subcompositional_pairs(raw_pairs)
     return pairs or list(_DEFAULT_SUBCOMPOSITIONAL_PAIRS)
 
 
@@ -481,6 +490,79 @@ def classify_stratum(
     return "minors"
 
 
+def _bucket_records(
+    per_element_records: Iterable[Mapping[str, Any]],
+    cfg: Mapping[str, Mapping[str, float]],
+) -> Dict[str, List[Tuple[str, float, float]]]:
+    """Group records into majors/minors/traces buckets keyed by certified concentration.
+
+    Each bucket entry is ``(element, true, rd)``.  Records with ``true <= 0``
+    are dropped because they cannot be stratified by certified concentration.
+    """
+    buckets: Dict[str, List[Tuple[str, float, float]]] = {
+        "majors": [],
+        "minors": [],
+        "traces": [],
+    }
+    for record in per_element_records:
+        true = float(record.get("true", 0.0))
+        if true <= 0.0:
+            continue
+        pred = float(record.get("predicted", 0.0))
+        element = str(record.get("element", "?"))
+        rd = abs(pred - true) / true
+        stratum = classify_stratum(true, cfg)
+        buckets[stratum].append((element, true, rd))
+    return buckets
+
+
+def _empty_stratum_summary() -> Dict[str, Any]:
+    """Summary for a stratum with no observations (vacuously passes)."""
+    return {
+        "n_elements": 0,
+        "n_spectra": 0,
+        "mean_rd": float("nan"),
+        "median_rd": float("nan"),
+        "p95_rd": float("nan"),
+        "pass": True,  # vacuously passes when no observations
+    }
+
+
+def _traces_passed(
+    entries: List[Tuple[str, float, float]],
+    cfg: Mapping[str, Mapping[str, float]],
+    loq_lookup: Optional[Mapping[str, float]],
+) -> bool:
+    """Pass criterion for the MDL-bounded ``traces`` stratum."""
+    # traces: MDL-bounded.  When a per-element LOQ table is provided,
+    # require mean_rd to stay within (mdl_factor * LOQ / mean(true)).
+    mdl_factor = float(cfg.get("traces", {}).get("mdl_factor", 3.0))
+    if not loq_lookup:
+        # No LOQ table available: do not gate (return informational
+        # pass=True so the absence of LOQ data does not silently fail).
+        return True
+    bounded = []
+    for element, true, rd in entries:
+        loq = float(loq_lookup.get(element, float("inf")))
+        if true > 0:
+            bounded.append(rd <= mdl_factor * (loq / true))
+    return bool(bounded) and all(bounded)
+
+
+def _stratum_passed(
+    stratum: str,
+    mean_rd: float,
+    entries: List[Tuple[str, float, float]],
+    cfg: Mapping[str, Mapping[str, float]],
+    loq_lookup: Optional[Mapping[str, float]],
+) -> bool:
+    """Determine whether a populated stratum passes its gate criterion."""
+    if stratum in ("majors", "minors"):
+        rd_max = float(cfg.get(stratum, {}).get("rd_max", 0.20))
+        return mean_rd <= rd_max
+    return _traces_passed(entries, cfg, loq_lookup)
+
+
 def stratify_per_element_errors(
     per_element_records: Iterable[Mapping[str, Any]],
     thresholds: Optional[Mapping[str, Mapping[str, float]]] = None,
@@ -522,33 +604,12 @@ def stratify_per_element_errors(
         ``{stratum: {n_elements, n_spectra, mean_rd, median_rd, p95_rd, pass}}``.
     """
     cfg = thresholds or DEFAULT_STRATA_THRESHOLDS
-    buckets: Dict[str, List[Tuple[str, float, float]]] = {
-        "majors": [],
-        "minors": [],
-        "traces": [],
-    }
-
-    for record in per_element_records:
-        true = float(record.get("true", 0.0))
-        if true <= 0.0:
-            continue
-        pred = float(record.get("predicted", 0.0))
-        element = str(record.get("element", "?"))
-        rd = abs(pred - true) / true
-        stratum = classify_stratum(true, cfg)
-        buckets[stratum].append((element, true, rd))
+    buckets = _bucket_records(per_element_records, cfg)
 
     summary: Dict[str, Dict[str, Any]] = {}
     for stratum, entries in buckets.items():
         if not entries:
-            summary[stratum] = {
-                "n_elements": 0,
-                "n_spectra": 0,
-                "mean_rd": float("nan"),
-                "median_rd": float("nan"),
-                "p95_rd": float("nan"),
-                "pass": True,  # vacuously passes when no observations
-            }
+            summary[stratum] = _empty_stratum_summary()
             continue
 
         rds = np.array([rd for _, _, rd in entries], dtype=np.float64)
@@ -558,24 +619,7 @@ def stratify_per_element_errors(
         median_rd = float(np.median(rds))
         p95_rd = float(np.percentile(rds, 95))
 
-        if stratum in ("majors", "minors"):
-            rd_max = float(cfg.get(stratum, {}).get("rd_max", 0.20))
-            passed = mean_rd <= rd_max
-        else:
-            # traces: MDL-bounded.  When a per-element LOQ table is provided,
-            # require mean_rd to stay within (mdl_factor * LOQ / mean(true)).
-            mdl_factor = float(cfg.get("traces", {}).get("mdl_factor", 3.0))
-            if loq_lookup:
-                bounded = []
-                for element, true, rd in entries:
-                    loq = float(loq_lookup.get(element, float("inf")))
-                    if true > 0:
-                        bounded.append(rd <= mdl_factor * (loq / true))
-                passed = bool(bounded) and all(bounded)
-            else:
-                # No LOQ table available: do not gate (return informational
-                # pass=True so the absence of LOQ data does not silently fail).
-                passed = True
+        passed = _stratum_passed(stratum, mean_rd, entries, cfg, loq_lookup)
 
         summary[stratum] = {
             "n_elements": len(elements),
