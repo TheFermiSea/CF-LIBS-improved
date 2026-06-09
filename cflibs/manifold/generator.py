@@ -120,6 +120,120 @@ class ManifoldGenerator:
 
         logger.info("Loading atomic data from database...")
 
+        # Build query for all elements (including Stark parameters)
+        placeholders = ",".join(["?"] * len(self.config.elements))
+        query = f"""
+            SELECT
+                l.element, l.sp_num, l.wavelength_nm, l.aki, l.ek_ev, l.gk,
+                sp.ip_ev, l.stark_w, l.stark_alpha
+            FROM lines l
+            JOIN species_physics sp ON l.element = sp.element AND l.sp_num = sp.sp_num
+            WHERE l.wavelength_nm BETWEEN ? AND ?
+            AND l.element IN ({placeholders})
+            ORDER BY l.wavelength_nm
+        """
+        params = [
+            self.config.wavelength_range[0],
+            self.config.wavelength_range[1],
+        ] + self.config.elements
+
+        with self.atomic_db._get_connection() as conn:
+            df = pd.read_sql_query(query, conn, params=params)
+
+        if df.empty:
+            raise ValueError(
+                f"No atomic data found for elements {self.config.elements} "
+                f"in wavelength range {self.config.wavelength_range}"
+            )
+
+        # Map element names to indices
+        el_map = {el: i for i, el in enumerate(self.config.elements)}
+        df["el_idx"] = df["element"].map(el_map)
+
+        # Load atomic masses per element from database (with fallback)
+        element_masses = self._resolve_element_masses()
+
+        # Map masses to each line based on element
+        df["mass_amu"] = df["element"].map(element_masses)
+
+        # Convert to JAX arrays
+        lines_wl = jnp.array(df["wavelength_nm"].values, dtype=jnp.float32)
+        lines_aki = jnp.array(df["aki"].values, dtype=jnp.float32)
+        lines_ek = jnp.array(df["ek_ev"].values, dtype=jnp.float32)
+        lines_gk = jnp.array(df["gk"].values, dtype=jnp.float32)
+        lines_ip = jnp.array(df["ip_ev"].values, dtype=jnp.float32)
+        lines_z = jnp.array(df["sp_num"].values - 1, dtype=jnp.int32)  # 0=neutral, 1=ion
+        lines_el_idx = jnp.array(df["el_idx"].values, dtype=jnp.int32)
+
+        # Stark parameters - use NaN for missing (will use estimation in compute)
+        stark_w_raw = df["stark_w"].fillna(float("nan")).values
+        stark_alpha_raw = df["stark_alpha"].fillna(0.5).values  # Default alpha=0.5
+        lines_stark_w = jnp.array(stark_w_raw, dtype=jnp.float32)
+        lines_stark_alpha = jnp.array(stark_alpha_raw, dtype=jnp.float32)
+        lines_mass_amu = jnp.array(df["mass_amu"].values, dtype=jnp.float32)
+
+        # Count Stark data coverage
+        stark_count = df["stark_w"].notna().sum()
+        logger.info(f"Loaded {len(df)} spectral lines ({stark_count} with Stark data)")
+
+        # --- Load Partition Function Coefficients & Ionization Potentials ---
+        # Shapes:
+        # partition_coeffs: (num_elements, max_stages, 5)
+        # ionization_potentials: (num_elements, max_stages)
+        max_stages = 3
+        num_elements = len(self.config.elements)
+
+        coeffs = np.zeros((num_elements, max_stages, 5), dtype=np.float32)
+        ips = np.zeros((num_elements, max_stages), dtype=np.float32)
+        # Per-species t_min / t_max / g0 for the encapsulated partition
+        # provider (arch candidate 4).  Default window 2000–25000 K matches
+        # the canonical CF-LIBS fit range; default g0 = 1.0 is the
+        # conservative physical lower bound.  Without these the polynomial
+        # in :meth:`_calculate_partition_functions` would extrapolate
+        # outside the fit window — the Ca I @ 100 000 K, 560× error case
+        # documented in CF-LIBS-improved-s1qr.1.
+        tmin = np.full((num_elements, max_stages), 2000.0, dtype=np.float32)
+        tmax = np.full((num_elements, max_stages), 25000.0, dtype=np.float32)
+        g0 = np.ones((num_elements, max_stages), dtype=np.float32)
+
+        # Set defaults for coeffs (approximate log(U))
+        coeffs[:, 0, 0] = np.log(25.0)
+        coeffs[:, 1, 0] = np.log(15.0)
+        coeffs[:, 2, 0] = np.log(10.0)
+
+        self._load_partition_physics(el_map, placeholders, max_stages, coeffs, ips, tmin, tmax, g0)
+
+        partition_coeffs = jnp.array(coeffs, dtype=jnp.float32)
+        ionization_potentials = jnp.array(ips, dtype=jnp.float32)
+        partition_t_min = jnp.array(tmin, dtype=jnp.float32)
+        partition_t_max = jnp.array(tmax, dtype=jnp.float32)
+        partition_g0 = jnp.array(g0, dtype=jnp.float32)
+
+        return (
+            lines_wl,
+            lines_aki,
+            lines_ek,
+            lines_gk,
+            lines_ip,
+            lines_z,
+            lines_el_idx,
+            partition_coeffs,
+            ionization_potentials,
+            lines_stark_w,
+            lines_stark_alpha,
+            lines_mass_amu,
+            partition_t_min,
+            partition_t_max,
+            partition_g0,
+        )
+
+    def _resolve_element_masses(self) -> dict:
+        """Resolve per-element atomic masses (amu) from the database with fallback.
+
+        Prefers ``AtomicDatabase.get_atomic_mass``; falls back to a table of
+        standard atomic masses, then to a generic 50.0 amu placeholder. Extracted
+        verbatim from :meth:`_load_atomic_data` (behavior-preserving).
+        """
         # Standard atomic masses (amu) for fallback
         STANDARD_MASSES = {
             "H": 1.008,
@@ -206,37 +320,6 @@ class ManifoldGenerator:
             "U": 238.0,
         }
 
-        # Build query for all elements (including Stark parameters)
-        placeholders = ",".join(["?"] * len(self.config.elements))
-        query = f"""
-            SELECT
-                l.element, l.sp_num, l.wavelength_nm, l.aki, l.ek_ev, l.gk,
-                sp.ip_ev, l.stark_w, l.stark_alpha
-            FROM lines l
-            JOIN species_physics sp ON l.element = sp.element AND l.sp_num = sp.sp_num
-            WHERE l.wavelength_nm BETWEEN ? AND ?
-            AND l.element IN ({placeholders})
-            ORDER BY l.wavelength_nm
-        """
-        params = [
-            self.config.wavelength_range[0],
-            self.config.wavelength_range[1],
-        ] + self.config.elements
-
-        with self.atomic_db._get_connection() as conn:
-            df = pd.read_sql_query(query, conn, params=params)
-
-        if df.empty:
-            raise ValueError(
-                f"No atomic data found for elements {self.config.elements} "
-                f"in wavelength range {self.config.wavelength_range}"
-            )
-
-        # Map element names to indices
-        el_map = {el: i for i, el in enumerate(self.config.elements)}
-        df["el_idx"] = df["element"].map(el_map)
-
-        # Load atomic masses per element from database (with fallback)
         element_masses = {}
         for el in self.config.elements:
             db_mass = self.atomic_db.get_atomic_mass(el)
@@ -248,76 +331,44 @@ class ManifoldGenerator:
             else:
                 element_masses[el] = 50.0  # Generic fallback
                 logger.warning(f"No mass found for {el}, using fallback 50.0 amu")
+        return element_masses
 
-        # Map masses to each line based on element
-        df["mass_amu"] = df["element"].map(element_masses)
+    def _load_partition_physics(
+        self,
+        el_map: dict,
+        placeholders: str,
+        max_stages: int,
+        coeffs: np.ndarray,
+        ips: np.ndarray,
+        tmin: np.ndarray,
+        tmax: np.ndarray,
+        g0: np.ndarray,
+    ) -> None:
+        """Fill IPs and partition-function spec arrays in place.
 
-        # Convert to JAX arrays
-        lines_wl = jnp.array(df["wavelength_nm"].values, dtype=jnp.float32)
-        lines_aki = jnp.array(df["aki"].values, dtype=jnp.float32)
-        lines_ek = jnp.array(df["ek_ev"].values, dtype=jnp.float32)
-        lines_gk = jnp.array(df["gk"].values, dtype=jnp.float32)
-        lines_ip = jnp.array(df["ip_ev"].values, dtype=jnp.float32)
-        lines_z = jnp.array(df["sp_num"].values - 1, dtype=jnp.int32)  # 0=neutral, 1=ion
-        lines_el_idx = jnp.array(df["el_idx"].values, dtype=jnp.int32)
+        Ionization potentials are read directly (they feed the Saha factor at
+        index 8).  Partition coefficients + ``[t_min, t_max]`` + ``g0`` come
+        from the SINGLE factory ``AtomicDatabase.partition_spec_for`` — the
+        one place the partition-function policy lives (*prefer the direct-sum
+        FIT over energy levels when the species has tabulated levels; else the
+        stored polynomial; always carry the bounds + g0*).  This is the JAX
+        batched adapter from the locked design: the manifold's static snapshot
+        arrays bake the SAME spec the CPU scalar adapter
+        (``partition_function_for``) consumes, so the two paths provably agree
+        (the PF-3/PF-4 unification, diagnosis § 2.1; CONTEXT.md § "The
+        partition-function provider").
 
-        # Stark parameters - use NaN for missing (will use estimation in compute)
-        stark_w_raw = df["stark_w"].fillna(float("nan")).values
-        stark_alpha_raw = df["stark_alpha"].fillna(0.5).values  # Default alpha=0.5
-        lines_stark_w = jnp.array(stark_w_raw, dtype=jnp.float32)
-        lines_stark_alpha = jnp.array(stark_alpha_raw, dtype=jnp.float32)
-        lines_mass_amu = jnp.array(df["mass_amu"].values, dtype=jnp.float32)
+        "Prefer direct-sum" is a BUILD-TIME choice here: vmap needs static,
+        fixed-shape arrays and cannot hold a per-species variable-length level
+        sum, so the factory fits the direct-sum to an ln-polynomial once
+        (cached in ``partition._spec_cache``, compute-once per (db, element,
+        stage) — invariant 5) and we bake those coefficients.  The kernel then
+        evaluates the same guarded ``polynomial_partition_function_jax`` form,
+        so jit / vmap are unaffected.
 
-        # Count Stark data coverage
-        stark_count = df["stark_w"].notna().sum()
-        logger.info(f"Loaded {len(df)} spectral lines ({stark_count} with Stark data)")
-
-        # --- Load Partition Function Coefficients & Ionization Potentials ---
-        # Shapes:
-        # partition_coeffs: (num_elements, max_stages, 5)
-        # ionization_potentials: (num_elements, max_stages)
-        max_stages = 3
-        num_elements = len(self.config.elements)
-
-        coeffs = np.zeros((num_elements, max_stages, 5), dtype=np.float32)
-        ips = np.zeros((num_elements, max_stages), dtype=np.float32)
-        # Per-species t_min / t_max / g0 for the encapsulated partition
-        # provider (arch candidate 4).  Default window 2000–25000 K matches
-        # the canonical CF-LIBS fit range; default g0 = 1.0 is the
-        # conservative physical lower bound.  Without these the polynomial
-        # in :meth:`_calculate_partition_functions` would extrapolate
-        # outside the fit window — the Ca I @ 100 000 K, 560× error case
-        # documented in CF-LIBS-improved-s1qr.1.
-        tmin = np.full((num_elements, max_stages), 2000.0, dtype=np.float32)
-        tmax = np.full((num_elements, max_stages), 25000.0, dtype=np.float32)
-        g0 = np.ones((num_elements, max_stages), dtype=np.float32)
-
-        # Set defaults for coeffs (approximate log(U))
-        coeffs[:, 0, 0] = np.log(25.0)
-        coeffs[:, 1, 0] = np.log(15.0)
-        coeffs[:, 2, 0] = np.log(10.0)
-
-        # Load Physics Data (IPs and partition coeffs).
-        #
-        # Ionization potentials are read directly (they feed the Saha factor at
-        # index 8).  Partition coefficients + ``[t_min, t_max]`` + ``g0`` come
-        # from the SINGLE factory ``AtomicDatabase.partition_spec_for`` — the
-        # one place the partition-function policy lives (*prefer the direct-sum
-        # FIT over energy levels when the species has tabulated levels; else the
-        # stored polynomial; always carry the bounds + g0*).  This is the JAX
-        # batched adapter from the locked design: the manifold's static snapshot
-        # arrays bake the SAME spec the CPU scalar adapter
-        # (``partition_function_for``) consumes, so the two paths provably agree
-        # (the PF-3/PF-4 unification, diagnosis § 2.1; CONTEXT.md § "The
-        # partition-function provider").
-        #
-        # "Prefer direct-sum" is a BUILD-TIME choice here: vmap needs static,
-        # fixed-shape arrays and cannot hold a per-species variable-length level
-        # sum, so the factory fits the direct-sum to an ln-polynomial once
-        # (cached in ``partition._spec_cache``, compute-once per (db, element,
-        # stage) — invariant 5) and we bake those coefficients.  The kernel then
-        # evaluates the same guarded ``polynomial_partition_function_jax`` form,
-        # so jit / vmap are unaffected.
+        Extracted verbatim from :meth:`_load_atomic_data` (behavior-preserving);
+        mutates ``coeffs``/``ips``/``tmin``/``tmax``/``g0`` in place.
+        """
         try:
             with self.atomic_db._get_connection() as conn:
                 cursor = conn.cursor()
@@ -329,40 +380,10 @@ class ManifoldGenerator:
                     WHERE element IN ({placeholders})
                 """
                 cursor.execute(ip_query, self.config.elements)
-                for row in cursor.fetchall():
-                    el, sp_num, ip_ev = row
-                    if el in el_map and ip_ev is not None:
-                        el_idx = el_map[el]
-                        stage_idx = sp_num - 1
-                        if 0 <= stage_idx < max_stages:
-                            ips[el_idx, stage_idx] = ip_ev
+                self._fill_ionization_potentials(cursor, el_map, max_stages, ips)
 
             # Partition coefficients + bounds + g0 from the single factory.
-            n_ds = 0
-            n_poly = 0
-            for el, el_idx in el_map.items():
-                for stage in range(1, max_stages + 1):
-                    stage_idx = stage - 1
-                    if stage_idx >= max_stages:
-                        continue
-                    spec = self.atomic_db.partition_spec_for(el, stage)
-                    if spec is None:
-                        # Neither energy levels nor a stored polynomial row:
-                        # keep the conservative ln(U) defaults / [2000, 25000] K
-                        # window / g0 = 1.0 already filled above so the static
-                        # arrays stay well-formed and the guarded evaluator
-                        # always receives concrete bounds.
-                        continue
-                    spec_coeffs = list(spec.coefficients)
-                    spec_coeffs += [0.0] * (5 - len(spec_coeffs))
-                    coeffs[el_idx, stage_idx] = spec_coeffs[:5]
-                    tmin[el_idx, stage_idx] = float(spec.t_min)
-                    tmax[el_idx, stage_idx] = float(spec.t_max)
-                    g0[el_idx, stage_idx] = float(spec.g0)
-                    if spec.from_direct_sum:
-                        n_ds += 1
-                    else:
-                        n_poly += 1
+            n_ds, n_poly = self._fill_partition_specs(el_map, max_stages, coeffs, tmin, tmax, g0)
             logger.info(
                 "Loaded partition specs via factory for %d species "
                 "(%d direct-sum-fit, %d stored-polynomial)",
@@ -374,29 +395,61 @@ class ManifoldGenerator:
         except Exception as e:
             logger.warning(f"Failed to load physics data: {e}")
 
-        partition_coeffs = jnp.array(coeffs, dtype=jnp.float32)
-        ionization_potentials = jnp.array(ips, dtype=jnp.float32)
-        partition_t_min = jnp.array(tmin, dtype=jnp.float32)
-        partition_t_max = jnp.array(tmax, dtype=jnp.float32)
-        partition_g0 = jnp.array(g0, dtype=jnp.float32)
+    @staticmethod
+    def _fill_ionization_potentials(cursor, el_map: dict, max_stages: int, ips: np.ndarray) -> None:
+        """Populate the ionization-potential array from an executed IP query.
 
-        return (
-            lines_wl,
-            lines_aki,
-            lines_ek,
-            lines_gk,
-            lines_ip,
-            lines_z,
-            lines_el_idx,
-            partition_coeffs,
-            ionization_potentials,
-            lines_stark_w,
-            lines_stark_alpha,
-            lines_mass_amu,
-            partition_t_min,
-            partition_t_max,
-            partition_g0,
-        )
+        Extracted verbatim from :meth:`_load_atomic_data` (behavior-preserving).
+        """
+        for row in cursor.fetchall():
+            el, sp_num, ip_ev = row
+            if el in el_map and ip_ev is not None:
+                el_idx = el_map[el]
+                stage_idx = sp_num - 1
+                if 0 <= stage_idx < max_stages:
+                    ips[el_idx, stage_idx] = ip_ev
+
+    def _fill_partition_specs(
+        self,
+        el_map: dict,
+        max_stages: int,
+        coeffs: np.ndarray,
+        tmin: np.ndarray,
+        tmax: np.ndarray,
+        g0: np.ndarray,
+    ) -> Tuple[int, int]:
+        """Bake partition specs (coeffs/bounds/g0) from the single factory.
+
+        Returns ``(n_direct_sum, n_polynomial)`` counts. Extracted verbatim from
+        :meth:`_load_atomic_data` (behavior-preserving); mutates the supplied
+        arrays in place.
+        """
+        n_ds = 0
+        n_poly = 0
+        for el, el_idx in el_map.items():
+            for stage in range(1, max_stages + 1):
+                stage_idx = stage - 1
+                if stage_idx >= max_stages:
+                    continue
+                spec = self.atomic_db.partition_spec_for(el, stage)
+                if spec is None:
+                    # Neither energy levels nor a stored polynomial row:
+                    # keep the conservative ln(U) defaults / [2000, 25000] K
+                    # window / g0 = 1.0 already filled above so the static
+                    # arrays stay well-formed and the guarded evaluator
+                    # always receives concrete bounds.
+                    continue
+                spec_coeffs = list(spec.coefficients)
+                spec_coeffs += [0.0] * (5 - len(spec_coeffs))
+                coeffs[el_idx, stage_idx] = spec_coeffs[:5]
+                tmin[el_idx, stage_idx] = float(spec.t_min)
+                tmax[el_idx, stage_idx] = float(spec.t_max)
+                g0[el_idx, stage_idx] = float(spec.g0)
+                if spec.from_direct_sum:
+                    n_ds += 1
+                else:
+                    n_poly += 1
+        return n_ds, n_poly
 
     def _build_ldm_sigma_grid(self, sigma_inst: float) -> np.ndarray:
         """Build the LDM σ-layer grid that brackets the manifold sweep.
