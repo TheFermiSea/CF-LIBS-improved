@@ -339,6 +339,176 @@ def _build_composition_failure_record(
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class _CheckpointState:
+    """Mutable checkpoint plumbing for :func:`evaluate_composition_workflow`.
+
+    Bundles the part-file directory, run-id, worker-slug, the per-batch
+    cadence, and the gap-free sequence counter so the extracted emit
+    helpers can advance ``part_seq`` in place without the orchestrator
+    threading five locals through every call.
+    """
+
+    parts_dir: Optional[Path]
+    run_id: Optional[str]
+    worker_slug: str
+    every: int
+    part_seq: int = 0
+
+
+def _init_checkpoint_state() -> _CheckpointState:
+    """Read ``CFLIBS_BENCH_CHECKPOINT_*`` env vars and prepare the parts dir.
+
+    Mirrors the original inline setup exactly: ``CHECKPOINT_EVERY`` parses
+    to ``int`` (defaulting/clamping to ``>= 1`` so the modulo gate cannot
+    divide by zero), and the ``.parts`` directory + run-id + worker-slug
+    are only materialised when ``CHECKPOINT_PATH`` is exported.
+    """
+    checkpoint_path_str = os.environ.get("CFLIBS_BENCH_CHECKPOINT_PATH")
+    try:
+        checkpoint_every = int(os.environ.get("CFLIBS_BENCH_CHECKPOINT_EVERY", "1"))
+    except ValueError:
+        checkpoint_every = 1
+    # Guard against misconfiguration: ``0`` or negative would deadlock the
+    # modulo check (ZeroDivisionError) or never trigger.
+    checkpoint_every = max(1, checkpoint_every)
+    checkpoint_path = Path(checkpoint_path_str) if checkpoint_path_str else None
+    checkpoint_parts_dir: Optional[Path] = None
+    checkpoint_run_id: Optional[str] = None
+    checkpoint_worker_slug = ""
+    if checkpoint_path is not None:
+        checkpoint_parts_dir = checkpoint_path.with_name(checkpoint_path.name + ".parts")
+        checkpoint_parts_dir.mkdir(parents=True, exist_ok=True)
+        # ``new_run_id`` + ``make_worker_slug`` live in
+        # :mod:`cflibs.benchmark.checkpoint`. The worker_slug bakes in
+        # hostname + PID + first-8-chars of the run_id so the
+        # part-file filename survives SLURM --requeue (same host,
+        # same PID) and cross-node PID collisions without silent
+        # overwrite. See ``checkpoint.make_worker_slug`` docstring.
+        checkpoint_run_id = new_run_id()
+        checkpoint_worker_slug = make_worker_slug(checkpoint_run_id)
+    return _CheckpointState(
+        parts_dir=checkpoint_parts_dir,
+        run_id=checkpoint_run_id,
+        worker_slug=checkpoint_worker_slug,
+        every=checkpoint_every,
+    )
+
+
+def _evaluate_one_spectrum(
+    spectrum: BenchmarkSpectrum,
+    id_workflow_name: str,
+    id_config_name: str,
+    id_predictor: Callable[[BenchmarkSpectrum], "ElementIdentificationResult"],
+    composition_workflow: Any,
+    composition_predictor: Callable[
+        [BenchmarkSpectrum, Sequence[str], Optional["ElementIdentificationResult"]], Dict[str, Any]
+    ],
+    outer_split_id: str,
+    tuning_split_id: Optional[str],
+    composition_config_name: str,
+) -> CompositionEvaluationRecord:
+    """Run id -> composition -> score for a single spectrum.
+
+    Returns a success record when the workflow completes, or a failure
+    record (with ``failure_reason`` set) on any exception. Timing and the
+    success/failure branch are identical to the original inline body.
+    """
+    start = time.perf_counter()
+    try:
+        id_result = id_predictor(spectrum)
+        candidate_elements = sorted({element.element for element in id_result.detected_elements})
+        if not candidate_elements:
+            raise ValueError(
+                "No identified candidate elements available for composition estimation"
+            )
+        prediction = composition_predictor(spectrum, candidate_elements, id_result)
+        concentrations = _coerce_composition_prediction(prediction, candidate_elements)
+        if not concentrations:
+            raise ValueError("Composition workflow returned no concentrations")
+        return _build_composition_success_record(
+            spectrum=spectrum,
+            id_workflow_name=id_workflow_name,
+            id_config_name=id_config_name,
+            composition_workflow_name=composition_workflow.name,
+            composition_config_name=composition_config_name,
+            outer_split_id=outer_split_id,
+            tuning_split_id=tuning_split_id,
+            elapsed_seconds=time.perf_counter() - start,
+            candidate_elements=candidate_elements,
+            concentrations=concentrations,
+            prediction=prediction,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _build_composition_failure_record(
+            spectrum=spectrum,
+            id_workflow_name=id_workflow_name,
+            id_config_name=id_config_name,
+            composition_workflow_name=composition_workflow.name,
+            composition_config_name=composition_config_name,
+            outer_split_id=outer_split_id,
+            tuning_split_id=tuning_split_id,
+            elapsed_seconds=time.perf_counter() - start,
+            failure_reason=str(exc),
+        )
+
+
+def _maybe_emit_checkpoint(
+    state: _CheckpointState,
+    records: List[CompositionEvaluationRecord],
+    processed: int,
+) -> None:
+    """Emit a per-batch part-file when the modulo cadence trips.
+
+    Incremental checkpoint -- best-effort, never blocks the gate. Each
+    checkpoint write is a fresh part-file (O(1) I/O per write), so the
+    on-disk state grows linearly with the number of completed spectra
+    instead of quadratically as a single append-rewritten parquet would.
+    """
+    if (
+        state.parts_dir is not None
+        and records  # guard against empty failure-only batches
+        and (processed % state.every == 0)
+    ):
+        state.part_seq = emit_checkpoint_part(
+            parts_dir=state.parts_dir,
+            run_id=state.run_id,
+            worker_slug=state.worker_slug,
+            seq=state.part_seq,
+            records=records[-state.every :],
+            processed=processed,
+        )
+
+
+def _final_flush_checkpoint(
+    state: _CheckpointState,
+    records: List[CompositionEvaluationRecord],
+    processed: int,
+) -> None:
+    """Flush trailing records that never tripped the modulo cadence.
+
+    Final-flush: capture any trailing records that didn't trip the modulo
+    gate (e.g. ``processed == 7`` with ``checkpoint_every == 5``). Without
+    this, up to ``checkpoint_every - 1`` records would be lost on a SLURM
+    timeout that fires *between* the loop end and ``write_outputs``.
+    ``emit_checkpoint_part`` owns the sequence increment, so we pass the
+    current ``part_seq`` unchanged -- the helper handles the ``+= 1``
+    internally so the on-disk file numbers are gap-free.
+    """
+    if state.parts_dir is not None and records:
+        trailing = processed % state.every
+        if trailing > 0:
+            emit_checkpoint_part(
+                parts_dir=state.parts_dir,
+                run_id=state.run_id,
+                worker_slug=state.worker_slug,
+                seq=state.part_seq,
+                records=records[-trailing:],
+                processed=processed,
+                final_flush=True,
+            )
+
+
 def evaluate_composition_workflow(
     spectra: Sequence[BenchmarkSpectrum],
     id_workflow_name: str,
@@ -377,30 +547,7 @@ def evaluate_composition_workflow(
     """
     records: List[CompositionEvaluationRecord] = []
 
-    checkpoint_path_str = os.environ.get("CFLIBS_BENCH_CHECKPOINT_PATH")
-    try:
-        checkpoint_every = int(os.environ.get("CFLIBS_BENCH_CHECKPOINT_EVERY", "1"))
-    except ValueError:
-        checkpoint_every = 1
-    # Guard against misconfiguration: ``0`` or negative would deadlock the
-    # modulo check (ZeroDivisionError) or never trigger.
-    checkpoint_every = max(1, checkpoint_every)
-    checkpoint_path = Path(checkpoint_path_str) if checkpoint_path_str else None
-    checkpoint_parts_dir: Optional[Path] = None
-    checkpoint_part_seq = 0
-    checkpoint_run_id: Optional[str] = None
-    checkpoint_worker_slug = ""
-    if checkpoint_path is not None:
-        checkpoint_parts_dir = checkpoint_path.with_name(checkpoint_path.name + ".parts")
-        checkpoint_parts_dir.mkdir(parents=True, exist_ok=True)
-        # ``new_run_id`` + ``make_worker_slug`` live in
-        # :mod:`cflibs.benchmark.checkpoint`. The worker_slug bakes in
-        # hostname + PID + first-8-chars of the run_id so the
-        # part-file filename survives SLURM --requeue (same host,
-        # same PID) and cross-node PID collisions without silent
-        # overwrite. See ``checkpoint.make_worker_slug`` docstring.
-        checkpoint_run_id = new_run_id()
-        checkpoint_worker_slug = make_worker_slug(checkpoint_run_id)
+    checkpoint = _init_checkpoint_state()
 
     eligible_total = sum(1 for s in spectra if s.truth_type != TruthType.BLIND)
     processed = 0
@@ -422,86 +569,21 @@ def evaluate_composition_workflow(
             file=sys.stderr,
             flush=True,
         )
-        start = time.perf_counter()
-        try:
-            id_result = id_predictor(spectrum)
-            candidate_elements = sorted(
-                {element.element for element in id_result.detected_elements}
+        records.append(
+            _evaluate_one_spectrum(
+                spectrum=spectrum,
+                id_workflow_name=id_workflow_name,
+                id_config_name=id_config_name,
+                id_predictor=id_predictor,
+                composition_workflow=composition_workflow,
+                composition_predictor=composition_predictor,
+                outer_split_id=outer_split_id,
+                tuning_split_id=tuning_split_id,
+                composition_config_name=composition_config_name,
             )
-            if not candidate_elements:
-                raise ValueError(
-                    "No identified candidate elements available for composition estimation"
-                )
-            prediction = composition_predictor(spectrum, candidate_elements, id_result)
-            concentrations = _coerce_composition_prediction(prediction, candidate_elements)
-            if not concentrations:
-                raise ValueError("Composition workflow returned no concentrations")
-            records.append(
-                _build_composition_success_record(
-                    spectrum=spectrum,
-                    id_workflow_name=id_workflow_name,
-                    id_config_name=id_config_name,
-                    composition_workflow_name=composition_workflow.name,
-                    composition_config_name=composition_config_name,
-                    outer_split_id=outer_split_id,
-                    tuning_split_id=tuning_split_id,
-                    elapsed_seconds=time.perf_counter() - start,
-                    candidate_elements=candidate_elements,
-                    concentrations=concentrations,
-                    prediction=prediction,
-                )
-            )
-        except Exception as exc:  # noqa: BLE001
-            records.append(
-                _build_composition_failure_record(
-                    spectrum=spectrum,
-                    id_workflow_name=id_workflow_name,
-                    id_config_name=id_config_name,
-                    composition_workflow_name=composition_workflow.name,
-                    composition_config_name=composition_config_name,
-                    outer_split_id=outer_split_id,
-                    tuning_split_id=tuning_split_id,
-                    elapsed_seconds=time.perf_counter() - start,
-                    failure_reason=str(exc),
-                )
-            )
+        )
+        _maybe_emit_checkpoint(checkpoint, records, processed)
 
-        # Incremental checkpoint -- best-effort, never blocks the gate. Each
-        # checkpoint write is a fresh part-file (O(1) I/O per write), so the
-        # on-disk state grows linearly with the number of completed spectra
-        # instead of quadratically as a single append-rewritten parquet would.
-        if (
-            checkpoint_parts_dir is not None
-            and records  # guard against empty failure-only batches
-            and (processed % checkpoint_every == 0)
-        ):
-            checkpoint_part_seq = emit_checkpoint_part(
-                parts_dir=checkpoint_parts_dir,
-                run_id=checkpoint_run_id,
-                worker_slug=checkpoint_worker_slug,
-                seq=checkpoint_part_seq,
-                records=records[-checkpoint_every:],
-                processed=processed,
-            )
-
-    # Final-flush: capture any trailing records that didn't trip the modulo
-    # gate (e.g. ``processed == 7`` with ``checkpoint_every == 5``). Without
-    # this, up to ``checkpoint_every - 1`` records would be lost on a SLURM
-    # timeout that fires *between* the loop end and ``write_outputs``.
-    # ``emit_checkpoint_part`` owns the sequence increment, so we pass the
-    # current ``checkpoint_part_seq`` unchanged -- the helper handles the
-    # ``+= 1`` internally so the on-disk file numbers are gap-free.
-    if checkpoint_parts_dir is not None and records:
-        trailing = processed % checkpoint_every
-        if trailing > 0:
-            emit_checkpoint_part(
-                parts_dir=checkpoint_parts_dir,
-                run_id=checkpoint_run_id,
-                worker_slug=checkpoint_worker_slug,
-                seq=checkpoint_part_seq,
-                records=records[-trailing:],
-                processed=processed,
-                final_flush=True,
-            )
+    _final_flush_checkpoint(checkpoint, records, processed)
 
     return records
