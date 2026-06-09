@@ -367,6 +367,95 @@ def _extract_inputs(record: Any) -> Dict[str, Any]:
     }
 
 
+def _eval_lte_consistency(inputs: Dict[str, Any], sid: str, lte: CheckCounts) -> None:
+    """LTE consistency — only when BOTH neutral and ion T are reported.
+
+    Single-T records silently skip this check (with one temperature you
+    have zero signal), which matches the intended degradation path until
+    multi-T solvers land.
+    """
+    if inputs["t_neutral"] is not None and inputs["t_ion"] is not None:
+        try:
+            passed = check_lte_consistency(inputs["t_neutral"], inputs["t_ion"])
+            lte.record(passed, sid)
+        except ValueError:
+            pass
+
+
+def _t_for_mcwhirter(inputs: Dict[str, Any]) -> Optional[float]:
+    """Average of (t_neutral, t_ion) when both present, else the single T."""
+    if inputs["t_neutral"] is not None and inputs["t_ion"] is not None:
+        return 0.5 * (inputs["t_neutral"] + inputs["t_ion"])
+    return inputs["t_single"]
+
+
+def _eval_mcwhirter_floor(
+    inputs: Dict[str, Any],
+    sid: str,
+    mcw: CheckCounts,
+    t_for_mcw: Optional[float],
+    default_delta_e_ev: float,
+) -> None:
+    """McWhirter floor — needs n_e and at least one T."""
+    if inputs["n_e"] is not None and t_for_mcw is not None:
+        delta_e = inputs["delta_e_ev"] or default_delta_e_ev
+        try:
+            passed = check_mcwhirter_floor(inputs["n_e"], t_for_mcw, delta_e)
+            mcw.record(passed, sid)
+        except ValueError:
+            pass
+
+
+def _eval_t_physicality(
+    sid: str,
+    tphys: CheckCounts,
+    t_for_phys: Optional[float],
+    catastrophic_spectra: List[str],
+) -> int:
+    """T physicality — applied to the average/single T. Returns catastrophic delta (0 or 1)."""
+    if t_for_phys is not None:
+        try:
+            in_bounds, catastrophic = check_t_physicality(t_for_phys)
+            tphys.record(in_bounds, sid)
+            if catastrophic:
+                if len(catastrophic_spectra) < 50:
+                    catastrophic_spectra.append(sid)
+                return 1
+        except ValueError:
+            pass
+    return 0
+
+
+def _raw_composition(rec: Any) -> Any:
+    """Pull ``annotations['raw_concentrations']`` from a record (dict or object)."""
+    if isinstance(rec, Mapping):
+        return (
+            rec.get("annotations", {}).get("raw_concentrations") if rec.get("annotations") else None
+        )
+    ann = getattr(rec, "annotations", None) or {}
+    return ann.get("raw_concentrations") if isinstance(ann, Mapping) else None
+
+
+def _eval_closure_residual(
+    rec: Any, inputs: Dict[str, Any], sid: str, closure: CheckCounts
+) -> None:
+    """Closure residual — on the *un-normalized* composition.
+
+    The benchmark currently normalises before recording, so this check
+    will frequently report N/A; pipelines that wish to surface true
+    closure residual must populate ``record.annotations['raw_concentrations']``
+    (or expose a ``predicted_composition`` that has not been re-closed).
+    """
+    raw_comp = _raw_composition(rec)
+    comp_for_closure = raw_comp if raw_comp else inputs["composition"]
+    if comp_for_closure:
+        try:
+            passed, _ = check_closure_residual(comp_for_closure)
+            closure.record(passed, sid)
+        except ValueError:
+            pass
+
+
 def aggregate_physical_consistency(
     per_spectrum_records: Iterable[Any],
     *,
@@ -408,69 +497,20 @@ def aggregate_physical_consistency(
         inputs = _extract_inputs(rec)
         sid = inputs["spectrum_id"]
 
-        # 1. LTE consistency — only when BOTH neutral and ion T are
-        #    reported. Single-T records silently skip this check (with
-        #    one temperature you have zero signal), which matches the
-        #    intended degradation path until multi-T solvers land.
-        if inputs["t_neutral"] is not None and inputs["t_ion"] is not None:
-            try:
-                passed = check_lte_consistency(inputs["t_neutral"], inputs["t_ion"])
-                lte.record(passed, sid)
-            except ValueError:
-                pass
+        # 1. LTE consistency.
+        _eval_lte_consistency(inputs, sid, lte)
 
-        # 2. McWhirter floor — needs n_e and at least one T. Use the
-        #    average of (t_neutral, t_ion) when both are present, else
-        #    the single T.
-        t_for_mcw: Optional[float]
-        if inputs["t_neutral"] is not None and inputs["t_ion"] is not None:
-            t_for_mcw = 0.5 * (inputs["t_neutral"] + inputs["t_ion"])
-        else:
-            t_for_mcw = inputs["t_single"]
-        if inputs["n_e"] is not None and t_for_mcw is not None:
-            delta_e = inputs["delta_e_ev"] or default_delta_e_ev
-            try:
-                passed = check_mcwhirter_floor(inputs["n_e"], t_for_mcw, delta_e)
-                mcw.record(passed, sid)
-            except ValueError:
-                pass
+        # 2. McWhirter floor.
+        t_for_mcw: Optional[float] = _t_for_mcwhirter(inputs)
+        _eval_mcwhirter_floor(inputs, sid, mcw, t_for_mcw, default_delta_e_ev)
 
         # 3. T physicality — applied to the average T when both are
         #    present, else the single T.
         t_for_phys: Optional[float] = t_for_mcw
-        if t_for_phys is not None:
-            try:
-                in_bounds, catastrophic = check_t_physicality(t_for_phys)
-                tphys.record(in_bounds, sid)
-                if catastrophic:
-                    catastrophic_count += 1
-                    if len(catastrophic_spectra) < 50:
-                        catastrophic_spectra.append(sid)
-            except ValueError:
-                pass
+        catastrophic_count += _eval_t_physicality(sid, tphys, t_for_phys, catastrophic_spectra)
 
-        # 4. Closure residual — on the *un-normalized* composition. The
-        #    benchmark currently normalises before recording, so this
-        #    check will frequently report N/A; pipelines that wish to
-        #    surface true closure residual must populate
-        #    ``record.annotations['raw_concentrations']`` (or expose
-        #    a ``predicted_composition`` that has not been re-closed).
-        if isinstance(rec, Mapping):
-            raw_comp = (
-                rec.get("annotations", {}).get("raw_concentrations")
-                if rec.get("annotations")
-                else None
-            )
-        else:
-            ann = getattr(rec, "annotations", None) or {}
-            raw_comp = ann.get("raw_concentrations") if isinstance(ann, Mapping) else None
-        comp_for_closure = raw_comp if raw_comp else inputs["composition"]
-        if comp_for_closure:
-            try:
-                passed, _ = check_closure_residual(comp_for_closure)
-                closure.record(passed, sid)
-            except ValueError:
-                pass
+        # 4. Closure residual.
+        _eval_closure_residual(rec, inputs, sid, closure)
 
     report = PhysicalConsistencyReport(
         n_spectra=len(records),
