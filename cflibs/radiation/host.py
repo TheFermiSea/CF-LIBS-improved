@@ -113,6 +113,53 @@ class ChunkPlan:
 _FALLBACK_AVAILABLE_BYTES = 4 * 1024**3
 
 
+def _jax_free_device_bytes() -> int | None:
+    """Free bytes from ``jax.devices()[0].memory_stats()`` (CUDA / TPU).
+
+    Returns ``None`` on CPU / Metal backends (their ``memory_stats`` is not
+    meaningful), when JAX is unavailable, when no device exposes
+    ``memory_stats``, or when ``bytes_limit`` is missing — the caller then
+    falls through to the next fallback source.
+    """
+    try:
+        import jax
+
+        devices = jax.devices()
+        if not devices:
+            return None
+        device = devices[0]
+        platform = getattr(device, "platform", "").lower()
+        if platform in ("cpu", "metal"):
+            return None
+        stats_fn = getattr(device, "memory_stats", None)
+        if not callable(stats_fn):
+            return None
+        stats = stats_fn() or {}
+        bytes_limit = stats.get("bytes_limit")
+        bytes_in_use = stats.get("bytes_in_use", 0)
+        if bytes_limit:
+            # Report actual free bytes; do NOT floor at the 4 GiB fallback —
+            # a CUDA card with 2 GiB free genuinely has 2 GiB free, not 4 GiB.
+            return max(int(bytes_limit) - int(bytes_in_use), 0)
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _psutil_available_bytes() -> int | None:
+    """25% of ``psutil.virtual_memory().available`` — CPU host-RAM fallback.
+
+    Returns ``None`` when psutil is unavailable so the caller can fall back
+    to the hard 4 GiB default.
+    """
+    try:
+        import psutil
+
+        return int(0.25 * psutil.virtual_memory().available)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @functools.lru_cache(maxsize=1)
 def available_device_bytes() -> int:
     """Return a conservative estimate of available memory (bytes).
@@ -125,33 +172,13 @@ def available_device_bytes() -> int:
     2. ``psutil.virtual_memory().available`` × 0.25 — CPU host-RAM fallback.
     3. Hard fallback to 4 GiB when no source is reachable.
     """
-    try:
-        import jax
+    jax_bytes = _jax_free_device_bytes()
+    if jax_bytes is not None:
+        return jax_bytes
 
-        devices = jax.devices()
-        if devices:
-            device = devices[0]
-            platform = getattr(device, "platform", "").lower()
-            if platform not in ("cpu", "metal"):
-                stats_fn = getattr(device, "memory_stats", None)
-                if callable(stats_fn):
-                    stats = stats_fn() or {}
-                    bytes_limit = stats.get("bytes_limit")
-                    bytes_in_use = stats.get("bytes_in_use", 0)
-                    if bytes_limit:
-                        # Report actual free bytes; do NOT floor at the
-                        # 4 GiB fallback — a CUDA card with 2 GiB free
-                        # genuinely has 2 GiB free, not 4 GiB.
-                        return max(int(bytes_limit) - int(bytes_in_use), 0)
-    except Exception:  # noqa: BLE001
-        pass
-
-    try:
-        import psutil
-
-        return int(0.25 * psutil.virtual_memory().available)
-    except Exception:  # noqa: BLE001
-        pass
+    psutil_bytes = _psutil_available_bytes()
+    if psutil_bytes is not None:
+        return psutil_bytes
 
     return _FALLBACK_AVAILABLE_BYTES
 
