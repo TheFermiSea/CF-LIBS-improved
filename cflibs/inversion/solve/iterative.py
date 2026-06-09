@@ -15,8 +15,6 @@ from cflibs.core.constants import (
     SAHA_CONST_CM3,
     STP_PRESSURE,
     EV_TO_K,
-    H_PLANCK_EV,
-    C_LIGHT,
 )
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.radiation.stark import estimate_ne_from_stark
@@ -24,6 +22,10 @@ from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFit
 from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy
 from cflibs.inversion.physics.self_absorption import SelfAbsorptionCorrector
+from cflibs.inversion.physics.self_absorption_inputs import (
+    evaluate_partition_function as _build_evaluate_partition_function,
+    lower_level_energy_ev as _build_lower_level_energy_ev,
+)
 from cflibs.core.logging_config import get_logger
 
 
@@ -1069,33 +1071,14 @@ class IterativeCFLIBSSolver:
         polynomial) — the same fallback ladder this method used before the
         provider unification, and mirroring the guard in
         :meth:`SahaBoltzmannSolver.calculate_partition_function`.
+
+        The fallback-ladder implementation was moved verbatim to
+        :func:`cflibs.inversion.physics.self_absorption_inputs.evaluate_partition_function`
+        so the solver and the self-absorption tooling scripts share one
+        partition-function policy; this method delegates to it with
+        ``self.atomic_db``, preserving byte-identical behavior.
         """
-        if hasattr(self.atomic_db, "partition_function_for"):
-            provider = self.atomic_db.partition_function_for(element, ionization_stage)
-            if provider is not None:
-                return float(provider.at(T_K))
-        else:
-            # ABC-only backend: reproduce the pre-unification fallback ladder
-            # (direct sum over energy levels, then the stored polynomial).
-            from cflibs.plasma.partition import (
-                PartitionFunctionEvaluator,
-                get_levels_for_species,
-            )
-
-            levels = get_levels_for_species(self.atomic_db, element, ionization_stage)
-            if levels is not None:
-                g_arr, E_arr, ip_ev = levels
-                return PartitionFunctionEvaluator.evaluate_direct(T_K, g_arr, E_arr, ip_ev)
-
-            pf = self.atomic_db.get_partition_coefficients(element, ionization_stage)
-            if pf:
-                return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
-
-        if ionization_stage == 1:
-            return 25.0
-        if ionization_stage == 2:
-            return 15.0
-        return 2.0
+        return _build_evaluate_partition_function(self.atomic_db, element, ionization_stage, T_K)
 
     def _compute_saha_ratio(
         self,
@@ -1311,18 +1294,14 @@ class IterativeCFLIBSSolver:
     def _lower_level_energy_ev(obs: LineObservation) -> float:
         """Lower-level energy ``E_i`` of a line, in eV.
 
-        ``LineObservation`` carries only the upper-level energy ``E_k`` and the
-        wavelength, but the curve-of-growth optical-depth estimate needs the
-        *lower*-level energy (the absorbing level). Energy conservation for the
-        transition gives ``E_i = E_k - hc/lambda`` exactly, so we recover it
-        rather than defaulting every line to the ground state (which would make
-        every line look like a maximally self-absorbed resonance line).
-
-        Clamped to be non-negative to absorb small wavelength/energy rounding in
-        the atomic data.
+        Thin delegate to
+        :func:`cflibs.inversion.physics.self_absorption_inputs.lower_level_energy_ev`,
+        which owns the canonical ``E_i = E_k - hc/lambda`` derivation (moved
+        there verbatim so the solver, the ablation script, and the experiment
+        harness all share one implementation). Kept as a method for the
+        existing call site and backward compatibility.
         """
-        photon_ev = (H_PLANCK_EV * C_LIGHT) / (obs.wavelength_nm * 1e-9)
-        return max(0.0, obs.E_k_ev - photon_ev)
+        return _build_lower_level_energy_ev(obs)
 
     def _apply_self_absorption_correction(
         self,

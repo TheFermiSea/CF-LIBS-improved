@@ -42,6 +42,9 @@ from cflibs.inversion.physics.boltzmann import (  # noqa: E402
 from cflibs.inversion.physics.self_absorption import (  # noqa: E402
     SelfAbsorptionCorrector,
 )
+from cflibs.inversion.physics.self_absorption_inputs import (  # noqa: E402
+    build_self_absorption_inputs,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers: peak detection on Gaussian-fallback spectra
@@ -242,20 +245,25 @@ def _apply_cdsb_pipeline(
     audit-buggy ``CDSBPlotter`` (bugs #14b/#14c/#13c); the numbers may differ
     from historical runs, which is expected for this tooling harness.
 
-    Argument mapping for ``correct()``:
+    Argument mapping for ``correct()`` (all derived by the single
+    :func:`~cflibs.inversion.physics.self_absorption_inputs.build_self_absorption_inputs`
+    builder — the SAME derivation the shipped solver uses):
 
     * ``temperature_K`` from a quick per-element Boltzmann fit on the raw
       observations (mean of valid element temperatures), falling back to
       10000.0 K — the same fallback the closure step below uses.
     * ``concentrations`` = uniform mass-fraction prior (no composition known
       pre-solve; the corrector renormalises internally).
-    * ``partition_funcs`` = ``{}``: this Gaussian-fallback experiment harness
-      has no atomic-DB handle, so partition functions cannot be sourced. The
-      corrector treats missing entries with a default, which is acceptable for
-      this benchmark-only path (and was effectively what the old code did,
-      since CDSBPlotter's tau never fed the closure here anyway).
-    * ``lower_level_energies`` omitted: E_i defaults to the ground state (0 eV)
-      inside the corrector, matching the old ``E_i_ev=0.0`` assumption.
+    * ``partition_funcs`` = canonical fallback ladder (this Gaussian-fallback
+      experiment harness has no atomic-DB handle, so the builder is called with
+      ``atomic_db=None``; its neutral default 25.0 matches the corrector's
+      own missing-entry default, so this is numerically equivalent to the old
+      empty-``partition_funcs`` path).
+    * ``lower_level_energies`` now derived EXACTLY (``E_i = E_k - hc/lambda``)
+      per line — fixing the prior defect where E_i was omitted and silently
+      defaulted to the ground state (0 eV), making every line look like a
+      maximally self-absorbed resonance line (CF-LIBS-improved-4bgt). The
+      self-absorption numbers therefore change intentionally for this tooling.
     """
     fitter = BoltzmannPlotFitter(method=fit_method)
 
@@ -270,20 +278,21 @@ def _apply_cdsb_pipeline(
             raw_temps.append(res.temperature_K)
     T = float(np.mean(raw_temps)) if raw_temps else 10000.0
 
-    # Uniform mass-fraction prior; no DB -> empty partition functions.
+    # Uniform mass-fraction prior; no DB handle in this harness.
     n_el = len(elements)
     concentrations = {el: 1.0 / n_el for el in elements} if n_el else {}
 
     corrected_obs = observations
     try:
-        corrector = SelfAbsorptionCorrector(plasma_length_cm=0.1)
-        sa_result = corrector.correct(
+        inputs = build_self_absorption_inputs(
             observations,
             temperature_K=T,
             concentrations=concentrations,
             total_number_density_cm3=1e16,
-            partition_funcs={},
+            atomic_db=None,
         )
+        corrector = SelfAbsorptionCorrector(plasma_length_cm=0.1)
+        sa_result = corrector.correct(observations, **inputs.as_correct_kwargs())
         if len(sa_result.corrected_observations) >= 2:
             corrected_obs = sa_result.corrected_observations
     except Exception:

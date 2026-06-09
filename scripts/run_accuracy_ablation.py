@@ -63,6 +63,9 @@ from cflibs.inversion.physics.closure import ClosureEquation  # noqa: E402
 from cflibs.inversion.physics.self_absorption import (  # noqa: E402
     SelfAbsorptionCorrector,
 )
+from cflibs.inversion.physics.self_absorption_inputs import (  # noqa: E402
+    build_self_absorption_inputs,
+)
 from cflibs.inversion.line_detection import detect_line_observations  # noqa: E402
 from cflibs.inversion.solve.iterative import CFLIBSResult, IterativeCFLIBSSolver  # noqa: E402
 
@@ -515,45 +518,38 @@ def apply_cdsb_correction(
       ``n_e`` (~1e18) saturates every strong line and erases per-line
       discrimination. ``n_e`` is retained in the signature for call-site
       compatibility but is intentionally not used as the absorbing column.
-    * ``partition_funcs`` = stage-I U(T) from the atomic DB at ``initial_T_K``,
-      via :meth:`AtomicDatabase.partition_function_for` (THE partition policy).
-    * ``lower_level_energies`` = ``{wavelength_nm: E_i_ev}`` from the same DB
-      transitions previously queried for the CD-SB lower-level info.
+    * ``partition_funcs`` = stage-I U(T) from the atomic DB at ``initial_T_K``.
+    * ``lower_level_energies`` = ``{wavelength_nm: E_i_ev}`` per line.
+
+    Both physics-derived inputs now come from the single
+    :func:`~cflibs.inversion.physics.self_absorption_inputs.build_self_absorption_inputs`
+    builder — the SAME derivation the shipped solver uses. This replaces the
+    prior ad-hoc derivation (a fuzzy ±0.05 nm DB lookup for ``E_i`` and a
+    non-canonical ``U(T)=1.0`` fallback), so the self-absorption numbers change
+    intentionally (CF-LIBS-improved-4bgt): ``E_i`` is now exact
+    (``E_i = E_k - hc/lambda``) and ``U(T)`` follows the canonical
+    direct-sum-preferred policy with the 25.0 / 15.0 / 2.0 fallback ladder.
     """
     if len(observations) < 3:
         return observations
 
-    # Lower-level energy E_i per line, from the nearest DB transition.
-    lower_level_energies: Dict[float, float] = {}
-    elements: Set[str] = set()
-    for obs in observations:
-        elements.add(obs.element)
-        transitions = atomic_db.get_transitions(
-            obs.element,
-            wavelength_min=obs.wavelength_nm - 0.05,
-            wavelength_max=obs.wavelength_nm + 0.05,
-        )
-        E_i_ev = 0.0
-        if transitions:
-            best = min(transitions, key=lambda t: abs(t.wavelength_nm - obs.wavelength_nm))
-            E_i_ev = best.E_i_ev
-        lower_level_energies[obs.wavelength_nm] = E_i_ev
-
+    elements: Set[str] = {obs.element for obs in observations}
     if not elements:
         return observations
 
     # Uniform mass-fraction prior over detected elements (no composition known
-    # before solving). Stage-I partition functions at the assumed temperature.
+    # before solving). LIBS-realistic absorbing column (see docstring;
+    # deliberately not n_e).
     concentrations: Dict[str, float] = {el: 1.0 / len(elements) for el in elements}
-    partition_funcs: Dict[str, float] = {}
-    for el in elements:
-        provider = atomic_db.partition_function_for(el, 1)
-        partition_funcs[el] = float(provider.at(initial_T_K)) if provider is not None else 1.0
-
-    # LIBS-realistic absorbing column (see docstring); deliberately not n_e.
-    total_number_density_cm3 = 1e16
 
     try:
+        inputs = build_self_absorption_inputs(
+            observations,
+            temperature_K=initial_T_K,
+            concentrations=concentrations,
+            total_number_density_cm3=1e16,
+            atomic_db=atomic_db,
+        )
         corrector = SelfAbsorptionCorrector(
             optical_depth_threshold=0.1,
             mask_threshold=3.0,
@@ -561,14 +557,7 @@ def apply_cdsb_correction(
             convergence_tolerance=0.02,
             plasma_length_cm=0.1,
         )
-        result = corrector.correct(
-            observations,
-            temperature_K=initial_T_K,
-            concentrations=concentrations,
-            total_number_density_cm3=total_number_density_cm3,
-            partition_funcs=partition_funcs,
-            lower_level_energies=lower_level_energies,
-        )
+        result = corrector.correct(observations, **inputs.as_correct_kwargs())
         corrected = result.corrected_observations
         if len(corrected) >= 2:
             return corrected
