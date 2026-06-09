@@ -10,31 +10,55 @@ on:
     - cron: '0 0 * * 0'
   workflow_dispatch:
 
+# Default GITHUB_TOKEN is read-only; the benchmark action's auto-push needs
+# write access to commit results to the gh-pages branch.
+permissions:
+  contents: write
+
 jobs:
   benchmark:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
+    env:
+      JAX_PLATFORMS: cpu
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         cache: 'pip'
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-        pip install pytest pytest-benchmark
-    
+        # ".[ci]" provides jax[cpu] + h5py/zarr/faiss/numpyro — without it
+        # test collection errors on jax-importing modules (ModuleNotFoundError).
+        pip install -e ".[dev,ci]"
+        pip install pytest-benchmark
+
     - name: Run benchmarks
       run: |
-        pytest tests/ -v --benchmark-only --benchmark-json=benchmark-results.json || echo "No benchmarks found"
-    
+        # --benchmark-only deselects non-benchmark tests; exits 5 ("no tests
+        # ran") when the suite has no pytest-benchmark fixtures yet. Tolerate it.
+        pytest tests/ -m "not requires_db and not requires_rust and not slow" \
+          --benchmark-only --benchmark-json=benchmark-results.json \
+          || echo "No benchmarks collected"
+
+    - name: Check for benchmark results
+      id: bench
+      run: |
+        if [ -s benchmark-results.json ] && \
+           python -c "import json,sys; sys.exit(0 if json.load(open('benchmark-results.json')).get('benchmarks') else 1)" 2>/dev/null; then
+          echo "has_results=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "has_results=false" >> "$GITHUB_OUTPUT"
+          echo "No valid benchmark results to upload (no pytest-benchmark tests in the suite yet)."
+        fi
+
     - name: Upload benchmark results
-      if: github.event_name == 'push' && hashFiles('benchmark-results.json') != ''
+      if: github.event_name == 'push' && steps.bench.outputs.has_results == 'true'
       uses: benchmark-action/github-action-benchmark@d48d326b4ca9ba73ca0cd0d59f108f9e02a381c7  # v1.20.4
       with:
         tool: 'pytest'
