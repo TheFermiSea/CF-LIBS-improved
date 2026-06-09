@@ -465,58 +465,78 @@ class PerturbationReport:
         if rng is None:
             rng = np.random.default_rng()
 
-        # Group the (delta, threshold) values by perturbation, ignoring rows
-        # where the pipeline raised an error.
+        by_pert = self._group_deltas_by_perturbation()
+
+        summaries: Dict[str, PerturbationSummary] = {}
+        for name, rows in by_pert.items():
+            summary = self._summarise_perturbation(
+                name, rows, bootstrap_iterations, bootstrap_alpha, rng
+            )
+            if summary is not None:
+                summaries[name] = summary
+
+        return summaries
+
+    def _group_deltas_by_perturbation(
+        self,
+    ) -> Dict[str, List[Tuple[float, Optional[float]]]]:
+        """Group ``(delta, threshold)`` rows by perturbation, skipping errors."""
         by_pert: Dict[str, List[Tuple[float, Optional[float]]]] = {}
         for row in self.results:
             if row.error is not None:
                 continue
             by_pert.setdefault(row.perturbation, []).append((row.delta_d_a, row.threshold))
+        return by_pert
 
-        summaries: Dict[str, PerturbationSummary] = {}
-        for name, rows in by_pert.items():
-            deltas = np.asarray([r[0] for r in rows], dtype=float)
-            thresholds = [r[1] for r in rows if r[1] is not None]
-            threshold = thresholds[0] if thresholds else None
-            n = deltas.size
+    @staticmethod
+    def _summarise_perturbation(
+        name: str,
+        rows: List[Tuple[float, Optional[float]]],
+        bootstrap_iterations: int,
+        bootstrap_alpha: float,
+        rng: np.random.Generator,
+    ) -> Optional[PerturbationSummary]:
+        """Build the :class:`PerturbationSummary` for one perturbation's rows."""
+        deltas = np.asarray([r[0] for r in rows], dtype=float)
+        thresholds = [r[1] for r in rows if r[1] is not None]
+        threshold = thresholds[0] if thresholds else None
+        n = deltas.size
 
-            if n == 0:
-                continue
+        if n == 0:
+            return None
 
-            mean_d = float(np.mean(deltas))
-            median_d = float(np.median(deltas))
-            max_d = float(np.max(deltas))
+        mean_d = float(np.mean(deltas))
+        median_d = float(np.median(deltas))
+        max_d = float(np.max(deltas))
 
-            if bootstrap_iterations > 0 and n > 1:
-                idx = rng.integers(0, n, size=(bootstrap_iterations, n))
-                boot = np.mean(deltas[idx], axis=1)
-                lo = float(np.quantile(boot, bootstrap_alpha / 2.0))
-                hi = float(np.quantile(boot, 1.0 - bootstrap_alpha / 2.0))
-            else:
-                lo = mean_d
-                hi = mean_d
+        if bootstrap_iterations > 0 and n > 1:
+            idx = rng.integers(0, n, size=(bootstrap_iterations, n))
+            boot = np.mean(deltas[idx], axis=1)
+            lo = float(np.quantile(boot, bootstrap_alpha / 2.0))
+            hi = float(np.quantile(boot, 1.0 - bootstrap_alpha / 2.0))
+        else:
+            lo = mean_d
+            hi = mean_d
 
-            if threshold is not None:
-                fraction_passing = float(np.mean(deltas < threshold))
-                fraction_failing = 1.0 - fraction_passing
-            else:
-                fraction_passing = None
-                fraction_failing = None
+        if threshold is not None:
+            fraction_passing = float(np.mean(deltas < threshold))
+            fraction_failing = 1.0 - fraction_passing
+        else:
+            fraction_passing = None
+            fraction_failing = None
 
-            summaries[name] = PerturbationSummary(
-                perturbation=name,
-                n_spectra=n,
-                mean_delta_d_a=mean_d,
-                median_delta_d_a=median_d,
-                max_delta_d_a=max_d,
-                bootstrap_ci_lo=lo,
-                bootstrap_ci_hi=hi,
-                threshold=threshold,
-                fraction_passing=fraction_passing,
-                fraction_failing=fraction_failing,
-            )
-
-        return summaries
+        return PerturbationSummary(
+            perturbation=name,
+            n_spectra=n,
+            mean_delta_d_a=mean_d,
+            median_delta_d_a=median_d,
+            max_delta_d_a=max_d,
+            bootstrap_ci_lo=lo,
+            bootstrap_ci_hi=hi,
+            threshold=threshold,
+            fraction_passing=fraction_passing,
+            fraction_failing=fraction_failing,
+        )
 
     # ------------------------------------------------------------------
     # Persistence
@@ -662,79 +682,103 @@ def run_perturbation_battery(
         try:
             base_pred = pipeline_fn(spec)
         except Exception as exc:  # pragma: no cover -- defensive
-            for name in perturbations:
-                report.results.append(
-                    PerturbationResult(
-                        spectrum_id=spec.spectrum_id,
-                        perturbation=name,
-                        d_a_unperturbed=float("nan"),
-                        d_a_perturbed=float("nan"),
-                        delta_d_a=float("nan"),
-                        threshold=perturbations[name].get("threshold"),
-                        passes_threshold=None,
-                        error=f"unperturbed-pipeline: {exc!r}",
-                    )
-                )
+            report.results.extend(_unperturbed_error_rows(spec, perturbations, exc))
             continue
 
-        truth: Optional[CompositionDict] = None
-        if ground_truth is not None and spec.spectrum_id in ground_truth:
-            truth = dict(ground_truth[spec.spectrum_id])
-        elif ground_truth is None:
-            # The benchmark's own true_composition is also acceptable when
-            # the caller supplied no override.
-            truth = dict(spec.true_composition) if spec.true_composition else None
-
-        d_a_unperturbed: float
-        if truth is not None and truth:
-            d_a_unperturbed = aitchison_distance(truth, base_pred)
-        else:
-            d_a_unperturbed = 0.0  # unperturbed-vs-itself
+        truth = _resolve_truth(spec, ground_truth)
+        d_a_unperturbed = aitchison_distance(truth, base_pred) if truth else 0.0
 
         for name, entry in perturbations.items():
-            fn: PerturbationFn = entry["fn"]
-            threshold: Optional[float] = entry.get("threshold")
-            try:
-                perturbed_spec = fn(spec)
-                pert_pred = pipeline_fn(perturbed_spec)
-            except Exception as exc:  # pragma: no cover -- defensive
-                report.results.append(
-                    PerturbationResult(
-                        spectrum_id=spec.spectrum_id,
-                        perturbation=name,
-                        d_a_unperturbed=d_a_unperturbed,
-                        d_a_perturbed=float("nan"),
-                        delta_d_a=float("nan"),
-                        threshold=threshold,
-                        passes_threshold=None,
-                        error=f"perturbation/pipeline: {exc!r}",
-                    )
-                )
-                continue
-
-            if truth is not None and truth:
-                d_a_perturbed = aitchison_distance(truth, pert_pred)
-                delta = abs(d_a_perturbed - d_a_unperturbed)
-            else:
-                d_a_perturbed = aitchison_distance(base_pred, pert_pred)
-                delta = d_a_perturbed
-
-            passes = bool(delta < threshold) if threshold is not None else None
-
             report.results.append(
-                PerturbationResult(
-                    spectrum_id=spec.spectrum_id,
-                    perturbation=name,
-                    d_a_unperturbed=float(d_a_unperturbed),
-                    d_a_perturbed=float(d_a_perturbed),
-                    delta_d_a=float(delta),
-                    threshold=threshold,
-                    passes_threshold=passes,
-                    error=None,
+                _evaluate_perturbation(
+                    pipeline_fn, spec, name, entry, truth, base_pred, d_a_unperturbed
                 )
             )
 
     return report
+
+
+def _unperturbed_error_rows(
+    spec: BenchmarkSpectrum,
+    perturbations: Mapping[str, Mapping[str, Any]],
+    exc: Exception,
+) -> List[PerturbationResult]:
+    """Build one NaN error row per perturbation when the base pipeline fails."""
+    return [
+        PerturbationResult(
+            spectrum_id=spec.spectrum_id,
+            perturbation=name,
+            d_a_unperturbed=float("nan"),
+            d_a_perturbed=float("nan"),
+            delta_d_a=float("nan"),
+            threshold=perturbations[name].get("threshold"),
+            passes_threshold=None,
+            error=f"unperturbed-pipeline: {exc!r}",
+        )
+        for name in perturbations
+    ]
+
+
+def _resolve_truth(
+    spec: BenchmarkSpectrum,
+    ground_truth: Optional[Mapping[str, CompositionDict]],
+) -> Optional[CompositionDict]:
+    """Select the ground-truth composition for ``spec`` (override or built-in)."""
+    if ground_truth is not None and spec.spectrum_id in ground_truth:
+        return dict(ground_truth[spec.spectrum_id])
+    if ground_truth is None:
+        # The benchmark's own true_composition is also acceptable when
+        # the caller supplied no override.
+        return dict(spec.true_composition) if spec.true_composition else None
+    return None
+
+
+def _evaluate_perturbation(
+    pipeline_fn: PipelineFn,
+    spec: BenchmarkSpectrum,
+    name: str,
+    entry: Mapping[str, Any],
+    truth: Optional[CompositionDict],
+    base_pred: CompositionDict,
+    d_a_unperturbed: float,
+) -> PerturbationResult:
+    """Apply one perturbation and return its :class:`PerturbationResult` row."""
+    fn: PerturbationFn = entry["fn"]
+    threshold: Optional[float] = entry.get("threshold")
+    try:
+        perturbed_spec = fn(spec)
+        pert_pred = pipeline_fn(perturbed_spec)
+    except Exception as exc:  # pragma: no cover -- defensive
+        return PerturbationResult(
+            spectrum_id=spec.spectrum_id,
+            perturbation=name,
+            d_a_unperturbed=d_a_unperturbed,
+            d_a_perturbed=float("nan"),
+            delta_d_a=float("nan"),
+            threshold=threshold,
+            passes_threshold=None,
+            error=f"perturbation/pipeline: {exc!r}",
+        )
+
+    if truth:
+        d_a_perturbed = aitchison_distance(truth, pert_pred)
+        delta = abs(d_a_perturbed - d_a_unperturbed)
+    else:
+        d_a_perturbed = aitchison_distance(base_pred, pert_pred)
+        delta = d_a_perturbed
+
+    passes = bool(delta < threshold) if threshold is not None else None
+
+    return PerturbationResult(
+        spectrum_id=spec.spectrum_id,
+        perturbation=name,
+        d_a_unperturbed=float(d_a_unperturbed),
+        d_a_perturbed=float(d_a_perturbed),
+        delta_d_a=float(delta),
+        threshold=threshold,
+        passes_threshold=passes,
+        error=None,
+    )
 
 
 __all__ = [
