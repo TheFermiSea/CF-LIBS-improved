@@ -502,43 +502,9 @@ class BoltzmannPlotFitter:
                 logger.error("Linear regression failed (JAX kernel returned non-finite)")
                 return self._empty_result()
 
-            if len(x) > 2:
-                # numpy.polyfit(..., cov=True) scales its returned cov by
-                # chi^2/dof (the ``scale_cov=True`` default in older
-                # polyfit). We mirror that here using the **same**
-                # squared-residual weight as the corrected CPU path:
-                # ``kernel_weights == weights == 1/sigma^2``. The JAX kernel
-                # returns the *unscaled* formal cov (sigma_slope=sqrt(S_w/det));
-                # we rescale by chi^2/dof so r_jax.slope_uncertainty matches
-                # r_cpu.slope_uncertainty.
-                w_masked = kernel_weights
-                S_w = float(np.sum(w_masked))
-                S_wx = float(np.sum(w_masked * x))
-                S_wxx = float(np.sum(w_masked * x * x))
-                det = S_w * S_wxx - S_wx * S_wx
-                if abs(det) > 1e-30:
-                    # Chi-squared per degree of freedom from the current
-                    # in-mask fit.
-                    y_pred_now = m * x + c
-                    resid_now = y - y_pred_now
-                    chi2 = float(np.sum(w_masked * resid_now * resid_now))
-                    dof = len(x) - 2
-                    chi2_dof = chi2 / dof if dof > 0 else 1.0
-
-                    var_slope = (S_w / det) * chi2_dof
-                    var_intercept = (S_wxx / det) * chi2_dof
-                    cov_si = (-S_wx / det) * chi2_dof
-                    slope_err = float(np.sqrt(max(var_slope, 0.0)))
-                    intercept_err = float(np.sqrt(max(var_intercept, 0.0)))
-                    covariance_matrix = np.array([[var_slope, cov_si], [cov_si, var_intercept]])
-                else:
-                    slope_err = float(kernel_result.sigma_slope[0])
-                    intercept_err = float(kernel_result.sigma_intercept[0])
-                    covariance_matrix = None
-            else:
-                slope_err = np.inf
-                intercept_err = np.inf
-                covariance_matrix = None
+            slope_err, intercept_err, covariance_matrix = self._jax_scaled_covariance(
+                x, y, m, c, kernel_weights, kernel_result
+            )
 
             slope = m
             intercept = c
@@ -552,29 +518,8 @@ class BoltzmannPlotFitter:
             y_pred = m * x + c
             r_squared = self._compute_r_squared(y, y_pred, weights)
 
-            # Outlier rejection — identical predicate to CPU path
-            # (computed in numpy, not JAX, so behavior is bit-exact with
-            # the CPU sigma_clip when residuals are well-separated).
-            y_pred = m * x + c
-            residuals = y - y_pred
-            std_res = float(np.std(residuals))
-            if std_res == 0:
+            if self._jax_reject_outliers(x, y, m, c, mask, indices, iteration):
                 break
-
-            bad_indices = np.abs(residuals) > self.outlier_sigma * std_res
-
-            if not np.any(bad_indices):
-                break
-
-            current_indices = indices[mask]
-            outlier_global_indices = current_indices[bad_indices]
-            mask[outlier_global_indices] = False
-
-            logger.debug(
-                "Iteration %d (JAX): Rejected %d outliers",
-                iteration,
-                len(outlier_global_indices),
-            )
 
         return self._create_result(
             slope,
@@ -588,6 +533,99 @@ class BoltzmannPlotFitter:
             n_iterations,
             covariance_matrix,
         )
+
+    def _jax_scaled_covariance(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        m: float,
+        c: float,
+        kernel_weights: np.ndarray,
+        kernel_result: object,
+    ) -> tuple[float, float, np.ndarray | None]:
+        """Slope/intercept errors + covariance for the JAX sigma-clip path.
+
+        Mirrors ``numpy.polyfit(..., cov=True)``'s chi^2/dof-scaled covariance
+        using the same squared-residual weights as the corrected CPU path.
+        Returns ``(slope_err, intercept_err, covariance_matrix)``.
+        """
+        if len(x) <= 2:
+            return np.inf, np.inf, None
+
+        # numpy.polyfit(..., cov=True) scales its returned cov by
+        # chi^2/dof (the ``scale_cov=True`` default in older
+        # polyfit). We mirror that here using the **same**
+        # squared-residual weight as the corrected CPU path:
+        # ``kernel_weights == weights == 1/sigma^2``. The JAX kernel
+        # returns the *unscaled* formal cov (sigma_slope=sqrt(S_w/det));
+        # we rescale by chi^2/dof so r_jax.slope_uncertainty matches
+        # r_cpu.slope_uncertainty.
+        w_masked = kernel_weights
+        S_w = float(np.sum(w_masked))
+        S_wx = float(np.sum(w_masked * x))
+        S_wxx = float(np.sum(w_masked * x * x))
+        det = S_w * S_wxx - S_wx * S_wx
+        if abs(det) <= 1e-30:
+            return (
+                float(kernel_result.sigma_slope[0]),  # type: ignore[attr-defined]
+                float(kernel_result.sigma_intercept[0]),  # type: ignore[attr-defined]
+                None,
+            )
+
+        # Chi-squared per degree of freedom from the current
+        # in-mask fit.
+        y_pred_now = m * x + c
+        resid_now = y - y_pred_now
+        chi2 = float(np.sum(w_masked * resid_now * resid_now))
+        dof = len(x) - 2
+        chi2_dof = chi2 / dof if dof > 0 else 1.0
+
+        var_slope = (S_w / det) * chi2_dof
+        var_intercept = (S_wxx / det) * chi2_dof
+        cov_si = (-S_wx / det) * chi2_dof
+        slope_err = float(np.sqrt(max(var_slope, 0.0)))
+        intercept_err = float(np.sqrt(max(var_intercept, 0.0)))
+        covariance_matrix = np.array([[var_slope, cov_si], [cov_si, var_intercept]])
+        return slope_err, intercept_err, covariance_matrix
+
+    def _jax_reject_outliers(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        m: float,
+        c: float,
+        mask: np.ndarray,
+        indices: np.ndarray,
+        iteration: int,
+    ) -> bool:
+        """Reject sigma-clip outliers in-place on ``mask``; return stop flag.
+
+        Identical predicate to the CPU path (computed in numpy, not JAX, so
+        behavior is bit-exact with the CPU sigma_clip when residuals are
+        well-separated). Returns ``True`` when the iteration loop should stop
+        (zero residual spread or no remaining outliers).
+        """
+        y_pred = m * x + c
+        residuals = y - y_pred
+        std_res = float(np.std(residuals))
+        if std_res == 0:
+            return True
+
+        bad_indices = np.abs(residuals) > self.outlier_sigma * std_res
+
+        if not np.any(bad_indices):
+            return True
+
+        current_indices = indices[mask]
+        outlier_global_indices = current_indices[bad_indices]
+        mask[outlier_global_indices] = False
+
+        logger.debug(
+            "Iteration %d (JAX): Rejected %d outliers",
+            iteration,
+            len(outlier_global_indices),
+        )
+        return False
 
     def _fit_ransac(
         self,
