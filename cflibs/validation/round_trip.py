@@ -199,78 +199,28 @@ class GoldenSpectrumGenerator:
             logger.warning(f"Concentrations sum to {total_c:.3f}, normalizing to 1.0")
             concentrations = {el: c / total_c for el, c in concentrations.items()}
 
-        all_observations = []
+        all_observations: List[LineObservation] = []
 
         T_eV = temperature_K / EV_TO_K
         for element, concentration in concentrations.items():
-            # Pre-compute Saha ratios and 3-stage coupled fractions
-            ip_I = self._get_ionization_potential(element, 1) or 7.0
-            U_I = self._get_partition_function(element, 1, temperature_K)
-            U_II = self._get_partition_function(element, 2, temperature_K)
-            S1 = (
-                (SAHA_CONST_CM3 / electron_density_cm3)
-                * (T_eV**1.5)
-                * (U_II / U_I)
-                * np.exp(-ip_I / T_eV)
+            f_I, f_II = self._compute_stage_fractions(
+                element, temperature_K, electron_density_cm3, T_eV
             )
 
-            ip_II = self._get_ionization_potential(element, 2)
-            S2 = 0.0
-            if ip_II is not None:
-                U_III = self._get_partition_function(element, 3, temperature_K)
-                S2 = (
-                    (SAHA_CONST_CM3 / electron_density_cm3)
-                    * (T_eV**1.5)
-                    * (U_III / U_II)
-                    * np.exp(-ip_II / T_eV)
-                )
-            denom = 1.0 + S1 + S1 * S2
-            f_I = 1.0 / denom
-            f_II = S1 / denom
-
             for ion_stage in [1, 2] if include_ionic else [1]:
-                transitions = self._get_element_transitions(element, ion_stage, n_lines_per_element)
-
-                # Get partition function (approximate if not in database)
-                U = self._get_partition_function(element, ion_stage, temperature_K)
-
                 # Stage fraction: what fraction of this element is in this stage
                 stage_fraction = f_I if ion_stage == 1 else f_II
-
-                for trans in transitions:
-                    # Calculate intensity using Boltzmann distribution
-                    # I ∝ C × f_stage × (g_k × A_ki / U) × exp(-E_k / kT)
-                    E_k = trans["E_k_ev"]
-                    g_k = trans["g_k"]
-                    A_ki = trans["A_ki"]
-                    wavelength = trans["wavelength_nm"]
-
-                    boltzmann_factor = np.exp(-E_k / (KB_EV * temperature_K))
-                    base_intensity = (
-                        concentration * stage_fraction * g_k * A_ki * boltzmann_factor / U
-                    )
-
-                    # Scale to reasonable intensity values
-                    intensity = base_intensity * 1e-4  # Arbitrary scaling
-
-                    if intensity < min_intensity:
-                        continue
-
-                    # Estimate uncertainty (SNR ~ 20-100 for typical LIBS)
-                    snr = rng.uniform(20, 100)
-                    uncertainty = intensity / snr
-
-                    obs = LineObservation(
-                        wavelength_nm=wavelength,
-                        intensity=intensity,
-                        intensity_uncertainty=uncertainty,
-                        element=element,
-                        ionization_stage=ion_stage,
-                        E_k_ev=E_k,
-                        g_k=g_k,
-                        A_ki=A_ki,
-                    )
-                    all_observations.append(obs)
+                self._append_stage_observations(
+                    all_observations,
+                    element=element,
+                    ion_stage=ion_stage,
+                    concentration=concentration,
+                    stage_fraction=stage_fraction,
+                    temperature_K=temperature_K,
+                    n_lines_per_element=n_lines_per_element,
+                    min_intensity=min_intensity,
+                    rng=rng,
+                )
 
         logger.info(
             f"Generated golden spectrum: T={temperature_K:.0f} K, "
@@ -290,6 +240,91 @@ class GoldenSpectrumGenerator:
                 "min_intensity": min_intensity,
             },
         )
+
+    def _compute_stage_fractions(
+        self,
+        element: str,
+        temperature_K: float,
+        electron_density_cm3: float,
+        T_eV: float,
+    ) -> Tuple[float, float]:
+        """Pre-compute Saha ratios and 3-stage coupled neutral/singly-ionized fractions."""
+        ip_I = self._get_ionization_potential(element, 1) or 7.0
+        U_I = self._get_partition_function(element, 1, temperature_K)
+        U_II = self._get_partition_function(element, 2, temperature_K)
+        S1 = (
+            (SAHA_CONST_CM3 / electron_density_cm3)
+            * (T_eV**1.5)
+            * (U_II / U_I)
+            * np.exp(-ip_I / T_eV)
+        )
+
+        ip_II = self._get_ionization_potential(element, 2)
+        S2 = 0.0
+        if ip_II is not None:
+            U_III = self._get_partition_function(element, 3, temperature_K)
+            S2 = (
+                (SAHA_CONST_CM3 / electron_density_cm3)
+                * (T_eV**1.5)
+                * (U_III / U_II)
+                * np.exp(-ip_II / T_eV)
+            )
+        denom = 1.0 + S1 + S1 * S2
+        f_I = 1.0 / denom
+        f_II = S1 / denom
+        return f_I, f_II
+
+    def _append_stage_observations(
+        self,
+        all_observations: List[LineObservation],
+        *,
+        element: str,
+        ion_stage: int,
+        concentration: float,
+        stage_fraction: float,
+        temperature_K: float,
+        n_lines_per_element: int,
+        min_intensity: float,
+        rng: "np.random.Generator",
+    ) -> None:
+        """Build and append line observations for one (element, ion_stage) pair."""
+        transitions = self._get_element_transitions(element, ion_stage, n_lines_per_element)
+
+        # Get partition function (approximate if not in database)
+        U = self._get_partition_function(element, ion_stage, temperature_K)
+
+        for trans in transitions:
+            # Calculate intensity using Boltzmann distribution
+            # I ∝ C × f_stage × (g_k × A_ki / U) × exp(-E_k / kT)
+            E_k = trans["E_k_ev"]
+            g_k = trans["g_k"]
+            A_ki = trans["A_ki"]
+            wavelength = trans["wavelength_nm"]
+
+            boltzmann_factor = np.exp(-E_k / (KB_EV * temperature_K))
+            base_intensity = concentration * stage_fraction * g_k * A_ki * boltzmann_factor / U
+
+            # Scale to reasonable intensity values
+            intensity = base_intensity * 1e-4  # Arbitrary scaling
+
+            if intensity < min_intensity:
+                continue
+
+            # Estimate uncertainty (SNR ~ 20-100 for typical LIBS)
+            snr = rng.uniform(20, 100)
+            uncertainty = intensity / snr
+
+            obs = LineObservation(
+                wavelength_nm=wavelength,
+                intensity=intensity,
+                intensity_uncertainty=uncertainty,
+                element=element,
+                ionization_stage=ion_stage,
+                E_k_ev=E_k,
+                g_k=g_k,
+                A_ki=A_ki,
+            )
+            all_observations.append(obs)
 
     def _get_element_transitions(self, element: str, ion_stage: int, n_lines: int) -> List[Dict]:
         """Get transitions from database or generate synthetic ones."""
