@@ -1441,6 +1441,129 @@ def _identify_with_voter(kind: str, identifier, spectrum: BenchmarkSpectrum):
     raise ValueError(f"Unknown voter kind: {kind!r}")
 
 
+def _build_consensus_voters(
+    main_id: Any,
+    sibling_identifiers: Sequence[Tuple[str, Dict[str, Any]]],
+    *,
+    context: "UnifiedBenchmarkContext",
+    spectrum: BenchmarkSpectrum,
+    db: Any,
+    candidate_elements: List[str],
+    rp: float,
+) -> Tuple[List[str], List[Any], Optional[float], Optional[float]]:
+    """Build the ordered ``(voter_kinds, voters)`` plus NNLS basis FWHM info.
+
+    The NNLS sibling needs a basis library resolved once per call; the
+    returned ``(basis_fwhm, basis_mismatch)`` are ``None`` unless an NNLS
+    sibling is present.
+    """
+    nnls_basis = None
+    basis_fwhm: Optional[float] = None
+    basis_mismatch: Optional[float] = None
+    if any(kind == "nnls" for kind, _ in sibling_identifiers):
+        nnls_basis, basis_fwhm, basis_mismatch = context.basis_for_rp(spectrum.rp_estimate)
+
+    voter_kinds: List[str] = ["alias"]
+    voters: List[Any] = [main_id]
+    for kind, static_kwargs in sibling_identifiers:
+        voters.append(
+            _build_sibling_voter(
+                kind,
+                static_kwargs,
+                db=db,
+                candidate_elements=candidate_elements,
+                rp=rp,
+                nnls_basis=nnls_basis,
+            )
+        )
+        voter_kinds.append(kind)
+    return voter_kinds, voters, basis_fwhm, basis_mismatch
+
+
+def _build_consensus_identifier(
+    consensus_cls: Any,
+    voting: Any,
+    voters: List[Any],
+    candidate_elements: List[str],
+    config: Dict[str, Any],
+) -> Any:
+    """Construct the consensus identifier for the given voting rule.
+
+    ``consensus_cls`` is the (already imported) ``HybridConsensusIdentifier``
+    class — passed in so the import side effect keeps its original ordering
+    relative to voter construction in the orchestrating closure.
+    """
+    if isinstance(voting, _BinaryVoting):
+        return consensus_cls(
+            identifiers=voters,
+            elements=candidate_elements,
+            min_agreeing=voting.min_agreeing,
+            names=list(voting.voter_names),
+        )
+    if isinstance(voting, _WeightedVoting):
+        weights = {
+            name: float(config.get(f"w_{name}", voting.default_weights[name]))
+            for name in voting.voter_names
+        }
+        return consensus_cls(
+            identifiers=voters,
+            elements=candidate_elements,
+            names=list(voting.voter_names),
+            voter_weights=weights,
+            weight_threshold=float(config.get("weight_threshold", voting.default_threshold)),
+        )
+    raise TypeError(f"Unsupported voting rule: {type(voting).__name__}")
+
+
+def _run_consensus_predictor(
+    main_id: Any,
+    voting: Any,
+    sibling_identifiers: Sequence[Tuple[str, Dict[str, Any]]],
+    *,
+    context: "UnifiedBenchmarkContext",
+    spectrum: BenchmarkSpectrum,
+    db: Any,
+    candidate_elements: List[str],
+    rp: float,
+    config: Dict[str, Any],
+) -> ElementIdentificationResult:
+    """Consensus path -- build the siblings, run all voters, combine.
+
+    Extracted verbatim from ``_make_predictor``'s ``predictor`` closure to
+    keep that closure's cognitive complexity below the SonarCloud threshold.
+    Side-effect ordering (the ``hybrid_consensus`` import, NNLS basis
+    resolution, voter construction) is preserved exactly.
+    """
+    from cflibs.inversion.identify.hybrid_consensus import (
+        HybridConsensusIdentifier,
+    )
+
+    voter_kinds, voters, basis_fwhm, basis_mismatch = _build_consensus_voters(
+        main_id,
+        sibling_identifiers,
+        context=context,
+        spectrum=spectrum,
+        db=db,
+        candidate_elements=candidate_elements,
+        rp=rp,
+    )
+
+    voter_results = [
+        _identify_with_voter(kind, voter, spectrum) for kind, voter in zip(voter_kinds, voters)
+    ]
+
+    consensus = _build_consensus_identifier(
+        HybridConsensusIdentifier, voting, voters, candidate_elements, config
+    )
+
+    result = consensus.combine(voter_results)
+    result.parameters["candidate_elements"] = list(candidate_elements)
+    if basis_fwhm is not None:
+        result.parameters["basis_fwhm_nm"] = basis_fwhm
+        result.parameters["basis_fwhm_mismatch_nm"] = basis_mismatch
+    return result
+
+
 def _make_predictor(
     identifier_cls,
     preset_name: str,
@@ -1510,70 +1633,17 @@ def _make_predictor(
                         result.parameters["alias_mode"] = alias_mode_tag
                     return result
 
-                # Consensus path -- build the siblings, run all voters, combine.
-                from cflibs.inversion.identify.hybrid_consensus import (
-                    HybridConsensusIdentifier,
+                return _run_consensus_predictor(
+                    main_id,
+                    voting,
+                    sibling_identifiers,
+                    context=context,
+                    spectrum=spectrum,
+                    db=db,
+                    candidate_elements=candidate_elements,
+                    rp=rp,
+                    config=config,
                 )
-
-                # NNLS sibling needs a basis library; resolve once per call.
-                nnls_basis = None
-                basis_fwhm: Optional[float] = None
-                basis_mismatch: Optional[float] = None
-                if any(kind == "nnls" for kind, _ in sibling_identifiers):
-                    nnls_basis, basis_fwhm, basis_mismatch = context.basis_for_rp(
-                        spectrum.rp_estimate
-                    )
-
-                voter_kinds: List[str] = ["alias"]
-                voters: List[Any] = [main_id]
-                for kind, static_kwargs in sibling_identifiers:
-                    voters.append(
-                        _build_sibling_voter(
-                            kind,
-                            static_kwargs,
-                            db=db,
-                            candidate_elements=candidate_elements,
-                            rp=rp,
-                            nnls_basis=nnls_basis,
-                        )
-                    )
-                    voter_kinds.append(kind)
-
-                voter_results = [
-                    _identify_with_voter(kind, voter, spectrum)
-                    for kind, voter in zip(voter_kinds, voters)
-                ]
-
-                if isinstance(voting, _BinaryVoting):
-                    consensus = HybridConsensusIdentifier(
-                        identifiers=voters,
-                        elements=candidate_elements,
-                        min_agreeing=voting.min_agreeing,
-                        names=list(voting.voter_names),
-                    )
-                elif isinstance(voting, _WeightedVoting):
-                    weights = {
-                        name: float(config.get(f"w_{name}", voting.default_weights[name]))
-                        for name in voting.voter_names
-                    }
-                    consensus = HybridConsensusIdentifier(
-                        identifiers=voters,
-                        elements=candidate_elements,
-                        names=list(voting.voter_names),
-                        voter_weights=weights,
-                        weight_threshold=float(
-                            config.get("weight_threshold", voting.default_threshold)
-                        ),
-                    )
-                else:  # pragma: no cover - defensive
-                    raise TypeError(f"Unsupported voting rule: {type(voting).__name__}")
-
-                result = consensus.combine(voter_results)
-                result.parameters["candidate_elements"] = list(candidate_elements)
-                if basis_fwhm is not None:
-                    result.parameters["basis_fwhm_nm"] = basis_fwhm
-                    result.parameters["basis_fwhm_mismatch_nm"] = basis_mismatch
-                return result
 
         return predictor
 
@@ -2187,22 +2257,13 @@ def _fit_iterative_pipeline(
     return predictor
 
 
-def _fit_iterative_jax_pipeline(
-    _context: UnifiedBenchmarkContext,
-    _train_spectra: Sequence[BenchmarkSpectrum],
-    config: Dict[str, Any],
-) -> Callable[
-    [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
-]:
-    """JAX-accelerated iterative CF-LIBS pipeline.
+def _iterative_jax_configure() -> bool:
+    """Detect JAX availability for the iterative_jax pipeline and configure it.
 
-    Mirrors :func:`_fit_iterative_pipeline` but routes the inner-loop linear
-    algebra through ``IterativeCFLIBSSolverJax`` so the heavy Boltzmann +
-    closure passes execute on GPU when ``JAX_PLATFORMS=cuda`` is set. When
-    the JAX solver is unavailable (Agent B's solver hasn't landed, or JAX
-    isn't installed), the workflow logs a warning and falls back to the
-    numpy ``IterativeCFLIBSSolver`` path so the benchmark gate keeps running
-    end-to-end on CPU-only hosts.
+    Returns ``use_jax``: ``True`` when both JAX and the JAX iterative solver
+    are importable. Pins float64 precision + GPU platform when the
+    ``JAX_PLATFORMS=cuda`` hint is set, and logs the numpy-fallback warning
+    otherwise.
     """
     use_jax = bool(HAS_JAX and HAS_JAX_ITERATIVE_SOLVER)
     if use_jax:
@@ -2220,6 +2281,93 @@ def _fit_iterative_jax_pipeline(
             HAS_JAX,
             HAS_JAX_ITERATIVE_SOLVER,
         )
+    return use_jax
+
+
+def _iterative_jax_solve(
+    spectrum: BenchmarkSpectrum,
+    elements: List[str],
+    db_path: Any,
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Run the JAX-accelerated iterative CF-LIBS solve for one spectrum."""
+    from cflibs.atomic.database import AtomicDatabase
+    from cflibs.inversion.identify.line_detection import detect_line_observations
+
+    with AtomicDatabase(str(db_path)) as db:
+        detection = detect_line_observations(
+            spectrum.wavelength_nm,
+            spectrum.intensity,
+            db,
+            elements=elements,
+        )
+        observations = detection.observations if detection is not None else []
+        if not observations:
+            raise RuntimeError("iterative_jax: no matched line observations for spectrum")
+        # IterativeCFLIBSSolverJax shares the same call surface as the
+        # numpy IterativeCFLIBSSolver — we instantiate, then solve.
+        solver = IterativeCFLIBSSolverJax(atomic_db=db)
+        result = solver.solve(
+            observations,
+            closure_mode=str(config.get("closure_mode", "standard")),
+        )
+    if result is None or not getattr(result, "concentrations", None):
+        raise RuntimeError("iterative_jax composition workflow failed")
+    payload: Dict[str, Any] = {"concentrations": dict(result.concentrations)}
+    t_K = getattr(result, "temperature_K", None)
+    if t_K is not None:
+        payload["temperature_K"] = float(t_K)
+    ne = getattr(result, "electron_density_cm3", None)
+    if ne is not None:
+        payload["electron_density_cm3"] = float(ne)
+    payload["solver_backend"] = "jax"
+    return payload
+
+
+def _iterative_jax_numpy_fallback(
+    spectrum: BenchmarkSpectrum,
+    elements: List[str],
+    db_path: Any,
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Numpy iterative CF-LIBS fallback (matches ``_fit_iterative_pipeline``)."""
+    from cflibs.atomic.database import AtomicDatabase
+
+    with AtomicDatabase(str(db_path)) as db:
+        result = _run_boltzmann_pipeline_lazy(
+            {
+                "wavelength": spectrum.wavelength_nm,
+                "intensity": spectrum.intensity,
+                "ground_truth": spectrum.true_composition,
+            },
+            db=db,
+            fit_method=config["fit_method"],
+            closure_mode=str(config["closure_mode"]),
+            elements=elements,
+        )
+    if result is None:
+        raise RuntimeError("iterative_jax (numpy fallback) failed")
+    return {"concentrations": result, "solver_backend": "numpy_fallback"}
+
+
+def _fit_iterative_jax_pipeline(
+    _context: UnifiedBenchmarkContext,
+    _train_spectra: Sequence[BenchmarkSpectrum],
+    config: Dict[str, Any],
+) -> Callable[
+    [BenchmarkSpectrum, Sequence[str], Optional[ElementIdentificationResult]], Dict[str, Any]
+]:
+    """JAX-accelerated iterative CF-LIBS pipeline.
+
+    Mirrors :func:`_fit_iterative_pipeline` but routes the inner-loop linear
+    algebra through ``IterativeCFLIBSSolverJax`` so the heavy Boltzmann +
+    closure passes execute on GPU when ``JAX_PLATFORMS=cuda`` is set. When
+    the JAX solver is unavailable (Agent B's solver hasn't landed, or JAX
+    isn't installed), the workflow logs a warning and falls back to the
+    numpy ``IterativeCFLIBSSolver`` path so the benchmark gate keeps running
+    end-to-end on CPU-only hosts.
+    """
+    use_jax = _iterative_jax_configure()
 
     def predictor(
         spectrum: BenchmarkSpectrum,
@@ -2233,56 +2381,9 @@ def _fit_iterative_jax_pipeline(
             )
 
         if use_jax:
-            from cflibs.atomic.database import AtomicDatabase
-            from cflibs.inversion.identify.line_detection import detect_line_observations
+            return _iterative_jax_solve(spectrum, elements, _context.db_path, config)
 
-            with AtomicDatabase(str(_context.db_path)) as db:
-                detection = detect_line_observations(
-                    spectrum.wavelength_nm,
-                    spectrum.intensity,
-                    db,
-                    elements=elements,
-                )
-                observations = detection.observations if detection is not None else []
-                if not observations:
-                    raise RuntimeError("iterative_jax: no matched line observations for spectrum")
-                # IterativeCFLIBSSolverJax shares the same call surface as the
-                # numpy IterativeCFLIBSSolver — we instantiate, then solve.
-                solver = IterativeCFLIBSSolverJax(atomic_db=db)
-                result = solver.solve(
-                    observations,
-                    closure_mode=str(config.get("closure_mode", "standard")),
-                )
-            if result is None or not getattr(result, "concentrations", None):
-                raise RuntimeError("iterative_jax composition workflow failed")
-            payload: Dict[str, Any] = {"concentrations": dict(result.concentrations)}
-            t_K = getattr(result, "temperature_K", None)
-            if t_K is not None:
-                payload["temperature_K"] = float(t_K)
-            ne = getattr(result, "electron_density_cm3", None)
-            if ne is not None:
-                payload["electron_density_cm3"] = float(ne)
-            payload["solver_backend"] = "jax"
-            return payload
-
-        # --- numpy fallback (matches _fit_iterative_pipeline) ---
-        from cflibs.atomic.database import AtomicDatabase
-
-        with AtomicDatabase(str(_context.db_path)) as db:
-            result = _run_boltzmann_pipeline_lazy(
-                {
-                    "wavelength": spectrum.wavelength_nm,
-                    "intensity": spectrum.intensity,
-                    "ground_truth": spectrum.true_composition,
-                },
-                db=db,
-                fit_method=config["fit_method"],
-                closure_mode=str(config["closure_mode"]),
-                elements=elements,
-            )
-        if result is None:
-            raise RuntimeError("iterative_jax (numpy fallback) failed")
-        return {"concentrations": result, "solver_backend": "numpy_fallback"}
+        return _iterative_jax_numpy_fallback(spectrum, elements, _context.db_path, config)
 
     return predictor
 
@@ -2539,6 +2640,61 @@ def _bayesian_build_payload(
     }
 
 
+def _bayesian_log_progress(
+    progress_state: Dict[str, Any], spectrum: BenchmarkSpectrum
+) -> Tuple[int, float]:
+    """Advance per-spectrum progress counters and emit the progress log.
+
+    Returns ``(spectrum_index, spectrum_start)``. ``loop_start`` is captured
+    BEFORE the first iteration so the logged ``elapsed_cumulative`` measures
+    time since the bayesian loop began; ``spectrum_start`` gives the
+    per-spectrum wall time for the checkpoint record.
+    """
+    if progress_state["loop_start"] is None:
+        progress_state["loop_start"] = time.monotonic()
+    progress_state["spectrum_index"] += 1
+    spectrum_index = int(progress_state["spectrum_index"])
+    elapsed_cumulative = time.monotonic() - float(progress_state["loop_start"])
+    dataset_name = getattr(spectrum, "dataset_id", None) or "unknown"
+    logger.info(
+        f"[bayesian] {dataset_name}: spectrum {spectrum_index} "
+        f"(elapsed {elapsed_cumulative:.1f}s)"
+    )
+    return spectrum_index, time.monotonic()
+
+
+def _bayesian_prepare_observation(
+    spectrum: BenchmarkSpectrum,
+    sampler_cache: Dict[Tuple[Any, ...], Any],
+    db_path: Any,
+    elements: List[str],
+    pixels: int,
+) -> Any:
+    """Validate the spectrum, build/cache the sampler, and interpolate obs.
+
+    Returns ``(sampler, obs)`` where ``obs`` is the observed intensity
+    resampled onto the forward model's wavelength grid.
+    """
+    wl = np.asarray(spectrum.wavelength_nm, dtype=float)
+    intensity = np.asarray(spectrum.intensity, dtype=float)
+    if wl.size == 0 or intensity.size == 0:
+        raise ValueError("bayesian: empty spectrum input")
+    wl_min = float(wl.min())
+    wl_max = float(wl.max())
+
+    forward_model, sampler = _bayesian_get_or_build_sampler(
+        sampler_cache,
+        db_path,
+        elements,
+        wl_min,
+        wl_max,
+        pixels,
+        spectrum.rp_estimate,
+    )
+    obs = np.interp(np.asarray(forward_model.wavelength), wl, intensity)
+    return sampler, obs
+
+
 def _fit_bayesian_pipeline(
     _context: UnifiedBenchmarkContext,
     _train_spectra: Sequence[BenchmarkSpectrum],
@@ -2618,41 +2774,19 @@ def _fit_bayesian_pipeline(
         if not elements:
             raise ValueError("No candidate elements available for bayesian composition workflow")
 
-        # Per-spectrum progress log. ``loop_start`` is captured BEFORE the
-        # first iteration so the logged ``elapsed_cumulative`` measures time
-        # since the bayesian loop began. ``spectrum_start`` (below) gives
-        # the per-spectrum wall time for the checkpoint record.
-        if progress_state["loop_start"] is None:
-            progress_state["loop_start"] = time.monotonic()
-        progress_state["spectrum_index"] += 1
-        spectrum_index = int(progress_state["spectrum_index"])
-        elapsed_cumulative = time.monotonic() - float(progress_state["loop_start"])
-        dataset_name = getattr(spectrum, "dataset_id", None) or "unknown"
-        logger.info(
-            f"[bayesian] {dataset_name}: spectrum {spectrum_index} "
-            f"(elapsed {elapsed_cumulative:.1f}s)"
-        )
-        spectrum_start = time.monotonic()
+        # Per-spectrum progress log + spectrum prep + sampler get + MCMC run,
+        # all delegated to module-level helpers to keep this closure's
+        # cognitive complexity low. ``spectrum_start`` gives the per-spectrum
+        # wall time for the checkpoint record.
+        spectrum_index, spectrum_start = _bayesian_log_progress(progress_state, spectrum)
 
-        # Spectrum prep + sampler get + MCMC run, all delegated to module-
-        # level helpers to keep this closure's cognitive complexity low.
-        wl = np.asarray(spectrum.wavelength_nm, dtype=float)
-        intensity = np.asarray(spectrum.intensity, dtype=float)
-        if wl.size == 0 or intensity.size == 0:
-            raise ValueError("bayesian: empty spectrum input")
-        wl_min = float(wl.min())
-        wl_max = float(wl.max())
-
-        forward_model, sampler = _bayesian_get_or_build_sampler(
+        sampler, obs = _bayesian_prepare_observation(
+            spectrum,
             sampler_cache,
             _context.db_path,
             elements,
-            wl_min,
-            wl_max,
             pixels,
-            spectrum.rp_estimate,
         )
-        obs = np.interp(np.asarray(forward_model.wavelength), wl, intensity)
         result = _bayesian_run_mcmc(
             sampler,
             obs,
@@ -3006,6 +3140,44 @@ def evaluate_id_workflow(
     return records
 
 
+def _tune_id_score_config(
+    context: UnifiedBenchmarkContext,
+    workflow: IDWorkflowSpec,
+    train_dataset: BenchmarkDataset,
+    candidate_elements: List[str],
+    config: Dict[str, Any],
+    inner_splits: Sequence[Any],
+    tuning_split_id: Optional[str],
+) -> Tuple[float, float]:
+    """Mean inner-fold ``(micro_f1, micro_precision)`` for a single config."""
+    fold_scores: List[float] = []
+    precisions: List[float] = []
+    for split in inner_splits:
+        validation_dataset = subset_dataset(
+            train_dataset,
+            split.test_ids,
+            name=f"{train_dataset.name}_{split.name}_validation",
+        )
+        predictor = workflow.build_predictor(context, candidate_elements, config)
+        records = evaluate_id_workflow(
+            validation_dataset.spectra,
+            workflow=workflow,
+            predictor=predictor,
+            outer_split_id=split.name,
+            tuning_split_id=tuning_split_id,
+            config_name=workflow.config_name(config),
+        )
+        overall = summarize_id_records(records)["overall"]
+        if workflow.name not in overall:
+            continue
+        summary = overall[workflow.name]
+        fold_scores.append(float(summary["micro_f1"]))
+        precisions.append(float(summary["micro_precision"]))
+    score = float(np.mean(fold_scores)) if fold_scores else 0.0
+    tie = float(np.mean(precisions)) if precisions else 0.0
+    return score, tie
+
+
 def tune_id_workflow(
     context: UnifiedBenchmarkContext,
     workflow: IDWorkflowSpec,
@@ -3025,31 +3197,15 @@ def tune_id_workflow(
     best_tiebreak = float("-inf")
 
     for config in workflow.parameter_grid:
-        fold_scores: List[float] = []
-        precisions: List[float] = []
-        for split in inner_splits:
-            validation_dataset = subset_dataset(
-                train_dataset,
-                split.test_ids,
-                name=f"{train_dataset.name}_{split.name}_validation",
-            )
-            predictor = workflow.build_predictor(context, candidate_elements, config)
-            records = evaluate_id_workflow(
-                validation_dataset.spectra,
-                workflow=workflow,
-                predictor=predictor,
-                outer_split_id=split.name,
-                tuning_split_id=tuning_split_id,
-                config_name=workflow.config_name(config),
-            )
-            overall = summarize_id_records(records)["overall"]
-            if workflow.name not in overall:
-                continue
-            summary = overall[workflow.name]
-            fold_scores.append(float(summary["micro_f1"]))
-            precisions.append(float(summary["micro_precision"]))
-        score = float(np.mean(fold_scores)) if fold_scores else 0.0
-        tie = float(np.mean(precisions)) if precisions else 0.0
+        score, tie = _tune_id_score_config(
+            context,
+            workflow,
+            train_dataset,
+            candidate_elements,
+            config,
+            inner_splits,
+            tuning_split_id,
+        )
         config_name = workflow.config_name(config)
         scores.append(
             {"config_name": config_name, "mean_inner_f1": score, "mean_inner_precision": tie}
@@ -3060,6 +3216,102 @@ def tune_id_workflow(
             best_config = dict(config)
 
     return best_config, workflow.config_name(best_config), tuning_split_id, scores
+
+
+def _tune_composition_eval_fold(
+    context: UnifiedBenchmarkContext,
+    workflow: CompositionWorkflowSpec,
+    train_dataset: BenchmarkDataset,
+    id_workflow_name: str,
+    id_config_name: str,
+    id_predictor: Callable[[BenchmarkSpectrum], ElementIdentificationResult],
+    config: Dict[str, Any],
+    split: Any,
+    tuning_split_id: Optional[str],
+) -> Tuple[str, float, float]:
+    """Evaluate one inner fold for a composition config.
+
+    Returns ``(status, aitchison, rmse)`` where ``status`` is ``"ok"``
+    (valid scores), ``"skip"`` (empty validation -- not counted as failure),
+    or ``"fail"`` (predictor raised or no scored records).
+    """
+    inner_train = subset_dataset(
+        train_dataset,
+        split.train_ids,
+        name=f"{train_dataset.name}_{split.name}_train",
+    )
+    validation = [
+        train_dataset.get_spectrum(spec_id)
+        for spec_id in split.test_ids
+        if train_dataset.get_spectrum(spec_id).truth_type != TruthType.BLIND
+    ]
+    if not validation:
+        return "skip", 0.0, 0.0
+    try:
+        predictor = workflow.fit_predictor(
+            context,
+            [spec for spec in inner_train.spectra if spec.truth_type != TruthType.BLIND],
+            config,
+        )
+    except Exception:  # noqa: BLE001
+        return "fail", 0.0, 0.0
+    records = evaluate_composition_workflow(
+        validation,
+        id_workflow_name=id_workflow_name,
+        id_config_name=id_config_name,
+        id_predictor=id_predictor,
+        composition_workflow=workflow,
+        composition_predictor=predictor,
+        outer_split_id=split.name,
+        tuning_split_id=tuning_split_id,
+        composition_config_name=workflow.config_name(config),
+    )
+    scored = [record for record in records if record.scored and record.aitchison is not None]
+    if not scored:
+        return "fail", 0.0, 0.0
+    aitchison = float(np.mean([record.aitchison for record in scored]))
+    rmse = float(np.mean([record.rmse for record in scored if record.rmse is not None]))
+    return "ok", aitchison, rmse
+
+
+def _tune_composition_score_config(
+    context: UnifiedBenchmarkContext,
+    workflow: CompositionWorkflowSpec,
+    train_dataset: BenchmarkDataset,
+    id_workflow_name: str,
+    id_config_name: str,
+    id_predictor: Callable[[BenchmarkSpectrum], ElementIdentificationResult],
+    config: Dict[str, Any],
+    inner_splits: Sequence[Any],
+    tuning_split_id: Optional[str],
+) -> Tuple[float, float, int]:
+    """Mean inner-fold ``(aitchison, rmse, failed_folds)`` for a single config."""
+    fold_aitchisons: List[float] = []
+    fold_rmses: List[float] = []
+    failed_folds = 0
+    for split in inner_splits:
+        status, aitchison, rmse = _tune_composition_eval_fold(
+            context,
+            workflow,
+            train_dataset,
+            id_workflow_name,
+            id_config_name,
+            id_predictor,
+            config,
+            split,
+            tuning_split_id,
+        )
+        if status == "skip":
+            continue
+        if status == "fail":
+            failed_folds += 1
+            continue
+        fold_aitchisons.append(aitchison)
+        fold_rmses.append(rmse)
+
+    score = float(np.mean(fold_aitchisons)) if fold_aitchisons else float("inf")
+    tie = float(np.mean(fold_rmses)) if fold_rmses else float("inf")
+    return score, tie, failed_folds
 
 
 def tune_composition_workflow(
@@ -3083,55 +3335,17 @@ def tune_composition_workflow(
     best_tiebreak = float("inf")
 
     for config in workflow.parameter_grid:
-        fold_aitchisons: List[float] = []
-        fold_rmses: List[float] = []
-        failed_folds = 0
-        for split in inner_splits:
-            inner_train = subset_dataset(
-                train_dataset,
-                split.train_ids,
-                name=f"{train_dataset.name}_{split.name}_train",
-            )
-            validation = [
-                train_dataset.get_spectrum(spec_id)
-                for spec_id in split.test_ids
-                if train_dataset.get_spectrum(spec_id).truth_type != TruthType.BLIND
-            ]
-            if not validation:
-                continue
-            try:
-                predictor = workflow.fit_predictor(
-                    context,
-                    [spec for spec in inner_train.spectra if spec.truth_type != TruthType.BLIND],
-                    config,
-                )
-            except Exception:  # noqa: BLE001
-                failed_folds += 1
-                continue
-            records = evaluate_composition_workflow(
-                validation,
-                id_workflow_name=id_workflow_name,
-                id_config_name=id_config_name,
-                id_predictor=id_predictor,
-                composition_workflow=workflow,
-                composition_predictor=predictor,
-                outer_split_id=split.name,
-                tuning_split_id=tuning_split_id,
-                composition_config_name=workflow.config_name(config),
-            )
-            scored = [
-                record for record in records if record.scored and record.aitchison is not None
-            ]
-            if not scored:
-                failed_folds += 1
-                continue
-            fold_aitchisons.append(float(np.mean([record.aitchison for record in scored])))
-            fold_rmses.append(
-                float(np.mean([record.rmse for record in scored if record.rmse is not None]))
-            )
-
-        score = float(np.mean(fold_aitchisons)) if fold_aitchisons else float("inf")
-        tie = float(np.mean(fold_rmses)) if fold_rmses else float("inf")
+        score, tie, failed_folds = _tune_composition_score_config(
+            context,
+            workflow,
+            train_dataset,
+            id_workflow_name,
+            id_config_name,
+            id_predictor,
+            config,
+            inner_splits,
+            tuning_split_id,
+        )
         config_name = workflow.config_name(config)
         scores.append(
             {
@@ -3780,6 +3994,51 @@ def _write_failure_table(records: Sequence[IDEvaluationRecord], output_path: Pat
     _write_csv(output_path, rows)
 
 
+def _compute_statistics(
+    id_records: Sequence[IDEvaluationRecord],
+    composition_records: Sequence[CompositionEvaluationRecord],
+) -> Dict[str, Any]:
+    """Pairwise McNemar + Friedman/Nemenyi statistics for the output report.
+
+    Extracted from ``UnifiedBenchmarkRunner.write_outputs`` to keep that
+    method's cognitive complexity below the SonarCloud threshold.
+    """
+    statistics: Dict[str, Any] = {"mcnemar": {}, "friedman_nemenyi": {}}
+    by_workflow_records = {
+        workflow: [
+            record for record in id_records if record.workflow_name == workflow and record.scored
+        ]
+        for workflow in sorted({record.workflow_name for record in id_records})
+    }
+    workflows = sorted(by_workflow_records.keys())
+    for idx, left_workflow in enumerate(workflows):
+        for right_workflow in workflows[idx + 1 :]:
+            key = f"{left_workflow}__vs__{right_workflow}"
+            statistics["mcnemar"][key] = mcnemar_test(
+                by_workflow_records[left_workflow], by_workflow_records[right_workflow]
+            )
+    id_blocks: Dict[str, Dict[str, float]] = {}
+    for record in id_records:
+        if record.scored:
+            id_blocks.setdefault(f"{record.outer_split_id}:{record.spectrum_id}", {})[
+                record.workflow_name
+            ] = record.f1
+    statistics["friedman_nemenyi"]["identification"] = friedman_nemenyi(
+        id_blocks, higher_is_better=True
+    )
+    comp_blocks: Dict[str, Dict[str, float]] = {}
+    for record in composition_records:
+        if record.scored and record.aitchison is not None:
+            pair_name = f"{record.id_workflow_name}__{record.composition_workflow_name}"
+            comp_blocks.setdefault(f"{record.outer_split_id}:{record.spectrum_id}", {})[
+                pair_name
+            ] = record.aitchison
+    statistics["friedman_nemenyi"]["composition"] = friedman_nemenyi(
+        comp_blocks, higher_is_better=False
+    )
+    return statistics
+
+
 class UnifiedBenchmarkRunner:
     def __init__(
         self,
@@ -4087,41 +4346,7 @@ class UnifiedBenchmarkRunner:
         _write_csv(outputs["latency_table_csv"], latency_rows)
         _write_failure_table(id_records, outputs["failure_table_csv"])
 
-        statistics: Dict[str, Any] = {"mcnemar": {}, "friedman_nemenyi": {}}
-        by_workflow_records = {
-            workflow: [
-                record
-                for record in id_records
-                if record.workflow_name == workflow and record.scored
-            ]
-            for workflow in sorted({record.workflow_name for record in id_records})
-        }
-        workflows = sorted(by_workflow_records.keys())
-        for idx, left_workflow in enumerate(workflows):
-            for right_workflow in workflows[idx + 1 :]:
-                key = f"{left_workflow}__vs__{right_workflow}"
-                statistics["mcnemar"][key] = mcnemar_test(
-                    by_workflow_records[left_workflow], by_workflow_records[right_workflow]
-                )
-        id_blocks: Dict[str, Dict[str, float]] = {}
-        for record in id_records:
-            if record.scored:
-                id_blocks.setdefault(f"{record.outer_split_id}:{record.spectrum_id}", {})[
-                    record.workflow_name
-                ] = record.f1
-        statistics["friedman_nemenyi"]["identification"] = friedman_nemenyi(
-            id_blocks, higher_is_better=True
-        )
-        comp_blocks: Dict[str, Dict[str, float]] = {}
-        for record in composition_records:
-            if record.scored and record.aitchison is not None:
-                pair_name = f"{record.id_workflow_name}__{record.composition_workflow_name}"
-                comp_blocks.setdefault(f"{record.outer_split_id}:{record.spectrum_id}", {})[
-                    pair_name
-                ] = record.aitchison
-        statistics["friedman_nemenyi"]["composition"] = friedman_nemenyi(
-            comp_blocks, higher_is_better=False
-        )
+        statistics = _compute_statistics(id_records, composition_records)
         _write_json(outputs["statistics_json"], statistics)
 
         _plot_per_element_heatmap(id_summary["per_element"], outputs["per_element_heatmap_png"])
