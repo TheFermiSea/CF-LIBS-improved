@@ -38,6 +38,7 @@ from cflibs.core.constants import (
     MCWHIRTER_CONST,
     SAHA_CONST_CM3,
 )
+from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES, resolve_element_mass
 from cflibs.core.jax_runtime import jax_default_real_dtype
 from cflibs.core.logging_config import get_logger
 
@@ -97,38 +98,47 @@ else:  # pragma: no cover - JAX not installed
     _JAX_M_PROTON = M_PROTON
 
 
-# Standard atomic masses for fallback [amu]
+# Standard atomic masses for fallback [amu].
+#
+# Historically a 30-element literal (H..Zn). It is the value-identical contiguous
+# prefix of the canonical :data:`cflibs.atomic.masses.STANDARD_ATOMIC_MASSES`, so
+# it is derived from that table to remove the duplicated literal while keeping
+# this public symbol's exact keys/values (and thus its ``.get(el, 50.0)``
+# table-miss behaviour) byte-identical to before.
+_BAYESIAN_FALLBACK_ELEMENTS = (
+    "H",
+    "He",
+    "Li",
+    "Be",
+    "B",
+    "C",
+    "N",
+    "O",
+    "F",
+    "Ne",
+    "Na",
+    "Mg",
+    "Al",
+    "Si",
+    "P",
+    "S",
+    "Cl",
+    "Ar",
+    "K",
+    "Ca",
+    "Sc",
+    "Ti",
+    "V",
+    "Cr",
+    "Mn",
+    "Fe",
+    "Co",
+    "Ni",
+    "Cu",
+    "Zn",
+)
 STANDARD_MASSES: Dict[str, float] = {
-    "H": 1.008,
-    "He": 4.003,
-    "Li": 6.941,
-    "Be": 9.012,
-    "B": 10.81,
-    "C": 12.01,
-    "N": 14.01,
-    "O": 16.00,
-    "F": 19.00,
-    "Ne": 20.18,
-    "Na": 22.99,
-    "Mg": 24.31,
-    "Al": 26.98,
-    "Si": 28.09,
-    "P": 30.97,
-    "S": 32.07,
-    "Cl": 35.45,
-    "Ar": 39.95,
-    "K": 39.10,
-    "Ca": 40.08,
-    "Sc": 44.96,
-    "Ti": 47.87,
-    "V": 50.94,
-    "Cr": 52.00,
-    "Mn": 54.94,
-    "Fe": 55.85,
-    "Co": 58.93,
-    "Ni": 58.69,
-    "Cu": 63.55,
-    "Zn": 65.38,
+    el: STANDARD_ATOMIC_MASSES[el] for el in _BAYESIAN_FALLBACK_ELEMENTS
 }
 
 
@@ -211,11 +221,10 @@ def _build_lines_dataframe(
 
     element_masses = {}
     for el in elements:
-        if el in STANDARD_MASSES:
-            element_masses[el] = STANDARD_MASSES[el]
-        else:
-            element_masses[el] = 50.0
+        if el not in STANDARD_MASSES:
             logger.warning(f"No mass for {el}, using fallback 50 amu")
+        # Table-only ladder (no DB lookup): table -> 50.0 amu generic fallback.
+        element_masses[el] = resolve_element_mass(el, table=STANDARD_MASSES)
     df["mass_amu"] = df["element"].map(element_masses)
 
     return df, el_map
@@ -621,7 +630,7 @@ class AtomicDataArrays:
             el, stage = snapshot.species[int(sp_idx[li])]
             line_element_idx[li] = element_to_idx.get(el, 0)
             line_ion_stage[li] = max(int(stage) - 1, 0)
-            line_mass_amu[li] = STANDARD_MASSES.get(el, 50.0)
+            line_mass_amu[li] = resolve_element_mass(el, table=STANDARD_MASSES)
             line_ip_ev[li] = float(ip_arr[int(sp_idx[li])])
 
         if HAS_JAX:

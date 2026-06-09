@@ -32,6 +32,7 @@ except ImportError:
 from cflibs.core.jax_runtime import HAS_JAX, jax, jit_if_available, jnp, vmap_if_available
 from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_J, EV_TO_K, H_PLANCK, M_PROTON
 from cflibs.atomic.database import AtomicDatabase
+from cflibs.atomic.masses import DEFAULT_ATOMIC_MASS_AMU, STANDARD_ATOMIC_MASSES
 from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
 from cflibs.plasma.partition import polynomial_partition_function_jax
@@ -230,107 +231,27 @@ class ManifoldGenerator:
     def _resolve_element_masses(self) -> dict:
         """Resolve per-element atomic masses (amu) from the database with fallback.
 
-        Prefers ``AtomicDatabase.get_atomic_mass``; falls back to a table of
-        standard atomic masses, then to a generic 50.0 amu placeholder. Extracted
-        verbatim from :meth:`_load_atomic_data` (behavior-preserving).
-        """
-        # Standard atomic masses (amu) for fallback
-        STANDARD_MASSES = {
-            "H": 1.008,
-            "He": 4.003,
-            "Li": 6.941,
-            "Be": 9.012,
-            "B": 10.81,
-            "C": 12.01,
-            "N": 14.01,
-            "O": 16.00,
-            "F": 19.00,
-            "Ne": 20.18,
-            "Na": 22.99,
-            "Mg": 24.31,
-            "Al": 26.98,
-            "Si": 28.09,
-            "P": 30.97,
-            "S": 32.07,
-            "Cl": 35.45,
-            "Ar": 39.95,
-            "K": 39.10,
-            "Ca": 40.08,
-            "Sc": 44.96,
-            "Ti": 47.87,
-            "V": 50.94,
-            "Cr": 52.00,
-            "Mn": 54.94,
-            "Fe": 55.85,
-            "Co": 58.93,
-            "Ni": 58.69,
-            "Cu": 63.55,
-            "Zn": 65.38,
-            "Ga": 69.72,
-            "Ge": 72.63,
-            "As": 74.92,
-            "Se": 78.97,
-            "Br": 79.90,
-            "Kr": 83.80,
-            "Rb": 85.47,
-            "Sr": 87.62,
-            "Y": 88.91,
-            "Zr": 91.22,
-            "Nb": 92.91,
-            "Mo": 95.95,
-            "Ru": 101.1,
-            "Rh": 102.9,
-            "Pd": 106.4,
-            "Ag": 107.9,
-            "Cd": 112.4,
-            "In": 114.8,
-            "Sn": 118.7,
-            "Sb": 121.8,
-            "Te": 127.6,
-            "I": 126.9,
-            "Xe": 131.3,
-            "Cs": 132.9,
-            "Ba": 137.3,
-            "La": 138.9,
-            "Ce": 140.1,
-            "Pr": 140.9,
-            "Nd": 144.2,
-            "Sm": 150.4,
-            "Eu": 152.0,
-            "Gd": 157.3,
-            "Tb": 158.9,
-            "Dy": 162.5,
-            "Ho": 164.9,
-            "Er": 167.3,
-            "Tm": 168.9,
-            "Yb": 173.0,
-            "Lu": 175.0,
-            "Hf": 178.5,
-            "Ta": 180.9,
-            "W": 183.8,
-            "Re": 186.2,
-            "Os": 190.2,
-            "Ir": 192.2,
-            "Pt": 195.1,
-            "Au": 197.0,
-            "Hg": 200.6,
-            "Tl": 204.4,
-            "Pb": 207.2,
-            "Bi": 209.0,
-            "U": 238.0,
-        }
+        Prefers ``AtomicDatabase.get_atomic_mass``; falls back to the canonical
+        :data:`~cflibs.atomic.masses.STANDARD_ATOMIC_MASSES` table, then to the
+        generic :data:`~cflibs.atomic.masses.DEFAULT_ATOMIC_MASS_AMU` placeholder.
 
+        The ``database -> table -> 50.0`` ladder now lives in
+        :mod:`cflibs.atomic.masses`; this method retains the per-branch logging
+        but produces masses identical to the previous in-module table.
+        """
         element_masses = {}
         for el in self.config.elements:
             db_mass = self.atomic_db.get_atomic_mass(el)
             if db_mass is not None:
                 element_masses[el] = db_mass
-            elif el in STANDARD_MASSES:
-                element_masses[el] = STANDARD_MASSES[el]
-                logger.debug(f"Using standard mass for {el}: {STANDARD_MASSES[el]} amu")
+            elif el in STANDARD_ATOMIC_MASSES:
+                element_masses[el] = STANDARD_ATOMIC_MASSES[el]
+                logger.debug(f"Using standard mass for {el}: {STANDARD_ATOMIC_MASSES[el]} amu")
             else:
-                element_masses[el] = 50.0  # Generic fallback
-                logger.warning(f"No mass found for {el}, using fallback 50.0 amu")
+                element_masses[el] = DEFAULT_ATOMIC_MASS_AMU  # Generic fallback
+                logger.warning(
+                    f"No mass found for {el}, using fallback {DEFAULT_ATOMIC_MASS_AMU} amu"
+                )
         return element_masses
 
     def _load_partition_physics(
