@@ -239,8 +239,40 @@ class DistributedMCMCSampler:
         cfg: DistributedMCMCConfig,
     ) -> DistributedMCMCResult:
         """Merge samples from all ranks and compute diagnostics."""
+        combined, rank_counts = self._stack_samples_by_chain(all_samples_list)
+
+        total_chains = sum(rank_counts)
+        total_samples = total_chains * cfg.num_samples
+
+        r_hat, ess = self._compute_cross_chain_diagnostics(combined, total_chains)
+
+        flat_samples = self._flatten_combined_samples(combined)
+
+        logger.info(
+            f"Distributed MCMC complete: {total_chains} chains, "
+            f"{total_samples} total samples from {len(rank_counts)} ranks"
+        )
+
+        return DistributedMCMCResult(
+            samples=flat_samples,
+            r_hat=r_hat,
+            ess=ess,
+            total_chains=total_chains,
+            total_samples=total_samples,
+            rank_chain_counts=rank_counts,
+        )
+
+    @staticmethod
+    def _stack_samples_by_chain(
+        all_samples_list: List[Dict[str, np.ndarray]],
+    ) -> tuple[Dict[str, np.ndarray], List[int]]:
+        """Stack per-rank samples along the chain axis.
+
+        Returns the concatenated per-parameter arrays (shape
+        ``(n_chains, n_samples, ...)``) and the per-rank chain counts.
+        """
         merged: Dict[str, List[np.ndarray]] = {}
-        rank_counts = []
+        rank_counts: List[int] = []
 
         for rank_samples in all_samples_list:
             n_chains = 0
@@ -261,10 +293,14 @@ class DistributedMCMCSampler:
         for key, arrs in merged.items():
             combined[key] = np.concatenate(arrs, axis=0)
 
-        total_chains = sum(rank_counts)
-        total_samples = total_chains * cfg.num_samples
+        return combined, rank_counts
 
-        # Compute cross-chain diagnostics with ArviZ
+    @staticmethod
+    def _compute_cross_chain_diagnostics(
+        combined: Dict[str, np.ndarray],
+        total_chains: int,
+    ) -> tuple[Dict[str, float], Dict[str, float]]:
+        """Compute cross-chain R-hat and ESS diagnostics with ArviZ."""
         r_hat: Dict[str, float] = {}
         ess: Dict[str, float] = {}
 
@@ -283,36 +319,33 @@ class DistributedMCMCSampler:
                 ess_data = az.ess(idata)
 
                 for var in combined.keys():
-                    if var in rhat_data:
-                        val = rhat_data[var]
-                        if hasattr(val, "values"):
-                            r_hat[var] = float(np.mean(val.values))
-                        else:
-                            r_hat[var] = float(val)
-                    if var in ess_data:
-                        val = ess_data[var]
-                        if hasattr(val, "values"):
-                            ess[var] = float(np.mean(val.values))
-                        else:
-                            ess[var] = float(val)
+                    DistributedMCMCSampler._record_diagnostic(r_hat, var, rhat_data)
+                    DistributedMCMCSampler._record_diagnostic(ess, var, ess_data)
             except Exception as e:
                 logger.warning(f"ArviZ diagnostics failed: {e}")
 
-        # Flatten for the result
+        return r_hat, ess
+
+    @staticmethod
+    def _record_diagnostic(
+        target: Dict[str, float],
+        var: str,
+        data: Any,
+    ) -> None:
+        """Store the mean diagnostic value for ``var`` if present in ``data``."""
+        if var in data:
+            val = data[var]
+            if hasattr(val, "values"):
+                target[var] = float(np.mean(val.values))
+            else:
+                target[var] = float(val)
+
+    @staticmethod
+    def _flatten_combined_samples(
+        combined: Dict[str, np.ndarray],
+    ) -> Dict[str, np.ndarray]:
+        """Flatten chain and sample axes of each parameter array."""
         flat_samples = {}
         for key, arr in combined.items():
             flat_samples[key] = arr.reshape(-1, *arr.shape[2:])
-
-        logger.info(
-            f"Distributed MCMC complete: {total_chains} chains, "
-            f"{total_samples} total samples from {len(rank_counts)} ranks"
-        )
-
-        return DistributedMCMCResult(
-            samples=flat_samples,
-            r_hat=r_hat,
-            ess=ess,
-            total_chains=total_chains,
-            total_samples=total_samples,
-            rank_chain_counts=rank_counts,
-        )
+        return flat_samples
