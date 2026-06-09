@@ -286,6 +286,84 @@ def _select_datasets(
     return out
 
 
+def _apply_use_jax_env(config: Dict[str, Any]) -> None:
+    """Set CFLIBS_USE_JAX_IDENTIFIER per ``config`` for the current call."""
+    if config["use_jax_identifier"]:
+        os.environ["CFLIBS_USE_JAX_IDENTIFIER"] = "1"
+    else:
+        os.environ.pop("CFLIBS_USE_JAX_IDENTIFIER", None)
+
+
+def _restore_use_jax_env(prev_use_jax: Optional[str]) -> None:
+    """Restore CFLIBS_USE_JAX_IDENTIFIER to its prior value."""
+    if prev_use_jax is None:
+        os.environ.pop("CFLIBS_USE_JAX_IDENTIFIER", None)
+    else:
+        os.environ["CFLIBS_USE_JAX_IDENTIFIER"] = prev_use_jax
+
+
+def _run_analysis_sections(
+    state: SweepServerState,
+    config: Dict[str, Any],
+    cancel: asyncio.Event,
+) -> Dict[str, Any]:
+    """Select datasets, run the requested sections, and build the result dict.
+
+    Raises :class:`_Cancelled` if ``cancel`` is set before a section starts.
+    """
+    from cflibs.benchmark.dataset import TruthType
+
+    id_datasets = _select_datasets(
+        state,
+        config["datasets_filter"],
+        (TruthType.ASSAY, TruthType.FORMULA_PROXY, TruthType.SYNTHETIC, TruthType.BLIND),
+    )
+    comp_datasets = _select_datasets(
+        state,
+        config["datasets_filter"],
+        (TruthType.ASSAY, TruthType.SYNTHETIC),
+    )
+
+    id_records = []
+    id_selections = []
+    comp_records = []
+    comp_selections = []
+
+    if config["sections"] in {"all", "id"} and id_datasets:
+        if cancel.is_set():
+            raise _Cancelled()
+        id_records, id_selections = state.runner.run_identification(
+            id_datasets,
+            workflow_names=config["id_workflows"],
+            max_outer_folds=config["max_outer_folds"],
+        )
+
+    if config["sections"] in {"all", "composition"} and comp_datasets:
+        if cancel.is_set():
+            raise _Cancelled()
+        comp_records, comp_selections = state.runner.run_composition(
+            comp_datasets,
+            id_workflow_names=config["id_workflows"],
+            composition_workflow_names=config["composition_workflows"],
+            max_outer_folds=config["max_outer_folds"],
+        )
+
+    return {
+        "id_records": [_asdict_safe(r) for r in id_records],
+        "id_selections": list(id_selections),
+        "composition_records": [_asdict_safe(r) for r in comp_records],
+        "composition_selections": list(comp_selections),
+        "manifest": {
+            "config": config["raw"],
+            "id_workflows": config["id_workflows"],
+            "composition_workflows": config["composition_workflows"],
+            "datasets_loaded": sorted(state.datasets.keys()),
+            "id_datasets": [d.name for d in id_datasets],
+            "composition_datasets": [d.name for d in comp_datasets],
+        },
+    }
+
+
 def _run_analysis_sync(
     state: SweepServerState,
     request_id: str,
@@ -317,62 +395,9 @@ def _run_analysis_sync(
     # restoring the previous value afterwards.
     prev_use_jax = os.environ.get("CFLIBS_USE_JAX_IDENTIFIER")
     try:
-        if config["use_jax_identifier"]:
-            os.environ["CFLIBS_USE_JAX_IDENTIFIER"] = "1"
-        else:
-            os.environ.pop("CFLIBS_USE_JAX_IDENTIFIER", None)
+        _apply_use_jax_env(config)
 
-        from cflibs.benchmark.dataset import TruthType
-
-        id_datasets = _select_datasets(
-            state,
-            config["datasets_filter"],
-            (TruthType.ASSAY, TruthType.FORMULA_PROXY, TruthType.SYNTHETIC, TruthType.BLIND),
-        )
-        comp_datasets = _select_datasets(
-            state,
-            config["datasets_filter"],
-            (TruthType.ASSAY, TruthType.SYNTHETIC),
-        )
-
-        id_records = []
-        id_selections = []
-        comp_records = []
-        comp_selections = []
-
-        if config["sections"] in {"all", "id"} and id_datasets:
-            if cancel.is_set():
-                raise _Cancelled()
-            id_records, id_selections = state.runner.run_identification(
-                id_datasets,
-                workflow_names=config["id_workflows"],
-                max_outer_folds=config["max_outer_folds"],
-            )
-
-        if config["sections"] in {"all", "composition"} and comp_datasets:
-            if cancel.is_set():
-                raise _Cancelled()
-            comp_records, comp_selections = state.runner.run_composition(
-                comp_datasets,
-                id_workflow_names=config["id_workflows"],
-                composition_workflow_names=config["composition_workflows"],
-                max_outer_folds=config["max_outer_folds"],
-            )
-
-        result = {
-            "id_records": [_asdict_safe(r) for r in id_records],
-            "id_selections": list(id_selections),
-            "composition_records": [_asdict_safe(r) for r in comp_records],
-            "composition_selections": list(comp_selections),
-            "manifest": {
-                "config": config["raw"],
-                "id_workflows": config["id_workflows"],
-                "composition_workflows": config["composition_workflows"],
-                "datasets_loaded": sorted(state.datasets.keys()),
-                "id_datasets": [d.name for d in id_datasets],
-                "composition_datasets": [d.name for d in comp_datasets],
-            },
-        }
+        result = _run_analysis_sections(state, config, cancel)
         env = proto.make_ok_envelope(
             request_id,
             result,
@@ -416,10 +441,7 @@ def _run_analysis_sync(
             server=state.server_info,
         )
     finally:
-        if prev_use_jax is None:
-            os.environ.pop("CFLIBS_USE_JAX_IDENTIFIER", None)
-        else:
-            os.environ["CFLIBS_USE_JAX_IDENTIFIER"] = prev_use_jax
+        _restore_use_jax_env(prev_use_jax)
 
     return json.dumps(env, separators=(",", ":"), default=str).encode("utf-8")
 
