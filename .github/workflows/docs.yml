@@ -9,6 +9,11 @@ on:
       - '*.md'
   workflow_dispatch:
 
+# Default GITHUB_TOKEN is read-only; peaceiris/actions-gh-pages needs write
+# access to force-push the gh-pages branch (was failing with a 403).
+permissions:
+  contents: write
+
 jobs:
   build-docs:
     name: Build Documentation
