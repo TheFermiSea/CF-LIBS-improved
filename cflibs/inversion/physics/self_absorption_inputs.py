@@ -65,6 +65,15 @@ def lower_level_energy_ev(obs: LineObservation) -> float:
     return max(0.0, obs.E_k_ev - photon_ev)
 
 
+def _canonical_partition_fallback(ionization_stage: int) -> float:
+    """Canonical U(T) estimate for species the provider factory cannot resolve."""
+    if ionization_stage == 1:
+        return 25.0
+    if ionization_stage == 2:
+        return 15.0
+    return 2.0
+
+
 def evaluate_partition_function(
     atomic_db, element: str, ionization_stage: int, T_K: float
 ) -> float:
@@ -95,11 +104,7 @@ def evaluate_partition_function(
     fallback-ladder logic.
     """
     if atomic_db is None:
-        if ionization_stage == 1:
-            return 25.0
-        if ionization_stage == 2:
-            return 15.0
-        return 2.0
+        return _canonical_partition_fallback(ionization_stage)
 
     if hasattr(atomic_db, "partition_function_for"):
         provider = atomic_db.partition_function_for(element, ionization_stage)
@@ -122,11 +127,7 @@ def evaluate_partition_function(
         if pf:
             return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
 
-    if ionization_stage == 1:
-        return 25.0
-    if ionization_stage == 2:
-        return 15.0
-    return 2.0
+    return _canonical_partition_fallback(ionization_stage)
 
 
 @dataclass(frozen=True)
