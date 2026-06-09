@@ -8,6 +8,11 @@ This module provides:
 - Interfaces to external databases (NIST ASD, Kurucz, etc.)
 """
 
+from cflibs.atomic.masses import (
+    DEFAULT_ATOMIC_MASS_AMU,
+    STANDARD_ATOMIC_MASSES,
+    resolve_element_mass,
+)
 from cflibs.atomic.structures import EnergyLevel, Transition, SpeciesPhysics, PartitionFunction
 
 
@@ -26,4 +31,7 @@ __all__ = [
     "SpeciesPhysics",
     "PartitionFunction",
     "AtomicDatabase",
+    "STANDARD_ATOMIC_MASSES",
+    "DEFAULT_ATOMIC_MASS_AMU",
+    "resolve_element_mass",
 ]
