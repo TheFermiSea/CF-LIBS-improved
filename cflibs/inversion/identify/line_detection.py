@@ -764,6 +764,114 @@ def _collect_observations(
             )
 
 
+def _apply_kdet_filter(
+    peaks: List[Tuple[int, float]],
+    transitions_by_element: Dict[str, List[Transition]],
+    shift_scan_nm: float,
+    shift_step_nm: Optional[float],
+    wavelength_tolerance_nm: float,
+    wl_step: float,
+    kdet_min_score: float,
+    kdet_min_candidates: int,
+    kdet_rarity_power: float,
+    kdet_weight_clip: Tuple[float, float],
+    use_jax_kdet: bool,
+    shift_coherence_veto: bool,
+    coherence_min_lines: int,
+    coherence_min_fraction: float,
+    warnings: List[str],
+) -> Dict[str, List[Transition]]:
+    """Run the kdet pre-filter, extending ``warnings`` and returning the kept map.
+
+    Mirrors the inline ``if kdet_enabled:`` block exactly: extend ``warnings``
+    with the kdet warnings, keep the filtered element map when non-empty, else
+    append ``kdet_filtered_all_elements`` and keep the original map.
+    """
+    filtered_elements, kdet_warnings = _kdet_filter_elements(
+        peaks=peaks,
+        transitions_by_element=transitions_by_element,
+        shift_scan_nm=shift_scan_nm,
+        shift_step_nm=shift_step_nm,
+        wavelength_tolerance_nm=wavelength_tolerance_nm,
+        wl_step=wl_step,
+        kdet_min_score=kdet_min_score,
+        kdet_min_candidates=kdet_min_candidates,
+        kdet_rarity_power=kdet_rarity_power,
+        kdet_weight_clip=kdet_weight_clip,
+        use_jax=use_jax_kdet,
+        shift_coherence=shift_coherence_veto,
+        coherence_min_lines=coherence_min_lines,
+        coherence_min_fraction=coherence_min_fraction,
+    )
+    warnings.extend(kdet_warnings)
+    if filtered_elements:
+        return filtered_elements
+    warnings.append("kdet_filtered_all_elements")
+    return transitions_by_element
+
+
+def _apply_shift_coherence_veto(
+    accepted_elements: List[str],
+    peaks: List[Tuple[int, float]],
+    comb_transitions_by_element: Dict[str, List[Transition]],
+    applied_shift_nm: float,
+    wavelength_tolerance_nm: float,
+    coherence_min_lines: int,
+    coherence_min_fraction: float,
+    warnings: List[str],
+) -> List[str]:
+    """Apply the shift-coherence veto, returning the surviving accepted elements.
+
+    Mirrors the inline veto block exactly: when any element is vetoed, swap in
+    the kept set and append ``shift_coherence_vetoed_elements``; otherwise leave
+    ``accepted_elements`` unchanged.
+    """
+    kept, vetoed = _shift_coherence_veto(
+        elements=accepted_elements,
+        peaks=peaks,
+        transitions_by_element=comb_transitions_by_element,
+        applied_shift_nm=applied_shift_nm,
+        tolerance_nm=wavelength_tolerance_nm,
+        min_coherent_lines=coherence_min_lines,
+        min_coherent_fraction=coherence_min_fraction,
+    )
+    if vetoed:
+        warnings.append("shift_coherence_vetoed_elements")
+        return kept
+    return accepted_elements
+
+
+def _assemble_line_detection_result(
+    observations: List[LineObservation],
+    resonance_lines: Set[Tuple[str, int, float]],
+    total_peaks: int,
+    matched_peak_indices: Set[int],
+    applied_shift_nm: float,
+    warnings: List[str],
+) -> LineDetectionResult:
+    """Compute matched/unmatched counts and build the final result.
+
+    Mirrors the inline tail of :func:`detect_line_observations`: append
+    ``no_peaks_matched`` when nothing matched on a non-empty peak set, then
+    package the :class:`LineDetectionResult`.
+    """
+    matched_peaks = len(matched_peak_indices)
+    unmatched_peaks = max(total_peaks - matched_peaks, 0)
+
+    if matched_peaks == 0 and total_peaks > 0:
+        warnings.append("no_peaks_matched")
+
+    return LineDetectionResult(
+        observations=observations,
+        resonance_lines=resonance_lines,
+        total_peaks=total_peaks,
+        matched_peaks=matched_peaks,
+        unmatched_peaks=unmatched_peaks,
+        applied_shift_nm=applied_shift_nm,
+        warnings=warnings,
+    )
+
+
 def detect_line_observations(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -985,7 +1093,7 @@ def detect_line_observations(
         transitions_by_element.setdefault(transition.element, []).append(transition)
 
     if kdet_enabled:
-        filtered_elements, kdet_warnings = _kdet_filter_elements(
+        transitions_by_element = _apply_kdet_filter(
             peaks=peaks,
             transitions_by_element=transitions_by_element,
             shift_scan_nm=shift_scan_nm,
@@ -996,16 +1104,12 @@ def detect_line_observations(
             kdet_min_candidates=kdet_min_candidates,
             kdet_rarity_power=kdet_rarity_power,
             kdet_weight_clip=kdet_weight_clip,
-            use_jax=use_jax_kdet,
-            shift_coherence=shift_coherence_veto,
+            use_jax_kdet=use_jax_kdet,
+            shift_coherence_veto=shift_coherence_veto,
             coherence_min_lines=coherence_min_lines,
             coherence_min_fraction=coherence_min_fraction,
+            warnings=warnings,
         )
-        warnings.extend(kdet_warnings)
-        if filtered_elements:
-            transitions_by_element = filtered_elements
-        else:
-            warnings.append("kdet_filtered_all_elements")
 
     comb_transitions_by_element = {
         element: _select_comb_transitions(transitions, comb_max_lines_per_element)
@@ -1040,18 +1144,16 @@ def detect_line_observations(
     # selections. Runs after the (Rust or Python) comb scan so it gates both
     # backends identically.
     if shift_coherence_veto and accepted_elements:
-        kept, vetoed = _shift_coherence_veto(
-            elements=accepted_elements,
+        accepted_elements = _apply_shift_coherence_veto(
+            accepted_elements=accepted_elements,
             peaks=peaks,
-            transitions_by_element=comb_transitions_by_element,
+            comb_transitions_by_element=comb_transitions_by_element,
             applied_shift_nm=applied_shift_nm,
-            tolerance_nm=wavelength_tolerance_nm,
-            min_coherent_lines=coherence_min_lines,
-            min_coherent_fraction=coherence_min_fraction,
+            wavelength_tolerance_nm=wavelength_tolerance_nm,
+            coherence_min_lines=coherence_min_lines,
+            coherence_min_fraction=coherence_min_fraction,
+            warnings=warnings,
         )
-        if vetoed:
-            accepted_elements = kept
-            warnings.append("shift_coherence_vetoed_elements")
 
     matched_peak_indices: Set[int] = set()
 
@@ -1084,18 +1186,11 @@ def detect_line_observations(
             resonance_lines,
         )
 
-    matched_peaks = len(matched_peak_indices)
-    unmatched_peaks = max(total_peaks - matched_peaks, 0)
-
-    if matched_peaks == 0 and total_peaks > 0:
-        warnings.append("no_peaks_matched")
-
-    return LineDetectionResult(
+    return _assemble_line_detection_result(
         observations=observations,
         resonance_lines=resonance_lines,
         total_peaks=total_peaks,
-        matched_peaks=matched_peaks,
-        unmatched_peaks=unmatched_peaks,
+        matched_peak_indices=matched_peak_indices,
         applied_shift_nm=applied_shift_nm,
         warnings=warnings,
     )
@@ -1680,6 +1775,67 @@ def _kdet_element_passes(
     return best_candidates >= kdet_min_candidates and kdet_score >= kdet_min_score
 
 
+def _kdet_element_densities(
+    transitions_by_element: Dict[str, List[Transition]],
+    peak_wavelengths: np.ndarray,
+) -> Tuple[Dict[str, float], float]:
+    """Per-element line density and the median density across elements."""
+    densities = []
+    element_density: Dict[str, float] = {}
+    wl_range = max(float(peak_wavelengths.max() - peak_wavelengths.min()), 1e-6)
+    for element, transitions in transitions_by_element.items():
+        density = len(transitions) / wl_range
+        element_density[element] = density
+        densities.append(density)
+    median_density = float(np.median(densities)) if densities else 1.0
+    return element_density, median_density
+
+
+def _kdet_passing_elements(
+    transitions_by_element: Dict[str, List[Transition]],
+    peak_wavelengths: np.ndarray,
+    shift_grid: np.ndarray,
+    total_peaks: int,
+    wavelength_tolerance_nm: float,
+    element_density: Dict[str, float],
+    median_density: float,
+    kdet_min_score: float,
+    kdet_min_candidates: int,
+    kdet_rarity_power: float,
+    kdet_weight_clip: Tuple[float, float],
+    use_jax: bool,
+    shift_coherence: bool,
+    coherence_min_lines: int,
+) -> Dict[str, List[Transition]]:
+    """Per-element kdet pass/fail loop (pure-NumPy path)."""
+    filtered: Dict[str, List[Transition]] = {}
+    for element, transitions in transitions_by_element.items():
+        if not transitions:
+            continue
+        transitions_wl = np.array([t.wavelength_nm for t in transitions], dtype=float)
+        transitions_wl.sort()
+
+        best_candidates = _kdet_best_candidates(
+            peak_wavelengths, transitions_wl, shift_grid, wavelength_tolerance_nm, use_jax
+        )
+        kdet_fraction = best_candidates / total_peaks
+        density = element_density.get(element, median_density)
+        if _kdet_element_passes(
+            best_candidates,
+            kdet_fraction,
+            density,
+            median_density,
+            kdet_rarity_power,
+            kdet_weight_clip,
+            kdet_min_score,
+            kdet_min_candidates,
+            shift_coherence,
+            coherence_min_lines,
+        ):
+            filtered[element] = transitions
+    return filtered
+
+
 def _kdet_filter_elements(
     peaks: List[Tuple[int, float]],
     transitions_by_element: Dict[str, List[Transition]],
@@ -1732,40 +1888,26 @@ def _kdet_filter_elements(
         if rust_filtered is not None:
             return rust_filtered, warnings
 
-    densities = []
-    element_density: Dict[str, float] = {}
-    wl_range = max(float(peak_wavelengths.max() - peak_wavelengths.min()), 1e-6)
-    for element, transitions in transitions_by_element.items():
-        density = len(transitions) / wl_range
-        element_density[element] = density
-        densities.append(density)
-    median_density = float(np.median(densities)) if densities else 1.0
+    element_density, median_density = _kdet_element_densities(
+        transitions_by_element, peak_wavelengths
+    )
 
-    filtered: Dict[str, List[Transition]] = {}
-    for element, transitions in transitions_by_element.items():
-        if not transitions:
-            continue
-        transitions_wl = np.array([t.wavelength_nm for t in transitions], dtype=float)
-        transitions_wl.sort()
-
-        best_candidates = _kdet_best_candidates(
-            peak_wavelengths, transitions_wl, shift_grid, wavelength_tolerance_nm, use_jax
-        )
-        kdet_fraction = best_candidates / total_peaks
-        density = element_density.get(element, median_density)
-        if _kdet_element_passes(
-            best_candidates,
-            kdet_fraction,
-            density,
-            median_density,
-            kdet_rarity_power,
-            kdet_weight_clip,
-            kdet_min_score,
-            kdet_min_candidates,
-            shift_coherence,
-            coherence_min_lines,
-        ):
-            filtered[element] = transitions
+    filtered = _kdet_passing_elements(
+        transitions_by_element,
+        peak_wavelengths,
+        shift_grid,
+        total_peaks,
+        wavelength_tolerance_nm,
+        element_density,
+        median_density,
+        kdet_min_score,
+        kdet_min_candidates,
+        kdet_rarity_power,
+        kdet_weight_clip,
+        use_jax,
+        shift_coherence,
+        coherence_min_lines,
+    )
 
     if filtered and len(filtered) < len(transitions_by_element):
         warnings.append("kdet_filtered_elements")
