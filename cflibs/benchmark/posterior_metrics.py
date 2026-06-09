@@ -461,6 +461,157 @@ def _clr_sharpness(
 # ---------------------------------------------------------------------------
 
 
+def _convergence_numpy(
+    flat: Dict[str, np.ndarray],
+) -> tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
+    """Per-parameter R-hat / bulk-ESS / tail-ESS via the numpy fallbacks."""
+    rhat: Dict[str, float] = {}
+    ess_bulk: Dict[str, float] = {}
+    ess_tail: Dict[str, float] = {}
+    for name, arr in flat.items():
+        rhat[name] = _split_rhat_numpy(arr)
+        ess_bulk[name] = _ess_bulk_numpy(arr)
+        ess_tail[name] = _ess_tail_numpy(arr)
+    return rhat, ess_bulk, ess_tail
+
+
+def _convergence_arviz(
+    norm: Dict[str, np.ndarray],
+    flat: Dict[str, np.ndarray],
+    log_likelihood: Optional[np.ndarray],
+) -> tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
+    """Per-parameter R-hat / bulk-ESS / tail-ESS via ArviZ, with a numpy
+    fall-through on any ArviZ failure."""
+    rhat: Dict[str, float] = {}
+    ess_bulk: Dict[str, float] = {}
+    ess_tail: Dict[str, float] = {}
+    try:
+        idata = _to_inference_data(norm, log_likelihood)
+        rhat_ds = az.rhat(idata)  # type: ignore[union-attr]
+        ess_bulk_ds = az.ess(idata, method="bulk")  # type: ignore[union-attr]
+        ess_tail_ds = az.ess(idata, method="tail")  # type: ignore[union-attr]
+        for name, arr in flat.items():
+            base, idx = _split_indexed_name(name)
+            rhat[name] = _extract_named_value(rhat_ds, base, idx)
+            ess_bulk[name] = _extract_named_value(ess_bulk_ds, base, idx)
+            ess_tail[name] = _extract_named_value(ess_tail_ds, base, idx)
+    except Exception:
+        # Any arviz failure → fall through to numpy.
+        return _convergence_numpy(flat)
+    return rhat, ess_bulk, ess_tail
+
+
+def _compute_convergence(
+    norm: Dict[str, np.ndarray],
+    flat: Dict[str, np.ndarray],
+    log_likelihood: Optional[np.ndarray],
+) -> tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
+    """Per-parameter R-hat / bulk-ESS / tail-ESS, ArviZ when available."""
+    if _HAS_ARVIZ:
+        return _convergence_arviz(norm, flat, log_likelihood)
+    return _convergence_numpy(flat)
+
+
+def _compute_psis_loo(
+    norm: Dict[str, np.ndarray],
+    log_likelihood: Optional[np.ndarray],
+    psis_k_hat_threshold: float,
+) -> tuple[Optional[float], Optional[float], Optional[float], Optional[float], Optional[float]]:
+    """PSIS-LOO ELPD / SE / p_loo / max-khat / bad-khat-fraction.
+
+    All five fields are ``None`` when ``log_likelihood`` is absent, ArviZ
+    is unavailable, or the ArviZ call fails.
+    """
+    psis_loo_elpd: Optional[float] = None
+    psis_loo_se: Optional[float] = None
+    psis_loo_p: Optional[float] = None
+    psis_loo_k_hat_max: Optional[float] = None
+    psis_loo_k_hat_bad_fraction: Optional[float] = None
+
+    if log_likelihood is not None and _HAS_ARVIZ:
+        try:
+            idata = _to_inference_data(norm, log_likelihood)
+            loo = az.loo(idata, pointwise=True)  # type: ignore[union-attr]
+            psis_loo_elpd = float(loo.elpd_loo)
+            psis_loo_se = float(loo.se)
+            psis_loo_p = float(loo.p_loo)
+            khats = np.asarray(getattr(loo, "pareto_k", []))
+            if khats.size > 0:
+                psis_loo_k_hat_max = float(khats.max())
+                psis_loo_k_hat_bad_fraction = float(np.mean(khats >= psis_k_hat_threshold))
+        except Exception:
+            # Leave PSIS-LOO fields at None.
+            pass
+
+    return (
+        psis_loo_elpd,
+        psis_loo_se,
+        psis_loo_p,
+        psis_loo_k_hat_max,
+        psis_loo_k_hat_bad_fraction,
+    )
+
+
+def _compute_coverage_pit(
+    flat: Dict[str, np.ndarray],
+    certified_values: Optional[Mapping[str, float]],
+) -> tuple[Dict[str, float], Optional[float], Optional[float]]:
+    """Coverage-per-param dict, aggregate 95% coverage, and PIT chi2 p-value.
+
+    All defaults (``{}``, ``None``, ``None``) returned when no certified
+    values are supplied.
+    """
+    coverage_per_param: Dict[str, float] = {}
+    coverage_95: Optional[float] = None
+    pit_chi2_p_value: Optional[float] = None
+
+    if certified_values is not None:
+        coverage_per_param = _coverage_per_param(flat, certified_values)
+        if coverage_per_param:
+            coverage_95 = float(np.mean(list(coverage_per_param.values())))
+        pit_chi2_p_value = _pit_chi2_p_value(flat, certified_values)
+
+    return coverage_per_param, coverage_95, pit_chi2_p_value
+
+
+def _convergence_reasons(
+    rhat_max: float,
+    ess_bulk_min: float,
+    ess_tail_min: float,
+    rhat_threshold: float,
+    ess_threshold: int,
+) -> list[str]:
+    """Hard-gate failure reasons for the convergence diagnostics."""
+    reasons: list[str] = []
+    if np.isfinite(rhat_max) and rhat_max >= rhat_threshold:
+        reasons.append(f"rhat_max={rhat_max:.4f} >= {rhat_threshold}")
+    if np.isfinite(ess_bulk_min) and ess_bulk_min < ess_threshold:
+        reasons.append(f"ess_bulk_min={ess_bulk_min:.0f} < {ess_threshold}")
+    if np.isfinite(ess_tail_min) and ess_tail_min < ess_threshold:
+        reasons.append(f"ess_tail_min={ess_tail_min:.0f} < {ess_threshold}")
+    return reasons
+
+
+def _coverage_verdict(
+    coverage_95: Optional[float],
+    coverage_band: Sequence[float],
+    reasons: list[str],
+) -> Optional[bool]:
+    """Decide whether coverage is in-band, appending any out-of-band reason.
+
+    Mutates ``reasons`` in place to match the original control flow.
+    """
+    if coverage_95 is None:
+        return None
+    lo, hi = float(coverage_band[0]), float(coverage_band[1])
+    coverage_in_band = bool(lo <= coverage_95 <= hi)
+    if coverage_95 < lo:
+        reasons.append(f"coverage_95={coverage_95:.3f} < {lo} (under-coverage)")
+    elif coverage_95 > hi:
+        reasons.append(f"coverage_95={coverage_95:.3f} > {hi} (over-coverage)")
+    return coverage_in_band
+
+
 def compute_posterior_diagnostics(
     samples: Mapping[str, Any] | Any,
     *,
@@ -520,65 +671,21 @@ def compute_posterior_diagnostics(
     n_chains, n_draws = next(iter(flat.values())).shape
 
     # --- R-hat / ESS per parameter ---
-    rhat: Dict[str, float] = {}
-    ess_bulk: Dict[str, float] = {}
-    ess_tail: Dict[str, float] = {}
-
-    if _HAS_ARVIZ:
-        try:
-            idata = _to_inference_data(norm, log_likelihood)
-            rhat_ds = az.rhat(idata)  # type: ignore[union-attr]
-            ess_bulk_ds = az.ess(idata, method="bulk")  # type: ignore[union-attr]
-            ess_tail_ds = az.ess(idata, method="tail")  # type: ignore[union-attr]
-            for name, arr in flat.items():
-                base, idx = _split_indexed_name(name)
-                rhat[name] = _extract_named_value(rhat_ds, base, idx)
-                ess_bulk[name] = _extract_named_value(ess_bulk_ds, base, idx)
-                ess_tail[name] = _extract_named_value(ess_tail_ds, base, idx)
-        except Exception:
-            # Any arviz failure → fall through to numpy.
-            for name, arr in flat.items():
-                rhat[name] = _split_rhat_numpy(arr)
-                ess_bulk[name] = _ess_bulk_numpy(arr)
-                ess_tail[name] = _ess_tail_numpy(arr)
-    else:
-        for name, arr in flat.items():
-            rhat[name] = _split_rhat_numpy(arr)
-            ess_bulk[name] = _ess_bulk_numpy(arr)
-            ess_tail[name] = _ess_tail_numpy(arr)
+    rhat, ess_bulk, ess_tail = _compute_convergence(norm, flat, log_likelihood)
 
     # --- PSIS-LOO ---
-    psis_loo_elpd: Optional[float] = None
-    psis_loo_se: Optional[float] = None
-    psis_loo_p: Optional[float] = None
-    psis_loo_k_hat_max: Optional[float] = None
-    psis_loo_k_hat_bad_fraction: Optional[float] = None
-
-    if log_likelihood is not None and _HAS_ARVIZ:
-        try:
-            idata = _to_inference_data(norm, log_likelihood)
-            loo = az.loo(idata, pointwise=True)  # type: ignore[union-attr]
-            psis_loo_elpd = float(loo.elpd_loo)
-            psis_loo_se = float(loo.se)
-            psis_loo_p = float(loo.p_loo)
-            khats = np.asarray(getattr(loo, "pareto_k", []))
-            if khats.size > 0:
-                psis_loo_k_hat_max = float(khats.max())
-                psis_loo_k_hat_bad_fraction = float(np.mean(khats >= psis_k_hat_threshold))
-        except Exception:
-            # Leave PSIS-LOO fields at None.
-            pass
+    (
+        psis_loo_elpd,
+        psis_loo_se,
+        psis_loo_p,
+        psis_loo_k_hat_max,
+        psis_loo_k_hat_bad_fraction,
+    ) = _compute_psis_loo(norm, log_likelihood, psis_k_hat_threshold)
 
     # --- Coverage + PIT ---
-    coverage_per_param: Dict[str, float] = {}
-    coverage_95: Optional[float] = None
-    pit_chi2_p_value: Optional[float] = None
-
-    if certified_values is not None:
-        coverage_per_param = _coverage_per_param(flat, certified_values)
-        if coverage_per_param:
-            coverage_95 = float(np.mean(list(coverage_per_param.values())))
-        pit_chi2_p_value = _pit_chi2_p_value(flat, certified_values)
+    coverage_per_param, coverage_95, pit_chi2_p_value = _compute_coverage_pit(
+        flat, certified_values
+    )
 
     # --- Sharpness ---
     sharpness_clr = _clr_sharpness(norm, concentration_key=concentration_key)
@@ -588,28 +695,15 @@ def compute_posterior_diagnostics(
     ess_bulk_min = min(ess_bulk.values()) if ess_bulk else float("nan")
     ess_tail_min = min(ess_tail.values()) if ess_tail else float("nan")
 
-    reasons: list[str] = []
-    if np.isfinite(rhat_max) and rhat_max >= rhat_threshold:
-        reasons.append(f"rhat_max={rhat_max:.4f} >= {rhat_threshold}")
-    if np.isfinite(ess_bulk_min) and ess_bulk_min < ess_threshold:
-        reasons.append(f"ess_bulk_min={ess_bulk_min:.0f} < {ess_threshold}")
-    if np.isfinite(ess_tail_min) and ess_tail_min < ess_threshold:
-        reasons.append(f"ess_tail_min={ess_tail_min:.0f} < {ess_threshold}")
+    reasons = _convergence_reasons(
+        rhat_max, ess_bulk_min, ess_tail_min, rhat_threshold, ess_threshold
+    )
     if divergent_count > 0:
         reasons.append(f"divergent_transitions={divergent_count} > 0")
     if psis_loo_k_hat_max is not None and psis_loo_k_hat_max >= psis_k_hat_threshold:
         reasons.append(f"psis_k_hat_max={psis_loo_k_hat_max:.3f} >= {psis_k_hat_threshold}")
 
-    coverage_in_band: Optional[bool]
-    if coverage_95 is None:
-        coverage_in_band = None
-    else:
-        lo, hi = float(coverage_band[0]), float(coverage_band[1])
-        coverage_in_band = bool(lo <= coverage_95 <= hi)
-        if coverage_95 < lo:
-            reasons.append(f"coverage_95={coverage_95:.3f} < {lo} (under-coverage)")
-        elif coverage_95 > hi:
-            reasons.append(f"coverage_95={coverage_95:.3f} > {hi} (over-coverage)")
+    coverage_in_band = _coverage_verdict(coverage_95, coverage_band, reasons)
 
     passes_hard_gate = len(reasons) == 0
 
