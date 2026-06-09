@@ -292,55 +292,63 @@ class VectorIndex:
 
         # Create index based on type
         if self.config.index_type == "flat":
-            self.index = faiss.IndexFlatL2(self.dimension)
-            self.index.add(embeddings)
-
+            self._build_flat(embeddings)
         elif self.config.index_type == "ivf_flat":
-            n_lists = self._guarded_n_lists(n_vectors)
-            if n_lists is None:
-                # Too few training vectors for any IVF cell count — fall back
-                # to an exact flat index.
-                self.index = faiss.IndexFlatL2(self.dimension)
-                self.index.add(embeddings)
-            else:
-                quantizer = faiss.IndexFlatL2(self.dimension)
-                self.index = faiss.IndexIVFFlat(quantizer, self.dimension, n_lists, faiss.METRIC_L2)
-                self.index.train(embeddings)
-                self.index.add(embeddings)
-                self.index.nprobe = min(self.config.n_probe, n_lists)
-
+            self._build_ivf_flat(embeddings, n_vectors)
         elif self.config.index_type == "ivf_pq":
-            n_lists = self._guarded_n_lists(n_vectors)
-            # IVF_PQ trains TWO quantizers: the IVF coarse quantizer (guarded
-            # above) AND the product quantizer, whose k-means needs at least
-            # 2**pq_bits training points. If either cannot be trained, fall
-            # back to an exact flat index.
-            pq_clusters = 2**self.config.pq_bits
-            if n_lists is None or n_vectors < pq_clusters:
-                if n_lists is not None and n_vectors < pq_clusters:
-                    logger.warning(
-                        "ivf_pq index requires >= 2**pq_bits = %d training "
-                        "vectors for the product quantizer but only %d are "
-                        "available; falling back to exact IndexFlatL2.",
-                        pq_clusters,
-                        n_vectors,
-                    )
-                self.index = faiss.IndexFlatL2(self.dimension)
-                self.index.add(embeddings)
-            else:
-                quantizer = faiss.IndexFlatL2(self.dimension)
-                self.index = faiss.IndexIVFPQ(
-                    quantizer,
-                    self.dimension,
-                    n_lists,
-                    self.config.pq_m,
-                    self.config.pq_bits,
-                )
-                self.index.train(embeddings)
-                self.index.add(embeddings)
-                self.index.nprobe = min(self.config.n_probe, n_lists)
+            self._build_ivf_pq(embeddings, n_vectors)
 
         logger.info(f"Index built: {self.index.ntotal} vectors indexed")
+
+    def _build_flat(self, embeddings: np.ndarray) -> None:
+        """Build an exact flat (``IndexFlatL2``) index."""
+        self.index = faiss.IndexFlatL2(self.dimension)
+        self.index.add(embeddings)
+
+    def _build_ivf_flat(self, embeddings: np.ndarray, n_vectors: int) -> None:
+        """Build an IVF flat index, falling back to exact flat when unsafe."""
+        n_lists = self._guarded_n_lists(n_vectors)
+        if n_lists is None:
+            # Too few training vectors for any IVF cell count — fall back
+            # to an exact flat index.
+            self._build_flat(embeddings)
+        else:
+            quantizer = faiss.IndexFlatL2(self.dimension)
+            self.index = faiss.IndexIVFFlat(quantizer, self.dimension, n_lists, faiss.METRIC_L2)
+            self.index.train(embeddings)
+            self.index.add(embeddings)
+            self.index.nprobe = min(self.config.n_probe, n_lists)
+
+    def _build_ivf_pq(self, embeddings: np.ndarray, n_vectors: int) -> None:
+        """Build an IVF_PQ index, falling back to exact flat when unsafe."""
+        n_lists = self._guarded_n_lists(n_vectors)
+        # IVF_PQ trains TWO quantizers: the IVF coarse quantizer (guarded
+        # above) AND the product quantizer, whose k-means needs at least
+        # 2**pq_bits training points. If either cannot be trained, fall
+        # back to an exact flat index.
+        pq_clusters = 2**self.config.pq_bits
+        if n_lists is None or n_vectors < pq_clusters:
+            if n_lists is not None and n_vectors < pq_clusters:
+                logger.warning(
+                    "ivf_pq index requires >= 2**pq_bits = %d training "
+                    "vectors for the product quantizer but only %d are "
+                    "available; falling back to exact IndexFlatL2.",
+                    pq_clusters,
+                    n_vectors,
+                )
+            self._build_flat(embeddings)
+        else:
+            quantizer = faiss.IndexFlatL2(self.dimension)
+            self.index = faiss.IndexIVFPQ(
+                quantizer,
+                self.dimension,
+                n_lists,
+                self.config.pq_m,
+                self.config.pq_bits,
+            )
+            self.index.train(embeddings)
+            self.index.add(embeddings)
+            self.index.nprobe = min(self.config.n_probe, n_lists)
 
     def _guarded_n_lists(self, n_train: int) -> Optional[int]:
         """Return a safe IVF ``n_lists`` for ``n_train`` training vectors.
