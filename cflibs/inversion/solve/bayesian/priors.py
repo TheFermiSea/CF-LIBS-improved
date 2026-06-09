@@ -257,36 +257,48 @@ class Parameter:
         if self.prior_kind == "uniform":
             return numpyro.sample(self.name, dist.Uniform(self.prior_low, self.prior_high))
         if self.prior_kind == "loguniform":
-            log_low = jnp.log10(jnp.asarray(self.prior_low))
-            log_high = jnp.log10(jnp.asarray(self.prior_high))
-            log_x = numpyro.sample(self.name + "_log", dist.Uniform(log_low, log_high))
-            return numpyro.deterministic(self.name, jnp.power(10.0, log_x))
+            return self._numpyro_sample_loguniform()
         if self.prior_kind == "normal":
-            if self.prior_mean is None or self.prior_std is None:
-                raise ValueError(
-                    f"Parameter {self.name!r}: 'normal' prior requires prior_mean and prior_std"
-                )
-            return numpyro.sample(self.name, dist.Normal(self.prior_mean, self.prior_std))
+            return self._numpyro_sample_normal()
         if self.prior_kind == "truncnormal":
-            if self.prior_mean is None or self.prior_std is None:
-                raise ValueError(
-                    f"Parameter {self.name!r}: 'truncnormal' prior requires prior_mean and prior_std"
-                )
-            return numpyro.sample(
-                self.name,
-                dist.TruncatedNormal(
-                    self.prior_mean,
-                    self.prior_std,
-                    low=self.prior_low,
-                    high=self.prior_high,
-                ),
-            )
+            return self._numpyro_sample_truncnormal()
         if self.prior_kind == "dirichlet":
             raise ValueError(
                 "Parameter('dirichlet') is reserved -- compose Dirichlet at the model layer "
                 "or use dynesty stick-breaking in NestedSampler._prior_transform"
             )
         raise ValueError(f"Unsupported prior_kind: {self.prior_kind!r}")
+
+    def _numpyro_sample_loguniform(self) -> Any:
+        """NumPyro draw for the ``loguniform`` prior_kind."""
+        log_low = jnp.log10(jnp.asarray(self.prior_low))
+        log_high = jnp.log10(jnp.asarray(self.prior_high))
+        log_x = numpyro.sample(self.name + "_log", dist.Uniform(log_low, log_high))
+        return numpyro.deterministic(self.name, jnp.power(10.0, log_x))
+
+    def _numpyro_sample_normal(self) -> Any:
+        """NumPyro draw for the ``normal`` prior_kind."""
+        if self.prior_mean is None or self.prior_std is None:
+            raise ValueError(
+                f"Parameter {self.name!r}: 'normal' prior requires prior_mean and prior_std"
+            )
+        return numpyro.sample(self.name, dist.Normal(self.prior_mean, self.prior_std))
+
+    def _numpyro_sample_truncnormal(self) -> Any:
+        """NumPyro draw for the ``truncnormal`` prior_kind."""
+        if self.prior_mean is None or self.prior_std is None:
+            raise ValueError(
+                f"Parameter {self.name!r}: 'truncnormal' prior requires prior_mean and prior_std"
+            )
+        return numpyro.sample(
+            self.name,
+            dist.TruncatedNormal(
+                self.prior_mean,
+                self.prior_std,
+                low=self.prior_low,
+                high=self.prior_high,
+            ),
+        )
 
     def cube_transform(self, u: float) -> float:
         """Inverse-CDF transform from a unit-cube draw ``u`` in [0, 1].
