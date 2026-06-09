@@ -872,7 +872,33 @@ class IterativeCFLIBSSolver:
         min_boltzmann_r2: float = 0.3,
         boltzmann_weight_cap: float = 5.0,
         saha_boltzmann_graph: bool = False,
+        use_jax_boltzmann: Optional[bool] = None,
+        use_lax_while_loop: Optional[bool] = None,
     ):
+        # JAX numerical-path selectors lifted onto the interface (arch review
+        # c5-solver-flags). These two flags choose between the CPU reference
+        # path and an opt-in JAX kernel for, respectively, the inner Boltzmann
+        # sigma-clip WLS step (``use_jax_boltzmann``) and the whole iterative
+        # solve loop via ``jax.lax.while_loop`` (``use_lax_while_loop``, T1-3 /
+        # ADR-0001). They were previously read silently from the process
+        # environment (``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION`` /
+        # ``CFLIBS_USE_LAX_WHILE_LOOP``) at construction/solve time, which made
+        # the active numerical path invisible to callers and to tests.
+        #
+        # Default ``None`` SEEDS each flag from its env var, so default
+        # construction is byte-identical to the historical env-driven behavior
+        # and every existing ``CFLIBS_USE_*`` invocation is unchanged. Passing
+        # an explicit ``True``/``False`` is AUTHORITATIVE and overrides the env
+        # var. ``solve`` and the Boltzmann-fitter wiring read ``self.use_*``
+        # instead of touching ``os.environ`` directly.
+        self.use_jax_boltzmann = (
+            _jax_boltzmann_composition_enabled()
+            if use_jax_boltzmann is None
+            else bool(use_jax_boltzmann)
+        )
+        self.use_lax_while_loop = (
+            _lax_while_loop_enabled() if use_lax_while_loop is None else bool(use_lax_while_loop)
+        )
         self.atomic_db = atomic_db
         self.max_iterations = max_iterations
         self.t_tolerance_k = t_tolerance_k
@@ -1038,7 +1064,7 @@ class IterativeCFLIBSSolver:
         self.closure: ClosureStrategy = closure
         self.boltzmann_fitter = BoltzmannPlotFitter(
             outlier_sigma=2.5,
-            use_jax=_jax_boltzmann_composition_enabled(),
+            use_jax=self.use_jax_boltzmann,
         )
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
@@ -1572,8 +1598,10 @@ class IterativeCFLIBSSolver:
         Estimate plasma temperature, electron density, and elemental concentrations from spectral line observations using the iterative CF-LIBS algorithm.
 
         Routes to ``_solve_lax`` (``jax.lax.while_loop`` path, T1-3) when both
-        :func:`_lax_while_loop_enabled` and ``HAS_JAX`` are true; otherwise
-        runs the Python ``for``-loop reference path in ``_solve_python``.
+        ``self.use_lax_while_loop`` (seeded from
+        :func:`_lax_while_loop_enabled` at construction, overridable via the
+        constructor) and ``HAS_JAX`` are true; otherwise runs the Python
+        ``for``-loop reference path in ``_solve_python``.
 
         Parameters:
             observations (List[LineObservation]): Spectral line observations to invert; lines are grouped by element.
@@ -1606,7 +1634,7 @@ class IterativeCFLIBSSolver:
         # supplied stark_diagnostic forces the Python path.
         if (
             HAS_JAX
-            and _lax_while_loop_enabled()
+            and self.use_lax_while_loop
             and not self.apply_self_absorption
             and not self.saha_boltzmann_graph
             and stark_diagnostic is None
