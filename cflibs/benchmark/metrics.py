@@ -384,25 +384,8 @@ class BenchmarkMetrics:
         EvaluationResult
             Complete evaluation results
         """
-        # Validate inputs
-        elements = sorted(set(predictions.keys()) & set(true_values.keys()))
-        if not elements:
-            raise ValueError("No common elements between predictions and true values")
-
-        # Check array lengths
-        n_spectra = None
-        for elem in elements:
-            pred_len = len(predictions[elem])
-            true_len = len(true_values[elem])
-            if pred_len != true_len:
-                raise ValueError(
-                    f"Element {elem}: prediction length ({pred_len}) != "
-                    f"true values length ({true_len})"
-                )
-            if n_spectra is None:
-                n_spectra = pred_len
-            elif pred_len != n_spectra:
-                raise ValueError("Inconsistent array lengths across elements")
+        # Validate inputs and resolve common elements / spectrum count
+        elements, n_spectra = self._validate_and_resolve_dimensions(predictions, true_values)
 
         # Calculate per-element metrics
         element_metrics = {}
@@ -416,44 +399,13 @@ class BenchmarkMetrics:
         overall_mae = np.mean([m.mae for m in element_metrics.values()])
         overall_r2 = np.mean([m.r_squared for m in element_metrics.values()])
 
-        # Stratified summary: stratify by certified concentration, NOT predicted.
-        # Each (element, spectrum) pair becomes one record so that an element
-        # whose certified value crosses a stratum boundary across spectra is
-        # counted in the appropriate bucket per-spectrum.
-        from cflibs.benchmark.composition_metrics import (
-            stratify_per_element_errors,
-            subcompositional_ratio_errors as _subcompositional_ratio_errors,
-            load_subcompositional_pairs,
+        per_stratum_summary = self._compute_per_stratum_summary(
+            elements, predictions, true_values, element_metrics
         )
 
-        stratum_records = []
-        for elem in elements:
-            true_arr = true_values[elem]
-            pred_arr = predictions[elem]
-            for t, p in zip(true_arr, pred_arr):
-                stratum_records.append({"element": elem, "true": float(t), "predicted": float(p)})
-
-        loq_lookup = {elem: float(metrics_obj.loq) for elem, metrics_obj in element_metrics.items()}
-        per_stratum_summary = stratify_per_element_errors(
-            stratum_records,
-            thresholds=self.strata_thresholds,
-            loq_lookup=loq_lookup,
+        subcomp_errors = self._compute_subcompositional_errors(
+            elements, predictions, true_values, n_spectra
         )
-
-        # Subcompositional ratio errors: per-spectrum |log(r̂/r*)| for each
-        # configured pair, then aggregated as a list across spectra.
-        pair_list = self.subcompositional_pairs
-        if pair_list is None:
-            pair_list = load_subcompositional_pairs()
-
-        subcomp_errors: Dict[str, List[float]] = {f"{n}/{d}": [] for n, d in pair_list}
-        for spectrum_idx in range(n_spectra):
-            true_comp = {elem: float(true_values[elem][spectrum_idx]) for elem in elements}
-            pred_comp = {elem: float(predictions[elem][spectrum_idx]) for elem in elements}
-            errs = _subcompositional_ratio_errors(pred_comp, true_comp, pair_list)
-            for key, val in errs.items():
-                if not np.isnan(val):
-                    subcomp_errors[key].append(val)
 
         return EvaluationResult(
             dataset_name=dataset_name,
@@ -469,6 +421,90 @@ class BenchmarkMetrics:
             algorithm_version=algorithm_version,
             metadata=metadata or {},
         )
+
+    @staticmethod
+    def _validate_and_resolve_dimensions(
+        predictions: Dict[str, List[float]],
+        true_values: Dict[str, List[float]],
+    ) -> Tuple[List[str], int]:
+        """Validate inputs and return common elements plus the spectrum count."""
+        elements = sorted(set(predictions.keys()) & set(true_values.keys()))
+        if not elements:
+            raise ValueError("No common elements between predictions and true values")
+
+        # Check array lengths
+        n_spectra: Optional[int] = None
+        for elem in elements:
+            pred_len = len(predictions[elem])
+            true_len = len(true_values[elem])
+            if pred_len != true_len:
+                raise ValueError(
+                    f"Element {elem}: prediction length ({pred_len}) != "
+                    f"true values length ({true_len})"
+                )
+            if n_spectra is None:
+                n_spectra = pred_len
+            elif pred_len != n_spectra:
+                raise ValueError("Inconsistent array lengths across elements")
+
+        assert n_spectra is not None  # guaranteed: `elements` is non-empty
+        return elements, n_spectra
+
+    def _compute_per_stratum_summary(
+        self,
+        elements: List[str],
+        predictions: Dict[str, List[float]],
+        true_values: Dict[str, List[float]],
+        element_metrics: Dict[str, ElementMetrics],
+    ):
+        """Stratify by certified concentration, NOT predicted.
+
+        Each (element, spectrum) pair becomes one record so that an element
+        whose certified value crosses a stratum boundary across spectra is
+        counted in the appropriate bucket per-spectrum.
+        """
+        from cflibs.benchmark.composition_metrics import stratify_per_element_errors
+
+        stratum_records = []
+        for elem in elements:
+            true_arr = true_values[elem]
+            pred_arr = predictions[elem]
+            for t, p in zip(true_arr, pred_arr):
+                stratum_records.append({"element": elem, "true": float(t), "predicted": float(p)})
+
+        loq_lookup = {elem: float(metrics_obj.loq) for elem, metrics_obj in element_metrics.items()}
+        return stratify_per_element_errors(
+            stratum_records,
+            thresholds=self.strata_thresholds,
+            loq_lookup=loq_lookup,
+        )
+
+    def _compute_subcompositional_errors(
+        self,
+        elements: List[str],
+        predictions: Dict[str, List[float]],
+        true_values: Dict[str, List[float]],
+        n_spectra: int,
+    ) -> Dict[str, List[float]]:
+        """Per-spectrum |log(r̂/r*)| for each configured pair, aggregated as a list."""
+        from cflibs.benchmark.composition_metrics import (
+            subcompositional_ratio_errors as _subcompositional_ratio_errors,
+            load_subcompositional_pairs,
+        )
+
+        pair_list = self.subcompositional_pairs
+        if pair_list is None:
+            pair_list = load_subcompositional_pairs()
+
+        subcomp_errors: Dict[str, List[float]] = {f"{n}/{d}": [] for n, d in pair_list}
+        for spectrum_idx in range(n_spectra):
+            true_comp = {elem: float(true_values[elem][spectrum_idx]) for elem in elements}
+            pred_comp = {elem: float(predictions[elem][spectrum_idx]) for elem in elements}
+            errs = _subcompositional_ratio_errors(pred_comp, true_comp, pair_list)
+            for key, val in errs.items():
+                if not np.isnan(val):
+                    subcomp_errors[key].append(val)
+        return subcomp_errors
 
     def _calculate_element_metrics(
         self,
