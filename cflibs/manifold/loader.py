@@ -117,24 +117,10 @@ class ManifoldLoader:
 
         self.manifold_path = path
         self.storage_format = _infer_storage_format(path)
-        self.file = None
-        self.root = None
+        self.file: Any = None
+        self.root: Any = None
 
-        if self.storage_format == "hdf5":
-            if not HAS_H5PY:
-                raise ImportError(
-                    "h5py is required for HDF5 manifold loading. Install with: pip install h5py"
-                )
-            self.file = h5py.File(path, "r")
-            self.root = self.file
-        elif self.storage_format == "zarr":
-            if not HAS_ZARR:
-                raise ImportError(
-                    "zarr is required for Zarr manifold loading. Install with: pip install zarr"
-                )
-            self.root = zarr.open_group(str(path), mode="r")
-        else:
-            raise ValueError(f"Unsupported manifold storage format: {self.storage_format}")
+        self.root = self._open_store(path)
 
         self.spectra = _DatasetView(self.root["spectra"])
         self.params = _DatasetView(self.root["params"])
@@ -152,11 +138,57 @@ class ManifoldLoader:
             f"{len(self.wavelength)} wavelength points"
         )
 
-        # Nyquist-sampling sanity check (Wave 1 D1 fix). Warn (don't error) if
-        # the loaded manifold was generated below the ≥3 px/FWHM threshold the
-        # current ManifoldConfig.validate() enforces — consumers need to
-        # regenerate such manifolds to avoid line-shape and pixel-integrated
-        # flux bias (Robertson 2017; Magnier 2025; Demidov 2022).
+        self._warn_if_sub_nyquist(attrs)
+
+    def _open_store(self, path: Path) -> Any:
+        """Open the backend store, set ``self.file``, and return the root.
+
+        Parameters
+        ----------
+        path : Path
+            Path to the HDF5 or Zarr manifold store.
+
+        Returns
+        -------
+        Any
+            The opened backend root (HDF5 file or Zarr group).
+
+        Raises
+        ------
+        ImportError
+            If the required backend is not installed.
+        ValueError
+            If the inferred storage format is unsupported.
+        """
+        if self.storage_format == "hdf5":
+            if not HAS_H5PY:
+                raise ImportError(
+                    "h5py is required for HDF5 manifold loading. Install with: pip install h5py"
+                )
+            self.file = h5py.File(path, "r")
+            return self.file
+        if self.storage_format == "zarr":
+            if not HAS_ZARR:
+                raise ImportError(
+                    "zarr is required for Zarr manifold loading. Install with: pip install zarr"
+                )
+            return zarr.open_group(str(path), mode="r")
+        raise ValueError(f"Unsupported manifold storage format: {self.storage_format}")
+
+    def _warn_if_sub_nyquist(self, attrs: Any) -> None:
+        """Warn when the loaded manifold was generated below 3 px/FWHM.
+
+        Nyquist-sampling sanity check (Wave 1 D1 fix). Warn (don't error) if
+        the loaded manifold was generated below the ≥3 px/FWHM threshold the
+        current ManifoldConfig.validate() enforces — consumers need to
+        regenerate such manifolds to avoid line-shape and pixel-integrated
+        flux bias (Robertson 2017; Magnier 2025; Demidov 2022).
+
+        Parameters
+        ----------
+        attrs : Any
+            Manifold store attribute mapping (HDF5/Zarr ``attrs``).
+        """
         instrument_fwhm = attrs.get("instrument_fwhm_nm", None)
         try:
             instrument_fwhm = float(instrument_fwhm) if instrument_fwhm is not None else None
