@@ -186,6 +186,22 @@ def distort_wavelength_axis(
     return warped
 
 
+def _inner_factorial_perturbations(
+    axes: PerturbationAxes, snr_db: float, continuum: float
+) -> Iterator[Dict[str, float]]:
+    """Yield perturbations over the inner (resolving/shift/warp) axes."""
+    for resolving_power in axes.resolving_power:
+        for shift_nm in axes.shift_nm:
+            for warp_nm in axes.warp_quadratic_nm:
+                yield {
+                    "snr_db": float(snr_db),
+                    "continuum_level": float(continuum),
+                    "resolving_power": float(resolving_power),
+                    "shift_nm": float(shift_nm),
+                    "warp_quadratic_nm": float(warp_nm),
+                }
+
+
 def full_factorial_perturbations(axes: PerturbationAxes) -> Iterator[Dict[str, float]]:
     """
     Yield full-factorial perturbation combinations in deterministic order.
@@ -202,16 +218,7 @@ def full_factorial_perturbations(axes: PerturbationAxes) -> Iterator[Dict[str, f
     """
     for snr_db in axes.snr_db:
         for continuum in axes.continuum_level:
-            for resolving_power in axes.resolving_power:
-                for shift_nm in axes.shift_nm:
-                    for warp_nm in axes.warp_quadratic_nm:
-                        yield {
-                            "snr_db": float(snr_db),
-                            "continuum_level": float(continuum),
-                            "resolving_power": float(resolving_power),
-                            "shift_nm": float(shift_nm),
-                            "warp_quadratic_nm": float(warp_nm),
-                        }
+            yield from _inner_factorial_perturbations(axes, snr_db, continuum)
 
 
 def _apply_resolving_power(
