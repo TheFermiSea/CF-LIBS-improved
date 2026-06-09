@@ -31,8 +31,13 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
+from cflibs.pds._csv_spectrum import parse_metadata_csv
 
 logger = get_logger("pds.chemcam")
+
+# ChemCam has a ~40 nm gap (UV->VIO) and a ~5 nm gap (VIO->VNIR), so the
+# threshold is set low enough to catch the smaller of the two gaps.
+_GAP_THRESHOLD_NM = 3.0
 
 
 @dataclass
@@ -108,27 +113,19 @@ class ChemCamParser:
 
         logger.debug("Parsing ChemCam file: %s", path)
 
-        # Read the file and split into metadata header and data
+        # Read the file and parse the shared metadata-CSV layout.
         text = path.read_text(encoding="utf-8", errors="replace")
-        lines = text.strip().split("\n")
+        parsed = parse_metadata_csv(text, gap_threshold_nm=_GAP_THRESHOLD_NM)
 
-        metadata: Dict = {"source_file": str(path)}
-        product_id = path.stem
-
-        # Parse header lines (lines starting with # or containing metadata)
-        data_start = self._parse_header_lines(lines, metadata)
-
-        # Parse the numeric data
-        wavelengths, intensities = self._parse_data_lines(lines[data_start:])
-
-        if not wavelengths:
+        if parsed.wavelength.size == 0:
             raise ValueError(f"No spectral data found in {path}")
 
-        wl_arr = np.array(wavelengths)
-        int_arr = np.array(intensities)
+        metadata: Dict = {"source_file": str(path), **parsed.metadata}
+        product_id = path.stem
 
-        # Identify spectrometer boundaries from wavelength gaps
-        spec_ranges = self._find_spectrometer_ranges(wl_arr)
+        wl_arr = parsed.wavelength
+        int_arr = parsed.intensity
+        spec_ranges = parsed.spectrometer_ranges
 
         # Extract metadata
         sol = metadata.get("sol", 0)
@@ -157,92 +154,6 @@ class ChemCamParser:
             sol,
         )
         return spectrum
-
-    def _parse_header_lines(self, lines: List[str], metadata: Dict) -> int:
-        """Parse header lines and return the index where numeric data starts.
-
-        Lines starting with ``#`` or ``"`` are metadata header lines. The first
-        comma-separated line whose first field parses as a float marks the start
-        of the numeric data; a non-numeric comma-separated line is treated as a
-        column-header row.
-        """
-        data_start = 0
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("#") or stripped.startswith('"'):
-                self._parse_header_line(stripped, metadata)
-                data_start = i + 1
-            elif "," in stripped:
-                # Check if this is a header row with column names
-                parts = stripped.split(",")
-                try:
-                    float(parts[0])
-                    # It's numeric data
-                    data_start = i
-                    break
-                except ValueError:
-                    # Column header row
-                    data_start = i + 1
-            else:
-                data_start = i + 1
-        return data_start
-
-    def _parse_data_lines(self, data_lines: List[str]) -> Tuple[List[float], List[float]]:
-        """Parse numeric ``wavelength,intensity`` rows from the data section."""
-        wavelengths: List[float] = []
-        intensities: List[float] = []
-        for line in data_lines:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            parts = stripped.split(",")
-            if len(parts) >= 2:
-                try:
-                    wl = float(parts[0])
-                    intensity = float(parts[1])
-                    wavelengths.append(wl)
-                    intensities.append(intensity)
-                except ValueError:
-                    continue
-        return wavelengths, intensities
-
-    def _parse_header_line(self, line: str, metadata: Dict) -> None:
-        """Extract metadata from a header line."""
-        clean = line.lstrip("#").strip().strip('"')
-        if "=" in clean:
-            key, _, val = clean.partition("=")
-            key = key.strip().lower().replace(" ", "_")
-            val = val.strip().strip('"')
-            try:
-                metadata[key] = int(val)
-            except ValueError:
-                try:
-                    metadata[key] = float(val)
-                except ValueError:
-                    metadata[key] = val
-
-    def _find_spectrometer_ranges(
-        self, wavelength: np.ndarray, gap_threshold_nm: float = 3.0
-    ) -> List[Tuple[int, int]]:
-        """Identify spectrometer boundaries from wavelength gaps.
-
-        ChemCam has a ~40nm gap (UV→VIO) and a ~5nm gap (VIO→VNIR),
-        so the default threshold is set low enough for the smaller gap.
-        """
-        if len(wavelength) < 2:
-            return [(0, len(wavelength))]
-
-        diffs = np.diff(wavelength)
-        gap_indices = np.where(diffs > gap_threshold_nm)[0]
-
-        ranges = []
-        start = 0
-        for gap_idx in gap_indices:
-            ranges.append((start, gap_idx + 1))
-            start = gap_idx + 1
-        ranges.append((start, len(wavelength)))
-
-        return ranges
 
     def _extract_sol_from_product_id(self, product_id: str) -> int:
         """Try to extract sol number from product ID naming convention.
