@@ -571,6 +571,15 @@ class SpectralNNLSIdentifier:
                 "n_elements_tested": n_elements,
                 "n_detected": len(detected_elements),
             },
+            # Deep-module seam: expose the (T, ne) the NNLS decomposition was
+            # solved at as typed result fields so downstream consumers (the
+            # Bayesian candidate prefilter) read the estimate from this RESULT
+            # rather than reaching into the identifier's private cached
+            # ``_estimated_T`` / ``_estimated_ne`` state. Same values as the
+            # cached attributes and the ``parameters`` mirror; just returned,
+            # not reached-for.
+            estimated_T_K=T_est,
+            estimated_ne_cm3=ne_est,
         )
 
     def _compute_element_snr(

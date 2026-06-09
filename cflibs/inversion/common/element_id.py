@@ -127,6 +127,18 @@ class ElementIdentificationResult:
         Algorithm parameters used; values may be float, str, bool, or list (default {})
     warnings : List[str]
         Any warnings generated (default [])
+    estimated_T_K : float, optional
+        Plasma temperature estimate (K) the identifier inferred while running,
+        if it estimates one. Populated by ``SpectralNNLSIdentifier`` (whose
+        NNLS decomposition is solved at an estimated (T, ne)); ``None`` for
+        identifiers that do not produce a plasma estimate. Exposed as a typed
+        result field so downstream consumers (e.g. the Bayesian candidate
+        prefilter) can read the estimate from the *return value* instead of
+        reaching into the identifier's private cached state.
+    estimated_ne_cm3 : float, optional
+        Plasma electron-density estimate (cm^-3) the identifier inferred while
+        running, if it estimates one. See ``estimated_T_K``; ``None`` when the
+        identifier does not produce a plasma estimate.
     """
 
     detected_elements: List[ElementIdentification]
@@ -139,6 +151,8 @@ class ElementIdentificationResult:
     algorithm: str
     parameters: Dict[str, Any] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
+    estimated_T_K: Optional[float] = None
+    estimated_ne_cm3: Optional[float] = None
 
 
 def get_wavelength_tolerance(
