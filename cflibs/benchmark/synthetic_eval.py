@@ -384,6 +384,224 @@ class CalibrationOptions:
     quality_max_abs_correction_nm: float = 2.5
 
 
+def _apply_calibration(
+    wl: np.ndarray,
+    intensity: np.ndarray,
+    db: AtomicDatabase,
+    candidate_elements: List[str],
+    calibration: CalibrationOptions,
+) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Optionally calibrate the wavelength axis, returning (wl, cal_meta)."""
+    cal_meta: Dict[str, Any] = {
+        "calibration_mode": calibration.mode,
+        "calibration_applied": False,
+        "calibration_success": False,
+        "calibration_quality_passed": False,
+        "calibration_reason": "",
+        "calibration_model": "none",
+    }
+    if calibration.mode == "none":
+        return wl, cal_meta
+
+    cal = calibrate_wavelength_axis(
+        wavelength=wl,
+        intensity=intensity,
+        atomic_db=db,
+        elements=candidate_elements,
+        mode=calibration.mode,  # type: ignore[arg-type]
+        max_pair_window_nm=calibration.max_pair_window_nm,
+        inlier_tolerance_nm=calibration.inlier_tolerance_nm,
+        apply_quality_gate=calibration.apply_quality_gate,
+        quality_min_inliers=calibration.quality_min_inliers,
+        quality_min_peak_match_fraction=calibration.quality_min_peak_match_fraction,
+        quality_max_rmse_nm=calibration.quality_max_rmse_nm,
+        quality_min_inlier_span_fraction=calibration.quality_min_inlier_span_fraction,
+        quality_max_abs_correction_nm=calibration.quality_max_abs_correction_nm,
+    )
+    cal_meta.update(
+        {
+            "calibration_success": bool(cal.success),
+            "calibration_quality_passed": bool(cal.quality_passed),
+            "calibration_reason": cal.quality_reason or str(cal.details.get("reason", "")),
+            "calibration_model": cal.model,
+            "calibration_rmse_nm": float(cal.rmse_nm),
+            "calibration_n_inliers": int(cal.n_inliers),
+            "calibration_n_candidates": int(cal.n_candidates),
+            "calibration_peak_match_fraction": float(cal.matched_peak_fraction),
+        }
+    )
+    if cal.success and cal.quality_passed:
+        wl = cal.corrected_wavelength
+        cal_meta["calibration_applied"] = True
+    return wl, cal_meta
+
+
+def _build_failed_row(
+    spec: BenchmarkSpectrum,
+    algo_name: str,
+    true_elements: Set[str],
+    candidate_elements: List[str],
+    resolving_power: float,
+    manifest_meta: Dict[str, Any],
+    perturb: Dict[str, Any],
+    cal_meta: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build the row dict emitted when an identifier failed for a spectrum."""
+    return {
+        "sample_id": spec.spectrum_id,
+        "algorithm": algo_name,
+        "failed": True,
+        "true_elements": sorted(true_elements),
+        "predicted_elements": [],
+        "tp": 0,
+        "fp": 0,
+        "fn": len(true_elements),
+        "tn": max(len(candidate_elements) - len(true_elements), 0),
+        "n_peaks": 0,
+        "n_matched_peaks": 0,
+        "n_unmatched_peaks": 0,
+        "peak_match_rate": 0.0,
+        "matched_lines_true_elements": 0,
+        "total_lines_true_elements": 0,
+        "matched_lines_absent_elements": 0,
+        "resolving_power": resolving_power,
+        "recipe": manifest_meta.get("recipe", ""),
+        "snr_db": perturb.get("snr_db"),
+        "continuum_level": perturb.get("continuum_level"),
+        "shift_nm": perturb.get("shift_nm"),
+        "warp_quadratic_nm": perturb.get("warp_quadratic_nm"),
+        **cal_meta,
+    }
+
+
+def _count_line_matches(
+    result: ElementIdentificationResult,
+    true_elements: Set[str],
+    candidate_elements: List[str],
+) -> Tuple[int, int, int]:
+    """Tally matched/total true-element lines and matched absent-element lines."""
+    by_element = _element_by_name(result)
+    matched_true = 0
+    total_true = 0
+    matched_absent = 0
+    for element in candidate_elements:
+        elem_result = by_element.get(element)
+        if elem_result is None:
+            continue
+        if element in true_elements:
+            matched_true += int(elem_result.n_matched_lines)
+            total_true += int(elem_result.n_total_lines)
+        else:
+            matched_absent += int(elem_result.n_matched_lines)
+    return matched_true, total_true, matched_absent
+
+
+def _build_success_row(
+    spec: BenchmarkSpectrum,
+    algo_name: str,
+    result: ElementIdentificationResult,
+    true_elements: Set[str],
+    candidate_elements: List[str],
+    resolving_power: float,
+    manifest_meta: Dict[str, Any],
+    perturb: Dict[str, Any],
+    cal_meta: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build the row dict emitted when an identifier succeeded for a spectrum."""
+    predicted_elements = {e.element for e in result.detected_elements}
+    counts = confusion_counts(true_elements, predicted_elements, candidate_elements)
+    matched_true, total_true, matched_absent = _count_line_matches(
+        result, true_elements, candidate_elements
+    )
+    return {
+        "sample_id": spec.spectrum_id,
+        "algorithm": algo_name,
+        "failed": False,
+        "true_elements": sorted(true_elements),
+        "predicted_elements": sorted(predicted_elements),
+        **counts,
+        "n_peaks": int(result.n_peaks),
+        "n_matched_peaks": int(result.n_matched_peaks),
+        "n_unmatched_peaks": int(result.n_unmatched_peaks),
+        "peak_match_rate": float(result.n_matched_peaks / max(result.n_peaks, 1)),
+        "matched_lines_true_elements": int(matched_true),
+        "total_lines_true_elements": int(total_true),
+        "matched_lines_absent_elements": int(matched_absent),
+        "resolving_power": float(resolving_power),
+        "recipe": manifest_meta.get("recipe", ""),
+        "snr_db": perturb.get("snr_db"),
+        "continuum_level": perturb.get("continuum_level"),
+        "shift_nm": perturb.get("shift_nm"),
+        "warp_quadratic_nm": perturb.get("warp_quadratic_nm"),
+        **cal_meta,
+    }
+
+
+def _evaluate_spectrum_rows(
+    spec: BenchmarkSpectrum,
+    db: AtomicDatabase,
+    candidate_elements: List[str],
+    algorithms: List[str],
+    presence_threshold: float,
+    calibration: CalibrationOptions,
+    basis_library: Optional["BasisLibrary"],
+    manifest_by_sample: Optional[Dict[str, Dict[str, Any]]],
+) -> List[Dict[str, Any]]:
+    """Run all identifiers on one spectrum and build its per-algorithm rows."""
+    true_elements = derive_truth_elements(
+        spec.true_composition, presence_threshold=presence_threshold
+    )
+    wl = np.asarray(spec.wavelength_nm, dtype=float)
+    intensity = np.asarray(spec.intensity, dtype=float)
+
+    wl, cal_meta = _apply_calibration(wl, intensity, db, candidate_elements, calibration)
+
+    resolving_power = resolving_power_from_spectrum(spec)
+    results = _identifier_suite(
+        wavelength=wl,
+        intensity=intensity,
+        db=db,
+        elements=candidate_elements,
+        resolving_power=resolving_power,
+        basis_library=basis_library,
+    )
+
+    manifest_meta = (manifest_by_sample or {}).get(spec.spectrum_id, {})
+    perturb = manifest_meta.get("perturbation", {})
+
+    spectrum_rows: List[Dict[str, Any]] = []
+    for algo_name in algorithms:
+        result = results.get(algo_name)
+        if result is None:
+            spectrum_rows.append(
+                _build_failed_row(
+                    spec,
+                    algo_name,
+                    true_elements,
+                    candidate_elements,
+                    resolving_power,
+                    manifest_meta,
+                    perturb,
+                    cal_meta,
+                )
+            )
+            continue
+        spectrum_rows.append(
+            _build_success_row(
+                spec,
+                algo_name,
+                result,
+                true_elements,
+                candidate_elements,
+                resolving_power,
+                manifest_meta,
+                perturb,
+                cal_meta,
+            )
+        )
+    return spectrum_rows
+
+
 def evaluate_dataset(
     dataset: BenchmarkDataset,
     db: AtomicDatabase,
@@ -436,138 +654,18 @@ def evaluate_dataset(
         algorithms.extend(_BASIS_ALGORITHMS)
 
     for idx, spec in enumerate(spectra, start=1):
-        true_elements = derive_truth_elements(
-            spec.true_composition, presence_threshold=presence_threshold
+        rows.extend(
+            _evaluate_spectrum_rows(
+                spec=spec,
+                db=db,
+                candidate_elements=candidate_elements,
+                algorithms=algorithms,
+                presence_threshold=presence_threshold,
+                calibration=calibration,
+                basis_library=basis_library,
+                manifest_by_sample=manifest_by_sample,
+            )
         )
-        wl = np.asarray(spec.wavelength_nm, dtype=float)
-        intensity = np.asarray(spec.intensity, dtype=float)
-
-        cal_meta: Dict[str, Any] = {
-            "calibration_mode": calibration.mode,
-            "calibration_applied": False,
-            "calibration_success": False,
-            "calibration_quality_passed": False,
-            "calibration_reason": "",
-            "calibration_model": "none",
-        }
-        if calibration.mode != "none":
-            cal = calibrate_wavelength_axis(
-                wavelength=wl,
-                intensity=intensity,
-                atomic_db=db,
-                elements=candidate_elements,
-                mode=calibration.mode,  # type: ignore[arg-type]
-                max_pair_window_nm=calibration.max_pair_window_nm,
-                inlier_tolerance_nm=calibration.inlier_tolerance_nm,
-                apply_quality_gate=calibration.apply_quality_gate,
-                quality_min_inliers=calibration.quality_min_inliers,
-                quality_min_peak_match_fraction=calibration.quality_min_peak_match_fraction,
-                quality_max_rmse_nm=calibration.quality_max_rmse_nm,
-                quality_min_inlier_span_fraction=calibration.quality_min_inlier_span_fraction,
-                quality_max_abs_correction_nm=calibration.quality_max_abs_correction_nm,
-            )
-            cal_meta.update(
-                {
-                    "calibration_success": bool(cal.success),
-                    "calibration_quality_passed": bool(cal.quality_passed),
-                    "calibration_reason": cal.quality_reason or str(cal.details.get("reason", "")),
-                    "calibration_model": cal.model,
-                    "calibration_rmse_nm": float(cal.rmse_nm),
-                    "calibration_n_inliers": int(cal.n_inliers),
-                    "calibration_n_candidates": int(cal.n_candidates),
-                    "calibration_peak_match_fraction": float(cal.matched_peak_fraction),
-                }
-            )
-            if cal.success and cal.quality_passed:
-                wl = cal.corrected_wavelength
-                cal_meta["calibration_applied"] = True
-
-        resolving_power = resolving_power_from_spectrum(spec)
-        results = _identifier_suite(
-            wavelength=wl,
-            intensity=intensity,
-            db=db,
-            elements=candidate_elements,
-            resolving_power=resolving_power,
-            basis_library=basis_library,
-        )
-
-        manifest_meta = (manifest_by_sample or {}).get(spec.spectrum_id, {})
-        perturb = manifest_meta.get("perturbation", {})
-
-        for algo_name in algorithms:
-            result = results.get(algo_name)
-            if result is None:
-                rows.append(
-                    {
-                        "sample_id": spec.spectrum_id,
-                        "algorithm": algo_name,
-                        "failed": True,
-                        "true_elements": sorted(true_elements),
-                        "predicted_elements": [],
-                        "tp": 0,
-                        "fp": 0,
-                        "fn": len(true_elements),
-                        "tn": max(len(candidate_elements) - len(true_elements), 0),
-                        "n_peaks": 0,
-                        "n_matched_peaks": 0,
-                        "n_unmatched_peaks": 0,
-                        "peak_match_rate": 0.0,
-                        "matched_lines_true_elements": 0,
-                        "total_lines_true_elements": 0,
-                        "matched_lines_absent_elements": 0,
-                        "resolving_power": resolving_power,
-                        "recipe": manifest_meta.get("recipe", ""),
-                        "snr_db": perturb.get("snr_db"),
-                        "continuum_level": perturb.get("continuum_level"),
-                        "shift_nm": perturb.get("shift_nm"),
-                        "warp_quadratic_nm": perturb.get("warp_quadratic_nm"),
-                        **cal_meta,
-                    }
-                )
-                continue
-
-            predicted_elements = {e.element for e in result.detected_elements}
-            counts = confusion_counts(true_elements, predicted_elements, candidate_elements)
-            by_element = _element_by_name(result)
-
-            matched_true = 0
-            total_true = 0
-            matched_absent = 0
-            for element in candidate_elements:
-                elem_result = by_element.get(element)
-                if elem_result is None:
-                    continue
-                if element in true_elements:
-                    matched_true += int(elem_result.n_matched_lines)
-                    total_true += int(elem_result.n_total_lines)
-                else:
-                    matched_absent += int(elem_result.n_matched_lines)
-
-            rows.append(
-                {
-                    "sample_id": spec.spectrum_id,
-                    "algorithm": algo_name,
-                    "failed": False,
-                    "true_elements": sorted(true_elements),
-                    "predicted_elements": sorted(predicted_elements),
-                    **counts,
-                    "n_peaks": int(result.n_peaks),
-                    "n_matched_peaks": int(result.n_matched_peaks),
-                    "n_unmatched_peaks": int(result.n_unmatched_peaks),
-                    "peak_match_rate": float(result.n_matched_peaks / max(result.n_peaks, 1)),
-                    "matched_lines_true_elements": int(matched_true),
-                    "total_lines_true_elements": int(total_true),
-                    "matched_lines_absent_elements": int(matched_absent),
-                    "resolving_power": float(resolving_power),
-                    "recipe": manifest_meta.get("recipe", ""),
-                    "snr_db": perturb.get("snr_db"),
-                    "continuum_level": perturb.get("continuum_level"),
-                    "shift_nm": perturb.get("shift_nm"),
-                    "warp_quadratic_nm": perturb.get("warp_quadratic_nm"),
-                    **cal_meta,
-                }
-            )
 
         if idx % 20 == 0 or idx == len(spectra):
             print(f"[synthetic-benchmark] processed {idx}/{len(spectra)} spectra")
@@ -638,6 +736,23 @@ def summarize_aggregate(
     return out
 
 
+def _per_element_confusion(subset: List[Dict[str, Any]], element: str) -> Tuple[int, int, int, int]:
+    """Tally TP/FP/FN/TN for one element across a per-algorithm row subset."""
+    tp = fp = fn = tn = 0
+    for row in subset:
+        truth = element in set(row["true_elements"])
+        pred = element in set(row["predicted_elements"])
+        if truth and pred:
+            tp += 1
+        elif (not truth) and pred:
+            fp += 1
+        elif truth and (not pred):
+            fn += 1
+        else:
+            tn += 1
+    return tp, fp, fn, tn
+
+
 def summarize_per_element(
     rows: List[Dict[str, Any]],
     candidate_elements: List[str],
@@ -648,18 +763,7 @@ def summarize_per_element(
     for algorithm in algorithms:
         subset = [row for row in rows if row["algorithm"] == algorithm and not row["failed"]]
         for element in candidate_elements:
-            tp = fp = fn = tn = 0
-            for row in subset:
-                truth = element in set(row["true_elements"])
-                pred = element in set(row["predicted_elements"])
-                if truth and pred:
-                    tp += 1
-                elif (not truth) and pred:
-                    fp += 1
-                elif truth and (not pred):
-                    fn += 1
-                else:
-                    tn += 1
+            tp, fp, fn, tn = _per_element_confusion(subset, element)
             metrics = compute_binary_metrics(tp, fp, fn, tn)
             out.append(
                 {
