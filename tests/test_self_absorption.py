@@ -1607,9 +1607,7 @@ class TestSiHighConcentrationSelfAbsorption:
             ),
         ]
 
-    def test_escape_factor_below_unity_for_si_resonance_lines(
-        self, si_resonance_lines
-    ):
+    def test_escape_factor_below_unity_for_si_resonance_lines(self, si_resonance_lines):
         """Escape factor f(tau) must be < 1 for optically-thick Si lines.
 
         Asserts the physics primitive ``_escape_factor`` does the right
@@ -1637,8 +1635,6 @@ class TestSiHighConcentrationSelfAbsorption:
         # resonance line (E_i = 0.0 eV) at the input level.
         assert si_resonance_lines[0].element == "Si"
         assert si_resonance_lines[0].wavelength_nm == 251.611
-
-
 
 
 # ==============================================================================
