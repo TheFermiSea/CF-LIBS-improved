@@ -374,7 +374,7 @@ def spectrum_target_names(root: Path) -> Dict[str, str]:
     for columns, row in _iter_table(csv_path):
         if _cell(row, columns.meta, "shift") != "0":
             continue
-        groups[_cell(row, columns.meta, "file")] = _cell(columns, row, columns.meta, "Target_Name")
+        groups[_cell(row, columns.meta, "file")] = _cell(row, columns.meta, "Target_Name")
     return groups
 
 

@@ -247,3 +247,19 @@ def test_scct_every_flight_target_resolves():
             assert truth.elements_present == frozenset({"Ti", "Al", "V"})
         else:
             assert truth.composition_wt, flight
+
+
+@pytest.mark.integration
+def test_spectrum_target_names_groups_shift0_files():
+    """The split-grouping helper streams the full table (no spectral parsing).
+
+    Uncovered until PR #287's Sonar blocker proved it: a stale 4-arg _cell
+    call lived here undetected because nothing called this function yet.
+    """
+    if not LABCAL_CSV.is_file():
+        pytest.skip("supercam_calib data not available")
+    groups = supercam_labcal.spectrum_target_names(SUPERCAM_ROOT)
+    assert len(groups) >= 1000  # ~1,193 shift==0 base spectra
+    targets = set(groups.values())
+    assert len(targets) >= 300  # ~334 unique standards
+    assert any("BHVO" in t.upper() for t in targets)
