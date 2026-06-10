@@ -512,9 +512,7 @@ def _build_observation(
         peak_height = float(np.max(segment_intensity))
         if not np.isfinite(peak_height) or peak_height <= 0.0:
             return None
-        fwhm_nm = _estimate_fwhm_nm(
-            segment_wl, segment_intensity, peak_idx - start_idx, wl_step
-        )
+        fwhm_nm = _estimate_fwhm_nm(segment_wl, segment_intensity, peak_idx - start_idx, wl_step)
         line_area = peak_height * fwhm_nm * _GAUSSIAN_AREA_PER_HEIGHT_FWHM
 
     counts = np.maximum(segment_intensity, 1.0)
