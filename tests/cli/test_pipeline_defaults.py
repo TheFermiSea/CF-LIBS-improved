@@ -52,7 +52,7 @@ class TestPresetResolution:
         assert cfg.top_k_per_element == 60
         assert cfg.min_relative_intensity is None
         assert cfg.exclude_resonance is None  # helper resolves None -> keep
-        assert cfg.apply_self_absorption is False
+        assert cfg.apply_self_absorption == "off"
 
     def test_metallic_preset(self):
         cfg = _build_pipeline_config(["Fe", "Cr"], preset="metallic")
@@ -285,8 +285,6 @@ class TestAnalysisConfigValidation:
             "ne_tolerance_frac",
             "pressure_pa",
             "pressure",
-            "self_absorption_column_density_cm3",
-            "self_absorption_plasma_length_cm",
             "boltzmann_weight_cap",
             "min_boltzmann_r2",
             "saha_boltzmann_graph",

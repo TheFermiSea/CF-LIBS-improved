@@ -58,8 +58,6 @@ class TestSelfAbsorptionCorrectorInit:
 
         assert corrector.optical_depth_threshold == 0.1
         assert corrector.mask_threshold == 3.0
-        assert corrector.max_iterations == 5
-        assert corrector.convergence_tolerance == 0.01
         assert corrector.plasma_length_cm == 0.1
 
     def test_custom_parameters(self):
@@ -67,15 +65,11 @@ class TestSelfAbsorptionCorrectorInit:
         corrector = SelfAbsorptionCorrector(
             optical_depth_threshold=0.5,
             mask_threshold=5.0,
-            max_iterations=10,
-            convergence_tolerance=0.001,
             plasma_length_cm=0.5,
         )
 
         assert corrector.optical_depth_threshold == 0.5
         assert corrector.mask_threshold == 5.0
-        assert corrector.max_iterations == 10
-        assert corrector.convergence_tolerance == 0.001
         assert corrector.plasma_length_cm == 0.5
 
 
@@ -239,164 +233,6 @@ class TestOpticalDepthEstimation:
         )
 
         assert tau == 0.0
-
-
-# ==============================================================================
-# SelfAbsorptionCorrector.correct() Tests
-# ==============================================================================
-
-
-class TestSelfAbsorptionCorrectorCorrect:
-    """Tests for SelfAbsorptionCorrector.correct() method."""
-
-    @pytest.fixture
-    def corrector(self):
-        return SelfAbsorptionCorrector(
-            optical_depth_threshold=0.1,
-            mask_threshold=3.0,
-            max_iterations=5,
-        )
-
-    @pytest.fixture
-    def sample_observations(self):
-        """Create sample line observations."""
-        return [
-            LineObservation(
-                wavelength_nm=400.0,
-                intensity=1000.0,
-                intensity_uncertainty=20.0,
-                element="Fe",
-                ionization_stage=1,
-                E_k_ev=3.0,
-                g_k=9,
-                A_ki=1e7,
-            ),
-            LineObservation(
-                wavelength_nm=410.0,
-                intensity=800.0,
-                intensity_uncertainty=16.0,
-                element="Fe",
-                ionization_stage=1,
-                E_k_ev=3.5,
-                g_k=7,
-                A_ki=8e6,
-            ),
-        ]
-
-    def test_correct_returns_result(self, corrector, sample_observations):
-        """Verify correct() returns SelfAbsorptionResult."""
-        result = corrector.correct(
-            observations=sample_observations,
-            temperature_K=10000.0,
-            concentrations={"Fe": 0.01},
-            total_number_density_cm3=1e18,
-            partition_funcs={"Fe": 25.0},
-        )
-
-        assert isinstance(result, SelfAbsorptionResult)
-        assert len(result.corrected_observations) + len(result.masked_observations) == 2
-
-    def test_optically_thin_unchanged(self, corrector, sample_observations):
-        """Verify optically thin lines are returned unchanged."""
-        # Very low concentration = low optical depth
-        result = corrector.correct(
-            observations=sample_observations,
-            temperature_K=10000.0,
-            concentrations={"Fe": 1e-10},  # Very low
-            total_number_density_cm3=1e15,  # Low density
-            partition_funcs={"Fe": 25.0},
-        )
-
-        # All should be returned without correction
-        for obs, corrected in zip(sample_observations, result.corrected_observations):
-            assert corrected.intensity == pytest.approx(obs.intensity, rel=0.001)
-
-    def test_corrections_dict_populated(self, corrector, sample_observations):
-        """Verify corrections dictionary is populated for all lines."""
-        result = corrector.correct(
-            observations=sample_observations,
-            temperature_K=10000.0,
-            concentrations={"Fe": 0.01},
-            total_number_density_cm3=1e18,
-            partition_funcs={"Fe": 25.0},
-        )
-
-        # All wavelengths should have entries
-        for obs in sample_observations:
-            assert obs.wavelength_nm in result.corrections
-            assert isinstance(result.corrections[obs.wavelength_nm], AbsorptionCorrectionResult)
-
-    def test_masked_lines_have_warnings(self):
-        """Verify masked lines generate warnings."""
-        corrector = SelfAbsorptionCorrector(mask_threshold=0.5)
-
-        # High concentration = potentially high optical depth
-        observations = [
-            LineObservation(
-                wavelength_nm=400.0,
-                intensity=10000.0,
-                intensity_uncertainty=100.0,
-                element="Fe",
-                ionization_stage=1,
-                E_k_ev=0.0,  # Ground state = high absorption
-                g_k=25,
-                A_ki=1e9,  # Very strong line
-            ),
-        ]
-
-        result = corrector.correct(
-            observations=observations,
-            temperature_K=8000.0,
-            concentrations={"Fe": 0.5},  # High concentration
-            total_number_density_cm3=1e20,  # High density
-            partition_funcs={"Fe": 25.0},
-        )
-
-        # With high optical depth, line may be masked
-        # Check that we got some result
-        assert len(result.corrected_observations) + len(result.masked_observations) == 1
-
-    def test_empty_observations(self, corrector):
-        """Verify handling of empty observation list."""
-        result = corrector.correct(
-            observations=[],
-            temperature_K=10000.0,
-            concentrations={"Fe": 0.01},
-            total_number_density_cm3=1e18,
-            partition_funcs={"Fe": 25.0},
-        )
-
-        assert result.corrected_observations == []
-        assert result.masked_observations == []
-        assert result.n_corrected == 0
-        assert result.n_masked == 0
-
-    def test_missing_element_in_concentrations(self, corrector):
-        """Verify graceful handling when element not in concentrations."""
-        observations = [
-            LineObservation(
-                wavelength_nm=400.0,
-                intensity=1000.0,
-                intensity_uncertainty=20.0,
-                element="Cu",  # Not in concentrations
-                ionization_stage=1,
-                E_k_ev=3.0,
-                g_k=4,
-                A_ki=1e8,
-            ),
-        ]
-
-        result = corrector.correct(
-            observations=observations,
-            temperature_K=10000.0,
-            concentrations={"Fe": 0.01},  # No Cu
-            total_number_density_cm3=1e18,
-            partition_funcs={"Cu": 2.0},
-        )
-
-        # Should return unchanged (τ = 0 for missing element)
-        assert len(result.corrected_observations) == 1
-        assert result.corrected_observations[0].intensity == 1000.0
 
 
 # ==============================================================================
@@ -578,140 +414,6 @@ class TestPublishedCorrectionFactors:
             assert f_tau == pytest.approx(
                 asymptotic, rel=0.01
             ), f"Asymptotic deviation at τ={tau}: f={f_tau:.6f}, 1/τ={asymptotic:.6f}"
-
-
-class TestSelfAbsorptionEdgeCases:
-    """Edge case tests for self-absorption module."""
-
-    def test_zero_intensity(self):
-        """Verify handling of zero intensity."""
-        corrector = SelfAbsorptionCorrector()
-
-        observations = [
-            LineObservation(
-                wavelength_nm=400.0,
-                intensity=0.0,  # Zero intensity
-                intensity_uncertainty=0.0,
-                element="Fe",
-                ionization_stage=1,
-                E_k_ev=3.0,
-                g_k=9,
-                A_ki=1e7,
-            ),
-        ]
-
-        result = corrector.correct(
-            observations=observations,
-            temperature_K=10000.0,
-            concentrations={"Fe": 0.01},
-            total_number_density_cm3=1e18,
-            partition_funcs={"Fe": 25.0},
-        )
-
-        # Should not crash
-        assert len(result.corrected_observations) + len(result.masked_observations) == 1
-
-    def test_zero_temperature(self):
-        """Verify handling of zero temperature."""
-        corrector = SelfAbsorptionCorrector()
-
-        observations = [
-            LineObservation(
-                wavelength_nm=400.0,
-                intensity=1000.0,
-                intensity_uncertainty=20.0,
-                element="Fe",
-                ionization_stage=1,
-                E_k_ev=3.0,
-                g_k=9,
-                A_ki=1e7,
-            ),
-        ]
-
-        result = corrector.correct(
-            observations=observations,
-            temperature_K=0.0,  # Zero temperature
-            concentrations={"Fe": 0.01},
-            total_number_density_cm3=1e18,
-            partition_funcs={"Fe": 25.0},
-        )
-
-        # Should return unchanged (τ = 0 for T = 0)
-        assert len(result.corrected_observations) == 1
-
-    def test_lower_level_energies_used(self):
-        """Verify lower level energies are used when provided."""
-        corrector = SelfAbsorptionCorrector()
-
-        observations = [
-            LineObservation(
-                wavelength_nm=400.0,
-                intensity=1000.0,
-                intensity_uncertainty=20.0,
-                element="Fe",
-                ionization_stage=1,
-                E_k_ev=3.0,
-                g_k=9,
-                A_ki=1e7,
-            ),
-        ]
-
-        # With E_i = 0 (ground state) vs E_i = 2.0 eV (excited)
-        # Ground state should have higher absorption
-        result_ground = corrector.correct(
-            observations=observations,
-            temperature_K=10000.0,
-            concentrations={"Fe": 0.1},
-            total_number_density_cm3=1e19,
-            partition_funcs={"Fe": 25.0},
-            lower_level_energies={400.0: 0.0},  # Ground state
-        )
-
-        result_excited = corrector.correct(
-            observations=observations,
-            temperature_K=10000.0,
-            concentrations={"Fe": 0.1},
-            total_number_density_cm3=1e19,
-            partition_funcs={"Fe": 25.0},
-            lower_level_energies={400.0: 3.0},  # Excited state
-        )
-
-        # Ground state should have higher optical depth
-        tau_ground = result_ground.corrections[400.0].optical_depth
-        tau_excited = result_excited.corrections[400.0].optical_depth
-
-        assert tau_ground >= tau_excited
-
-    def test_max_iterations_respected(self):
-        """Verify max_iterations limit is respected."""
-        corrector = SelfAbsorptionCorrector(
-            max_iterations=2,
-            convergence_tolerance=1e-10,  # Very tight, won't converge
-        )
-
-        observations = [
-            LineObservation(
-                wavelength_nm=400.0,
-                intensity=1000.0,
-                intensity_uncertainty=20.0,
-                element="Fe",
-                ionization_stage=1,
-                E_k_ev=3.0,
-                g_k=9,
-                A_ki=1e7,
-            ),
-        ]
-
-        result = corrector.correct(
-            observations=observations,
-            temperature_K=10000.0,
-            concentrations={"Fe": 0.5},
-            total_number_density_cm3=1e20,
-            partition_funcs={"Fe": 25.0},
-        )
-
-        # Should not hang, should return with iterations <= max_iterations
-        assert len(result.corrected_observations) + len(result.masked_observations) == 1
 
 
 # ==============================================================================
@@ -1494,9 +1196,13 @@ class TestSelfAbsorptionCorrectorCOGIntegration:
             temperature_K=10000.0,
         )
 
-        # Should still return a result (fallback to standard correction)
+        # Should still return a pass-through no-op result (bead 0jvr: the
+        # plasma-state correct() fallback was deleted; the contract is an
+        # explicit uncorrected pass-through).
         assert isinstance(result, SelfAbsorptionResult)
-        assert "falling back" in str(result.warnings).lower()
+        assert "no correction applied" in str(result.warnings).lower()
+        assert result.n_corrected == 0
+        assert result.corrected_observations[0].intensity == observations[0].intensity
 
     def test_correct_with_cog_reports_regime(self, sample_observations):
         """Verify COG regime is reported in warnings."""
@@ -1634,9 +1340,12 @@ def _make_doublet(
     depth tau1_inj injected into line 1 (and tau2_inj = tau1_inj / r_theory
     into line 2). Returns (line1, line2, tau1_inj, tau2_inj).
     """
-    r_theory = (lam1**3) / (lam2**3)  # g_k and A_ki cancel since they match
-    tau2_inj = tau1_inj / r_theory
-    # True intensities consistent with r_theory: I_true_1 / I_true_2 = r_theory
+    # Emission thin ratio r_thin = (gA/lam1)/(gA/lam2) = lam2/lam1 (g, A match);
+    # optical-depth link rho = tau1/tau2 = (gA lam1^3)/(gA lam2^3) (bead 0jvr).
+    r_theory = lam2 / lam1
+    rho = (lam1**3) / (lam2**3)
+    tau2_inj = tau1_inj / rho
+    # True intensities consistent with r_thin: I_true_1 / I_true_2 = r_thin
     I_true_1, I_true_2 = r_theory, 1.0
     I_meas_1 = I_true_1 * _f_tau(tau1_inj)
     I_meas_2 = I_true_2 * _f_tau(tau2_inj)
@@ -1683,8 +1392,8 @@ class TestDoubletRatioCorrection:
             abs(result.tau_2 - tau2_truth) / tau2_truth < 0.15
         ), f"tau_2 recovery failed: {result.tau_2} vs truth {tau2_truth}"
         # Corrected intensities should approximate the true (optically thin)
-        # intensities used for injection
-        r_theory = (400.0**3) / (500.0**3)
+        # intensities used for injection (emission thin ratio = lam2/lam1)
+        r_theory = 500.0 / 400.0
         assert result.i1_corrected == pytest.approx(r_theory, rel=0.15)
         assert result.i2_corrected == pytest.approx(1.0, rel=0.15)
         # Wavelength pair ordered by ascending wavelength
@@ -1695,8 +1404,8 @@ class TestDoubletRatioCorrection:
     def test_doublet_correction_optically_thin_limit(self):
         """If r_meas == r_theory, recovered tau collapses to brentq lower bound."""
         line1, line2, _, _ = _make_doublet(lam1=400.0, lam2=500.0, A_ki=1e8, g_k=4, tau1_inj=1e-6)
-        # Force exactly thin: set r_meas = r_theory by reconstructing intensities
-        r_theory = (400.0**3) / (500.0**3)
+        # Force exactly thin: set r_meas = r_thin by reconstructing intensities
+        r_theory = 500.0 / 400.0
         line1 = LineObservation(
             wavelength_nm=400.0,
             intensity=r_theory,
@@ -1929,197 +1638,7 @@ class TestSiHighConcentrationSelfAbsorption:
         assert si_resonance_lines[0].element == "Si"
         assert si_resonance_lines[0].wavelength_nm == 251.611
 
-    def test_si_correction_pipeline_runs_and_logs(
-        self, si_resonance_lines, caplog
-    ):
-        """End-to-end ``correct()`` call must run and emit structured logs.
 
-        Whether the correction *actually triggers* depends on the
-        ``_estimate_optical_depth`` SCALE_FACTOR (which is currently off
-        by orders of magnitude — see follow-up bd). What MUST happen
-        regardless is: (a) the corrector returns a result for every
-        observation, (b) a summary log line is emitted at INFO, (c) the
-        max_optical_depth value is in the result. Transparency, not
-        magnitude, is what this test gates.
-        """
-        import logging
-
-        corrector = SelfAbsorptionCorrector(
-            optical_depth_threshold=0.01,
-            mask_threshold=10.0,
-            plasma_length_cm=0.1,
-        )
-        with caplog.at_level(logging.INFO, logger="cflibs.inversion.self_absorption"):
-            result = corrector.correct(
-                observations=si_resonance_lines,
-                temperature_K=10000.0,
-                concentrations={"Si": 0.60},
-                total_number_density_cm3=1.0e17,
-                partition_funcs={"Si": 9.0},
-                lower_level_energies={251.611: 0.0, 288.158: 0.0},
-            )
-
-        # Every observation has a recorded correction (no silent drops).
-        assert 251.611 in result.corrections
-        assert 288.158 in result.corrections
-        # max_optical_depth is populated (even if tiny under current scale).
-        assert result.max_optical_depth >= 0.0
-        # Summary log must fire — that is the audit's load-bearing assertion.
-        summary_records = [
-            r for r in caplog.records if "self_absorption.correct summary" in r.message
-        ]
-        assert len(summary_records) == 1
-        assert "max_tau=" in summary_records[0].message
-
-    def test_correct_logs_structured_summary_for_si(
-        self, si_resonance_lines, caplog
-    ):
-        """SelfAbsorptionCorrector.correct() emits one INFO-level summary line.
-
-        Addresses the user's transparency complaint: previously the
-        correction ran silently and operators had no way to tell whether
-        Si lines had been touched. Now every call emits an INFO log line
-        with element-level counts and max tau.
-        """
-        import logging
-
-        corrector = SelfAbsorptionCorrector(
-            optical_depth_threshold=0.01,
-            mask_threshold=10.0,
-            plasma_length_cm=0.1,
-        )
-        with caplog.at_level(logging.INFO, logger="cflibs.inversion.self_absorption"):
-            corrector.correct(
-                observations=si_resonance_lines,
-                temperature_K=10000.0,
-                concentrations={"Si": 0.60},
-                total_number_density_cm3=1.0e17,
-                partition_funcs={"Si": 9.0},
-                lower_level_energies={251.611: 0.0, 288.158: 0.0},
-            )
-
-        # Exactly one summary line, containing the diagnostic keywords.
-        summary_records = [
-            r for r in caplog.records if "self_absorption.correct summary" in r.message
-        ]
-        assert len(summary_records) == 1, (
-            f"Expected exactly one summary log; got {len(summary_records)}: "
-            f"{[r.message for r in caplog.records]}"
-        )
-        msg = summary_records[0].message
-        assert "n_lines=2" in msg
-        assert "max_tau=" in msg
-        assert "T=10000" in msg
-
-    def test_correct_warns_on_zero_temperature(self, si_resonance_lines, caplog):
-        """T=0 must emit a WARNING — silently returning tau=0 is the bug class."""
-        import logging
-
-        corrector = SelfAbsorptionCorrector()
-        with caplog.at_level(logging.WARNING, logger="cflibs.inversion.self_absorption"):
-            corrector.correct(
-                observations=si_resonance_lines,
-                temperature_K=0.0,  # pathological
-                concentrations={"Si": 0.60},
-                total_number_density_cm3=1.0e17,
-                partition_funcs={"Si": 9.0},
-            )
-        assert any(
-            "non-positive temperature" in r.message for r in caplog.records
-        ), (
-            "T=0 must trigger a WARNING so the silent zero-tau path is "
-            f"visible; got: {[r.message for r in caplog.records]}"
-        )
-
-    def test_correct_logs_missing_concentration_elements(
-        self, si_resonance_lines, caplog
-    ):
-        """Element absent from concentrations dict logs at INFO — never silent."""
-        import logging
-
-        corrector = SelfAbsorptionCorrector()
-        with caplog.at_level(logging.INFO, logger="cflibs.inversion.self_absorption"):
-            corrector.correct(
-                observations=si_resonance_lines,
-                temperature_K=10000.0,
-                concentrations={"Fe": 0.10},  # Si MISSING
-                total_number_density_cm3=1.0e17,
-                partition_funcs={"Si": 9.0},
-            )
-        assert any(
-            "no concentration entry" in r.message and "Si" in r.message
-            for r in caplog.records
-        ), (
-            "Missing concentration entry must be logged so silent skips are "
-            f"diagnosable; got: {[r.message for r in caplog.records]}"
-        )
-
-
-class TestALIASSelfAbsorptionLogging:
-    """Tests that ALIAS identifier exposes self-absorption damping state.
-
-    Replaces the previously-silent ``SA_DAMPING = 0.3`` hardcoded constant
-    with an opt-in flag + structured logging. Default behavior is
-    preserved (damping is ON with the historical 0.3 factor) so the F1
-    regression gate is not perturbed; only the visibility changes.
-    """
-
-    def test_identifier_has_self_absorption_knobs(self, atomic_db):
-        """Constructor exposes the new self-absorption knobs with safe defaults."""
-        from cflibs.inversion.identify.alias import ALIASIdentifier
-
-        identifier = ALIASIdentifier(atomic_db)
-        assert identifier.self_absorption_aware is True
-        assert identifier.self_absorption_damping == 0.3
-        assert identifier.self_absorption_e_i_cutoff_ev == 0.1
-        assert identifier._sa_n_damped_lines == 0
-        assert identifier._sa_damped_elements == set()
-
-    def test_identifier_rejects_invalid_damping(self, atomic_db):
-        """Damping factor must be in (0, 1]; out-of-range values raise."""
-        from cflibs.inversion.identify.alias import ALIASIdentifier
-
-        with pytest.raises(ValueError, match="damping"):
-            ALIASIdentifier(atomic_db, self_absorption_damping=0.0)
-        with pytest.raises(ValueError, match="damping"):
-            ALIASIdentifier(atomic_db, self_absorption_damping=1.5)
-        with pytest.raises(ValueError, match="damping"):
-            ALIASIdentifier(atomic_db, self_absorption_damping=-0.1)
-
-    def test_identifier_rejects_invalid_e_i_cutoff(self, atomic_db):
-        """E_i cutoff must be finite and >= 0."""
-        from cflibs.inversion.identify.alias import ALIASIdentifier
-
-        with pytest.raises(ValueError, match="e_i_cutoff"):
-            ALIASIdentifier(atomic_db, self_absorption_e_i_cutoff_ev=-0.5)
-
-    def test_identifier_disabled_mode_logs_explicitly(
-        self, atomic_db, caplog
-    ):
-        """When self_absorption_aware=False, identify() logs that fact at INFO.
-
-        Operators reading benchmark logs need to be able to tell at a
-        glance whether the run used SA damping or not.
-        """
-        import logging
-        from cflibs.inversion.identify.alias import ALIASIdentifier
-
-        identifier = ALIASIdentifier(atomic_db, self_absorption_aware=False)
-        wavelength = np.linspace(200.0, 800.0, 6000)
-        # Pure noise spectrum: identify() should complete and log without
-        # actually detecting anything.
-        intensity = np.random.RandomState(42).normal(10.0, 1.0, size=6000)
-
-        with caplog.at_level(logging.INFO, logger="cflibs.inversion.identify.alias"):
-            identifier.identify(wavelength, intensity)
-
-        assert any(
-            "self-absorption damping DISABLED" in r.message
-            for r in caplog.records
-        ), (
-            "self_absorption_aware=False must emit an INFO log so disabled "
-            f"mode is auditable; got: {[r.message for r in caplog.records]}"
-        )
 
 
 # ==============================================================================

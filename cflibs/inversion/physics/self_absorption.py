@@ -264,19 +264,21 @@ class DoubletRatioResult:
     https://www.sciencedirect.com/science/article/abs/pii/S0584854725001995)
     is a SECOND-OPINION estimator that complements the curve-of-growth
     derived self-absorption correction (CDSB). For two lines (k -> i1,
-    k -> i2) sharing the same upper level k, the LS-coupling theoretical
+    k -> i2) sharing the same upper level k, the theoretical EMISSION
     intensity ratio in the optically-thin limit is
 
-        r_theory = (g_i1 * A_i1 * lambda_i1**3) / (g_i2 * A_i2 * lambda_i2**3)
+        r_thin = (g_k1 * A_1 / lambda_1) / (g_k2 * A_2 / lambda_2)
 
-    The measured ratio r_meas = I_1 / I_2 differs from r_theory because
-    each line is attenuated by a curve-of-growth escape factor
-    f(tau) = (1 - exp(-tau)) / tau, with both line-center optical
-    depths sharing the upper-level population:
+    (:func:`_thin_emission_ratio`; consistent with the Boltzmann ordinate
+    ln(I lambda / gA)). The measured ratio r_meas = I_1 / I_2 differs from
+    r_thin because each line is attenuated by a curve-of-growth escape
+    factor f(tau) = (1 - exp(-tau)) / tau, with the two line-center optical
+    depths linked by the line-strength ratio (:func:`_tau_ratio`)
 
-        tau_2 = tau_1 / r_theory
+        tau_2 = tau_1 / rho,
+        rho = (g_k1 * A_1 * lambda_1**3) / (g_k2 * A_2 * lambda_2**3)
 
-    Solving f(tau_1) / f(tau_1 / r_theory) = r_meas / r_theory for tau_1
+    Solving f(tau_1) / f(tau_1 / rho) = r_meas / r_thin for tau_1
     gives a 1-D nonlinear root, which is solved with `scipy.optimize.brentq`.
 
     Attributes
@@ -292,7 +294,7 @@ class DoubletRatioResult:
     r_measured : float
         Measured intensity ratio I_1 / I_2.
     r_theory : float
-        Theoretical optically-thin intensity ratio.
+        Theoretical optically-thin EMISSION intensity ratio ``r_thin``.
     i1_corrected : float
         Self-absorption-corrected intensity of line 1: I_1 / f(tau_1).
     i2_corrected : float
@@ -317,19 +319,47 @@ class DoubletRatioResult:
     agreement_with_cdsb_sigma: Optional[float] = None
 
 
-def _theoretical_doublet_ratio(line1: LineObservation, line2: LineObservation) -> float:
+def _thin_emission_ratio(line1: LineObservation, line2: LineObservation) -> float:
     """
-    LS-coupling theoretical optically-thin intensity ratio I_1 / I_2 for
-    two emission lines sharing the same upper level.
+    Optically-thin integrated EMISSION intensity ratio ``I_1 / I_2`` for two
+    lines sharing the same upper level.
 
-    r_theory = (g_i1 * A_i1 * lambda_i1**3) / (g_i2 * A_i2 * lambda_i2**3)
+    The integrated emission radiance of a transition ``k -> i`` is
+    ``J = (hc / 4 pi lambda) A_ki n_k L``, so for two lines from the SAME
+    upper level (identical ``n_k``) the thin ratio is
 
-    Note: For LIBS line lists, ``g_k`` (upper-level statistical weight)
-    is what we have on ``LineObservation``; for two lines sharing the
-    upper level, the line-strength ratio reduces to A * lambda**3 with
-    a degeneracy factor that accounts for the two transitions. We use
-    g_k * A_ki * lambda**3 as a stand-in (same upper level => g_k_1 ==
-    g_k_2, so this reduces to A * lambda**3).
+        r_thin = (g_k1 A_1 / lambda_1) / (g_k2 A_2 / lambda_2)
+
+    (``g_k`` written explicitly; it cancels for a true same-level pair).
+    This is the convention consistent with the Boltzmann ordinate
+    ``LineObservation.y_value = ln(I lambda / g A)``.
+
+    Historical note (bead 0jvr): the original implementation used
+    ``g A lambda^3``, which is the LINE-STRENGTH / optical-depth ratio
+    (see :func:`_tau_ratio`), not the emission-intensity ratio. The two were
+    conflated; for nearby pairs the error is ``(lambda_1/lambda_2)^4`` (a few
+    per cent) but it diverges for well-separated pairs.
+    """
+    return (line1.g_k * line1.A_ki / line1.wavelength_nm) / (
+        line2.g_k * line2.A_ki / line2.wavelength_nm
+    )
+
+
+def _tau_ratio(line1: LineObservation, line2: LineObservation) -> float:
+    """
+    Approximate line-center optical-depth ratio ``tau_1 / tau_2`` for a
+    same-upper-level pair.
+
+    With ``tau_0 ∝ f_lu n_i L phi(nu_0)``, ``f_lu ∝ lambda^2 g_k A / g_i``,
+    the Doppler line-center profile value ``phi(nu_0) ∝ lambda`` and the
+    lower-level population ``n_i ∝ g_i exp(-E_i / kT)``:
+
+        tau_1 / tau_2 = (g_k1 A_1 lambda_1^3) / (g_k2 A_2 lambda_2^3)
+                        * exp(-(E_i1 - E_i2) / kT)
+
+    The lower-level Boltzmann factor is dropped so the estimator stays
+    temperature-independent; this is exact for ``lambda_1 ~ lambda_2``
+    (where ``E_i1 ~ E_i2``) and degrades smoothly with pair separation.
     """
     return (line1.g_k * line1.A_ki * line1.wavelength_nm**3) / (
         line2.g_k * line2.A_ki * line2.wavelength_nm**3
@@ -347,14 +377,25 @@ def correct_via_doublet_ratio(
     the same species (element + ionization stage). The correction solves
     the 1-D nonlinear equation
 
-        f(tau_1) / f(tau_1 / r_theory) = r_meas / r_theory
+        f(tau_1) / f(tau_1 / rho) = r_meas / r_thin
 
     for the optical depth tau_1 of line 1 via `scipy.optimize.brentq`
-    over tau_1 in [1e-4, 30]. The corrected intensities are
-    I_i_corr = I_i / f(tau_i), with tau_2 = tau_1 / r_theory.
+    over tau_1 in [1e-4, 30], where
+
+    * ``r_thin`` is the optically-thin EMISSION intensity ratio
+      ``(g_k1 A_1 / lambda_1) / (g_k2 A_2 / lambda_2)``
+      (:func:`_thin_emission_ratio`), and
+    * ``rho = tau_1 / tau_2`` is the line-strength (optical-depth) ratio
+      ``(g_k1 A_1 lambda_1^3) / (g_k2 A_2 lambda_2^3)``
+      (:func:`_tau_ratio`).
+
+    The corrected intensities are I_i_corr = I_i / f(tau_i), with
+    tau_2 = tau_1 / rho.
 
     See Pace et al., Spectrochim. Acta B 2025
     (https://www.sciencedirect.com/science/article/abs/pii/S0584854725001995).
+    Bead 0jvr fixed the historical conflation of ``r_thin`` and ``rho``
+    (both were ``g A lambda^3``).
 
     Parameters
     ----------
@@ -406,14 +447,15 @@ def correct_via_doublet_ratio(
     if line1.A_ki <= 0 or line2.A_ki <= 0 or line1.g_k <= 0 or line2.g_k <= 0:
         raise ValueError("Doublet correction requires positive g_k * A_ki for both lines")
 
-    r_theory = _theoretical_doublet_ratio(line1, line2)
+    r_theory = _thin_emission_ratio(line1, line2)
+    rho = _tau_ratio(line1, line2)
     r_meas = line1.intensity / line2.intensity
     ratio_of_ratios = r_meas / r_theory
 
     def residual(tau_1_guess: float) -> float:
-        """f(tau_1) / f(tau_1 / r_theory) - r_meas / r_theory."""
+        """f(tau_1) / f(tau_1 / rho) - r_meas / r_thin."""
         f1 = _escape_factor(tau_1_guess)
-        f2 = _escape_factor(tau_1_guess / r_theory)
+        f2 = _escape_factor(tau_1_guess / rho)
         return f1 / f2 - ratio_of_ratios
 
     tau_low, tau_high = 1e-4, 30.0
@@ -436,7 +478,7 @@ def correct_via_doublet_ratio(
                 res_low,
             )
         tau_1 = 1e-4
-        tau_2 = tau_1 / r_theory
+        tau_2 = tau_1 / rho
         f_tau_1 = _escape_factor(tau_1)
         f_tau_2 = _escape_factor(tau_2)
         return DoubletRatioResult(
@@ -452,7 +494,7 @@ def correct_via_doublet_ratio(
         )
 
     tau_1 = brentq(residual, tau_low, tau_high, xtol=1e-6, rtol=1e-8, maxiter=100)
-    tau_2 = tau_1 / r_theory
+    tau_2 = tau_1 / rho
     f_tau_1 = _escape_factor(tau_1)
     f_tau_2 = _escape_factor(tau_2)
 

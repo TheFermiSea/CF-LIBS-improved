@@ -23,7 +23,7 @@ measured spectrum, never only to the current composition iterate:
   width ratio.
 * Völker & Gornushkin 2023, *J. Anal. At. Spectrom.* 38, 1098
   (doi:10.1039/D2JA00352J) — closed-form Planck-function correction
-  (see :func:`planck_thin_spectral_radiance` below).
+  (see :func:`planck_ceiling_optical_depth` below).
 * Pace et al. 2025, *Spectrochim. Acta B*
   (doi:10.1016/j.sab.2025.107361, PII S0584854725001995) — doublet
   intensity-ratio method (T-independent, single spectrum).
@@ -32,9 +32,10 @@ Correction ladder (per line, in order of preference)
 ----------------------------------------------------
 (a) **Doublet/multiplet intensity ratio** — when a measured pair sharing the
     same upper level exists, the deviation of the measured intensity ratio
-    from the optically-thin ``g_k A_ki lambda^3`` ratio yields the optical
-    depth of both lines directly (no plasma state needed at all). Wires the
-    machinery landed by bead CF-LIBS-improved-1fcg
+    from the optically-thin emission ratio ``(g_k A_ki / lambda)_1 /
+    (g_k A_ki / lambda)_2`` yields the optical depth of both lines directly
+    (no plasma state needed at all). Wires the machinery landed by bead
+    CF-LIBS-improved-1fcg
     (:func:`cflibs.inversion.physics.self_absorption.correct_via_doublet_ratio`).
 (b) **Planck-ceiling closed form** (Völker & Gornushkin 2023) — when the
     measured *peak spectral radiance* of the line is available in absolute
@@ -428,7 +429,10 @@ class ObservableSelfAbsorptionCorrector:
         rel1 = line1.intensity_uncertainty / line1.intensity
         rel2 = line2.intensity_uncertainty / line2.intensity
         sigma_rel = math.sqrt(rel1**2 + rel2**2)
-        deviation = 1.0 - res.r_measured / res.r_theory
+        # SA shifts the measured ratio away from the thin ratio in either
+        # direction depending on which member of the pair is more absorbed
+        # (tau_2 = tau_1 / rho can exceed tau_1), so significance is two-sided.
+        deviation = abs(1.0 - res.r_measured / res.r_theory)
         if sigma_rel <= 0:
             return float("inf") if deviation > 0 else 0.0
         return deviation / sigma_rel
@@ -459,7 +463,8 @@ class ObservableSelfAbsorptionCorrector:
                 continue
 
             significance = self._ratio_significance_sigma(line1, line2, res)
-            if res.tau_1 <= 1e-3 or significance < self.min_ratio_significance_sigma:
+            tau_pair_max = max(res.tau_1, res.tau_2)
+            if tau_pair_max <= 1e-3 or significance < self.min_ratio_significance_sigma:
                 # Observably thin (or deviation within noise): clear both.
                 for idx, line, tau in ((i1, line1, res.tau_1), (i2, line2, res.tau_2)):
                     cleared.add(idx)
@@ -473,12 +478,12 @@ class ObservableSelfAbsorptionCorrector:
                     )
                 continue
 
-            if res.tau_1 > self.doublet_tau_max:
+            if tau_pair_max > self.doublet_tau_max:
                 # Observable says VERY thick — beyond the validated recovery
                 # range. Do not boost; force-flag both lines as SA-suspect.
                 warnings.append(
                     f"doublet ({line1.wavelength_nm:.3f}, {line2.wavelength_nm:.3f}) nm: "
-                    f"tau_1={res.tau_1:.2f} > {self.doublet_tau_max} validity ceiling; "
+                    f"tau={tau_pair_max:.2f} > {self.doublet_tau_max} validity ceiling; "
                     "flagging pair SA-suspect instead of correcting"
                 )
                 for idx, line, tau in ((i1, line1, res.tau_1), (i2, line2, res.tau_2)):
