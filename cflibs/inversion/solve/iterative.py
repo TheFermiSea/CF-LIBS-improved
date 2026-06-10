@@ -448,12 +448,6 @@ class _AtomicSnapshot:
         fallback_II = np.full(E, 15.0, dtype=np.float64)
 
         for i, el in enumerate(elements):
-            # Canonical per-species fallbacks for the scalar-fallback regime
-            # (read by _eval_partition_jax only when neither direct levels nor
-            # a polynomial resolved — the NaN-coefficient sentinel).  Closed-
-            # shell ions get their exact U here (e.g. Na II → 1.0, not 15.0).
-            fallback_I[i] = canonical_partition_fallback(el, 1, solver.atomic_db, warn=False)
-            fallback_II[i] = canonical_partition_fallback(el, 2, solver.atomic_db, warn=False)
             # Stage-I IP (the only one used by the loop; for IPD/Saha)
             ip = solver.atomic_db.get_ionization_potential(el, 1)
             if ip is None:
@@ -480,13 +474,18 @@ class _AtomicSnapshot:
                     coeffs_II,
                 )
 
-        # Warn (once per species) where the scalar fallback WILL actually be
-        # read: neither direct levels nor polynomial coefficients resolved.
+        # Canonical per-species fallbacks for the scalar-fallback regime, set
+        # lazily ONLY where _eval_partition_jax will actually read them:
+        # neither direct levels nor a polynomial resolved (the NaN-coefficient
+        # sentinel). Closed-shell ions get their exact U here (e.g. Na II →
+        # 1.0, not 15.0), and the helper warns once per species. Eager
+        # evaluation would add g0 probes (get_energy_levels) for every
+        # element and break the no-sqlite-inside-loop prefetch budget.
         for i, el in enumerate(elements):
             if not use_direct[i, 0] and np.any(np.isnan(coeffs_I[i])):
-                canonical_partition_fallback(el, 1, solver.atomic_db, warn=True)
+                fallback_I[i] = canonical_partition_fallback(el, 1, solver.atomic_db, warn=True)
             if not use_direct[i, 1] and np.any(np.isnan(coeffs_II[i])):
-                canonical_partition_fallback(el, 2, solver.atomic_db, warn=True)
+                fallback_II[i] = canonical_partition_fallback(el, 2, solver.atomic_db, warn=True)
 
         # Pad ragged level arrays per stage
         gI_pad, mI = _pad_ragged_arrays(g_I)
