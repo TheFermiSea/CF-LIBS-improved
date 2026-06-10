@@ -233,6 +233,26 @@ def estimate_instrument_fwhm(
     return float(np.percentile(widths, percentile))
 
 
+def _recenter_on_local_peak(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    center_nm: float,
+    search_nm: float,
+) -> float:
+    """Re-centre on the local intensity maximum near ``center_nm``.
+
+    Observations carry the DB transition wavelength; the spectrum axis can be
+    offset by residual calibration error (and the line by its Stark shift),
+    so the profile fit anchors on the actual local peak.
+    """
+    mask = (wavelength >= center_nm - search_nm) & (wavelength <= center_nm + search_nm)
+    if int(np.count_nonzero(mask)) < 3:
+        return center_nm
+    wl = wavelength[mask]
+    inten = intensity[mask]
+    return float(wl[int(np.argmax(inten))])
+
+
 def _fit_lorentz_fwhm(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -441,7 +461,10 @@ def measure_stark_ne(
         # Window: wide enough for the Lorentzian wings, capped at half the
         # distance to the nearest neighbour so blends stay out of the fit.
         window = min(max(4.0 * gauss, 0.3), max(iso / 2.0, 2.0 * gauss))
-        fit = _fit_lorentz_fwhm(wavelength, intensity, obs.wavelength_nm, gauss, window)
+        center = _recenter_on_local_peak(
+            wavelength, intensity, obs.wavelength_nm, search_nm=max(0.5 * gauss, 0.15)
+        )
+        fit = _fit_lorentz_fwhm(wavelength, intensity, center, gauss, window)
         if fit is None:
             _reject("fit_failed")
             continue

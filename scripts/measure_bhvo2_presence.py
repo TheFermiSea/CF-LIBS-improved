@@ -64,6 +64,16 @@ def main() -> None:
         action="store_true",
         help="Use the pooled Saha-Boltzmann graph intercept extraction.",
     )
+    ap.add_argument(
+        "--stark-ne",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Measure n_e from the Stark widths of observed literature-grade lines "
+            "(mirrors the production geological-preset default; --no-stark-ne for "
+            "the legacy 1-atm pressure-balance fallback)."
+        ),
+    )
     ap.add_argument("--label", default="baseline")
     args = ap.parse_args()
 
@@ -98,6 +108,30 @@ def main() -> None:
         if el is not None:
             obs_counts[el] = obs_counts.get(el, 0) + 1
 
+    # Stark-broadening n_e diagnostic (bead pxex): measure n_e from observed
+    # literature-grade line widths (production geological-preset default).
+    stark_diagnostics = None
+    stark_info: dict = {"enabled": bool(args.stark_ne), "n_lines": 0}
+    if args.stark_ne:
+        from cflibs.inversion.physics.stark_ne import measure_stark_ne
+
+        stark_result = measure_stark_ne(wl, inten, obs, db)
+        stark_info = {
+            "enabled": True,
+            "n_lines": stark_result.n_lines,
+            "ne_cm3": stark_result.ne_median_cm3,
+            "ne_scatter_cm3": stark_result.ne_scatter_cm3,
+            "instrument_fwhm_source": stark_result.instrument_fwhm_source,
+            "lines": [
+                f"{m.element} {'I' if m.ionization_stage == 1 else 'II'} "
+                f"{m.wavelength_nm:.2f} -> {m.ne_cm3:.2e}"
+                for m in stark_result.measurements
+            ],
+            "rejected": dict(stark_result.rejected),
+        }
+        if stark_result.usable:
+            stark_diagnostics = stark_result.diagnostics
+
     solver = IterativeCFLIBSSolver(
         atomic_db=db,
         apply_self_absorption=sa,
@@ -110,7 +144,12 @@ def main() -> None:
         closure_kwargs["oxide_stoichiometry"] = default_oxide_stoichiometry(
             [o.element for o in obs]
         )
-    result = solver.solve(obs, closure_mode=args.closure_mode, **closure_kwargs)
+    result = solver.solve(
+        obs,
+        closure_mode=args.closure_mode,
+        stark_diagnostics=stark_diagnostics,
+        **closure_kwargs,
+    )
     pred = dict(result.concentrations)
 
     # --- scoring ---
@@ -128,6 +167,17 @@ def main() -> None:
         f"  T={result.temperature_K:.0f}K  ne={result.electron_density_cm3:.2e}  "
         f"converged={result.converged}  n_obs={len(obs)}"
     )
+    ne_source = (
+        "stark"
+        if result.quality_metrics.get("ne_from_stark")
+        else "pressure_balance_fallback (ASSUMED)"
+    )
+    print(
+        f"  n_e source={ne_source}  stark_lines={stark_info.get('n_lines', 0)}  "
+        f"scatter={stark_info.get('ne_scatter_cm3', 0.0) or 0.0:.2e}"
+    )
+    for line_desc in stark_info.get("lines", []) or []:
+        print(f"    stark line: {line_desc}")
     print("=" * 72)
     print(f"  {'el':<4}{'cert(wt%)':>11}{'pred(wt%)':>11}{'err':>9}{'n_obs':>7}")
     for e in cert_elems:
@@ -149,6 +199,10 @@ def main() -> None:
         "saha_boltzmann_graph": bool(args.saha_boltzmann_graph),
         "T_K": result.temperature_K,
         "ne": result.electron_density_cm3,
+        "ne_source": (
+            "stark" if result.quality_metrics.get("ne_from_stark") else "pressure_balance"
+        ),
+        "stark_ne": stark_info,
         "pred": {e: pred.get(e, 0.0) for e in requested},
         "obs_counts": obs_counts,
         "dropped": dropped,
