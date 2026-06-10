@@ -17,6 +17,23 @@ Adapters
   Material Information Sheets / Jochum et al. (2016); spectra are
   user-supplied (see module docstring for the expected file layout under
   ``data/usgs_geostandards/``).
+
+Extended-adapter helpers (bead A2)
+----------------------------------
+The following modules back the :data:`cflibs.benchmark.adapters_extended.MANIFEST`
+generators. They are intentionally *not* imported here: the adapters lazy-import
+them at iteration time so importing this package stays free of heavy I/O.
+
+- :mod:`cflibs.benchmark.datasets.csa_planetary` -- CSA open planetary-analogue
+  LIBS set (oxide certificates -> element wt%).
+- :mod:`cflibs.benchmark.datasets.chemcam_calib` -- MSL ChemCam preflight
+  cleanroom calibration spectra (PDS CALIB directory).
+- :mod:`cflibs.benchmark.datasets.emslibs2019` -- EMSLIBS 2019 contest train
+  split (class-level presence truth).
+- :mod:`cflibs.benchmark.datasets.silva2022` -- Silva et al. 2022 tropical
+  soils (presence-only exchangeable-fertility panel).
+- :mod:`cflibs.benchmark.datasets.gibbons2024` -- Gibbons et al. nitrate-doped
+  Mars Global Simulant series (quantitative N).
 """
 
 from cflibs.benchmark.datasets.nist_steel import (
