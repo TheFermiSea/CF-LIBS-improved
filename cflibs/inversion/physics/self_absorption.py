@@ -22,9 +22,15 @@ Limiting behaviors:
 
 Correction Process
 ------------------
-1. Estimate τ₀ from plasma parameters (T, n_e, concentrations) or intensity ratios
+1. Estimate τ₀ from an OBSERVABLE (doublet intensity ratio, measured
+   equivalent widths via the COG, or — diagnostically — plasma parameters)
 2. Calculate correction factor: C = 1/f(τ₀)
 3. Apply: I_true = I_observed × C
+
+The composition-fed applicator (the old ``SelfAbsorptionCorrector.correct``)
+was deleted in bead CF-LIBS-improved-0jvr — see the class docstring. The
+production correction is
+:class:`cflibs.inversion.physics.self_absorption_observable.ObservableSelfAbsorptionCorrector`.
 
 Literature References
 ---------------------
@@ -657,24 +663,39 @@ class COGResult:
 
 class SelfAbsorptionCorrector:
     """
-    Corrects for self-absorption in optically thick plasmas.
+    Curve-of-growth self-absorption DIAGNOSTICS for optically thick plasmas.
 
-    Uses the curve-of-growth approach:
-    1. Estimate optical depth τ₀ at line center
-    2. Apply correction factor: I_true = I_measured / f(τ)
-    3. Where f(τ) = (1 - exp(-τ)) / τ (for Gaussian profile)
+    Provides:
 
-    For very high optical depth, lines can be masked instead of corrected.
+    * :meth:`_estimate_optical_depth` — the classical Doppler line-center
+      optical depth from a *given* plasma state (T, concentrations, column
+      density). This is a PRIOR/diagnostic quantity only.
+    * :meth:`correct_with_cog` — curve-of-growth multiplet analysis driven by
+      *measured equivalent widths* (an observable).
+    * :meth:`cross_check_with_doublets` — Pace 2025 doublet-ratio second
+      opinion on COG-derived optical depths.
+
+    .. warning::
+
+       The composition-fed correction applicator (the old ``correct()``
+       method, which divided observed intensities by ``1/f(tau)`` with tau
+       computed from the *recovered* composition) was DELETED in bead
+       CF-LIBS-improved-0jvr. Driven from inside the CF-LIBS solver it is a
+       positive feedback loop (over-attributed element -> bigger tau ->
+       bigger boost -> bigger intercept; audit 02-inversion-solver.md F4)
+       and it measurably worsened intercept inflation on real ChemCam
+       BHVO-2 data. Production correction lives in
+       :class:`cflibs.inversion.physics.self_absorption_observable.ObservableSelfAbsorptionCorrector`,
+       which derives every correction factor from observables. Plasma-state
+       tau estimates from this class must only ever be used as priors or
+       cross-checks, never as the sole driver of an intensity correction.
     """
 
     def __init__(
         self,
         optical_depth_threshold: float = 0.1,
         mask_threshold: float = 3.0,
-        max_iterations: int = 5,
-        convergence_tolerance: float = 0.01,
         plasma_length_cm: float = 0.1,
-        correction_tau_cap: Optional[float] = None,
     ):
         """
         Initialize corrector.
@@ -685,357 +706,41 @@ class SelfAbsorptionCorrector:
             Minimum τ₀ to apply correction (below this, line is optically thin)
         mask_threshold : float
             τ₀ above which to mask line instead of correct
-        max_iterations : int
-            Maximum iterations for recursive correction
-        convergence_tolerance : float
-            Relative change threshold for convergence
         plasma_length_cm : float
             Estimated plasma depth (path length) in cm
-        correction_tau_cap : float, optional
-            If set, the τ used to compute the curve-of-growth *correction
-            factor* is clamped to this ceiling (the τ reported in the result
-            is still the true value). The Gaussian escape factor correction
-            ``I/f(τ) ≈ τ`` grows without bound as ``τ → ∞`` and the underlying
-            Doppler-core model loses validity beyond τ ~ 5-10 (El Sherbini
-            2005), so an uncapped correction is both physically unjustified
-            and numerically unstable when the absorbing column density (n·L)
-            is only known to an order of magnitude — exactly the situation
-            inside the iterative CF-LIBS solver. Capping the correction factor
-            at ``≈ τ_cap`` bounds the maximum intensity boost to the literature
-            ``~10×`` regime (Bulajic 2002) while still correcting the dominant
-            self-absorbed major lines. ``None`` (default) preserves the
-            historical uncapped behaviour for callers that supply a
-            well-constrained column density.
         """
         self.optical_depth_threshold = optical_depth_threshold
         self.mask_threshold = mask_threshold
-        self.max_iterations = max_iterations
-        self.convergence_tolerance = convergence_tolerance
         self.plasma_length_cm = plasma_length_cm
-        self.correction_tau_cap = correction_tau_cap
 
-    def correct(
-        self,
-        observations: List[LineObservation],
-        temperature_K: float,
-        concentrations: Dict[str, float],
-        total_number_density_cm3: float,
-        partition_funcs: Dict[str, float],
-        lower_level_energies: Optional[Dict[float, float]] = None,
+    @staticmethod
+    def _passthrough_result(
+        observations: List[LineObservation], warnings_list: List[str]
     ) -> SelfAbsorptionResult:
+        """Explicit no-op result: every line passed through uncorrected.
+
+        Replaces the historical fallback of calling the deleted plasma-state
+        ``correct()`` with empty concentrations, which forced ``tau = 0`` for
+        every line — i.e. exactly this pass-through.
         """
-        Apply self-absorption correction to line observations.
-
-        Parameters
-        ----------
-        observations : List[LineObservation]
-            Line observations to correct
-        temperature_K : float
-            Plasma temperature
-        concentrations : Dict[str, float]
-            Elemental concentrations (mass fractions)
-        total_number_density_cm3 : float
-            Total number density of plasma
-        partition_funcs : Dict[str, float]
-            Partition functions U(T) for each element
-        lower_level_energies : Dict[float, float], optional
-            Lower level energies E_i by wavelength (nm -> eV)
-
-        Returns
-        -------
-        SelfAbsorptionResult
-        """
-        if lower_level_energies is None:
-            lower_level_energies = {}
-
-        # Edge-case logging: identify silent no-op conditions BEFORE running
-        # the loop, so operators can tell at a glance whether a "n_corrected=0"
-        # result was a genuine optically-thin spectrum or a silent skip.
-        n_observations = len(observations)
-        if n_observations == 0:
-            return self._empty_correct_result(
-                temperature_K, total_number_density_cm3, concentrations
-            )
-
-        missing_conc_elements, missing_partition_elements = self._log_correct_preconditions(
-            observations,
-            temperature_K,
-            total_number_density_cm3,
-            concentrations,
-            partition_funcs,
-            n_observations,
-        )
-
-        warnings: List[str] = []
-        corrected_obs: List[LineObservation] = []
-        masked_obs: List[LineObservation] = []
-        corrections: Dict[float, AbsorptionCorrectionResult] = {}
-        max_tau = 0.0
-
-        for obs in observations:
-            # Get lower level energy (default to 0 = ground state, worst case)
-            E_i_ev = lower_level_energies.get(obs.wavelength_nm, 0.0)
-
-            # Estimate optical depth
-            tau = self._estimate_optical_depth(
-                obs,
-                temperature_K,
-                concentrations,
-                total_number_density_cm3,
-                partition_funcs,
-                E_i_ev,
-            )
-
-            max_tau = max(max_tau, tau)
-
-            self._record_correction(
-                obs,
-                tau,
-                temperature_K,
-                concentrations,
-                total_number_density_cm3,
-                partition_funcs,
-                E_i_ev,
-                corrected_obs,
-                masked_obs,
-                corrections,
-                warnings,
-            )
-
-        affected_summary = self._summarize_affected_elements(observations, corrections)
-
-        # Preserve historical n_corrected semantics (count of non-thin
-        # corrections, which historically lumped masked + corrected) so the
-        # F1 gate and downstream tests stay byte-stable. The new structured
-        # log line breaks the count out explicitly for diagnostic clarity.
-        # The comparison uses ``abs(...) > 1e-9`` rather than a direct
-        # ``!= 1.0`` because ``correction_factor`` is a *sentinel*: the code
-        # writes exactly ``1.0`` to mark "optically thin, no correction
-        # applied", and any other value is the actual computed factor.
-        # SonarCloud python:S1244 (and similar lints) flag direct float
-        # ``!=`` even when the comparison is against a sentinel literal --
-        # the absolute-difference form expresses the same semantic without
-        # tripping the rule.
-        n_corrected_legacy = len(
-            [c for c in corrections.values() if abs(c.correction_factor - 1.0) > 1e-9]
-        )
-        n_masked = len(masked_obs)
-
-        self._log_correct_summary(
-            n_observations,
-            n_corrected_legacy,
-            n_masked,
-            max_tau,
-            temperature_K,
-            total_number_density_cm3,
-            missing_conc_elements,
-            missing_partition_elements,
-            affected_summary,
-        )
-
-        return SelfAbsorptionResult(
-            corrected_observations=corrected_obs,
-            masked_observations=masked_obs,
-            corrections=corrections,
-            n_corrected=n_corrected_legacy,
-            n_masked=n_masked,
-            max_optical_depth=max_tau,
-            warnings=warnings,
-        )
-
-    def _empty_correct_result(
-        self,
-        temperature_K: float,
-        total_number_density_cm3: float,
-        concentrations: Dict[str, float],
-    ) -> SelfAbsorptionResult:
-        """Log and build the no-op result for an empty observation list."""
-        logger.info(
-            "self_absorption.correct skipped: empty observation list "
-            "(T=%.0fK, n_tot=%.2e cm^-3, n_elements=%d)",
-            temperature_K,
-            total_number_density_cm3,
-            len(concentrations),
-        )
-        return SelfAbsorptionResult(
-            corrected_observations=[],
-            masked_observations=[],
-            corrections={},
-            n_corrected=0,
-            n_masked=0,
-            max_optical_depth=0.0,
-            warnings=["Empty observation list — no correction applied"],
-        )
-
-    def _log_correct_preconditions(
-        self,
-        observations: List[LineObservation],
-        temperature_K: float,
-        total_number_density_cm3: float,
-        concentrations: Dict[str, float],
-        partition_funcs: Dict[str, float],
-        n_observations: int,
-    ) -> Tuple[set, set]:
-        """
-        Emit pre-loop edge-case warnings and return the sets of elements that
-        are seen in ``observations`` but missing from ``concentrations`` /
-        ``partition_funcs``.
-
-        Elements absent from ``concentrations`` silently get tau=0 inside
-        ``_estimate_optical_depth``; the returned sets feed the summary log.
-        """
-        if total_number_density_cm3 <= 0:
-            logger.warning(
-                "self_absorption.correct: non-positive total number density "
-                "(n_tot=%.2e cm^-3); all optical depths will be zero and no "
-                "correction will be applied (n_lines=%d)",
-                total_number_density_cm3,
-                n_observations,
-            )
-        if temperature_K <= 0:
-            logger.warning(
-                "self_absorption.correct: non-positive temperature "
-                "(T=%.1fK); optical depth estimator will return zero and no "
-                "correction will be applied (n_lines=%d)",
-                temperature_K,
-                n_observations,
-            )
-        missing_conc_elements = {
-            obs.element for obs in observations if obs.element not in concentrations
-        }
-        missing_partition_elements = {
-            obs.element for obs in observations if obs.element not in partition_funcs
-        }
-        if missing_conc_elements:
-            logger.info(
-                "self_absorption.correct: elements with no concentration entry "
-                "(tau forced to 0): %s",
-                sorted(missing_conc_elements),
-            )
-        return missing_conc_elements, missing_partition_elements
-
-    def _record_correction(
-        self,
-        obs: LineObservation,
-        tau: float,
-        temperature_K: float,
-        concentrations: Dict[str, float],
-        total_number_density_cm3: float,
-        partition_funcs: Dict[str, float],
-        E_i_ev: float,
-        corrected_obs: List[LineObservation],
-        masked_obs: List[LineObservation],
-        corrections: Dict[float, AbsorptionCorrectionResult],
-        warnings: List[str],
-    ) -> None:
-        """
-        Classify a single line by optical depth and record its outcome
-        (mask / correct / leave-thin) into the supplied accumulators.
-        """
-        if tau > self.mask_threshold:
-            # Too optically thick - mask this line
-            masked_obs.append(obs)
-            corrections[obs.wavelength_nm] = AbsorptionCorrectionResult(
-                original_intensity=obs.intensity,
-                corrected_intensity=0.0,
-                optical_depth=tau,
-                correction_factor=0.0,
-                is_optically_thick=True,
-            )
-            warnings.append(
-                f"Line {obs.wavelength_nm:.2f} nm masked: τ={tau:.2f} > {self.mask_threshold}"
-            )
-
-        elif tau > self.optical_depth_threshold:
-            # Apply correction — pass plasma state so _apply_recursive_correction
-            # can recompute τ from physics each iteration (Bulajic 2002 §3) rather
-            # than rescaling it from the observed intensity (which would be a
-            # dimensionally-wrong feedback hack). See B4 in the 2026-05-27 physics
-            # audit for the bug being fixed here.
-            result = self._apply_recursive_correction(
-                obs,
-                tau,
-                temperature_K,
-                concentrations,
-                total_number_density_cm3,
-                partition_funcs,
-                E_i_ev,
-            )
-            corrected_obs.append(self._create_corrected_observation(obs, result))
-            corrections[obs.wavelength_nm] = result
-
-        else:
-            # Optically thin - no correction needed
-            corrected_obs.append(obs)
-            corrections[obs.wavelength_nm] = AbsorptionCorrectionResult(
+        corrections = {
+            obs.wavelength_nm: AbsorptionCorrectionResult(
                 original_intensity=obs.intensity,
                 corrected_intensity=obs.intensity,
-                optical_depth=tau,
+                optical_depth=0.0,
                 correction_factor=1.0,
                 is_optically_thick=False,
             )
-
-    @staticmethod
-    def _summarize_affected_elements(
-        observations: List[LineObservation],
-        corrections: Dict[float, AbsorptionCorrectionResult],
-    ) -> Dict[str, Dict[str, int]]:
-        """
-        Per-element bookkeeping for the summary log: which elements had at
-        least one line corrected or masked?  Operators want to see this when
-        debugging "why was Si missed in soil at 60% SiO2".
-        """
-        affected_elements: Dict[str, Dict[str, int]] = {}
-        for obs in observations:
-            corr = corrections.get(obs.wavelength_nm)
-            if corr is None:
-                continue
-            slot = affected_elements.setdefault(
-                obs.element, {"corrected": 0, "masked": 0, "thin": 0}
-            )
-            if corr.correction_factor == 0.0:
-                slot["masked"] += 1
-            elif corr.correction_factor == 1.0:
-                slot["thin"] += 1
-            else:
-                slot["corrected"] += 1
-        return {
-            el: counts
-            for el, counts in affected_elements.items()
-            if counts["corrected"] > 0 or counts["masked"] > 0
+            for obs in observations
         }
-
-    @staticmethod
-    def _log_correct_summary(
-        n_observations: int,
-        n_corrected_legacy: int,
-        n_masked: int,
-        max_tau: float,
-        temperature_K: float,
-        total_number_density_cm3: float,
-        missing_conc_elements: set,
-        missing_partition_elements: set,
-        affected_summary: Dict[str, Dict[str, int]],
-    ) -> None:
-        """Emit the structured per-call summary log line."""
-        n_truly_corrected = n_corrected_legacy - n_masked
-        n_thin = n_observations - n_corrected_legacy
-
-        logger.info(
-            "self_absorption.correct summary: n_lines=%d (thin=%d, corrected=%d, "
-            "masked=%d), max_tau=%.3f, T=%.0fK, n_tot=%.2e cm^-3, "
-            "missing_concentrations=%d, missing_partition_funcs=%d, "
-            "affected_elements=%s",
-            n_observations,
-            n_thin,
-            n_truly_corrected,
-            n_masked,
-            max_tau,
-            temperature_K,
-            total_number_density_cm3,
-            len(missing_conc_elements),
-            len(missing_partition_elements),
-            affected_summary or "{}",
+        return SelfAbsorptionResult(
+            corrected_observations=list(observations),
+            masked_observations=[],
+            corrections=corrections,
+            n_corrected=0,
+            n_masked=0,
+            max_optical_depth=0.0,
+            warnings=warnings_list,
         )
 
     def _estimate_optical_depth(
@@ -1109,8 +814,7 @@ class SelfAbsorptionCorrector:
         partition_funcs : Dict[str, float]
             Partition function U(T) per element.
         E_i_ev : float
-            Lower-level energy in eV (defaults to 0 = ground state in
-            ``correct``).
+            Lower-level energy in eV (0 = ground state, the worst case).
 
         Returns
         -------
@@ -1219,164 +923,6 @@ class SelfAbsorptionCorrector:
 
         return max(0.0, tau)
 
-    def _capped_tau(self, tau: float) -> float:
-        """Clamp τ to ``correction_tau_cap`` for correction-factor purposes.
-
-        Returns τ unchanged when no cap is configured. The cap bounds the
-        intensity boost ``I/f(τ) ≈ τ`` to the literature ~10× regime and keeps
-        the correction stable when the absorbing column density is uncertain
-        (see :meth:`__init__`). The true τ is still reported in the result.
-        """
-        if self.correction_tau_cap is not None and tau > self.correction_tau_cap:
-            return self.correction_tau_cap
-        return tau
-
-    def _apply_recursive_correction(
-        self,
-        obs: LineObservation,
-        tau_initial: float,
-        temperature_K: float,
-        concentrations: Dict[str, float],
-        total_n_cm3: float,
-        partition_funcs: Dict[str, float],
-        E_i_ev: float,
-    ) -> AbsorptionCorrectionResult:
-        """
-        Apply recursive self-absorption correction (Bulajic 2002).
-
-        For each iteration:
-
-        1. ``τ_n`` is the line-center optical depth at iteration *n* (the
-           seed value ``tau_initial`` is the τ computed from the current
-           plasma state by ``_estimate_optical_depth``).
-        2. The escape factor for a Gaussian (Doppler) line profile is
-           ``f(τ) = (1 - exp(-τ)) / τ``.
-        3. The corrected intensity is ``I_true = I_obs / f(τ_n)``.
-        4. ``τ_{n+1}`` is **recomputed from the plasma state** via
-           ``_estimate_optical_depth`` using the same (T, n_e,
-           concentrations, partition functions) inputs. τ is a property of
-           the plasma column (Cowan 1981 Eq. 14.39 + Hutchinson Eq. 5.13;
-           Bulajic, Corsi, Cristoforetti, Legnaioli, Palleschi, Salvetti,
-           Tognoni 2002 *Spectrochim. Acta B* 57 339,
-           doi:10.1016/S0584-8547(01)00398-6, §3) — it is NOT a function
-           of the observed line intensity.
-        5. Convergence test: ``|τ_{n+1} - τ_n| / τ_n < convergence_tolerance``.
-
-        Historical bug
-        --------------
-        The pre-Wave-1 implementation updated τ via
-        ``tau *= I_new / obs.intensity`` (≡ ``tau /= f(τ)``). That formula
-        has no physics support (it implicitly assumed τ is a function of
-        the observed intensity), and because the factor 1/f(τ) > 1 for
-        any τ > 0, the iteration was monotonically divergent in the
-        optically-thick regime — only bounded by ``max_iterations=5``.
-        The Bulajic 2002 prescription instead recomputes τ from the
-        updated *plasma state* (T, n_e, concentrations) — which is what
-        this method now does. Within a single call with frozen plasma
-        state τ is therefore a constant of motion: the loop converges in
-        one iteration, and the meaningful "recursion" lives in the outer
-        CF-LIBS solver which re-invokes `correct()` after each plasma
-        update. See ``docs/architecture/2026-05-27-physics-audit.md`` (B4).
-
-        Parameters
-        ----------
-        obs : LineObservation
-            Emission line with observed intensity to correct.
-        tau_initial : float
-            Initial optical depth from ``_estimate_optical_depth`` at the
-            current plasma state. Used both as the first correction
-            factor and the convergence reference.
-        temperature_K, concentrations, total_n_cm3, partition_funcs, E_i_ev
-            Same arguments as ``_estimate_optical_depth`` — required so
-            τ can be recomputed each iteration. They are taken from the
-            current iteration of the outer CF-LIBS solver and are
-            constant within this call.
-
-        Returns
-        -------
-        AbsorptionCorrectionResult
-            With ``optical_depth`` set to the FINAL τ (not the seed), so
-            downstream consumers see the converged value. The seed value
-            is recoverable from the caller's ``max_tau`` bookkeeping.
-        """
-        tau = tau_initial
-        I_corrected = obs.intensity
-        iteration = 0
-
-        for iteration in range(self.max_iterations):
-            # Correction factor at this iteration's tau. When a correction cap
-            # is configured, the *correction* uses the clamped tau (bounding the
-            # intensity boost to ~tau_cap, the literature ~10x regime); the
-            # reported tau below remains the true plasma value.
-            tau_corr = self._capped_tau(tau)
-            f_tau = _escape_factor(tau_corr)
-
-            # Corrected intensity = observed / escape factor
-            I_corrected = obs.intensity / f_tau if f_tau > 0 else obs.intensity
-
-            # Recompute tau from the CURRENT plasma state — never from
-            # the observed intensity. This is the Bulajic 2002 step that
-            # the buggy version skipped. Within a single call the plasma
-            # state inputs are constant, so tau_new == tau and the loop
-            # converges immediately. The meaningful feedback lives in the
-            # outer CF-LIBS solver which re-invokes correct() after each
-            # plasma-state update.
-            tau_new = self._estimate_optical_depth(
-                obs,
-                temperature_K,
-                concentrations,
-                total_n_cm3,
-                partition_funcs,
-                E_i_ev,
-            )
-
-            # Convergence test on tau itself (not on intensity). The
-            # tolerance threshold is the same convergence_tolerance
-            # attribute, reinterpreted as a relative-change criterion on
-            # tau: |Δτ| / τ < tol.
-            if tau > 0:
-                rel_change = abs(tau_new - tau) / tau
-                tau = tau_new
-                if rel_change < self.convergence_tolerance:
-                    # Recompute I_corrected with the converged (capped) tau for
-                    # internal consistency before returning.
-                    f_tau = _escape_factor(self._capped_tau(tau))
-                    I_corrected = obs.intensity / f_tau if f_tau > 0 else obs.intensity
-                    break
-            else:
-                tau = tau_new
-                break
-
-        return AbsorptionCorrectionResult(
-            original_intensity=obs.intensity,
-            corrected_intensity=I_corrected,
-            optical_depth=tau,
-            correction_factor=obs.intensity / I_corrected if I_corrected > 0 else 0.0,
-            is_optically_thick=tau > 1.0,
-            iterations=iteration + 1,
-        )
-
-    def _create_corrected_observation(
-        self,
-        obs: LineObservation,
-        result: AbsorptionCorrectionResult,
-    ) -> LineObservation:
-        """Create a new observation with corrected intensity."""
-        return LineObservation(
-            wavelength_nm=obs.wavelength_nm,
-            intensity=result.corrected_intensity,
-            intensity_uncertainty=(
-                obs.intensity_uncertainty / result.correction_factor
-                if result.correction_factor > 0
-                else obs.intensity_uncertainty
-            ),
-            element=obs.element,
-            ionization_stage=obs.ionization_stage,
-            E_k_ev=obs.E_k_ev,
-            g_k=obs.g_k,
-            A_ki=obs.A_ki,
-        )
-
     def correct_with_cog(
         self,
         observations: List[LineObservation],
@@ -1420,8 +966,9 @@ class SelfAbsorptionCorrector:
         - Lines span a range of oscillator strengths
         - Equivalent widths are accurately measured
 
-        For isolated lines or single-line analysis, use the standard
-        correct() method instead.
+        For isolated lines or single-line analysis use the observable-gated
+        corrector
+        (:class:`cflibs.inversion.physics.self_absorption_observable.ObservableSelfAbsorptionCorrector`).
         """
         warnings_list: List[str] = []
 
@@ -1453,28 +1000,15 @@ class SelfAbsorptionCorrector:
 
         # Need at least 3 lines for COG analysis
         if len(multiplet_lines) < 3:
-            fallback_warning = (
-                f"Only {len(multiplet_lines)} lines available, falling back to standard correction"
+            # Historical behaviour: the fallback called the (now deleted)
+            # plasma-state correct() with empty concentrations, which forced
+            # tau = 0 for every line — an exact pass-through. Keep that no-op
+            # contract explicitly.
+            warnings_list.append(
+                f"Only {len(multiplet_lines)} lines available; COG needs >= 3 — "
+                "no correction applied"
             )
-            warnings_list.append(fallback_warning)
-            result = self.correct(
-                observations,
-                temperature_K,
-                concentrations={},
-                total_number_density_cm3=1e18,
-                partition_funcs={},
-                lower_level_energies=lower_level_energies,
-            )
-            # Merge warnings from fallback with our warnings
-            return SelfAbsorptionResult(
-                corrected_observations=result.corrected_observations,
-                masked_observations=result.masked_observations,
-                corrections=result.corrections,
-                n_corrected=result.n_corrected,
-                n_masked=result.n_masked,
-                max_optical_depth=result.max_optical_depth,
-                warnings=warnings_list + result.warnings,
-            )
+            return self._passthrough_result(observations, warnings_list)
 
         # Perform COG analysis
         analyzer = CurveOfGrowthAnalyzer(
@@ -1487,14 +1021,8 @@ class SelfAbsorptionCorrector:
             cog_result = analyzer.fit(multiplet_lines, excitation_correct=True)
         except ValueError as e:
             warnings_list.append(f"COG analysis failed: {e}")
-            return self.correct(
-                observations,
-                temperature_K,
-                concentrations={},
-                total_number_density_cm3=1e18,
-                partition_funcs={},
-                lower_level_energies=lower_level_energies,
-            )
+            # Same no-op contract as the < 3 lines fallback above.
+            return self._passthrough_result(observations, warnings_list)
 
         # Get correction factors from COG
         cog_corrections = analyzer.get_correction_factors(cog_result)

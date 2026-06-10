@@ -633,8 +633,7 @@ def normalize_self_absorption_mode(value) -> str:
         if mode in ("off", "observable"):
             return mode
     raise ValueError(
-        f"Invalid apply_self_absorption mode {value!r}: expected False/'off', "
-        "True/'observable'."
+        f"Invalid apply_self_absorption mode {value!r}: expected False/'off', " "True/'observable'."
     )
 
 
