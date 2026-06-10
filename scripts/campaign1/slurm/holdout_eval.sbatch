@@ -22,7 +22,8 @@ TOP_K="${TOP_K:-5}"
 
 export JAX_PLATFORMS=cpu
 export OMP_NUM_THREADS=1
-export JAX_COMPILATION_CACHE_DIR="${SLURM_TMPDIR:-$HOME/.cache}/jax-cflibs-c1"
+# Persistent per-user cache (eff#7) — SLURM_TMPDIR is wiped per job.
+export JAX_COMPILATION_CACHE_DIR="$HOME/.cache/jax-cflibs-c1"
 mkdir -p "$JAX_COMPILATION_CACHE_DIR"
 if [[ -f "$REPO_DIR/data/synthetic_corpus/corpus.json" ]]; then
     export CFLIBS_SCOREBOARD_SYNTH_CORPUS="$REPO_DIR/data/synthetic_corpus/corpus.json"

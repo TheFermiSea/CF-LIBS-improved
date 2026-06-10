@@ -24,9 +24,12 @@ set -euo pipefail
 TRIALS_PER_TASK="${TRIALS_PER_TASK:-5}"
 
 # CPU-only JAX with a PRIVATE compilation cache (never the shared one).
+# $HOME, not $SLURM_TMPDIR (eff#7): SLURM_TMPDIR is wiped per job, so every
+# array task recompiled XLA from scratch; a persistent per-user cache pays
+# the compile cost once across all waves.
 export JAX_PLATFORMS=cpu
 export OMP_NUM_THREADS=1
-export JAX_COMPILATION_CACHE_DIR="${SLURM_TMPDIR:-$HOME/.cache}/jax-cflibs-c1"
+export JAX_COMPILATION_CACHE_DIR="$HOME/.cache/jax-cflibs-c1"
 mkdir -p "$JAX_COMPILATION_CACHE_DIR"
 
 # Synthetic corpus (staged by stage.sh; adapter skips-with-log if absent).

@@ -393,7 +393,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_init.add_argument("--target-trials", type=int, default=DEFAULT_TARGET_TRIALS)
     p_init.add_argument("--preset", default=None, help="Pipeline preset (default geological)")
     p_init.add_argument("--per-spectrum-timeout", type=float, default=120.0)
-    p_init.add_argument("--n-procs", type=int, default=1)
+    # Default 8 (eff#5): the baseline evaluation is a full per-trial-sample
+    # scoreboard run; single-process it dominates init wall time for nothing.
+    p_init.add_argument("--n-procs", type=int, default=8)
 
     p_worker = sub.add_parser("worker", help="Consume trials until STOP/budget/target")
     p_worker.add_argument("--study-dir", required=True)
