@@ -297,6 +297,74 @@ def _find_peaks_jax_fallback(
     return [(int(idx), float(wavelength[idx])) for idx in peak_indices]
 
 
+# Area of a unit-height Gaussian expressed per unit FWHM:
+# A = h * sigma * sqrt(2*pi) with FWHM = 2*sigma*sqrt(2*ln 2)
+#   => A = h * FWHM * sqrt(pi / (4*ln 2)) ~= 1.0645 * h * FWHM.
+_GAUSSIAN_AREA_PER_HEIGHT_FWHM = math.sqrt(math.pi / (4.0 * math.log(2.0)))
+
+
+def _estimate_fwhm_nm(
+    segment_wl: np.ndarray,
+    segment_intensity: np.ndarray,
+    peak_rel_idx: int,
+    wl_step: float,
+) -> float:
+    """Estimate a line FWHM (nm) from half-maximum crossings within a segment.
+
+    Walks outward from the peak sample and linearly interpolates the first
+    crossing of half the peak height on each side. When a side never crosses
+    half-maximum inside the window (line truncated by the integration window)
+    the window edge is used, and a degenerate (non-positive) width falls back
+    to the Nyquist-limited ``2 * wl_step``.
+
+    Parameters
+    ----------
+    segment_wl : np.ndarray
+        Wavelength sub-array of the integration window (nm).
+    segment_intensity : np.ndarray
+        Intensity sub-array of the integration window.
+    peak_rel_idx : int
+        Peak index relative to the segment start.
+    wl_step : float
+        Local wavelength step (nm), used as the resolution floor.
+
+    Returns
+    -------
+    float
+        Estimated FWHM in nm (always positive, >= ``wl_step``).
+    """
+    step_floor = max(wl_step, 1e-6)
+    n = len(segment_intensity)
+    if n == 0:
+        return 2.0 * step_floor
+    # Anchor on the tallest sample of the window (the local-maximum peak).
+    apex = int(np.argmax(segment_intensity))
+    if 0 <= peak_rel_idx < n and segment_intensity[peak_rel_idx] >= segment_intensity[apex]:
+        apex = peak_rel_idx
+    height = float(segment_intensity[apex])
+    if not np.isfinite(height) or height <= 0.0:
+        return 2.0 * step_floor
+    half = 0.5 * height
+
+    def _crossing(start: int, stop: int, step: int, edge: float) -> float:
+        for i in range(start, stop, step):
+            y1 = float(segment_intensity[i])
+            y0 = float(segment_intensity[i + step])
+            if y0 <= half < y1:
+                x1 = float(segment_wl[i])
+                x0 = float(segment_wl[i + step])
+                frac = (half - y0) / (y1 - y0) if y1 != y0 else 0.0
+                return x0 + frac * (x1 - x0)
+        return edge
+
+    left_wl = _crossing(apex, 0, -1, float(segment_wl[0]))
+    right_wl = _crossing(apex, n - 1, 1, float(segment_wl[-1]))
+    fwhm = right_wl - left_wl
+    if not np.isfinite(fwhm) or fwhm <= 0.0:
+        fwhm = 2.0 * step_floor
+    return max(float(fwhm), step_floor)
+
+
 def _poisson_area_floor(line_area: float, wl_step: float, scale: float) -> float:
     """Shot-noise-equivalent 1-sigma floor for an integrated line area.
 
@@ -428,7 +496,26 @@ def _build_observation(
     segment_intensity = intensity[start_idx:end_idx]
 
     line_area = float(np.trapezoid(segment_intensity, segment_wl))
-    line_area = max(line_area, float(segment_intensity.max()))
+
+    # Boltzmann/Saha-Boltzmann ordinates require the wavelength-INTEGRATED
+    # line intensity (counts*nm) for every line on a common scale. The
+    # historical ``max(line_area, peak_height)`` floor silently swapped the
+    # integrated area for a bare peak height (counts) whenever the line was
+    # narrower than ~1 nm equivalent, mixing incompatible quantities across
+    # lines and distorting ln(I*lambda/gA) by |ln(FWHM_eff/1 nm)| ~ 1.5-3
+    # ln-units (audit 2026-06-09 02-F6). The floor is removed: when the
+    # trapezoid integral is unusable (non-finite or <= 0, e.g. an
+    # over-subtracted baseline), fall back to a UNITS-CONSISTENT
+    # Gaussian-equivalent area h * FWHM * sqrt(pi/(4 ln 2)) — never the bare
+    # height.
+    if not np.isfinite(line_area) or line_area <= 0.0:
+        peak_height = float(np.max(segment_intensity))
+        if not np.isfinite(peak_height) or peak_height <= 0.0:
+            return None
+        fwhm_nm = _estimate_fwhm_nm(
+            segment_wl, segment_intensity, peak_idx - start_idx, wl_step
+        )
+        line_area = peak_height * fwhm_nm * _GAUSSIAN_AREA_PER_HEIGHT_FWHM
 
     counts = np.maximum(segment_intensity, 1.0)
     line_unc = float(np.sqrt(np.sum(counts)) * wl_step)
