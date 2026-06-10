@@ -1009,6 +1009,35 @@ def _min_relative_intensity_arg(value: str):
     return None if str(value).lower() == "none" else float(value)
 
 
+def scoreboard_cmd(args):
+    """Goal-metric scoreboard: ID accuracy, composition accuracy, runtime."""
+    from cflibs.atomic.database import AtomicDatabase
+    from cflibs.benchmark.adapters_core import register_core_adapters
+    from cflibs.benchmark.scoreboard import run_scoreboard, write_artifacts
+
+    register_core_adapters()
+
+    db_path = _resolve_db_path(args.db_path)
+    if not db_path.exists():
+        raise FileNotFoundError(_missing_db_message(db_path))
+    atomic_db = AtomicDatabase(db_path)
+
+    datasets = [s.strip() for s in args.datasets.split(",") if s.strip()] if args.datasets else None
+    tags = [s.strip() for s in args.tags.split(",") if s.strip()] if args.tags else None
+
+    board = run_scoreboard(
+        atomic_db,
+        datasets=datasets,
+        tags=tags,
+        max_spectra=args.max_spectra,
+        seed=args.seed,
+    )
+    json_path, md_path = write_artifacts(board, args.output_dir)
+    print(md_path.read_text())
+    print(f"JSON artifact: {json_path}")
+    print(f"Markdown table: {md_path}")
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -1220,6 +1249,52 @@ def main():
     )
     _add_pipeline_flags(batch_parser)
     batch_parser.set_defaults(func=batch_cmd)
+
+    # Goal-metric scoreboard command (bead A1)
+    scoreboard_parser = subparsers.add_parser(
+        "scoreboard",
+        help=(
+            "Goal-metric scoreboard: element-ID accuracy, composition accuracy "
+            "and runtime across every truth-bearing dataset"
+        ),
+    )
+    scoreboard_parser.add_argument(
+        "--datasets",
+        type=str,
+        default=None,
+        help="Comma-separated dataset names (default: all registered)",
+    )
+    scoreboard_parser.add_argument(
+        "--tags",
+        type=str,
+        default=None,
+        help="Comma-separated tag filter, e.g. 'real' or 'synthetic' (default: all)",
+    )
+    scoreboard_parser.add_argument(
+        "--db-path", type=str, default=None, help="Path to atomic database"
+    )
+    scoreboard_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="output/scoreboard",
+        help="Directory for scoreboard.json + scoreboard.md (default: output/scoreboard)",
+    )
+    scoreboard_parser.add_argument(
+        "--max-spectra",
+        type=int,
+        default=None,
+        help=(
+            "Per-dataset spectrum cap; larger datasets are sampled with a "
+            "seeded rng (default: run everything)"
+        ),
+    )
+    scoreboard_parser.add_argument(
+        "--seed",
+        type=int,
+        default=20260610,
+        help="Sampling seed used with --max-spectra (default: 20260610)",
+    )
+    scoreboard_parser.set_defaults(func=scoreboard_cmd)
 
     # Setup diagnostics command
     doctor_parser = subparsers.add_parser(
