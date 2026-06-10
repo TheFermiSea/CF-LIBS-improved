@@ -37,6 +37,10 @@ Silva 2022 soils       working   presence-only (exchangeable P/K/Ca/Mg);
                                  102 spectra, 200-780 nm
 Gibbons 2024 nitrogen  working   element wt% for N (nitrate-doped MGS-1);
                                  ~175 spectra, 186-1049 nm
+SuperCam lab calib     working   element wt% (oxide certs converted);
+                                 1,193 shift==0 spectra, 244-853 nm
+SuperCam SCCT (Mars)   working   element wt% joined from lab chip rows;
+                                 547 CL1 FITS products, sols 13-1694
 =====================  ========  ==========================================
 
 Per-dataset parsing lives in small helper modules under
@@ -64,6 +68,8 @@ __all__ = [
     "iter_emslibs2019_spectra",
     "iter_gibbons2024_spectra",
     "iter_silva2022_spectra",
+    "iter_supercam_labcal_spectra",
+    "iter_supercam_scct_spectra",
 ]
 
 logger = logging.getLogger(__name__)
@@ -243,6 +249,67 @@ def iter_gibbons2024_spectra(data_dir: Path | None = None) -> Iterator[SpectrumR
     yield from gibbons2024.iter_spectra(root)
 
 
+def iter_supercam_labcal_spectra(data_dir: Path | None = None) -> Iterator[SpectrumRecord]:
+    """
+    SuperCam laboratory LIBS calibration database (Anderson et al. 2022).
+
+    1,193 shift==0 spectra (244-853 nm, 7,933 channels) of 334 geological
+    standards, streamed row-by-row from the 721 MB PDS4 table with certified
+    compositions in the same rows (oxide wt% -> element wt%). Honest splits
+    must group by Target_Name (see the helper module docstring).
+    """
+    from cflibs.benchmark.datasets import supercam_labcal
+
+    root = Path(data_dir) if data_dir is not None else DATA_ROOT / "supercam_calib"
+    labcal_csv = root / supercam_labcal.LABCAL_CSV_RELPATH
+    if not _require(
+        "supercam_labcal",
+        "Download the SuperCam lab calibration table (PDS Geosciences node, "
+        "urn:nasa:pds:mars2020_supercam:calibration_supercam, "
+        "libs_spectral_library_reference.csv) into "
+        "data/supercam_calib/raw/labcal/.",
+        (labcal_csv, labcal_csv.is_file()),
+    ):
+        return
+    yield from supercam_labcal.iter_spectra(root)
+
+
+def iter_supercam_scct_spectra(data_dir: Path | None = None) -> Iterator[SpectrumRecord]:
+    """
+    SuperCam Calibration Target LIBS spectra from the Mars surface (CL1).
+
+    547 calibrated FITS products across 23 onboard cal targets, sols 13-1694;
+    truth joined to the lab calibration table's SCCT chip rows (same material
+    batch). Real-Mars spectra: HOLDOUT tier (adoption-gate material).
+    Requires astropy and both raw/scct/cl1/ and the lab CSV.
+    """
+    from cflibs.benchmark.datasets import supercam_labcal, supercam_scct
+
+    root = Path(data_dir) if data_dir is not None else DATA_ROOT / "supercam_calib"
+    cl1_dir = root / supercam_scct.CL1_RELPATH
+    labcal_csv = root / supercam_labcal.LABCAL_CSV_RELPATH
+    if not _require(
+        "supercam_scct",
+        "Download the SCCT CL1 FITS products (PDS urn:nasa:pds:mars2020_supercam "
+        "data_calibrated_spectra, files matching *scct*cl1*) into "
+        "data/supercam_calib/raw/scct/cl1/sol_XXXXX/ and the lab table "
+        "libs_spectral_library_reference.csv (truth source) into "
+        "data/supercam_calib/raw/labcal/.",
+        (cl1_dir, cl1_dir.is_dir()),
+        (labcal_csv, labcal_csv.is_file()),
+    ):
+        return
+    try:
+        import astropy  # noqa: F401
+    except ImportError:
+        logger.warning(
+            "Skipping supercam_scct adapter: astropy is not installed "
+            "(pip install 'cflibs[fits]')."
+        )
+        return
+    yield from supercam_scct.iter_spectra(root)
+
+
 # ---------------------------------------------------------------------------
 # Registration manifest -- the scoreboard maintainer wires these entries into
 # the registry at integration time. Order = value order from bead A2. Tiers
@@ -297,6 +364,30 @@ MANIFEST: list[tuple[str, AdapterFactory, tuple[str, ...], str, str]] = [
         "Gibbons et al. nitrate-doped Mars Global Simulant: ~175 spectra "
         "(186-1049 nm, He atmosphere); quantitative N wt% from certified "
         "NO3- ion wt%; matrix elements uncertified (partial panel).",
+    ),
+    (
+        "supercam_labcal",
+        iter_supercam_labcal_spectra,
+        ("real", "geological", "element_wt", "supercam", "mars_analog"),
+        "optimization",
+        "SuperCam lab LIBS calibration database (Anderson et al. 2022, PDS "
+        "calibration_supercam): 1,193 shift==0 spectra (244-853 nm) of 334 "
+        "certified standards in a ~7 mbar CO2 chamber; element-wt truth from "
+        "the same table's oxide/volatile/trace columns; 54 Remove_from_all "
+        "rows skipped; multiple observation points share one Target_Name "
+        "truth row — honest splits must group by Target_Name; relative "
+        "intensity units.",
+    ),
+    (
+        "supercam_scct",
+        iter_supercam_scct_spectra,
+        ("real", "geological", "element_wt", "supercam", "mars"),
+        "holdout",
+        "SuperCam onboard calibration targets shot on Mars (PDS CL1 products): "
+        "547 spectra of 23 targets, sols 13-1694, true Mars atmosphere/dust "
+        "at ~3 m standoff; element-wt truth joined from the lab table's SCCT "
+        "chip rows (same material batch, chip number ignored); TITANIUM is "
+        "presence-only (Ti6Al4V plate). Real-Mars adoption-gate material.",
     ),
 ]
 
