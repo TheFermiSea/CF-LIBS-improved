@@ -149,9 +149,7 @@ def _validate_curve(curve: np.ndarray, source: str = "") -> None:
     if curve.ndim != 2 or curve.shape[1] != 2:
         raise ValueError(f"Response curve{label} must be an (N, 2) array; got {curve.shape}.")
     if curve.shape[0] < 2:
-        raise ValueError(
-            f"Response curve{label} needs at least 2 points; got {curve.shape[0]}."
-        )
+        raise ValueError(f"Response curve{label} needs at least 2 points; got {curve.shape[0]}.")
     if not np.all(np.isfinite(curve)):
         raise ValueError(f"Response curve{label} contains non-finite values.")
     wl = curve[:, 0]

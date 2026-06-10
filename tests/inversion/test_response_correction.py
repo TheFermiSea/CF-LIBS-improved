@@ -240,24 +240,16 @@ def _build_atomic_db(tmp_path: Path):
 
     db_path = tmp_path / "response_e2e.db"
     conn = sqlite3.connect(db_path)
-    conn.execute(
-        """CREATE TABLE lines (id INTEGER PRIMARY KEY, element TEXT, sp_num INTEGER,
+    conn.execute("""CREATE TABLE lines (id INTEGER PRIMARY KEY, element TEXT, sp_num INTEGER,
         wavelength_nm REAL, aki REAL, ei_ev REAL, ek_ev REAL, gi INTEGER, gk INTEGER,
-        rel_int REAL)"""
-    )
-    conn.execute(
-        """CREATE TABLE energy_levels (element TEXT, sp_num INTEGER, g_level INTEGER,
-        energy_ev REAL)"""
-    )
-    conn.execute(
-        """CREATE TABLE species_physics (element TEXT, sp_num INTEGER, ip_ev REAL,
-        atomic_mass REAL, PRIMARY KEY (element, sp_num))"""
-    )
-    conn.execute(
-        """CREATE TABLE partition_functions (element TEXT, sp_num INTEGER, a0 REAL,
+        rel_int REAL)""")
+    conn.execute("""CREATE TABLE energy_levels (element TEXT, sp_num INTEGER, g_level INTEGER,
+        energy_ev REAL)""")
+    conn.execute("""CREATE TABLE species_physics (element TEXT, sp_num INTEGER, ip_ev REAL,
+        atomic_mass REAL, PRIMARY KEY (element, sp_num))""")
+    conn.execute("""CREATE TABLE partition_functions (element TEXT, sp_num INTEGER, a0 REAL,
         a1 REAL, a2 REAL, a3 REAL, a4 REAL, t_min REAL, t_max REAL, source TEXT,
-        PRIMARY KEY (element, sp_num))"""
-    )
+        PRIMARY KEY (element, sp_num))""")
     line_rows = [
         ("Fe", 1, 371.99, 1.5e7, 0.0, 3.33, 9, 11, 1000),
         ("Fe", 1, 373.49, 8.0e6, 0.0, 3.32, 9, 9, 700),
@@ -390,9 +382,9 @@ def _intercept_vector(obs_by_key, keys, temperature_K: float) -> dict:
     species: dict = {}
     for key in keys:
         obs = obs_by_key[key]
-        ordinate = np.log(
-            obs.intensity * obs.wavelength_nm / (obs.g_k * obs.A_ki)
-        ) + obs.E_k_ev / (KB_EV * temperature_K)
+        ordinate = np.log(obs.intensity * obs.wavelength_nm / (obs.g_k * obs.A_ki)) + obs.E_k_ev / (
+            KB_EV * temperature_K
+        )
         species.setdefault((obs.element, obs.ionization_stage), []).append(ordinate)
     return {sp: float(np.mean(vals)) for sp, vals in species.items()}
 
@@ -423,9 +415,11 @@ def test_response_correction_recovers_boltzmann_intercepts(tmp_path: Path):
     # cannot leak into the intercept comparison.
     common = set(obs_clean) & set(obs_corrupted) & set(obs_corrected)
     species_seen = {(el, sp) for el, sp, _ in common}
-    assert {("Fe", 1), ("Fe", 2), ("Cu", 1)} <= species_seen, (
-        f"Expected all three species among common detections; got {species_seen}"
-    )
+    assert {
+        ("Fe", 1),
+        ("Fe", 2),
+        ("Cu", 1),
+    } <= species_seen, f"Expected all three species among common detections; got {species_seen}"
 
     q_clean = _intercept_vector(obs_clean, common, TEST_T_K)
     q_corrupted = _intercept_vector(obs_corrupted, common, TEST_T_K)
@@ -469,11 +463,13 @@ def test_uncorrected_bias_matches_ln_e_prediction(tmp_path: Path):
 
     ln_e: dict = {}
     for el, sp, wl in common:
-        ln_e.setdefault((el, sp), []).append(float(np.log(correction.efficiency(np.array([wl]))[0])))
+        ln_e.setdefault((el, sp), []).append(
+            float(np.log(correction.efficiency(np.array([wl]))[0]))
+        )
 
     for species in q_clean:
         predicted = float(np.mean(ln_e[species]))
         measured = q_corrupted[species] - q_clean[species]
-        assert measured == pytest.approx(predicted, abs=0.1), (
-            f"{species}: measured bias {measured:.3f} vs predicted ln E {predicted:.3f}"
-        )
+        assert measured == pytest.approx(
+            predicted, abs=0.1
+        ), f"{species}: measured bias {measured:.3f} vs predicted ln E {predicted:.3f}"
