@@ -118,9 +118,12 @@ def test_comb_adaptive_tolerance_reduces_false_matches(fe_only_spectrum_R10000):
         intensity=spec["intensity"],
         atomic_db=spec["atomic_db"],
         elements=candidates,
-        # Isolate the tolerance mechanism from the other FP gates.
+        # Isolate the tolerance mechanism from the other FP gates (including
+        # the bead-ye6t per-line residual gate, which on its own suppresses
+        # the Cr/Ti/Cu/Ni ride-alongs this baseline needs to exhibit).
         shift_coherence_veto=False,
         kdet_enabled=False,
+        line_residual_gate=False,
     )
     pre = detect_line_observations(
         wavelength_tolerance_nm=0.1,
