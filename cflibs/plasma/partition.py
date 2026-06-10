@@ -115,6 +115,38 @@ def ionization_potential_depression(n_e: float, T_K: float, Z: int = 1) -> float
     return float(delta_chi_erg * _ERG_TO_EV)
 
 
+def ionization_potential_depression_jax(n_e: Any, T_K: Any, Z: int = 1) -> Any:
+    """JAX twin of :func:`ionization_potential_depression` (traced inputs).
+
+    Identical Gaussian-CGS Debye-Hückel math — ``Δχ = Z·e²/λ_D`` with
+    ``λ_D = sqrt(k_B T / (4π n_e e²))`` — expressed in ``jnp`` so jit/vmap
+    kernels (the snapshot Saha in :mod:`cflibs.radiation.kernels` and the
+    manifold generator's Saha-Eggert solver) can apply the SAME Δχ the CPU
+    solver uses (audit 01-F4, bead CF-LIBS-improved-rs7e).  Non-physical
+    inputs (``n_e <= 0`` or ``T_K <= 0``) yield 0, mirroring the scalar
+    helper, via ``jnp.where`` (no Python branching on traced values).
+
+    Parameters
+    ----------
+    n_e : float or traced scalar/array
+        Electron density in cm⁻³.
+    T_K : float or traced scalar/array
+        Temperature in Kelvin.
+    Z : int
+        Ionic charge of perturbers (default 1, static).
+
+    Returns
+    -------
+    jnp.ndarray
+        IPD in eV, broadcast over the inputs.
+    """
+    safe_ne = jnp.maximum(n_e, 1e-300)
+    safe_T = jnp.maximum(T_K, 1e-300)
+    lambda_D = jnp.sqrt(_KB_ERG * safe_T / (4.0 * jnp.pi * safe_ne * _E_ESU**2))
+    delta_chi = Z * _E_ESU**2 / lambda_D * _ERG_TO_EV
+    return jnp.where((n_e > 0.0) & (T_K > 0.0), delta_chi, 0.0)
+
+
 def direct_sum_partition_function(
     T_K: float,
     g_levels: np.ndarray,
