@@ -129,6 +129,12 @@ class AnalysisPipelineConfig:
     isolation_wavelength_nm: float = 0.1
     max_lines_per_element: int = 20
     wavelength_calibration: bool = True
+    # Optional spectral-response curve path (CSV/YAML). When set, measured
+    # intensities are divided by the interpolated relative efficiency
+    # E(lambda) BEFORE detection/observation building (audit 02-F5; Tognoni
+    # et al. 2010 prerequisite). ``None`` = identity (bit-identical default;
+    # ChemCam CCS data are already response-corrected upstream).
+    response_curve: Optional[str] = None
     # Iterative-solver knobs (mirror ``IterativeCFLIBSSolver``).
     max_iterations: int = 20
     t_tolerance_k: float = 100.0
@@ -166,6 +172,7 @@ def _build_pipeline_config(
     wavelength_tolerance_nm: Optional[float] = None,
     min_peak_height: Optional[float] = None,
     peak_width_nm: Optional[float] = None,
+    response_curve: Optional[str] = None,
 ) -> AnalysisPipelineConfig:
     """Resolve the shared pipeline configuration for analyze/invert/batch.
 
@@ -222,6 +229,7 @@ def _build_pipeline_config(
         isolation_wavelength_nm=cfg.get("isolation_wavelength_nm", 0.1),
         max_lines_per_element=cfg.get("max_lines_per_element", 20),
         wavelength_calibration=bool(cfg.get("wavelength_calibration", True)),
+        response_curve=_first_not_none(response_curve, cfg.get("response_curve")),
         max_iterations=cfg.get("max_iterations", 20),
         t_tolerance_k=cfg.get("t_tolerance_k", 100.0),
         ne_tolerance_frac=cfg.get("ne_tolerance_frac", 0.1),
@@ -256,7 +264,7 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
         "min_snr=%s, min_energy_spread_ev=%s, min_lines_per_element=%s, "
         "max_lines_per_element=%s, isolation_wavelength_nm=%s, max_iterations=%s, "
         "t_tolerance_k=%s, ne_tolerance_frac=%s, pressure_pa=%s, "
-        "boltzmann_weight_cap=%s, min_boltzmann_r2=%s, elements=%s",
+        "boltzmann_weight_cap=%s, min_boltzmann_r2=%s, response_curve=%s, elements=%s",
         pipeline.preset,
         pipeline.saha_boltzmann_graph,
         pipeline.closure_mode,
@@ -280,6 +288,7 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
         pipeline.pressure_pa,
         pipeline.boltzmann_weight_cap,
         pipeline.min_boltzmann_r2,
+        pipeline.response_curve,
         pipeline.elements,
     )
 
@@ -628,6 +637,25 @@ def _run_pipeline(
     """
     from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
 
+    # Spectral-response correction FIRST (audit 02-F5): divide the measured
+    # spectrum by the relative detection efficiency E(lambda) before any
+    # observation building, so integrated line intensities, their shot-noise
+    # uncertainties and the Boltzmann ordinates are all computed from
+    # response-corrected data. Identity (no-op) when no curve is configured —
+    # ChemCam CCS spectra arrive response-corrected upstream and must NOT be
+    # corrected twice.
+    if pipeline.response_curve:
+        from cflibs.inversion.preprocess.response_correction import SpectralResponseCorrection
+
+        curve_path = _resolve_existing_path(pipeline.response_curve)
+        correction = SpectralResponseCorrection.from_file(curve_path)
+        intensity = correction.apply(wavelength, intensity)
+        logger.info(
+            "Applied spectral-response correction from %s (coverage %.1f-%.1f nm).",
+            curve_path,
+            *correction.coverage_nm,
+        )
+
     observations, diagnostics = _detect_and_select_lines(
         wavelength,
         intensity,
@@ -652,6 +680,7 @@ def _run_pipeline(
     diagnostics["preset"] = pipeline.preset
     diagnostics["saha_boltzmann_graph"] = pipeline.saha_boltzmann_graph
     diagnostics["closure_mode"] = pipeline.closure_mode
+    diagnostics["response_curve"] = pipeline.response_curve
 
     if len(observations) == 0:
         raise ValueError("No usable spectral lines detected for inversion.")
@@ -851,6 +880,14 @@ def invert_cmd(args):
 
     analysis_cfg = config.get("analysis", {}) if isinstance(config, dict) else {}
 
+    # A response-curve path in the YAML is resolved relative to the config
+    # file (like atomic_database), so shipped configs can use short paths.
+    if analysis_cfg.get("response_curve") and args.config:
+        analysis_cfg = dict(analysis_cfg)
+        analysis_cfg["response_curve"] = str(
+            _resolve_existing_path(analysis_cfg["response_curve"], relative_to=args.config)
+        )
+
     elements = _resolve_invert_elements(args, config, analysis_cfg)
 
     db_path = _resolve_db_path(config.get("atomic_database"), relative_to=args.config)
@@ -871,6 +908,7 @@ def invert_cmd(args):
         wavelength_tolerance_nm=getattr(args, "tolerance_nm", None),
         min_peak_height=getattr(args, "min_peak_height", None),
         peak_width_nm=getattr(args, "peak_width_nm", None),
+        response_curve=getattr(args, "response_curve", None),
     )
 
     result, diagnostics = _run_pipeline(wavelength, intensity, atomic_db, pipeline)
@@ -908,6 +946,7 @@ def analyze_cmd(args):
         apply_self_absorption=getattr(args, "apply_self_absorption", None),
         min_relative_intensity=getattr(args, "min_relative_intensity", None),
         resolving_power=getattr(args, "resolving_power", None),
+        response_curve=getattr(args, "response_curve", None),
     )
 
     uncertainty_mode = getattr(args, "uncertainty", "none")
@@ -1228,6 +1267,7 @@ def batch_cmd(args):
         apply_self_absorption=getattr(args, "apply_self_absorption", None),
         min_relative_intensity=getattr(args, "min_relative_intensity", None),
         resolving_power=getattr(args, "resolving_power", None),
+        response_curve=getattr(args, "response_curve", None),
     )
 
     csv_files = sorted(directory.glob("*.csv"))
@@ -1455,6 +1495,20 @@ def _add_pipeline_flags(parser) -> None:
         help=(
             "Apply the curve-of-growth self-absorption correction in the solver "
             "and retain strong resonance lines (default: off)"
+        ),
+    )
+    parser.add_argument(
+        "--response-curve",
+        type=str,
+        default=None,
+        help=(
+            "Path to a spectral-response curve (CSV 'wavelength_nm,relative_efficiency' "
+            "or YAML with those two keys). Measured intensities are divided by the "
+            "interpolated relative detection efficiency E(lambda) before line "
+            "extraction — mandatory for CF-LIBS on uncalibrated spectrometers "
+            "(Tognoni et al. 2010). Only the relative shape matters; the curve is "
+            "normalized to max=1. Default: no correction. Do NOT use on ChemCam CCS "
+            "data (already response-corrected upstream)."
         ),
     )
 
