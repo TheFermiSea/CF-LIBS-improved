@@ -162,9 +162,9 @@ def sample_split_ids(
     return [ids[i] for i in idx]
 
 
-def _get_eval_items(ctx: EvalContext, section: str, name: str) -> list:
+def _get_eval_items(ctx: EvalContext, section: str, name: str, chosen: Sequence[str]) -> list:
+    """The dataset's split items restricted to the already-sampled ``chosen`` ids."""
     items = _load_split_items(ctx.manifest, section, name)
-    chosen = sample_split_ids(ctx.manifest, section, name, ctx.spectra_per_dataset, ctx.sample_seed)
     if len(chosen) == len(items):
         return items
     by_id = {item[0]: item for item in items}
@@ -249,8 +249,6 @@ def _get_pool(n_procs: int, db_path: Path | str):
     global _POOL, _POOL_PROCS
     if _POOL is None or _POOL_PROCS != n_procs:
         _terminate_pool()
-        import multiprocessing as mp
-
         _POOL = mp.get_context("spawn").Pool(
             processes=n_procs, initializer=_pool_init, initargs=(str(db_path),)
         )
@@ -344,15 +342,8 @@ def evaluate_overrides(
     splits.assert_not_vault(names)
     if section == "optimization":
         # Dataset-level refusal FIRST (a holdout-only dataset has no
-        # optimization split to even sample from), then id-level.
+        # optimization split to even sample from), then id-level below.
         splits.assert_optimization_only(ctx.manifest, names)
-        spectrum_ids = {
-            name: sample_split_ids(
-                ctx.manifest, section, name, ctx.spectra_per_dataset, ctx.sample_seed
-            )
-            for name in names
-        }
-        splits.assert_optimization_only(ctx.manifest, names, spectrum_ids)
     elif section == "holdout":
         if not allow_restricted:
             raise splits.HoldoutViolation(
@@ -361,13 +352,22 @@ def evaluate_overrides(
             )
     else:
         raise ValueError(f"Unknown split section {section!r}")
+    # Sample ONCE per dataset; the guard and the evaluation see the same ids.
+    spectrum_ids = {
+        name: sample_split_ids(
+            ctx.manifest, section, name, ctx.spectra_per_dataset, ctx.sample_seed
+        )
+        for name in names
+    }
+    if section == "optimization":
+        splits.assert_optimization_only(ctx.manifest, names, spectrum_ids)
 
     from cflibs.benchmark.scoreboard import _aggregate_dataset
 
     rows = []
     for name in names:
         entry = _dataset_entry(name)
-        items = _get_eval_items(ctx, section, name)
+        items = _get_eval_items(ctx, section, name, spectrum_ids[name])
         payloads = [
             (
                 sid,
@@ -555,12 +555,6 @@ def _confusion_by_id(rows: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, t
     return out
 
 
-def _micro_f1(tp: float, fp: float, fn: float) -> float:
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    return 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-
-
 def paired_bootstrap_delta_f1(
     candidate_rows: Sequence[Mapping[str, Any]],
     baseline_rows: Sequence[Mapping[str, Any]],
@@ -573,7 +567,13 @@ def paired_bootstrap_delta_f1(
     Spectra are resampled with replacement *within each dataset*; the same
     resample indices apply to candidate and baseline (paired). Returns the
     point delta and the 95% percentile CI.
+
+    Micro-F1 comes from the scoreboard's :func:`precision_recall_f1` (the
+    single source for this metric math). The summed confusion counts are
+    integral by construction, so the int conversion inside it is exact.
     """
+    from cflibs.benchmark.scoreboard import precision_recall_f1
+
     cand = _confusion_by_id(candidate_rows)
     base = _confusion_by_id(baseline_rows)
     pairs: list[np.ndarray] = []  # per dataset: (n_spectra, 6) [c_tp c_fp c_fn b_tp b_fp b_fn]
@@ -593,7 +593,7 @@ def paired_bootstrap_delta_f1(
 
     def pooled_delta(arrays: list[np.ndarray]) -> float:
         total = np.sum(np.vstack(arrays), axis=0)
-        return _micro_f1(*total[:3]) - _micro_f1(*total[3:])
+        return precision_recall_f1(*total[:3])[2] - precision_recall_f1(*total[3:])[2]
 
     point = pooled_delta(pairs)
     rng = np.random.default_rng(seed)
