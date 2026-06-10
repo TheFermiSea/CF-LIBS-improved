@@ -264,12 +264,11 @@ CF-LIBS fits the Boltzmann plot per element. With multiple elements, the
 solver enforces a **common slope** (all elements share the same plasma
 temperature) while letting each element have its own intercept. This is
 the multi-element common-slope fit, implemented in
-`cflibs.inversion.physics.boltzmann_fit`.
+`cflibs.inversion.solve.iterative.IterativeCFLIBSSolver._fit_common_boltzmann_plane`
+(single-element fitting lives in `cflibs.inversion.physics.boltzmann`).
 
 Available fitting estimators (`FitMethod`):
 
-- `WEIGHTED_LS` — ordinary weighted least squares with intensity-error
-  weights `w_i = 1/σ_i²`.
 - `SIGMA_CLIP` — iterative re-fit dropping `>3σ` outliers (default).
 - `RANSAC` — random sample consensus for heavy contamination.
 - `HUBER` — Huber M-estimator for medium-tail noise.

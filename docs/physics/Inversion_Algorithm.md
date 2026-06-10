@@ -62,7 +62,7 @@ REPEAT:
   ── Step 2: Common-slope Boltzmann fit ────────────────────────────
   fit a single line through { (E_k, ln(I·λ/(g_k·A_ki)) + correction) }
   with all elements sharing the slope (= -1/(k_B T)) and per-element
-  intercepts q_s. Method: SIGMA_CLIP / WEIGHTED_LS / RANSAC / HUBER.
+  intercepts q_s. Method: SIGMA_CLIP / RANSAC / HUBER.
   
   T_new ← -1 / (k_B · slope)
 
@@ -121,11 +121,11 @@ UNCERTAINTY (selectable):
 |------|--------|
 | Peak detection and line matching | `cflibs.inversion.identify.line_detection.detect_line_observations`; see [Peak Identification and Line Matching](../user/Peak_Identification_Guide.md) |
 | Line scoring + selection | `cflibs.inversion.physics.line_selection.LineSelector` |
-| Saha correction | `IterativeCFLIBSSolver._saha_correction` |
-| Common-slope Boltzmann fit | `cflibs.inversion.physics.boltzmann_fit` (and `boltzmann.py` shim) |
+| Saha correction | `IterativeCFLIBSSolver._apply_saha_correction` |
+| Common-slope Boltzmann fit | `IterativeCFLIBSSolver._fit_common_boltzmann_plane` (single-element fitting: `cflibs.inversion.physics.boltzmann.BoltzmannPlotFitter`) |
 | Closure equation | `cflibs.inversion.physics.closure.ClosureEquation` |
-| `n_e` update | `IterativeCFLIBSSolver._update_electron_density` |
-| Quality assessment | `cflibs.inversion.quality.QualityAssessor` |
+| `n_e` update | `IterativeCFLIBSSolver._update_ne_python` (pressure balance: `_pressure_balance_ne`) |
+| Quality assessment | `cflibs.inversion.physics.quality.QualityAssessor` |
 | Analytical UQ | `cflibs.inversion.physics.uncertainty.create_boltzmann_uncertainties` |
 | Monte Carlo UQ | `cflibs.inversion.physics.uncertainty.MonteCarloUQ` |
 | Bayesian | `cflibs.inversion.solve.bayesian` (separate solver) |

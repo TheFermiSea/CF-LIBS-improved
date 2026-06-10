@@ -105,8 +105,8 @@ composition as physically suspect even if the solver converged.
 
 ### Code references
 
-- McWhirter check: `cflibs/inversion/quality.py`
-  (`QualityAssessor.check_lte_validity`).
+- McWhirter check: `cflibs/plasma/lte_validator.py`
+  (`LTEValidator.check_mcwhirter`).
 - Quality metrics surfaced in `CFLIBSResult.quality_metrics`.
 - Constant: `cflibs.core.constants.MCWHIRTER_CONST = 1.6e12`.
 
@@ -159,15 +159,15 @@ the *lower-level* population, `f_ki` is the oscillator strength.
    Requires absolute intensity calibration or a known-fraction reference
    line.
 3. **Use CDSB (Column-Density Self-Absorption correction)** for
-   moderate-`τ` regimes (`cflibs/inversion/cdsb.py`). Implements the
+   moderate-`τ` regimes (`cflibs/inversion/physics/cdsb.py`). Implements the
    full Voigt curve of growth.
 4. **Mask lines whose `τ > max_optical_depth`** (the corrector does this
    automatically).
 
 ### Code references
 
-- `cflibs/inversion/self_absorption.py` (iterative).
-- `cflibs/inversion/cdsb.py` (curve-of-growth).
+- `cflibs/inversion/physics/self_absorption.py` (iterative).
+- `cflibs/inversion/physics/cdsb.py` (curve-of-growth).
 - `quality_metrics["self_absorption_warnings"]` in the result.
 
 ---

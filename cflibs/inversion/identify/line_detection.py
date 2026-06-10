@@ -2401,7 +2401,10 @@ def _match_transition(
     for transition in transitions:
         signed = peak_wavelength - transition.wavelength_nm
         distance = abs(signed)
-        if distance > tolerance_nm or distance >= best_distance:
+        # Positive-form comparison: NaN distances (NaN peak or axis) fail
+        # every branch and match nothing. The De Morgan inversion
+        # ``distance > tol or distance >= best`` let NaN through.
+        if not (distance <= tolerance_nm and distance < best_distance):
             continue
         if residual_center_nm is not None and abs(signed - residual_center_nm) > residual_band_nm:
             continue

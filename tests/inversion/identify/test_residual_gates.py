@@ -15,6 +15,8 @@ tests pin both halves of the fix:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -303,3 +305,37 @@ class TestPerPeakOwnership:
         result = self._detect(line_residual_gate=False)
         sn = sorted(o.wavelength_nm for o in result.observations if o.element == "Sn")
         assert sn == [400.004, 600.0, 610.0]
+
+
+class TestMatchTransitionNaN:
+    """A NaN peak wavelength must match nothing (PR #282 review MF2).
+
+    The De Morgan rewrite ``distance > tol or distance >= best`` let NaN
+    through every branch (NaN comparisons are all False), so a NaN peak
+    fabricated a match with the LAST transition in the list.
+    """
+
+    def test_nan_peak_matches_nothing(self):
+        from cflibs.inversion.identify.line_detection import _match_transition
+
+        t1 = SimpleNamespace(wavelength_nm=255.0)
+        t2 = SimpleNamespace(wavelength_nm=255.5)
+        assert _match_transition(float("nan"), [t1, t2], 0.1) is None
+
+    def test_nan_peak_matches_nothing_with_residual_gate(self):
+        from cflibs.inversion.identify.line_detection import _match_transition
+
+        t1 = SimpleNamespace(wavelength_nm=255.0)
+        assert (
+            _match_transition(
+                float("nan"), [t1], 0.1, residual_center_nm=0.0, residual_band_nm=0.05
+            )
+            is None
+        )
+
+    def test_finite_peak_still_matches_nearest(self):
+        from cflibs.inversion.identify.line_detection import _match_transition
+
+        t1 = SimpleNamespace(wavelength_nm=255.0)
+        t2 = SimpleNamespace(wavelength_nm=255.5)
+        assert _match_transition(255.04, [t1, t2], 0.1) is t1

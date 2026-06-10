@@ -72,7 +72,7 @@ The canonical implementation is:
 Relevant entry points:
 
 ```python
-from cflibs.inversion.preprocessing import (
+from cflibs.inversion.preprocess.preprocessing import (
     BaselineMethod,
     detect_peaks_auto,
     estimate_baseline,

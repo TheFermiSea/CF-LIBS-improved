@@ -19,6 +19,7 @@ Pins three contracts introduced by the pipeline-defaults overhaul
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -372,3 +373,67 @@ def test_example_inversion_config_is_valid_and_safe():
     assert analysis.get("exclude_resonance") is False
     assert analysis.get("min_relative_intensity") is None
     assert analysis.get("preset", DEFAULT_ANALYSIS_PRESET) == "geological"
+
+
+class TestResidualScanGlue:
+    """The conditional that DELIVERS the ye6t fix in production: the residual
+    comb scan is zeroed only after a quality-passed calibration; failed or
+    disabled calibration keeps the legacy 0.5 nm global scan (PR #282 review
+    FU5 — this glue previously had no test)."""
+
+    @staticmethod
+    def _capture_scan(monkeypatch, cal_result, wavelength_calibration=True):
+        import cflibs.inversion.pipeline as pipeline_mod
+        from cflibs.inversion.identify import line_detection as ld_mod
+        from cflibs.inversion.preprocess import wavelength_calibration as wcal_mod
+
+        seen = {}
+
+        def _fake_detect(**kwargs):
+            seen["shift_scan_nm"] = kwargs["shift_scan_nm"]
+            raise RuntimeError("stop-after-capture")
+
+        monkeypatch.setattr(wcal_mod, "calibrate_wavelength_axis_segmented", lambda **k: cal_result)
+        monkeypatch.setattr(ld_mod, "detect_line_observations", _fake_detect)
+        wl = np.linspace(250.0, 800.0, 100)
+        with pytest.raises(RuntimeError, match="stop-after-capture"):
+            pipeline_mod.detect_and_select_lines(
+                wl,
+                np.ones_like(wl),
+                MagicMock(),
+                ["Fe"],
+                wavelength_calibration=wavelength_calibration,
+            )
+        return seen["shift_scan_nm"]
+
+    def test_quality_passed_calibration_zeroes_the_scan(self, monkeypatch):
+        wl = np.linspace(250.0, 800.0, 100)
+        cal = SimpleNamespace(
+            success=True,
+            quality_passed=True,
+            corrected_wavelength=wl,
+            model="affine",
+            details={"segments": 1},
+            n_inliers=30,
+            rmse_nm=0.02,
+            quality_reason="passed",
+        )
+        assert self._capture_scan(monkeypatch, cal) == pytest.approx(0.0, abs=0)
+
+    def test_failed_quality_keeps_legacy_global_scan(self, monkeypatch):
+        cal = SimpleNamespace(
+            success=True,
+            quality_passed=False,
+            corrected_wavelength=None,
+            model="affine",
+            details={},
+            n_inliers=2,
+            rmse_nm=0.5,
+            quality_reason="too-few-inliers",
+        )
+        assert self._capture_scan(monkeypatch, cal) == pytest.approx(0.5, abs=0)
+
+    def test_calibration_disabled_keeps_legacy_global_scan(self, monkeypatch):
+        assert self._capture_scan(monkeypatch, None, wavelength_calibration=False) == pytest.approx(
+            0.5, abs=0
+        )

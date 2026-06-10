@@ -1469,6 +1469,47 @@ def calibrate_wavelength_axis_segmented(
         **calibrate_kwargs,
     )
 
+    # ye6t coverage gate on the GLOBAL fit. The global fit is both the
+    # seam-free answer and the per-segment fallback offset source, so an
+    # affine anchored in one region of the axis must be degraded HERE —
+    # otherwise its extrapolated correction drift leaks through both paths
+    # (single-channel instruments hit the same failure class as the ChemCam
+    # VNIR segment: anchors at 420-600 nm extrapolating ~1 px at the red end).
+    if affine_coverage_gate and global_result.success and global_result.model != "shift":
+        span_fraction, extrap_nm, extrap_px = _segment_anchor_coverage(global_result, wavelength)
+        if (
+            span_fraction < coverage_min_anchor_span_fraction
+            or extrap_px > coverage_max_extrapolation_px
+        ):
+            logger.info(
+                "Global coverage gate: %s model anchors cover %.0f%% of the axis "
+                "(min %.0f%%) with %.3f nm (%.2f px) extrapolated correction drift "
+                "past the dense anchor hull (max %.2f px); degraded to shift model.",
+                global_result.model,
+                100.0 * span_fraction,
+                100.0 * coverage_min_anchor_span_fraction,
+                extrap_nm,
+                extrap_px,
+                coverage_max_extrapolation_px,
+            )
+            global_result = calibrate_wavelength_axis(
+                wavelength=wavelength,
+                intensity=intensity,
+                atomic_db=atomic_db,
+                elements=elements,
+                mode="auto",
+                candidate_models=("shift",),
+                inlier_tolerance_nm=inlier_tolerance_nm,
+                max_pair_window_nm=max_pair_window_nm,
+                random_seed=random_seed,
+                **calibrate_kwargs,
+            )
+            global_result.details["coverage_gate"] = "degraded_to_shift"
+            global_result.details["coverage_extrapolation_nm"] = float(extrap_nm)
+        else:
+            global_result.details["coverage_gate"] = "passed"
+            global_result.details["coverage_extrapolation_nm"] = float(extrap_nm)
+
     if seams.size == 0:
         # No seams: degrade to the ordinary global calibration (safe path).
         global_result.details["segments"] = 1
