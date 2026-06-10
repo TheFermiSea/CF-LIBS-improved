@@ -240,6 +240,12 @@ HARD_TIMEOUT_GRACE_S = 30.0
 _POOL = None
 _POOL_PROCS = 0
 
+# Tear the pool down BEFORE interpreter shutdown: a garbage-collected
+# mp.Pool raises spurious AttributeErrors from Pool.__del__ at exit.
+import atexit  # noqa: E402
+
+atexit.register(lambda: _terminate_pool())
+
 
 def _get_pool(n_procs: int, db_path: Path | str):
     global _POOL, _POOL_PROCS

@@ -159,3 +159,20 @@ the `frozen_manifest.json` hashes in the body. CI runs the full suite.
 - **G2 requires holdout ΔF1 ≥ +0.02 significant** (task spec), which is
   stricter than design 2.5's "no holdout regression"; both are reported in the
   verdict table.
+
+## Smoke-run findings (2026-06-10)
+
+- **Per-spectrum timeouts are two-layered.** The in-child SIGALRM cannot
+  interrupt GIL-released C/XLA calls — a smoke trial with
+  `use_deconvolution=True` wedged inside `jax backend_compile_and_load` for
+  13+ minutes. Spectra therefore always run in a spawn pool and the parent
+  hard-kills the pool on wall-deadline overrun, records the timeout as a
+  failure, and resubmits the untouched remainder.
+- **`closure_mode="matrix"` draws die by design**: the scoreboard's
+  per-spectrum candidate sets have no globally valid `matrix_element`, so the
+  solver raises on every spectrum and the failure death penalty fires
+  (fitness −1e9). TPE learns to avoid the branch (~1/6 of random startup
+  draws wasted); the choice stays in the space because the design doc lists
+  it.
+- Death penalties were observed live: two of four smoke trials drew configs
+  whose failures exceeded `1.25 × baseline` and scored −1e9.

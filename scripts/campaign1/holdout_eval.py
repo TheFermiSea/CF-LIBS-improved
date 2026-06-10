@@ -244,10 +244,12 @@ def render_report(study_dir: Path, results: list[dict[str, Any]], meta: dict[str
         )
         if res["g3_reasons"]:
             lines.append(f"- G3 violations: {'; '.join(res['g3_reasons'])}")
-        if res.get("params"):
+        if res.get("params_diff"):
             lines.append("- Params (diff from baseline only):")
             for key, (base_val, cand_val) in sorted(res["params_diff"].items()):
                 lines.append(f"  - `{key}`: {base_val} → {cand_val}")
+        elif res.get("params") is not None:
+            lines.append("- Params: identical to baseline.")
     lines.append("")
     return "\n".join(lines)
 
