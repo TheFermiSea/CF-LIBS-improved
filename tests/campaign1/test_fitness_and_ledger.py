@@ -84,7 +84,7 @@ def test_composite_fitness_known_value():
     expected_var = float(np.var(list(scores.values())))
     assert report.variance == pytest.approx(expected_var)
     # wall 1.0 s << 5 s budget: no runtime penalty.
-    assert report.runtime_penalty == 0.0
+    assert report.runtime_penalty == pytest.approx(0.0, abs=0)
     assert report.fitness == pytest.approx(expected_weighted - 0.5 * expected_var)
 
 
@@ -155,7 +155,7 @@ def test_ledger_cap_refusal(tmp_path):
     import driver
 
     assert driver.read_ledger(tmp_path) == []
-    assert driver.core_hours_used(tmp_path) == 0.0
+    assert driver.core_hours_used(tmp_path) == pytest.approx(0.0, abs=0)
     assert not driver.budget_exceeded(tmp_path, budget_core_hours=1.0)
     # Charge 2 x 0.5 core-hour (1800 s x 1 cpu, 225 s x 8 cpus).
     driver.append_ledger(tmp_path, {"kind": "trial", "trial": 0, "wall_s": 1800.0, "cpus": 1})
