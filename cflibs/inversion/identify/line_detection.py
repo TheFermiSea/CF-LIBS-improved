@@ -798,6 +798,8 @@ def _collect_observations(
     residual_center_nm: Optional[float] = None,
     residual_band_nm: float = float("inf"),
     residual_gate_diag: Optional[Dict[str, Any]] = None,
+    coherence_min_lines: int = 2,
+    coherence_min_fraction: float = 0.5,
 ) -> None:
     """Build observations for every accepted element (in-place accumulation).
 
@@ -810,6 +812,18 @@ def _collect_observations(
     per-line residual coherence (bead ye6t): a matched line whose signed
     residual deviates from the consensus by more than ``residual_band_nm`` is
     dropped as a contaminated match and recorded in ``residual_gate_diag``.
+    An element whose match set turns out to be MOSTLY contamination (post-gate
+    coherent fraction below ``coherence_min_fraction`` — the same threshold
+    the element-level veto uses) is dropped entirely: a lucky-coherent FP line
+    set (the BHVO-2 Sn confounder: 6 lines scattered across the Fe/Ti UV
+    forest, 2 coherent by chance) must not reach the solver on its rump.
+
+    Gating also enables per-peak OWNERSHIP across elements: a peak claimed by
+    a stronger (higher-f1) element's match set cannot double-count as evidence
+    for a weaker claimant through the per-peak nearest matcher (BHVO-2: Sn
+    "matched" 248.341/277.981 on the very peaks Fe I 248.327 and Mg 277.983
+    already own — separations of 0.014/0.002 nm, unresolvable). Within one
+    element the per-peak loop behaves exactly as before.
     """
 
     def _score_key(element: str) -> Tuple[float, int]:
@@ -820,12 +834,19 @@ def _collect_observations(
 
     accepted_elements.sort(key=_score_key, reverse=True)
 
+    # Per-peak ownership (only with the residual gate, so the legacy path is
+    # untouched): peaks claimed by stronger elements are off-limits to weaker
+    # claimants' per-peak nearest matcher.
+    peak_ownership = residual_center_nm is not None
+
     used_peaks: Set[int] = set()
     for element in accepted_elements:
         transitions = comb_transitions_by_element.get(element, [])
         if not transitions:
             continue
         gated_out: List[Tuple[Transition, float, float]] = []
+        n_obs_before = len(observations)
+        owned_by_stronger = set(used_peaks)
         matches = _match_transitions_to_peaks(
             peaks=peaks,
             transitions=transitions,
@@ -848,6 +869,8 @@ def _collect_observations(
                 resonance_lines,
             )
         for peak_idx, peak_wl in peaks:
+            if peak_ownership and peak_idx in owned_by_stronger:
+                continue
             transition = _match_transition(
                 peak_wl + applied_shift_nm,
                 transitions,
@@ -857,6 +880,8 @@ def _collect_observations(
             )
             if transition is None:
                 continue
+            if peak_ownership:
+                used_peaks.add(peak_idx)
             _register_observation(
                 ctx,
                 transition,
@@ -867,8 +892,17 @@ def _collect_observations(
                 observations,
                 resonance_lines,
             )
-        if residual_gate_diag is not None and gated_out:
-            residual_gate_diag["n_gated"] = residual_gate_diag.get("n_gated", 0) + len(gated_out)
+        # Gated transitions that were rescued by the per-peak loop (matched a
+        # different, coherent peak) are kept, not contamination.
+        gated_effective = [
+            (t, pw, res)
+            for t, pw, res in gated_out
+            if (t.element, t.ionization_stage, t.wavelength_nm) not in seen_keys
+        ]
+        if residual_gate_diag is not None and gated_effective:
+            residual_gate_diag["n_gated"] = residual_gate_diag.get("n_gated", 0) + len(
+                gated_effective
+            )
             residual_gate_diag.setdefault("gated_lines", []).extend(
                 {
                     "element": t.element,
@@ -877,8 +911,67 @@ def _collect_observations(
                     "peak_wl_nm": peak_wl,
                     "residual_nm": residual,
                 }
-                for t, peak_wl, residual in gated_out
+                for t, peak_wl, residual in gated_effective
             )
+        _drop_element_if_mostly_gated(
+            element,
+            n_kept=len(observations) - n_obs_before,
+            n_gated=len(gated_effective),
+            coherence_min_lines=coherence_min_lines,
+            coherence_min_fraction=coherence_min_fraction,
+            observations=observations,
+            n_obs_before=n_obs_before,
+            resonance_lines=resonance_lines,
+            residual_gate_diag=residual_gate_diag,
+        )
+
+
+def _drop_element_if_mostly_gated(
+    element: str,
+    *,
+    n_kept: int,
+    n_gated: int,
+    coherence_min_lines: int,
+    coherence_min_fraction: float,
+    observations: List[LineObservation],
+    n_obs_before: int,
+    resonance_lines: Set[Tuple[str, int, float]],
+    residual_gate_diag: Optional[Dict[str, Any]],
+) -> None:
+    """Drop an element whose match set was mostly residual-gated contamination.
+
+    The element-level shift-coherence veto judges coherence on loose
+    per-transition residuals BEFORE observation build; an FP line set can
+    scrape past it and then be pruned to a small coherent rump by the per-line
+    gate (BHVO-2 Sn: 6 matches, 2 coherent by chance — 2.1 wt% of phantom
+    mass). Re-apply the SAME veto criterion (``coherence_min_fraction`` of
+    matches coherent, given at least ``coherence_min_lines`` of evidence) on
+    the post-gate counts and remove the element's observations when it fails.
+    Its claimed peaks deliberately stay claimed: releasing them would only
+    offer them to even weaker claimants.
+    """
+    n_total = n_kept + n_gated
+    if n_gated == 0 or n_total < coherence_min_lines:
+        return
+    if n_kept / n_total >= coherence_min_fraction:
+        return
+    removed = [obs for obs in observations[n_obs_before:] if obs.element == element]
+    del observations[n_obs_before:]
+    for obs in removed:
+        resonance_lines.discard((obs.element, obs.ionization_stage, obs.wavelength_nm))
+    if residual_gate_diag is not None:
+        residual_gate_diag.setdefault("dropped_elements", {})[element] = {
+            "kept": n_kept,
+            "gated": n_gated,
+        }
+    logger.info(
+        "Per-line residual gate dropped element %s: only %d of %d matches "
+        "coherent with the consensus shift (min fraction %.2f).",
+        element,
+        n_kept,
+        n_total,
+        coherence_min_fraction,
+    )
 
 
 def _apply_kdet_filter(
@@ -1341,9 +1434,13 @@ def detect_line_observations(
             residual_center_nm=residual_center_nm,
             residual_band_nm=residual_band_nm,
             residual_gate_diag=residual_gate_diag,
+            coherence_min_lines=coherence_min_lines,
+            coherence_min_fraction=coherence_min_fraction,
         )
         if residual_gate_diag is not None and residual_gate_diag["n_gated"] > 0:
             warnings.append("line_residual_gated_matches")
+        if residual_gate_diag is not None and residual_gate_diag.get("dropped_elements"):
+            warnings.append("line_residual_gate_dropped_elements")
 
     return _assemble_line_detection_result(
         observations=observations,
