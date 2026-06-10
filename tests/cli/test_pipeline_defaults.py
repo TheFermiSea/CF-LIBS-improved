@@ -118,7 +118,29 @@ class TestPresetResolution:
             "saha_boltzmann_graph": True,
             "closure_mode": "oxide",
             "stark_ne": True,
+            "residual_shift_scan_nm": 0.0,
+            "affine_coverage_gate": True,
+            "line_residual_gate": True,
         }
+
+    def test_axis_alignment_knobs_default_fixed_raw_keeps_legacy(self):
+        """Bead ye6t: the three axis-alignment fixes are the DEFAULT; the raw
+        preset reproduces the legacy edge-riding mop-up behaviour."""
+        cfg = _build_pipeline_config(["Fe"])
+        assert cfg.residual_shift_scan_nm == pytest.approx(0.0)
+        assert cfg.affine_coverage_gate is True
+        assert cfg.line_residual_gate is True
+        raw = _build_pipeline_config(["Fe"], preset="raw")
+        assert raw.residual_shift_scan_nm == pytest.approx(0.05)
+        assert raw.affine_coverage_gate is False
+        assert raw.line_residual_gate is False
+        # Explicit flags and YAML keys override the preset.
+        cfg = _build_pipeline_config(["Fe"], residual_shift_scan_nm=0.02)
+        assert cfg.residual_shift_scan_nm == pytest.approx(0.02)
+        cfg = _build_pipeline_config(["Fe"], analysis_cfg={"line_residual_gate": False})
+        assert cfg.line_residual_gate is False
+        cfg = _build_pipeline_config(["Fe"], analysis_cfg={"affine_coverage_gate": False})
+        assert cfg.affine_coverage_gate is False
 
     def test_analyze_parser_exposes_preset_flag(self):
         """``analyze --preset metallic`` parses through the real CLI parser."""

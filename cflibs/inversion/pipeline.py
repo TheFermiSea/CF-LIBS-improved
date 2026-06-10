@@ -47,10 +47,40 @@ CLOSURE_MODES = ("standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residu
 #: ``metallic`` keeps the pooled SB-graph but uses the standard closure
 #: (oxide stoichiometry is wrong physics for alloys); ``raw`` reproduces the
 #: legacy defaults for comparison runs.
+#:
+#: The three axis-alignment knobs (bead ye6t, measured on ChemCam BHVO-2
+#: loc1: RMSE 4.50 -> 2.25 wt%) default to the FIXED behaviour in the
+#: production presets and to the legacy behaviour in ``raw``:
+#: ``residual_shift_scan_nm=0`` (a quality-passed calibration must not be
+#: re-broken by a match-count-greedy mop-up scan that measurably rides its
+#: window edge), ``affine_coverage_gate=True`` (never extrapolate a fitted
+#: dispersion slope past its inlier anchors), and ``line_residual_gate=True``
+#: (drop individual matched lines incoherent with the consensus residual).
 ANALYSIS_PRESETS = {
-    "geological": {"saha_boltzmann_graph": True, "closure_mode": "oxide", "stark_ne": True},
-    "metallic": {"saha_boltzmann_graph": True, "closure_mode": "standard", "stark_ne": True},
-    "raw": {"saha_boltzmann_graph": False, "closure_mode": "standard", "stark_ne": False},
+    "geological": {
+        "saha_boltzmann_graph": True,
+        "closure_mode": "oxide",
+        "stark_ne": True,
+        "residual_shift_scan_nm": 0.0,
+        "affine_coverage_gate": True,
+        "line_residual_gate": True,
+    },
+    "metallic": {
+        "saha_boltzmann_graph": True,
+        "closure_mode": "standard",
+        "stark_ne": True,
+        "residual_shift_scan_nm": 0.0,
+        "affine_coverage_gate": True,
+        "line_residual_gate": True,
+    },
+    "raw": {
+        "saha_boltzmann_graph": False,
+        "closure_mode": "standard",
+        "stark_ne": False,
+        "residual_shift_scan_nm": 0.05,
+        "affine_coverage_gate": False,
+        "line_residual_gate": False,
+    },
 }
 
 DEFAULT_ANALYSIS_PRESET = "geological"
@@ -88,6 +118,20 @@ class AnalysisPipelineConfig:
     max_lines_per_element: int = 20
     wavelength_calibration: bool = True
     shift_coherence_veto: bool = True
+    #: Residual comb shift-scan half-width (nm) AFTER a quality-passed
+    #: calibration (bead ye6t). Default 0: the fitted axis is trusted; the
+    #: legacy 0.05 mop-up measurably rode its window edge and admitted
+    #: contaminated matches (Al I 892.356). The full 0.5 nm global scan still
+    #: runs whenever calibration is skipped or fails its quality gate.
+    residual_shift_scan_nm: float = 0.0
+    #: Degrade per-segment affine calibration fits to pure shift when the
+    #: inlier anchors do not cover the segment (bead ye6t): never extrapolate
+    #: a dispersion slope past its anchors.
+    affine_coverage_gate: bool = True
+    #: Drop individual matched lines whose residual is incoherent with the
+    #: consensus residual shift (bead ye6t): kills contaminated matches and
+    #: lucky-coherent FP line sets that survive the element-level veto.
+    line_residual_gate: bool = True
     #: Optional path to a spectral-response curve E(lambda); identity when None
     #: (audit 02-F5 — ChemCam CCS data arrive response-corrected upstream).
     response_curve: Optional[str] = None
@@ -132,6 +176,9 @@ def build_pipeline_config(
     exclude_resonance: Optional[bool] = None,
     wavelength_calibration: Optional[bool] = None,
     shift_coherence_veto: Optional[bool] = None,
+    residual_shift_scan_nm: Optional[float] = None,
+    affine_coverage_gate: Optional[bool] = None,
+    line_residual_gate: Optional[bool] = None,
     response_curve: Optional[str] = None,
     stark_ne: Optional[bool] = None,
 ) -> AnalysisPipelineConfig:
@@ -195,6 +242,27 @@ def build_pipeline_config(
         shift_coherence_veto=bool(
             _first_not_none(shift_coherence_veto, cfg.get("shift_coherence_veto"), True)
         ),
+        residual_shift_scan_nm=float(
+            _first_not_none(
+                residual_shift_scan_nm,
+                cfg.get("residual_shift_scan_nm"),
+                preset_knobs["residual_shift_scan_nm"],
+            )
+        ),
+        affine_coverage_gate=bool(
+            _first_not_none(
+                affine_coverage_gate,
+                cfg.get("affine_coverage_gate"),
+                preset_knobs["affine_coverage_gate"],
+            )
+        ),
+        line_residual_gate=bool(
+            _first_not_none(
+                line_residual_gate,
+                cfg.get("line_residual_gate"),
+                preset_knobs["line_residual_gate"],
+            )
+        ),
         response_curve=_first_not_none(response_curve, cfg.get("response_curve")),
         max_iterations=cfg.get("max_iterations", 20),
         t_tolerance_k=cfg.get("t_tolerance_k", 100.0),
@@ -226,7 +294,8 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
         "stark_ne=%s, "
         "apply_self_absorption=%s, exclude_resonance=%s, min_relative_intensity=%s, "
         "top_k_per_element=%s, resolving_power=%s, wavelength_calibration=%s, "
-        "shift_coherence_veto=%s, "
+        "shift_coherence_veto=%s, residual_shift_scan_nm=%s, "
+        "affine_coverage_gate=%s, line_residual_gate=%s, "
         "wavelength_tolerance_nm=%s, min_peak_height=%s, peak_width_nm=%s, "
         "min_snr=%s, min_energy_spread_ev=%s, min_lines_per_element=%s, "
         "max_lines_per_element=%s, isolation_wavelength_nm=%s, max_iterations=%s, "
@@ -243,6 +312,9 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
         pipeline.resolving_power,
         pipeline.wavelength_calibration,
         pipeline.shift_coherence_veto,
+        pipeline.residual_shift_scan_nm,
+        pipeline.affine_coverage_gate,
+        pipeline.line_residual_gate,
         pipeline.wavelength_tolerance_nm,
         pipeline.min_peak_height,
         pipeline.peak_width_nm,
@@ -285,7 +357,9 @@ def detect_and_select_lines(
     max_lines_per_element: int = 20,
     wavelength_calibration: bool = True,
     shift_coherence_veto: bool = True,
-    residual_shift_scan_nm: float = 0.05,
+    residual_shift_scan_nm: float = 0.0,
+    affine_coverage_gate: bool = True,
+    line_residual_gate: bool = True,
     return_diagnostics: bool = False,
 ):
     """
@@ -353,9 +427,23 @@ def detect_and_select_lines(
         pipeline wiring.
     residual_shift_scan_nm : float
         Half-width (nm) of the residual comb shift-scan applied *after* a
-        successful wavelength calibration. Small by design (default 0.05 nm):
-        the calibration has already aligned the axis, so only sub-tolerance
-        jitter remains.
+        quality-passed wavelength calibration. Default ``0.0`` (no residual
+        scan, bead ye6t): the fitted axis is trusted as-is. The legacy 0.05 nm
+        "mop-up" measurably rode its window edge in every configuration tested
+        (its objective maximizes match count), displacing every element's
+        residual cluster and admitting contaminated matches up to
+        ``tolerance + 0.05`` away (Al I 892.356: +10.4 wt% Al on BHVO-2 loc1).
+        When calibration is skipped or fails its quality gate the full legacy
+        0.5 nm global scan still runs — this knob only controls the
+        post-calibration scan.
+    affine_coverage_gate : bool
+        Degrade per-segment affine calibration fits to a pure shift when the
+        inlier anchors do not cover the segment (see
+        :func:`calibrate_wavelength_axis_segmented`). Default True (bead ye6t).
+    line_residual_gate : bool
+        Drop individual matched lines whose residual is incoherent with the
+        consensus residual shift (see ``detect_line_observations``). Default
+        True (bead ye6t).
     return_diagnostics : bool
         When True, also return a diagnostics dict recording which requested
         elements were dropped and at which stage (``detection`` = no matched
@@ -397,6 +485,7 @@ def detect_and_select_lines(
                 intensity=np.asarray(intensity, dtype=float),
                 atomic_db=atomic_db,
                 elements=elements,
+                affine_coverage_gate=affine_coverage_gate,
             )
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning(f"Wavelength calibration failed ({exc!r}); using raw axis.")
@@ -434,6 +523,7 @@ def detect_and_select_lines(
         top_k_per_element=top_k_per_element,
         shift_scan_nm=shift_scan_nm,
         shift_coherence_veto=shift_coherence_veto,
+        line_residual_gate=line_residual_gate,
     )
 
     for warning in detection.warnings:
@@ -479,6 +569,10 @@ def detect_and_select_lines(
         "detected_elements": sorted(detected_elements),
         "selected_elements": sorted(selected_elements),
         "dropped_elements": dropped,
+        # Per-line residual-gate diagnostics (bead ye6t): consensus residual,
+        # band, and the contaminated matches dropped at observation build.
+        "residual_gate": detection.residual_gate,
+        "applied_shift_nm": detection.applied_shift_nm,
     }
     return selection.selected_lines, diagnostics
 
@@ -615,6 +709,9 @@ def run_pipeline(
         max_lines_per_element=pipeline.max_lines_per_element,
         wavelength_calibration=pipeline.wavelength_calibration,
         shift_coherence_veto=pipeline.shift_coherence_veto,
+        residual_shift_scan_nm=pipeline.residual_shift_scan_nm,
+        affine_coverage_gate=pipeline.affine_coverage_gate,
+        line_residual_gate=pipeline.line_residual_gate,
         return_diagnostics=True,
     )
     diagnostics["preset"] = pipeline.preset
