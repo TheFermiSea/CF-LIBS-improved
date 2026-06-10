@@ -123,6 +123,41 @@ cflibs analyze my_spectrum.csv --elements Fe,Cu,Al --db-path ASD_da/libs_product
 The element list is a candidate list. Include elements you believe might be present; do
 not include the whole periodic table for a first pass.
 
+### Presets: geological (default), metallic, raw
+
+`analyze` (and `invert`/`batch`) defaults to the `geological` preset — the
+configuration that scored best on real geological reference standards: pooled
+Saha-Boltzmann graph intercepts plus the oxide closure. For metal/alloy
+samples, switch the closure off oxide stoichiometry:
+
+```bash
+cflibs analyze my_alloy.csv --elements Fe,Cr,Ni --preset metallic --db-path ASD_da/libs_production.db
+```
+
+`--preset raw` reproduces the legacy defaults. Explicit `--closure-mode` /
+`--saha-boltzmann-graph` flags override the preset, and every run logs the
+resolved settings.
+
+To reproduce the documented BHVO-2 basalt reference result (RMSE ~4.03 wt%
+against the USGS certificate) with no extra flags:
+
+```bash
+cflibs analyze data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv \
+  --elements Si,Ti,Al,Fe,Mn,Mg,Ca,Na,K,P \
+  --db-path ASD_da/libs_production.db
+```
+
+### Reading the trust report
+
+Each run prints quality information alongside the concentrations: whether the
+solve converged, the Boltzmann-plot R², how many elements were actually fit,
+and where the electron density came from. If you see
+`n_e source : 1-atm pressure-balance fallback (ASSUMED)`, the electron density
+was not measured (no usable Stark-width diagnostic) — treat it as an
+order-of-magnitude estimate. `WARNING: requested elements dropped: ...` tells
+you which candidate elements never made it into the fit and at which stage
+(`detection`, `selection`, or `solve`).
+
 ## 5. Batch-Process a Folder
 
 Once one spectrum works:
@@ -132,6 +167,10 @@ cflibs batch spectra/ --elements Fe,Cu,Al --db-path ASD_da/libs_production.db --
 ```
 
 This processes every `.csv` file in `spectra/` and writes a summary table.
+Batch uses the exact same pipeline and presets as `analyze` (same flags
+apply), adds per-spectrum trust columns (`converged`, `boltzmann_r_squared`,
+`ne_source`, `dropped_elements`, ...), and prints an aggregate summary with
+warnings for non-converged or assumed-n_e spectra.
 
 ## Common Problems
 
