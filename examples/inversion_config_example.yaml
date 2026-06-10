@@ -2,11 +2,25 @@ atomic_database: ../ASD_da/libs_production.db
 
 analysis:
   elements: ["Fe", "Cu"]
-  closure_mode: standard
+
+  # Preset bundles for the accuracy-critical solver knobs (validated on real
+  # ChemCam BHVO-2 + CSA data):
+  #   geological (default): saha_boltzmann_graph=true + closure_mode=oxide
+  #   metallic:             saha_boltzmann_graph=true + closure_mode=standard
+  #   raw:                  legacy defaults (no SB-graph, standard closure)
+  # Explicit keys below override the preset.
+  preset: geological
+  # saha_boltzmann_graph: true   # pooled Saha-Boltzmann graph intercepts
+  # closure_mode: oxide          # standard | matrix | oxide | ilr | pwlr | dirichlet_residual
+
+  # Line selection quality gates. Resonance lines are KEPT by default
+  # (exclude_resonance: false): they are the brightest, most persistent LIBS
+  # lines and the only detectable lines for some majors (e.g. the Al I
+  # 394.4/396.2 nm doublet). Setting it true silently deletes those elements.
   min_snr: 10.0
   min_energy_spread_ev: 2.0
   min_lines_per_element: 3
-  exclude_resonance: true
+  exclude_resonance: false
   isolation_wavelength_nm: 0.1
   max_lines_per_element: 20
   wavelength_tolerance_nm: 0.1
@@ -17,7 +31,14 @@ analysis:
   t_tolerance_k: 100.0
   ne_tolerance_frac: 0.1
   pressure_pa: 101325.0
-  min_relative_intensity: 100.0
+
+  # Detection floor: keep null. An absolute relative-intensity floor deletes
+  # whole real elements whose tabulated rel_int is small or NULL (Mg, K, and
+  # the Al I resonance doublet all sit below 100); the detection path instead
+  # bounds catalog richness with an element-relative top-K (gA-Boltzmann
+  # strength) plus a shift-coherence veto. Set a number only to re-enable the
+  # legacy floor.
+  min_relative_intensity: null
   # closure_kwargs:
   #   matrix_element: Fe
   #   oxide_elements: ["Si", "Al", "Ca"]

@@ -123,6 +123,84 @@ def validate_plasma_config(config: Dict[str, Any]) -> bool:
     return True
 
 
+#: Keys accepted under the ``analysis:`` section of an inversion config.
+#: Single source of truth shared by :func:`validate_analysis_config` and the
+#: CLI (``cflibs invert --config``). Unknown keys are a HARD ERROR: a typo'd
+#: key (e.g. ``saha_boltzman_graph``) used to be silently ignored, reverting
+#: the run to defaults with no indication anything was wrong.
+VALID_ANALYSIS_KEYS = frozenset(
+    {
+        "preset",
+        "elements",
+        "wavelength_tolerance_nm",
+        "min_peak_height",
+        "peak_width_nm",
+        "min_relative_intensity",
+        "top_k_per_element",
+        "resolving_power",
+        "apply_self_absorption",
+        "exclude_resonance",
+        "min_snr",
+        "min_energy_spread_ev",
+        "min_lines_per_element",
+        "isolation_wavelength_nm",
+        "max_lines_per_element",
+        "wavelength_calibration",
+        "max_iterations",
+        "t_tolerance_k",
+        "ne_tolerance_frac",
+        "pressure_pa",
+        "pressure",
+        "self_absorption_column_density_cm3",
+        "self_absorption_plasma_length_cm",
+        "boltzmann_weight_cap",
+        "min_boltzmann_r2",
+        "saha_boltzmann_graph",
+        "closure_mode",
+        "closure_kwargs",
+        "matrix_element",
+        "oxide_elements",
+    }
+)
+
+
+def validate_analysis_config(config: Dict[str, Any]) -> bool:
+    """
+    Validate the ``analysis`` section of an inversion configuration.
+
+    Unknown keys raise a hard error listing the valid keys, so a typo'd
+    knob (``saha_boltzman_graph``) cannot silently fall back to defaults.
+
+    Parameters
+    ----------
+    config : dict
+        Full configuration dictionary (the ``analysis`` section is optional).
+
+    Returns
+    -------
+    bool
+        True if valid (or no ``analysis`` section is present).
+
+    Raises
+    ------
+    ValueError
+        If the ``analysis`` section is not a mapping or contains unknown keys.
+    """
+    analysis = config.get("analysis")
+    if analysis is None:
+        return True
+    if not isinstance(analysis, dict):
+        raise ValueError(f"'analysis' section must be a mapping; got {type(analysis).__name__}")
+
+    unknown = sorted(set(analysis) - VALID_ANALYSIS_KEYS)
+    if unknown:
+        raise ValueError(
+            f"Unknown analysis config key(s): {unknown}. "
+            f"Valid keys: {sorted(VALID_ANALYSIS_KEYS)}"
+        )
+    return True
+
+
 def validate_instrument_config(config: Dict[str, Any]) -> bool:
     """
     Validate instrument configuration structure.

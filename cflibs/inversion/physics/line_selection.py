@@ -113,9 +113,11 @@ class LineSelector:
     - Energy spread requirement
 
     Filters out:
-    - Resonance lines (high self-absorption risk)
     - Low SNR lines
     - Blended lines
+    - Resonance lines, only when ``exclude_resonance=True`` (default False:
+      resonance lines are the brightest, most persistent LIBS lines and the
+      only detectable lines for some majors, e.g. Al I 394.4/396.2 nm)
     """
 
     # Default atomic data uncertainties (relative, from NIST accuracy grades)
@@ -138,7 +140,7 @@ class LineSelector:
         min_snr: float = 10.0,
         min_energy_spread_ev: float = 2.0,
         min_lines_per_element: int = 3,
-        exclude_resonance: bool = True,
+        exclude_resonance: bool = False,
         isolation_wavelength_nm: float = 0.1,
         max_lines_per_element: int = 20,
     ):
@@ -154,7 +156,11 @@ class LineSelector:
         min_lines_per_element : int
             Minimum number of lines required per element
         exclude_resonance : bool
-            Whether to exclude resonance lines (ground state transitions)
+            Whether to exclude resonance lines (ground state transitions).
+            Default False — matches the validated CLI default: resonance
+            lines are kept because they are the only detectable lines for
+            some major elements, and the solver corrects them when
+            self-absorption correction is enabled.
         isolation_wavelength_nm : float
             Minimum wavelength separation for isolation check
         max_lines_per_element : int

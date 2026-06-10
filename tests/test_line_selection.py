@@ -35,7 +35,10 @@ class TestLineSelectorInit:
         assert selector.min_snr == 10.0
         assert selector.min_energy_spread_ev == 2.0
         assert selector.min_lines_per_element == 3
-        assert selector.exclude_resonance is True
+        # Default False matches the validated CLI default: resonance lines are
+        # kept (they are the only detectable lines for some majors, e.g. the
+        # Al I 394.4/396.2 nm doublet); bead CF-LIBS-improved-l4a8.
+        assert selector.exclude_resonance is False
         assert selector.isolation_wavelength_nm == 0.1
         assert selector.max_lines_per_element == 20
 
