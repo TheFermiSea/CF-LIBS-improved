@@ -750,7 +750,7 @@ class TestEdgeOptimizedModel:
 
         # Closed-shell neutral: exact value from the isoelectronic ladder.
         pf = model.get_partition_function("Xe", 1, 10000.0)
-        assert pf == 1.0
+        assert pf == pytest.approx(1.0)
 
         # Open-shell species with no data: generic constant (warned).
         pf = model.get_partition_function("W", 1, 10000.0)

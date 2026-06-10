@@ -47,7 +47,7 @@ class TestPresetResolution:
         assert cfg.saha_boltzmann_graph is True
         assert cfg.closure_mode == "oxide"
         # The rest of the validated-best bundle (audit acceptance criteria).
-        assert cfg.boltzmann_weight_cap == 5.0
+        assert cfg.boltzmann_weight_cap == pytest.approx(5.0)
         assert cfg.wavelength_calibration is True
         assert cfg.top_k_per_element == 60
         assert cfg.min_relative_intensity is None
@@ -224,7 +224,7 @@ class TestBatchAnalyzeParity:
         assert pipeline.preset == "geological"
         assert pipeline.saha_boltzmann_graph is True
         assert pipeline.closure_mode == "oxide"
-        assert pipeline.boltzmann_weight_cap == 5.0
+        assert pipeline.boltzmann_weight_cap == pytest.approx(5.0)
         assert pipeline.wavelength_calibration is True
 
 

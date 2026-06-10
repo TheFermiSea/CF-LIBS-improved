@@ -796,7 +796,7 @@ class TestMCMCSampling:
         assert np.allclose(np.diag(matrix), 1.0)
         assert np.allclose(matrix, matrix.T)
         # The stuck T_eV chain has no defined correlation -> reported as 0.
-        assert corr_data["T_log_ne_corr"] == 0.0
+        assert corr_data["T_log_ne_corr"] == pytest.approx(0.0, abs=1e-12)
         # Healthy parameters keep their true correlation (log_ne vs C_Fe are
         # perfectly linearly related here).
         i, j = labels.index("log_ne"), labels.index("C_Fe")

@@ -83,7 +83,7 @@ class TestClosedShellExactValues:
     def test_open_shell_species_do_not_match(self):
         """Fe II (open 3d shell) must NOT get a closed-shell value."""
         value = canonical_partition_fallback("Fe", 2)
-        assert value == 15.0  # generic tier (warned), not 1.0/2.0
+        assert value == pytest.approx(15.0)  # generic tier (warned), not 1.0/2.0
 
 
 class TestGroundDegeneracyTier:
@@ -93,12 +93,12 @@ class TestGroundDegeneracyTier:
         db = _FakeDb({("Fe", 2): [_FakeLevel(10.0, 0.0), _FakeLevel(8.0, 0.5)]})
         with caplog.at_level(logging.WARNING):
             value = canonical_partition_fallback("Fe", 2, db)
-        assert value == 10.0
+        assert value == pytest.approx(10.0)
         assert any("Fe" in rec.message and "g0" in rec.message for rec in caplog.records)
 
     def test_g0_skipped_without_levels(self):
         db = _FakeDb({})
-        assert canonical_partition_fallback("Fe", 2, db) == 15.0
+        assert canonical_partition_fallback("Fe", 2, db) == pytest.approx(15.0)
 
 
 class TestGenericTierWarns:
@@ -132,13 +132,13 @@ class TestLookupPartitionFunction:
     """Dict-lookup wrapper used by the inversion call sites."""
 
     def test_present_entry_returned(self):
-        assert lookup_partition_function({"Fe": 42.5}, "Fe", 1) == 42.5
+        assert lookup_partition_function({"Fe": 42.5}, "Fe", 1) == pytest.approx(42.5)
 
     def test_missing_entry_routes_to_ladder(self):
-        assert lookup_partition_function({}, "Na", 2) == 1.0
+        assert lookup_partition_function({}, "Na", 2) == pytest.approx(1.0)
 
     def test_missing_open_shell_gets_generic_with_warning(self, caplog):
         with caplog.at_level(logging.WARNING):
             value = lookup_partition_function({}, "Xx", 1)
-        assert value == 25.0
+        assert value == pytest.approx(25.0)
         assert any("Xx" in rec.message for rec in caplog.records)
