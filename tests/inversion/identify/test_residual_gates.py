@@ -20,10 +20,12 @@ import pytest
 
 from cflibs.atomic.structures import Transition
 from cflibs.inversion.identify.line_detection import (
+    _drop_element_if_mostly_gated,
     _match_transitions_to_peaks,
     _pooled_residual_consensus,
     detect_line_observations,
 )
+from cflibs.inversion.physics.boltzmann import LineObservation
 
 pytestmark = pytest.mark.unit
 
@@ -203,3 +205,101 @@ class TestPerLineResidualGate:
             )
             is None
         )
+
+
+class TestMostlyGatedElementDrop:
+    """An element whose match set was mostly contamination is dropped whole."""
+
+    def _drop(self, n_kept, n_gated, min_kept_lines=3):
+        observations = [
+            LineObservation(
+                wavelength_nm=500.0 + i,
+                intensity=1.0,
+                intensity_uncertainty=0.1,
+                element="Zz",
+                ionization_stage=1,
+                E_k_ev=3.0,
+                g_k=5,
+                A_ki=1e7,
+            )
+            for i in range(n_kept)
+        ]
+        resonance: set = set()
+        diag: dict = {}
+        _drop_element_if_mostly_gated(
+            "Zz",
+            n_kept=n_kept,
+            n_gated=n_gated,
+            coherence_min_lines=2,
+            coherence_min_fraction=0.5,
+            min_kept_lines=min_kept_lines,
+            observations=observations,
+            n_obs_before=0,
+            resonance_lines=resonance,
+            residual_gate_diag=diag,
+        )
+        return observations, diag
+
+    def test_low_coherent_fraction_drops_element(self):
+        """The BHVO-2 Sn case: 2 coherent of 6 matches -> dropped."""
+        obs, diag = self._drop(n_kept=2, n_gated=4)
+        assert obs == []
+        assert diag["dropped_elements"]["Zz"] == {"kept": 2, "gated": 4}
+
+    def test_contaminated_element_below_min_kept_lines_drops(self):
+        """The BHVO-2 Th case: 2 kept + 2 gated sits exactly at the fraction
+        threshold but below the min-kept-lines evidence bar -> dropped."""
+        obs, diag = self._drop(n_kept=2, n_gated=2)
+        assert obs == []
+        assert diag["dropped_elements"]["Zz"] == {"kept": 2, "gated": 2}
+
+    def test_majority_coherent_with_enough_lines_survives(self):
+        obs, diag = self._drop(n_kept=3, n_gated=2)
+        assert len(obs) == 3
+        assert "dropped_elements" not in diag
+
+    def test_clean_element_never_subject_to_the_bar(self):
+        """No gated matches -> no contamination evidence -> never dropped,
+        however sparse (protects 2-line real elements)."""
+        obs, diag = self._drop(n_kept=2, n_gated=0)
+        assert len(obs) == 2
+        assert "dropped_elements" not in diag
+
+
+class TestPerPeakOwnership:
+    """A stronger element's claimed peak cannot double-count for a weaker one."""
+
+    def _detect(self, line_residual_gate):
+        el1_lines = [400.0, 410.0, 420.0, 430.0]
+        # 400.004 sits on El1's 400.0 peak; 600/610 are El2's own peaks.
+        el2_lines = [400.004, 600.0, 610.0]
+        peak_centers = el1_lines + [600.0, 610.0]
+        wavelength = np.arange(395.0, 615.0, 0.01)
+        intensity = np.zeros_like(wavelength)
+        for center in peak_centers:
+            intensity += 10.0 * np.exp(-0.5 * ((wavelength - center) / 0.03) ** 2)
+        db = _StubDB(
+            [_transition("Fe", wl) for wl in el1_lines]
+            + [_transition("Sn", wl) for wl in el2_lines]
+        )
+        return detect_line_observations(
+            wavelength=wavelength,
+            intensity=intensity,
+            atomic_db=db,
+            elements=["Fe", "Sn"],
+            wavelength_tolerance_nm=0.1,
+            min_peak_height=0.05,
+            peak_width_nm=0.2,
+            shift_scan_nm=0.0,
+            line_residual_gate=line_residual_gate,
+        )
+
+    def test_weaker_claimant_cannot_reuse_owned_peak(self):
+        result = self._detect(line_residual_gate=True)
+        sn = sorted(o.wavelength_nm for o in result.observations if o.element == "Sn")
+        assert sn == [600.0, 610.0]  # 400.004 blocked: the peak belongs to Fe 400.0
+
+    def test_legacy_path_still_double_counts(self):
+        result = self._detect(line_residual_gate=False)
+        sn = sorted(o.wavelength_nm for o in result.observations if o.element == "Sn")
+        assert sn == [400.004, 600.0, 610.0]

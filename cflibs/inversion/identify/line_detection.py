@@ -800,6 +800,7 @@ def _collect_observations(
     residual_gate_diag: Optional[Dict[str, Any]] = None,
     coherence_min_lines: int = 2,
     coherence_min_fraction: float = 0.5,
+    residual_gate_min_kept_lines: int = 3,
 ) -> None:
     """Build observations for every accepted element (in-place accumulation).
 
@@ -919,6 +920,7 @@ def _collect_observations(
             n_gated=len(gated_effective),
             coherence_min_lines=coherence_min_lines,
             coherence_min_fraction=coherence_min_fraction,
+            min_kept_lines=residual_gate_min_kept_lines,
             observations=observations,
             n_obs_before=n_obs_before,
             resonance_lines=resonance_lines,
@@ -933,6 +935,7 @@ def _drop_element_if_mostly_gated(
     n_gated: int,
     coherence_min_lines: int,
     coherence_min_fraction: float,
+    min_kept_lines: int,
     observations: List[LineObservation],
     n_obs_before: int,
     resonance_lines: Set[Tuple[str, int, float]],
@@ -944,16 +947,25 @@ def _drop_element_if_mostly_gated(
     per-transition residuals BEFORE observation build; an FP line set can
     scrape past it and then be pruned to a small coherent rump by the per-line
     gate (BHVO-2 Sn: 6 matches, 2 coherent by chance — 2.1 wt% of phantom
-    mass). Re-apply the SAME veto criterion (``coherence_min_fraction`` of
-    matches coherent, given at least ``coherence_min_lines`` of evidence) on
-    the post-gate counts and remove the element's observations when it fails.
-    Its claimed peaks deliberately stay claimed: releasing them would only
-    offer them to even weaker claimants.
+    mass). Once the gate has PROVEN contamination in an element's match set
+    (``n_gated > 0``), its presence must rest on solid coherent evidence:
+
+    - at least ``coherence_min_fraction`` of its matches coherent (the same
+      threshold the element veto uses, now on accurate deduped counts), AND
+    - at least ``min_kept_lines`` coherent lines (the solver's own
+      min-lines-per-element quality bar; a dense-catalog confounder like Th
+      retains 2 chance-coherent lines on BHVO-2 loc3/4 — 2 coherent matches
+      of a dense catalog are not evidence of presence).
+
+    Elements with NO gated matches are never touched here, so sparse-but-clean
+    real elements are unaffected. A dropped element's claimed peaks
+    deliberately stay claimed: releasing them would only offer them to even
+    weaker claimants.
     """
     n_total = n_kept + n_gated
     if n_gated == 0 or n_total < coherence_min_lines:
         return
-    if n_kept / n_total >= coherence_min_fraction:
+    if n_kept / n_total >= coherence_min_fraction and n_kept >= min_kept_lines:
         return
     removed = [obs for obs in observations[n_obs_before:] if obs.element == element]
     del observations[n_obs_before:]
@@ -1113,6 +1125,7 @@ def detect_line_observations(
     coherence_min_lines: int = 2,
     coherence_min_fraction: float = 0.5,
     line_residual_gate: bool = True,
+    residual_gate_min_kept_lines: int = 3,
     use_deconvolution: bool = False,
     poisson_floor_scale: float = 1.0,
     use_jax_kdet: bool = False,
@@ -1210,6 +1223,12 @@ def detect_line_observations(
         otherwise *carry* their incoherent lines into the Boltzmann fit (the
         Al I 892.356 class) and lucky-coherent FP line sets (Sn) survive.
         Gated drops are reported in ``LineDetectionResult.residual_gate``.
+    residual_gate_min_kept_lines : int
+        Once the per-line gate has proven contamination in an element's match
+        set (any gated line), the element must retain at least this many
+        coherent lines to survive (default 3 — the same min-lines-per-element
+        quality bar the line selector documents). Elements with no gated
+        matches are never subject to this bar.
     use_deconvolution : bool
         If True, apply Voigt deconvolution to resolve overlapping peaks
         before building line observations (default: False).
@@ -1436,6 +1455,7 @@ def detect_line_observations(
             residual_gate_diag=residual_gate_diag,
             coherence_min_lines=coherence_min_lines,
             coherence_min_fraction=coherence_min_fraction,
+            residual_gate_min_kept_lines=residual_gate_min_kept_lines,
         )
         if residual_gate_diag is not None and residual_gate_diag["n_gated"] > 0:
             warnings.append("line_residual_gated_matches")

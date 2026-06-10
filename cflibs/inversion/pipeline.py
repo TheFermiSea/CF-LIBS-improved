@@ -524,6 +524,7 @@ def detect_and_select_lines(
         shift_scan_nm=shift_scan_nm,
         shift_coherence_veto=shift_coherence_veto,
         line_residual_gate=line_residual_gate,
+        residual_gate_min_kept_lines=min_lines_per_element,
     )
 
     for warning in detection.warnings:
