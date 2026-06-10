@@ -1,0 +1,153 @@
+"""Knob-space round-trip: suggestion -> config_overrides -> valid pipeline config."""
+
+import inspect
+
+import pytest
+
+import knob_space
+
+
+class _RandomTrial:
+    """Duck-typed trial drawing uniformly (no optuna needed)."""
+
+    def __init__(self, rng):
+        self.rng = rng
+
+    def suggest_categorical(self, name, choices):
+        return choices[int(self.rng.integers(0, len(choices)))]
+
+    def suggest_int(self, name, low, high):
+        return int(self.rng.integers(low, high + 1))
+
+    def suggest_float(self, name, low, high, log=False):
+        import numpy as np
+
+        if log:
+            return float(np.exp(self.rng.uniform(np.log(low), np.log(high))))
+        return float(self.rng.uniform(low, high))
+
+
+def _pipeline_field_names():
+    from cflibs.inversion.pipeline import AnalysisPipelineConfig
+
+    return set(AnalysisPipelineConfig.__dataclass_fields__)
+
+
+def _detection_param_names():
+    from cflibs.inversion.identify.line_detection import detect_line_observations
+
+    return set(inspect.signature(detect_line_observations).parameters)
+
+
+@pytest.mark.unit
+def test_knob_count_matches_design():
+    # ~43 knobs incl. mode selectors; design doc says ~45 total knobs.
+    assert 40 <= len(knob_space.SPACE) <= 50
+    # Frozen-by-design axes must NOT be searchable.
+    params = {k.param for k in knob_space.SPACE}
+    assert "wavelength_calibration" not in params
+    assert "presence_eps_massfrac" not in params
+    assert "resolving_power" not in params
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
+def test_suggestion_roundtrip_builds_valid_config(seed):
+    import numpy as np
+
+    from cflibs.benchmark.scoreboard import apply_config_overrides
+    from cflibs.inversion.pipeline import build_pipeline_config
+
+    trial = _RandomTrial(np.random.default_rng(seed))
+    params = knob_space.suggest_params(trial)
+    overrides = knob_space.params_to_overrides(params)
+
+    detection = overrides["detection_overrides"]
+    pipeline_keys = set(overrides) - {"detection_overrides"}
+    assert pipeline_keys <= _pipeline_field_names()
+    assert set(detection) <= _detection_param_names()
+    assert isinstance(detection["kdet_weight_clip"], tuple)
+    lo, hi = detection["kdet_weight_clip"]
+    assert 0.05 <= lo <= 1.0 < hi <= 10.0
+
+    # Overrides must apply cleanly onto a resolved production config.
+    pipeline = build_pipeline_config(["Fe", "Si"])
+    apply_config_overrides(pipeline, overrides)
+    assert pipeline.detection_overrides == detection
+    if overrides["closure_mode"] is not None:
+        assert pipeline.closure_mode in (
+            "standard",
+            "matrix",
+            "oxide",
+            "ilr",
+            "pwlr",
+            "dirichlet_residual",
+        )
+
+
+@pytest.mark.unit
+def test_conditional_knobs():
+    import numpy as np
+
+    # Find one draw with adaptive tolerance + disabled rel-int floor.
+    for seed in range(200):
+        trial = _RandomTrial(np.random.default_rng(seed))
+        params = knob_space.suggest_params(trial)
+        if (
+            params["wavelength_tolerance_mode"] == "adaptive"
+            and not params["min_relative_intensity_enabled"]
+        ):
+            break
+    else:  # pragma: no cover
+        pytest.fail("no adaptive draw in 200 seeds")
+    assert "wavelength_tolerance_nm" not in params
+    assert "min_relative_intensity" not in params
+    overrides = knob_space.params_to_overrides(params)
+    assert overrides["wavelength_tolerance_nm"] is None
+    assert overrides["min_relative_intensity"] is None
+
+
+@pytest.mark.unit
+def test_baseline_params_reproduce_production_defaults():
+    from cflibs.benchmark.scoreboard import apply_config_overrides
+    from cflibs.inversion.pipeline import build_pipeline_config
+
+    overrides = knob_space.params_to_overrides(knob_space.baseline_params())
+    reference = build_pipeline_config(["Fe"])
+    candidate = build_pipeline_config(["Fe"])
+    apply_config_overrides(candidate, overrides)
+    # The baseline candidate must equal the untouched production config on
+    # every searched pipeline field. exclude_resonance is special: the
+    # production config carries None, which detect_and_select_lines resolves
+    # to False — the knob space encodes the resolved value directly.
+    for key in set(overrides) - {"detection_overrides", "exclude_resonance"}:
+        assert getattr(candidate, key) == getattr(reference, key), key
+    assert candidate.exclude_resonance is False
+    assert reference.exclude_resonance in (None, False)
+    # Detection overrides must equal the detect_line_observations defaults.
+    from cflibs.inversion.identify.line_detection import detect_line_observations
+
+    sig = inspect.signature(detect_line_observations)
+    for key, value in overrides["detection_overrides"].items():
+        assert value == sig.parameters[key].default, key
+
+
+@pytest.mark.unit
+def test_optuna_fixedtrial_roundtrip():
+    optuna = pytest.importorskip("optuna")
+
+    params = knob_space.baseline_params()
+    trial = optuna.trial.FixedTrial(params)
+    suggested = knob_space.suggest_params(trial)
+    assert suggested == params
+    assert knob_space.params_to_overrides(suggested) == knob_space.params_to_overrides(params)
+
+
+@pytest.mark.unit
+def test_looser_gates_is_a_distinct_valid_candidate():
+    base = knob_space.baseline_params()
+    loose = knob_space.looser_gates_params()
+    assert loose != base
+    overrides = knob_space.params_to_overrides(loose)
+    assert overrides["min_snr"] < base["min_snr"]
+    assert overrides["detection_overrides"]["comb_min_matches"] == 2

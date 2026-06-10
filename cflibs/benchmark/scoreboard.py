@@ -124,6 +124,23 @@ def _median(values: Sequence[float]) -> Optional[float]:
     return float(np.median(np.asarray(values, dtype=float))) if values else None
 
 
+def apply_config_overrides(pipeline: Any, config_overrides: Optional[Mapping[str, Any]]) -> Any:
+    """Apply knob overrides onto a built :class:`AnalysisPipelineConfig`.
+
+    Campaign-tooling hook (docs/audit/2026-06-10-goalfirst/
+    optimization-program-design.md): the optimization layer searches over
+    pipeline knobs by overriding fields on the *resolved* production config,
+    so a candidate differs from production by exactly the recorded dict.
+    Unknown field names fail fast — a typo must not silently evaluate the
+    production default.
+    """
+    for key, value in (config_overrides or {}).items():
+        if not hasattr(pipeline, key):
+            raise AttributeError(f"AnalysisPipelineConfig has no knob {key!r}")
+        setattr(pipeline, key, value)
+    return pipeline
+
+
 # ---------------------------------------------------------------------------
 # Per-spectrum execution
 # ---------------------------------------------------------------------------
@@ -137,6 +154,7 @@ def _score_spectrum(
     truth: SpectrumTruth,
     *,
     preset: Optional[str] = None,
+    config_overrides: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:
     """Run the production pipeline on one spectrum and score it against truth."""
     candidates = sorted(set(truth.elements_present) | set(CONFOUNDER_ELEMENTS))
@@ -155,6 +173,7 @@ def _score_spectrum(
             preset=preset,
             resolving_power=truth.resolving_power,
         )
+        apply_config_overrides(pipeline, config_overrides)
         result, diagnostics = run_pipeline(wavelength, intensity, atomic_db, pipeline)
     except Exception as exc:  # noqa: BLE001 — the board must never crash
         record["status"] = "error"
@@ -279,6 +298,7 @@ def run_scoreboard(
     max_spectra: Optional[int] = None,
     seed: int = DEFAULT_SEED,
     preset: Optional[str] = None,
+    config_overrides: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:
     """Run the goal-metric scoreboard over the registered datasets.
 
@@ -297,6 +317,10 @@ def run_scoreboard(
     preset : str or None
         Pipeline preset override; ``None`` = the production default
         (``geological``). Exposed for ablation runs only.
+    config_overrides : Mapping[str, Any] or None
+        Knob overrides applied to every resolved pipeline config (see
+        :func:`apply_config_overrides`). Campaign tooling only; recorded in
+        the artifact so every board is attributable to an exact config.
     """
     import cflibs
 
@@ -311,6 +335,7 @@ def run_scoreboard(
         "candidate_policy": (
             "candidates(spectrum) = truth.elements_present UNION confounder_elements"
         ),
+        "config_overrides": dict(config_overrides) if config_overrides else None,
         "datasets": [],
     }
 
@@ -323,7 +348,9 @@ def run_scoreboard(
             items = [items[i] for i in indices]
         notes = items[0][3].notes if items else ""
         records = [
-            _score_spectrum(atomic_db, sid, wl, inten, truth, preset=preset)
+            _score_spectrum(
+                atomic_db, sid, wl, inten, truth, preset=preset, config_overrides=config_overrides
+            )
             for sid, wl, inten, truth in items
         ]
         dataset_row = _aggregate_dataset(
