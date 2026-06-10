@@ -5,54 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import objective as objective_mod
-
-
-def _row(
-    name,
-    *,
-    tags=("real",),
-    f1=0.7,
-    precision=1.0,
-    recall=0.6,
-    fp=0,
-    n_failed=0,
-    rmse=None,
-    basis="presence_only",
-    wall_s=1.0,
-    n_spectra=10,
-):
-    spectra = [
-        {
-            "spectrum_id": f"{name}/s{i}",
-            "status": "ok",
-            "wall_s": wall_s,
-            "composition_basis": basis,
-            "tp": ["Fe"],
-            "fp": [],
-            "fn": [],
-        }
-        for i in range(n_spectra)
-    ]
-    composition = {"rmse_wt_median": rmse} if rmse is not None else None
-    return {
-        "name": name,
-        "tags": list(tags),
-        "n_run": n_spectra,
-        "n_failed": n_failed,
-        "id_metrics": {
-            "tp": 10,
-            "fp": fp,
-            "fn": 4,
-            "precision": precision,
-            "recall": recall,
-            "f1": f1,
-        },
-        "composition": composition,
-        "spectra": spectra,
-        "failures": {},
-        "runtime": {"median_wall_s": wall_s},
-    }
-
+from board_fixtures import make_row as _row
 
 BASE_REF = {
     "real_wt": {"fp": 0, "n_failed": 1, "n_run": 10, "f1": 0.7},
@@ -80,13 +33,13 @@ def _rows(**overrides):
 def test_graded_excess_counts_exact_thresholds():
     base = {"fp": 2, "n_failed": 4}
     # FP allowance = base + 1; failure allowance = ceil(1.25 * base) = 5.
-    assert objective_mod.graded_excess_counts("d", False, 3, 5, base) == (0, 0)
-    assert objective_mod.graded_excess_counts("d", False, 4, 6, base) == (1, 1)
-    assert objective_mod.graded_excess_counts("d", False, 9, 12, base) == (6, 7)
+    assert objective_mod.graded_excess_counts(False, 3, 5, base) == (0, 0)
+    assert objective_mod.graded_excess_counts(False, 4, 6, base) == (1, 1)
+    assert objective_mod.graded_excess_counts(False, 9, 12, base) == (6, 7)
     # Synthetic datasets are FP-exempt (mirrors the v1 death condition).
-    assert objective_mod.graded_excess_counts("d", True, 99, 6, base) == (0, 1)
+    assert objective_mod.graded_excess_counts(True, 99, 6, base) == (0, 1)
     # Zero-failure baseline: ceil(0) = 0, ANY failure is excess.
-    assert objective_mod.graded_excess_counts("d", False, 0, 1, {"fp": 0, "n_failed": 0}) == (0, 1)
+    assert objective_mod.graded_excess_counts(False, 0, 1, {"fp": 0, "n_failed": 0}) == (0, 1)
 
 
 @pytest.mark.unit
@@ -194,8 +147,8 @@ def test_near_miss_ordering():
         return objective_mod.compute_fitness(rows, ref, fitness_version=2).fitness
 
     clean_baseline = fitness(0.33, 0)  # 0.33
-    near_miss = fitness(0.35, 2)  # 0.35 - 1*0.05 = 0.30
-    three_excess = fitness(0.30, 4)  # 0.30 - 3*0.05 = 0.15
+    near_miss = fitness(0.35, 2)  # one excess FP costs LAMBDA_FP, lands at 0.30
+    three_excess = fitness(0.30, 4)  # three excess FPs land at 0.15
     catastrophic = fitness(0.56, 40)  # penalty 1.95 -> floor
     assert near_miss == pytest.approx(0.30)
     assert three_excess == pytest.approx(0.15)

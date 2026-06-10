@@ -218,12 +218,24 @@ def test_scct_every_flight_target_resolves():
     cl1_dir = SUPERCAM_ROOT / CL1_RELPATH
     if not (cl1_dir.is_dir() and LABCAL_CSV.is_file()):
         pytest.skip("supercam_calib data not available")
-    stem_re = re.compile(r"_cl1_[a-z0-9]+_(.+?)_*\d+p\d+$")
+
+    def _target_from_stem(stem: str):
+        # ..._cl1_<inst>_<target>_______<dd>p<dd> — linear string parsing
+        # (the previous regex backtracked polynomially on the underscore pad).
+        head, _, dist = stem.rpartition("_")
+        if not (dist and dist[0].isdigit() and "p" in dist):
+            return None
+        head = head.rstrip("_")
+        _, sep, tail = head.partition("_cl1_")
+        if not sep or "_" not in tail:
+            return None
+        return tail.split("_", 1)[1]
+
     flight_targets = set()
     for path in cl1_dir.glob("sol_*/*.fits"):
-        match = stem_re.search(path.stem)
+        match = _target_from_stem(path.stem)
         if match:
-            flight_targets.add(match.group(1).upper())
+            flight_targets.add(match.upper())
     assert len(flight_targets) == 23
     table = supercam_labcal.load_scct_truth_table(SUPERCAM_ROOT)
     for flight in sorted(flight_targets):

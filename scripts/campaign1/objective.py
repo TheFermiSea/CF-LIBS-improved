@@ -412,6 +412,68 @@ def _iter_payload_records(payloads: list[tuple], ctx: "EvalContext"):
 # ---------------------------------------------------------------------------
 
 
+def _consume_dataset_records(per_dataset, record_stream, tracker, ctx, section, aggregate):
+    """Drain the merged record stream per dataset, honoring the early abort.
+
+    Returns ``(rows, aborted_at)``. Cheap per-record check (eff#1):
+    counts/penalties are monotone in the accumulated records, so crossing the
+    fitness version's threshold here means the full run would cross it too —
+    the fitness is identical either way (see :class:`EarlyAbortTracker`).
+    """
+    rows: list = []
+    aborted_at: Optional[str] = None
+    for name, entry, items in per_dataset:
+        if tracker is not None:
+            tracker.start_dataset(name, "synthetic" in entry.tags)
+        records: list[dict[str, Any]] = []
+        dead = False
+        for _ in items:
+            record = next(record_stream)
+            records.append(record)
+            if tracker is not None and tracker.add_record(record):
+                dead = True
+                break
+        rows.append(
+            aggregate(
+                name,
+                sorted(entry.tags),
+                records,
+                n_total=len(ctx.manifest[section][name]),
+                sampled=len(items) < len(ctx.manifest[section][name]),
+                notes=entry.notes or (items[0][3].notes if items else ""),
+            )
+        )
+        if dead:
+            aborted_at = name
+            _terminate_pool()  # kill the queued/in-flight remainder of the batch
+            break
+        if tracker is not None:
+            tracker.finish_dataset()
+    return rows, aborted_at
+
+
+def _assert_section_access(
+    section: str,
+    names: tuple,
+    ctx: "EvalContext",
+    allow_restricted: bool,
+) -> None:
+    """Structural split-tier refusal for one evaluation request."""
+    splits.assert_not_vault(names)
+    if section == "optimization":
+        # Dataset-level refusal FIRST (a holdout-only dataset has no
+        # optimization split to even sample from), then id-level in the caller.
+        splits.assert_optimization_only(ctx.manifest, names)
+    elif section == "holdout":
+        if not allow_restricted:
+            raise splits.HoldoutViolation(
+                "Holdout evaluation requires allow_restricted=True (holdout_eval.py "
+                "only; every holdout query is ledger-logged)."
+            )
+    else:
+        raise ValueError(f"Unknown split section {section!r}")
+
+
 def evaluate_overrides(
     config_overrides: Mapping[str, Any],
     ctx: EvalContext,
@@ -442,19 +504,7 @@ def evaluate_overrides(
     full run by construction (determinism proof: :class:`EarlyAbortTracker`).
     """
     names = tuple(datasets) if datasets is not None else ctx.datasets
-    splits.assert_not_vault(names)
-    if section == "optimization":
-        # Dataset-level refusal FIRST (a holdout-only dataset has no
-        # optimization split to even sample from), then id-level below.
-        splits.assert_optimization_only(ctx.manifest, names)
-    elif section == "holdout":
-        if not allow_restricted:
-            raise splits.HoldoutViolation(
-                "Holdout evaluation requires allow_restricted=True (holdout_eval.py "
-                "only; every holdout query is ledger-logged)."
-            )
-    else:
-        raise ValueError(f"Unknown split section {section!r}")
+    _assert_section_access(section, names, ctx, allow_restricted)
     # Sample ONCE per dataset; the guard and the evaluation see the same ids.
     spectrum_ids = {
         name: sample_split_ids(
@@ -492,45 +542,14 @@ def evaluate_overrides(
         )
 
     record_stream = _iter_payload_records(payloads, ctx)
-    rows = []
-    aborted_at: Optional[str] = None
     tracker = (
         EarlyAbortTracker(death_penalty_ref, fitness_version)
         if death_penalty_ref is not None
         else None
     )
-    for name, entry, items in per_dataset:
-        synthetic = "synthetic" in entry.tags
-        if tracker is not None:
-            tracker.start_dataset(name, synthetic)
-        records: list[dict[str, Any]] = []
-        dead = False
-        for _ in items:
-            record = next(record_stream)
-            records.append(record)
-            # Cheap per-record check (eff#1): counts/penalties are monotone
-            # in the accumulated records, so crossing the version's threshold
-            # here means the full run would cross it too — the fitness is
-            # identical either way (see EarlyAbortTracker).
-            if tracker is not None and tracker.add_record(record):
-                dead = True
-                break
-        rows.append(
-            _aggregate_dataset(
-                name,
-                sorted(entry.tags),
-                records,
-                n_total=len(ctx.manifest[section][name]),
-                sampled=len(items) < len(ctx.manifest[section][name]),
-                notes=entry.notes or (items[0][3].notes if items else ""),
-            )
-        )
-        if dead:
-            aborted_at = name
-            _terminate_pool()  # kill the queued/in-flight remainder of the batch
-            break
-        if tracker is not None:
-            tracker.finish_dataset()
+    rows, aborted_at = _consume_dataset_records(
+        per_dataset, record_stream, tracker, ctx, section, _aggregate_dataset
+    )
     board: dict[str, Any] = {
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "section": section,
@@ -594,7 +613,6 @@ def death_reasons_for_counts(
 
 
 def graded_excess_counts(
-    name: str,
     synthetic: bool,
     fp: int,
     n_failed: int,
@@ -678,7 +696,7 @@ class EarlyAbortTracker:
     def _dataset_penalty(self) -> float:
         assert self._name is not None
         return graded_penalty(
-            *graded_excess_counts(self._name, self._synthetic, self._fp, self._failed, self._base)
+            *graded_excess_counts(self._synthetic, self._fp, self._failed, self._base)
         )
 
     def add_record(self, record: Mapping[str, Any]) -> bool:
@@ -784,7 +802,7 @@ def compute_fitness(
         kind = dataset_kind(row)
         synthetic = kind == "synthetic"
         death_reasons.extend(death_reasons_for_counts(name, synthetic, fp, n_failed, base))
-        excess_fp, excess_failed = graded_excess_counts(name, synthetic, fp, n_failed, base)
+        excess_fp, excess_failed = graded_excess_counts(synthetic, fp, n_failed, base)
         penalty_fp, penalty_failed = LAMBDA_FP * excess_fp, LAMBDA_FAIL * excess_failed
         graded_total += penalty_fp + penalty_failed
         score = dataset_score(row)
@@ -870,7 +888,6 @@ def regrade_report_v2(
         if name not in baseline_ref:
             raise KeyError(f"Baseline reference missing dataset {name!r}")
         excess_fp, excess_failed = graded_excess_counts(
-            name,
             row["kind"] == "synthetic",
             int(row["fp"]),
             int(row["n_failed"]),

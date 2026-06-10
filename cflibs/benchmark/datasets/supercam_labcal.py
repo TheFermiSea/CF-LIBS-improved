@@ -69,7 +69,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 
@@ -183,7 +183,7 @@ def _iter_table(csv_path: Path) -> Iterator[Tuple[_Columns, List[str]]]:
             yield columns, row
 
 
-def _cell(columns: _Columns, row: List[str], section: Dict[str, int], name: str) -> str:
+def _cell(row: List[str], section: Dict[str, int], name: str) -> str:
     return row[section[name]].strip()
 
 
@@ -196,6 +196,43 @@ def _parse_wt(cell: str) -> float | None:
         return float(cell)
     except ValueError:
         return None
+
+
+def _sulfur_wt(comp_cells: Dict[str, str]) -> Optional[float]:
+    """S wt% from the S column, else converted from SO3T."""
+    sulfur = _parse_wt(comp_cells.get("S", ""))
+    if sulfur is not None:
+        return sulfur
+    so3t = _parse_wt(comp_cells.get("SO3T", ""))
+    return so3t * S_FROM_SO3T if so3t is not None else None
+
+
+def _carbon_wt(comp_cells: Dict[str, str]) -> Optional[float]:
+    """C wt% from C_total/C, else converted from CO2T/CO2."""
+    for column in ("C_total", "C"):
+        carbon = _parse_wt(comp_cells.get(column, ""))
+        if carbon is not None:
+            return carbon
+    for column in ("CO2T", "CO2"):
+        co2 = _parse_wt(comp_cells.get(column, ""))
+        if co2 is not None:
+            return co2 * C_FROM_CO2
+    return None
+
+
+def _trace_element_wt(comp_cells: Dict[str, str], handled: set) -> Dict[str, float]:
+    """ppm-reported trace analytes -> wt%, cutoff-gated, pipeline elements only."""
+    out: Dict[str, float] = {}
+    for name, cell in comp_cells.items():
+        if name in handled or name not in STANDARD_ATOMIC_MASSES:
+            continue
+        ppm = _parse_wt(cell)
+        if ppm is None:
+            continue
+        wt = ppm / 1.0e4
+        if wt >= PRESENCE_CUTOFF_WT:  # ppm-reported analytes are cutoff-gated
+            out[name] = wt
+    return out
 
 
 def comp_row_to_element_wt(comp_cells: Dict[str, str]) -> Dict[str, float]:
@@ -225,21 +262,11 @@ def comp_row_to_element_wt(comp_cells: Dict[str, str]) -> Dict[str, float]:
         element, factor = _OXIDE_FACTORS[oxide]
         element_wt[element] = element_wt.get(element, 0.0) + value * factor
 
-    sulfur = _parse_wt(comp_cells.get("S", ""))
-    if sulfur is None:
-        so3t = _parse_wt(comp_cells.get("SO3T", ""))
-        sulfur = so3t * S_FROM_SO3T if so3t is not None else None
+    sulfur = _sulfur_wt(comp_cells)
     if sulfur is not None:
         element_wt["S"] = element_wt.get("S", 0.0) + sulfur
 
-    carbon = _parse_wt(comp_cells.get("C_total", ""))
-    if carbon is None:
-        carbon = _parse_wt(comp_cells.get("C", ""))
-    if carbon is None:
-        co2 = _parse_wt(comp_cells.get("CO2T", ""))
-        if co2 is None:
-            co2 = _parse_wt(comp_cells.get("CO2", ""))
-        carbon = co2 * C_FROM_CO2 if co2 is not None else None
+    carbon = _carbon_wt(comp_cells)
     if carbon is not None:
         element_wt["C"] = element_wt.get("C", 0.0) + carbon
 
@@ -248,17 +275,7 @@ def comp_row_to_element_wt(comp_cells: Dict[str, str]) -> Dict[str, float]:
         element_wt["H"] = element_wt.get("H", 0.0) + water * H_FROM_H2O
 
     handled = set(MAJOR_OXIDES) | set(_WT_PCT_VOLATILES) | set(_NON_ELEMENT_COLUMNS)
-    for name, cell in comp_cells.items():
-        if name in handled:
-            continue
-        if name not in STANDARD_ATOMIC_MASSES:  # e.g. Th: not a pipeline candidate
-            continue
-        ppm = _parse_wt(cell)
-        if ppm is None:
-            continue
-        wt = ppm / 1.0e4
-        if wt < PRESENCE_CUTOFF_WT:  # ppm-reported analytes are cutoff-gated
-            continue
+    for name, wt in _trace_element_wt(comp_cells, handled).items():
         element_wt[name] = element_wt.get(name, 0.0) + wt
 
     return {el: round(wt, 6) for el, wt in sorted(element_wt.items())}
@@ -272,7 +289,7 @@ def _row_notes(columns: _Columns, row: List[str], element_wt: Dict[str, float]) 
     """Per-spectrum provenance + stratifier metadata string."""
 
     def meta(name: str) -> str:
-        return _cell(columns, row, columns.meta, name)
+        return _cell(row, columns.meta, name)
 
     train = ",".join(meta(f"{ox}_Train") or "-" for ox in MOC_SPLIT_OXIDES)
     folds = ",".join(meta(f"{ox}_Folds") or "-" for ox in MOC_SPLIT_OXIDES)
@@ -311,9 +328,9 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
     csv_path = root / LABCAL_CSV_RELPATH
     n_yielded = n_removed = n_no_truth = 0
     for columns, row in _iter_table(csv_path):
-        if _cell(columns, row, columns.meta, "shift") != "0":
+        if _cell(row, columns.meta, "shift") != "0":
             continue
-        if _cell(columns, row, columns.meta, "Remove_from_all").lower() == "remove":
+        if _cell(row, columns.meta, "Remove_from_all").lower() == "remove":
             n_removed += 1
             continue
         element_wt = comp_row_to_element_wt(_comp_cells(columns, row))
@@ -322,7 +339,7 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
             n_no_truth += 1
             logger.warning(
                 "supercam_labcal: row %r has no scoreable certified analyte; skipping.",
-                _cell(columns, row, columns.meta, "file"),
+                _cell(row, columns.meta, "file"),
             )
             continue
         intensity = np.array(row[columns.wvl_start :], dtype=float)
@@ -334,7 +351,7 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
             notes=_row_notes(columns, row, element_wt),
         )
         n_yielded += 1
-        yield _cell(columns, row, columns.meta, "file"), wl, inten, truth
+        yield _cell(row, columns.meta, "file"), wl, inten, truth
     logger.info(
         "supercam_labcal: yielded %d shift==0 spectra (skipped %d Remove_from_all rows, "
         "%d rows without scoreable truth).",
@@ -355,11 +372,9 @@ def spectrum_target_names(root: Path) -> Dict[str, str]:
     csv_path = root / LABCAL_CSV_RELPATH
     groups: Dict[str, str] = {}
     for columns, row in _iter_table(csv_path):
-        if _cell(columns, row, columns.meta, "shift") != "0":
+        if _cell(row, columns.meta, "shift") != "0":
             continue
-        groups[_cell(columns, row, columns.meta, "file")] = _cell(
-            columns, row, columns.meta, "Target_Name"
-        )
+        groups[_cell(row, columns.meta, "file")] = _cell(columns, row, columns.meta, "Target_Name")
     return groups
 
 
@@ -390,11 +405,11 @@ def load_scct_truth_table(root: Path) -> Dict[str, Dict[str, Any]]:
 
     table: Dict[str, Dict[str, Any]] = {}
     for columns, row in _iter_table(csv_path):
-        if _cell(columns, row, columns.meta, "shift") != "0":
+        if _cell(row, columns.meta, "shift") != "0":
             continue
-        if _cell(columns, row, columns.meta, "SCCT").lower() != "yes":
+        if _cell(row, columns.meta, "SCCT").lower() != "yes":
             continue
-        target = _cell(columns, row, columns.meta, "Target_Name")
+        target = _cell(row, columns.meta, "Target_Name")
         base = chip_base_name(target)
         element_wt = comp_row_to_element_wt(_comp_cells(columns, row))
         entry = table.get(base)
@@ -402,8 +417,8 @@ def load_scct_truth_table(root: Path) -> Dict[str, Dict[str, Any]]:
             table[base] = {
                 "target_names": [target],
                 "element_wt": element_wt,
-                "composition_type": _cell(columns, row, columns.meta, "composition_type"),
-                "composition_source": _cell(columns, row, columns.meta, "composition_source"),
+                "composition_type": _cell(row, columns.meta, "composition_type"),
+                "composition_source": _cell(row, columns.meta, "composition_source"),
             }
             continue
         if target not in entry["target_names"]:
