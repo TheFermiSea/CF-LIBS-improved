@@ -190,29 +190,87 @@ def test_positive_slope_sets_boltzmann_degenerate_and_unconverged(mock_db):
     assert res.quality_metrics["n_elements_fit"] == pytest.approx(2.0)
 
 
-def test_degenerate_composition_flagged_and_unconverged(mock_db):
-    """One element soaking >0.8 of the closure mass (with >1 element) yields
-    converged=False and closure_degenerate=True, even with a clean slope.
+def _degenerate_four_element_obs() -> list:
+    """Rigged 4-element observation set whose closure collapses onto 'A'.
+
+    Element A gets a clean negative-slope plane with a high intercept (~13);
+    B/C/D get the same clean slope but intercepts ~5, so each carries a
+    closure mass exp(5-13) ~ 3e-4 of A's — A soaks ~99.9% >> 0.8.
+    """
+    T_eV = 1.0
+    obs = []
+    for E in (1.0, 2.0, 3.0, 4.0, 5.0):
+        obs.append(LineObservation(500.0, np.exp(-E / T_eV + 13.0), 0.1, "A", 1, E, 1, 1e8))
+    for el in ("B", "C", "D"):
+        for E in (1.0, 2.0, 3.0, 4.0, 5.0):
+            obs.append(LineObservation(500.0, np.exp(-E / T_eV + 5.0), 0.1, el, 1, E, 1, 1e8))
+    return obs
+
+
+def test_degenerate_composition_flagged_and_unconverged(mock_db, caplog):
+    """One element soaking >0.8 of the closure mass out of a 4-element
+    candidate set yields converged=False, degenerate_composition=True (and the
+    deprecated closure_degenerate alias), and a logged warning — even with a
+    clean slope.
 
     Independent oracle for the degeneracy threshold: validate_degeneracy uses
-    0.8; we construct A's intercept far above B's so closure mass A >> 0.8."""
+    0.8; we construct A's intercept far above the others so A >> 0.8."""
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=10)
+    obs = _degenerate_four_element_obs()
+
+    with caplog.at_level(logging.WARNING):
+        res = solver.solve(obs)
+
+    # Independent check of the dominance the closure produced.
+    assert max(res.concentrations.values()) > 0.8
+    assert res.quality_metrics["degenerate_composition"] == pytest.approx(1.0)
+    assert res.quality_metrics["closure_degenerate"] == pytest.approx(1.0)
+    assert res.converged is False
+    # tpkm: boltzmann_r_squared / n_elements_fit must be POPULATED, not None —
+    # the slope here is clean so the fit R^2 is high even though the
+    # composition collapsed.
+    assert res.quality_metrics["boltzmann_r_squared"] is not None
+    assert np.isfinite(res.quality_metrics["boltzmann_r_squared"])
+    assert res.quality_metrics["boltzmann_r_squared"] > 0.9
+    assert res.quality_metrics["n_elements_fit"] == pytest.approx(4.0)
+    msgs = " ".join(r.getMessage() for r in caplog.records)
+    assert "Degenerate composition" in msgs
+
+
+def test_dominant_binary_alloy_is_not_flagged_degenerate(mock_db):
+    """A 2-element solve with one element > 0.8 must NOT be flagged: binary
+    alloys legitimately have a >80% major (brass is ~90% Cu). The keystone
+    gate applies only to candidate sets of >= degeneracy_min_elements (4)."""
     solver = IterativeCFLIBSSolver(mock_db, max_iterations=10)
     T_eV = 1.0
     obs = []
-    # Element A: clean negative-slope plane with a high intercept (~13).
     for E in (1.0, 2.0, 3.0, 4.0, 5.0):
         obs.append(LineObservation(500.0, np.exp(-E / T_eV + 13.0), 0.1, "A", 1, E, 1, 1e8))
-    # Element B: same clean slope but a much lower intercept (~5) so its closure
-    # mass is exp(5-13) ~ 3e-4 of A's — A soaks >> 0.8.
     for E in (1.0, 2.0, 3.0, 4.0, 5.0):
         obs.append(LineObservation(500.0, np.exp(-E / T_eV + 5.0), 0.1, "B", 1, E, 1, 1e8))
 
     res = solver.solve(obs)
 
-    # Independent check of the dominance the closure produced.
     assert max(res.concentrations.values()) > 0.8
-    assert res.quality_metrics["closure_degenerate"] == pytest.approx(1.0)
-    assert res.converged is False
+    assert res.quality_metrics["degenerate_composition"] == pytest.approx(0.0)
+    assert res.quality_metrics["closure_degenerate"] == pytest.approx(0.0)
+
+
+def test_degeneracy_dominance_threshold_is_constructor_parameter(mock_db):
+    """Raising degeneracy_dominance_threshold above the produced dominance
+    disables the gate for the same rigged 4-element collapse."""
+    obs = _degenerate_four_element_obs()
+
+    flagged = IterativeCFLIBSSolver(mock_db, max_iterations=10).solve(obs)
+    assert flagged.quality_metrics["degenerate_composition"] == pytest.approx(1.0)
+    assert flagged.converged is False
+
+    relaxed_solver = IterativeCFLIBSSolver(
+        mock_db, max_iterations=10, degeneracy_dominance_threshold=0.9999
+    )
+    relaxed = relaxed_solver.solve(obs)
+    # Same collapse, but below the (absurdly high) configured threshold.
+    assert relaxed.quality_metrics["degenerate_composition"] == pytest.approx(0.0)
 
 
 def test_clean_two_element_fit_is_not_degenerate(mock_db):
@@ -226,6 +284,7 @@ def test_clean_two_element_fit_is_not_degenerate(mock_db):
             obs.append(LineObservation(500.0, np.exp(-E / T_eV + 10.0), 0.1, el, 1, E, 1, 1e8))
 
     res = solver.solve(obs)
+    assert res.quality_metrics["degenerate_composition"] == pytest.approx(0.0)
     assert res.quality_metrics["closure_degenerate"] == pytest.approx(0.0)
     assert res.quality_metrics["boltzmann_degenerate"] == pytest.approx(0.0)
     assert res.converged is True

@@ -236,6 +236,12 @@ class LoopState(NamedTuple):
     intercepts: Any
     concentrations: Any
     r_squared: Any
+    # Boltzmann-fit degeneracy flag from the LAST iteration (slope >= 0 or
+    # R^2 < min_boltzmann_r2). Initialized True ("until a clean fit proves
+    # otherwise", mirroring the Python path) so a loop that never runs a
+    # usable fit reports degenerate. Consumed host-side by ``_solve_lax`` for
+    # the quality_metrics/converged parity gates (audit 02-F8).
+    boltzmann_degenerate: Any
 
 
 def _snapshot_record_levels(
@@ -850,6 +856,7 @@ def _run_lax_while_loop(
             intercepts=intercepts,
             concentrations=concentrations,
             r_squared=r_squared,
+            boltzmann_degenerate=degenerate,
         )
 
     return jax.lax.while_loop(cond_fun, body_fun, init_state)
@@ -889,6 +896,8 @@ class IterativeCFLIBSSolver:
         saha_boltzmann_graph: bool = False,
         use_jax_boltzmann: Optional[bool] = None,
         use_lax_while_loop: Optional[bool] = None,
+        degeneracy_dominance_threshold: float = 0.8,
+        degeneracy_min_elements: int = 4,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
         # c5-solver-flags). These two flags choose between the CPU reference
@@ -1077,6 +1086,18 @@ class IterativeCFLIBSSolver:
 
             closure = ILRClosure()
         self.closure: ClosureStrategy = closure
+        # Composition-degeneracy ("keystone collapse") gate, bead
+        # CF-LIBS-improved-tpkm / -cxxq. A composition where ONE element soaks
+        # more than ``degeneracy_dominance_threshold`` of the closure mass out
+        # of a candidate set of >= ``degeneracy_min_elements`` elements is the
+        # collapse signature (the historical Na=98% blow-up from a basalt-like
+        # 10-element set): the closure has lost discriminating power and the
+        # result is untrustworthy, so the solve is reported converged=False
+        # and ``quality_metrics['degenerate_composition']`` is set on BOTH the
+        # Python and the lax solve paths. Small candidate sets are exempt
+        # (binary alloys legitimately exceed 0.8: brass is ~90% Cu).
+        self.degeneracy_dominance_threshold = float(degeneracy_dominance_threshold)
+        self.degeneracy_min_elements = int(degeneracy_min_elements)
         self.boltzmann_fitter = BoltzmannPlotFitter(
             outlier_sigma=2.5,
             use_jax=self.use_jax_boltzmann,
@@ -1996,12 +2017,13 @@ class IterativeCFLIBSSolver:
         n_e = 0.5 * ne_prev + 0.5 * ne_new
 
         # Composition degeneracy gate (supersedes PR #220, which only
-        # *reported* the flag). A single element soaking >80% of the closure
-        # mass with >1 element present is the "keystone collapse" signature:
-        # the closure has lost discriminating power and the composition is
-        # untrustworthy. Acting on it (not just reporting) means such a solve
-        # can NEVER be flagged converged.
-        closure_degenerate = ClosureEquation.validate_degeneracy(concentrations)
+        # *reported* the flag). A single element soaking more than
+        # ``degeneracy_dominance_threshold`` of the closure mass out of a
+        # >= ``degeneracy_min_elements`` candidate set is the "keystone
+        # collapse" signature: the closure has lost discriminating power and
+        # the composition is untrustworthy. Acting on it (not just reporting)
+        # means such a solve can NEVER be flagged converged.
+        closure_degenerate = self._validate_composition_degeneracy(concentrations)
 
         # Check convergence. A degenerate Boltzmann fit holds T at the prior,
         # which would otherwise satisfy |ΔT| < tol spuriously — so a
@@ -2030,6 +2052,101 @@ class IterativeCFLIBSSolver:
             should_break=False,
         )
 
+    def _validate_composition_degeneracy(self, concentrations: Dict[str, float]) -> bool:
+        """Apply the keystone-collapse gate with the solver's configured knobs.
+
+        One element soaking more than ``self.degeneracy_dominance_threshold``
+        of the closure mass out of a candidate set of at least
+        ``self.degeneracy_min_elements`` elements means the closure has lost
+        discriminating power (bead CF-LIBS-improved-tpkm). Used identically by
+        the Python and lax solve paths.
+        """
+        return ClosureEquation.validate_degeneracy(
+            concentrations,
+            threshold=self.degeneracy_dominance_threshold,
+            min_elements=self.degeneracy_min_elements,
+        )
+
+    def _warn_degenerate_composition(self, concentrations: Dict[str, float]) -> None:
+        """Log the keystone-collapse warning for a degenerate final composition."""
+        if not concentrations:
+            return
+        dominant = max(concentrations, key=lambda el: concentrations[el])
+        logger.warning(
+            "Degenerate composition: %s soaks %.1f%% of the closure mass out of "
+            "%d candidate elements (> %.0f%% dominance threshold). The closure "
+            "has lost discriminating power (keystone collapse); reporting "
+            "converged=False and quality_metrics['degenerate_composition']=1.0.",
+            dominant,
+            100.0 * concentrations[dominant],
+            len(concentrations),
+            100.0 * self.degeneracy_dominance_threshold,
+        )
+
+    def _assemble_quality_metrics(
+        self,
+        observations: List[LineObservation],
+        T_K: float,
+        n_e: float,
+        concentrations: Dict[str, float],
+        fit_r2: float,
+        boltzmann_degenerate: bool,
+        closure_degenerate: bool,
+        ne_from_stark: bool,
+        self_absorption_applied: bool,
+        last_max_tau: float,
+    ) -> Dict[str, float]:
+        """Assemble the post-loop ``quality_metrics`` dict.
+
+        SINGLE source of truth for the quality-metric key set: both
+        ``_solve_python`` and ``_solve_lax`` route through here, so the two
+        paths emit identical keys by construction (audit 02-F8: the lax path
+        previously emitted only ``r_squared_last`` + LTE keys, letting
+        ``converged=True`` coexist with ``boltzmann_r_squared=None``).
+        """
+        # LTE validity check
+        from cflibs.plasma.lte_validator import LTEValidator
+
+        lte_validator = LTEValidator()
+        lte_report = lte_validator.validate(
+            T_K=T_K,
+            n_e_cm3=n_e,
+            observations=observations,
+        )
+        quality_metrics = {
+            # CANONICAL fit quality: R^2 of the common-slope plane / SB-graph
+            # fit, read from the fit where it happens (the final
+            # _CommonSlopeFit on the Python path; the final lax kernel fit on
+            # the lax path).
+            "boltzmann_r_squared": fit_r2,
+            # Deprecated alias of ``boltzmann_r_squared`` kept for legacy
+            # consumers (tests/scripts predating the canonical key); same
+            # provenance, do not read both.
+            "r_squared_last": fit_r2,
+            # Number of elements that received an intercept from the fit and
+            # entered the closure.
+            "n_elements_fit": float(len(concentrations)),
+            # Silent-failure gates (supersedes PR #220 — incorporates its
+            # additive metrics AND acts on them). These let downstream consumers
+            # detect a non-physical Boltzmann slope or a collapsed composition
+            # even though the solver already refuses to flag such a solve as
+            # converged.
+            "degenerate_composition": float(closure_degenerate),
+            # Deprecated alias of ``degenerate_composition`` (pre-cxxq key).
+            "closure_degenerate": float(closure_degenerate),
+            "boltzmann_degenerate": float(boltzmann_degenerate),
+            # n_e provenance: 1.0 when the canonical Stark-width diagnostic drove
+            # the final n_e, 0.0 when the physically-invalid 1-atm pressure
+            # balance fallback was used.
+            "ne_from_stark": float(ne_from_stark),
+        }
+        quality_metrics.update(lte_report.quality_metrics)
+        # Self-absorption diagnostics: max optical depth seen on the final
+        # correction pass (0.0 when SA is disabled or never fired).
+        quality_metrics["self_absorption_applied"] = float(self_absorption_applied)
+        quality_metrics["self_absorption_max_tau"] = float(last_max_tau)
+        return quality_metrics
+
     def _build_python_quality_metrics(
         self,
         observations: List[LineObservation],
@@ -2043,38 +2160,19 @@ class IterativeCFLIBSSolver:
         ne_from_stark: bool,
     ) -> Dict[str, float]:
         """Assemble the post-loop ``quality_metrics`` dict (``_solve_python`` helper)."""
-        # LTE validity check
-        from cflibs.plasma.lte_validator import LTEValidator
-
-        lte_validator = LTEValidator()
-        lte_report = lte_validator.validate(
-            T_K=T_K,
-            n_e_cm3=n_e,
-            observations=observations,
-        )
         fit_r2_final = last_common_fit.r_squared if last_common_fit is not None else 0.0
-        quality_metrics = {
-            "r_squared_last": fit_r2_final,
-            # Silent-failure gates (supersedes PR #220 — incorporates its
-            # additive metrics AND acts on them). These let downstream consumers
-            # detect a non-physical Boltzmann slope or a collapsed composition
-            # even though the solver already refuses to flag such a solve as
-            # converged.
-            "boltzmann_r_squared": fit_r2_final,
-            "n_elements_fit": float(len(concentrations)),
-            "closure_degenerate": float(closure_degenerate),
-            "boltzmann_degenerate": float(boltzmann_degenerate),
-            # n_e provenance: 1.0 when the canonical Stark-width diagnostic drove
-            # the final n_e, 0.0 when the physically-invalid 1-atm pressure
-            # balance fallback was used.
-            "ne_from_stark": float(ne_from_stark),
-        }
-        quality_metrics.update(lte_report.quality_metrics)
-        # Self-absorption diagnostics: max optical depth seen on the final
-        # correction pass (0.0 when SA is disabled or never fired).
-        quality_metrics["self_absorption_applied"] = float(self.apply_self_absorption)
-        quality_metrics["self_absorption_max_tau"] = float(last_max_tau)
-        return quality_metrics
+        return self._assemble_quality_metrics(
+            observations,
+            T_K,
+            n_e,
+            concentrations,
+            fit_r2=fit_r2_final,
+            boltzmann_degenerate=boltzmann_degenerate,
+            closure_degenerate=closure_degenerate,
+            ne_from_stark=ne_from_stark,
+            self_absorption_applied=self.apply_self_absorption,
+            last_max_tau=last_max_tau,
+        )
 
     def _solve_python(
         self,
@@ -2172,6 +2270,8 @@ class IterativeCFLIBSSolver:
         # Defensive: a degenerate Boltzmann slope (non-physical T) or a
         # collapsed composition must never report converged, even if an early
         # break left the loop's convergence flag set on a prior clean iteration.
+        if closure_degenerate:
+            self._warn_degenerate_composition(concentrations)
         if boltzmann_degenerate or closure_degenerate:
             converged = False
 
@@ -2268,6 +2368,8 @@ class IterativeCFLIBSSolver:
             intercepts=jnp.zeros(len(elements_ord), dtype=jnp.float64),
             concentrations=jnp.zeros(len(elements_ord), dtype=jnp.float64),
             r_squared=jnp.asarray(0.0, dtype=jnp.float64),
+            # True until a clean fit proves otherwise (Python-path parity).
+            boltzmann_degenerate=jnp.asarray(True),
         )
 
         # 7. Run the while loop
@@ -2295,23 +2397,44 @@ class IterativeCFLIBSSolver:
         converged_bool = bool(final_state.converged)
         iterations = int(final_state.i)
         r_squared = float(final_state.r_squared)
+        boltzmann_degenerate = bool(final_state.boltzmann_degenerate)
         conc_arr = np.asarray(final_state.concentrations)
         concentrations = {el: float(conc_arr[i]) for i, el in enumerate(elements_ord)}
 
         # Corona post-loop assembly (matches Python path)
         T_corona = 0.8 * T_K if self.two_region else None
 
-        # LTE validity check
-        from cflibs.plasma.lte_validator import LTEValidator
+        # Quality gates + metrics: PARITY with the Python path (audit 02-F8).
+        # The lax loop already refuses to converge on a degenerate Boltzmann
+        # fit (the in-body gate), but the composition-degeneracy (keystone
+        # collapse) gate and the full quality_metrics key set were missing —
+        # the lax path could report converged=True with
+        # quality_metrics.get('boltzmann_r_squared') is None on a collapsed
+        # composition. Compute both gates host-side after the loop and route
+        # the metric assembly through the SAME builder as the Python path so
+        # the key sets cannot drift.
+        closure_degenerate = self._validate_composition_degeneracy(concentrations)
+        if closure_degenerate:
+            self._warn_degenerate_composition(concentrations)
+        if boltzmann_degenerate or closure_degenerate:
+            converged_bool = False
 
-        lte_validator = LTEValidator()
-        lte_report = lte_validator.validate(
-            T_K=T_K,
-            n_e_cm3=n_e,
-            observations=observations,
+        quality_metrics = self._assemble_quality_metrics(
+            observations,
+            T_K,
+            n_e,
+            concentrations,
+            fit_r2=r_squared,
+            boltzmann_degenerate=boltzmann_degenerate,
+            closure_degenerate=closure_degenerate,
+            # The lax body's n_e update is always the traced pressure-balance
+            # kernel (a supplied stark_diagnostic forces the Python path), and
+            # self-absorption is not implemented on the lax path (its presence
+            # also forces the Python path in solve()).
+            ne_from_stark=False,
+            self_absorption_applied=False,
+            last_max_tau=0.0,
         )
-        quality_metrics: Dict[str, float] = {"r_squared_last": r_squared}
-        quality_metrics.update(lte_report.quality_metrics)
 
         return CFLIBSResult(
             temperature_K=T_K,

@@ -496,16 +496,23 @@ class ClosureEquation:
     def validate_degeneracy(
         concentrations: Dict[str, float],
         threshold: float = 0.8,
+        min_elements: int = 2,
     ) -> bool:
         """Flag a degenerate (single-element-dominated) composition.
 
-        Returns ``True`` when more than one element is present and any single
-        element soaks more than ``threshold`` of the total closure mass — the
-        "keystone collapse" signature in which the closure has lost
-        discriminating power and the recovered composition is untrustworthy.
+        Returns ``True`` when at least ``min_elements`` elements are present
+        and any single element soaks more than ``threshold`` of the total
+        closure mass — the "keystone collapse" signature in which the closure
+        has lost discriminating power and the recovered composition is
+        untrustworthy.
 
         A single-element solve (``len <= 1``) is never flagged: a pure sample
-        legitimately closes to a single 1.0 concentration.
+        legitimately closes to a single 1.0 concentration. Callers analyzing
+        small candidate sets where one dominant element is physically
+        plausible (binary alloys: brass is ~90% Cu) should raise
+        ``min_elements`` — the iterative solver passes ``min_elements=4`` so
+        the gate fires only on multi-element candidate sets where >0.8
+        dominance is the collapse signature, not chemistry.
 
         Parameters
         ----------
@@ -514,13 +521,16 @@ class ClosureEquation:
         threshold : float
             Dominance fraction above which the composition is degenerate
             (default 0.8).
+        min_elements : int
+            Minimum candidate-set size for the gate to apply (default 2,
+            i.e. any multi-element composition is eligible).
 
         Returns
         -------
         bool
             ``True`` if degenerate, ``False`` otherwise.
         """
-        if len(concentrations) <= 1:
+        if len(concentrations) < max(int(min_elements), 2):
             return False
         return any(c > threshold for c in concentrations.values())
 
