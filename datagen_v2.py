@@ -164,57 +164,123 @@ def fetch_ionization_potential(element, stage_roman):
         return None
 
 
+_LEADING_FLOAT_RE = re.compile(r"[-+]?\d+(?:\.\d*)?(?:[eE][-+]?\d+)?")
+
+
+def _g_from_j_field(j_field):
+    """Sum (2J+1) over a possibly multi-valued NIST J field, e.g. '7/2,9/2'.
+
+    NIST lists unresolved fine-structure groups with several J values for one
+    energy. Each J in the group contributes its own (2J+1) — exactly the
+    convention NIST's own g column uses for such rows ('7/2,9/2' -> g=18).
+    This is the same parse Barklem & Collet fixed in their Nov-2022 revision
+    (their original code read '7/2' as 7.0, doubling those weights).
+    """
+    total = 0.0
+    for token in j_field.replace("---", "").replace("-", ",").split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if "/" in token:
+            num, den = token.split("/", 1)
+            j_val = float(num) / float(den)
+        else:
+            j_val = float(token)
+        total += 2.0 * j_val + 1.0
+    return int(round(total)) if total > 0 else None
+
+
+def _parse_levels_tsv(text):
+    """Parse NIST ASD energy1.pl tab-delimited output into [(g, energy_eV)].
+
+    Column-aware replacement for the historical token-soup heuristic, which
+    silently dropped or mangled most high-Rydberg levels (the root cause of
+    the 5–40 % partition-function deficits documented in audit finding 01-F3:
+    Ca I had 76 levels in the DB vs ~370 bound levels in NIST). Format 3 wraps
+    the J and Level fields in double quotes, which the old parser never
+    stripped — ``float('"6.03270"')`` fails, so the 'last parseable float in
+    the row' fell back to the (unquoted, integer) g column, and the
+    ``isdigit()`` g-hunt then produced garbage or nothing for those rows.
+
+    Rules:
+    - locate the J / g / Level columns from the header (Prefix/Suffix columns
+      carry the ``[``/``]`` interpolation markers, NOT the Level field);
+    - skip separator / ionization-limit rows (``J == '---'`` or no energy);
+    - take g from the g column when present; otherwise derive it as the sum
+      of (2J+1) over the (possibly multi-valued) J field;
+    - parse the energy as the leading float of the Level field (annotations
+      such as ``+x``, ``?``, ``[...]`` are ignored).
+    """
+    import csv
+    import io
+
+    reader = csv.reader(io.StringIO(text), delimiter="\t")
+    header = next(reader, None)
+    if not header or not any("Level" in (col or "") for col in header):
+        # HTML error page (e.g. 'Invalid Column Setting') or empty payload.
+        print(" [Levels Error: unexpected NIST response format]", end="")
+        return []
+    col_index = {}
+    for i, col in enumerate(header):
+        name = (col or "").strip().strip('"')
+        if name.startswith("Level"):
+            col_index["level"] = i
+        elif name == "J":
+            col_index["j"] = i
+        elif name == "g":
+            col_index["g"] = i
+    if "level" not in col_index:
+        return []
+
+    data = []
+    for row in reader:
+        fields = [(f or "").strip().strip('"').strip() for f in row]
+        if len(fields) <= col_index["level"]:
+            continue
+        j_field = fields[col_index["j"]] if "j" in col_index else ""
+        if j_field == "---":  # separator / ionization-limit row
+            continue
+        match = _LEADING_FLOAT_RE.match(fields[col_index["level"]].lstrip("[("))
+        if not match:
+            continue
+        energy = float(match.group(0))
+        g_field = fields[col_index["g"]] if "g" in col_index else ""
+        if g_field.isdigit() and int(g_field) > 0:
+            g = int(g_field)
+        else:
+            try:
+                g = _g_from_j_field(j_field)
+            except (ValueError, ZeroDivisionError):
+                g = None
+        if g and energy >= 0:
+            data.append((g, energy))
+    return data
+
+
 def fetch_energy_levels(element, stage_roman):
-    """Scrapes the NIST Atomic Levels form for Partition Functions Z(T)."""
+    """Scrapes the NIST Atomic Levels form for Partition Functions Z(T).
+
+    NOTE (bead CF-LIBS-improved-16m7): unchecked-checkbox parameters
+    (``conf_out=off`` etc.) must be OMITTED, not sent — NIST ASD treats the
+    mere presence of the parameter as a column request and rejects the
+    historical combination with an 'Invalid Column Setting' HTML error page.
+    """
     url = "https://physics.nist.gov/cgi-bin/ASD/energy1.pl"
-    query = f"{element} {stage_roman}"
     params = {
-        "spectrum": query,
-        "units": 1,
-        "format": 3,
+        "spectrum": f"{element} {stage_roman}",
+        "units": 1,  # energies in eV
+        "format": 3,  # tab-delimited
+        "output": 0,  # all levels in one page
         "multiplet_ordered": 0,
-        "conf_out": "off",
-        "term_out": "off",
         "level_out": "on",
-        "unc_out": 0,
         "j_out": "on",
         "g_out": "on",
-        "land_out": "off",
         "submit": "Retrieve Data",
     }
 
     try:
         response = levels_session.get(url, params=params)
-        lines = response.text.splitlines()
-        data = []
-        for line in lines:
-            if "Level" in line and "eV" in line:
-                continue
-            parts = re.split(r"\s+", line.strip())
-            if len(parts) < 3:
-                continue
-            try:
-                clean_parts = [re.sub(r"[\[\]\(\)\?]", "", p) for p in parts]
-                energy = None
-                for p in reversed(clean_parts):
-                    try:
-                        energy = float(p)
-                        break
-                    except Exception:
-                        continue
-                if energy is None:
-                    continue
-                g = None
-                for p in clean_parts:
-                    if p.isdigit():
-                        val = int(p)
-                        if val > 0 and val < 200:
-                            g = val
-                if g and energy >= 0:
-                    data.append((g, energy))
-            except Exception:
-                continue
-        return data
+        return _parse_levels_tsv(response.text)
     except Exception as e:
         print(f" [Levels Error: {e}]", end="")
         return []
