@@ -73,7 +73,7 @@ def test_default_knobs_are_cli_defaults(harness):
     assert cfg.saha_boltzmann_graph is True
     assert cfg.wavelength_calibration is True
     assert cfg.shift_coherence_veto is True
-    assert cfg.apply_self_absorption is False
+    assert cfg.apply_self_absorption == "off"
     assert cfg.exclude_resonance is None
     assert cfg.min_relative_intensity is None
 
@@ -91,7 +91,8 @@ def test_default_knobs_are_cli_defaults(harness):
         (["--no-shift-coherence-veto"], "shift_coherence_veto", False),
         (["--shift-coherence-veto"], "shift_coherence_veto", True),
         (["--no-saha-boltzmann-graph"], "saha_boltzmann_graph", False),
-        (["--apply-self-absorption"], "apply_self_absorption", True),
+        (["--apply-self-absorption"], "apply_self_absorption", "observable"),
+        (["--sa-mode", "observable"], "apply_self_absorption", "observable"),
         (["--exclude-resonance", "true"], "exclude_resonance", True),
         (["--exclude-resonance", "false"], "exclude_resonance", False),
         (["--exclude-resonance", "auto"], "exclude_resonance", None),
