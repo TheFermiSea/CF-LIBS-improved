@@ -18,7 +18,7 @@ true partition function for iron-group workhorse species:
    a *deliberately truncated* direct-sum (``PARITY_TRUNCATION_EV``) tuned to
    reproduce Irwin's value, so it could never catch the undershoot.
 
-After the PF-1/PF-2 regeneration (``scripts/regenerate_partition_functions.py``)
+After the PF-1/PF-2 regeneration (``scripts/archive/migrations/regenerate_partition_functions.py``)
 the stored polynomial tracks the FULL direct-sum, so these tests now assert the
 correct physics: poly == full-direct-sum (a strict lower bound on the true U)
 within tolerance, never *below* it, across the ps-LIBS band.

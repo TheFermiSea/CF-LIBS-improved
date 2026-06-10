@@ -126,10 +126,8 @@ _REFERENCE_LINES: Dict[str, List[Tuple[float, float, int, float]]] = {
     ],
 }
 
-# Boltzmann constant in eV/K (avoid importing cflibs.core.constants so
-# this module stays self-contained for the fallback path).
-_KB_EV = 8.617333262e-5
-
+# Boltzmann constant in eV/K from the canonical constants module.
+from cflibs.core.constants import KB_EV as _KB_EV  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Corpus builder

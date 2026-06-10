@@ -1,5 +1,5 @@
 """
-Unit and integration tests for cflibs.inversion.self_absorption module.
+Unit and integration tests for cflibs.inversion.physics.self_absorption module.
 
 Tests cover:
 - SelfAbsorptionCorrector initialization and correction
@@ -13,7 +13,7 @@ Tests cover:
 import pytest
 import numpy as np
 
-from cflibs.inversion.self_absorption import (
+from cflibs.inversion.physics.self_absorption import (
     SelfAbsorptionCorrector,
     SelfAbsorptionResult,
     AbsorptionCorrectionResult,

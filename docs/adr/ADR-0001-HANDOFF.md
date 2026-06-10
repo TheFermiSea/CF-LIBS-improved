@@ -18,9 +18,10 @@ You are picking up CF-LIBS-improved after ADR-0001 just landed on dev at commit
 2. Read `docs/adr/ADR-0001-radis-jaxrts-pattern-survey.md` (the survey) and
    `docs/adr/ADR-0001-RUNBOOK.md` (the workflow protocol). Per-bead specs in
    `docs/adr/specs/T1-{1..6}-*.md` describe what was actually built.
-3. Baseline files at repo root: `.adr-0001-baseline.txt`, `-bench.json`,
-   `-cov.txt` — captured on origin/dev@2f06dd9 before any T1 work landed. Use
-   these to anchor any regression check.
+3. Baseline files in `docs/adr/`: `adr-0001-baseline.txt`, `adr-0001-baseline-bench.json`
+   — captured on origin/dev@2f06dd9 before any T1 work landed. Use these to
+   anchor any regression check. (Moved from repo root in the 2026-06 cleanliness
+   sweep; the 608 KB `.adr-0001-baseline-cov.txt` coverage dump was deleted.)
 
 # What landed (six Tier-1 beads, all closed)
 

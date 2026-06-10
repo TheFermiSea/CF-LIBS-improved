@@ -18,7 +18,7 @@ logger = get_logger("radiation.stark")
 # SINGLE SOURCE OF TRUTH for the project-wide Stark-width convention.
 # The atomic database stores ``lines.stark_w`` as the electron-impact
 # **FWHM** at ``n_e = 1e17 cm^-3``, ``T = 10000 K`` — see
-# ``scripts/ingest_stark_b.py`` ("T_e = 10000 K, n_e = 1.0e17 cm^-3")
+# ``scripts/archive/migrations/ingest_stark_b.py`` ("T_e = 10000 K, n_e = 1.0e17 cm^-3")
 # and the published-value anchors in ``tests/test_stark_provenance.py``.
 #
 # Historically the runtime treated the column as **HWHM at 1e16**, which

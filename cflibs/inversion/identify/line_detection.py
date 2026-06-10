@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from cflibs.inversion.deconvolution import VoigtFitResult
+    from cflibs.inversion.preprocess.deconvolution import VoigtFitResult
 
 import numpy as np
 
@@ -674,7 +674,7 @@ def _run_deconvolution(
     behaviour exactly.
     """
     try:
-        from cflibs.inversion.deconvolution import deconvolve_peaks
+        from cflibs.inversion.preprocess.deconvolution import deconvolve_peaks
 
         # Collect all peak wavelengths for deconvolution
         peak_wl_arr = np.array([pw for _, pw in peaks], dtype=float)

@@ -32,45 +32,16 @@ from cflibs.benchmark.dataset import (
     SampleType,
     MatrixType,
 )
+from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES
 from cflibs.plasma.state import mass_fractions_to_species_densities
 
 logger = get_logger("benchmark.synthetic")
 
-# Standard atomic masses used for mass-fraction -> number-density conversion [amu]
-# NOTE: Keep this table aligned with candidate elements used in synthetic benchmarks.
-# Unknown elements now raise to avoid silently corrupting number-fraction conversion.
-STANDARD_MASSES = {
-    "H": 1.008,
-    "He": 4.003,
-    "Li": 6.941,
-    "Be": 9.012,
-    "B": 10.81,
-    "C": 12.01,
-    "N": 14.01,
-    "O": 16.00,
-    "F": 19.00,
-    "Ne": 20.18,
-    "Na": 22.99,
-    "Mg": 24.31,
-    "Al": 26.98,
-    "Si": 28.09,
-    "P": 30.97,
-    "S": 32.07,
-    "Cl": 35.45,
-    "Ar": 39.95,
-    "K": 39.10,
-    "Ca": 40.08,
-    "Sc": 44.96,
-    "Ti": 47.87,
-    "V": 50.94,
-    "Cr": 52.00,
-    "Mn": 54.94,
-    "Fe": 55.85,
-    "Co": 58.93,
-    "Ni": 58.69,
-    "Cu": 63.55,
-    "Zn": 65.38,
-}
+# Standard atomic masses used for mass-fraction -> number-density conversion [amu].
+# Canonical table from cflibs.atomic.masses (value-identical superset of the old
+# local table). Unknown elements still raise downstream to avoid silently
+# corrupting number-fraction conversion.
+STANDARD_MASSES = STANDARD_ATOMIC_MASSES
 
 
 @dataclass

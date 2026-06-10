@@ -363,9 +363,9 @@ When the CLI is not enough, the same pipeline is available from Python:
 
 ```python
 from cflibs.atomic.database import AtomicDatabase
-from cflibs.inversion.line_detection import detect_line_observations
-from cflibs.inversion.line_selection import LineSelector
-from cflibs.inversion.solver import IterativeCFLIBSSolver
+from cflibs.inversion.identify.line_detection import detect_line_observations
+from cflibs.inversion.physics.line_selection import LineSelector
+from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
 from cflibs.io.spectrum import load_spectrum
 
 db = AtomicDatabase("ASD_da/libs_production.db")

@@ -10,7 +10,7 @@ Tests cover:
 import numpy as np
 import pytest
 
-from cflibs.inversion.outliers import (
+from cflibs.inversion.preprocess.outliers import (
     SAMResult,
     SpectralAngleMapper,
     sam_distance,

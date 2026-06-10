@@ -519,7 +519,7 @@ def check_polynomial_gate(poly_data, ref_data, our_data, jax_data=None, bayes_da
         print(
             "\nThe JAX manifold / Bayesian adapters consume the direct-sum-FIT\n"
             "polynomial baked into the snapshot.  Regenerate with\n"
-            "  python scripts/regenerate_partition_functions.py --db-path <db>\n"
+            "  python scripts/archive/migrations/regenerate_partition_functions.py --db-path <db>\n"
         )
     else:
         print(

@@ -35,7 +35,9 @@ def test_radiation_import_is_safe_without_forced_cpu_backend():
 
 def test_hybrid_import_is_safe_when_optional_stack_fails():
     """Optional Bayesian/JAX failures must not prevent hybrid imports."""
-    result = _run_import_snippet("from cflibs.inversion.hybrid import HybridInverter; print('ok')")
+    result = _run_import_snippet(
+        "from cflibs.inversion.solve.coarse_to_fine import HybridInverter; print('ok')"
+    )
     assert result.returncode == 0, result.stderr or result.stdout
 
 

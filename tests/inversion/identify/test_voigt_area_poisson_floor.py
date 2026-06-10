@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 
 from cflibs.atomic.structures import Transition
-from cflibs.inversion.deconvolution import VoigtFitResult
+from cflibs.inversion.preprocess.deconvolution import VoigtFitResult
 from cflibs.inversion.identify.line_detection import (
     _build_observation_from_fit,
     _poisson_area_floor,

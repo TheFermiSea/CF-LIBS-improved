@@ -63,7 +63,7 @@ from cflibs.inversion.physics.closure import ClosureEquation  # noqa: E402
 from cflibs.inversion.physics.self_absorption_observable import (  # noqa: E402
     ObservableSelfAbsorptionCorrector,
 )
-from cflibs.inversion.line_detection import detect_line_observations  # noqa: E402
+from cflibs.inversion.identify.line_detection import detect_line_observations  # noqa: E402
 from cflibs.inversion.solve.iterative import CFLIBSResult, IterativeCFLIBSSolver  # noqa: E402
 
 logger = get_logger("accuracy_ablation")

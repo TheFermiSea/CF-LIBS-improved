@@ -8,7 +8,7 @@ loose to catch real regressions in the inverse-transform path.
 import numpy as np
 import pytest
 
-from cflibs.inversion.pca import PCAPipeline
+from cflibs.inversion.common.pca import PCAPipeline
 
 
 @pytest.fixture

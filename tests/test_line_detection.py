@@ -1,6 +1,6 @@
 import numpy as np
 
-from cflibs.inversion.line_detection import detect_line_observations
+from cflibs.inversion.identify.line_detection import detect_line_observations
 
 
 def _gaussian(wavelength: np.ndarray, center: float, sigma: float, amplitude: float) -> np.ndarray:

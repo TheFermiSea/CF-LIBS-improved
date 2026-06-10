@@ -35,7 +35,7 @@ Literature References
 
 Example
 -------
->>> from cflibs.inversion.streaming import StreamingAnalyzer, SpectrumBuffer
+>>> from cflibs.inversion.runtime.streaming import StreamingAnalyzer, SpectrumBuffer
 >>> from cflibs.atomic.database import AtomicDatabase
 >>>
 >>> # Create buffer and analyzer
@@ -76,7 +76,7 @@ import numpy as np
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.solve.iterative import CFLIBSResult, IterativeCFLIBSSolver
-from cflibs.inversion.line_selection import LineSelector
+from cflibs.inversion.physics.line_selection import LineSelector
 
 __all__ = [
     "AnalysisMode",

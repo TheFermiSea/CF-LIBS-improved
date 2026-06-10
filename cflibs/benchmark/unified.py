@@ -1983,7 +1983,7 @@ def _build_voigt_alias_predictor(
     candidate_elements: List[str],
     config: Dict[str, Any],
 ) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
-    from cflibs.inversion.deconvolution import deconvolve_peaks
+    from cflibs.inversion.preprocess.deconvolution import deconvolve_peaks
     from cflibs.inversion.preprocess.preprocessing import estimate_baseline
 
     def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:

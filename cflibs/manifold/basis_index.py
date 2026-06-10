@@ -384,7 +384,7 @@ class BasisIndex:
             pca_components = f["pca_components"][:]
             pca_mean = f["pca_mean"][:]
 
-            from cflibs.inversion.pca import PCAResult
+            from cflibs.inversion.common.pca import PCAResult
 
             n_feat = pca_components.shape[1]
             minimal_result = PCAResult(

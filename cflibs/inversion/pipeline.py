@@ -460,8 +460,8 @@ def detect_and_select_lines(
     """
     import numpy as np
 
-    from cflibs.inversion.line_detection import detect_line_observations
-    from cflibs.inversion.line_selection import LineSelector
+    from cflibs.inversion.identify.line_detection import detect_line_observations
+    from cflibs.inversion.physics.line_selection import LineSelector
     from cflibs.inversion.preprocess.wavelength_calibration import (
         calibrate_wavelength_axis_segmented,
     )

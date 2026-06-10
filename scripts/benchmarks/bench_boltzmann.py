@@ -156,7 +156,7 @@ def run_boltzmann_benchmark(
             import jax.numpy as jnp
 
             jax.config.update("jax_enable_x64", True)
-            from cflibs.inversion.boltzmann_jax import batched_boltzmann_fit
+            from cflibs.inversion.physics.boltzmann_jax import batched_boltzmann_fit
 
             has_jax = True
         except ImportError:
@@ -195,7 +195,7 @@ def run_boltzmann_benchmark(
             # GPU (JAX)
             if has_jax:
                 import jax.numpy as jnp
-                from cflibs.inversion.boltzmann_jax import batched_boltzmann_fit
+                from cflibs.inversion.physics.boltzmann_jax import batched_boltzmann_fit
 
                 x_jax = jnp.array(x)
                 y_jax = jnp.array(y)

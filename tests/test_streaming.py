@@ -14,7 +14,7 @@ import threading
 import time
 from unittest.mock import Mock
 
-from cflibs.inversion.streaming import (
+from cflibs.inversion.runtime.streaming import (
     AnalysisMode,
     StreamingConfig,
     SpectrumPacket,

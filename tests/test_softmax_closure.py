@@ -13,7 +13,7 @@ import pytest
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-from cflibs.inversion.softmax_closure import (  # noqa: E402
+from cflibs.inversion.physics.softmax_closure import (  # noqa: E402
     softmax_closure,
     inverse_softmax,
     softmax_jacobian,
