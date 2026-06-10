@@ -303,10 +303,18 @@ class ObservableSelfAbsorptionCorrector:
         Validity ceiling for the Planck-ceiling correction
         (default :data:`PLANCK_TAU_VALIDITY_MAX`, Völker & Gornushkin 2023).
     min_ratio_significance_sigma : float
-        Minimum significance (in propagated intensity-uncertainty sigmas) of
-        the measured doublet-ratio deviation from the optically-thin ratio
-        before a correction is applied. Below it the pair is treated as
-        observably thin (a noisy ratio must not manufacture optical depth).
+        Minimum significance (in propagated sigmas — intensity noise AND
+        fractional A_ki uncertainty when available) of the measured
+        doublet-ratio deviation from the optically-thin ratio before a
+        correction is applied. Below it the pair is treated as observably
+        thin (a noisy ratio must not manufacture optical depth).
+    min_ratio_deviation : float
+        Absolute floor on the fractional ratio deviation
+        ``|1 - r_meas/r_thin|`` (default 0.10). Lines frequently carry no
+        intensity uncertainty (sigma = 0 would make ANY deviation
+        infinitely significant) and NIST grade-B transition probabilities
+        are only accurate to ~10%, so deviations below this floor cannot be
+        attributed to self-absorption rather than atomic-data error.
     suspect_E_i_max_ev : float
         Lower-level energy below which a line is SA-prone (default
         :data:`SUSPECT_E_I_MAX_EV`, the Fayyaz 2023 6000 cm^-1 cut).
@@ -326,6 +334,7 @@ class ObservableSelfAbsorptionCorrector:
         doublet_tau_max: float = DOUBLET_TAU_VALIDITY_MAX,
         planck_tau_max: float = PLANCK_TAU_VALIDITY_MAX,
         min_ratio_significance_sigma: float = 1.0,
+        min_ratio_deviation: float = 0.10,
         suspect_E_i_max_ev: float = SUSPECT_E_I_MAX_EV,
         suspect_intensity_factor: float = 1.0,
         suspect_uncertainty_inflation: float = 3.0,
@@ -333,6 +342,7 @@ class ObservableSelfAbsorptionCorrector:
         self.doublet_tau_max = float(doublet_tau_max)
         self.planck_tau_max = float(planck_tau_max)
         self.min_ratio_significance_sigma = float(min_ratio_significance_sigma)
+        self.min_ratio_deviation = float(min_ratio_deviation)
         self.suspect_E_i_max_ev = float(suspect_E_i_max_ev)
         self.suspect_intensity_factor = float(suspect_intensity_factor)
         self.suspect_uncertainty_inflation = float(suspect_uncertainty_inflation)
@@ -420,22 +430,38 @@ class ObservableSelfAbsorptionCorrector:
     # pass (a): doublets
     # ------------------------------------------------------------------
 
-    def _ratio_significance_sigma(
+    def _ratio_deviation_significant(
         self, line1: LineObservation, line2: LineObservation, res: DoubletRatioResult
-    ) -> float:
-        """Significance of the ratio deviation in propagated-noise sigmas."""
+    ) -> bool:
+        """Is the measured ratio deviation attributable to self-absorption?
+
+        Two gates, both required:
+
+        1. an absolute floor ``min_ratio_deviation`` on the fractional
+           deviation ``|1 - r_meas/r_thin|`` (uncalibrated noise sources and
+           ~10% grade-B A_ki accuracy put a hard floor on what a ratio can
+           prove);
+        2. a significance threshold in propagated sigmas, combining the
+           relative intensity uncertainties of both lines with their
+           fractional A_ki uncertainties when the database supplies them.
+
+        SA shifts the measured ratio away from the thin ratio in either
+        direction depending on which member of the pair is more absorbed
+        (tau_2 = tau_1 / rho can exceed tau_1), so the test is two-sided.
+        """
         if line1.intensity <= 0 or line2.intensity <= 0:
-            return 0.0
+            return False
+        deviation = abs(1.0 - res.r_measured / res.r_theory)
+        if deviation < self.min_ratio_deviation:
+            return False
         rel1 = line1.intensity_uncertainty / line1.intensity
         rel2 = line2.intensity_uncertainty / line2.intensity
-        sigma_rel = math.sqrt(rel1**2 + rel2**2)
-        # SA shifts the measured ratio away from the thin ratio in either
-        # direction depending on which member of the pair is more absorbed
-        # (tau_2 = tau_1 / rho can exceed tau_1), so significance is two-sided.
-        deviation = abs(1.0 - res.r_measured / res.r_theory)
+        aki1 = line1.aki_uncertainty or 0.0
+        aki2 = line2.aki_uncertainty or 0.0
+        sigma_rel = math.sqrt(rel1**2 + rel2**2 + aki1**2 + aki2**2)
         if sigma_rel <= 0:
-            return float("inf") if deviation > 0 else 0.0
-        return deviation / sigma_rel
+            return True  # floor already passed; no noise model to test against
+        return deviation / sigma_rel >= self.min_ratio_significance_sigma
 
     def _apply_doublet_pass(
         self,
@@ -462,9 +488,9 @@ class ObservableSelfAbsorptionCorrector:
                 )
                 continue
 
-            significance = self._ratio_significance_sigma(line1, line2, res)
+            significant = self._ratio_deviation_significant(line1, line2, res)
             tau_pair_max = max(res.tau_1, res.tau_2)
-            if tau_pair_max <= 1e-3 or significance < self.min_ratio_significance_sigma:
+            if tau_pair_max <= 1e-3 or not significant:
                 # Observably thin (or deviation within noise): clear both.
                 for idx, line, tau in ((i1, line1, res.tau_1), (i2, line2, res.tau_2)):
                     cleared.add(idx)

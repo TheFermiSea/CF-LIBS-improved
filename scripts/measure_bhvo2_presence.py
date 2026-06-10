@@ -52,7 +52,20 @@ def main() -> None:
         "--min-relative-intensity", type=lambda s: None if s == "none" else float(s), default=None
     )
     ap.add_argument("--exclude-resonance", choices=["auto", "true", "false"], default="auto")
-    ap.add_argument("--apply-self-absorption", action="store_true")
+    ap.add_argument(
+        "--apply-self-absorption",
+        action="store_true",
+        help="Legacy alias for --sa-mode observable.",
+    )
+    ap.add_argument(
+        "--sa-mode",
+        choices=["off", "observable"],
+        default=None,
+        help=(
+            "Self-absorption mode (bead 0jvr): 'observable' applies the "
+            "doublet-ratio-gated pre-fit correction; 'off' (default) applies none."
+        ),
+    )
     ap.add_argument(
         "--closure-mode",
         default="standard",
@@ -79,7 +92,7 @@ def main() -> None:
     db = AtomicDatabase(_resolve_db())
 
     excl = {"auto": None, "true": True, "false": False}[args.exclude_resonance]
-    sa = bool(args.apply_self_absorption)
+    sa = args.sa_mode or ("observable" if args.apply_self_absorption else "off")
 
     obs = _detect_and_select_lines(
         wl,
@@ -133,7 +146,13 @@ def main() -> None:
     for e in cert_elems:
         c, p = cert[e] * 100, pred.get(e, 0.0) * 100
         print(f"  {e:<4}{c:>11.3f}{p:>11.3f}{p-c:>9.3f}{obs_counts.get(e,0):>7}")
+    qm = result.quality_metrics or {}
     print(f"\n  Al observation lines surviving detection: {obs_counts.get('Al',0)}")
+    print(
+        f"  SA diagnostics         : corrected={qm.get('n_lines_sa_corrected', 0.0):.0f} "
+        f"suspect={qm.get('n_lines_sa_suspect', 0.0):.0f} "
+        f"max_tau={qm.get('max_tau_estimate', 0.0):.3f}"
+    )
     print(f"  RMSE (cert-10)        : {rmse*100:.3f} wt%")
     print(f"  Dropped majors (<{EPS_PRESENT}): {dropped}")
     print(f"  FP confounders present : { {k: round(v*100,3) for k,v in fps.items()} or 'NONE'}")
@@ -145,6 +164,10 @@ def main() -> None:
         "label": args.label,
         "spectrum": spec_path.name,
         "rmse_wt%": rmse * 100,
+        "sa_mode": sa,
+        "n_lines_sa_corrected": qm.get("n_lines_sa_corrected", 0.0),
+        "n_lines_sa_suspect": qm.get("n_lines_sa_suspect", 0.0),
+        "max_tau_estimate": qm.get("max_tau_estimate", 0.0),
         "closure_mode": args.closure_mode,
         "saha_boltzmann_graph": bool(args.saha_boltzmann_graph),
         "T_K": result.temperature_K,
