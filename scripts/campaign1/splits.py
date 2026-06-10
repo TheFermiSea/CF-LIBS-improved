@@ -17,6 +17,9 @@ Splits are seeded, persisted as explicit spectrum-id lists under
 ``docs/benchmarks/manifests/`` and embedded into every study's
 ``frozen_manifest.json``. The objective refuses holdout/vault material
 structurally (:func:`assert_optimization_only` / :func:`assert_not_vault`).
+Holdout/vault *membership* is derived from the scoreboard registry
+(``DatasetEntry.tier``, declared at registration) — the registry is the
+single source of truth; this module owns only the refusal behavior.
 
 CLI::
 
@@ -48,10 +51,29 @@ SYNTHETIC_SAMPLE_SIZE = 74  # seeded 74/288 sample per the committed baseline
 FULL_OPTIMIZATION_DATASETS = ("aalto",)
 #: Datasets split ~60/40 by target identity (train -> optimization, rest -> holdout).
 TARGET_SPLIT_DATASETS = ("chemcam_calib", "csa_planetary", "silva2022")
+
+
+def _registered_tier_names(tier: str) -> tuple[str, ...]:
+    """Dataset names of one tier, from the scoreboard registry.
+
+    The registry (``DatasetEntry.tier``, set at registration in
+    ``cflibs.benchmark.adapters_core`` / ``adapters_extended``) is the single
+    source of truth for holdout/vault membership; this module only derives
+    its refusal sets from it.
+    """
+    from cflibs.benchmark.adapters_core import register_core_adapters
+    from cflibs.benchmark.adapters_extended import register_extended_adapters
+    from cflibs.benchmark.scoreboard_registry import iter_datasets
+
+    register_core_adapters()
+    register_extended_adapters()
+    return tuple(entry.name for entry in iter_datasets() if entry.tier == tier)
+
+
 #: Datasets entirely holdout (the adoption gate; bhvo2 is the headline number).
-HOLDOUT_ONLY_DATASETS = ("bhvo2_chemcam", "emslibs2019")
+HOLDOUT_ONLY_DATASETS = _registered_tier_names("holdout")
 #: Vault: never measured by any tuning loop. One run, ever, by a human.
-VAULT_DATASETS = ("gibbons2024",)
+VAULT_DATASETS = _registered_tier_names("vault")
 
 OPTIMIZATION_DATASETS = (
     FULL_OPTIMIZATION_DATASETS + ("synthetic_fixedforward",) + (TARGET_SPLIT_DATASETS)

@@ -265,16 +265,20 @@ def iter_gibbons2024_spectra(data_dir: Path | None = None) -> Iterator[SpectrumR
 
 # ---------------------------------------------------------------------------
 # Registration manifest -- the scoreboard maintainer wires these entries into
-# the registry at integration time. Order = value order from bead A2.
+# the registry at integration time. Order = value order from bead A2. Tiers
+# mirror the campaign split design (design 2.1; splits.py derives its name
+# sets from these registrations): emslibs2019 is HOLDOUT (adoption gate),
+# gibbons2024 is VAULT (end-of-program only — never run by the scoreboard).
 # ---------------------------------------------------------------------------
 
 AdapterFactory = Callable[[], Iterator[SpectrumRecord]]
 
-MANIFEST: list[tuple[str, AdapterFactory, tuple[str, ...], str]] = [
+MANIFEST: list[tuple[str, AdapterFactory, tuple[str, ...], str, str]] = [
     (
         "csa_planetary",
         iter_csa_planetary_spectra,
         ("real", "geological", "element_wt", "broadband"),
+        "optimization",
         "CSA open planetary-analogue LIBS: ~99 pulse-averaged spectra "
         "(198-970 nm) of certified geological standards + hand samples; "
         "element-wt truth from oxide certificates; requires one-time 7z "
@@ -284,6 +288,7 @@ MANIFEST: list[tuple[str, AdapterFactory, tuple[str, ...], str]] = [
         "chemcam_calib",
         iter_chemcam_calibration_spectra,
         ("real", "geological", "element_wt", "chemcam"),
+        "optimization",
         "MSL ChemCam preflight cleanroom calibration: ~250 radiance spectra "
         "(240-906 nm) of 66 standards with oxide certificates; same "
         "instrument family as the BHVO-2 gate.",
@@ -292,6 +297,7 @@ MANIFEST: list[tuple[str, AdapterFactory, tuple[str, ...], str]] = [
         "emslibs2019",
         iter_emslibs2019_spectra,
         ("real", "ore", "presence_only", "classification"),
+        "holdout",
         "EMSLIBS 2019 contest (Vrabel et al. 2020): 100 train ore samples x "
         "3 shots (200-1000 nm); presence-only truth at class level because "
         "the train-sample <-> certificate mapping is not in the files.",
@@ -300,6 +306,7 @@ MANIFEST: list[tuple[str, AdapterFactory, tuple[str, ...], str]] = [
         "silva2022",
         iter_silva2022_spectra,
         ("real", "soil", "presence_only"),
+        "optimization",
         "Silva et al. 2022 tropical soils: 102 spectra (200-780 nm); "
         "presence-only truth for exchangeable P/K/Ca/Mg (units are mg/dm3 / "
         "mmolc/dm3, not convertible to wt% without bulk density).",
@@ -308,6 +315,7 @@ MANIFEST: list[tuple[str, AdapterFactory, tuple[str, ...], str]] = [
         "gibbons2024",
         iter_gibbons2024_spectra,
         ("real", "planetary", "element_wt", "nitrogen"),
+        "vault",
         "Gibbons et al. nitrate-doped Mars Global Simulant: ~175 spectra "
         "(186-1049 nm, He atmosphere); quantitative N wt% from certified "
         "NO3- ion wt%; matrix elements uncertified (partial panel).",
@@ -322,5 +330,5 @@ def register_extended_adapters(*, replace: bool = True) -> None:
     """
     from cflibs.benchmark.scoreboard_registry import register_dataset
 
-    for name, factory, tags, notes in MANIFEST:
-        register_dataset(name, factory, tags=tags, replace=replace)
+    for name, factory, tags, tier, notes in MANIFEST:
+        register_dataset(name, factory, tags=tags, tier=tier, replace=replace)

@@ -39,6 +39,13 @@ AdapterFactory = Callable[[], Iterator[AdapterYield]]
 #: Valid values of :attr:`SpectrumTruth.composition_basis`.
 COMPOSITION_BASES = ("element_wt", "presence_only")
 
+#: Valid values of :attr:`DatasetEntry.tier` (campaign design 2.1):
+#: ``optimization`` datasets may be queried freely; ``holdout`` datasets are
+#: the adoption gate (default scoreboard runs exclude them; pass
+#: ``include_holdout=True`` / ``--include-holdout`` explicitly); ``vault``
+#: datasets are end-of-program material and are NEVER run by the scoreboard.
+DATASET_TIERS = ("optimization", "holdout", "vault")
+
 
 @dataclass(frozen=True)
 class SpectrumTruth:
@@ -86,11 +93,22 @@ class SpectrumTruth:
 
 @dataclass(frozen=True)
 class DatasetEntry:
-    """One registered scoreboard dataset."""
+    """One registered scoreboard dataset.
+
+    ``tier`` is a property of the dataset itself, declared at registration
+    (single source of truth — ``scripts/campaign1/splits.py`` derives its
+    holdout/vault name sets from here): ``"optimization"`` (default),
+    ``"holdout"`` (adoption gate) or ``"vault"`` (end-of-program only).
+    """
 
     name: str
     adapter_factory: AdapterFactory
     tags: frozenset[str] = field(default_factory=frozenset)
+    tier: str = "optimization"
+
+    def __post_init__(self) -> None:
+        if self.tier not in DATASET_TIERS:
+            raise ValueError(f"tier must be one of {DATASET_TIERS}, got {self.tier!r}")
 
 
 #: Module-level registry, insertion-ordered. Tests monkeypatch this dict.
@@ -102,6 +120,7 @@ def register_dataset(
     adapter_factory: AdapterFactory,
     *,
     tags: Iterable[str] = (),
+    tier: str = "optimization",
     replace: bool = False,
 ) -> DatasetEntry:
     """Register a dataset adapter under ``name``.
@@ -114,6 +133,9 @@ def register_dataset(
         Zero-argument generator function (see module docstring contract).
     tags : Iterable[str]
         Filter tags, e.g. ``("real", "geological")`` or ``("synthetic",)``.
+    tier : str
+        One of :data:`DATASET_TIERS` (default ``"optimization"``). See
+        :class:`DatasetEntry`.
     replace : bool
         Allow overwriting an existing registration (default False: duplicate
         names raise ``ValueError`` so two branches cannot silently shadow
@@ -121,7 +143,9 @@ def register_dataset(
     """
     if name in _REGISTRY and not replace:
         raise ValueError(f"Scoreboard dataset {name!r} is already registered (use replace=True).")
-    entry = DatasetEntry(name=name, adapter_factory=adapter_factory, tags=frozenset(tags))
+    entry = DatasetEntry(
+        name=name, adapter_factory=adapter_factory, tags=frozenset(tags), tier=tier
+    )
     _REGISTRY[name] = entry
     return entry
 

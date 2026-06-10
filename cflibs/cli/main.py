@@ -1033,6 +1033,7 @@ def scoreboard_cmd(args):
         tags=tags,
         max_spectra=args.max_spectra,
         seed=args.seed,
+        include_holdout=args.include_holdout,
     )
     json_path, md_path = write_artifacts(board, args.output_dir)
     print(md_path.read_text())
@@ -1290,11 +1291,22 @@ def main():
             "seeded rng (default: run everything)"
         ),
     )
+    from cflibs.benchmark.scoreboard import DEFAULT_SEED as _SCOREBOARD_DEFAULT_SEED
+
     scoreboard_parser.add_argument(
         "--seed",
         type=int,
-        default=20260610,
-        help="Sampling seed used with --max-spectra (default: 20260610)",
+        default=_SCOREBOARD_DEFAULT_SEED,
+        help=f"Sampling seed used with --max-spectra (default: {_SCOREBOARD_DEFAULT_SEED})",
+    )
+    scoreboard_parser.add_argument(
+        "--include-holdout",
+        action="store_true",
+        help=(
+            "Also run holdout-tier datasets (the campaign adoption gate, e.g. "
+            "bhvo2_chemcam, emslibs2019). Off by default so casual boards cannot "
+            "leak the gate; vault-tier datasets never run."
+        ),
     )
     scoreboard_parser.set_defaults(func=scoreboard_cmd)
 

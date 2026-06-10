@@ -372,9 +372,19 @@ def synthetic_fixedforward_adapter() -> Iterator[AdapterYield]:
 
 
 def register_core_adapters(*, replace: bool = True) -> None:
-    """Register the core datasets. Idempotent (``replace=True`` by default)."""
+    """Register the core datasets. Idempotent (``replace=True`` by default).
+
+    Tier assignments mirror the campaign split design (design 2.1, single
+    source of truth — ``scripts/campaign1/splits.py`` derives its name sets
+    from these registrations): ``bhvo2_chemcam`` is HOLDOUT (the adoption-gate
+    headline number must never leak into tuning loops or default boards).
+    """
     register_dataset(
-        "bhvo2_chemcam", bhvo2_chemcam_adapter, tags=("real", "geological"), replace=replace
+        "bhvo2_chemcam",
+        bhvo2_chemcam_adapter,
+        tags=("real", "geological"),
+        tier="holdout",
+        replace=replace,
     )
     register_dataset("aalto", aalto_adapter, tags=("real", "minerals"), replace=replace)
     register_dataset(

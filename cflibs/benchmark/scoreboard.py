@@ -16,6 +16,16 @@ Reproduce::
 
     JAX_PLATFORMS=cpu cflibs scoreboard --output-dir output/scoreboard
 
+Tier policy
+-----------
+Each registered dataset declares a tier (:class:`DatasetEntry.tier`):
+``optimization`` datasets always run; ``holdout`` datasets (the campaign
+adoption gate, e.g. bhvo2_chemcam, emslibs2019) are EXCLUDED unless
+``include_holdout=True`` (CLI ``--include-holdout``) so casual boards cannot
+leak the gate; ``vault`` datasets (gibbons2024) are never run by this
+harness. Explicitly requesting an excluded dataset is a hard error, never a
+silent skip.
+
 Candidate-set policy
 --------------------
 For each spectrum the pipeline is given ``candidates = truth.elements_present
@@ -282,6 +292,7 @@ def run_scoreboard(
     seed: int = DEFAULT_SEED,
     preset: Optional[str] = None,
     config_overrides: Optional[Mapping[str, Any]] = None,
+    include_holdout: bool = False,
 ) -> dict[str, Any]:
     """Run the goal-metric scoreboard over the registered datasets.
 
@@ -300,6 +311,10 @@ def run_scoreboard(
     preset : str or None
         Pipeline preset override; ``None`` = the production default
         (``geological``). Exposed for ablation runs only.
+    include_holdout : bool
+        Run holdout-tier datasets too (deliberate adoption-gate measurement).
+        Default False: holdout datasets are skipped (or, when requested by
+        name, refused). Vault-tier datasets never run regardless.
     config_overrides : Mapping[str, Any] or None
         Knob overrides routed through the top precedence tier of
         :func:`cflibs.inversion.pipeline.build_pipeline_config` (validated,
@@ -321,10 +336,30 @@ def run_scoreboard(
             "candidates(spectrum) = truth.elements_present UNION confounder_elements"
         ),
         "config_overrides": dict(config_overrides) if config_overrides else None,
+        "include_holdout": include_holdout,
         "datasets": [],
     }
 
+    explicitly_requested = datasets is not None
     for entry in iter_datasets(names=datasets, tags=tags):
+        if entry.tier == "vault":
+            if explicitly_requested:
+                raise ValueError(
+                    f"Dataset {entry.name!r} is VAULT tier (end-of-program material, "
+                    "design 2.1); the scoreboard never runs it."
+                )
+            logger.info("scoreboard: skipping %s (vault tier — never run).", entry.name)
+            continue
+        if entry.tier == "holdout" and not include_holdout:
+            if explicitly_requested:
+                raise ValueError(
+                    f"Dataset {entry.name!r} is HOLDOUT tier (adoption gate); pass "
+                    "include_holdout=True / --include-holdout to run it deliberately."
+                )
+            logger.info(
+                "scoreboard: skipping %s (holdout tier; use --include-holdout).", entry.name
+            )
+            continue
         logger.info("scoreboard: dataset %s ...", entry.name)
         items = list(entry.adapter_factory())
         n_total = len(items)
@@ -346,6 +381,7 @@ def run_scoreboard(
             sampled=indices is not None,
             notes=notes,
         )
+        dataset_row["tier"] = entry.tier
         board["datasets"].append(dataset_row)
         metrics = dataset_row["id_metrics"]
         logger.info(
@@ -387,8 +423,16 @@ def render_markdown(board: Mapping[str, Any]) -> str:
     cmd = "JAX_PLATFORMS=cpu cflibs scoreboard --output-dir output/scoreboard"
     if board["max_spectra"] is not None:
         cmd += f" --max-spectra {board['max_spectra']} --seed {board['seed']}"
+    if board.get("include_holdout"):
+        cmd += " --include-holdout"
     lines.append(cmd)
     lines.append("```")
+    lines.append("")
+    lines.append(
+        "**Tier policy:** vault-tier datasets never run; holdout-tier datasets "
+        "(adoption gate) run only with `--include-holdout`"
+        f"{' (this board INCLUDES holdout datasets)' if board.get('include_holdout') else ''}. "
+    )
     lines.append("")
     lines.append(
         f"**Candidate-set policy:** {board['candidate_policy']} "

@@ -64,6 +64,14 @@ class TestRegistry:
         with pytest.raises(KeyError, match="Unknown scoreboard dataset"):
             list(iter_datasets(names=["nope"]))
 
+    def test_tier_registration(self, monkeypatch):
+        monkeypatch.setattr(reg, "_REGISTRY", {})
+        assert register_dataset("opt", _toy_adapter).tier == "optimization"
+        assert register_dataset("held", _toy_adapter, tier="holdout").tier == "holdout"
+        assert register_dataset("locked", _toy_adapter, tier="vault").tier == "vault"
+        with pytest.raises(ValueError, match="tier"):
+            register_dataset("bad", _toy_adapter, tier="secret")
+
     def test_truth_basis_derivation(self):
         assert SpectrumTruth(frozenset({"Fe"})).composition_basis == "presence_only"
         quantitative = SpectrumTruth(frozenset({"Fe"}), composition_wt={"Fe": 100.0})
@@ -94,6 +102,11 @@ class TestAdapterContract:
             "nist_steel",
             "synthetic_fixedforward",
         ]
+        # The adoption-gate dataset is holdout TIER at registration (the
+        # campaign splits derive their refusal sets from this).
+        tiers = {e.name: e.tier for e in iter_datasets()}
+        assert tiers["bhvo2_chemcam"] == "holdout"
+        assert all(t == "optimization" for n, t in tiers.items() if n != "bhvo2_chemcam")
         for entry in iter_datasets():
             gen = entry.adapter_factory()
             first = next(gen, None)
@@ -248,6 +261,44 @@ class TestScoringMath:
         assert len(ids1) == 5
         assert board1["datasets"][0]["sampled"] is True
         assert board1["datasets"][0]["n_total"] == n
+
+    def test_holdout_and_vault_tiers_are_gated(self, monkeypatch):
+        """altitude#7: tier is a dataset property. Default boards exclude
+        holdout and vault; --include-holdout admits holdout only; explicitly
+        requesting an excluded dataset is a hard error, never a silent skip."""
+        monkeypatch.setattr(reg, "_REGISTRY", {})
+        register_dataset("opt", _toy_adapter, tags=("real",))
+        register_dataset("gate", _toy_adapter, tags=("real",), tier="holdout")
+        register_dataset("locked", _toy_adapter, tags=("real",), tier="vault")
+
+        def fake_run_pipeline(*args, **kwargs):
+            return _FakeResult({"Fe": 1.0}), {"n_observations": 1, "stage_timings": {}}
+
+        monkeypatch.setattr(sb, "run_pipeline", fake_run_pipeline)
+
+        board = sb.run_scoreboard(atomic_db=None)
+        assert [ds["name"] for ds in board["datasets"]] == ["opt"]
+        assert board["include_holdout"] is False
+        assert board["datasets"][0]["tier"] == "optimization"
+
+        board = sb.run_scoreboard(atomic_db=None, include_holdout=True)
+        assert [ds["name"] for ds in board["datasets"]] == ["opt", "gate"]
+        assert "--include-holdout" in sb.render_markdown(board)
+        assert {ds["name"]: ds["tier"] for ds in board["datasets"]} == {
+            "opt": "optimization",
+            "gate": "holdout",
+        }
+
+        with pytest.raises(ValueError, match="HOLDOUT"):
+            sb.run_scoreboard(atomic_db=None, datasets=["gate"])
+        # Vault never runs — not even with include_holdout.
+        with pytest.raises(ValueError, match="VAULT"):
+            sb.run_scoreboard(atomic_db=None, datasets=["locked"], include_holdout=True)
+        board = sb.run_scoreboard(atomic_db=None, include_holdout=True)
+        assert "locked" not in [ds["name"] for ds in board["datasets"]]
+        # Explicitly requesting holdout WITH the flag is allowed.
+        board = sb.run_scoreboard(atomic_db=None, datasets=["gate"], include_holdout=True)
+        assert [ds["name"] for ds in board["datasets"]] == ["gate"]
 
     def test_skipped_dataset_renders(self, monkeypatch, tmp_path):
         monkeypatch.setattr(reg, "_REGISTRY", {})
