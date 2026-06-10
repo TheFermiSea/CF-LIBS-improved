@@ -33,7 +33,7 @@ from __future__ import annotations
 import csv
 import logging
 from pathlib import Path
-from typing import Dict, Iterator
+from typing import Dict, Iterator, Optional
 
 import numpy as np
 
@@ -80,6 +80,51 @@ def _load_compositions(comp_csv: Path) -> Dict[str, dict]:
     return table
 
 
+def _standard_truth(name: str, sample: Optional[dict]) -> Optional[SpectrumTruth]:
+    """Build one standard's truth; log-and-None when it cannot be scored."""
+    if sample is None:
+        logger.warning(
+            "ChemCam spectrum %r has no composition row in "
+            "ccam_calibration_compositions.csv; skipping its replicates.",
+            name,
+        )
+        return None
+    coverage = sum(sample["oxides"].values())
+    if coverage < MIN_PANEL_COVERAGE_WT:
+        logger.warning(
+            "ChemCam standard %r skipped: certified oxide panel covers "
+            "only %.1f wt%% of sample mass.",
+            name,
+            coverage,
+        )
+        return None
+    element_wt: Dict[str, float] = {}
+    for oxide, wt in sample["oxides"].items():
+        element, factor = _FACTORS[oxide]
+        element_wt[element] = element_wt.get(element, 0.0) + wt * factor
+    notes = (
+        "MSL ChemCam preflight cleanroom calibration spectrum (PDS "
+        "MSL-M-CHEMCAM-LIBS-4/5-RDR-V1.0, MSL_CCAM_LIBS_CALIB.CSV, "
+        f"column {name!r}, target {sample['target']!r}); radiance in "
+        "photons/shot/mm^2/sr/nm at 3 m through 7 Torr CO2 (Wiens et "
+        "al. 2013); composition from CCAM_CALIBRATION_COMPOSITIONS.CSV "
+        "oxide columns SiO2/TiO2/Al2O3/FeOT/MnO/MgO/CaO/Na2O/K2O "
+        f"converted to element wt% (O excluded); certified panel totals "
+        f"{coverage:.1f} wt% -- elements outside the panel (S, P, C, "
+        f"H2O, trace metals) may appear in the spectrum; presence "
+        f"cutoff {PRESENCE_CUTOFF_WT} wt%. Resolving-power hint "
+        "2000 (band FWHM about 0.15/0.20/0.65 nm in UV/VIO/VNIR, "
+        "Wiens et al. 2012); spectra contain real gaps at 341-382 and "
+        "469-473 nm."
+    )
+    return SpectrumTruth(
+        elements_present=presence_set(element_wt),
+        composition_wt={el: round(wt, 6) for el, wt in sorted(element_wt.items())},
+        resolving_power=RESOLVING_POWER_HINT,
+        notes=notes,
+    )
+
+
 def iter_spectra(root: Path) -> Iterator[tuple]:
     """Yield ``SpectrumRecord`` tuples for the ChemCam preflight calibration set."""
     comp_table = _load_compositions(root / "ccam_calibration_compositions.csv")
@@ -90,61 +135,19 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
     data = np.loadtxt(spectra_csv, delimiter=",", skiprows=1)
     wavelength = data[:, 0]
 
-    truths: Dict[str, SpectrumTruth] = {}
-    skipped: set[str] = set()
+    # Pass 1: one truth (or None = skip, logged once) per unique standard.
+    truths: Dict[str, Optional[SpectrumTruth]] = {}
+    for name in column_names:
+        if name not in truths:
+            truths[name] = _standard_truth(name, comp_table.get(name))
+
+    # Pass 2: flat yield loop over the replicate columns, header order.
     occurrence: Dict[str, int] = {}
     for j, name in enumerate(column_names):
         rep = occurrence.get(name, 0)
         occurrence[name] = rep + 1
-        if name in skipped:
-            continue
-        truth = truths.get(name)
+        truth = truths[name]
         if truth is None:
-            sample = comp_table.get(name)
-            if sample is None:
-                logger.warning(
-                    "ChemCam spectrum %r has no composition row in "
-                    "ccam_calibration_compositions.csv; skipping its replicates.",
-                    name,
-                )
-                skipped.add(name)
-                continue
-            coverage = sum(sample["oxides"].values())
-            if coverage < MIN_PANEL_COVERAGE_WT:
-                logger.warning(
-                    "ChemCam standard %r skipped: certified oxide panel covers "
-                    "only %.1f wt%% of sample mass.",
-                    name,
-                    coverage,
-                )
-                skipped.add(name)
-                continue
-            element_wt: Dict[str, float] = {}
-            for oxide, wt in sample["oxides"].items():
-                element, factor = _FACTORS[oxide]
-                element_wt[element] = element_wt.get(element, 0.0) + wt * factor
-            present = presence_set(element_wt)
-            notes = (
-                "MSL ChemCam preflight cleanroom calibration spectrum (PDS "
-                "MSL-M-CHEMCAM-LIBS-4/5-RDR-V1.0, MSL_CCAM_LIBS_CALIB.CSV, "
-                f"column {name!r}, target {sample['target']!r}); radiance in "
-                "photons/shot/mm^2/sr/nm at 3 m through 7 Torr CO2 (Wiens et "
-                "al. 2013); composition from CCAM_CALIBRATION_COMPOSITIONS.CSV "
-                "oxide columns SiO2/TiO2/Al2O3/FeOT/MnO/MgO/CaO/Na2O/K2O "
-                f"converted to element wt% (O excluded); certified panel totals "
-                f"{coverage:.1f} wt% -- elements outside the panel (S, P, C, "
-                f"H2O, trace metals) may appear in the spectrum; presence "
-                f"cutoff {PRESENCE_CUTOFF_WT} wt%. Resolving-power hint "
-                "2000 (band FWHM about 0.15/0.20/0.65 nm in UV/VIO/VNIR, "
-                "Wiens et al. 2012); spectra contain real gaps at 341-382 and "
-                "469-473 nm."
-            )
-            truth = SpectrumTruth(
-                elements_present=present,
-                composition_wt={el: round(wt, 6) for el, wt in sorted(element_wt.items())},
-                resolving_power=RESOLVING_POWER_HINT,
-                notes=notes,
-            )
-            truths[name] = truth
+            continue
         wl, inten = enforce_strictly_increasing(wavelength, data[:, j + 1])
         yield f"chemcam/{name}/{rep}", wl, inten, truth
