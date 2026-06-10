@@ -555,14 +555,17 @@ def _assemble_calibration_result(
         "peak_count": float(peak_wl.size),
         "line_pool_size": float(line_wl.size),
         "candidate_count": float(x.size),
-        # Inlier anchor hull (measured peak wavelengths of the robust inliers).
-        # Consumers use this to gate slope models on anchor *coverage*: a slope
-        # fitted from anchors spanning only part of the axis extrapolates its
-        # dispersion correction past the anchored range (audit bead ye6t: the
-        # ChemCam VNIR affine, anchored at 475-650 nm, was wrong by ~0.2 nm at
-        # 877-905 nm against the Ca II IR triplet).
+        # Inlier anchor positions (measured peak wavelengths of the robust
+        # inliers). Consumers use these to gate slope models on anchor
+        # *coverage*: a slope fitted from anchors spanning only part of the
+        # axis extrapolates its dispersion correction past the anchored range
+        # (audit bead ye6t: the ChemCam VNIR affine, anchored mostly at
+        # 475-650 nm, was wrong by ~0.2 nm at 877-905 nm against the Ca II IR
+        # triplet — and the few red "inliers" were the disputed contaminated
+        # peaks themselves, so a min/max hull cannot detect the gap).
         "inlier_anchor_min_nm": float(np.min(inlier_x)) if inlier_x.size else float("nan"),
         "inlier_anchor_max_nm": float(np.max(inlier_x)) if inlier_x.size else float("nan"),
+        "inlier_anchor_wl_nm": sorted(float(v) for v in inlier_x),
         "selected_model_bic": float(best.bic),
         "quality_gate_enabled": bool(apply_quality_gate),
         "quality_passed": bool(quality_passed),
@@ -904,6 +907,34 @@ def _no_op_result(wavelength: np.ndarray, reason: str) -> WavelengthCalibrationR
     )
 
 
+#: Fraction of inlier anchors that must fit inside the dense anchor hull
+#: (shortest interval). 0.8 tolerates up to 20% stray/circular anchors while
+#: still keying the hull on where the anchors actually concentrate.
+_COVERAGE_DENSE_HULL_ALPHA = 0.8
+
+
+def _dense_anchor_hull(
+    anchors_sorted: np.ndarray, alpha: float = _COVERAGE_DENSE_HULL_ALPHA
+) -> Tuple[float, float]:
+    """Shortest interval containing ``ceil(alpha * n)`` of the sorted anchors.
+
+    A robust anchor hull: the plain min/max hull is stretched arbitrarily by a
+    handful of stray inliers (on ChemCam BHVO-2 the VNIR affine's few red
+    "anchors" are the disputed contaminated peaks themselves, matched
+    circularly), whereas the highest-density interval tracks where the anchor
+    mass actually sits (475-650 nm).
+    """
+    n = int(anchors_sorted.size)
+    if n == 0:
+        return float("nan"), float("nan")
+    k = max(int(np.ceil(alpha * n)), 1)
+    if k >= n:
+        return float(anchors_sorted[0]), float(anchors_sorted[-1])
+    widths = anchors_sorted[k - 1 :] - anchors_sorted[: n - k + 1]
+    i = int(np.argmin(widths))
+    return float(anchors_sorted[i]), float(anchors_sorted[i + k - 1])
+
+
 def _coverage_extrapolation_nm(
     seg_wl: np.ndarray,
     model: CalibrationModel,
@@ -956,6 +987,31 @@ def _segment_fit_trusted(
     )
 
 
+def _segment_anchor_coverage(
+    seg_cal: WavelengthCalibrationResult,
+    seg_wl: np.ndarray,
+) -> Tuple[float, float, float]:
+    """Dense-hull anchor coverage of a segment fit.
+
+    Returns ``(span_fraction, extrapolation_nm, extrapolation_px)``:
+    the dense anchor hull's width as a fraction of the segment span, the
+    implied correction drift from the dense-hull edges to the segment edges,
+    and that drift in local pixels.
+    """
+    anchors = np.asarray(seg_cal.details.get("inlier_anchor_wl_nm", []), dtype=float)
+    hull_lo, hull_hi = _dense_anchor_hull(np.sort(anchors))
+    seg_span = max(float(seg_wl[-1] - seg_wl[0]), 1e-9) if seg_wl.size >= 2 else 1e-9
+    span_fraction = (
+        (hull_hi - hull_lo) / seg_span if np.isfinite(hull_lo) and np.isfinite(hull_hi) else 0.0
+    )
+    extrap_nm = _coverage_extrapolation_nm(
+        seg_wl, seg_cal.model, seg_cal.coefficients, hull_lo, hull_hi
+    )
+    local_px = float(np.median(np.diff(seg_wl))) if seg_wl.size >= 2 else 0.0
+    extrap_px = extrap_nm / max(local_px, 1e-9)
+    return float(span_fraction), float(extrap_nm), float(extrap_px)
+
+
 def _apply_segment_coverage_gate(
     seg_cal: WavelengthCalibrationResult,
     seg_wl: np.ndarray,
@@ -963,6 +1019,7 @@ def _apply_segment_coverage_gate(
     atomic_db: AtomicDatabase,
     elements: Sequence[str],
     *,
+    coverage_min_anchor_span_fraction: float,
     coverage_max_extrapolation_px: float,
     inlier_tolerance_nm: float,
     max_pair_window_nm: float,
@@ -972,25 +1029,25 @@ def _apply_segment_coverage_gate(
     """Degrade a slope model to ``shift`` when its anchors do not cover the segment.
 
     Never extrapolate a dispersion slope past its anchors (audit bead ye6t):
-    the ChemCam VNIR affine, anchored only at 475-650 nm, overcorrected the red
-    end by ~0.2 nm at 877-905 nm, flipping the Al I 877 doublet to the wrong
-    member. When the implied correction drift between the inlier-anchor hull
-    and the segment edge exceeds ``coverage_max_extrapolation_px`` local pixels,
-    the segment is refit with a pure ``shift`` model (constant correction is
-    safe to extend beyond its anchors).
+    the ChemCam VNIR affine, anchored mostly at 475-650 nm, overcorrected the
+    red end by ~0.2 nm at 877-905 nm, flipping the Al I 877 doublet to the
+    wrong member. A slope model is kept only when its *dense* inlier-anchor
+    hull (shortest interval holding 80% of anchors — robust against the
+    handful of circularly-matched stray anchors that stretch a min/max hull)
+    covers at least ``coverage_min_anchor_span_fraction`` of the segment AND
+    the implied correction drift past the hull stays within
+    ``coverage_max_extrapolation_px`` local pixels. Otherwise the segment is
+    refit with a pure ``shift`` model (a constant correction is safe to extend
+    beyond its anchors).
 
     Returns ``(seg_cal, coverage_status, extrapolation_nm)``; ``seg_cal`` is
     the (possibly replaced) calibration whose trust gates the caller re-checks.
     """
-    extrap_nm = _coverage_extrapolation_nm(
-        seg_wl,
-        seg_cal.model,
-        seg_cal.coefficients,
-        float(seg_cal.details.get("inlier_anchor_min_nm", float("nan"))),
-        float(seg_cal.details.get("inlier_anchor_max_nm", float("nan"))),
-    )
-    local_px = float(np.median(np.diff(seg_wl))) if seg_wl.size >= 2 else 0.0
-    if extrap_nm <= coverage_max_extrapolation_px * max(local_px, 1e-9):
+    span_fraction, extrap_nm, extrap_px = _segment_anchor_coverage(seg_cal, seg_wl)
+    if (
+        span_fraction >= coverage_min_anchor_span_fraction
+        and extrap_px <= coverage_max_extrapolation_px
+    ):
         return seg_cal, "passed", extrap_nm
 
     shift_cal = calibrate_wavelength_axis(
@@ -1007,10 +1064,14 @@ def _apply_segment_coverage_gate(
         **calibrate_kwargs,
     )
     logger.info(
-        "Segment coverage gate: %s model extrapolates %.3f nm past its inlier "
-        "anchors (> %.2f px); degraded to shift model.",
+        "Segment coverage gate: %s model anchors cover %.0f%% of the segment "
+        "(min %.0f%%) with %.3f nm (%.2f px) extrapolated correction drift "
+        "past the dense anchor hull (max %.2f px); degraded to shift model.",
         seg_cal.model,
+        100.0 * span_fraction,
+        100.0 * coverage_min_anchor_span_fraction,
         extrap_nm,
+        extrap_px,
         coverage_max_extrapolation_px,
     )
     return shift_cal, "degraded_to_shift", extrap_nm
@@ -1036,6 +1097,7 @@ def _fit_one_segment(
     segment_min_inliers: int,
     segment_max_rmse_nm: float,
     affine_coverage_gate: bool,
+    coverage_min_anchor_span_fraction: float,
     coverage_max_extrapolation_px: float,
     random_seed: int,
     calibrate_kwargs: Dict[str, Any],
@@ -1076,6 +1138,7 @@ def _fit_one_segment(
                 seg_in,
                 atomic_db,
                 elements,
+                coverage_min_anchor_span_fraction=coverage_min_anchor_span_fraction,
                 coverage_max_extrapolation_px=coverage_max_extrapolation_px,
                 inlier_tolerance_nm=inlier_tolerance_nm,
                 max_pair_window_nm=max_pair_window_nm,
@@ -1133,6 +1196,7 @@ def _run_segments(
     segment_min_inliers: int,
     segment_max_rmse_nm: float,
     affine_coverage_gate: bool,
+    coverage_min_anchor_span_fraction: float,
     coverage_max_extrapolation_px: float,
     random_seed: int,
     calibrate_kwargs: Dict[str, Any],
@@ -1164,6 +1228,7 @@ def _run_segments(
             segment_min_inliers=segment_min_inliers,
             segment_max_rmse_nm=segment_max_rmse_nm,
             affine_coverage_gate=affine_coverage_gate,
+            coverage_min_anchor_span_fraction=coverage_min_anchor_span_fraction,
             coverage_max_extrapolation_px=coverage_max_extrapolation_px,
             random_seed=random_seed,
             calibrate_kwargs=calibrate_kwargs,
@@ -1300,6 +1365,7 @@ def calibrate_wavelength_axis_segmented(
     sparse_segment_max_models: Sequence[CalibrationModel] = ("shift",),
     sparse_segment_points: int = 400,
     affine_coverage_gate: bool = True,
+    coverage_min_anchor_span_fraction: float = 0.6,
     coverage_max_extrapolation_px: float = 1.0,
     random_seed: int = 42,
     fallback_to_global: bool = True,
@@ -1353,13 +1419,19 @@ def calibrate_wavelength_axis_segmented(
     affine_coverage_gate : bool
         If True (default), gate each accepted slope-model (``affine``/
         ``quadratic``) segment fit on inlier anchor *coverage*: when the
-        implied correction drift between the inlier-anchor hull and the
-        segment edge exceeds ``coverage_max_extrapolation_px`` local pixels,
-        the segment is refit with a pure ``shift`` model. Never extrapolate a
-        dispersion slope past its anchors (bead ye6t: the ChemCam VNIR affine,
-        anchored at 475-650 nm, was wrong by ~0.2 nm at 877-905 nm).
+        dense anchor hull (shortest interval holding 80% of the inlier
+        anchors) covers less than ``coverage_min_anchor_span_fraction`` of the
+        segment, or the implied correction drift past the hull exceeds
+        ``coverage_max_extrapolation_px`` local pixels, the segment is refit
+        with a pure ``shift`` model. Never extrapolate a dispersion slope past
+        its anchors (bead ye6t: the ChemCam VNIR affine, anchored mostly at
+        475-650 nm, was wrong by ~0.2 nm at 877-905 nm).
+    coverage_min_anchor_span_fraction : float
+        Minimum dense-anchor-hull width as a fraction of the segment span for
+        a slope model to be kept (default 0.6; a uniformly anchored segment
+        measures ~0.8, the defective ChemCam VNIR affine ~0.53).
     coverage_max_extrapolation_px : float
-        Maximum tolerated anchor-hull-to-segment-edge correction drift, in
+        Maximum tolerated dense-hull-to-segment-edge correction drift, in
         local pixels (default 1.0).
     fallback_to_global : bool
         If True, low-confidence segments use the global single-axis fit before
@@ -1429,6 +1501,7 @@ def calibrate_wavelength_axis_segmented(
         segment_min_inliers=segment_min_inliers,
         segment_max_rmse_nm=segment_max_rmse_nm,
         affine_coverage_gate=affine_coverage_gate,
+        coverage_min_anchor_span_fraction=coverage_min_anchor_span_fraction,
         coverage_max_extrapolation_px=coverage_max_extrapolation_px,
         random_seed=random_seed,
         calibrate_kwargs=calibrate_kwargs,
