@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from cflibs.core.logging_config import setup_logging, get_logger
+from cflibs.inversion.physics.self_absorption_observable import normalize_self_absorption_mode
 
 logger = get_logger("cli.main")
 
@@ -121,7 +122,9 @@ class AnalysisPipelineConfig:
     wavelength_tolerance_nm: float = 0.1
     min_peak_height: float = 0.01
     peak_width_nm: float = 0.2
-    apply_self_absorption: bool = False
+    #: Self-absorption mode: ``'off'`` or ``'observable'`` (bead 0jvr).
+    #: Booleans are accepted on input and normalized (True -> 'observable').
+    apply_self_absorption: str = "off"
     exclude_resonance: Optional[bool] = None
     min_snr: float = 10.0
     min_energy_spread_ev: float = 2.0
@@ -134,8 +137,6 @@ class AnalysisPipelineConfig:
     t_tolerance_k: float = 100.0
     ne_tolerance_frac: float = 0.1
     pressure_pa: float = 101325.0
-    self_absorption_column_density_cm3: float = 1.0e16
-    self_absorption_plasma_length_cm: float = 0.1
     boltzmann_weight_cap: float = 5.0
     min_boltzmann_r2: float = 0.3
     saha_boltzmann_graph: bool = True
@@ -160,7 +161,7 @@ def _build_pipeline_config(
     analysis_cfg: Optional[dict] = None,
     saha_boltzmann_graph: Optional[bool] = None,
     closure_mode: Optional[str] = None,
-    apply_self_absorption: Optional[bool] = None,
+    apply_self_absorption: Optional["bool | str"] = None,
     min_relative_intensity: Optional[float] = None,
     resolving_power: Optional[float] = None,
     wavelength_tolerance_nm: Optional[float] = None,
@@ -212,7 +213,7 @@ def _build_pipeline_config(
         ),
         min_peak_height=_first_not_none(min_peak_height, cfg.get("min_peak_height"), 0.01),
         peak_width_nm=_first_not_none(peak_width_nm, cfg.get("peak_width_nm"), 0.2),
-        apply_self_absorption=bool(
+        apply_self_absorption=normalize_self_absorption_mode(
             _first_not_none(apply_self_absorption, cfg.get("apply_self_absorption"), False)
         ),
         exclude_resonance=cfg.get("exclude_resonance"),
@@ -226,8 +227,6 @@ def _build_pipeline_config(
         t_tolerance_k=cfg.get("t_tolerance_k", 100.0),
         ne_tolerance_frac=cfg.get("ne_tolerance_frac", 0.1),
         pressure_pa=cfg.get("pressure_pa", None) or cfg.get("pressure", 101325.0),
-        self_absorption_column_density_cm3=cfg.get("self_absorption_column_density_cm3", 1.0e16),
-        self_absorption_plasma_length_cm=cfg.get("self_absorption_plasma_length_cm", 0.1),
         boltzmann_weight_cap=cfg.get("boltzmann_weight_cap", 5.0),
         min_boltzmann_r2=cfg.get("min_boltzmann_r2", 0.3),
         saha_boltzmann_graph=bool(
@@ -380,7 +379,7 @@ def _detect_and_select_lines(
     wavelength_tolerance_nm: float = 0.1,
     min_peak_height: float = 0.01,
     peak_width_nm: float = 0.2,
-    apply_self_absorption: bool = False,
+    apply_self_absorption: "bool | str" = False,
     exclude_resonance: bool | None = None,
     min_snr: float = 10.0,
     min_energy_spread_ev: float = 2.0,
@@ -663,8 +662,6 @@ def _run_pipeline(
         ne_tolerance_frac=pipeline.ne_tolerance_frac,
         pressure_pa=pipeline.pressure_pa,
         apply_self_absorption=pipeline.apply_self_absorption,
-        self_absorption_column_density_cm3=pipeline.self_absorption_column_density_cm3,
-        self_absorption_plasma_length_cm=pipeline.self_absorption_plasma_length_cm,
         min_boltzmann_r2=pipeline.min_boltzmann_r2,
         boltzmann_weight_cap=pipeline.boltzmann_weight_cap,
         saha_boltzmann_graph=pipeline.saha_boltzmann_graph,
@@ -1453,8 +1450,10 @@ def _add_pipeline_flags(parser) -> None:
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "Apply the curve-of-growth self-absorption correction in the solver "
-            "and retain strong resonance lines (default: off)"
+            "Apply the observable-gated self-absorption correction "
+            "(doublet intensity ratios; SA-suspect resonance lines are "
+            "down-weighted) to the measured line intensities before the "
+            "Boltzmann fit (default: off)"
         ),
     )
 
