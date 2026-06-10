@@ -61,12 +61,9 @@ def _registered_tier_names(tier: str) -> tuple[str, ...]:
     source of truth for holdout/vault membership; this module only derives
     its refusal sets from it.
     """
-    from cflibs.benchmark.adapters_core import register_core_adapters
-    from cflibs.benchmark.adapters_extended import register_extended_adapters
-    from cflibs.benchmark.scoreboard_registry import iter_datasets
+    from cflibs.benchmark.scoreboard_registry import ensure_default_datasets, iter_datasets
 
-    register_core_adapters()
-    register_extended_adapters()
+    ensure_default_datasets()
     return tuple(entry.name for entry in iter_datasets() if entry.tier == tier)
 
 
@@ -109,11 +106,9 @@ def target_key(dataset: str, spectrum_id: str) -> str:
 
 
 def _register_adapters() -> None:
-    from cflibs.benchmark.adapters_core import register_core_adapters
-    from cflibs.benchmark.adapters_extended import register_extended_adapters
+    from cflibs.benchmark.scoreboard_registry import ensure_default_datasets
 
-    register_core_adapters()
-    register_extended_adapters()
+    ensure_default_datasets()
 
 
 def _dataset_ids(name: str) -> list[str]:

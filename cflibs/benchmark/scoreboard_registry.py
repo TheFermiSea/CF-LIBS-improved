@@ -204,3 +204,18 @@ def iter_datasets(
 def registered_names() -> list[str]:
     """Names of all registered datasets, in registration order."""
     return list(_REGISTRY)
+
+
+def ensure_default_datasets() -> None:
+    """Idempotently register the default scoreboard datasets (core + extended).
+
+    The one-call replacement for the register_core_adapters() +
+    register_extended_adapters() ritual every harness entry point used to
+    repeat. Late imports avoid a registry <-> adapters cycle; both
+    registration functions use ``replace=True`` so repeated calls are safe.
+    """
+    from cflibs.benchmark.adapters_core import register_core_adapters
+    from cflibs.benchmark.adapters_extended import register_extended_adapters
+
+    register_core_adapters()
+    register_extended_adapters()

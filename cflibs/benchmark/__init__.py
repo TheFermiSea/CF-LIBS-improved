@@ -65,6 +65,7 @@ _LAZY_ATTRIBUTE_GROUPS = {
     "cflibs.benchmark.scoreboard_registry": [
         "DatasetEntry",
         "SpectrumTruth",
+        "ensure_default_datasets",
         "iter_datasets",
         "register_dataset",
     ],
@@ -75,6 +76,9 @@ _LAZY_ATTRIBUTE_GROUPS = {
     ],
     "cflibs.benchmark.adapters_core": [
         "register_core_adapters",
+    ],
+    "cflibs.benchmark.adapters_extended": [
+        "register_extended_adapters",
     ],
 }
 
@@ -143,9 +147,11 @@ __all__ = [
     # Goal-metric scoreboard (bead A1)
     "DatasetEntry",
     "SpectrumTruth",
+    "ensure_default_datasets",
     "iter_datasets",
     "register_dataset",
     "register_core_adapters",
+    "register_extended_adapters",
     "render_markdown",
     "run_scoreboard",
     "write_artifacts",

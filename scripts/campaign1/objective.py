@@ -104,11 +104,9 @@ _DB_CACHE: dict[str, Any] = {}
 def _ensure_adapters() -> None:
     global _ADAPTERS_REGISTERED
     if not _ADAPTERS_REGISTERED:
-        from cflibs.benchmark.adapters_core import register_core_adapters
-        from cflibs.benchmark.adapters_extended import register_extended_adapters
+        from cflibs.benchmark.scoreboard_registry import ensure_default_datasets
 
-        register_core_adapters()
-        register_extended_adapters()
+        ensure_default_datasets()
         _ADAPTERS_REGISTERED = True
 
 

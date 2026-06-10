@@ -66,7 +66,12 @@ import numpy as np
 
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
-from cflibs.benchmark.scoreboard_registry import SpectrumTruth, iter_datasets
+from cflibs.benchmark.scoreboard_registry import (
+    SpectrumTruth,
+    ensure_default_datasets,
+    iter_datasets,
+    registered_names,
+)
 from cflibs.benchmark.synthetic_eval import compute_binary_metrics
 
 logger = get_logger("benchmark.scoreboard")
@@ -326,6 +331,9 @@ def run_scoreboard(
         config.
     """
     import cflibs
+
+    if not registered_names():  # bare interpreter: load the default board
+        ensure_default_datasets()
 
     board: dict[str, Any] = {
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),

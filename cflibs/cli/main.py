@@ -1012,12 +1012,10 @@ def _min_relative_intensity_arg(value: str):
 def scoreboard_cmd(args):
     """Goal-metric scoreboard: ID accuracy, composition accuracy, runtime."""
     from cflibs.atomic.database import AtomicDatabase
-    from cflibs.benchmark.adapters_core import register_core_adapters
-    from cflibs.benchmark.adapters_extended import register_extended_adapters
     from cflibs.benchmark.scoreboard import run_scoreboard, write_artifacts
+    from cflibs.benchmark.scoreboard_registry import ensure_default_datasets
 
-    register_core_adapters()
-    register_extended_adapters()
+    ensure_default_datasets()
 
     db_path = _resolve_db_path(args.db_path)
     if not db_path.exists():
