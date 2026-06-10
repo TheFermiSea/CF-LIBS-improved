@@ -260,18 +260,37 @@ def _terminate_pool() -> None:
         _POOL = None
 
 
+def _harvest_finished(asyncs: list[tuple[int, Any]], results: dict[int, dict[str, Any]]) -> None:
+    """Sweep finished-but-uncollected pool results before a pool kill (eff#2).
+
+    When one payload hard-times-out, the other pool workers have usually
+    finished several queued payloads already — work that is paid for. Collect
+    every ``ready()`` handle non-blockingly so only truly-unfinished payloads
+    are resubmitted to the fresh pool. A handle whose child *raised* is left
+    pending (the resubmit decides its fate exactly as before).
+    """
+    for j, handle in asyncs:
+        if j in results or not handle.ready():
+            continue
+        try:
+            results[j] = handle.get(timeout=0)
+        except Exception:  # noqa: BLE001 — crashed child: let the resubmit retry it
+            pass
+
+
 def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, Any]]:
     """Score payloads with a HARD per-spectrum timeout.
 
     Two timeout layers (the smoke run caught the gap): the in-child SIGALRM
     interrupts Python-level overruns gracefully at ``per_spectrum_timeout_s``,
-    but it cannot interrupt long GIL-released C/XLA calls (measured:
-    ``use_deconvolution=True`` wedged a worker inside
+    but it cannot interrupt long GIL-released C/XLA calls (measured: a
+    ``use_deconvolution=True`` draw wedged a worker inside
     ``backend_compile_and_load`` indefinitely). So spectra always run in a
     spawn pool and the parent enforces wall deadlines via
-    ``AsyncResult.get(timeout)``; a hard overrun terminates the pool (the only
-    way to kill stuck C code), records a timeout failure, and resubmits the
-    untouched remainder to a fresh pool.
+    ``AsyncResult.get(timeout)``; a hard overrun harvests every finished
+    result, terminates the pool (the only way to kill stuck C code), records
+    a timeout failure, and resubmits the truly-unfinished remainder to a
+    fresh pool.
     """
     if not payloads:
         return []
@@ -297,6 +316,7 @@ def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, A
                 sid, _wl, _inten, truth = payloads[i][:4]
                 results[i] = _timeout_record(sid, truth, hard)
                 results[i]["error"] += " (hard kill: stuck in C/XLA, pool terminated)"
+                _harvest_finished(asyncs[position + 1 :], results)
                 _terminate_pool()
                 timed_out = True
                 break
@@ -304,6 +324,7 @@ def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, A
                 sid, _wl, _inten, truth = payloads[i][:4]
                 results[i] = _timeout_record(sid, truth, hard)
                 results[i]["error"] = f"{type(exc).__name__}: pool child crashed: {exc}"
+                _harvest_finished(asyncs[position + 1 :], results)
                 _terminate_pool()
                 timed_out = True
                 break
