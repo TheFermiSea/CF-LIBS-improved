@@ -146,6 +146,7 @@ VALID_ANALYSIS_KEYS = frozenset(
         "isolation_wavelength_nm",
         "max_lines_per_element",
         "wavelength_calibration",
+        "shift_coherence_veto",
         "max_iterations",
         "t_tolerance_k",
         "ne_tolerance_frac",
