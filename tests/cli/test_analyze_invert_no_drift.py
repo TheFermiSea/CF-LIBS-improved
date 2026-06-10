@@ -98,7 +98,7 @@ def test_helper_exclude_resonance_tied_to_self_absorption():
     """exclude_resonance defaults to (not apply_self_absorption) when None."""
     sig = inspect.signature(_detect_and_select_lines)
     assert sig.parameters["exclude_resonance"].default is None
-    assert sig.parameters["apply_self_absorption"].default is False
+    assert sig.parameters["apply_self_absorption"].default == "off"
 
 
 @pytest.mark.requires_db

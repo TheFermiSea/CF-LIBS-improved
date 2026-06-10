@@ -406,6 +406,62 @@ not measured), the degeneracy gates (`boltzmann_degenerate`,
 `closure_degenerate`), and any requested elements that were dropped before
 the fit, with the dropping stage (`detection`, `selection` or `solve`).
 
+### Spectral-Response Correction (`--response-curve`)
+
+CF-LIBS compares line intensities across wide wavelength spans, so the
+wavelength-dependent detection efficiency E(λ) of the collection optics +
+spectrometer + detector chain enters the Boltzmann intercepts directly
+(Δq = ln E) and biases both temperature and concentrations. Correcting the
+measured spectrum for E(λ) is an experimental prerequisite of the method
+(Tognoni et al., *Spectrochim. Acta B* 65 (2010) 1–14).
+
+**When you need it:** any spectrometer whose data are *not* already
+radiometrically calibrated upstream — e.g. an in-house instrument calibrated
+with a deuterium/halogen lamp. **When you must not use it:** ChemCam/SuperCam
+CCS spectra arrive response-corrected from the mission pipeline; applying a
+curve there would corrupt them. The default is therefore *no correction*
+(identity) — flagless behaviour is bit-identical to previous releases.
+
+```bash
+cflibs analyze spectrum.csv --elements Fe,Cu --response-curve lamp_response.csv
+```
+
+or in YAML (path resolved relative to the config file):
+
+```yaml
+analysis:
+  response_curve: lamp_response.csv
+```
+
+File format — the same `(wavelength_nm, relative_efficiency)` representation
+the forward model uses (`instrument.response_curve`), either CSV:
+
+```csv
+wavelength_nm,relative_efficiency
+250.0,0.31
+300.0,0.55
+...
+850.0,0.42
+```
+
+or YAML (`wavelength_nm:` and `relative_efficiency:` lists). Comments (`#`)
+and a header row are tolerated. Only the **relative** shape matters: the
+curve is normalized to max = 1 on load, and the CF-LIBS closure cancels any
+absolute scale — an absolutely-calibrated irradiance curve works unchanged.
+
+The measured intensities are divided by the interpolated E(λ) *before* line
+detection and observation building, so integrated line intensities and their
+uncertainties are both response-corrected. Validation: a curve that does not
+cover the spectrum's wavelength range is a hard error (the message lists the
+curve coverage vs the spectrum range); up to 5 nm of edge extrapolation is
+allowed with a warning (edge value held).
+
+A lamp-free alternative — internal calibration from argon branching ratios
+(*J. Anal. At. Spectrom.* 29 (2014) 657–664, DOI 10.1039/C3JA50371B) — has a
+designed API surface
+(`cflibs.inversion.preprocess.derive_response_from_argon_branching_ratios`)
+but is not yet implemented.
+
 ### Inversion Configuration
 
 Inversion settings live under the `analysis` section. Unknown keys are a
@@ -437,6 +493,7 @@ analysis:
   # min_boltzmann_r2: 0.3
   # top_k_per_element: 60
   # wavelength_calibration: true
+  # response_curve: lamp_response.csv   # spectral-response E(lambda) correction (see above)
   # closure_kwargs:
   #   matrix_element: Fe
   #   oxide_elements: ["Si", "Al", "Ca"]

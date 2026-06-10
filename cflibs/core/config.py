@@ -146,13 +146,13 @@ VALID_ANALYSIS_KEYS = frozenset(
         "isolation_wavelength_nm",
         "max_lines_per_element",
         "wavelength_calibration",
+        "shift_coherence_veto",
+        "response_curve",
         "max_iterations",
         "t_tolerance_k",
         "ne_tolerance_frac",
         "pressure_pa",
         "pressure",
-        "self_absorption_column_density_cm3",
-        "self_absorption_plasma_length_cm",
         "boltzmann_weight_cap",
         "min_boltzmann_r2",
         "saha_boltzmann_graph",
@@ -160,6 +160,7 @@ VALID_ANALYSIS_KEYS = frozenset(
         "closure_kwargs",
         "matrix_element",
         "oxide_elements",
+        "stark_ne",
     }
 )
 

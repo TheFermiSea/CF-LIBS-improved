@@ -52,17 +52,34 @@ class TestPresetResolution:
         assert cfg.top_k_per_element == 60
         assert cfg.min_relative_intensity is None
         assert cfg.exclude_resonance is None  # helper resolves None -> keep
-        assert cfg.apply_self_absorption is False
+        assert cfg.apply_self_absorption == "off"
+        # n_e is MEASURED from Stark widths by default (bead pxex / audit
+        # 02-F2); the pressure-balance fallback only fires when no
+        # literature-grade line qualifies.
+        assert cfg.stark_ne is True
 
     def test_metallic_preset(self):
         cfg = _build_pipeline_config(["Fe", "Cr"], preset="metallic")
         assert cfg.saha_boltzmann_graph is True
         assert cfg.closure_mode == "standard"
+        assert cfg.stark_ne is True
 
     def test_raw_preset_is_legacy_defaults(self):
         cfg = _build_pipeline_config(["Fe"], preset="raw")
         assert cfg.saha_boltzmann_graph is False
         assert cfg.closure_mode == "standard"
+        assert cfg.stark_ne is False
+
+    def test_stark_ne_flag_and_yaml_resolution(self):
+        # Explicit flag beats the preset default...
+        cfg = _build_pipeline_config(["Fe"], preset="geological", stark_ne=False)
+        assert cfg.stark_ne is False
+        # ...the YAML key beats the preset...
+        cfg = _build_pipeline_config(["Fe"], analysis_cfg={"stark_ne": False})
+        assert cfg.stark_ne is False
+        # ...and the flag beats the YAML key.
+        cfg = _build_pipeline_config(["Fe"], analysis_cfg={"stark_ne": False}, stark_ne=True)
+        assert cfg.stark_ne is True
 
     def test_explicit_flags_override_preset(self):
         cfg = _build_pipeline_config(
@@ -100,6 +117,7 @@ class TestPresetResolution:
         assert ANALYSIS_PRESETS["geological"] == {
             "saha_boltzmann_graph": True,
             "closure_mode": "oxide",
+            "stark_ne": True,
         }
 
     def test_analyze_parser_exposes_preset_flag(self):
@@ -285,8 +303,6 @@ class TestAnalysisConfigValidation:
             "ne_tolerance_frac",
             "pressure_pa",
             "pressure",
-            "self_absorption_column_density_cm3",
-            "self_absorption_plasma_length_cm",
             "boltzmann_weight_cap",
             "min_boltzmann_r2",
             "saha_boltzmann_graph",
@@ -294,6 +310,7 @@ class TestAnalysisConfigValidation:
             "closure_kwargs",
             "matrix_element",
             "oxide_elements",
+            "stark_ne",
         }
         assert builder_keys <= VALID_ANALYSIS_KEYS
 

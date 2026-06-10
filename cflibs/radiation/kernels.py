@@ -51,11 +51,13 @@ from cflibs.core.constants import (
     EV_TO_K,
     H_PLANCK,
     KB,
+    KB_EV,
     M_PROTON,
     SAHA_CONST_CM3,
 )
 from cflibs.core.jax_runtime import HAS_JAX, jnp
 from cflibs.core.logging_config import get_logger
+from cflibs.plasma.partition import ionization_potential_depression_jax
 from cflibs.radiation.profiles import BroadeningMode
 from cflibs.radiation.stark import REF_NE as _STARK_REF_NE
 
@@ -164,7 +166,8 @@ def _species_mass_array(snapshot: "AtomicSnapshot") -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# Saha-Boltzmann populations (snapshot-based, two-stage I/II)
+# Saha-Boltzmann populations (snapshot-based, three-stage I/II/III with
+# Debye-Hückel ionization-potential depression — audit 01-F4, bead rs7e)
 # ---------------------------------------------------------------------------
 
 
@@ -255,24 +258,20 @@ def _saha_species_index_maps(species_list):
     )
 
 
-def _saha_partition_functions(snapshot, T_K, dtype):
-    """Per-species partition functions ``U`` (traced), floored at 1e-30.
+def _guarded_polynomial_u(coeffs, t_min, t_max, g0, T_K, dtype):
+    """Guarded per-species polynomial U(T) (traced), floored at 1e-30.
 
     Per-species bounds + g0 routed through the encapsulated provider
     (arch candidate 4).  Older snapshots produced before the candidate-4
-    rollout leave these fields as ``None`` — fall back to the legacy
+    rollout leave the bounds fields as ``None`` — fall back to the legacy
     unclamped evaluation so we don't break callers that build their
     own snapshots without the bounds arrays.
     """
-    pf_all = jnp.asarray(snapshot.partition_coeffs, dtype=dtype)
-    if snapshot.partition_t_min is not None and snapshot.partition_t_max is not None:
-        tmin_arr = jnp.asarray(snapshot.partition_t_min, dtype=dtype)
-        tmax_arr = jnp.asarray(snapshot.partition_t_max, dtype=dtype)
-        g0_arr = (
-            jnp.asarray(snapshot.partition_g0, dtype=dtype)
-            if snapshot.partition_g0 is not None
-            else None
-        )
+    pf_all = jnp.asarray(coeffs, dtype=dtype)
+    if t_min is not None and t_max is not None:
+        tmin_arr = jnp.asarray(t_min, dtype=dtype)
+        tmax_arr = jnp.asarray(t_max, dtype=dtype)
+        g0_arr = jnp.asarray(g0, dtype=dtype) if g0 is not None else None
         return jnp.maximum(
             _polynomial_partition_function_jax(T_K, pf_all, tmin_arr, tmax_arr, g0_arr),
             1e-30,
@@ -280,8 +279,206 @@ def _saha_partition_functions(snapshot, T_K, dtype):
     return jnp.maximum(_polynomial_partition_function_jax(T_K, pf_all), 1e-30)
 
 
-def _saha_two_stage_populations(plasma_state, snapshot, total_species_density_cm3=None):
-    """Two-stage (I, II) Saha-Boltzmann populations per snapshot line.
+def _saha_partition_functions(snapshot, T_K, dtype):
+    """Per-species (stage I/II rows) partition functions ``U`` (traced)."""
+    return _guarded_polynomial_u(
+        snapshot.partition_coeffs,
+        snapshot.partition_t_min,
+        snapshot.partition_t_max,
+        snapshot.partition_g0,
+        T_K,
+        dtype,
+    )
+
+
+def _directsum_partition_functions(snapshot, T_K, n_e, U_poly, dtype):
+    """Exact IPD-truncated direct-sum U for direct-sum-flagged species.
+
+    Mirrors :meth:`DirectSumPartitionFunctionProvider.at(T_K, n_e)` — the CPU
+    scalar adapter — species-row by species-row:
+
+    1. clamp ``T`` into the spec's ``[t_min, t_max]`` window,
+    2. compute the Debye-Hückel ``Δχ(n_e, T_clamped)``,
+    3. sum ``g · exp(-E / kT)`` over levels with ``E < ip - Δχ``,
+    4. floor at ``max(1, g0)``.
+
+    Only species whose CPU adapter direct-sums their levels
+    (``snapshot.partition_from_direct_sum == 1``) are replaced; the rest keep
+    the guarded polynomial ``U_poly``.  Returns ``U_poly`` unchanged when the
+    snapshot lacks level arrays (built without ``include_levels=True``) or the
+    flag array (pre-rs7e snapshots).  This is what closes the kernel-vs-CPU
+    ionization-fraction gap at n_e = 1e18 cm^-3, where Δχ ≈ 0.2 eV truncates
+    enough high-lying Rydberg population that the static polynomial fit (no
+    n_e dependence) drifts >1 % for alkali/alkaline-earth neutrals.
+    """
+    if (
+        snapshot.partition_from_direct_sum is None
+        or snapshot.level_g is None
+        or snapshot.level_E_ev is None
+        or snapshot.level_mask is None
+        or snapshot.partition_t_min is None
+        or snapshot.partition_t_max is None
+    ):
+        return U_poly
+    g = jnp.asarray(snapshot.level_g, dtype=dtype)  # (N_sp, L)
+    E = jnp.asarray(snapshot.level_E_ev, dtype=dtype)  # (N_sp, L)
+    pad_mask = jnp.asarray(snapshot.level_mask).astype(dtype)  # (N_sp, L)
+    ip = jnp.asarray(snapshot.ionization_potential_ev, dtype=dtype)  # (N_sp,)
+    t_min = jnp.asarray(snapshot.partition_t_min, dtype=dtype)
+    t_max = jnp.asarray(snapshot.partition_t_max, dtype=dtype)
+    g0 = (
+        jnp.asarray(snapshot.partition_g0, dtype=dtype)
+        if snapshot.partition_g0 is not None
+        else jnp.ones_like(ip)
+    )
+    T_c = jnp.clip(T_K, t_min, t_max)  # (N_sp,) per-species clamp
+    delta_chi = ionization_potential_depression_jax(n_e, T_c)  # (N_sp,)
+    e_max = ip - delta_chi
+    kT_ev = jnp.maximum(KB_EV * T_c, 1e-30)  # (N_sp,)
+    include = pad_mask * (E < e_max[:, None]).astype(dtype)
+    U_ds = jnp.sum(g * jnp.exp(-E / kT_ev[:, None]) * include, axis=1)
+    # direct_sum_partition_function floors at 1.0; the provider then floors
+    # at g0 (its empty-mask sentinel max(g_levels[0], 1) == max(g0, 1)).
+    U_ds = jnp.maximum(jnp.maximum(U_ds, 1.0), g0)
+    flag = jnp.asarray(snapshot.partition_from_direct_sum).astype(dtype)
+    return jnp.where(flag > 0.5, U_ds, U_poly)
+
+
+def _saha_stage_quantities(snapshot, T_eV, n_e, dtype):
+    """Traced per-element stage fractions + per-species U for the snapshot Saha.
+
+    Implements the three-stage Saha system with Debye-Hückel
+    ionization-potential depression, mirroring
+    :meth:`SahaBoltzmannSolver.solve_ionization_balance` (audit 01-F4)::
+
+        S1 = (C/n_e) T^1.5 (U_II / U_I)  exp(-(ip_I  - Δχ)/kT)
+        S2 = (C/n_e) T^1.5 (U_III/U_II) exp(-(ip_II - Δχ)/kT)
+        f_I = 1/(1 + S1 + S1·S2),  f_II = S1·f_I,  f_III = S2·f_II
+
+    Returns
+    -------
+    tuple
+        ``(elements_in_snapshot, species_to_element_idx, stage_per_species,
+        U_per_species, frac_I, frac_II, frac_III, delta_chi)`` where the
+        fraction arrays have shape ``(N_elements,)``, ``U_per_species`` has
+        shape ``(N_species,)`` and ``delta_chi`` is the traced scalar Δχ(eV)
+        evaluated at the *unclamped* ``T`` (the CPU Saha-exponent convention;
+        the per-species U truncation inside
+        :func:`_directsum_partition_functions` uses the spec-clamped ``T``,
+        also matching the CPU provider).
+    """
+    T_K = T_eV * EV_TO_K
+    species_list = snapshot.species
+
+    # ---- Host-side index maps (static) ----
+    (
+        elements_in_snapshot,
+        species_to_element_idx,
+        sp_idx_I,
+        sp_idx_II,
+        stage_per_species,
+    ) = _saha_species_index_maps(species_list)
+
+    # ---- Partition functions for every species row (traced) ----
+    ip_all = jnp.asarray(snapshot.ionization_potential_ev, dtype=dtype)
+    U_per_species = _saha_partition_functions(snapshot, T_K, dtype)
+    # Exact IPD-truncated direct sum where the CPU adapter direct-sums
+    # (no-op for snapshots without level arrays / the from_direct_sum flag).
+    U_per_species = _directsum_partition_functions(snapshot, T_K, n_e, U_per_species, dtype)
+
+    # ---- Debye-Hückel IPD (one traced scalar; audit 01-F4) ----
+    delta_chi = ionization_potential_depression_jax(n_e, T_K)
+
+    # Gather stage-I / stage-II values per element. For missing-stage
+    # elements (sentinel -1) we fall back to species 0 then zero out the
+    # ratio via a mask.
+    valid_I_mask = jnp.asarray(sp_idx_I >= 0, dtype=dtype)
+    valid_II_mask = jnp.asarray(sp_idx_II >= 0, dtype=dtype)
+    safe_I = jnp.where(jnp.asarray(sp_idx_I) >= 0, jnp.asarray(sp_idx_I), 0)
+    safe_II = jnp.where(jnp.asarray(sp_idx_II) >= 0, jnp.asarray(sp_idx_II), 0)
+    U_I = U_per_species[safe_I]
+    U_II = U_per_species[safe_II]
+    # Δχ-lowered ionization edges (CPU: ``eff_ip = max(ip - Δχ, 0)``).
+    eff_ip_I = jnp.maximum(ip_all[safe_I] - delta_chi, 0.0) * valid_I_mask
+    eff_ip_II = jnp.maximum(ip_all[safe_II] - delta_chi, 0.0) * valid_II_mask
+
+    safe_T = jnp.maximum(T_eV, 1e-10)
+    saha_factor = (SAHA_CONST_CM3 / jnp.maximum(n_e, 1.0)) * (T_eV**1.5)
+    S1 = saha_factor * (U_II / U_I) * jnp.exp(-eff_ip_I / safe_T) * valid_I_mask * valid_II_mask
+
+    # ---- Stage III (doubly-ionized): S2 = n_III / n_II ----
+    if snapshot.partition_coeffs_iii is not None:
+        U_III_per_species = _guarded_polynomial_u(
+            snapshot.partition_coeffs_iii,
+            snapshot.partition_t_min_iii,
+            snapshot.partition_t_max_iii,
+            snapshot.partition_g0_iii,
+            T_K,
+            dtype,
+        )
+        # The stage-III spec is duplicated on every species row of the same
+        # element, so the stage-II row's index gathers it per element.
+        U_III = U_III_per_species[safe_II]
+        S2 = saha_factor * (U_III / U_II) * jnp.exp(-eff_ip_II / safe_T) * valid_II_mask
+    else:
+        # Pre-rs7e snapshot without stage-III arrays: two-stage balance.
+        S2 = jnp.zeros_like(S1)
+
+    denom = 1.0 + S1 + S1 * S2
+    frac_I = 1.0 / denom
+    frac_II = S1 / denom
+    frac_III = S1 * S2 / denom
+
+    return (
+        elements_in_snapshot,
+        species_to_element_idx,
+        stage_per_species,
+        U_per_species,
+        frac_I,
+        frac_II,
+        frac_III,
+        delta_chi,
+    )
+
+
+def snapshot_ionization_fractions(plasma_state, snapshot):
+    """Per-element ionization-stage fractions from the snapshot Saha system.
+
+    Host-callable diagnostic / parity surface for the kernel's three-stage
+    Saha block (bead CF-LIBS-improved-rs7e): the returned fractions must
+    match :meth:`SahaBoltzmannSolver.get_ionization_fractions` to <1 % over
+    the LIBS band (T 0.5-1.3 eV, n_e 1e16-1e18 cm^-3) when the snapshot is
+    built with ``include_levels=True``.
+
+    Parameters
+    ----------
+    plasma_state : SingleZoneLTEPlasma
+        Plasma state; only ``T_e_eV`` and ``n_e`` are consulted.
+    snapshot : AtomicSnapshot
+        Frozen atomic snapshot.
+
+    Returns
+    -------
+    dict[str, dict[int, float]]
+        ``{element: {1: f_I, 2: f_II, 3: f_III}}``.
+    """
+    T_eV = jnp.asarray(plasma_state.T_e_eV)
+    n_e = jnp.asarray(plasma_state.n_e)
+    dtype = T_eV.dtype if hasattr(T_eV, "dtype") else jnp.float64
+    elements_in_snapshot, _, _, _, frac_I, frac_II, frac_III, _ = _saha_stage_quantities(
+        snapshot, T_eV, n_e, dtype
+    )
+    f1 = np.asarray(frac_I)
+    f2 = np.asarray(frac_II)
+    f3 = np.asarray(frac_III)
+    return {
+        el: {1: float(f1[i]), 2: float(f2[i]), 3: float(f3[i])}
+        for i, el in enumerate(elements_in_snapshot)
+    }
+
+
+def _saha_three_stage_populations(plasma_state, snapshot, total_species_density_cm3=None):
+    """Three-stage (I, II, III) Saha-Boltzmann populations per snapshot line.
 
     Parameters
     ----------
@@ -303,32 +500,36 @@ def _saha_two_stage_populations(plasma_state, snapshot, total_species_density_cm
 
     Notes
     -----
-    Mirrors :meth:`BayesianForwardModel._compute_spectrum`'s Saha-Boltzmann
-    block. Treats every species as I or II only (``stage in {1, 2}``); higher
-    stages contribute negligibly to LIBS at ``T_e <= 2 eV``. Per-element
-    concentrations are derived from ``plasma_state.species`` densities --
-    we keep the values as jnp scalars so the function stays vmap-clean.
+    Pre-rs7e this block was two-stage with the *raw* ionization potential
+    (audit 01-F4): the missing Δχ made the kernel's ion/neutral ratio ~9 %
+    lower than the CPU/inversion convention at 0.8 eV / 1e17 cm^-3, and the
+    missing stage III re-assigned the doubly-ionized population to stage II
+    (Ca II inflated ×2.9 at the 1.3 eV manifold edge).  It now solves the
+    same Δχ-lowered three-stage system as
+    :meth:`SahaBoltzmannSolver.solve_ionization_balance`, and zeroes lines
+    whose upper level lies above the Δχ-lowered ionization potential (the
+    CPU ``max_energy_ev`` cutoff — levels merged into the continuum).
+    Per-element concentrations are derived from ``plasma_state.species``
+    densities; values stay jnp scalars so the function is vmap-clean.
     """
     T_eV = jnp.asarray(plasma_state.T_e_eV)
     n_e = jnp.asarray(plasma_state.n_e)
-    T_K = T_eV * EV_TO_K
-
-    species_list = snapshot.species
-
-    # ---- Host-side index maps (static) ----
-    (
-        elements_in_snapshot,
-        species_to_element_idx,
-        sp_idx_I,
-        sp_idx_II,
-        stage_per_species,
-    ) = _saha_species_index_maps(species_list)
-    n_elements = len(elements_in_snapshot)
 
     # ---- Per-element density and concentration (traced under vmap) ----
     # Pull each element's density as a jnp scalar via ``species[el]``; this
     # follows the pytree -> dict mapping registered for SingleZoneLTEPlasma.
     dtype = T_eV.dtype if hasattr(T_eV, "dtype") else jnp.float64
+    (
+        elements_in_snapshot,
+        species_to_element_idx,
+        stage_per_species,
+        U_per_species,
+        frac_I,
+        frac_II,
+        _frac_III,
+        delta_chi,
+    ) = _saha_stage_quantities(snapshot, T_eV, n_e, dtype)
+    n_elements = len(elements_in_snapshot)
     if n_elements == 0:
         # Empty snapshot: nothing to compute.
         return jnp.zeros_like(jnp.asarray(snapshot.line_wavelengths_nm))
@@ -339,32 +540,6 @@ def _saha_two_stage_populations(plasma_state, snapshot, total_species_density_cm
     concentrations = jnp.where(
         sum_density > 0.0, densities / jnp.maximum(sum_density, 1e-300), jnp.zeros_like(densities)
     )
-
-    # ---- Partition functions for every species row (traced) ----
-    ip_all = jnp.asarray(snapshot.ionization_potential_ev, dtype=dtype)
-    U_per_species = _saha_partition_functions(snapshot, T_K, dtype)
-
-    # Gather stage-I / stage-II values per element. For missing-stage
-    # elements (sentinel -1) we fall back to species 0 then zero out the
-    # ratio via a mask.
-    valid_I_mask = jnp.asarray(sp_idx_I >= 0, dtype=dtype)
-    valid_II_mask = jnp.asarray(sp_idx_II >= 0, dtype=dtype)
-    safe_I = jnp.where(jnp.asarray(sp_idx_I) >= 0, jnp.asarray(sp_idx_I), 0)
-    safe_II = jnp.where(jnp.asarray(sp_idx_II) >= 0, jnp.asarray(sp_idx_II), 0)
-    U_I = U_per_species[safe_I]
-    U_II = U_per_species[safe_II]
-    ip_I = ip_all[safe_I] * valid_I_mask
-
-    saha_factor = (SAHA_CONST_CM3 / jnp.maximum(n_e, 1.0)) * (T_eV**1.5)
-    ratio = (
-        saha_factor
-        * (U_II / U_I)
-        * jnp.exp(-ip_I / jnp.maximum(T_eV, 1e-10))
-        * valid_I_mask
-        * valid_II_mask
-    )
-    frac_I = 1.0 / (1.0 + ratio)
-    frac_II = ratio / (1.0 + ratio)
 
     # ---- Per-line populations ----
     line_species_index = jnp.asarray(snapshot.line_species_index, dtype=jnp.int32)
@@ -388,7 +563,21 @@ def _saha_two_stage_populations(plasma_state, snapshot, total_species_density_cm
     else:
         N_total = jnp.asarray(total_species_density_cm3)
     boltz = (line_g_k / U_line) * jnp.exp(-line_E_k_ev / jnp.maximum(T_eV, 1e-10))
-    return C_per_line * N_total * pop_fraction * boltz
+
+    # ---- IPD level cutoff (CPU parity: solve_level_population) ----
+    # Levels above the Δχ-lowered ionization potential of the line's own
+    # species have merged into the continuum and carry zero population.
+    ip_line = jnp.asarray(snapshot.ionization_potential_ev, dtype=dtype)[line_species_index]
+    line_cutoff_ev = jnp.maximum(ip_line - delta_chi, 0.0)
+    level_bound = (line_E_k_ev <= line_cutoff_ev).astype(dtype)
+
+    return C_per_line * N_total * pop_fraction * boltz * level_bound
+
+
+# Back-compat alias: the pre-rs7e name. External callers (none in-tree) that
+# imported the private two-stage symbol keep working; the physics is now the
+# three-stage + IPD system documented above.
+_saha_two_stage_populations = _saha_three_stage_populations
 
 
 # ---------------------------------------------------------------------------
@@ -730,7 +919,7 @@ def forward_model(
 
     # ---- Populations (snapshot path) or injected (legacy parity path) ----
     if _precomputed_n_upper_per_line is None:
-        n_upper = _saha_two_stage_populations(
+        n_upper = _saha_three_stage_populations(
             plasma_state, atomic_snapshot, total_species_density_cm3
         )
     else:
@@ -1214,7 +1403,9 @@ def forward_model_chunked(
     # wall-time tax that the previous implementation paid per chunk
     # iteration. The scan body now only multiplies in the chunk mask and
     # dispatches the broadening kernel against the chunk's wavelengths.
-    n_upper = _saha_two_stage_populations(plasma_state, atomic_snapshot, total_species_density_cm3)
+    n_upper = _saha_three_stage_populations(
+        plasma_state, atomic_snapshot, total_species_density_cm3
+    )
     line_wl_nm = jnp.asarray(atomic_snapshot.line_wavelengths_nm)
     line_A_ki = jnp.asarray(atomic_snapshot.line_A_ki)
     n_upper_m3 = n_upper * 1.0e6

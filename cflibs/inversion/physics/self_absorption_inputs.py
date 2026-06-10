@@ -1,48 +1,32 @@
-"""Derive the inputs to the self-absorption corrector in ONE place.
+"""Shared physics-input derivations for self-absorption analysis.
 
-:class:`~cflibs.inversion.physics.self_absorption.SelfAbsorptionCorrector.correct`
-needs four physics-derived inputs that are NOT carried directly on a
-:class:`~cflibs.inversion.physics.boltzmann.LineObservation`:
+Two canonical helpers used by the solver and the observable-gated
+self-absorption corrector:
 
-* ``lower_level_energies`` — the absorbing-level energy ``E_i`` per line, which
-  the curve-of-growth optical-depth estimate Boltzmann-weights. ``E_i`` is
-  recovered exactly from energy conservation, ``E_i = E_k - hc/λ`` (a
-  ``LineObservation`` carries only the *upper*-level ``E_k`` and the
-  wavelength). Defaulting every line to the ground state (0 eV) would make
-  every line look like a maximally self-absorbed resonance line.
-* ``partition_funcs`` — the stage-I partition function ``U(T)`` per element,
-  sourced from the atomic database through the single
-  :meth:`AtomicDatabase.partition_function_for` policy (direct-sum preferred,
-  always clamped + ``g0``-floored), with the canonical fallback ladder for
-  species the factory cannot resolve.
-* ``concentrations`` and ``total_number_density_cm3`` — pass-throughs that the
-  caller already holds (the previous iteration's number fractions and the
-  configurable absorbing column density), carried here so a single object
-  splats straight into ``correct()``.
+* :func:`lower_level_energy_ev` — the absorbing-level energy ``E_i`` per
+  line, recovered exactly from energy conservation ``E_i = E_k - hc/λ``
+  (a :class:`~cflibs.inversion.physics.boltzmann.LineObservation` carries
+  only the *upper*-level ``E_k`` and the wavelength). Defaulting every line
+  to the ground state (0 eV) would make every line look like a maximally
+  self-absorbed resonance line.
+* :func:`evaluate_partition_function` — the partition function ``U(T)``
+  per species, sourced from the atomic database through the single
+  :meth:`AtomicDatabase.partition_function_for` policy (direct-sum
+  preferred, always clamped + ``g0``-floored), with the canonical fallback
+  ladder for species the factory cannot resolve.
 
-Before this module existed, three call sites derived these inputs
-independently and drifted apart:
-
-* the shipped solver (``IterativeCFLIBSSolver``) derived ``E_i`` exactly and
-  used the full partition fallback ladder — the *correct* derivation;
-* ``scripts/run_experiments.py`` omitted ``lower_level_energies`` entirely, so
-  every ``E_i`` collapsed to ~0 eV (a defect), and passed an EMPTY
-  ``partition_funcs``;
-* ``scripts/run_accuracy_ablation.py`` looked ``E_i`` up via a fuzzy
-  ±0.05 nm database query and used a non-canonical ``U(T)`` fallback of 1.0.
-
-This module turns that leaky, duplicated seam into a DEEP module: callers
-hand it the plasma state and an atomic database and receive a single
-:class:`SelfAbsorptionInputs` ready to correct with. The shipped solver's
-derivation helpers were moved here VERBATIM (``lower_level_energy_ev`` and
-``evaluate_partition_function``), and the solver now calls back into them, so
-the solver's self-absorption path stays byte-identical.
+Historical note: this module also packaged the plasma-state inputs for the
+composition-fed ``SelfAbsorptionCorrector.correct()``
+(``SelfAbsorptionInputs`` / ``build_self_absorption_inputs``). That
+correction path was a positive feedback loop on the recovered composition
+(audit 2026-06-09, 02-inversion-solver.md F4) and was deleted in bead
+CF-LIBS-improved-0jvr together with its input builder; the production
+correction is now
+:class:`cflibs.inversion.physics.self_absorption_observable.ObservableSelfAbsorptionCorrector`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, List, Sequence
 
 from cflibs.core.constants import C_LIGHT, H_PLANCK_EV
 from cflibs.inversion.physics.boltzmann import LineObservation
@@ -124,127 +108,7 @@ def evaluate_partition_function(
     return canonical_partition_fallback(element, ionization_stage, atomic_db)
 
 
-@dataclass(frozen=True)
-class SelfAbsorptionInputs:
-    """Physics-derived inputs to :meth:`SelfAbsorptionCorrector.correct`.
-
-    A single object carrying everything ``correct()`` needs that is not
-    already on the :class:`LineObservation` list. Splat it with::
-
-        result = corrector.correct(observations, **inputs.as_correct_kwargs())
-
-    Attributes
-    ----------
-    temperature_K : float
-        Excitation temperature used for the Boltzmann weighting of the
-        lower-level population in the optical-depth estimate.
-    concentrations : Dict[str, float]
-        Per-element fractions (number or mass) modulating ``tau``. A flat
-        prior is the only unbiased choice when no composition is known yet.
-    total_number_density_cm3 : float
-        Absorbing heavy-particle column reference (``n_heavy``). The shipped
-        solver anchors this to a LIBS-realistic ``1e16`` rather than the STP
-        ``n_e`` (~``1e18``), which would saturate every strong major line.
-    partition_funcs : Dict[str, float]
-        Stage-I partition function ``U(T)`` per element, from
-        :func:`evaluate_partition_function`.
-    lower_level_energies : Dict[float, float]
-        Absorbing-level energy ``E_i`` (eV) keyed by wavelength (nm), from
-        :func:`lower_level_energy_ev`.
-    """
-
-    temperature_K: float
-    concentrations: Dict[str, float]
-    total_number_density_cm3: float
-    partition_funcs: Dict[str, float]
-    lower_level_energies: Dict[float, float]
-
-    def as_correct_kwargs(self) -> Dict[str, object]:
-        """Return the keyword arguments to splat into ``correct()``."""
-        return {
-            "temperature_K": self.temperature_K,
-            "concentrations": self.concentrations,
-            "total_number_density_cm3": self.total_number_density_cm3,
-            "partition_funcs": self.partition_funcs,
-            "lower_level_energies": self.lower_level_energies,
-        }
-
-
-def build_self_absorption_inputs(
-    observations: Sequence[LineObservation],
-    *,
-    temperature_K: float,
-    concentrations: Dict[str, float],
-    total_number_density_cm3: float,
-    atomic_db,
-    ionization_stage: int = 1,
-) -> SelfAbsorptionInputs:
-    """Derive every self-absorption input from the plasma state in ONE place.
-
-    Computes the exact lower-level energy ``E_i`` for each observation
-    (:func:`lower_level_energy_ev`) and the stage-``ionization_stage``
-    partition function ``U(T)`` for each distinct element
-    (:func:`evaluate_partition_function`), then packages them with the
-    caller-supplied pass-throughs into a :class:`SelfAbsorptionInputs`.
-
-    Parameters
-    ----------
-    observations : sequence of LineObservation
-        Emission lines whose intensities will be corrected. Their
-        ``wavelength_nm`` / ``E_k_ev`` give ``E_i``; their ``element`` set
-        drives the partition-function lookups.
-    temperature_K : float
-        Excitation temperature (also used to evaluate ``U(T)``).
-    concentrations : Dict[str, float]
-        Per-element fractions, passed through unchanged.
-    total_number_density_cm3 : float
-        Absorbing-column reference, passed through unchanged.
-    atomic_db : AtomicDatabase or AtomicDataSource or None
-        Atomic-data backend; only used to source partition functions. When
-        ``None`` (callers with no DB handle, e.g. the Gaussian-fallback
-        experiment harness) partition functions fall back to the canonical
-        ladder (:func:`cflibs.plasma.partition.canonical_partition_fallback`:
-        exact closed-shell values, then ``g0``, then a warned generic
-        constant) — never an empty dict. The same helper backs the
-        missing-entry substitution inside
-        :meth:`SelfAbsorptionCorrector.correct`, so the DB-less path stays
-        numerically equivalent to passing an empty ``partition_funcs``.
-    ionization_stage : int, default 1
-        Stage whose partition function is evaluated (1 = neutral). The
-        self-absorption corrector keys ``partition_funcs`` by element, so a
-        single stage is selected; neutral is the LIBS-resonance default.
-
-    Returns
-    -------
-    SelfAbsorptionInputs
-        Ready to splat into ``SelfAbsorptionCorrector.correct``.
-    """
-    lower_level_energies: Dict[float, float] = {}
-    elements: List[str] = []
-    seen: set[str] = set()
-    for obs in observations:
-        lower_level_energies[obs.wavelength_nm] = lower_level_energy_ev(obs)
-        if obs.element not in seen:
-            seen.add(obs.element)
-            elements.append(obs.element)
-
-    partition_funcs: Dict[str, float] = {
-        el: evaluate_partition_function(atomic_db, el, ionization_stage, temperature_K)
-        for el in elements
-    }
-
-    return SelfAbsorptionInputs(
-        temperature_K=temperature_K,
-        concentrations=concentrations,
-        total_number_density_cm3=total_number_density_cm3,
-        partition_funcs=partition_funcs,
-        lower_level_energies=lower_level_energies,
-    )
-
-
 __all__ = [
-    "SelfAbsorptionInputs",
-    "build_self_absorption_inputs",
     "evaluate_partition_function",
     "lower_level_energy_ev",
 ]
