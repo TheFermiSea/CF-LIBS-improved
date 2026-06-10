@@ -278,6 +278,9 @@ def evaluate_overrides(
     names = tuple(datasets) if datasets is not None else ctx.datasets
     splits.assert_not_vault(names)
     if section == "optimization":
+        # Dataset-level refusal FIRST (a holdout-only dataset has no
+        # optimization split to even sample from), then id-level.
+        splits.assert_optimization_only(ctx.manifest, names)
         spectrum_ids = {
             name: sample_split_ids(
                 ctx.manifest, section, name, ctx.spectra_per_dataset, ctx.sample_seed
