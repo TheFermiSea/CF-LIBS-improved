@@ -256,25 +256,16 @@ def nist_srm_612_adapter() -> Iterator[AdapterYield]:
             data_dir,
         )
         return
-    # Spectra appeared after the gap closes: wire them to the certified truth.
-    from cflibs.benchmark.reference_compositions import NIST_SRM_612_GLASS
-    from cflibs.io.spectrum import load_spectrum
-
-    composition_wt = {el: 100.0 * frac for el, frac in NIST_SRM_612_GLASS.items()}
-    elements_present = presence_set(composition_wt)
-    for path in spectra:
-        wavelength, intensity = load_spectrum(str(path))
-        truth = SpectrumTruth(
-            elements_present=elements_present,
-            composition_wt=dict(composition_wt),
-            resolving_power=None,
-            notes=(
-                "NIST SRM 612 trace-element glass; truth = certified majors "
-                "(Pearce et al. 1997) converted to element wt%; ~38 ppm trace "
-                f"dopants are far below the {PRESENCE_CUTOFF_WT} wt% cutoff and excluded."
-            ),
-        )
-        yield path.stem.replace("_spectrum", ""), wavelength, intensity, truth
+    # When data lands: wire truth like cflibs.benchmark.datasets.usgs, from the
+    # Pearce et al. 1997 majors in reference_compositions.NIST_SRM_612_GLASS.
+    logger.warning(
+        "nist_srm_612: %d spectrum file(s) found in %s but no certified-truth "
+        "mapping is wired for this layout — dataset skipped (wire "
+        "nist_srm_612_adapter to the SRM 612 certificate).",
+        len(spectra),
+        data_dir,
+    )
+    yield from ()  # empty generator: dataset yields nothing when skipped
 
 
 def nist_steel_adapter() -> Iterator[AdapterYield]:
@@ -288,6 +279,9 @@ def nist_steel_adapter() -> Iterator[AdapterYield]:
             data_dir,
         )
         return
+    # SRM 1261a-1265a certificates are already transcribed in
+    # cflibs.benchmark.datasets.nist_steel.NISTSteelDataset; wiring them here
+    # is deferred until validated public spectra exist (see the data README).
     logger.warning(
         "nist_steel: %d spectrum file(s) found in %s but no certified-truth "
         "mapping is wired for this layout — dataset skipped (extend "
