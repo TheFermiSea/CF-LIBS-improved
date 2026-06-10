@@ -107,9 +107,9 @@ def test_calculate_spectrum_emissivity(atomic_db, sample_plasma):
     """Test calculating spectrum emissivity."""
     from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 
-    # Solve for populations
+    # Solve for per-species Saha states
     solver = SahaBoltzmannSolver(atomic_db)
-    populations = solver.solve_plasma(sample_plasma)
+    species_states = solver.solve_species_states(sample_plasma)
 
     # Get transitions
     transitions = atomic_db.get_transitions("Fe", wavelength_min=370.0, wavelength_max=375.0)
@@ -120,10 +120,13 @@ def test_calculate_spectrum_emissivity(atomic_db, sample_plasma):
     wavelength = np.linspace(370, 375, 100)
     sigma = 0.05
 
-    emissivity = calculate_spectrum_emissivity(transitions, populations, wavelength, sigma)
+    emissivity = calculate_spectrum_emissivity(
+        transitions, species_states, wavelength, sigma, sample_plasma.T_e_eV
+    )
 
     assert len(emissivity) == len(wavelength)
     assert np.all(emissivity >= 0)
+    assert np.any(emissivity > 0)
 
 
 @pytest.mark.requires_jax
@@ -137,7 +140,7 @@ def test_calculate_spectrum_emissivity_jax(atomic_db, sample_plasma):
     from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 
     solver = SahaBoltzmannSolver(atomic_db)
-    populations = solver.solve_plasma(sample_plasma)
+    species_states = solver.solve_species_states(sample_plasma)
     transitions = atomic_db.get_transitions("Fe", wavelength_min=370.0, wavelength_max=375.0)
 
     if len(transitions) == 0:
@@ -147,10 +150,10 @@ def test_calculate_spectrum_emissivity_jax(atomic_db, sample_plasma):
     sigma = 0.05
 
     emissivity_np = calculate_spectrum_emissivity(
-        transitions, populations, wavelength, sigma, use_jax=False
+        transitions, species_states, wavelength, sigma, sample_plasma.T_e_eV, use_jax=False
     )
     emissivity_jax = calculate_spectrum_emissivity(
-        transitions, populations, wavelength, sigma, use_jax=True
+        transitions, species_states, wavelength, sigma, sample_plasma.T_e_eV, use_jax=True
     )
 
     assert len(emissivity_jax) == len(wavelength)
@@ -169,12 +172,12 @@ def test_calculate_spectrum_emissivity_jax(atomic_db, sample_plasma):
 
 
 def test_calculate_spectrum_emissivity_no_populations(atomic_db):
-    """Test spectrum emissivity with no matching populations."""
+    """Test spectrum emissivity with no matching species states."""
     transitions = atomic_db.get_transitions("Fe", wavelength_min=370, wavelength_max=375)
-    populations = {}  # Empty populations
+    species_states = {}  # Empty species states
     wavelength = np.linspace(370, 375, 100)
 
-    emissivity = calculate_spectrum_emissivity(transitions, populations, wavelength, 0.05)
+    emissivity = calculate_spectrum_emissivity(transitions, species_states, wavelength, 0.05, 0.86)
 
     # Should return zeros
     assert np.all(emissivity == 0)
@@ -269,9 +272,10 @@ def test_apply_gaussian_broadening_per_line_matches_scalar():
 def test_calculate_spectrum_emissivity_per_line_sigma(atomic_db, sample_plasma):
     """Test spectrum emissivity with per-line sigma array."""
     from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
+    from cflibs.radiation.emissivity import upper_level_population_cm3
 
     solver = SahaBoltzmannSolver(atomic_db)
-    populations = solver.solve_plasma(sample_plasma)
+    species_states = solver.solve_species_states(sample_plasma)
     transitions = atomic_db.get_transitions("Fe", wavelength_min=370.0, wavelength_max=375.0)
 
     if len(transitions) == 0:
@@ -279,16 +283,22 @@ def test_calculate_spectrum_emissivity_per_line_sigma(atomic_db, sample_plasma):
 
     wavelength = np.linspace(370, 375, 100)
 
-    # Count how many transitions will have matching populations
-    n_with_pop = sum(
-        1 for t in transitions if (t.element, t.ionization_stage, t.E_k_ev) in populations
-    )
+    # Count how many transitions will have non-zero populations
+    n_with_pop = 0
+    for t in transitions:
+        state = species_states.get((t.element, t.ionization_stage))
+        if state is None:
+            continue
+        if upper_level_population_cm3(state, t.g_k, t.E_k_ev, sample_plasma.T_e_eV) > 0:
+            n_with_pop += 1
 
     if n_with_pop == 0:
         pytest.skip("No transitions with populations")
 
     sigmas = np.full(n_with_pop, 0.05)
-    emissivity = calculate_spectrum_emissivity(transitions, populations, wavelength, sigmas)
+    emissivity = calculate_spectrum_emissivity(
+        transitions, species_states, wavelength, sigmas, sample_plasma.T_e_eV
+    )
 
     assert len(emissivity) == len(wavelength)
     assert np.all(emissivity >= 0)

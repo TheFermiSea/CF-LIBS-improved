@@ -320,6 +320,60 @@ def test_solve_plasma_temperature_dependence(atomic_db):
     assert pop1 != pop2
 
 
+def test_solve_species_states(atomic_db, sample_plasma):
+    """solve_species_states returns consistent per-(element, stage) states."""
+    solver = SahaBoltzmannSolver(atomic_db)
+    states = solver.solve_species_states(sample_plasma)
+
+    assert ("Fe", 1) in states
+    assert ("H", 1) in states
+    for state in states.values():
+        assert state.number_density_cm3 > 0
+        assert state.partition_function > 0
+        assert state.max_energy_ev > 0
+
+    # Stage densities recompose the per-element totals
+    for element, total in sample_plasma.species.items():
+        stage_sum = sum(s.number_density_cm3 for (el, _), s in states.items() if el == element)
+        assert stage_sum == pytest.approx(total, rel=1e-9)
+
+
+def test_solve_species_states_matches_level_populations(atomic_db, sample_plasma):
+    """State-formula populations agree with solve_plasma's per-level dict.
+
+    n_k = n_stage * (g_k / U) * exp(-E_k / kT) computed from a
+    SpeciesStageState must reproduce the detailed-levels population for
+    every level the legacy dict carries — the two paths share the same
+    Saha balance, partition function, and IPD cutoff.
+    """
+    import numpy as np
+
+    solver = SahaBoltzmannSolver(atomic_db)
+    states = solver.solve_species_states(sample_plasma)
+    populations = solver.solve_plasma(sample_plasma)
+
+    assert populations
+    checked = 0
+    for (element, stage, energy_ev), n_level in populations.items():
+        state = states[(element, stage)]
+        assert energy_ev <= state.max_energy_ev
+        candidate_g = [
+            lev.g
+            for lev in atomic_db.get_energy_levels(element, stage)
+            if lev.energy_ev == energy_ev
+        ]
+        assert candidate_g
+        expected = [
+            state.number_density_cm3
+            * (g / state.partition_function)
+            * np.exp(-energy_ev / sample_plasma.T_e_eV)
+            for g in candidate_g
+        ]
+        assert any(n_level == pytest.approx(e, rel=1e-9) for e in expected)
+        checked += 1
+    assert checked > 0
+
+
 # --- Ionization Fraction Diagnostic Tests ---
 
 

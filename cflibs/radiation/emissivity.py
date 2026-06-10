@@ -3,10 +3,11 @@ Line emissivity calculations.
 """
 
 import numpy as np
-from typing import Dict, Tuple, List, Union
+from typing import List, Mapping, Tuple, Union
 
 from cflibs.core.constants import H_PLANCK, C_LIGHT
 from cflibs.atomic.structures import Transition
+from cflibs.plasma.saha_boltzmann import SpeciesStageState
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("radiation.emissivity")
@@ -55,11 +56,38 @@ def calculate_line_emissivity(
     return epsilon
 
 
+def upper_level_population_cm3(
+    state: SpeciesStageState, g_k: float, E_k_ev: float, T_e_eV: float
+) -> float:
+    """Boltzmann upper-level population from a per-species Saha state.
+
+    ``n_k = n_stage * (g_k / U) * exp(-E_k / kT)``, with ``n_k = 0`` for
+    levels above the IPD-lowered ionization cutoff (merged into the
+    continuum). Computed from the transition's own ``(g_k, E_k)`` — no
+    float-keyed join against the ``energy_levels`` table (audit F1, bead
+    CF-LIBS-improved-z3cg).
+    """
+    if E_k_ev > state.max_energy_ev:
+        return 0.0
+    return (
+        state.number_density_cm3
+        * (g_k / state.partition_function)
+        * float(np.exp(-E_k_ev / T_e_eV))
+    )
+
+
 def _collect_line_contributions(
     transitions: List[Transition],
-    populations: Dict[Tuple[str, int, float], float],
+    species_states: Mapping[Tuple[str, int], SpeciesStageState],
+    T_e_eV: float,
 ) -> Tuple[List[float], List[float]]:
-    """Collect line wavelengths and emissivities for transitions with known populations.
+    """Collect line wavelengths and emissivities for transitions with known species.
+
+    The upper-level population of each transition is computed directly from
+    the transition's own ``(g_k, E_k_ev)`` via
+    :func:`upper_level_population_cm3`. Transitions of species absent from
+    ``species_states`` are skipped; transitions whose upper level exceeds
+    the IPD cutoff contribute zero emissivity and are also skipped.
 
     Returns
     -------
@@ -70,18 +98,19 @@ def _collect_line_contributions(
     line_emissivities: List[float] = []
 
     for trans in transitions:
-        # Find population for upper level
-        key = (trans.element, trans.ionization_stage, round(trans.E_k_ev, 8))
-        if key in populations:
-            n_k = populations[key]
-            epsilon = calculate_line_emissivity(trans, n_k)
-            line_wavelengths.append(trans.wavelength_nm)
-            line_emissivities.append(epsilon)
-        else:
+        state = species_states.get((trans.element, trans.ionization_stage))
+        if state is None:
             logger.debug(
-                f"No population found for {trans.element} {trans.ionization_stage} "
+                f"No species state for {trans.element} {trans.ionization_stage} "
                 f"E_k={trans.E_k_ev:.3f} eV"
             )
+            continue
+        n_k = upper_level_population_cm3(state, trans.g_k, trans.E_k_ev, T_e_eV)
+        if n_k <= 0.0:
+            continue
+        epsilon = calculate_line_emissivity(trans, n_k)
+        line_wavelengths.append(trans.wavelength_nm)
+        line_emissivities.append(epsilon)
 
     return line_wavelengths, line_emissivities
 
@@ -139,9 +168,10 @@ def _broaden_with_numpy(
 
 def calculate_spectrum_emissivity(
     transitions: List[Transition],
-    populations: Dict[Tuple[str, int, float], float],
+    species_states: Mapping[Tuple[str, int], SpeciesStageState],
     wavelength_grid: np.ndarray,
     sigma_nm: Union[float, np.ndarray],
+    T_e_eV: float,
     use_jax: bool = False,
 ) -> np.ndarray:
     """
@@ -151,14 +181,19 @@ def calculate_spectrum_emissivity(
     ----------
     transitions : List[Transition]
         List of transitions to include
-    populations : Dict[Tuple[str, int, float], float]
-        Level populations from Saha-Boltzmann solver
+    species_states : Mapping[Tuple[str, int], SpeciesStageState]
+        Per-(element, ionization stage) states from
+        :meth:`SahaBoltzmannSolver.solve_species_states`. Upper-level
+        populations are computed per transition from its own
+        ``(g_k, E_k_ev)`` — no float-keyed level join (audit F1).
     wavelength_grid : array
         Wavelength grid in nm
     sigma_nm : float or array
         Gaussian broadening width (standard deviation) in nm.
         If array, must match the number of transitions with valid
         populations (per-line broadening).
+    T_e_eV : float
+        Electron temperature in eV (Boltzmann factor for level populations)
     use_jax : bool
         Use JAX acceleration for broadening when available
 
@@ -167,7 +202,9 @@ def calculate_spectrum_emissivity(
     array
         Spectral emissivity in W m^-3 nm^-1
     """
-    line_wavelengths, line_emissivities = _collect_line_contributions(transitions, populations)
+    line_wavelengths, line_emissivities = _collect_line_contributions(
+        transitions, species_states, T_e_eV
+    )
 
     if not line_wavelengths:
         return np.zeros_like(wavelength_grid)
