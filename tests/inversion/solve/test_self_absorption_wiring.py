@@ -167,7 +167,7 @@ def test_observable_mode_noop_without_observables():
     """
     obs = _make_observations(attenuate_ca_doublet=False)
     # Remove one Ca doublet member so no same-upper-level pair exists.
-    obs_no_doublet = [o for o in obs if o.wavelength_nm != 487.81]
+    obs_no_doublet = [o for o in obs if abs(o.wavelength_nm - 487.81) > 1e-6]
 
     res_off = _solve(obs_no_doublet, apply_self_absorption="off")
     res_on = _solve(obs_no_doublet, apply_self_absorption="observable")
