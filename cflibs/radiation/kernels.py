@@ -465,7 +465,7 @@ def snapshot_ionization_fractions(plasma_state, snapshot):
     T_eV = jnp.asarray(plasma_state.T_e_eV)
     n_e = jnp.asarray(plasma_state.n_e)
     dtype = T_eV.dtype if hasattr(T_eV, "dtype") else jnp.float64
-    (elements_in_snapshot, _, _, _, frac_I, frac_II, frac_III, _) = _saha_stage_quantities(
+    elements_in_snapshot, _, _, _, frac_I, frac_II, frac_III, _ = _saha_stage_quantities(
         snapshot, T_eV, n_e, dtype
     )
     f1 = np.asarray(frac_I)

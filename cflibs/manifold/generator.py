@@ -561,9 +561,7 @@ class ManifoldGenerator:
         lines_z = atomic_data[5]
         lines_el_idx = atomic_data[6]
 
-        pop_fraction = jnp.where(
-            lines_z == 0, frac0, jnp.where(lines_z == 1, frac1, frac2)
-        )
+        pop_fraction = jnp.where(lines_z == 0, frac0, jnp.where(lines_z == 1, frac1, frac2))
         u_val = jnp.where(lines_z == 0, u0, jnp.where(lines_z == 1, u1, u2))
         element_conc = concentration_map[lines_el_idx]
         n_species_total = element_conc * n_e

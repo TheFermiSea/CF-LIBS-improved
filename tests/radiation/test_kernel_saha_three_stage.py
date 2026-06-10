@@ -207,9 +207,7 @@ class TestIpdLevelCutoff:
             line_stark_w=jnp.zeros(2),
             line_stark_alpha=jnp.zeros(2),
             line_natural_w=jnp.zeros(2),
-            partition_coeffs=jnp.array(
-                [[ln_u, 0.0, 0.0, 0.0, 0.0], [ln_u, 0.0, 0.0, 0.0, 0.0]]
-            ),
+            partition_coeffs=jnp.array([[ln_u, 0.0, 0.0, 0.0, 0.0], [ln_u, 0.0, 0.0, 0.0, 0.0]]),
             ionization_potential_ev=jnp.array([7.9, 16.19]),
         )
 
@@ -218,9 +216,7 @@ class TestIpdLevelCutoff:
         from cflibs.radiation.kernels import _saha_three_stage_populations
 
         snapshot = self._synthetic_snapshot()
-        plasma = SingleZoneLTEPlasma(
-            T_e=1.0 * EV_TO_K, n_e=1e18, species={"Fe": 1e16}
-        )
+        plasma = SingleZoneLTEPlasma(T_e=1.0 * EV_TO_K, n_e=1e18, species={"Fe": 1e16})
         n_upper = np.asarray(_saha_three_stage_populations(plasma, snapshot))
         assert n_upper[0] > 0.0  # E_k = 3.0 eV: bound, populated
         assert n_upper[1] == 0.0  # E_k = 7.88 eV > 7.9 - Δχ: continuum
@@ -230,9 +226,7 @@ class TestIpdLevelCutoff:
         from cflibs.radiation.kernels import _saha_three_stage_populations
 
         snapshot = self._synthetic_snapshot()
-        plasma = SingleZoneLTEPlasma(
-            T_e=1.0 * EV_TO_K, n_e=1e14, species={"Fe": 1e16}
-        )
+        plasma = SingleZoneLTEPlasma(T_e=1.0 * EV_TO_K, n_e=1e14, species={"Fe": 1e16})
         n_upper = np.asarray(_saha_three_stage_populations(plasma, snapshot))
         assert n_upper[0] > 0.0
         assert n_upper[1] > 0.0
@@ -247,9 +241,7 @@ class TestBackCompat:
 
         snapshot = TestIpdLevelCutoff._synthetic_snapshot()
         assert snapshot.partition_coeffs_iii is None
-        plasma = SingleZoneLTEPlasma(
-            T_e=1.0 * EV_TO_K, n_e=1e17, species={"Fe": 1e16}
-        )
+        plasma = SingleZoneLTEPlasma(T_e=1.0 * EV_TO_K, n_e=1e17, species={"Fe": 1e16})
         fractions = snapshot_ionization_fractions(plasma, snapshot)
         assert fractions["Fe"][3] == 0.0
         assert fractions["Fe"][1] + fractions["Fe"][2] == pytest.approx(1.0, abs=1e-9)
