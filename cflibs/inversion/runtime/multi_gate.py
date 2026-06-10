@@ -52,6 +52,7 @@ from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.common.data_structures import LineObservation
 from cflibs.inversion.physics.closure import ilr_inverse, ilr_transform
+from cflibs.plasma.partition import lookup_partition_function
 from cflibs.inversion.runtime.temporal import TemporalGateConfig, TimeResolvedSpectrum
 
 logger = get_logger("inversion.multi_gate")
@@ -157,7 +158,9 @@ def joint_multi_gate_fit(
         are treated as temperature-independent across the (modest) per-gate
         ``T`` range — adequate for the joint refinement which is seeded near
         the per-gate optimum and only needs to track *relative* changes.
-        Defaults: ``25.0`` for I, ``15.0`` for II.
+        Missing entries fall back to the canonical ladder in
+        :func:`cflibs.plasma.partition.canonical_partition_fallback`
+        (closed-shell exact values → g0 → warned generic 25.0 / 15.0).
     initial_temperatures_K, initial_electron_densities_cm3, initial_composition :
         Optional warm starts. If omitted, the per-gate
         ``IterativeCFLIBSSolver`` is run on each gate to produce a starting
@@ -197,17 +200,16 @@ def joint_multi_gate_fit(
     D = len(elements)
 
     # --- Atomic data: IPs, partition functions ----------------------------
+    # Missing entries route through the canonical physics-grounded fallback
+    # ladder (closed-shell exact values → g0 → warned generic constant)
+    # instead of the historical silent 25.0 / 15.0 constants.
     ips = _resolve_ips(elements, ionization_potentials_eV, atomic_db)
-    U_I = (
-        {el: float(partition_func_I.get(el, 25.0)) for el in elements}
-        if partition_func_I
-        else {el: 25.0 for el in elements}
-    )
-    U_II = (
-        {el: float(partition_func_II.get(el, 15.0)) for el in elements}
-        if partition_func_II
-        else {el: 15.0 for el in elements}
-    )
+    U_I = {
+        el: lookup_partition_function(partition_func_I or {}, el, 1, atomic_db) for el in elements
+    }
+    U_II = {
+        el: lookup_partition_function(partition_func_II or {}, el, 2, atomic_db) for el in elements
+    }
 
     # --- Warm start from per-gate iterative solver ------------------------
     (

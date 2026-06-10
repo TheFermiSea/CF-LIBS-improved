@@ -13,6 +13,7 @@ from cflibs.plasma.state import SingleZoneLTEPlasma
 from cflibs.core.abc import SolverStrategy, AtomicDataSource
 from cflibs.core.cache import cached_partition_function
 from cflibs.core.logging_config import get_logger
+from cflibs.plasma.partition import canonical_partition_fallback
 from cflibs.plasma.partition import (
     PartitionFunctionEvaluator,
     ionization_potential_depression,
@@ -215,7 +216,10 @@ class SahaBoltzmannSolver(SolverStrategy):
 
         if not levels:
             self._warn_missing_levels(element, ionization_stage)
-            return 2.0
+            # Canonical physics-grounded ladder (closed-shell ions get their
+            # exact U, e.g. Na II -> 1.0); _warn_missing_levels above already
+            # named the species, so suppress the helper's own warning.
+            return canonical_partition_fallback(element, ionization_stage, warn=False)
 
         return self._direct_sum_energy_levels(
             levels, element, ionization_stage, T_e_eV, max_energy_ev
