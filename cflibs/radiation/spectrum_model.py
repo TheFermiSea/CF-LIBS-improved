@@ -3,17 +3,18 @@ Forward spectrum model that ties together all components.
 """
 
 import numpy as np
-from typing import Optional, Tuple
+from typing import Dict, Tuple
 
 from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp
 from cflibs.plasma.state import SingleZoneLTEPlasma
-from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver, SahaBoltzmannSolverJax
+from cflibs.plasma.saha_boltzmann import (
+    SahaBoltzmannSolver,
+    SahaBoltzmannSolverJax,
+    SpeciesStageState,
+)
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.instrument.model import InstrumentModel
-from cflibs.radiation.profiles import (
-    BroadeningMode,
-    doppler_width,
-)
+from cflibs.radiation.profiles import BroadeningMode
 from cflibs.instrument.convolution import apply_instrument_function
 from cflibs.core.constants import H_PLANCK, C_LIGHT, KB, EV_TO_K
 from cflibs.core.logging_config import get_logger
@@ -21,30 +22,6 @@ from cflibs.core.logging_config import get_logger
 jit = jit_if_available  # local alias preserves existing @jit decorator sites
 
 logger = get_logger("radiation.spectrum_model")
-
-
-def _emissivity_line_table(transitions: list, populations: dict) -> Tuple[np.ndarray, np.ndarray]:
-    """Build (line_wavelengths_nm, line_emissivities) arrays for LDM dispatch.
-
-    Mirrors the population-lookup + ``ε = (hc / 4πλ) · A_ki · n_k`` loop in
-    :func:`cflibs.radiation.emissivity.calculate_spectrum_emissivity` but
-    returns the per-line catalog instead of immediately broadening — the
-    LDM kernel needs the raw line list. Transitions without an entry in
-    ``populations`` are skipped (same convention as the legacy path).
-    """
-    wls: list[float] = []
-    emis: list[float] = []
-    for trans in transitions:
-        key = (trans.element, trans.ionization_stage, round(trans.E_k_ev, 8))
-        if key not in populations:
-            continue
-        n_k = populations[key]
-        wl_m = trans.wavelength_nm * 1e-9
-        n_k_m3 = n_k * 1e6
-        epsilon = (H_PLANCK * C_LIGHT / (4 * np.pi * wl_m)) * trans.A_ki * n_k_m3
-        wls.append(trans.wavelength_nm)
-        emis.append(epsilon)
-    return np.asarray(wls, dtype=np.float64), np.asarray(emis, dtype=np.float64)
 
 
 def planck_radiance(wavelength_nm: np.ndarray, T_eV: float) -> np.ndarray:
@@ -200,52 +177,50 @@ class SpectrumModel:
             f"No atomic mass found for element {element!r} in database or fallback table"
         )
 
-    def _compute_sigma_per_line(self, transitions: list, populations: dict) -> Optional[np.ndarray]:
-        """
-        Compute per-line Gaussian sigma array based on broadening mode.
+    def _build_n_upper_per_line(
+        self,
+        snapshot,
+        species_states: Dict[Tuple[str, int], SpeciesStageState],
+        n_lines: int,
+    ) -> np.ndarray:
+        """Per-line upper-level populations from per-species Saha states.
 
-        Returns None for LEGACY mode (use scalar sigma instead).
-        """
-        if self.broadening_mode == BroadeningMode.LEGACY:
-            return None
+        Computes ``n_k = n_stage * (g_k / U) * exp(-E_k / kT)`` directly from
+        each transition's own ``(g_k, E_k)`` carried by the lines table.
+        The historical implementation joined against the ``energy_levels``
+        table on a ``round(E_k, 8)`` float key; the two tables encode the
+        same physical level with ~1e-7 eV differences, so ~98 % of lookups
+        missed and the lines were silently dropped (audit 2026-06-09 F1,
+        bead CF-LIBS-improved-z3cg).
 
-        # Collect sigmas only for transitions that have populations
-        sigmas = []
-        for trans in transitions:
-            key = (trans.element, trans.ionization_stage, round(trans.E_k_ev, 8))
-            if key not in populations:
-                continue
-
-            if self.broadening_mode == BroadeningMode.NIST_PARITY:
-                sig = self.instrument.sigma_at_wavelength(trans.wavelength_nm)
-            elif self.broadening_mode in (
-                BroadeningMode.PHYSICAL_DOPPLER,
-                BroadeningMode.LDM_GAUSSIAN,
-            ):
-                mass = self._get_element_mass(trans.element)
-                fwhm = doppler_width(trans.wavelength_nm, self.plasma.T_e_eV, mass)
-                sig = fwhm / 2.355
-            else:
-                raise ValueError(f"Unsupported broadening mode: {self.broadening_mode!r}")
-
-            sigmas.append(sig)
-
-        return np.array(sigmas) if sigmas else np.array([])
-
-    def _build_n_upper_per_line(self, snapshot, populations: dict, n_lines: int) -> np.ndarray:
-        """Convert dict-based populations -> per-line ``n_upper`` array.
-
-        Lets the kernel consume Saha-Boltzmann populations without re-running
-        the solver. Mirrors the legacy per-line population lookup exactly.
+        Lines whose upper level lies above the IPD-lowered ionization cutoff
+        get zero population (the level has merged into the continuum) —
+        preserving the cutoff semantics of
+        :meth:`SahaBoltzmannSolver.solve_level_population`.
         """
         n_upper_per_line = np.zeros(n_lines, dtype=np.float64)
-        if n_lines:
-            line_E_k = np.asarray(snapshot.line_E_k_ev)
-            line_sp_idx = np.asarray(snapshot.line_species_index)
-            for li in range(n_lines):
-                el, stage = snapshot.species[int(line_sp_idx[li])]
-                key = (el, stage, round(float(line_E_k[li]), 8))
-                n_upper_per_line[li] = populations.get(key, 0.0)
+        if not n_lines:
+            return n_upper_per_line
+
+        T_e_eV = self.plasma.T_e_eV
+        line_E_k = np.asarray(snapshot.line_E_k_ev, dtype=np.float64)
+        line_g_k = np.asarray(snapshot.line_g_k, dtype=np.float64)
+        line_sp_idx = np.asarray(snapshot.line_species_index)
+        for sp_idx, (element, stage) in enumerate(snapshot.species):
+            state = species_states.get((element, stage))
+            if state is None:
+                continue
+            sel = np.flatnonzero(line_sp_idx == sp_idx)
+            if sel.size == 0:
+                continue
+            E_k = line_E_k[sel]
+            n_line = (
+                state.number_density_cm3
+                * (line_g_k[sel] / state.partition_function)
+                * np.exp(-E_k / T_e_eV)
+            )
+            n_line[E_k > state.max_energy_ev] = 0.0
+            n_upper_per_line[sel] = n_line
         return n_upper_per_line
 
     def _build_ldm_sigma_grid(self, snapshot, n_lines: int):
@@ -354,11 +329,11 @@ class SpectrumModel:
         Notes
         -----
         Thin wrapper over the unified :func:`cflibs.radiation.kernels.forward_model`
-        kernel (ADR-0001 T1-2). Saha-Boltzmann populations are still computed
-        by the detailed-levels :class:`SahaBoltzmannSolver` so that this code
-        path remains numerically identical (rtol<1e-12, atol<1e-7) to its
-        pre-T1-2 output. The legacy populations dict is converted to a
-        per-line ``n_upper`` array and injected into the kernel via the
+        kernel (ADR-0001 T1-2). The Saha ionization balance and partition
+        functions are computed by the detailed :class:`SahaBoltzmannSolver`
+        (direct-sum U with IPD truncation); per-line upper-level populations
+        are then derived from each transition's own ``(g_k, E_k)`` via
+        :meth:`_build_n_upper_per_line` and injected into the kernel via the
         ``_precomputed_n_upper_per_line`` parameter; the kernel then handles
         the per-line broadening + optional radiative-transfer step.
 
@@ -369,9 +344,9 @@ class SpectrumModel:
         # Validate plasma
         self.plasma.validate()
 
-        # 1. Solve Saha-Boltzmann for level populations (detailed-levels path).
+        # 1. Solve the Saha ionization balance per (element, stage).
         logger.debug("Solving Saha-Boltzmann equations...")
-        populations = self.solver.solve_plasma(self.plasma)
+        species_states = self.solver.solve_species_states(self.plasma)
 
         # 2. Build the AtomicSnapshot with the same min_relative_intensity
         #    filter the legacy path applied per element.
@@ -384,9 +359,9 @@ class SpectrumModel:
         n_lines = int(np.asarray(snapshot.line_wavelengths_nm).shape[0])
         logger.debug(f"Snapshot has {n_lines} transitions")
 
-        # 3. Convert dict-based populations -> per-line n_upper array so the
-        #    kernel can consume them without re-running Saha-Boltzmann.
-        n_upper_per_line = self._build_n_upper_per_line(snapshot, populations, n_lines)
+        # 3. Per-line n_upper from the species states + each line's own
+        #    (g_k, E_k) — no float-keyed energy_levels join (audit F1).
+        n_upper_per_line = self._build_n_upper_per_line(snapshot, species_states, n_lines)
 
         # 4. Optional LDM sigma_grid (only for LDM_GAUSSIAN dispatch).
         sigma_grid = self._build_ldm_sigma_grid(snapshot, n_lines)
