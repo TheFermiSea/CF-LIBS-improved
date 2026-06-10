@@ -82,7 +82,9 @@ def test_helper_and_analyze_default_floor_agree():
     ns = _analyze_parser_defaults()
     assert ns["min_relative_intensity"] is None
     assert ns["resolving_power"] is None
-    assert ns["apply_self_absorption"] is False
+    # ``None`` = "not given"; the preset resolution in
+    # ``_build_pipeline_config`` resolves it to off (bead l4a8).
+    assert ns["apply_self_absorption"] is None
 
 
 def test_helper_exclude_resonance_tied_to_self_absorption():
