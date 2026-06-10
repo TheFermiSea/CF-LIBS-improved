@@ -1,0 +1,7165 @@
+{
+  "generated_utc": "2026-06-10T13:02:32+00:00",
+  "cflibs_path": "/home/brian/code/CF-LIBS-improved/.worktrees/w4-scoreboard/cflibs",
+  "preset": "geological (production default)",
+  "seed": 20260610,
+  "max_spectra": 74,
+  "presence_eps_massfrac": 0.005,
+  "confounder_elements": [
+    "Ag",
+    "Sn",
+    "W",
+    "Bi",
+    "Th"
+  ],
+  "candidate_policy": "candidates(spectrum) = truth.elements_present UNION confounder_elements",
+  "datasets": [
+    {
+      "name": "bhvo2_chemcam",
+      "tags": [
+        "geological",
+        "real"
+      ],
+      "status": "ok",
+      "notes": "ChemCam (LANL testbed) LIBS of USGS BHVO-2 Hawaiian basalt; truth = USGS/GeoReM certified oxide composition converted to element wt% (cflibs.benchmark.reference_compositions.BHVO2_BASALT_USGS; oxygen excluded, oxide-bound). All 10 certified elements are above the 0.01 wt% presence cutoff. CCS spectra arrive response-corrected upstream; resolving power not certified (None).",
+      "n_total": 4,
+      "n_run": 4,
+      "n_ok": 4,
+      "n_failed": 0,
+      "sampled": false,
+      "id_metrics": {
+        "tp": 23,
+        "fp": 0,
+        "fn": 17,
+        "precision": 1.0,
+        "recall": 0.575,
+        "f1": 0.7301587301587301
+      },
+      "composition": {
+        "n_scored": 4,
+        "rmse_wt_median": 2.524836446088631,
+        "rmse_wt_mean": 2.714355874905733,
+        "per_element_signed_mean_wt": {
+          "Al": -1.7492437458232202,
+          "Ca": -2.147739511029719,
+          "Fe": 0.9334712654455248,
+          "K": -0.432,
+          "Mg": -0.9721066871632092,
+          "Mn": -0.13,
+          "Na": -1.6500000000000001,
+          "P": -0.11800000000000001,
+          "Si": 4.6193489036570226,
+          "Ti": 4.51490355572271
+        }
+      },
+      "runtime": {
+        "median_wall_s": 2.6839049141854048,
+        "median_calibration_s": 1.5659083391074091,
+        "median_detection_id_s": 0.8987202872522175,
+        "median_stark_ne_s": 0.14579076878726482,
+        "median_solve_s": 0.0120764235034585,
+        "median_total_s": 2.6837084817234427
+      },
+      "failures": {},
+      "spectra": [
+        {
+          "spectrum_id": "chemcam_bhvo2_loc1",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Mn",
+            "Na",
+            "P",
+            "Si",
+            "Ti"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Mn",
+            "Na",
+            "P",
+            "Si",
+            "Sn",
+            "Th",
+            "Ti",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 4.64782586414367,
+          "called_present": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Ti"
+          ],
+          "tp": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Ti"
+          ],
+          "fp": [],
+          "fn": [
+            "K",
+            "Mn",
+            "Na",
+            "P"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 10.664005265371427,
+            "Bi": 0.0,
+            "Ca": 4.178008404932887,
+            "Fe": 7.877560024156108,
+            "K": 0.0,
+            "Mg": 2.194566852444143,
+            "Mn": 0.0,
+            "Na": 0.0,
+            "P": 0.0,
+            "Si": 27.63742120382464,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "Ti": 5.270117200341195,
+            "W": 0.0
+          },
+          "temperature_K": 12037.16735755762,
+          "electron_density_cm3": 1.1637250468575846e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 60,
+          "stage_timings_s": {
+            "calibration_s": 3.3799346927553415,
+            "detection_id_s": 0.9047814314253628,
+            "stark_ne_s": 0.1399925327859819,
+            "solve_s": 0.22273149201646447,
+            "total_s": 4.647673808038235
+          },
+          "rmse_wt": 2.6094535000985988,
+          "signed_errors_wt": {
+            "Si": 4.307421203824639,
+            "Ti": 3.630117200341195,
+            "Al": 3.524005265371427,
+            "Fe": -0.7324399758438913,
+            "Mn": -0.13,
+            "Mg": -2.1654331475558575,
+            "Ca": -3.971991595067113,
+            "Na": -1.6500000000000001,
+            "K": -0.432,
+            "P": -0.11800000000000001
+          }
+        },
+        {
+          "spectrum_id": "chemcam_bhvo2_loc2",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Mn",
+            "Na",
+            "P",
+            "Si",
+            "Ti"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Mn",
+            "Na",
+            "P",
+            "Si",
+            "Sn",
+            "Th",
+            "Ti",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 2.5786067321896553,
+          "called_present": [
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Ti"
+          ],
+          "tp": [
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Ti"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "K",
+            "Mn",
+            "Na",
+            "P"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "Ca": 7.616400713104339,
+            "Fe": 12.41929912018918,
+            "K": 0.0,
+            "Mg": 3.824290364210898,
+            "Mn": 0.0,
+            "Na": 0.0,
+            "P": 0.0,
+            "Si": 26.853311249137484,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "Ti": 8.111868872063004,
+            "W": 0.0
+          },
+          "temperature_K": 11912.319484527314,
+          "electron_density_cm3": 1.2729085045187717e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 56,
+          "stage_timings_s": {
+            "calibration_s": 1.5162522802129388,
+            "detection_id_s": 0.8916825708001852,
+            "stark_ne_s": 0.15928780334070325,
+            "solve_s": 0.011069504078477621,
+            "total_s": 2.5783976768143475
+          },
+          "rmse_wt": 3.5114217869034716,
+          "signed_errors_wt": {
+            "Si": 3.523311249137482,
+            "Ti": 6.471868872063004,
+            "Al": -7.140000000000001,
+            "Fe": 3.8092991201891806,
+            "Mn": -0.13,
+            "Mg": -0.5357096357891025,
+            "Ca": -0.5335992868956616,
+            "Na": -1.6500000000000001,
+            "K": -0.432,
+            "P": -0.11800000000000001
+          }
+        },
+        {
+          "spectrum_id": "chemcam_bhvo2_loc3",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Mn",
+            "Na",
+            "P",
+            "Si",
+            "Ti"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Mn",
+            "Na",
+            "P",
+            "Si",
+            "Sn",
+            "Th",
+            "Ti",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 2.569904997944832,
+          "called_present": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Ti"
+          ],
+          "tp": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Ti"
+          ],
+          "fp": [],
+          "fn": [
+            "K",
+            "Mn",
+            "Na",
+            "P"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 5.22107768044588,
+            "Bi": 0.0,
+            "Ca": 5.852027658186252,
+            "Fe": 9.453303905053524,
+            "K": 0.0,
+            "Mg": 3.1341978789798226,
+            "Mn": 0.0,
+            "Na": 0.0,
+            "P": 0.0,
+            "Si": 28.163090165703498,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "Ti": 6.338010876588913,
+            "W": 0.0
+          },
+          "temperature_K": 11821.28340972016,
+          "electron_density_cm3": 1.2073488732728504e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 60,
+          "stage_timings_s": {
+            "calibration_s": 1.513213086873293,
+            "detection_id_s": 0.8926591430790722,
+            "stark_ne_s": 0.15158900478854775,
+            "solve_s": 0.012129734270274639,
+            "total_s": 2.5697238501161337
+          },
+          "rmse_wt": 2.4402193920786632,
+          "signed_errors_wt": {
+            "Si": 4.833090165703496,
+            "Ti": 4.6980108765889135,
+            "Al": -1.9189223195541203,
+            "Fe": 0.8433039050535243,
+            "Mn": -0.13,
+            "Mg": -1.2258021210201777,
+            "Ca": -2.2979723418137485,
+            "Na": -1.6500000000000001,
+            "K": -0.432,
+            "P": -0.11800000000000001
+          }
+        },
+        {
+          "spectrum_id": "chemcam_bhvo2_loc4",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Mn",
+            "Na",
+            "P",
+            "Si",
+            "Ti"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "K",
+            "Mg",
+            "Mn",
+            "Na",
+            "P",
+            "Si",
+            "Sn",
+            "Th",
+            "Ti",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 2.7892030961811543,
+          "called_present": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Ti"
+          ],
+          "tp": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Ti"
+          ],
+          "fp": [],
+          "fn": [
+            "K",
+            "Mn",
+            "Na",
+            "P"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 5.677942070889814,
+            "Bi": 0.0,
+            "Ca": 6.362605179657647,
+            "Fe": 8.423722012383285,
+            "K": 0.0,
+            "Mg": 4.398518155712301,
+            "Mn": 0.0,
+            "Na": 0.0,
+            "P": 0.0,
+            "Si": 29.143572995962476,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "Ti": 4.899617273897729,
+            "W": 0.0
+          },
+          "temperature_K": 10730.751344718474,
+          "electron_density_cm3": 4.2446343945070906e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 61,
+          "stage_timings_s": {
+            "calibration_s": 1.6155643980018795,
+            "detection_id_s": 1.0276847169734538,
+            "stark_ne_s": 0.1336636608466506,
+            "solve_s": 0.01202311273664236,
+            "total_s": 2.789019286632538
+          },
+          "rmse_wt": 2.2963288205421977,
+          "signed_errors_wt": {
+            "Si": 5.813572995962474,
+            "Ti": 3.2596172738977285,
+            "Al": -1.4620579291101867,
+            "Fe": -0.1862779876167142,
+            "Mn": -0.13,
+            "Mg": 0.03851815571230066,
+            "Ca": -1.787394820342353,
+            "Na": -1.6500000000000001,
+            "K": -0.432,
+            "P": -0.11800000000000001
+          }
+        }
+      ]
+    },
+    {
+      "name": "aalto",
+      "tags": [
+        "minerals",
+        "real"
+      ],
+      "status": "ok",
+      "notes": "Aalto LIBS library pure-element standard (Al); presence-only truth. Nominal composition is ~100 wt% metal but element-wt comparison is skipped: the production geological preset closes on an oxide basis, which is ill-defined for a metallic standard. https://users.aalto.fi/~lainei1/pages/elements/",
+      "n_total": 74,
+      "n_run": 74,
+      "n_ok": 63,
+      "n_failed": 11,
+      "sampled": false,
+      "id_metrics": {
+        "tp": 89,
+        "fp": 6,
+        "fn": 100,
+        "precision": 0.9368421052631579,
+        "recall": 0.4708994708994709,
+        "f1": 0.6267605633802816
+      },
+      "composition": null,
+      "runtime": {
+        "median_wall_s": 0.7610232308506966,
+        "median_calibration_s": 0.5422773486934602,
+        "median_detection_id_s": 0.18093930091708899,
+        "median_stark_ne_s": 0.028818799182772636,
+        "median_solve_s": 0.005218207836151123,
+        "median_total_s": 0.7608669078908861
+      },
+      "failures": {
+        "element_Pb": "ValueError: No usable spectral lines detected for inversion.",
+        "element_Ti": "ValueError: No usable spectral lines detected for inversion.",
+        "mineral_apatite41": "ValueError: No usable spectral lines detected for inversion.",
+        "mineral_hematite37": "ValueError: No usable spectral lines detected for inversion.",
+        "mineral_pentlandite331": "ValueError: No usable spectral lines detected for inversion.",
+        "mineral_pentlandite68": "ValueError: No usable spectral lines detected for inversion.",
+        "mineral_plagioclaseE2": "ValueError: No usable spectral lines detected for inversion.",
+        "mineral_pyriteE32": "ValueError: No usable spectral lines detected for inversion.",
+        "mineral_quartzE26": "ValueError: No usable spectral lines detected for inversion.",
+        "mineral_sideriteE40": "ValueError: No usable spectral lines detected for inversion.",
+        "mineral_wollastoniteE25": "ValueError: No usable spectral lines detected for inversion."
+      },
+      "spectra": [
+        {
+          "spectrum_id": "element_Al",
+          "truth_elements": [
+            "Al"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6941055357456207,
+          "called_present": [
+            "Al"
+          ],
+          "tp": [
+            "Al"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 66.66666666666667,
+            "Bi": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 5838.571757511216,
+          "electron_density_cm3": 4.012031816551332e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 8,
+          "stage_timings_s": {
+            "calibration_s": 0.5242394977249205,
+            "detection_id_s": 0.1333293840289116,
+            "stark_ne_s": 0.03265790967270732,
+            "solve_s": 0.003498881123960018,
+            "total_s": 0.6938216858543456
+          }
+        },
+        {
+          "spectrum_id": "element_Co",
+          "truth_elements": [
+            "Co"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Co",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.0655408473685384,
+          "called_present": [
+            "Co"
+          ],
+          "tp": [
+            "Co"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Co": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 8849.36648069821,
+          "electron_density_cm3": 2.152465626989077e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 20,
+          "stage_timings_s": {
+            "calibration_s": 0.6655029729008675,
+            "detection_id_s": 0.34711621422320604,
+            "stark_ne_s": 0.0019331369549036026,
+            "solve_s": 0.05077585391700268,
+            "total_s": 1.0654002027586102
+          }
+        },
+        {
+          "spectrum_id": "element_Cr",
+          "truth_elements": [
+            "Cr"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7083701994270086,
+          "called_present": [
+            "Cr"
+          ],
+          "tp": [
+            "Cr"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cr": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 9590.253432992078,
+          "electron_density_cm3": 2.980788083605085e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 12,
+          "stage_timings_s": {
+            "calibration_s": 0.5040914015844464,
+            "detection_id_s": 0.16092858370393515,
+            "stark_ne_s": 0.0038076918572187424,
+            "solve_s": 0.03936962503939867,
+            "total_s": 0.7082528942264616
+          }
+        },
+        {
+          "spectrum_id": "element_Cu",
+          "truth_elements": [
+            "Cu"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cu",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7261332920752466,
+          "called_present": [
+            "Cu"
+          ],
+          "tp": [
+            "Cu"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cu": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 22008.067211882248,
+          "electron_density_cm3": 9.452237590721638e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 4,
+          "stage_timings_s": {
+            "calibration_s": 0.5389552717097104,
+            "detection_id_s": 0.14254058431833982,
+            "stark_ne_s": 0.01314195105805993,
+            "solve_s": 0.03131038090214133,
+            "total_s": 0.7260050429031253
+          }
+        },
+        {
+          "spectrum_id": "element_Fe",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 2.0224954900331795,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 66.66666666666666,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10198.092700294692,
+          "electron_density_cm3": 1.1136275211229942e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 18,
+          "stage_timings_s": {
+            "calibration_s": 1.2282758420333266,
+            "detection_id_s": 0.7269673892296851,
+            "stark_ne_s": 0.0614507501013577,
+            "solve_s": 0.005599294323474169,
+            "total_s": 2.0223610419780016
+          }
+        },
+        {
+          "spectrum_id": "element_Mg",
+          "truth_elements": [
+            "Mg"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Mg",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6897262618876994,
+          "called_present": [
+            "Mg"
+          ],
+          "tp": [
+            "Mg"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Mg": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 16522.340751743275,
+          "electron_density_cm3": 1.1680383521117028e+19,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 5,
+          "stage_timings_s": {
+            "calibration_s": 0.5284266690723598,
+            "detection_id_s": 0.13739785319194198,
+            "stark_ne_s": 0.020338802132755518,
+            "solve_s": 0.003369524609297514,
+            "total_s": 0.6895786030218005
+          }
+        },
+        {
+          "spectrum_id": "element_Mn",
+          "truth_elements": [
+            "Mn"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Mn",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.8575280401855707,
+          "called_present": [
+            "Mn"
+          ],
+          "tp": [
+            "Mn"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Mn": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 9103.067842157483,
+          "electron_density_cm3": 4.042318100358691e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 15,
+          "stage_timings_s": {
+            "calibration_s": 0.5491725392639637,
+            "detection_id_s": 0.20646624313667417,
+            "stark_ne_s": 0.04757380299270153,
+            "solve_s": 0.054101220797747374,
+            "total_s": 0.8574050809256732
+          }
+        },
+        {
+          "spectrum_id": "element_Ni",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.90647401381284,
+          "called_present": [
+            "Ni",
+            "Sn",
+            "W"
+          ],
+          "tp": [
+            "Ni"
+          ],
+          "fp": [
+            "Sn",
+            "W"
+          ],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ni": 23.344634619891455,
+            "Sn": 29.94496498034231,
+            "Th": 0.0,
+            "W": 46.710400399766236
+          },
+          "temperature_K": 19118.964366349617,
+          "electron_density_cm3": 1.9291297078043738e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 15,
+          "stage_timings_s": {
+            "calibration_s": 0.6409979020245373,
+            "detection_id_s": 0.1626629577949643,
+            "stark_ne_s": 0.03166319988667965,
+            "solve_s": 0.07092308113351464,
+            "total_s": 0.9062935132533312
+          }
+        },
+        {
+          "spectrum_id": "element_Pb",
+          "truth_elements": [
+            "Pb"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Pb",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.42431885469704866,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Pb"
+          ]
+        },
+        {
+          "spectrum_id": "element_Sn",
+          "truth_elements": [
+            "Sn"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.517851869110018,
+          "called_present": [
+            "Sn"
+          ],
+          "tp": [
+            "Sn"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Sn": 100.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 6436.096889222988,
+          "electron_density_cm3": 5.17866549951901e+16,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 14,
+          "stage_timings_s": {
+            "calibration_s": 0.4056763597764075,
+            "detection_id_s": 0.10826987633481622,
+            "stark_ne_s": 0.0006345920264720917,
+            "solve_s": 0.003110382240265608,
+            "total_s": 0.5177461868152022
+          }
+        },
+        {
+          "spectrum_id": "element_Ti",
+          "truth_elements": [
+            "Ti"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Sn",
+            "Th",
+            "Ti",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.7600839408114552,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ti"
+          ]
+        },
+        {
+          "spectrum_id": "element_V",
+          "truth_elements": [
+            "V"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Sn",
+            "Th",
+            "V",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.3091822466813028,
+          "called_present": [
+            "V"
+          ],
+          "tp": [
+            "V"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "V": 100.0,
+            "W": 0.0
+          },
+          "temperature_K": 10071.252635769437,
+          "electron_density_cm3": 3.255187290281261e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 16,
+          "stage_timings_s": {
+            "calibration_s": 0.8060607411898673,
+            "detection_id_s": 0.4355286927893758,
+            "stark_ne_s": 0.0032731061801314354,
+            "solve_s": 0.06419376190751791,
+            "total_s": 1.3091014907695353
+          }
+        },
+        {
+          "spectrum_id": "element_Zn",
+          "truth_elements": [
+            "Zn"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Sn",
+            "Th",
+            "W",
+            "Zn"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.5170691329985857,
+          "called_present": [
+            "Zn"
+          ],
+          "tp": [
+            "Zn"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0,
+            "Zn": 100.0
+          },
+          "temperature_K": 9625.87369813896,
+          "electron_density_cm3": 1.953662576532539e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 4,
+          "stage_timings_s": {
+            "calibration_s": 0.48249890375882387,
+            "detection_id_s": 0.02002802211791277,
+            "stark_ne_s": 0.000273766927421093,
+            "solve_s": 0.014110513031482697,
+            "total_s": 0.5169573980383575
+          }
+        },
+        {
+          "spectrum_id": "mineral_adulariaE11",
+          "truth_elements": [
+            "Al",
+            "K",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "K",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7550232009962201,
+          "called_present": [
+            "Si"
+          ],
+          "tp": [
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "K"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "K": 0.0,
+            "Si": 50.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 2.189859781103381e+18,
+          "converged": false,
+          "ne_source": "stark",
+          "n_observations": 3,
+          "stage_timings_s": {
+            "calibration_s": 0.5539362137205899,
+            "detection_id_s": 0.17523435922339559,
+            "stark_ne_s": 0.015534244943410158,
+            "solve_s": 0.010161728132516146,
+            "total_s": 0.7549127200618386
+          }
+        },
+        {
+          "spectrum_id": "mineral_adulariaE44",
+          "truth_elements": [
+            "Al",
+            "K",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "K",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7411478790454566,
+          "called_present": [
+            "Si"
+          ],
+          "tp": [
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "K"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "K": 0.0,
+            "Si": 50.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 2.622601886965243e+18,
+          "converged": false,
+          "ne_source": "stark",
+          "n_observations": 3,
+          "stage_timings_s": {
+            "calibration_s": 0.5422773486934602,
+            "detection_id_s": 0.1756608816795051,
+            "stark_ne_s": 0.013791934121400118,
+            "solve_s": 0.009215561207383871,
+            "total_s": 0.7410115958191454
+          }
+        },
+        {
+          "spectrum_id": "mineral_almandine26",
+          "truth_elements": [
+            "Al",
+            "Fe",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Fe",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.3600663230754435,
+          "called_present": [
+            "Al",
+            "Fe",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Fe",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 10.468445729554615,
+            "Bi": 0.0,
+            "Fe": 21.032252189465883,
+            "Si": 26.374476560734628,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12046.153824553818,
+          "electron_density_cm3": 2.7145451483654953e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 20,
+          "stage_timings_s": {
+            "calibration_s": 0.4605082110501826,
+            "detection_id_s": 0.783352802041918,
+            "stark_ne_s": 0.10680322209373116,
+            "solve_s": 0.009204576723277569,
+            "total_s": 1.3599234018474817
+          }
+        },
+        {
+          "spectrum_id": "mineral_apatite35",
+          "truth_elements": [
+            "Ca",
+            "P"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "P",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7190597271546721,
+          "called_present": [
+            "Ca"
+          ],
+          "tp": [
+            "Ca"
+          ],
+          "fp": [],
+          "fn": [
+            "P"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ca": 100.0,
+            "P": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 7921.795287314784,
+          "electron_density_cm3": 9.82911380827895e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 13,
+          "stage_timings_s": {
+            "calibration_s": 0.5496806758455932,
+            "detection_id_s": 0.13499371940270066,
+            "stark_ne_s": 0.03189902985468507,
+            "solve_s": 0.002263113856315613,
+            "total_s": 0.7188859591260552
+          }
+        },
+        {
+          "spectrum_id": "mineral_apatite41",
+          "truth_elements": [
+            "Ca",
+            "P"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "P",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.6725245360285044,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ca",
+            "P"
+          ]
+        },
+        {
+          "spectrum_id": "mineral_augite12",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.4893928207457066,
+          "called_present": [
+            "Mg"
+          ],
+          "tp": [
+            "Mg"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "Ca": 0.0,
+            "Fe": 0.0,
+            "Mg": 100.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 14180.119173867151,
+          "electron_density_cm3": 2.9502394937589263e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 5,
+          "stage_timings_s": {
+            "calibration_s": 0.6281132982112467,
+            "detection_id_s": 0.8303841850720346,
+            "stark_ne_s": 0.027224055025726557,
+            "solve_s": 0.0034813000820577145,
+            "total_s": 1.489280290901661
+          }
+        },
+        {
+          "spectrum_id": "mineral_augite25",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.4861968918703496,
+          "called_present": [
+            "Mg"
+          ],
+          "tp": [
+            "Mg"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "Ca": 0.0,
+            "Fe": 0.0,
+            "Mg": 100.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 16036.464326000993,
+          "electron_density_cm3": 6.11722461035385e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 6,
+          "stage_timings_s": {
+            "calibration_s": 0.6228463519364595,
+            "detection_id_s": 0.8322995561175048,
+            "stark_ne_s": 0.027113247197121382,
+            "solve_s": 0.0037420061416924,
+            "total_s": 1.4860482797957957
+          }
+        },
+        {
+          "spectrum_id": "mineral_augite4",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.5146532412618399,
+          "called_present": [
+            "Al",
+            "Fe"
+          ],
+          "tp": [
+            "Al",
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [
+            "Ca",
+            "Mg",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 15.969195301238322,
+            "Bi": 0.0,
+            "Ca": 0.0,
+            "Fe": 50.697471365428335,
+            "Mg": 0.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 13807.064490756104,
+          "electron_density_cm3": 7.808505808695193e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 11,
+          "stage_timings_s": {
+            "calibration_s": 0.628614722751081,
+            "detection_id_s": 0.8328560274094343,
+            "stark_ne_s": 0.04571716580539942,
+            "solve_s": 0.007263051811605692,
+            "total_s": 1.514499381184578
+          }
+        },
+        {
+          "spectrum_id": "mineral_biotiteE60",
+          "truth_elements": [
+            "Al",
+            "Fe",
+            "K",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Fe",
+            "K",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.5040398756973445,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "K",
+            "Mg",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "Fe": 66.66666666666667,
+            "K": 0.0,
+            "Mg": 0.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10236.836174578766,
+          "electron_density_cm3": 7.572348768490813e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 12,
+          "stage_timings_s": {
+            "calibration_s": 0.6269066967070103,
+            "detection_id_s": 0.8307389644905925,
+            "stark_ne_s": 0.04086039215326309,
+            "solve_s": 0.0053168791346251965,
+            "total_s": 1.5038807890377939
+          }
+        },
+        {
+          "spectrum_id": "mineral_chalcopyrite331",
+          "truth_elements": [
+            "Cu",
+            "Fe",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cu",
+            "Fe",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.7228422332555056,
+          "called_present": [
+            "Cu",
+            "Fe"
+          ],
+          "tp": [
+            "Cu",
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [
+            "S"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cu": 13.17439084521862,
+            "Fe": 57.88373943652092,
+            "S": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10809.567988349858,
+          "electron_density_cm3": 1.2189925968686792e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 19,
+          "stage_timings_s": {
+            "calibration_s": 0.6635181931778789,
+            "detection_id_s": 0.9701717356219888,
+            "stark_ne_s": 0.08221554011106491,
+            "solve_s": 0.006713198963552713,
+            "total_s": 1.7226767810061574
+          }
+        },
+        {
+          "spectrum_id": "mineral_chalcopyrite68",
+          "truth_elements": [
+            "Cu",
+            "Fe",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cu",
+            "Fe",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.4842358222231269,
+          "called_present": [
+            "Cu",
+            "Fe"
+          ],
+          "tp": [
+            "Cu",
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [
+            "S"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cu": 6.980422766136806,
+            "Fe": 62.01305148924213,
+            "S": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10308.217261948706,
+          "electron_density_cm3": 5.952455495369544e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 14,
+          "stage_timings_s": {
+            "calibration_s": 0.6145544699393213,
+            "detection_id_s": 0.8113888190127909,
+            "stark_ne_s": 0.0513336812146008,
+            "solve_s": 0.006730743683874607,
+            "total_s": 1.48406589217484
+          }
+        },
+        {
+          "spectrum_id": "mineral_cordierite16",
+          "truth_elements": [
+            "Al",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.4427945609204471,
+          "called_present": [
+            "Al",
+            "Mg",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Mg",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 15.34644236200467,
+            "Bi": 0.0,
+            "Fe": 0.0,
+            "Mg": 11.309823347479405,
+            "Si": 32.835256554756796,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 13145.781648450375,
+          "electron_density_cm3": 1.99071004719133e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 14,
+          "stage_timings_s": {
+            "calibration_s": 0.5683205355890095,
+            "detection_id_s": 0.8131736912764609,
+            "stark_ne_s": 0.0545887784101069,
+            "solve_s": 0.006490855943411589,
+            "total_s": 1.442621750291437
+          }
+        },
+        {
+          "spectrum_id": "mineral_cordieriteE15",
+          "truth_elements": [
+            "Al",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.4751344989053905,
+          "called_present": [
+            "Al",
+            "Fe",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Fe",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Mg"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 13.698521475910589,
+            "Bi": 0.0,
+            "Fe": 11.957209298511094,
+            "Mg": 0.0,
+            "Si": 30.75820191918374,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12774.5106387042,
+          "electron_density_cm3": 2.107209421794158e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 16,
+          "stage_timings_s": {
+            "calibration_s": 0.593442915007472,
+            "detection_id_s": 0.8120870599523187,
+            "stark_ne_s": 0.060474432073533535,
+            "solve_s": 0.008921968284994364,
+            "total_s": 1.4749766518361866
+          }
+        },
+        {
+          "spectrum_id": "mineral_corundumE21",
+          "truth_elements": [
+            "Al"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.5634340490214527,
+          "called_present": [
+            "Al"
+          ],
+          "tp": [
+            "Al"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 66.66666666666666,
+            "Bi": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10845.197413868273,
+          "electron_density_cm3": 8.753887311667057e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 7,
+          "stage_timings_s": {
+            "calibration_s": 0.3998605888336897,
+            "detection_id_s": 0.13339908747002482,
+            "stark_ne_s": 0.02775078220292926,
+            "solve_s": 0.0022353529930114746,
+            "total_s": 0.5632925219833851
+          }
+        },
+        {
+          "spectrum_id": "mineral_diopside5",
+          "truth_elements": [
+            "Ca",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.759840935934335,
+          "called_present": [
+            "Mg"
+          ],
+          "tp": [
+            "Mg"
+          ],
+          "fp": [],
+          "fn": [
+            "Ca",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ca": 0.0,
+            "Mg": 100.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10078.631781834969,
+          "electron_density_cm3": 3.110428380485117e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 5,
+          "stage_timings_s": {
+            "calibration_s": 0.5621068049222231,
+            "detection_id_s": 0.1810091300867498,
+            "stark_ne_s": 0.013844492845237255,
+            "solve_s": 0.002684974577277899,
+            "total_s": 0.7596965478733182
+          }
+        },
+        {
+          "spectrum_id": "mineral_fluorite39",
+          "truth_elements": [
+            "Ca"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6679557356983423,
+          "called_present": [
+            "Ca"
+          ],
+          "tp": [
+            "Ca"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ca": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 7000.62700172047,
+          "electron_density_cm3": 3.8858598759165307e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 12,
+          "stage_timings_s": {
+            "calibration_s": 0.5147031689994037,
+            "detection_id_s": 0.12268085405230522,
+            "stark_ne_s": 0.028226973954588175,
+            "solve_s": 0.002188128884881735,
+            "total_s": 0.6678465199656785
+          }
+        },
+        {
+          "spectrum_id": "mineral_fluoriteE13",
+          "truth_elements": [
+            "Ca"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6810008399188519,
+          "called_present": [
+            "Ca"
+          ],
+          "tp": [
+            "Ca"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ca": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 8947.512703228604,
+          "electron_density_cm3": 1.0263779775016973e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 8,
+          "stage_timings_s": {
+            "calibration_s": 0.5287061030976474,
+            "detection_id_s": 0.12224419321864843,
+            "stark_ne_s": 0.026848049834370613,
+            "solve_s": 0.003022660966962576,
+            "total_s": 0.6808704249560833
+          }
+        },
+        {
+          "spectrum_id": "mineral_galenaE27",
+          "truth_elements": [
+            "Pb",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Pb",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.687233539763838,
+          "called_present": [
+            "Pb"
+          ],
+          "tp": [
+            "Pb"
+          ],
+          "fp": [],
+          "fn": [
+            "S"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Pb": 100.0,
+            "S": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 13607.624378535365,
+          "electron_density_cm3": 2.6514461332988806e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 12,
+          "stage_timings_s": {
+            "calibration_s": 0.5165318651124835,
+            "detection_id_s": 0.15503406710922718,
+            "stark_ne_s": 0.000510393176227808,
+            "solve_s": 0.014971946831792593,
+            "total_s": 0.6870963061228395
+          }
+        },
+        {
+          "spectrum_id": "mineral_garnetE17",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.5452039800584316,
+          "called_present": [
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "tp": [
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "Ca"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "Ca": 0.0,
+            "Fe": 14.576095657368743,
+            "Mg": 4.351692435953506,
+            "Si": 36.89208203899669,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 13660.276915902527,
+          "electron_density_cm3": 6.8967639742817e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 19,
+          "stage_timings_s": {
+            "calibration_s": 0.6372923348098993,
+            "detection_id_s": 0.8309263321571052,
+            "stark_ne_s": 0.06783206900581717,
+            "solve_s": 0.008992027956992388,
+            "total_s": 1.545091189444065
+          }
+        },
+        {
+          "spectrum_id": "mineral_garnetE33",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.5618719728663564,
+          "called_present": [
+            "Al",
+            "Fe",
+            "Mg"
+          ],
+          "tp": [
+            "Al",
+            "Fe",
+            "Mg"
+          ],
+          "fp": [],
+          "fn": [
+            "Ca",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 9.454875391511802,
+            "Bi": 0.0,
+            "Ca": 0.0,
+            "Fe": 40.128638207707624,
+            "Mg": 25.62472960117087,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12439.9294690333,
+          "electron_density_cm3": 3.6631868536945336e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 18,
+          "stage_timings_s": {
+            "calibration_s": 0.6300604124553502,
+            "detection_id_s": 0.8330604643560946,
+            "stark_ne_s": 0.08967533055692911,
+            "solve_s": 0.008853354956954718,
+            "total_s": 1.561702880077064
+          }
+        },
+        {
+          "spectrum_id": "mineral_gypsum42",
+          "truth_elements": [
+            "Ca",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7125205737538636,
+          "called_present": [
+            "Ca"
+          ],
+          "tp": [
+            "Ca"
+          ],
+          "fp": [],
+          "fn": [
+            "S"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ca": 100.0,
+            "S": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 8653.150205327507,
+          "electron_density_cm3": 1.2726128860526874e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 11,
+          "stage_timings_s": {
+            "calibration_s": 0.513368362095207,
+            "detection_id_s": 0.16698274994269013,
+            "stark_ne_s": 0.028818799182772636,
+            "solve_s": 0.003151870798319578,
+            "total_s": 0.7123684552498162
+          }
+        },
+        {
+          "spectrum_id": "mineral_hematite37",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 1.4710698127746582,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "mineral_hornblendeE29",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.48328877100721,
+          "called_present": [
+            "Mg"
+          ],
+          "tp": [
+            "Mg"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "Ca",
+            "Fe",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "Ca": 0.0,
+            "Fe": 0.0,
+            "Mg": 100.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12952.458345817544,
+          "electron_density_cm3": 4.941734154984367e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 6,
+          "stage_timings_s": {
+            "calibration_s": 0.6277135238051414,
+            "detection_id_s": 0.8286547493189573,
+            "stark_ne_s": 0.023328562267124653,
+            "solve_s": 0.003435765393078327,
+            "total_s": 1.4831801010295749
+          }
+        },
+        {
+          "spectrum_id": "mineral_hyperstheneE7",
+          "truth_elements": [
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.4271103451028466,
+          "called_present": [
+            "Mg"
+          ],
+          "tp": [
+            "Mg"
+          ],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 0.0,
+            "Mg": 100.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12199.883770924906,
+          "electron_density_cm3": 3.9659816138062377e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 6,
+          "stage_timings_s": {
+            "calibration_s": 0.6128841009922326,
+            "detection_id_s": 0.7865612111054361,
+            "stark_ne_s": 0.024137524887919426,
+            "solve_s": 0.003314585890620947,
+            "total_s": 1.4269440048374236
+          }
+        },
+        {
+          "spectrum_id": "mineral_kaolinite9",
+          "truth_elements": [
+            "Al",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6397989811375737,
+          "called_present": [
+            "Sn",
+            "W"
+          ],
+          "tp": [],
+          "fp": [
+            "Sn",
+            "W"
+          ],
+          "fn": [
+            "Al",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 3.233964113625655e-05,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "Si": 0.0,
+            "Sn": 23.609406432588408,
+            "Th": 0.0,
+            "W": 76.39056122777046
+          },
+          "temperature_K": 51936.27996597601,
+          "electron_density_cm3": 7.116350651476352e+16,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 9,
+          "stage_timings_s": {
+            "calibration_s": 0.5192597708664834,
+            "detection_id_s": 0.09453448606655002,
+            "stark_ne_s": 0.0007370961830019951,
+            "solve_s": 0.02507096203044057,
+            "total_s": 0.6396483448334038
+          }
+        },
+        {
+          "spectrum_id": "mineral_kyanite14",
+          "truth_elements": [
+            "Al",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6450009508989751,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 16.098741362848724,
+            "Bi": 0.0,
+            "Si": 37.92594397786346,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 17509.084389824573,
+          "electron_density_cm3": 2.40330159392793e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 11,
+          "stage_timings_s": {
+            "calibration_s": 0.4288200680166483,
+            "detection_id_s": 0.1610604808665812,
+            "stark_ne_s": 0.04980963794514537,
+            "solve_s": 0.00516720674932003,
+            "total_s": 0.6449061939492822
+          }
+        },
+        {
+          "spectrum_id": "mineral_kyaniteE20",
+          "truth_elements": [
+            "Al",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.4915201747789979,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 21.647203448054224,
+            "Bi": 0.0,
+            "Si": 33.76459741395933,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 9706.003331188953,
+          "electron_density_cm3": 1.1034815426759058e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 14,
+          "stage_timings_s": {
+            "calibration_s": 0.4124283748678863,
+            "detection_id_s": 0.02050058590248227,
+            "stark_ne_s": 0.055268130265176296,
+            "solve_s": 0.0031222556717693806,
+            "total_s": 0.4913704260252416
+          }
+        },
+        {
+          "spectrum_id": "mineral_lepidolite31",
+          "truth_elements": [
+            "Al",
+            "K",
+            "Li",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "K",
+            "Li",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7610232308506966,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "K",
+            "Li"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 29.337407002266808,
+            "Bi": 0.0,
+            "K": 0.0,
+            "Li": 0.0,
+            "Si": 27.996944748299896,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 6.606299022756803e+18,
+          "converged": false,
+          "ne_source": "stark",
+          "n_observations": 9,
+          "stage_timings_s": {
+            "calibration_s": 0.5177724380046129,
+            "detection_id_s": 0.18093930091708899,
+            "stark_ne_s": 0.04868463007733226,
+            "solve_s": 0.013421412091702223,
+            "total_s": 0.7608669078908861
+          }
+        },
+        {
+          "spectrum_id": "mineral_magnesiteE46",
+          "truth_elements": [
+            "C",
+            "Mg"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "C",
+            "Mg",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7726689199917018,
+          "called_present": [
+            "Mg"
+          ],
+          "tp": [
+            "Mg"
+          ],
+          "fp": [],
+          "fn": [
+            "C"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "C": 0.0,
+            "Mg": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12619.750657896933,
+          "electron_density_cm3": 3.0221144082996214e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 5,
+          "stage_timings_s": {
+            "calibration_s": 0.5706108203157783,
+            "detection_id_s": 0.17795665748417377,
+            "stark_ne_s": 0.020558750722557306,
+            "solve_s": 0.0033336151391267776,
+            "total_s": 0.7725015264004469
+          }
+        },
+        {
+          "spectrum_id": "mineral_magnetite20",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.3469079989008605,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 66.66666666666666,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 11053.09890193072,
+          "electron_density_cm3": 1.0915059538307274e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 10,
+          "stage_timings_s": {
+            "calibration_s": 0.5964309251867235,
+            "detection_id_s": 0.7273189686238766,
+            "stark_ne_s": 0.017918456811457872,
+            "solve_s": 0.005053412169218063,
+            "total_s": 1.3467667577788234
+          }
+        },
+        {
+          "spectrum_id": "mineral_microcline23",
+          "truth_elements": [
+            "Al",
+            "K",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "K",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7395714302547276,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "K"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 5.9198739587093225,
+            "Bi": 0.0,
+            "K": 0.0,
+            "Si": 45.560094530968016,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10888.05898395599,
+          "electron_density_cm3": 3.85592521094865e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 13,
+          "stage_timings_s": {
+            "calibration_s": 0.5107316114008427,
+            "detection_id_s": 0.17599161947146058,
+            "stark_ne_s": 0.04965771874412894,
+            "solve_s": 0.0029775951988995075,
+            "total_s": 0.7394082196988165
+          }
+        },
+        {
+          "spectrum_id": "mineral_microclineE16",
+          "truth_elements": [
+            "Al",
+            "K",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "K",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7270421041175723,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "K"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 31.389358568315153,
+            "Bi": 0.0,
+            "K": 0.0,
+            "Si": 26.457981073763637,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 3.4549353658150984e+18,
+          "converged": false,
+          "ne_source": "stark",
+          "n_observations": 7,
+          "stage_timings_s": {
+            "calibration_s": 0.5168831520713866,
+            "detection_id_s": 0.17615571385249496,
+            "stark_ne_s": 0.02063308283686638,
+            "solve_s": 0.013173546176403761,
+            "total_s": 0.7268900088965893
+          }
+        },
+        {
+          "spectrum_id": "mineral_molybdenite40",
+          "truth_elements": [
+            "Mo",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Mo",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7794048059731722,
+          "called_present": [
+            "Mo",
+            "Sn"
+          ],
+          "tp": [
+            "Mo"
+          ],
+          "fp": [
+            "Sn"
+          ],
+          "fn": [
+            "S"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Mo": 16.104654815398053,
+            "S": 0.0,
+            "Sn": 83.89534518460195,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 15458.018834421753,
+          "electron_density_cm3": 2.3512019615202496e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 17,
+          "stage_timings_s": {
+            "calibration_s": 0.5198304732330143,
+            "detection_id_s": 0.2208733898587525,
+            "stark_ne_s": 0.0019242670387029648,
+            "solve_s": 0.036578710190951824,
+            "total_s": 0.7792564881965518
+          }
+        },
+        {
+          "spectrum_id": "mineral_muscoviteE22",
+          "truth_elements": [
+            "Al",
+            "K",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "K",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7158695301041007,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Al",
+            "K",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "K": 0.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 1e+17,
+          "converged": false,
+          "ne_source": "pressure_balance",
+          "n_observations": 1,
+          "stage_timings_s": {
+            "calibration_s": 0.5381869152188301,
+            "detection_id_s": 0.17666700622066855,
+            "stark_ne_s": 0.0004857010208070278,
+            "solve_s": 0.00036831432953476906,
+            "total_s": 0.7157535697333515
+          }
+        },
+        {
+          "spectrum_id": "mineral_muscoviteE35",
+          "truth_elements": [
+            "Al",
+            "K",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "K",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6833991291932762,
+          "called_present": [
+            "Sn"
+          ],
+          "tp": [],
+          "fp": [
+            "Sn"
+          ],
+          "fn": [
+            "Al",
+            "K",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "K": 0.0,
+            "Si": 0.0,
+            "Sn": 100.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 4546.878078984775,
+          "electron_density_cm3": 3329842919392525.0,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 4,
+          "stage_timings_s": {
+            "calibration_s": 0.502520221285522,
+            "detection_id_s": 0.17669204203411937,
+            "stark_ne_s": 0.0003371122293174267,
+            "solve_s": 0.003674158826470375,
+            "total_s": 0.6832711650058627
+          }
+        },
+        {
+          "spectrum_id": "mineral_olivine6",
+          "truth_elements": [
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.409061685204506,
+          "called_present": [
+            "Si"
+          ],
+          "tp": [
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Mg"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 0.0,
+            "Mg": 0.0,
+            "Si": 50.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 1.9003579235799204e+18,
+          "converged": false,
+          "ne_source": "stark",
+          "n_observations": 7,
+          "stage_timings_s": {
+            "calibration_s": 0.5849734111689031,
+            "detection_id_s": 0.7831347086466849,
+            "stark_ne_s": 0.0313535793684423,
+            "solve_s": 0.009459592867642641,
+            "total_s": 1.4089760268107057
+          }
+        },
+        {
+          "spectrum_id": "mineral_orthoclase7",
+          "truth_elements": [
+            "Al",
+            "K",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "K",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7483328920789063,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "K"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 7.309319167845096,
+            "Bi": 0.0,
+            "K": 0.0,
+            "Si": 44.51801062411617,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 8610.95252630175,
+          "electron_density_cm3": 4.163409858286721e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 14,
+          "stage_timings_s": {
+            "calibration_s": 0.5133222630247474,
+            "detection_id_s": 0.1759198592044413,
+            "stark_ne_s": 0.055958549957722425,
+            "solve_s": 0.0029667080380022526,
+            "total_s": 0.7482159798964858
+          }
+        },
+        {
+          "spectrum_id": "mineral_pentlandite331",
+          "truth_elements": [
+            "Fe",
+            "Ni",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 1.4435308407992125,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni",
+            "S"
+          ]
+        },
+        {
+          "spectrum_id": "mineral_pentlandite68",
+          "truth_elements": [
+            "Fe",
+            "Ni",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 1.3075995650142431,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni",
+            "S"
+          ]
+        },
+        {
+          "spectrum_id": "mineral_phlogopiteE45",
+          "truth_elements": [
+            "Al",
+            "K",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "K",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7883379380218685,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "K",
+            "Mg"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 21.948827477132333,
+            "Bi": 0.0,
+            "K": 0.0,
+            "Mg": 0.0,
+            "Si": 33.53837939215075,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 17445.167630779717,
+          "electron_density_cm3": 2.060609440713644e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 12,
+          "stage_timings_s": {
+            "calibration_s": 0.5229631531983614,
+            "detection_id_s": 0.2081303559243679,
+            "stark_ne_s": 0.0518906987272203,
+            "solve_s": 0.005218207836151123,
+            "total_s": 0.7882612450048327
+          }
+        },
+        {
+          "spectrum_id": "mineral_plagioclaseE2",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Na",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Na",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.7351666069589555,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Al",
+            "Ca",
+            "Na",
+            "Si"
+          ]
+        },
+        {
+          "spectrum_id": "mineral_plagioclaseE8",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Na",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Na",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7509940289892256,
+          "called_present": [
+            "Ca"
+          ],
+          "tp": [
+            "Ca"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "Na",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "Ca": 100.0,
+            "Na": 0.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 8789.324450470036,
+          "electron_density_cm3": 9.928971743659297e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 6,
+          "stage_timings_s": {
+            "calibration_s": 0.5338958278298378,
+            "detection_id_s": 0.19383289199322462,
+            "stark_ne_s": 0.02061625523492694,
+            "solve_s": 0.0024941680021584034,
+            "total_s": 0.7509114537388086
+          }
+        },
+        {
+          "spectrum_id": "mineral_pyriteE32",
+          "truth_elements": [
+            "Fe",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 1.5419255318120122,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "S"
+          ]
+        },
+        {
+          "spectrum_id": "mineral_pyrrhotite68",
+          "truth_elements": [
+            "Fe",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.2554836347699165,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [
+            "S"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 66.66666666666667,
+            "S": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10098.705609720786,
+          "electron_density_cm3": 5.95976294771403e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 7,
+          "stage_timings_s": {
+            "calibration_s": 0.4638953390531242,
+            "detection_id_s": 0.7725269049406052,
+            "stark_ne_s": 0.013880500104278326,
+            "solve_s": 0.005052566062659025,
+            "total_s": 1.255400539841503
+          }
+        },
+        {
+          "spectrum_id": "mineral_pyrrhotiteE10",
+          "truth_elements": [
+            "Fe",
+            "S"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "S",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.4198483526706696,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [
+            "S"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 66.66666666666667,
+            "S": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 11081.52434504054,
+          "electron_density_cm3": 1.3702509399163054e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 12,
+          "stage_timings_s": {
+            "calibration_s": 0.6108428202569485,
+            "detection_id_s": 0.7755258306860924,
+            "stark_ne_s": 0.028243517968803644,
+            "solve_s": 0.005053362343460321,
+            "total_s": 1.4197228522971272
+          }
+        },
+        {
+          "spectrum_id": "mineral_quartz12",
+          "truth_elements": [
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.5531519153155386,
+          "called_present": [
+            "Si"
+          ],
+          "tp": [
+            "Si"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Si": 50.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 16547.185933783745,
+          "electron_density_cm3": 8.957842598484776e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 7,
+          "stage_timings_s": {
+            "calibration_s": 0.4981798240914941,
+            "detection_id_s": 0.014642306137830019,
+            "stark_ne_s": 0.0366289890371263,
+            "solve_s": 0.003528058994561434,
+            "total_s": 0.5530251362361014
+          }
+        },
+        {
+          "spectrum_id": "mineral_quartzE26",
+          "truth_elements": [
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.629456935916096,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Si"
+          ]
+        },
+        {
+          "spectrum_id": "mineral_scapolite28",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Na",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Na",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7456918596290052,
+          "called_present": [
+            "Ca"
+          ],
+          "tp": [
+            "Ca"
+          ],
+          "fp": [],
+          "fn": [
+            "Al",
+            "Na",
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 0.0,
+            "Bi": 0.0,
+            "Ca": 100.0,
+            "Na": 0.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 7941.68084570943,
+          "electron_density_cm3": 3.494862014581115e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 6,
+          "stage_timings_s": {
+            "calibration_s": 0.5281377001665533,
+            "detection_id_s": 0.18995780497789383,
+            "stark_ne_s": 0.025329058058559895,
+            "solve_s": 0.0021422063000500202,
+            "total_s": 0.7456109118647873
+          }
+        },
+        {
+          "spectrum_id": "mineral_scapolite36",
+          "truth_elements": [
+            "Al",
+            "Ca",
+            "Na",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Ca",
+            "Na",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7822705451399088,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Ca",
+            "Na"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 11.469905377283837,
+            "Bi": 0.0,
+            "Ca": 0.0,
+            "Na": 0.0,
+            "Si": 41.397570967037126,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12588.298023334222,
+          "electron_density_cm3": 6.551863900803217e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 12,
+          "stage_timings_s": {
+            "calibration_s": 0.5371636268682778,
+            "detection_id_s": 0.1897086938843131,
+            "stark_ne_s": 0.05133926495909691,
+            "solve_s": 0.0038860682398080826,
+            "total_s": 0.782145865727216
+          }
+        },
+        {
+          "spectrum_id": "mineral_serpentineE18",
+          "truth_elements": [
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7598319319076836,
+          "called_present": [
+            "Mg",
+            "Si"
+          ],
+          "tp": [
+            "Mg",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Mg": 42.64807846201042,
+            "Si": 28.67596076899479,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12421.127357841942,
+          "electron_density_cm3": 5.14282785408249e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 10,
+          "stage_timings_s": {
+            "calibration_s": 0.5533333490602672,
+            "detection_id_s": 0.16590323066338897,
+            "stark_ne_s": 0.03513784194365144,
+            "solve_s": 0.005283225793391466,
+            "total_s": 0.7597072198987007
+          }
+        },
+        {
+          "spectrum_id": "mineral_sideriteE40",
+          "truth_elements": [
+            "C",
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "C",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 1.3664387851022184,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "C",
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "mineral_sphene45",
+          "truth_elements": [
+            "Ca",
+            "Si",
+            "Ti"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "Si",
+            "Sn",
+            "Th",
+            "Ti",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.9402525993064046,
+          "called_present": [
+            "Ca"
+          ],
+          "tp": [
+            "Ca"
+          ],
+          "fp": [],
+          "fn": [
+            "Si",
+            "Ti"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ca": 100.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "Ti": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 7880.714227982125,
+          "electron_density_cm3": 8.64103698620097e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 7,
+          "stage_timings_s": {
+            "calibration_s": 0.6829912601970136,
+            "detection_id_s": 0.22812496777623892,
+            "stark_ne_s": 0.026924035046249628,
+            "solve_s": 0.002076250035315752,
+            "total_s": 0.9401737609878182
+          }
+        },
+        {
+          "spectrum_id": "mineral_spodumene19",
+          "truth_elements": [
+            "Al",
+            "Li",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Li",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7305567506700754,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Li"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 6.369919054151072,
+            "Bi": 0.0,
+            "Li": 0.0,
+            "Si": 45.2225607093867,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10037.606431592323,
+          "electron_density_cm3": 4.3603359663387965e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 12,
+          "stage_timings_s": {
+            "calibration_s": 0.5207237000577152,
+            "detection_id_s": 0.16761716408655047,
+            "stark_ne_s": 0.038915491197258234,
+            "solve_s": 0.0031224037520587444,
+            "total_s": 0.7304275226779282
+          }
+        },
+        {
+          "spectrum_id": "mineral_staurolite30",
+          "truth_elements": [
+            "Al",
+            "Fe",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Fe",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.4630750701762736,
+          "called_present": [
+            "Al",
+            "Fe",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Fe",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 18.194193344735858,
+            "Bi": 0.0,
+            "Fe": 13.899767428341308,
+            "Si": 25.929529420192125,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 11588.184919855365,
+          "electron_density_cm3": 2.4966661256142843e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 20,
+          "stage_timings_s": {
+            "calibration_s": 0.5956363421864808,
+            "detection_id_s": 0.7843703739345074,
+            "stark_ne_s": 0.07369251688942313,
+            "solve_s": 0.009190242271870375,
+            "total_s": 1.4629422412253916
+          }
+        },
+        {
+          "spectrum_id": "mineral_talc38",
+          "truth_elements": [
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7307401532307267,
+          "called_present": [
+            "Si"
+          ],
+          "tp": [
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Mg"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Mg": 0.0,
+            "Si": 50.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 18100.946220371203,
+          "electron_density_cm3": 1.2810983295773373e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 8,
+          "stage_timings_s": {
+            "calibration_s": 0.5232886062003672,
+            "detection_id_s": 0.16474748449400067,
+            "stark_ne_s": 0.038640469778329134,
+            "solve_s": 0.0038719368167221546,
+            "total_s": 0.7306019891984761
+          }
+        },
+        {
+          "spectrum_id": "mineral_topaz27",
+          "truth_elements": [
+            "Al",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "Bi",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7849857369437814,
+          "called_present": [
+            "Al",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 13.867325257778232,
+            "Bi": 0.0,
+            "Si": 39.59950605666632,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 1.6573127956651085e+18,
+          "converged": false,
+          "ne_source": "stark",
+          "n_observations": 13,
+          "stage_timings_s": {
+            "calibration_s": 0.5500055477023125,
+            "detection_id_s": 0.16678648116067052,
+            "stark_ne_s": 0.05335919791832566,
+            "solve_s": 0.014655571896582842,
+            "total_s": 0.7848534299992025
+          }
+        },
+        {
+          "spectrum_id": "mineral_tourmaline34",
+          "truth_elements": [
+            "Al",
+            "B",
+            "Fe",
+            "Mg",
+            "Na",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Al",
+            "B",
+            "Bi",
+            "Fe",
+            "Mg",
+            "Na",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.6041920608840883,
+          "called_present": [
+            "Al",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "tp": [
+            "Al",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "B",
+            "Na"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Al": 6.53810400339413,
+            "B": 0.0,
+            "Bi": 0.0,
+            "Fe": 17.30944155859157,
+            "Mg": 11.243824910519876,
+            "Na": 0.0,
+            "Si": 26.49242837325079,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 11196.746988735436,
+          "electron_density_cm3": 1.8671486741021435e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 19,
+          "stage_timings_s": {
+            "calibration_s": 0.6438799821771681,
+            "detection_id_s": 0.851866742130369,
+            "stark_ne_s": 0.09936062293127179,
+            "solve_s": 0.008874411229044199,
+            "total_s": 1.6040432746522129
+          }
+        },
+        {
+          "spectrum_id": "mineral_tremolite18",
+          "truth_elements": [
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "Fe",
+            "Mg",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 1.4453822979703546,
+          "called_present": [
+            "Si"
+          ],
+          "tp": [
+            "Si"
+          ],
+          "fp": [],
+          "fn": [
+            "Ca",
+            "Fe",
+            "Mg"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ca": 0.0,
+            "Fe": 0.0,
+            "Mg": 0.0,
+            "Si": 50.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 1.9251077085038254e+18,
+          "converged": false,
+          "ne_source": "stark",
+          "n_observations": 7,
+          "stage_timings_s": {
+            "calibration_s": 0.6030546799302101,
+            "detection_id_s": 0.8029361213557422,
+            "stark_ne_s": 0.02971606096252799,
+            "solve_s": 0.009484910406172276,
+            "total_s": 1.445243766065687
+          }
+        },
+        {
+          "spectrum_id": "mineral_wollastonite30",
+          "truth_elements": [
+            "Ca",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7175993197597563,
+          "called_present": [
+            "Ca"
+          ],
+          "tp": [
+            "Ca"
+          ],
+          "fp": [],
+          "fn": [
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ca": 100.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 7554.236800087898,
+          "electron_density_cm3": 6.074928203687726e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 14,
+          "stage_timings_s": {
+            "calibration_s": 0.5262860199436545,
+            "detection_id_s": 0.1495446041226387,
+            "stark_ne_s": 0.039277585688978434,
+            "solve_s": 0.0023149861954152584,
+            "total_s": 0.7174708312377334
+          }
+        },
+        {
+          "spectrum_id": "mineral_wollastoniteE25",
+          "truth_elements": [
+            "Ca",
+            "Si"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ca",
+            "Si",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "presence_only",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.6805743090808392,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ca",
+            "Si"
+          ]
+        },
+        {
+          "spectrum_id": "mineral_zircon17",
+          "truth_elements": [
+            "Si",
+            "Zr"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Si",
+            "Sn",
+            "Th",
+            "W",
+            "Zr"
+          ],
+          "composition_basis": "presence_only",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7251743068918586,
+          "called_present": [
+            "Zr"
+          ],
+          "tp": [
+            "Zr"
+          ],
+          "fp": [],
+          "fn": [
+            "Si"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Si": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0,
+            "Zr": 100.0
+          },
+          "temperature_K": 8325.456721383967,
+          "electron_density_cm3": 2.6726093905594592e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 7,
+          "stage_timings_s": {
+            "calibration_s": 0.5744782676920295,
+            "detection_id_s": 0.14099104143679142,
+            "stark_ne_s": 0.0003770282492041588,
+            "solve_s": 0.009201903827488422,
+            "total_s": 0.725095225032419
+          }
+        }
+      ]
+    },
+    {
+      "name": "nist_srm_612",
+      "tags": [
+        "placeholder",
+        "real"
+      ],
+      "status": "skipped",
+      "notes": "",
+      "n_total": 0,
+      "n_run": 0,
+      "n_ok": 0,
+      "n_failed": 0,
+      "sampled": false,
+      "id_metrics": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "composition": null,
+      "runtime": {
+        "median_wall_s": null,
+        "median_calibration_s": null,
+        "median_detection_id_s": null,
+        "median_stark_ne_s": null,
+        "median_solve_s": null,
+        "median_total_s": null
+      },
+      "failures": {},
+      "spectra": []
+    },
+    {
+      "name": "nist_steel",
+      "tags": [
+        "placeholder",
+        "real"
+      ],
+      "status": "skipped",
+      "notes": "",
+      "n_total": 0,
+      "n_run": 0,
+      "n_ok": 0,
+      "n_failed": 0,
+      "sampled": false,
+      "id_metrics": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "composition": null,
+      "runtime": {
+        "median_wall_s": null,
+        "median_calibration_s": null,
+        "median_detection_id_s": null,
+        "median_stark_ne_s": null,
+        "median_solve_s": null,
+        "median_total_s": null
+      },
+      "failures": {},
+      "spectra": []
+    },
+    {
+      "name": "synthetic_fixedforward",
+      "tags": [
+        "synthetic"
+      ],
+      "status": "ok",
+      "notes": "SYNTHETIC corpus w2_fixedforward_v1 (version ak3.1.3) generated by OUR OWN fixed forward model \u2014 valid for RELATIVE comparisons between pipeline versions only, never a headline accuracy number (the generator shares physics with the inversion under test). Truth = generation recipe mass fractions; elements below 0.01 wt% excluded from elements_present. Source: /home/brian/code/CF-LIBS-improved/.worktrees/w1-integration/output/synthetic_corpus_w2/w2_fixedforward_v1/corpus.json",
+      "n_total": 288,
+      "n_run": 74,
+      "n_ok": 28,
+      "n_failed": 46,
+      "sampled": true,
+      "id_metrics": {
+        "tp": 21,
+        "fp": 15,
+        "fn": 121,
+        "precision": 0.5833333333333334,
+        "recall": 0.14788732394366197,
+        "f1": 0.23595505617977527
+      },
+      "composition": {
+        "n_scored": 28,
+        "rmse_wt_median": 43.920812830260076,
+        "rmse_wt_mean": 45.670978725596584,
+        "per_element_signed_mean_wt": {
+          "Cr": 19.0,
+          "Fe": -63.47736813942841,
+          "Mn": -2.0,
+          "Ni": -18.17558651241295
+        }
+      },
+      "runtime": {
+        "median_wall_s": 0.5091850457247347,
+        "median_calibration_s": 0.3393751233816147,
+        "median_detection_id_s": 0.2027217501308769,
+        "median_stark_ne_s": 0.001223511528223753,
+        "median_solve_s": 0.003874229732900858,
+        "median_total_s": 0.5090951849706471
+      },
+      "failures": {
+        "pure_Fe_0001": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0004": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0007": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0009": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0013": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0020": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0023": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0043": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0045": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0057": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0060": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Fe_0061": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0004": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0006": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0010": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0017": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0021": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0024": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0029": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0031": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0032": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0033": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0037": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0041": "ValueError: No usable spectral lines detected for inversion.",
+        "pure_Ni_0071": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0001": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0016": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0021": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0025": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0041": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0049": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0051": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0053": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0054": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0065": "ValueError: No usable spectral lines detected for inversion.",
+        "binary_Fe_Ni_0071": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0007": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0012": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0018": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0021": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0023": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0029": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0032": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0038": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0048": "ValueError: No usable spectral lines detected for inversion.",
+        "steel_like_0062": "ValueError: No usable spectral lines detected for inversion."
+      },
+      "spectra": [
+        {
+          "spectrum_id": "pure_Fe_0000",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.7361049391329288,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 66.66666666666667,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 9418.565096635328,
+          "electron_density_cm3": 2.140399461675602e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 9,
+          "stage_timings_s": {
+            "calibration_s": 0.4887518212199211,
+            "detection_id_s": 0.22636257065460086,
+            "stark_ne_s": 0.017889872193336487,
+            "solve_s": 0.002821352332830429,
+            "total_s": 0.7358985031023622
+          },
+          "rmse_wt": 33.33333333333333,
+          "signed_errors_wt": {
+            "Fe": -33.33333333333333
+          }
+        },
+        {
+          "spectrum_id": "pure_Fe_0001",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.8106677113100886,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0004",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.8138780700974166,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0007",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.41915518417954445,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0009",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.8146772147156298,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0010",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.5793309942819178,
+          "called_present": [
+            "Fe",
+            "W"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [
+            "W"
+          ],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 29.53987893262302,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 55.69018160106546
+          },
+          "temperature_K": 12165.084495493145,
+          "electron_density_cm3": 2.612015638975181e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 21,
+          "stage_timings_s": {
+            "calibration_s": 0.2899046209640801,
+            "detection_id_s": 0.2045637289993465,
+            "stark_ne_s": 0.07684953510761261,
+            "solve_s": 0.007878111209720373,
+            "total_s": 0.5792473750188947
+          },
+          "rmse_wt": 70.46012106737697,
+          "signed_errors_wt": {
+            "Fe": -70.46012106737697
+          }
+        },
+        {
+          "spectrum_id": "pure_Fe_0013",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.4125422709621489,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0018",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.5002365540713072,
+          "called_present": [
+            "Ag"
+          ],
+          "tp": [],
+          "fp": [
+            "Ag"
+          ],
+          "fn": [
+            "Fe"
+          ],
+          "predicted_wt": {
+            "Ag": 100.0,
+            "Bi": 0.0,
+            "Fe": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 25169.717251744085,
+          "electron_density_cm3": 1.4674663706855712e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 9,
+          "stage_timings_s": {
+            "calibration_s": 0.2909019119106233,
+            "detection_id_s": 0.20469731278717518,
+            "stark_ne_s": 0.000715052243322134,
+            "solve_s": 0.0037967353127896786,
+            "total_s": 0.5001550489105284
+          },
+          "rmse_wt": 100.0,
+          "signed_errors_wt": {
+            "Fe": -100.0
+          }
+        },
+        {
+          "spectrum_id": "pure_Fe_0020",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.7062070146203041,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0023",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.8288950519636273,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0043",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.4190946538001299,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0044",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.5121031352318823,
+          "called_present": [
+            "Ag"
+          ],
+          "tp": [],
+          "fp": [
+            "Ag"
+          ],
+          "fn": [
+            "Fe"
+          ],
+          "predicted_wt": {
+            "Ag": 100.0,
+            "Bi": 0.0,
+            "Fe": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 2.6896538633843514e+17,
+          "converged": false,
+          "ne_source": "pressure_balance",
+          "n_observations": 10,
+          "stage_timings_s": {
+            "calibration_s": 0.29671396780759096,
+            "detection_id_s": 0.20514869131147861,
+            "stark_ne_s": 0.0007582269608974457,
+            "solve_s": 0.009356054943054914,
+            "total_s": 0.5120215988717973
+          },
+          "rmse_wt": 100.0,
+          "signed_errors_wt": {
+            "Fe": -100.0
+          }
+        },
+        {
+          "spectrum_id": "pure_Fe_0045",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.6102001508697867,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0049",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.4089658008888364,
+          "called_present": [
+            "W"
+          ],
+          "tp": [],
+          "fp": [
+            "W"
+          ],
+          "fn": [
+            "Fe"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 100.0
+          },
+          "temperature_K": 11075.972918811032,
+          "electron_density_cm3": 2.974719377473907e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 10,
+          "stage_timings_s": {
+            "calibration_s": 0.37791620707139373,
+            "detection_id_s": 0.026870416942983866,
+            "stark_ne_s": 0.0011865370906889439,
+            "solve_s": 0.002861528191715479,
+            "total_s": 0.40888129314407706
+          },
+          "rmse_wt": 100.0,
+          "signed_errors_wt": {
+            "Fe": -100.0
+          }
+        },
+        {
+          "spectrum_id": "pure_Fe_0055",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.637326171156019,
+          "called_present": [
+            "Fe",
+            "Sn"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [
+            "Sn"
+          ],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 3.2104163204939846,
+            "Sn": 95.18437551925902,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 11884.82637847769,
+          "electron_density_cm3": 2.8774390156303987e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 17,
+          "stage_timings_s": {
+            "calibration_s": 0.3948729857802391,
+            "detection_id_s": 0.20398902613669634,
+            "stark_ne_s": 0.03194387070834637,
+            "solve_s": 0.006354904733598232,
+            "total_s": 0.6372215049341321
+          },
+          "rmse_wt": 96.78958367950601,
+          "signed_errors_wt": {
+            "Fe": -96.78958367950601
+          }
+        },
+        {
+          "spectrum_id": "pure_Fe_0057",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.6010335911996663,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0058",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.625556374900043,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 66.66666666666667,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10452.386323069382,
+          "electron_density_cm3": 8.239395692285427e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 13,
+          "stage_timings_s": {
+            "calibration_s": 0.40028011286631227,
+            "detection_id_s": 0.2024407354183495,
+            "stark_ne_s": 0.01735725812613964,
+            "solve_s": 0.005345582030713558,
+            "total_s": 0.6254715430550277
+          },
+          "rmse_wt": 33.33333333333333,
+          "signed_errors_wt": {
+            "Fe": -33.33333333333333
+          }
+        },
+        {
+          "spectrum_id": "pure_Fe_0060",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.40885043097659945,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0061",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.4085403927601874,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Fe_0066",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.5324602462351322,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 66.66666666666666,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 11623.297766967658,
+          "electron_density_cm3": 2.08727494331443e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 13,
+          "stage_timings_s": {
+            "calibration_s": 0.2946781050413847,
+            "detection_id_s": 0.2030027648434043,
+            "stark_ne_s": 0.028354911133646965,
+            "solve_s": 0.006288777105510235,
+            "total_s": 0.532373780850321
+          },
+          "rmse_wt": 33.33333333333334,
+          "signed_errors_wt": {
+            "Fe": -33.33333333333334
+          }
+        },
+        {
+          "spectrum_id": "pure_Fe_0070",
+          "truth_elements": [
+            "Fe"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6478902446106076,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 66.66666666666666,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12121.460201940754,
+          "electron_density_cm3": 1.7207464578209997e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 11,
+          "stage_timings_s": {
+            "calibration_s": 0.4006250216625631,
+            "detection_id_s": 0.20451414724811912,
+            "stark_ne_s": 0.03639868227764964,
+            "solve_s": 0.006169172935187817,
+            "total_s": 0.6477540023624897
+          },
+          "rmse_wt": 33.33333333333334,
+          "signed_errors_wt": {
+            "Fe": -33.33333333333334
+          }
+        },
+        {
+          "spectrum_id": "pure_Ni_0004",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.5315780136734247,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0006",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.5337283541448414,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0010",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.641656821127981,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0017",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.47459087800234556,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0019",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.3519927728921175,
+          "called_present": [
+            "Ni"
+          ],
+          "tp": [
+            "Ni"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ni": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 9953.56698206336,
+          "electron_density_cm3": 2.5504726822979395e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 16,
+          "stage_timings_s": {
+            "calibration_s": 0.31329537695273757,
+            "detection_id_s": 0.035031868144869804,
+            "stark_ne_s": 0.0011061248369514942,
+            "solve_s": 0.0024314201436936855,
+            "total_s": 0.35191172920167446
+          },
+          "rmse_wt": 0.0,
+          "signed_errors_wt": {
+            "Ni": 0.0
+          }
+        },
+        {
+          "spectrum_id": "pure_Ni_0021",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.3364599999040365,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0024",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.45602952875196934,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0028",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.39202735712751746,
+          "called_present": [
+            "Ni"
+          ],
+          "tp": [
+            "Ni"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ni": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 9564.942183291223,
+          "electron_density_cm3": 2.3483075302862733e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 14,
+          "stage_timings_s": {
+            "calibration_s": 0.3549201199784875,
+            "detection_id_s": 0.034153373911976814,
+            "stark_ne_s": 0.0010735616087913513,
+            "solve_s": 0.0017562261782586575,
+            "total_s": 0.3919483539648354
+          },
+          "rmse_wt": 0.0,
+          "signed_errors_wt": {
+            "Ni": 0.0
+          }
+        },
+        {
+          "spectrum_id": "pure_Ni_0029",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.37874117959290743,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0031",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.5145705919712782,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0032",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.4722474352456629,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0033",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.3542181756347418,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0034",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.36876567639410496,
+          "called_present": [
+            "Ni"
+          ],
+          "tp": [
+            "Ni"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ni": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12695.976281702731,
+          "electron_density_cm3": 2.760907576881499e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 14,
+          "stage_timings_s": {
+            "calibration_s": 0.32860268326476216,
+            "detection_id_s": 0.03567237453535199,
+            "stark_ne_s": 0.0009816158562898636,
+            "solve_s": 0.0033746380358934402,
+            "total_s": 0.3686761730350554
+          },
+          "rmse_wt": 0.0,
+          "signed_errors_wt": {
+            "Ni": 0.0
+          }
+        },
+        {
+          "spectrum_id": "pure_Ni_0037",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.4405221529304981,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0041",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.32353057619184256,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "pure_Ni_0046",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.3268464379943907,
+          "called_present": [
+            "Ni"
+          ],
+          "tp": [
+            "Ni"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ni": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 13061.195306430433,
+          "electron_density_cm3": 2.711701809825728e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 17,
+          "stage_timings_s": {
+            "calibration_s": 0.2871841681189835,
+            "detection_id_s": 0.034770538099110126,
+            "stark_ne_s": 0.001260485965758562,
+            "solve_s": 0.003503276966512203,
+            "total_s": 0.326767151709646
+          },
+          "rmse_wt": 0.0,
+          "signed_errors_wt": {
+            "Ni": 0.0
+          }
+        },
+        {
+          "spectrum_id": "pure_Ni_0052",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.3736079838126898,
+          "called_present": [
+            "Ni",
+            "Sn"
+          ],
+          "tp": [
+            "Ni"
+          ],
+          "fp": [
+            "Sn"
+          ],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ni": 33.92907103654496,
+            "Sn": 66.07092896345505,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 11511.885285869157,
+          "electron_density_cm3": 2.8933166805440486e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 16,
+          "stage_timings_s": {
+            "calibration_s": 0.3344217645935714,
+            "detection_id_s": 0.03452255530282855,
+            "stark_ne_s": 0.0009233420714735985,
+            "solve_s": 0.0035891998559236526,
+            "total_s": 0.3735039932653308
+          },
+          "rmse_wt": 66.07092896345503,
+          "signed_errors_wt": {
+            "Ni": -66.07092896345503
+          }
+        },
+        {
+          "spectrum_id": "pure_Ni_0054",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.506266956217587,
+          "called_present": [
+            "Ag",
+            "Ni"
+          ],
+          "tp": [
+            "Ni"
+          ],
+          "fp": [
+            "Ag"
+          ],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 91.14486104730382,
+            "Bi": 0.0,
+            "Ni": 8.855138952696189,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 13296.558589569919,
+          "electron_density_cm3": 2.6872966924928077e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 14,
+          "stage_timings_s": {
+            "calibration_s": 0.46451360592618585,
+            "detection_id_s": 0.0359383481554687,
+            "stark_ne_s": 0.0010876692831516266,
+            "solve_s": 0.0045801918022334576,
+            "total_s": 0.5061687710694969
+          },
+          "rmse_wt": 91.1448610473038,
+          "signed_errors_wt": {
+            "Ni": -91.1448610473038
+          }
+        },
+        {
+          "spectrum_id": "pure_Ni_0066",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.3310801200568676,
+          "called_present": [
+            "Ni"
+          ],
+          "tp": [
+            "Ni"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ni": 100.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12978.088833419686,
+          "electron_density_cm3": 2.7232859431704333e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 13,
+          "stage_timings_s": {
+            "calibration_s": 0.2923321588896215,
+            "detection_id_s": 0.03442128608003259,
+            "stark_ne_s": 0.000847281888127327,
+            "solve_s": 0.00333497766405344,
+            "total_s": 0.3309801537543535
+          },
+          "rmse_wt": 0.0,
+          "signed_errors_wt": {
+            "Ni": 0.0
+          }
+        },
+        {
+          "spectrum_id": "pure_Ni_0069",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.4319659168832004,
+          "called_present": [
+            "Sn"
+          ],
+          "tp": [],
+          "fp": [
+            "Sn"
+          ],
+          "fn": [
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Ni": 0.0,
+            "Sn": 100.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 17105.30906370502,
+          "electron_density_cm3": 2.1451499328466304e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 11,
+          "stage_timings_s": {
+            "calibration_s": 0.3936177142895758,
+            "detection_id_s": 0.03470217203721404,
+            "stark_ne_s": 0.0005526458844542503,
+            "solve_s": 0.002942871768027544,
+            "total_s": 0.4318650299683213
+          },
+          "rmse_wt": 100.0,
+          "signed_errors_wt": {
+            "Ni": -100.0
+          }
+        },
+        {
+          "spectrum_id": "pure_Ni_0071",
+          "truth_elements": [
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.323863429017365,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0001",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.3168898387812078,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0011",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.43146591912955046,
+          "called_present": [
+            "Sn",
+            "W"
+          ],
+          "tp": [],
+          "fp": [
+            "Sn",
+            "W"
+          ],
+          "fn": [
+            "Fe",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 0.0,
+            "Ni": 0.0,
+            "Sn": 65.85525178411861,
+            "Th": 0.0,
+            "W": 34.14474821588138
+          },
+          "temperature_K": 13868.591183204655,
+          "electron_density_cm3": 2.6064830088035386e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 26,
+          "stage_timings_s": {
+            "calibration_s": 0.3815701217390597,
+            "detection_id_s": 0.04356095055118203,
+            "stark_ne_s": 0.001645090989768505,
+            "solve_s": 0.0045542330481112,
+            "total_s": 0.43138108728453517
+          },
+          "rmse_wt": 53.85164807134504,
+          "signed_errors_wt": {
+            "Fe": -70.0,
+            "Ni": -30.0
+          }
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0016",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.41400790214538574,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0021",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.6160046621225774,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0025",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.3170237001031637,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0041",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.3197737857699394,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0042",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.536978485994041,
+          "called_present": [
+            "Fe",
+            "Ni"
+          ],
+          "tp": [
+            "Fe",
+            "Ni"
+          ],
+          "fp": [],
+          "fn": [],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Fe": 44.080235816724795,
+            "Ni": 33.87964627491281,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 12348.479091844867,
+          "electron_density_cm3": 2.995279588767797e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 26,
+          "stage_timings_s": {
+            "calibration_s": 0.29180359188467264,
+            "detection_id_s": 0.21534711308777332,
+            "stark_ne_s": 0.021992587950080633,
+            "solve_s": 0.0077008954249322414,
+            "total_s": 0.5368949831463397
+          },
+          "rmse_wt": 18.532212908002123,
+          "signed_errors_wt": {
+            "Fe": -25.919764183275205,
+            "Ni": 3.8796462749128082
+          }
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0044",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.5658180126920342,
+          "called_present": [
+            "Bi"
+          ],
+          "tp": [],
+          "fp": [
+            "Bi"
+          ],
+          "fn": [
+            "Fe",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 100.0,
+            "Fe": 0.0,
+            "Ni": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 3.452886270778243e+17,
+          "converged": false,
+          "ne_source": "pressure_balance",
+          "n_observations": 3,
+          "stage_timings_s": {
+            "calibration_s": 0.28615239495411515,
+            "detection_id_s": 0.23692783480510116,
+            "stark_ne_s": 0.0002537011168897152,
+            "solve_s": 0.04230885300785303,
+            "total_s": 0.5656889053061604
+          },
+          "rmse_wt": 53.85164807134504,
+          "signed_errors_wt": {
+            "Fe": -70.0,
+            "Ni": -30.0
+          }
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0049",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.39903566893190145,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0051",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.40019036224111915,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0053",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.30932867899537086,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0054",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.41969426488503814,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0065",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.40616225684061646,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "binary_Fe_Ni_0071",
+          "truth_elements": [
+            "Fe",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Fe",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.3102297140285373,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0001",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6769311591051519,
+          "called_present": [
+            "Cr"
+          ],
+          "tp": [
+            "Cr"
+          ],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cr": 100.0,
+            "Fe": 0.0,
+            "Mn": 0.0,
+            "Ni": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 6569.909877894423,
+          "electron_density_cm3": 9.596108717720909e+16,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 13,
+          "stage_timings_s": {
+            "calibration_s": 0.43638467881828547,
+            "detection_id_s": 0.2352196811698377,
+            "stark_ne_s": 0.0013519548811018467,
+            "solve_s": 0.0038443622179329395,
+            "total_s": 0.6768469400703907
+          },
+          "rmse_wt": 64.42049363362563,
+          "signed_errors_wt": {
+            "Fe": -88.0,
+            "Cr": 94.0,
+            "Ni": -4.0,
+            "Mn": -2.0
+          }
+        },
+        {
+          "spectrum_id": "steel_like_0007",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.4634675970301032,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0008",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6039579161442816,
+          "called_present": [
+            "Ag",
+            "Fe",
+            "Sn"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [
+            "Ag",
+            "Sn"
+          ],
+          "fn": [
+            "Cr",
+            "Mn",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 12.024180805865523,
+            "Bi": 0.0,
+            "Cr": 0.0,
+            "Fe": 0.9554394749233327,
+            "Mn": 0.0,
+            "Ni": 0.0,
+            "Sn": 86.54265998174947,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 11963.58049710188,
+          "electron_density_cm3": 2.780801699281542e+17,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 27,
+          "stage_timings_s": {
+            "calibration_s": 0.3308012946508825,
+            "detection_id_s": 0.2355863214470446,
+            "stark_ne_s": 0.030021692626178265,
+            "solve_s": 0.007410626858472824,
+            "total_s": 0.6038705273531377
+          },
+          "rmse_wt": 43.68282132888092,
+          "signed_errors_wt": {
+            "Fe": -87.04456052507666,
+            "Cr": -6.0,
+            "Ni": -4.0,
+            "Mn": -2.0
+          }
+        },
+        {
+          "spectrum_id": "steel_like_0012",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.38271531369537115,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0013",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.48406733060255647,
+          "called_present": [
+            "Bi"
+          ],
+          "tp": [],
+          "fp": [
+            "Bi"
+          ],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 100.0,
+            "Cr": 0.0,
+            "Fe": 0.0,
+            "Mn": 0.0,
+            "Ni": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10000.0,
+          "electron_density_cm3": 3.452886270778243e+17,
+          "converged": false,
+          "ne_source": "pressure_balance",
+          "n_observations": 3,
+          "stage_timings_s": {
+            "calibration_s": 0.403249756898731,
+            "detection_id_s": 0.045165701769292355,
+            "stark_ne_s": 0.0002956138923764229,
+            "solve_s": 0.03522460302338004,
+            "total_s": 0.4839836950413883
+          },
+          "rmse_wt": 44.15880433163923,
+          "signed_errors_wt": {
+            "Fe": -88.0,
+            "Cr": -6.0,
+            "Ni": -4.0,
+            "Mn": -2.0
+          }
+        },
+        {
+          "spectrum_id": "steel_like_0017",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.40684642968699336,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Mn",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cr": 0.0,
+            "Fe": 66.66666666666666,
+            "Mn": 0.0,
+            "Ni": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10020.89956093095,
+          "electron_density_cm3": 2.320444977689646e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 10,
+          "stage_timings_s": {
+            "calibration_s": 0.3147835871204734,
+            "detection_id_s": 0.06908117467537522,
+            "stark_ne_s": 0.019247521180659533,
+            "solve_s": 0.0035871188156306744,
+            "total_s": 0.4067491120658815
+          },
+          "rmse_wt": 11.303883305208785,
+          "signed_errors_wt": {
+            "Fe": -21.333333333333343,
+            "Cr": -6.0,
+            "Ni": -4.0,
+            "Mn": -2.0
+          }
+        },
+        {
+          "spectrum_id": "steel_like_0018",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.4409422199241817,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0021",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.3831613566726446,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0023",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.5307017480954528,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0029",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.3349789269268513,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0032",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.36439423402771354,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0038",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.42987319361418486,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0048",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.42731501813977957,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0049",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.5350716398097575,
+          "called_present": [
+            "Cr"
+          ],
+          "tp": [
+            "Cr"
+          ],
+          "fp": [],
+          "fn": [
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cr": 100.0,
+            "Fe": 0.0,
+            "Mn": 0.0,
+            "Ni": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 6837.670816693299,
+          "electron_density_cm3": 1.1749065661575522e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 9,
+          "stage_timings_s": {
+            "calibration_s": 0.29573937924578786,
+            "detection_id_s": 0.23453684756532311,
+            "stark_ne_s": 0.000972215086221695,
+            "solve_s": 0.0036975271068513393,
+            "total_s": 0.5349917421117425
+          },
+          "rmse_wt": 64.42049363362563,
+          "signed_errors_wt": {
+            "Fe": -88.0,
+            "Cr": 94.0,
+            "Ni": -4.0,
+            "Mn": -2.0
+          }
+        },
+        {
+          "spectrum_id": "steel_like_0058",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.735217603854835,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Mn",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cr": 0.0,
+            "Fe": 66.66666666666666,
+            "Mn": 0.0,
+            "Ni": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 8113.483231871488,
+          "electron_density_cm3": 1.4567425594018877e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 8,
+          "stage_timings_s": {
+            "calibration_s": 0.448718439321965,
+            "detection_id_s": 0.2563954256474972,
+            "stark_ne_s": 0.0260294321924448,
+            "solve_s": 0.0039040972478687763,
+            "total_s": 0.7351108640432358
+          },
+          "rmse_wt": 11.303883305208785,
+          "signed_errors_wt": {
+            "Fe": -21.333333333333343,
+            "Cr": -6.0,
+            "Ni": -4.0,
+            "Mn": -2.0
+          }
+        },
+        {
+          "spectrum_id": "steel_like_0059",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.6305481661111116,
+          "called_present": [
+            "Fe"
+          ],
+          "tp": [
+            "Fe"
+          ],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Mn",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cr": 0.0,
+            "Fe": 66.66666666666667,
+            "Mn": 0.0,
+            "Ni": 0.0,
+            "Sn": 0.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 10622.389077730653,
+          "electron_density_cm3": 1.4053531019619192e+18,
+          "converged": true,
+          "ne_source": "stark",
+          "n_observations": 10,
+          "stage_timings_s": {
+            "calibration_s": 0.34432848216965795,
+            "detection_id_s": 0.2489773901179433,
+            "stark_ne_s": 0.031530429143458605,
+            "solve_s": 0.005531747825443745,
+            "total_s": 0.6304280729964375
+          },
+          "rmse_wt": 11.303883305208778,
+          "signed_errors_wt": {
+            "Fe": -21.33333333333333,
+            "Cr": -6.0,
+            "Ni": -4.0,
+            "Mn": -2.0
+          }
+        },
+        {
+          "spectrum_id": "steel_like_0062",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "error",
+          "error": "ValueError: No usable spectral lines detected for inversion.",
+          "wall_s": 0.43043700512498617,
+          "called_present": [],
+          "tp": [],
+          "fp": [],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ]
+        },
+        {
+          "spectrum_id": "steel_like_0065",
+          "truth_elements": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "candidates": [
+            "Ag",
+            "Bi",
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni",
+            "Sn",
+            "Th",
+            "W"
+          ],
+          "composition_basis": "element_wt",
+          "status": "ok",
+          "error": null,
+          "wall_s": 0.44709076592698693,
+          "called_present": [
+            "Sn"
+          ],
+          "tp": [],
+          "fp": [
+            "Sn"
+          ],
+          "fn": [
+            "Cr",
+            "Fe",
+            "Mn",
+            "Ni"
+          ],
+          "predicted_wt": {
+            "Ag": 0.0,
+            "Bi": 0.0,
+            "Cr": 0.0,
+            "Fe": 0.0,
+            "Mn": 0.0,
+            "Ni": 0.0,
+            "Sn": 100.0,
+            "Th": 0.0,
+            "W": 0.0
+          },
+          "temperature_K": 17429.063164165145,
+          "electron_density_cm3": 2.1071516400103187e+17,
+          "converged": true,
+          "ne_source": "pressure_balance",
+          "n_observations": 10,
+          "stage_timings_s": {
+            "calibration_s": 0.39718196308240294,
+            "detection_id_s": 0.04572287807241082,
+            "stark_ne_s": 0.0006560226902365685,
+            "solve_s": 0.0033726957626640797,
+            "total_s": 0.4469937230460346
+          },
+          "rmse_wt": 44.15880433163923,
+          "signed_errors_wt": {
+            "Fe": -88.0,
+            "Cr": -6.0,
+            "Ni": -4.0,
+            "Mn": -2.0
+          }
+        }
+      ]
+    }
+  ]
+}
