@@ -189,7 +189,10 @@ SPACE: tuple[Knob, ...] = (
         "closure_mode",
         "cat",
         "oxide",
-        choices=("standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residual"),
+        # 'matrix' excluded: it requires a global matrix_element, which does not
+        # exist for per-spectrum candidate sets — every draw died with the
+        # failure death penalty in the smoke study (~1/6 of startup budget).
+        choices=("standard", "oxide", "ilr", "pwlr", "dirichlet_residual"),
         note="per-preset (geological run tunes the geological closure), not per-dataset",
     ),
     Knob("stark_ne", "pipeline", "stark_ne", "cat", True, choices=(False, True)),
