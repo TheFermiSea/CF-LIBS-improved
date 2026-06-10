@@ -131,11 +131,11 @@ def test_clean_trial_scores_identically_under_v1_and_v2():
     v2 = objective_mod.compute_fitness(_rows(), BASE_REF, fitness_version=2)
     assert not v1.death and not v2.catastrophic
     assert v2.fitness == pytest.approx(v1.fitness)
-    assert v2.graded_total_penalty == 0.0
+    assert v2.graded_total_penalty == pytest.approx(0.0, abs=0)
     # In-allowance counts are free: fp = base+1, n_failed = ceil(1.25*base).
     rows = _rows(real_wt=_row("real_wt", basis="element_wt", rmse=5.0, fp=1, n_failed=2))
     graded = objective_mod.compute_fitness(rows, BASE_REF, fitness_version=2)
-    assert graded.graded_total_penalty == 0.0
+    assert graded.graded_total_penalty == pytest.approx(0.0, abs=0)
 
 
 @pytest.mark.unit
