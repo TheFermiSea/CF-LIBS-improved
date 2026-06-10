@@ -88,14 +88,17 @@ SpectrumRecord = AdapterYield
 """One adapter yield: ``(spectrum_id, wavelength_nm, intensity, truth)``."""
 
 
-def _missing(dataset: str, path: Path, needs: str) -> None:
-    """Log the skip-with-log message for an absent dataset file."""
-    logger.warning(
-        "Skipping %s adapter: %s not found. %s",
-        dataset,
-        path,
-        needs,
-    )
+def _require(dataset: str, needs: str, *checks: tuple[Path, bool]) -> bool:
+    """Skip-with-log presence guard: every ``(path, present)`` check must pass.
+
+    Logs the first missing path together with the dataset's acquisition hint
+    and returns False so the wrapper can yield nothing (adapter contract).
+    """
+    for path, present in checks:
+        if not present:
+            logger.warning("Skipping %s adapter: %s not found. %s", dataset, path, needs)
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -118,14 +121,14 @@ def iter_csa_planetary_spectra(data_dir: Path | None = None) -> Iterator[Spectru
     root = Path(data_dir) if data_dir is not None else DATA_ROOT / "csa_planetary_libs"
     extracted = root / "extracted"
     comp_csv = root / "Sample_Composition_Data_LargeSet.csv"
-    if not extracted.is_dir() or not comp_csv.is_file():
-        _missing(
-            "csa_planetary",
-            extracted if not extracted.is_dir() else comp_csv,
-            "Extract LIBSOpenDatacsv.7z into data/csa_planetary_libs/extracted/ "
-            "(needs the two 'csv ...pulseaverage' folders) and keep "
-            "Sample_Composition_Data_LargeSet.csv next to the archive.",
-        )
+    if not _require(
+        "csa_planetary",
+        "Extract LIBSOpenDatacsv.7z into data/csa_planetary_libs/extracted/ "
+        "(needs the two 'csv ...pulseaverage' folders) and keep "
+        "Sample_Composition_Data_LargeSet.csv next to the archive.",
+        (extracted, extracted.is_dir()),
+        (comp_csv, comp_csv.is_file()),
+    ):
         return
     yield from csa_planetary.iter_spectra(root)
 
@@ -144,14 +147,14 @@ def iter_chemcam_calibration_spectra(data_dir: Path | None = None) -> Iterator[S
     root = Path(data_dir) if data_dir is not None else DATA_ROOT / "chemcam_calib"
     spectra_csv = root / "msl_ccam_libs_calib.csv"
     comp_csv = root / "ccam_calibration_compositions.csv"
-    if not spectra_csv.is_file() or not comp_csv.is_file():
-        _missing(
-            "chemcam_calib",
-            spectra_csv if not spectra_csv.is_file() else comp_csv,
-            "Download MSL_CCAM_LIBS_CALIB.CSV and CCAM_CALIBRATION_COMPOSITIONS.CSV "
-            "from the PDS Geosciences node (MSL ChemCam LIBS RDR CALIB directory, "
-            "msl-m-chemcam-libs-4_5-rdr-v1) into data/chemcam_calib/.",
-        )
+    if not _require(
+        "chemcam_calib",
+        "Download MSL_CCAM_LIBS_CALIB.CSV and CCAM_CALIBRATION_COMPOSITIONS.CSV "
+        "from the PDS Geosciences node (MSL ChemCam LIBS RDR CALIB directory, "
+        "msl-m-chemcam-libs-4_5-rdr-v1) into data/chemcam_calib/.",
+        (spectra_csv, spectra_csv.is_file()),
+        (comp_csv, comp_csv.is_file()),
+    ):
         return
     yield from chemcam_calib.iter_spectra(root)
 
@@ -172,15 +175,15 @@ def iter_emslibs2019_spectra(
     root = Path(data_dir) if data_dir is not None else DATA_ROOT / "vrabel2020_soil_benchmark"
     train_h5 = root / "train.h5"
     support = root / "support_tables.xlsx"
-    if not train_h5.is_file() or not support.is_file():
-        _missing(
-            "emslibs2019",
-            train_h5 if not train_h5.is_file() else support,
-            "Download train.h5 and support_tables.xlsx from the EMSLIBS 2019 "
-            "contest archive (Kepes/Vrabel et al. 2020, "
-            "https://doi.org/10.6084/m9.figshare.c.4768790) into "
-            "data/vrabel2020_soil_benchmark/.",
-        )
+    if not _require(
+        "emslibs2019",
+        "Download train.h5 and support_tables.xlsx from the EMSLIBS 2019 "
+        "contest archive (Kepes/Vrabel et al. 2020, "
+        "https://doi.org/10.6084/m9.figshare.c.4768790) into "
+        "data/vrabel2020_soil_benchmark/.",
+        (train_h5, train_h5.is_file()),
+        (support, support.is_file()),
+    ):
         return
     try:
         import h5py  # noqa: F401
@@ -202,13 +205,13 @@ def iter_silva2022_spectra(data_dir: Path | None = None) -> Iterator[SpectrumRec
     root = Path(data_dir) if data_dir is not None else DATA_ROOT / "silva2022_tropical_soils"
     libs_txt = root / "LIBS_data.txt"
     fert_txt = root / "soil_fertility_data.txt"
-    if not libs_txt.is_file() or not fert_txt.is_file():
-        _missing(
-            "silva2022",
-            libs_txt if not libs_txt.is_file() else fert_txt,
-            "Place LIBS_data.txt and soil_fertility_data.txt (Silva et al. 2022 "
-            "tropical-soils deposit) into data/silva2022_tropical_soils/.",
-        )
+    if not _require(
+        "silva2022",
+        "Place LIBS_data.txt and soil_fertility_data.txt (Silva et al. 2022 "
+        "tropical-soils deposit) into data/silva2022_tropical_soils/.",
+        (libs_txt, libs_txt.is_file()),
+        (fert_txt, fert_txt.is_file()),
+    ):
         return
     yield from silva2022.iter_spectra(root)
 
@@ -225,13 +228,12 @@ def iter_gibbons2024_spectra(data_dir: Path | None = None) -> Iterator[SpectrumR
 
     root = Path(data_dir) if data_dir is not None else DATA_ROOT / "gibbons2024_nitrogen_libs"
     xlsx = root / "SI_Raw_Spectral_Data.xlsx"
-    if not xlsx.is_file():
-        _missing(
-            "gibbons2024",
-            xlsx,
-            "Place SI_Raw_Spectral_Data.xlsx (Gibbons et al. supporting "
-            "information) into data/gibbons2024_nitrogen_libs/.",
-        )
+    if not _require(
+        "gibbons2024",
+        "Place SI_Raw_Spectral_Data.xlsx (Gibbons et al. supporting "
+        "information) into data/gibbons2024_nitrogen_libs/.",
+        (xlsx, xlsx.is_file()),
+    ):
         return
     try:
         import openpyxl  # noqa: F401
