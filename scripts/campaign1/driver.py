@@ -60,6 +60,11 @@ DEFAULT_SEED = 20260610
 DEFAULT_BUDGET_CORE_HOURS = 600.0
 DEFAULT_TARGET_TRIALS = 800
 DEFAULT_DATASETS = ",".join(splits.OPTIMIZATION_DATASETS)
+#: New studies default to the graded FITNESS-V2 math (run1's flat death
+#: penalties gave TPE a flat landscape: 79/80 trials at -1e9). Studies
+#: initialized before this knob existed (run1) carry no ``fitness_version``
+#: key and resolve to 1.
+DEFAULT_FITNESS_VERSION = 2
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +127,75 @@ def load_study_config(study_dir: Path) -> dict[str, Any]:
     return json.loads((Path(study_dir) / CONFIG_FILENAME).read_text())
 
 
+def resolve_fitness_version(
+    study_dir: Path, cfg: dict[str, Any], cli_value: Optional[int] = None
+) -> int:
+    """The study's pinned fitness version, refusing any mismatch.
+
+    A journal must never mix fitness maths: trial values of different
+    versions are not comparable and would corrupt TPE's ranking. The pin
+    lives in the study config (and in ``frozen_manifest.json``'s ``extra``);
+    pre-v2 studies (run1) carry no key and resolve to 1. A worker started
+    with an explicit ``--fitness-version`` that contradicts the pin is
+    refused — re-init a new study dir instead of appending mixed trials.
+    """
+    pinned = int(cfg.get("fitness_version", 1))
+    manifest_path = Path(study_dir) / knob_space.FROZEN_MANIFEST_FILENAME
+    if manifest_path.exists():
+        extra = json.loads(manifest_path.read_text()).get("extra") or {}
+        manifest_pin = extra.get("fitness_version")
+        if manifest_pin is not None and int(manifest_pin) != pinned:
+            raise SystemExit(
+                f"fitness_version mismatch: study config pins {pinned} but "
+                f"{knob_space.FROZEN_MANIFEST_FILENAME} pins {manifest_pin} — "
+                "the study dir is inconsistent; refusing to run."
+            )
+    if cli_value is not None and int(cli_value) != pinned:
+        raise SystemExit(
+            f"--fitness-version {cli_value} conflicts with the study's pinned "
+            f"version {pinned}; refusing to append mixed-fitness trials to the "
+            "journal. Initialize a new study dir for a different version."
+        )
+    if pinned not in objective_mod.SUPPORTED_FITNESS_VERSIONS:
+        raise SystemExit(f"Study pins unsupported fitness_version {pinned}.")
+    return pinned
+
+
+# ---------------------------------------------------------------------------
+# Warm starts (rescore.py output -> enqueued trials)
+# ---------------------------------------------------------------------------
+
+
+def load_warm_start_params(path: Path | str) -> list[dict[str, Any]]:
+    """Param dicts from a warm-start file (rescore.py output or a bare list)."""
+    data = json.loads(Path(path).read_text())
+    entries = data["params"] if isinstance(data, dict) else data
+    if not isinstance(entries, list) or not all(isinstance(p, dict) for p in entries):
+        raise SystemExit(f"{path}: expected a JSON list of param dicts (or {{'params': [...]}}).")
+    return entries
+
+
+def enqueue_warm_starts(study: optuna.Study, path: Path | str) -> int:
+    """Enqueue every warm-start param dict; returns the number enqueued.
+
+    Params unknown to the CURRENT knob space are dropped with a warning —
+    the knob-space-v2 / use_deconvolution interplay: rescore.py already
+    strips params removed from the space, but this guard makes init safe
+    against hand-edited files too (an unknown fixed param would otherwise
+    ride along as journal noise).
+    """
+    known = {knob.param for knob in knob_space.SPACE}
+    n = 0
+    for params in load_warm_start_params(path):
+        filtered = {k: v for k, v in params.items() if k in known}
+        dropped = sorted(set(params) - set(filtered))
+        if dropped:
+            print(f"warm-start: dropping params not in {knob_space.KNOB_SPACE_VERSION}: {dropped}")
+        study.enqueue_trial(filtered)
+        n += 1
+    return n
+
+
 def build_context(cfg: dict[str, Any], n_procs: int) -> objective_mod.EvalContext:
     manifest = splits.load_manifest(cfg["splits_manifest_path"])
     return objective_mod.EvalContext(
@@ -168,6 +242,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         "preset": args.preset,
         "per_spectrum_timeout_s": args.per_spectrum_timeout,
         "knob_space_version": knob_space.KNOB_SPACE_VERSION,
+        "fitness_version": args.fitness_version,
     }
     (study_dir / CONFIG_FILENAME).write_text(json.dumps(cfg, indent=2))
 
@@ -177,7 +252,17 @@ def cmd_init(args: argparse.Namespace) -> int:
         splits_manifest_path=cfg["splits_manifest_path"],
         db_path=cfg["db_path"],
         seed=args.seed,
-        extra={"datasets": list(datasets), "spectra_per_dataset": args.spectra_per_dataset},
+        extra={
+            "datasets": list(datasets),
+            "spectra_per_dataset": args.spectra_per_dataset,
+            "fitness_version": args.fitness_version,
+            "fitness_constants": {
+                "lambda_fp": objective_mod.LAMBDA_FP,
+                "lambda_fail": objective_mod.LAMBDA_FAIL,
+                "catastrophic_penalty": objective_mod.CATASTROPHIC_PENALTY,
+                "catastrophic_fitness": objective_mod.CATASTROPHIC_FITNESS,
+            },
+        },
     )
 
     # Baseline evaluation: the death-penalty reference (FP / failure counts on
@@ -207,9 +292,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     )
     for params in knob_space.seed_trial_params():
         study.enqueue_trial(params)
+    n_warm = 0
+    if args.enqueue_from:
+        n_warm = enqueue_warm_starts(study, args.enqueue_from)
     print(
         f"Initialized study at {study_dir}: {len(knob_space.seed_trial_params())} seed "
-        f"trials enqueued, baseline wall {wall:.1f}s, "
+        f"trials + {n_warm} warm-start trials enqueued, "
+        f"fitness_version {args.fitness_version}, baseline wall {wall:.1f}s, "
         f"budget {args.budget_core_hours} core-hours."
     )
     return 0
@@ -220,13 +309,17 @@ def cmd_init(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
-def make_objective(ctx, baseline_ref, study_dir: Path, cpus: int, worker_id: str):
+def make_objective(
+    ctx, baseline_ref, study_dir: Path, cpus: int, worker_id: str, fitness_version: int = 1
+):
     def _objective(trial: optuna.Trial) -> float:
         t0 = time.perf_counter()
         try:
             params = knob_space.suggest_params(trial)
             overrides = knob_space.params_to_overrides(params)
-            report, board = objective_mod.evaluate_candidate(overrides, ctx, baseline_ref)
+            report, board = objective_mod.evaluate_candidate(
+                overrides, ctx, baseline_ref, fitness_version=fitness_version
+            )
         finally:
             wall = time.perf_counter() - t0
             append_ledger(
@@ -286,6 +379,7 @@ def cmd_worker(args: argparse.Namespace) -> int:
     print(f"cflibs={Path(cflibs.__file__).resolve().parent}")
     study_dir = Path(args.study_dir)
     cfg = load_study_config(study_dir)
+    fitness_version = resolve_fitness_version(study_dir, cfg, args.fitness_version)
     cpus = args.cpus or detect_cpus()
     worker_id = str(args.worker_id)
     baseline_ref = json.loads((study_dir / BASELINE_FILENAME).read_text())["reference"]
@@ -302,7 +396,9 @@ def cmd_worker(args: argparse.Namespace) -> int:
     study = optuna.load_study(
         study_name=cfg["study_name"], storage=study_storage(study_dir), sampler=sampler
     )
-    objective_fn = make_objective(ctx, baseline_ref, study_dir, cpus, worker_id)
+    objective_fn = make_objective(
+        ctx, baseline_ref, study_dir, cpus, worker_id, fitness_version=fitness_version
+    )
 
     done = 0
     while True:
@@ -342,7 +438,10 @@ def cmd_status(args: argparse.Namespace) -> int:
     best: Optional[optuna.trial.FrozenTrial] = None
     if complete:
         best = max(complete, key=lambda t: t.value)
-    print(f"study: {cfg['study_name']} @ {study_dir}")
+    print(
+        f"study: {cfg['study_name']} @ {study_dir} "
+        f"(fitness_version {cfg.get('fitness_version', 1)})"
+    )
     print(
         f"trials: total={len(trials)} complete={len(complete)} "
         f"failed={sum(t.state == optuna.trial.TrialState.FAIL for t in trials)} "
@@ -396,6 +495,21 @@ def main(argv: Optional[list[str]] = None) -> int:
     # Default 8 (eff#5): the baseline evaluation is a full per-trial-sample
     # scoreboard run; single-process it dominates init wall time for nothing.
     p_init.add_argument("--n-procs", type=int, default=8)
+    p_init.add_argument(
+        "--fitness-version",
+        type=int,
+        default=DEFAULT_FITNESS_VERSION,
+        choices=objective_mod.SUPPORTED_FITNESS_VERSIONS,
+        help="Fitness math for the whole study (pinned in study config + frozen "
+        f"manifest; default {DEFAULT_FITNESS_VERSION} = graded penalties)",
+    )
+    p_init.add_argument(
+        "--enqueue-from",
+        default=None,
+        help="Warm-start file (rescore.py output: top-K param dicts) to "
+        "enqueue_trial at init; params unknown to the current knob space "
+        "(e.g. use_deconvolution) are dropped with a warning",
+    )
 
     p_worker = sub.add_parser("worker", help="Consume trials until STOP/budget/target")
     p_worker.add_argument("--study-dir", required=True)
@@ -403,6 +517,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_worker.add_argument("--worker-id", default=os.environ.get("SLURM_ARRAY_TASK_ID", "0"))
     p_worker.add_argument("--n-procs", type=int, default=1)
     p_worker.add_argument("--cpus", type=int, default=None, help="Cores to charge per wall-hour")
+    p_worker.add_argument(
+        "--fitness-version",
+        type=int,
+        default=None,
+        choices=objective_mod.SUPPORTED_FITNESS_VERSIONS,
+        help="Assert the study's pinned fitness version (mismatch = refusal); "
+        "default: use the pin from the study config",
+    )
 
     p_status = sub.add_parser("status", help="Study summary")
     p_status.add_argument("--study-dir", required=True)
