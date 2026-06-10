@@ -219,7 +219,7 @@ class TestIpdLevelCutoff:
         plasma = SingleZoneLTEPlasma(T_e=1.0 * EV_TO_K, n_e=1e18, species={"Fe": 1e16})
         n_upper = np.asarray(_saha_three_stage_populations(plasma, snapshot))
         assert n_upper[0] > 0.0  # E_k = 3.0 eV: bound, populated
-        assert n_upper[1] == 0.0  # E_k = 7.88 eV > 7.9 - Δχ: continuum
+        assert n_upper[1] == pytest.approx(0.0, abs=0)  # E_k = 7.88 eV > 7.9 - Δχ: continuum
 
     def test_near_ip_line_kept_at_low_density(self):
         """At 1e14 cm^-3, Δχ ≈ 0.007 eV keeps E_k = 7.88 below the cutoff."""
@@ -243,7 +243,7 @@ class TestBackCompat:
         assert snapshot.partition_coeffs_iii is None
         plasma = SingleZoneLTEPlasma(T_e=1.0 * EV_TO_K, n_e=1e17, species={"Fe": 1e16})
         fractions = snapshot_ionization_fractions(plasma, snapshot)
-        assert fractions["Fe"][3] == 0.0
+        assert fractions["Fe"][3] == pytest.approx(0.0, abs=0)
         assert fractions["Fe"][1] + fractions["Fe"][2] == pytest.approx(1.0, abs=1e-9)
 
     def test_two_stage_alias_points_at_three_stage(self):

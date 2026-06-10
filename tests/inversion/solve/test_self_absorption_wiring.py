@@ -150,11 +150,11 @@ def test_mode_off_bit_identical_to_default():
     assert res_off.concentrations == res_default.concentrations
     assert res_off.quality_metrics == res_default.quality_metrics
     # Off mode reports zeroed SA diagnostics.
-    assert res_off.quality_metrics["self_absorption_applied"] == 0.0
-    assert res_off.quality_metrics["self_absorption_max_tau"] == 0.0
-    assert res_off.quality_metrics["max_tau_estimate"] == 0.0
-    assert res_off.quality_metrics["n_lines_sa_corrected"] == 0.0
-    assert res_off.quality_metrics["n_lines_sa_suspect"] == 0.0
+    assert res_off.quality_metrics["self_absorption_applied"] == pytest.approx(0.0, abs=0)
+    assert res_off.quality_metrics["self_absorption_max_tau"] == pytest.approx(0.0, abs=0)
+    assert res_off.quality_metrics["max_tau_estimate"] == pytest.approx(0.0, abs=0)
+    assert res_off.quality_metrics["n_lines_sa_corrected"] == pytest.approx(0.0, abs=0)
+    assert res_off.quality_metrics["n_lines_sa_suspect"] == pytest.approx(0.0, abs=0)
 
 
 def test_observable_mode_noop_without_observables():
@@ -174,8 +174,8 @@ def test_observable_mode_noop_without_observables():
 
     assert res_on.temperature_K == res_off.temperature_K
     assert res_on.concentrations == res_off.concentrations
-    assert res_on.quality_metrics["n_lines_sa_corrected"] == 0.0
-    assert res_on.quality_metrics["n_lines_sa_suspect"] == 0.0
+    assert res_on.quality_metrics["n_lines_sa_corrected"] == pytest.approx(0.0, abs=0)
+    assert res_on.quality_metrics["n_lines_sa_suspect"] == pytest.approx(0.0, abs=0)
 
 
 # ---------------------------------------------------------------------------
@@ -235,10 +235,10 @@ def test_observable_mode_never_boosts_unpaired_lines():
     obs = []
     for element, lam, A_ki, g_k, E_k in _LINES:
         i_thin = _thin_intensity(_TRUE_NFRAC[element], g_k, A_ki, E_k, lam)
-        i_obs = i_thin * (_escape_factor(2.0) if lam == 445.48 else 1.0)
+        i_obs = i_thin * (_escape_factor(2.0) if abs(lam - 445.48) < 1e-6 else 1.0)
         obs.append(LineObservation(lam, i_obs, i_obs * 0.02, element, 1, E_k, g_k, A_ki))
     # Remove a doublet member so the 4.78 eV pair cannot fire either.
-    obs = [o for o in obs if o.wavelength_nm != 487.81]
+    obs = [o for o in obs if abs(o.wavelength_nm - 487.81) > 1e-6]
 
     result = _solve(obs, apply_self_absorption="observable")
-    assert result.quality_metrics["n_lines_sa_corrected"] == 0.0
+    assert result.quality_metrics["n_lines_sa_corrected"] == pytest.approx(0.0, abs=0)

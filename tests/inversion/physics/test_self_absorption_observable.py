@@ -176,7 +176,7 @@ class TestPlanckRung:
         peak_thick = b * (1.0 - math.exp(-4.5))
         pc = correct_intensity_planck(1.0, peak_thick, self.WL, self.T_K)
         assert not pc.valid
-        assert pc.correction_factor == 1.0
+        assert pc.correction_factor == pytest.approx(1.0, abs=0)
         assert pc.tau_0 > PLANCK_TAU_VALIDITY_MAX
 
     def test_doppler_cog_escape_factor_matches_numerical_integral(self):
