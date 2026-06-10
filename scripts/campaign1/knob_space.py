@@ -272,9 +272,14 @@ SPACE: tuple[Knob, ...] = (
         6,
     ),
     Knob("poisson_floor_scale", "detection", "poisson_floor_scale", "float", 1.0, 0.3, 3.0),
-    Knob(
-        "use_deconvolution", "detection", "use_deconvolution", "cat", False, choices=(False, True)
-    ),
+    # use_deconvolution: REMOVED from the space (like the matrix-closure
+    # exclusion). A True draw wedged a pool child inside JAX
+    # backend_compile_and_load for 13+ minutes (GIL-released C/XLA that no
+    # SIGALRM can interrupt) — the SLURM task died, ~32 core-hours went
+    # unledgered, and TPE was blind to the cause. The detection default
+    # (False) is what every candidate now gets. Optuna tolerates the space
+    # change mid-study: old journal trials keep their recorded param, new
+    # suggestions simply never draw it.
 )
 
 
