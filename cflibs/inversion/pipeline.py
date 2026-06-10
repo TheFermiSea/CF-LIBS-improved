@@ -458,6 +458,8 @@ def detect_and_select_lines(
         with ``return_diagnostics=True``, a ``(selected_lines, diagnostics)``
         tuple.
     """
+    import time
+
     import numpy as np
 
     from cflibs.inversion.identify.line_detection import detect_line_observations
@@ -465,6 +467,8 @@ def detect_and_select_lines(
     from cflibs.inversion.preprocess.wavelength_calibration import (
         calibrate_wavelength_axis_segmented,
     )
+
+    calibration_s = 0.0
 
     # Robust per-spectrum wavelength calibration BEFORE detection. Real LIBS
     # instruments carry a per-spectrum (and, for stitched multi-channel
@@ -479,6 +483,7 @@ def detect_and_select_lines(
     # residual ``shift_scan_nm`` is needed to mop up sub-tolerance jitter.
     shift_scan_nm = 0.5  # legacy global scan (used when calibration disabled)
     if wavelength_calibration:
+        _cal_t0 = time.perf_counter()
         try:
             cal = calibrate_wavelength_axis_segmented(
                 wavelength=np.asarray(wavelength, dtype=float),
@@ -509,6 +514,7 @@ def detect_and_select_lines(
                 "falling back to global comb shift-scan.",
                 reason,
             )
+        calibration_s = time.perf_counter() - _cal_t0
 
     detection = detect_line_observations(
         wavelength=wavelength,
@@ -574,6 +580,9 @@ def detect_and_select_lines(
         # band, and the contaminated matches dropped at observation build.
         "residual_gate": detection.residual_gate,
         "applied_shift_nm": detection.applied_shift_nm,
+        # Wall-clock spent in the wavelength-calibration stage (bead A1
+        # scoreboard); ``run_pipeline`` folds this into ``stage_timings``.
+        "calibration_s": calibration_s,
     }
     return selection.selected_lines, diagnostics
 
@@ -666,10 +675,16 @@ def run_pipeline(
     The single execution path behind ``analyze``, ``invert``, ``batch`` and
     the benchmark harnesses. Returns ``(result, diagnostics)`` where
     ``diagnostics`` carries the resolved preset, the requested-but-dropped
-    element map for the trust report, and per-element observation counts
-    (``observation_counts``) for benchmark scoring.
+    element map for the trust report, per-element observation counts
+    (``observation_counts``) for benchmark scoring, and per-stage wall-clock
+    timings (``stage_timings``: calibration / detection+ID / stark n_e /
+    solve, in seconds) for the goal-metric scoreboard (bead A1).
     """
+    import time
+
     from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+
+    _t_start = time.perf_counter()
 
     # Spectral-response correction FIRST (audit 02-F5): divide the measured
     # spectrum by the relative detection efficiency E(lambda) before any
@@ -690,6 +705,7 @@ def run_pipeline(
             *correction.coverage_nm,
         )
 
+    _t_detect0 = time.perf_counter()
     observations, diagnostics = detect_and_select_lines(
         wavelength,
         intensity,
@@ -715,6 +731,7 @@ def run_pipeline(
         line_residual_gate=pipeline.line_residual_gate,
         return_diagnostics=True,
     )
+    _detect_s = time.perf_counter() - _t_detect0
     diagnostics["preset"] = pipeline.preset
     diagnostics["saha_boltzmann_graph"] = pipeline.saha_boltzmann_graph
     diagnostics["closure_mode"] = pipeline.closure_mode
@@ -740,6 +757,7 @@ def run_pipeline(
     # no line qualifies, stark_diagnostics stays None and the solver keeps the
     # existing (warned) fallback path — behaviour unchanged.
     stark_diagnostics = None
+    _t_stark0 = time.perf_counter()
     if pipeline.stark_ne:
         from cflibs.inversion.physics.stark_ne import measure_stark_ne
 
@@ -774,6 +792,7 @@ def run_pipeline(
             }
             if stark_result.usable:
                 stark_diagnostics = stark_result.diagnostics
+    _stark_s = time.perf_counter() - _t_stark0
 
     solver = IterativeCFLIBSSolver(
         atomic_db=atomic_db,
@@ -788,6 +807,7 @@ def run_pipeline(
     )
 
     closure_kwargs = _finalize_closure_kwargs(pipeline, observations)
+    _t_solve0 = time.perf_counter()
     result = _solve_analyze_result(
         solver,
         observations,
@@ -796,6 +816,21 @@ def run_pipeline(
         uncertainty_mode,
         stark_diagnostics=stark_diagnostics,
     )
+    _solve_s = time.perf_counter() - _t_solve0
+
+    # Per-stage wall-clock timings (bead A1 scoreboard): runtime is a goal
+    # metric, so the production pipeline reports where each second went.
+    # ``calibration_s`` is measured inside ``detect_and_select_lines`` and is
+    # a subset of the detection call; ``detection_id_s`` is the remainder
+    # (peak detection, line matching, selection gates).
+    _calibration_s = float(diagnostics.pop("calibration_s", 0.0))
+    diagnostics["stage_timings"] = {
+        "calibration_s": _calibration_s,
+        "detection_id_s": max(_detect_s - _calibration_s, 0.0),
+        "stark_ne_s": _stark_s,
+        "solve_s": _solve_s,
+        "total_s": time.perf_counter() - _t_start,
+    }
 
     # Solver-stage drops: requested elements that survived detection and
     # selection but ended the solve with no mass attributed.
