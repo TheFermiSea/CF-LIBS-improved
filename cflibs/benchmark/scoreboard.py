@@ -16,6 +16,16 @@ Reproduce::
 
     JAX_PLATFORMS=cpu cflibs scoreboard --output-dir output/scoreboard
 
+Tier policy
+-----------
+Each registered dataset declares a tier (:class:`DatasetEntry.tier`):
+``optimization`` datasets always run; ``holdout`` datasets (the campaign
+adoption gate, e.g. bhvo2_chemcam, emslibs2019) are EXCLUDED unless
+``include_holdout=True`` (CLI ``--include-holdout``) so casual boards cannot
+leak the gate; ``vault`` datasets (gibbons2024) are never run by this
+harness. Explicitly requesting an excluded dataset is a hard error, never a
+silent skip.
+
 Candidate-set policy
 --------------------
 For each spectrum the pipeline is given ``candidates = truth.elements_present
@@ -56,7 +66,13 @@ import numpy as np
 
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
-from cflibs.benchmark.scoreboard_registry import SpectrumTruth, iter_datasets
+from cflibs.benchmark.scoreboard_registry import (
+    SpectrumTruth,
+    ensure_default_datasets,
+    iter_datasets,
+    registered_names,
+)
+from cflibs.benchmark.synthetic_eval import compute_binary_metrics
 
 logger = get_logger("benchmark.scoreboard")
 
@@ -69,6 +85,11 @@ PRESENCE_EPS_MASSFRAC = 5e-3
 
 #: Default sampling seed (date-stamped; recorded in every artifact).
 DEFAULT_SEED = 20260610
+
+#: Artifact label for ``preset=None`` (the production default). Shared with
+#: the campaign objective (scripts/campaign1/objective.py) so boards from
+#: both harnesses report the same provenance string.
+DEFAULT_PRESET_LABEL = "geological (production default)"
 
 
 # ---------------------------------------------------------------------------
@@ -94,12 +115,42 @@ def presence_confusion(
     }
 
 
+def failure_record(
+    spectrum_id: str,
+    truth: SpectrumTruth,
+    candidates: Sequence[str],
+    error: str,
+    wall_s: float,
+) -> dict[str, Any]:
+    """Scoreboard record for a spectrum whose pipeline run produced no result.
+
+    A failed solve calls nothing present: every truth element counts as a
+    false negative (the end user gets no answer). Shared by the scoreboard's
+    pipeline except-path and the campaign objective's timeout/crash records
+    (``scripts/campaign1/objective.py``) so the two failure shapes can never
+    drift apart.
+    """
+    record: dict[str, Any] = {
+        "spectrum_id": spectrum_id,
+        "truth_elements": sorted(truth.elements_present),
+        "candidates": list(candidates),
+        "composition_basis": truth.composition_basis,
+        "status": "error",
+        "error": error,
+        "wall_s": wall_s,
+    }
+    record.update(presence_confusion({}, truth.elements_present, candidates))
+    return record
+
+
 def precision_recall_f1(n_tp: int, n_fp: int, n_fn: int) -> tuple[float, float, float]:
-    """Micro precision/recall/F1 from confusion counts (0.0 on empty denominators)."""
-    precision = n_tp / (n_tp + n_fp) if (n_tp + n_fp) > 0 else 0.0
-    recall = n_tp / (n_tp + n_fn) if (n_tp + n_fn) > 0 else 0.0
-    f1 = 2.0 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    return precision, recall, f1
+    """Micro precision/recall/F1 from confusion counts (0.0 on empty denominators).
+
+    Thin delegate to :func:`cflibs.benchmark.synthetic_eval.compute_binary_metrics`
+    — the single source for this metric math (TN plays no role in micro P/R/F1).
+    """
+    metrics = compute_binary_metrics(n_tp, n_fp, n_fn, 0)
+    return metrics["precision"], metrics["recall"], metrics["f1"]
 
 
 def composition_errors(
@@ -122,23 +173,6 @@ def composition_errors(
 
 def _median(values: Sequence[float]) -> Optional[float]:
     return float(np.median(np.asarray(values, dtype=float))) if values else None
-
-
-def apply_config_overrides(pipeline: Any, config_overrides: Optional[Mapping[str, Any]]) -> Any:
-    """Apply knob overrides onto a built :class:`AnalysisPipelineConfig`.
-
-    Campaign-tooling hook (docs/audit/2026-06-10-goalfirst/
-    optimization-program-design.md): the optimization layer searches over
-    pipeline knobs by overriding fields on the *resolved* production config,
-    so a candidate differs from production by exactly the recorded dict.
-    Unknown field names fail fast — a typo must not silently evaluate the
-    production default.
-    """
-    for key, value in (config_overrides or {}).items():
-        if not hasattr(pipeline, key):
-            raise AttributeError(f"AnalysisPipelineConfig has no knob {key!r}")
-        setattr(pipeline, key, value)
-    return pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -172,15 +206,17 @@ def _score_spectrum(
             candidates,
             preset=preset,
             resolving_power=truth.resolving_power,
+            overrides=config_overrides,
         )
-        apply_config_overrides(pipeline, config_overrides)
         result, diagnostics = run_pipeline(wavelength, intensity, atomic_db, pipeline)
     except Exception as exc:  # noqa: BLE001 — the board must never crash
-        record["status"] = "error"
-        record["error"] = f"{type(exc).__name__}: {exc}"
-        record["wall_s"] = time.perf_counter() - t0
-        # A failed solve calls nothing present: all truth elements are FN.
-        record.update(presence_confusion({}, truth.elements_present, candidates))
+        record = failure_record(
+            spectrum_id,
+            truth,
+            candidates,
+            f"{type(exc).__name__}: {exc}",
+            time.perf_counter() - t0,
+        )
         logger.warning("scoreboard: %s failed: %s", spectrum_id, record["error"])
         return record
 
@@ -299,6 +335,7 @@ def run_scoreboard(
     seed: int = DEFAULT_SEED,
     preset: Optional[str] = None,
     config_overrides: Optional[Mapping[str, Any]] = None,
+    include_holdout: bool = False,
 ) -> dict[str, Any]:
     """Run the goal-metric scoreboard over the registered datasets.
 
@@ -317,17 +354,26 @@ def run_scoreboard(
     preset : str or None
         Pipeline preset override; ``None`` = the production default
         (``geological``). Exposed for ablation runs only.
+    include_holdout : bool
+        Run holdout-tier datasets too (deliberate adoption-gate measurement).
+        Default False: holdout datasets are skipped (or, when requested by
+        name, refused). Vault-tier datasets never run regardless.
     config_overrides : Mapping[str, Any] or None
-        Knob overrides applied to every resolved pipeline config (see
-        :func:`apply_config_overrides`). Campaign tooling only; recorded in
-        the artifact so every board is attributable to an exact config.
+        Knob overrides routed through the top precedence tier of
+        :func:`cflibs.inversion.pipeline.build_pipeline_config` (validated,
+        normalized and logged like every other tier). Campaign tooling only;
+        recorded in the artifact so every board is attributable to an exact
+        config.
     """
     import cflibs
+
+    if not registered_names():  # bare interpreter: load the default board
+        ensure_default_datasets()
 
     board: dict[str, Any] = {
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "cflibs_path": str(Path(cflibs.__file__).resolve().parent),
-        "preset": preset or "geological (production default)",
+        "preset": preset or DEFAULT_PRESET_LABEL,
         "seed": seed,
         "max_spectra": max_spectra,
         "presence_eps_massfrac": PRESENCE_EPS_MASSFRAC,
@@ -336,17 +382,39 @@ def run_scoreboard(
             "candidates(spectrum) = truth.elements_present UNION confounder_elements"
         ),
         "config_overrides": dict(config_overrides) if config_overrides else None,
+        "include_holdout": include_holdout,
         "datasets": [],
     }
 
+    explicitly_requested = datasets is not None
     for entry in iter_datasets(names=datasets, tags=tags):
+        if entry.tier == "vault":
+            if explicitly_requested:
+                raise ValueError(
+                    f"Dataset {entry.name!r} is VAULT tier (end-of-program material, "
+                    "design 2.1); the scoreboard never runs it."
+                )
+            logger.info("scoreboard: skipping %s (vault tier — never run).", entry.name)
+            continue
+        if entry.tier == "holdout" and not include_holdout:
+            if explicitly_requested:
+                raise ValueError(
+                    f"Dataset {entry.name!r} is HOLDOUT tier (adoption gate); pass "
+                    "include_holdout=True / --include-holdout to run it deliberately."
+                )
+            logger.info(
+                "scoreboard: skipping %s (holdout tier; use --include-holdout).", entry.name
+            )
+            continue
         logger.info("scoreboard: dataset %s ...", entry.name)
         items = list(entry.adapter_factory())
         n_total = len(items)
         indices = _sample_indices(n_total, max_spectra, seed)
         if indices is not None:
             items = [items[i] for i in indices]
-        notes = items[0][3].notes if items else ""
+        # Registration-time notes win; fall back to the first spectrum's truth
+        # notes for adapters whose provenance is only known at run time.
+        notes = entry.notes or (items[0][3].notes if items else "")
         records = [
             _score_spectrum(
                 atomic_db, sid, wl, inten, truth, preset=preset, config_overrides=config_overrides
@@ -361,6 +429,7 @@ def run_scoreboard(
             sampled=indices is not None,
             notes=notes,
         )
+        dataset_row["tier"] = entry.tier
         board["datasets"].append(dataset_row)
         metrics = dataset_row["id_metrics"]
         logger.info(
@@ -379,7 +448,8 @@ def run_scoreboard(
 # ---------------------------------------------------------------------------
 
 
-def _fmt(value: Optional[float], spec: str = ".3f") -> str:
+def fmt_metric(value: Optional[float], spec: str = ".3f") -> str:
+    """Format an optional metric value for a report ("—" for missing)."""
     return format(value, spec) if value is not None else "—"
 
 
@@ -402,8 +472,16 @@ def render_markdown(board: Mapping[str, Any]) -> str:
     cmd = "JAX_PLATFORMS=cpu cflibs scoreboard --output-dir output/scoreboard"
     if board["max_spectra"] is not None:
         cmd += f" --max-spectra {board['max_spectra']} --seed {board['seed']}"
+    if board.get("include_holdout"):
+        cmd += " --include-holdout"
     lines.append(cmd)
     lines.append("```")
+    lines.append("")
+    lines.append(
+        "**Tier policy:** vault-tier datasets never run; holdout-tier datasets "
+        "(adoption gate) run only with `--include-holdout`"
+        f"{' (this board INCLUDES holdout datasets)' if board.get('include_holdout') else ''}. "
+    )
     lines.append("")
     lines.append(
         f"**Candidate-set policy:** {board['candidate_policy']} "
@@ -429,12 +507,12 @@ def render_markdown(board: Mapping[str, Any]) -> str:
             continue
         m = ds["id_metrics"]
         comp = ds["composition"]
-        rmse = _fmt(comp["rmse_wt_median"], ".2f") if comp else "—"
+        rmse = fmt_metric(comp["rmse_wt_median"], ".2f") if comp else "—"
         lines.append(
             f"| {ds['name']} | {', '.join(ds['tags'])} | {ds['n_run']}/{ds['n_total']}"
             f"{' (sampled)' if ds['sampled'] else ''} "
             f"| {m['precision']:.3f} | {m['recall']:.3f} | {m['f1']:.3f} "
-            f"| {rmse} | {_fmt(ds['runtime']['median_wall_s'], '.1f')} "
+            f"| {rmse} | {fmt_metric(ds['runtime']['median_wall_s'], '.1f')} "
             f"| {ds['n_failed']} |"
         )
     lines.append("")
@@ -456,11 +534,11 @@ def render_markdown(board: Mapping[str, Any]) -> str:
         )
         rt = ds["runtime"]
         lines.append(
-            f"- Runtime medians (s): total={_fmt(rt['median_wall_s'], '.2f')}, "
-            f"calibration={_fmt(rt['median_calibration_s'], '.2f')}, "
-            f"detection+ID={_fmt(rt['median_detection_id_s'], '.2f')}, "
-            f"stark n_e={_fmt(rt['median_stark_ne_s'], '.2f')}, "
-            f"solve={_fmt(rt['median_solve_s'], '.2f')}"
+            f"- Runtime medians (s): total={fmt_metric(rt['median_wall_s'], '.2f')}, "
+            f"calibration={fmt_metric(rt['median_calibration_s'], '.2f')}, "
+            f"detection+ID={fmt_metric(rt['median_detection_id_s'], '.2f')}, "
+            f"stark n_e={fmt_metric(rt['median_stark_ne_s'], '.2f')}, "
+            f"solve={fmt_metric(rt['median_solve_s'], '.2f')}"
         )
         if ds["sampled"]:
             lines.append(
@@ -471,7 +549,7 @@ def render_markdown(board: Mapping[str, Any]) -> str:
             comp = ds["composition"]
             lines.append(
                 f"- Composition (n={comp['n_scored']}): RMSE wt% median="
-                f"{_fmt(comp['rmse_wt_median'], '.2f')}, mean={_fmt(comp['rmse_wt_mean'], '.2f')}"
+                f"{fmt_metric(comp['rmse_wt_median'], '.2f')}, mean={fmt_metric(comp['rmse_wt_mean'], '.2f')}"
             )
             lines.append("")
             lines.append("| Element | mean signed error (wt%) |")

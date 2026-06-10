@@ -27,15 +27,19 @@ Datasets
     CF-LIBS-improved-9jvd). The adapters skip-with-log so the board records
     the gap honestly instead of hiding it.
 ``synthetic_fixedforward``
-    The regenerated 288-spectrum synthetic ID corpus
-    (``w2_fixedforward_v1/corpus.json``) produced by OUR OWN fixed forward
-    model. Tagged ``synthetic``: useful for *relative* comparisons between
-    pipeline versions, never a headline accuracy number (the forward model
-    that generated it shares physics with the inversion under test).
+    The regenerated 288-spectrum synthetic ID corpus (w2_fixedforward_v1)
+    produced by OUR OWN fixed forward model, resolved from
+    ``$CFLIBS_SCOREBOARD_SYNTH_CORPUS`` or the repo convention
+    ``data/synthetic_corpus/corpus.json`` (sha256 recorded in the yielded
+    truth notes, hence in the board artifact). Tagged ``synthetic``: useful
+    for *relative* comparisons between pipeline versions, never a headline
+    accuracy number (the forward model that generated it shares physics with
+    the inversion under test).
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -46,8 +50,10 @@ import numpy as np
 
 from cflibs.core.logging_config import get_logger
 from cflibs.benchmark.scoreboard_registry import (
+    PRESENCE_CUTOFF_WT,
     AdapterYield,
     SpectrumTruth,
+    presence_set,
     register_dataset,
 )
 
@@ -55,10 +61,6 @@ logger = get_logger("benchmark.adapters_core")
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DATA_DIR = _REPO_ROOT / "data"
-
-#: Trace-element presence cutoff (wt%): certified elements below this are
-#: excluded from ``elements_present`` (documented in each adapter's notes).
-PRESENCE_CUTOFF_WT = 0.01
 
 # ---------------------------------------------------------------------------
 # bhvo2_chemcam — real ChemCam spectra of USGS BHVO-2 basalt
@@ -79,9 +81,7 @@ def bhvo2_chemcam_adapter() -> Iterator[AdapterYield]:
 
     data_dir = _DATA_DIR / "bhvo2_usgs"
     composition_wt = {el: 100.0 * frac for el, frac in BHVO2_BASALT_USGS.items()}
-    elements_present = frozenset(
-        el for el, wt in composition_wt.items() if wt >= PRESENCE_CUTOFF_WT
-    )
+    elements_present = presence_set(composition_wt)
     notes = (
         "ChemCam (LANL testbed) LIBS of USGS BHVO-2 Hawaiian basalt; "
         "truth = USGS/GeoReM certified oxide composition converted to element wt% "
@@ -256,27 +256,16 @@ def nist_srm_612_adapter() -> Iterator[AdapterYield]:
             data_dir,
         )
         return
-    # Spectra appeared after the gap closes: wire them to the certified truth.
-    from cflibs.benchmark.reference_compositions import NIST_SRM_612_GLASS
-    from cflibs.io.spectrum import load_spectrum
-
-    composition_wt = {el: 100.0 * frac for el, frac in NIST_SRM_612_GLASS.items()}
-    elements_present = frozenset(
-        el for el, wt in composition_wt.items() if wt >= PRESENCE_CUTOFF_WT
+    # When data lands: wire truth like cflibs.benchmark.datasets.usgs, from the
+    # Pearce et al. 1997 majors in reference_compositions.NIST_SRM_612_GLASS.
+    logger.warning(
+        "nist_srm_612: %d spectrum file(s) found in %s but no certified-truth "
+        "mapping is wired for this layout — dataset skipped (wire "
+        "nist_srm_612_adapter to the SRM 612 certificate).",
+        len(spectra),
+        data_dir,
     )
-    for path in spectra:
-        wavelength, intensity = load_spectrum(str(path))
-        truth = SpectrumTruth(
-            elements_present=elements_present,
-            composition_wt=dict(composition_wt),
-            resolving_power=None,
-            notes=(
-                "NIST SRM 612 trace-element glass; truth = certified majors "
-                "(Pearce et al. 1997) converted to element wt%; ~38 ppm trace "
-                f"dopants are far below the {PRESENCE_CUTOFF_WT} wt% cutoff and excluded."
-            ),
-        )
-        yield path.stem.replace("_spectrum", ""), wavelength, intensity, truth
+    yield from ()  # empty generator: dataset yields nothing when skipped
 
 
 def nist_steel_adapter() -> Iterator[AdapterYield]:
@@ -290,6 +279,9 @@ def nist_steel_adapter() -> Iterator[AdapterYield]:
             data_dir,
         )
         return
+    # SRM 1261a-1265a certificates are already transcribed in
+    # cflibs.benchmark.datasets.nist_steel.NISTSteelDataset; wiring them here
+    # is deferred until validated public spectra exist (see the data README).
     logger.warning(
         "nist_steel: %d spectrum file(s) found in %s but no certified-truth "
         "mapping is wired for this layout — dataset skipped (extend "
@@ -308,13 +300,8 @@ def nist_steel_adapter() -> Iterator[AdapterYield]:
 #: corpus was regenerated elsewhere).
 SYNTH_CORPUS_ENV = "CFLIBS_SCOREBOARD_SYNTH_CORPUS"
 
-_SYNTH_CORPUS_CANDIDATES = (
-    _REPO_ROOT / "output/synthetic_corpus_w2/w2_fixedforward_v1/corpus.json",
-    Path(
-        "/home/brian/code/CF-LIBS-improved/.worktrees/w1-integration/"
-        "output/synthetic_corpus_w2/w2_fixedforward_v1/corpus.json"
-    ),
-)
+#: Repo data/ convention for the committed corpus (locally and on the cluster).
+_SYNTH_CORPUS_CANDIDATES = (_DATA_DIR / "synthetic_corpus" / "corpus.json",)
 
 
 def _resolve_synth_corpus() -> Optional[Path]:
@@ -337,20 +324,20 @@ def synthetic_fixedforward_adapter() -> Iterator[AdapterYield]:
             [str(p) for p in _SYNTH_CORPUS_CANDIDATES],
         )
         return
-    corpus = json.loads(corpus_path.read_text())
+    corpus_bytes = corpus_path.read_bytes()
+    corpus_sha256 = hashlib.sha256(corpus_bytes).hexdigest()
+    corpus = json.loads(corpus_bytes)
     notes_base = (
         f"SYNTHETIC corpus {corpus.get('name', '?')} (version {corpus.get('version', '?')}) "
         "generated by OUR OWN fixed forward model — valid for RELATIVE comparisons "
         "between pipeline versions only, never a headline accuracy number "
         "(the generator shares physics with the inversion under test). "
         f"Truth = generation recipe mass fractions; elements below {PRESENCE_CUTOFF_WT} wt% "
-        "excluded from elements_present. Source: "
-    ) + str(corpus_path)
+        f"excluded from elements_present. Source: {corpus_path} (sha256 {corpus_sha256})"
+    )
     for spec in corpus["spectra"]:
         composition_wt = {el: 100.0 * float(frac) for el, frac in spec["true_composition"].items()}
-        elements_present = frozenset(
-            el for el, wt in composition_wt.items() if wt >= PRESENCE_CUTOFF_WT
-        )
+        elements_present = presence_set(composition_wt)
         rp_estimate = spec.get("rp_estimate")
         truth = SpectrumTruth(
             elements_present=elements_present,
@@ -372,17 +359,58 @@ def synthetic_fixedforward_adapter() -> Iterator[AdapterYield]:
 
 
 def register_core_adapters(*, replace: bool = True) -> None:
-    """Register the core datasets. Idempotent (``replace=True`` by default)."""
+    """Register the core datasets. Idempotent (``replace=True`` by default).
+
+    Tier assignments mirror the campaign split design (design 2.1, single
+    source of truth — ``scripts/campaign1/splits.py`` derives its name sets
+    from these registrations): ``bhvo2_chemcam`` is HOLDOUT (the adoption-gate
+    headline number must never leak into tuning loops or default boards).
+    """
     register_dataset(
-        "bhvo2_chemcam", bhvo2_chemcam_adapter, tags=("real", "geological"), replace=replace
+        "bhvo2_chemcam",
+        bhvo2_chemcam_adapter,
+        tags=("real", "geological"),
+        tier="holdout",
+        notes=(
+            "Real ChemCam (LANL testbed) LIBS of USGS BHVO-2 basalt (4 locations); "
+            "truth = USGS/GeoReM certified oxide composition as element wt%."
+        ),
+        replace=replace,
     )
-    register_dataset("aalto", aalto_adapter, tags=("real", "minerals"), replace=replace)
     register_dataset(
-        "nist_srm_612", nist_srm_612_adapter, tags=("real", "placeholder"), replace=replace
+        "aalto",
+        aalto_adapter,
+        tags=("real", "minerals"),
+        notes=(
+            "Aalto University LIBS spectral library: 13 pure-element standards + "
+            "61 mineral samples; presence-only truth from labels / idealized "
+            "mineral-formula stoichiometry."
+        ),
+        replace=replace,
     )
     register_dataset(
-        "nist_steel", nist_steel_adapter, tags=("real", "placeholder"), replace=replace
+        "nist_srm_612",
+        nist_srm_612_adapter,
+        tags=("real", "placeholder"),
+        notes=(
+            "Placeholder: no public SRM 612 LIBS spectra ingested "
+            "(data/nist_srm_612/README.md, bead CF-LIBS-improved-9jvd)."
+        ),
+        replace=replace,
     )
+    register_dataset(
+        "nist_steel",
+        nist_steel_adapter,
+        tags=("real", "placeholder"),
+        notes=(
+            "Placeholder: no validated public NIST steel-SRM LIBS spectra ingested "
+            "(certs already transcribed in cflibs.benchmark.datasets.nist_steel)."
+        ),
+        replace=replace,
+    )
+    # notes deliberately empty: this dataset's provenance (resolved corpus
+    # path + sha256) is only known when it runs, so the board falls back to
+    # the first yielded truth notes (see DatasetEntry.notes).
     register_dataset(
         "synthetic_fixedforward",
         synthetic_fixedforward_adapter,

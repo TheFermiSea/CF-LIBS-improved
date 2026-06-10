@@ -87,6 +87,9 @@ class FitnessReport:
     runtime_median_s: Optional[float] = None
     runtime_penalty: float = 0.0
     per_dataset: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: Dataset at which the evaluation short-circuited on a death penalty
+    #: (eff#1; its row may be partial). None = full evaluation.
+    aborted_after_dataset: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -104,11 +107,9 @@ _DB_CACHE: dict[str, Any] = {}
 def _ensure_adapters() -> None:
     global _ADAPTERS_REGISTERED
     if not _ADAPTERS_REGISTERED:
-        from cflibs.benchmark.adapters_core import register_core_adapters
-        from cflibs.benchmark.adapters_extended import register_extended_adapters
+        from cflibs.benchmark.scoreboard_registry import ensure_default_datasets
 
-        register_core_adapters()
-        register_extended_adapters()
+        ensure_default_datasets()
         _ADAPTERS_REGISTERED = True
 
 
@@ -164,9 +165,9 @@ def sample_split_ids(
     return [ids[i] for i in idx]
 
 
-def _get_eval_items(ctx: EvalContext, section: str, name: str) -> list:
+def _get_eval_items(ctx: EvalContext, section: str, name: str, chosen: Sequence[str]) -> list:
+    """The dataset's split items restricted to the already-sampled ``chosen`` ids."""
     items = _load_split_items(ctx.manifest, section, name)
-    chosen = sample_split_ids(ctx.manifest, section, name, ctx.spectra_per_dataset, ctx.sample_seed)
     if len(chosen) == len(items):
         return items
     by_id = {item[0]: item for item in items}
@@ -187,20 +188,16 @@ def _alarm_handler(signum, frame):  # pragma: no cover - signal path
 
 
 def _timeout_record(sid: str, truth: Any, timeout_s: float) -> dict[str, Any]:
-    from cflibs.benchmark.scoreboard import CONFOUNDER_ELEMENTS, presence_confusion
+    from cflibs.benchmark.scoreboard import CONFOUNDER_ELEMENTS, failure_record
 
     candidates = sorted(set(truth.elements_present) | set(CONFOUNDER_ELEMENTS))
-    record: dict[str, Any] = {
-        "spectrum_id": sid,
-        "truth_elements": sorted(truth.elements_present),
-        "candidates": candidates,
-        "composition_basis": truth.composition_basis,
-        "status": "error",
-        "error": f"TimeoutError: per-spectrum timeout ({timeout_s:.0f}s) exceeded",
-        "wall_s": timeout_s,
-    }
-    record.update(presence_confusion({}, truth.elements_present, candidates))
-    return record
+    return failure_record(
+        sid,
+        truth,
+        candidates,
+        f"TimeoutError: per-spectrum timeout ({timeout_s:.0f}s) exceeded",
+        timeout_s,
+    )
 
 
 # Module globals for pool children (set by _pool_init).
@@ -251,8 +248,6 @@ def _get_pool(n_procs: int, db_path: Path | str):
     global _POOL, _POOL_PROCS
     if _POOL is None or _POOL_PROCS != n_procs:
         _terminate_pool()
-        import multiprocessing as mp
-
         _POOL = mp.get_context("spawn").Pool(
             processes=n_procs, initializer=_pool_init, initargs=(str(db_path),)
         )
@@ -268,27 +263,53 @@ def _terminate_pool() -> None:
         _POOL = None
 
 
-def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, Any]]:
-    """Score payloads with a HARD per-spectrum timeout.
+def _harvest_finished(asyncs: list[tuple[int, Any]], results: dict[int, dict[str, Any]]) -> None:
+    """Sweep finished-but-uncollected pool results before a pool kill (eff#2).
+
+    When one payload hard-times-out, the other pool workers have usually
+    finished several queued payloads already — work that is paid for. Collect
+    every ``ready()`` handle non-blockingly so only truly-unfinished payloads
+    are resubmitted to the fresh pool. A handle whose child *raised* is left
+    pending (the resubmit decides its fate exactly as before).
+    """
+    for j, handle in asyncs:
+        if j in results or not handle.ready():
+            continue
+        try:
+            results[j] = handle.get(timeout=0)
+        except Exception:  # noqa: BLE001 — crashed child: let the resubmit retry it
+            pass
+
+
+def _iter_payload_records(payloads: list[tuple], ctx: "EvalContext"):
+    """Stream per-spectrum records for ``payloads`` in submission order.
+
+    The whole batch (typically every dataset of a trial, merged — eff#3) is
+    submitted to the pool up front; records are yielded strictly in payload
+    order as they complete, so a consumer can slice them back per dataset and
+    react at dataset boundaries (the eff#1 early-abort hook). A consumer that
+    stops iterating early MUST call :func:`_terminate_pool` to actually kill
+    the queued/in-flight remainder.
 
     Two timeout layers (the smoke run caught the gap): the in-child SIGALRM
     interrupts Python-level overruns gracefully at ``per_spectrum_timeout_s``,
-    but it cannot interrupt long GIL-released C/XLA calls (measured:
-    ``use_deconvolution=True`` wedged a worker inside
+    but it cannot interrupt long GIL-released C/XLA calls (measured: a
+    ``use_deconvolution=True`` draw wedged a worker inside
     ``backend_compile_and_load`` indefinitely). So spectra always run in a
     spawn pool and the parent enforces wall deadlines via
-    ``AsyncResult.get(timeout)``; a hard overrun terminates the pool (the only
-    way to kill stuck C code), records a timeout failure, and resubmits the
-    untouched remainder to a fresh pool.
+    ``AsyncResult.get(timeout)``; a hard overrun harvests every finished
+    result, terminates the pool (the only way to kill stuck C code), records
+    a timeout failure, and resubmits the truly-unfinished remainder to a
+    fresh pool.
     """
-    if not payloads:
-        return []
     hard = float(ctx.per_spectrum_timeout_s or 0.0)
     n_procs = max(int(ctx.n_procs), 1)
-    if hard <= 0.0:  # no timeout: plain pool map
-        return _get_pool(n_procs, ctx.db_path).map(_score_one, payloads)
+    if hard <= 0.0:  # no timeout: plain order-preserving pool stream
+        yield from _get_pool(n_procs, ctx.db_path).imap(_score_one, payloads)
+        return
 
     results: dict[int, dict[str, Any]] = {}
+    next_emit = 0
     pending = list(enumerate(payloads))
     while pending:
         pool = _get_pool(n_procs, ctx.db_path)
@@ -305,20 +326,27 @@ def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, A
                 sid, _wl, _inten, truth = payloads[i][:4]
                 results[i] = _timeout_record(sid, truth, hard)
                 results[i]["error"] += " (hard kill: stuck in C/XLA, pool terminated)"
+                _harvest_finished(asyncs[position + 1 :], results)
                 _terminate_pool()
                 timed_out = True
-                break
             except Exception as exc:  # child crashed (e.g. OOM-kill)
                 sid, _wl, _inten, truth = payloads[i][:4]
                 results[i] = _timeout_record(sid, truth, hard)
                 results[i]["error"] = f"{type(exc).__name__}: pool child crashed: {exc}"
+                _harvest_finished(asyncs[position + 1 :], results)
                 _terminate_pool()
                 timed_out = True
+            # Emit everything contiguous from the front (harvested results
+            # beyond a still-pending gap wait in ``results`` until the gap
+            # is filled by the resubmit round).
+            while next_emit in results:
+                yield results[next_emit]
+                next_emit += 1
+            if timed_out:
                 break
         pending = [(i, payload) for i, payload in pending if i not in results]
         if not timed_out and pending:  # pragma: no cover - defensive
             raise RuntimeError("pool returned without completing all payloads")
-    return [results[i] for i in range(len(payloads))]
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +361,7 @@ def evaluate_overrides(
     section: str = "optimization",
     datasets: Optional[Iterable[str]] = None,
     allow_restricted: bool = False,
+    death_penalty_ref: Optional[Mapping[str, Mapping[str, Any]]] = None,
 ) -> dict[str, Any]:
     """Run the scoreboard for one candidate config on one split section.
 
@@ -341,20 +370,22 @@ def evaluate_overrides(
     ``section='holdout'`` additionally requires ``allow_restricted=True`` —
     only ``holdout_eval.py`` passes it, and every such run is ledger-logged.
     Vault datasets are refused unconditionally.
+
+    ``death_penalty_ref`` (the per-dataset baseline FP/failure reference;
+    objective trials only) arms the eff#1 early abort: FP and failure counts
+    are monotone in the accumulated records, so the moment a dataset's
+    running counts cross a death threshold the trial's fitness is already
+    pinned at ``DEATH_FITNESS`` — the evaluation short-circuits, the pool is
+    terminated (killing the queued remainder), and the board records
+    ``aborted_after_dataset``. The returned fitness is identical to the full
+    run by construction (see :func:`death_reasons_for_counts`).
     """
     names = tuple(datasets) if datasets is not None else ctx.datasets
     splits.assert_not_vault(names)
     if section == "optimization":
         # Dataset-level refusal FIRST (a holdout-only dataset has no
-        # optimization split to even sample from), then id-level.
+        # optimization split to even sample from), then id-level below.
         splits.assert_optimization_only(ctx.manifest, names)
-        spectrum_ids = {
-            name: sample_split_ids(
-                ctx.manifest, section, name, ctx.spectra_per_dataset, ctx.sample_seed
-            )
-            for name in names
-        }
-        splits.assert_optimization_only(ctx.manifest, names, spectrum_ids)
     elif section == "holdout":
         if not allow_restricted:
             raise splits.HoldoutViolation(
@@ -363,14 +394,29 @@ def evaluate_overrides(
             )
     else:
         raise ValueError(f"Unknown split section {section!r}")
+    # Sample ONCE per dataset; the guard and the evaluation see the same ids.
+    spectrum_ids = {
+        name: sample_split_ids(
+            ctx.manifest, section, name, ctx.spectra_per_dataset, ctx.sample_seed
+        )
+        for name in names
+    }
+    if section == "optimization":
+        splits.assert_optimization_only(ctx.manifest, names, spectrum_ids)
 
-    from cflibs.benchmark.scoreboard import _aggregate_dataset
+    from cflibs.benchmark.scoreboard import DEFAULT_PRESET_LABEL, _aggregate_dataset
 
-    rows = []
+    # ONE merged pool batch for every dataset (eff#3): a single submission
+    # keeps all n_procs workers busy across dataset boundaries. Records come
+    # back in submission order, so each dataset's records are a contiguous
+    # slice of the stream.
+    per_dataset: list[tuple[str, Any, list]] = []
+    payloads: list[tuple] = []
     for name in names:
         entry = _dataset_entry(name)
-        items = _get_eval_items(ctx, section, name)
-        payloads = [
+        items = _get_eval_items(ctx, section, name, spectrum_ids[name])
+        per_dataset.append((name, entry, items))
+        payloads.extend(
             (
                 sid,
                 wl,
@@ -382,8 +428,35 @@ def evaluate_overrides(
                 str(ctx.db_path),
             )
             for sid, wl, inten, truth in items
-        ]
-        records = _run_payloads(payloads, ctx)
+        )
+
+    record_stream = _iter_payload_records(payloads, ctx)
+    rows = []
+    aborted_at: Optional[str] = None
+    for name, entry, items in per_dataset:
+        base: Optional[Mapping[str, Any]] = None
+        if death_penalty_ref is not None:
+            if name not in death_penalty_ref:
+                # Same contract (and message) as compute_fitness, just earlier.
+                raise KeyError(f"Baseline reference missing dataset {name!r}")
+            base = death_penalty_ref[name]
+        synthetic = "synthetic" in entry.tags
+        records: list[dict[str, Any]] = []
+        fp_count = failed_count = 0
+        dead = False
+        for _ in items:
+            record = next(record_stream)
+            records.append(record)
+            if base is None:
+                continue
+            # Cheap per-record death check (eff#1): both counts are monotone
+            # in the accumulated records, so crossing a threshold here means
+            # the full run would die too — fitness is identical either way.
+            fp_count += len(record["fp"])
+            failed_count += record["status"] == "error"
+            if death_reasons_for_counts(name, synthetic, fp_count, failed_count, base):
+                dead = True
+                break
         rows.append(
             _aggregate_dataset(
                 name,
@@ -391,18 +464,25 @@ def evaluate_overrides(
                 records,
                 n_total=len(ctx.manifest[section][name]),
                 sampled=len(items) < len(ctx.manifest[section][name]),
-                notes=items[0][3].notes if items else "",
+                notes=entry.notes or (items[0][3].notes if items else ""),
             )
         )
-    return {
+        if dead:
+            aborted_at = name
+            _terminate_pool()  # kill the queued/in-flight remainder of the batch
+            break
+    board: dict[str, Any] = {
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "section": section,
-        "preset": ctx.preset or "geological (production default)",
+        "preset": ctx.preset or DEFAULT_PRESET_LABEL,
         "sample_seed": ctx.sample_seed,
         "spectra_per_dataset": ctx.spectra_per_dataset,
         "config_overrides": dict(config_overrides),
         "datasets": rows,
     }
+    if aborted_at is not None:
+        board["aborted_after_dataset"] = aborted_at
+    return board
 
 
 # ---------------------------------------------------------------------------
@@ -418,6 +498,39 @@ def dataset_kind(row: Mapping[str, Any]) -> str:
         r.get("composition_basis") == "element_wt" for r in row.get("spectra", [])
     )
     return "real_element_wt" if basis_element_wt else "real_presence_only"
+
+
+def death_reasons_for_counts(
+    name: str,
+    synthetic: bool,
+    fp: int,
+    n_failed: int,
+    base: Mapping[str, Any],
+) -> list[str]:
+    """Death-penalty reasons for one dataset's (possibly partial) counts.
+
+    THE single source for the death thresholds: used by
+    :func:`compute_fitness` on full dataset rows AND by the eff#1 early-abort
+    check on running counts. Both ``fp`` and ``n_failed`` are monotone
+    non-decreasing in the accumulated per-spectrum records (a record can add
+    FP entries or a failure, never remove one), and ``compute_fitness`` ORs
+    death over datasets — so a non-empty result on a *partial* count already
+    pins the trial's fitness at ``DEATH_FITNESS`` regardless of every
+    remaining spectrum and dataset. Aborting there returns a bit-identical
+    fitness by construction.
+    """
+    reasons: list[str] = []
+    if not synthetic and fp > int(base["fp"]) + FP_DEATH_MARGIN:
+        reasons.append(
+            f"{name}: FP {fp} > baseline {base['fp']} + {FP_DEATH_MARGIN} "
+            "(precision is the asset)"
+        )
+    if n_failed > FAILURE_DEATH_FACTOR * float(base["n_failed"]):
+        reasons.append(
+            f"{name}: n_failed {n_failed} > {FAILURE_DEATH_FACTOR} * baseline "
+            f"{base['n_failed']} (no trading failures for F1)"
+        )
+    return reasons
 
 
 def dataset_weight(row: Mapping[str, Any]) -> float:
@@ -485,16 +598,9 @@ def compute_fitness(
         fp = int(row["id_metrics"]["fp"])
         n_failed = int(row["n_failed"])
         kind = dataset_kind(row)
-        if kind != "synthetic" and fp > int(base["fp"]) + FP_DEATH_MARGIN:
-            death_reasons.append(
-                f"{name}: FP {fp} > baseline {base['fp']} + {FP_DEATH_MARGIN} "
-                "(precision is the asset)"
-            )
-        if n_failed > FAILURE_DEATH_FACTOR * float(base["n_failed"]):
-            death_reasons.append(
-                f"{name}: n_failed {n_failed} > {FAILURE_DEATH_FACTOR} * baseline "
-                f"{base['n_failed']} (no trading failures for F1)"
-            )
+        death_reasons.extend(
+            death_reasons_for_counts(name, kind == "synthetic", fp, n_failed, base)
+        )
         score = dataset_score(row)
         weight = dataset_weight(row)
         scores.append(score)
@@ -536,9 +642,18 @@ def evaluate_candidate(
     ctx: EvalContext,
     baseline_ref: Mapping[str, Mapping[str, Any]],
 ) -> tuple[FitnessReport, dict[str, Any]]:
-    """Objective body: optimization-split scoreboard run -> composite fitness."""
-    board = evaluate_overrides(config_overrides, ctx, section="optimization")
+    """Objective body: optimization-split scoreboard run -> composite fitness.
+
+    Passing ``baseline_ref`` as the death-penalty reference arms the eff#1
+    early abort: a candidate that crosses a death threshold stops paying for
+    the remaining spectra/datasets, and ``report.aborted_after_dataset``
+    records where. Fitness is identical to the full run by construction.
+    """
+    board = evaluate_overrides(
+        config_overrides, ctx, section="optimization", death_penalty_ref=baseline_ref
+    )
     report = compute_fitness(board["datasets"], baseline_ref)
+    report.aborted_after_dataset = board.get("aborted_after_dataset")
     return report, board
 
 
@@ -557,12 +672,6 @@ def _confusion_by_id(rows: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, t
     return out
 
 
-def _micro_f1(tp: float, fp: float, fn: float) -> float:
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    return 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-
-
 def paired_bootstrap_delta_f1(
     candidate_rows: Sequence[Mapping[str, Any]],
     baseline_rows: Sequence[Mapping[str, Any]],
@@ -575,7 +684,13 @@ def paired_bootstrap_delta_f1(
     Spectra are resampled with replacement *within each dataset*; the same
     resample indices apply to candidate and baseline (paired). Returns the
     point delta and the 95% percentile CI.
+
+    Micro-F1 comes from the scoreboard's :func:`precision_recall_f1` (the
+    single source for this metric math). The summed confusion counts are
+    integral by construction, so the int conversion inside it is exact.
     """
+    from cflibs.benchmark.scoreboard import precision_recall_f1
+
     cand = _confusion_by_id(candidate_rows)
     base = _confusion_by_id(baseline_rows)
     pairs: list[np.ndarray] = []  # per dataset: (n_spectra, 6) [c_tp c_fp c_fn b_tp b_fp b_fn]
@@ -595,7 +710,7 @@ def paired_bootstrap_delta_f1(
 
     def pooled_delta(arrays: list[np.ndarray]) -> float:
         total = np.sum(np.vstack(arrays), axis=0)
-        return _micro_f1(*total[:3]) - _micro_f1(*total[3:])
+        return precision_recall_f1(*total[:3])[2] - precision_recall_f1(*total[3:])[2]
 
     point = pooled_delta(pairs)
     rng = np.random.default_rng(seed)

@@ -143,6 +143,57 @@ class TestPresetResolution:
         cfg = _build_pipeline_config(["Fe"], analysis_cfg={"affine_coverage_gate": False})
         assert cfg.affine_coverage_gate is False
 
+    def test_overrides_tier_beats_flags_and_yaml(self):
+        """``overrides`` is the TOP precedence tier (altitude#1): it beats
+        explicit flags, YAML keys and the preset, and goes through the same
+        validation/normalization as every other tier."""
+        cfg = _build_pipeline_config(
+            ["Fe"],
+            analysis_cfg={"closure_mode": "standard", "min_snr": 4.0},
+            closure_mode="ilr",
+            stark_ne=True,
+            overrides={"closure_mode": "pwlr", "stark_ne": False, "min_snr": 7.0},
+        )
+        assert cfg.closure_mode == "pwlr"
+        assert cfg.stark_ne is False
+        assert cfg.min_snr == pytest.approx(7.0)
+        # Validation applies to the overrides tier (not bypassed post-hoc).
+        with pytest.raises(ValueError, match="Valid modes"):
+            _build_pipeline_config(["Fe"], overrides={"closure_mode": "softmax"})
+        with pytest.raises(ValueError, match="no knob"):
+            _build_pipeline_config(["Fe"], overrides={"saha_boltzman_graph": True})
+        # Normalization applies too (True -> 'observable').
+        cfg = _build_pipeline_config(["Fe"], overrides={"apply_self_absorption": True})
+        assert cfg.apply_self_absorption == "observable"
+
+    def test_overrides_tier_can_express_none(self):
+        """Explicit ``None`` (= adaptive/disabled) is passable through the
+        overrides tier — the old post-hoc setattr hook existed only because
+        ``build_pipeline_config`` conflated None with not-given."""
+        cfg = _build_pipeline_config(
+            ["Fe"],
+            wavelength_tolerance_nm=0.1,
+            overrides={"wavelength_tolerance_nm": None, "peak_width_nm": None},
+        )
+        assert cfg.wavelength_tolerance_nm is None
+        assert cfg.peak_width_nm is None
+        # YAML explicit null is an explicit None as well (key presence decides).
+        cfg = _build_pipeline_config(["Fe"], analysis_cfg={"wavelength_tolerance_nm": None})
+        assert cfg.wavelength_tolerance_nm is None
+
+    def test_global_shift_scan_is_a_first_class_knob(self):
+        """altitude#2: the legacy magic detection_overrides['shift_scan_nm']
+        key is gone; ``global_shift_scan_nm`` resolves through the chain."""
+        assert _build_pipeline_config(["Fe"]).global_shift_scan_nm == pytest.approx(0.5)
+        cfg = _build_pipeline_config(["Fe"], analysis_cfg={"global_shift_scan_nm": 0.3})
+        assert cfg.global_shift_scan_nm == pytest.approx(0.3)
+        cfg = _build_pipeline_config(
+            ["Fe"],
+            analysis_cfg={"global_shift_scan_nm": 0.3},
+            overrides={"global_shift_scan_nm": 0.7},
+        )
+        assert cfg.global_shift_scan_nm == pytest.approx(0.7)
+
     def test_analyze_parser_exposes_preset_flag(self):
         """``analyze --preset metallic`` parses through the real CLI parser."""
         captured = {}
@@ -321,6 +372,12 @@ class TestAnalysisConfigValidation:
             "isolation_wavelength_nm",
             "max_lines_per_element",
             "wavelength_calibration",
+            "shift_coherence_veto",
+            "residual_shift_scan_nm",
+            "global_shift_scan_nm",
+            "affine_coverage_gate",
+            "line_residual_gate",
+            "response_curve",
             "max_iterations",
             "t_tolerance_k",
             "ne_tolerance_frac",
@@ -382,7 +439,7 @@ class TestResidualScanGlue:
     FU5 — this glue previously had no test)."""
 
     @staticmethod
-    def _capture_scan(monkeypatch, cal_result, wavelength_calibration=True):
+    def _capture_scan(monkeypatch, cal_result, wavelength_calibration=True, **extra):
         import cflibs.inversion.pipeline as pipeline_mod
         from cflibs.inversion.identify import line_detection as ld_mod
         from cflibs.inversion.preprocess import wavelength_calibration as wcal_mod
@@ -403,6 +460,7 @@ class TestResidualScanGlue:
                 MagicMock(),
                 ["Fe"],
                 wavelength_calibration=wavelength_calibration,
+                **extra,
             )
         return seen["shift_scan_nm"]
 
@@ -437,3 +495,42 @@ class TestResidualScanGlue:
         assert self._capture_scan(monkeypatch, None, wavelength_calibration=False) == pytest.approx(
             0.5, abs=0
         )
+
+    def test_global_shift_scan_knob_sets_the_fallback_scan(self, monkeypatch):
+        """altitude#2: the promoted ``global_shift_scan_nm`` knob IS the
+        legacy global scan width (same effective behavior as the old magic
+        detection_overrides['shift_scan_nm'] key)."""
+        scan = self._capture_scan(
+            monkeypatch, None, wavelength_calibration=False, global_shift_scan_nm=0.8
+        )
+        assert scan == pytest.approx(0.8, abs=0)
+        # ...and a quality-passed calibration still demotes it to the residual scan.
+        wl = np.linspace(250.0, 800.0, 100)
+        cal = SimpleNamespace(
+            success=True,
+            quality_passed=True,
+            corrected_wavelength=wl,
+            model="affine",
+            details={"segments": 1},
+            n_inliers=30,
+            rmse_nm=0.02,
+            quality_reason="passed",
+        )
+        scan = self._capture_scan(monkeypatch, cal, global_shift_scan_nm=0.8)
+        assert scan == pytest.approx(0.0, abs=0)
+
+    def test_magic_detection_override_key_is_rejected(self):
+        """The pre-promotion spelling must fail fast, not silently clobber the
+        post-calibration residual scan."""
+        import cflibs.inversion.pipeline as pipeline_mod
+
+        wl = np.linspace(250.0, 800.0, 10)
+        with pytest.raises(ValueError, match="global_shift_scan_nm"):
+            pipeline_mod.detect_and_select_lines(
+                wl,
+                np.ones_like(wl),
+                MagicMock(),
+                ["Fe"],
+                wavelength_calibration=False,
+                detection_overrides={"shift_scan_nm": 0.4},
+            )

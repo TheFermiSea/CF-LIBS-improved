@@ -241,6 +241,9 @@ def make_objective(ctx, baseline_ref, study_dir: Path, cpus: int, worker_id: str
             )
         trial.set_user_attr("wall_s", wall)
         trial.set_user_attr("fitness_report", report.to_dict())
+        # eff#1: where (if anywhere) the death-penalty early abort fired;
+        # None = full evaluation. Fitness is identical either way.
+        trial.set_user_attr("aborted_after_dataset", report.aborted_after_dataset)
         trial.set_user_attr(
             "per_dataset_metrics",
             {
@@ -390,7 +393,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_init.add_argument("--target-trials", type=int, default=DEFAULT_TARGET_TRIALS)
     p_init.add_argument("--preset", default=None, help="Pipeline preset (default geological)")
     p_init.add_argument("--per-spectrum-timeout", type=float, default=120.0)
-    p_init.add_argument("--n-procs", type=int, default=1)
+    # Default 8 (eff#5): the baseline evaluation is a full per-trial-sample
+    # scoreboard run; single-process it dominates init wall time for nothing.
+    p_init.add_argument("--n-procs", type=int, default=8)
 
     p_worker = sub.add_parser("worker", help="Consume trials until STOP/budget/target")
     p_worker.add_argument("--study-dir", required=True)

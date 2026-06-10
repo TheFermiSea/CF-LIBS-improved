@@ -36,6 +36,8 @@ from typing import Dict, Iterator
 
 import numpy as np
 
+from cflibs.benchmark.datasets._common import SpectrumTruth, enforce_strictly_increasing
+
 logger = logging.getLogger(__name__)
 
 ANALYTE_TO_ELEMENT = {"exP": "P", "exK": "K", "exCa": "Ca", "exMg": "Mg"}
@@ -56,11 +58,6 @@ def _load_fertility(fert_txt: Path) -> Dict[int, dict]:
 
 def iter_spectra(root: Path) -> Iterator[tuple]:
     """Yield ``SpectrumRecord`` tuples for the Silva 2022 tropical soils."""
-    from cflibs.benchmark.adapters_extended import (
-        SpectrumTruth,
-        enforce_strictly_increasing,
-    )
-
     fertility = _load_fertility(root / "soil_fertility_data.txt")
 
     with open(root / "LIBS_data.txt") as fh:
@@ -99,7 +96,6 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
         truth = SpectrumTruth(
             elements_present=frozenset(present),
             composition_wt=None,
-            composition_basis="presence_only",
             resolving_power=None,
             notes=(
                 "Silva et al. 2022 tropical-soil LIBS spectrum (LIBS_data.txt, "

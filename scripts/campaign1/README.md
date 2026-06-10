@@ -2,7 +2,8 @@
 
 The first (cheapest) campaign of the CF-LIBS optimization program
 ([design doc](../../docs/audit/2026-06-10-goalfirst/optimization-program-design.md),
-Section 3): a seeded TPE search over **43 pipeline + detection knobs**, fitness =
+Section 3): a seeded TPE search over **46 pipeline + detection knobs** (incl.
+mode selectors; space version `c1-knobs-v2`), fitness =
 the goal-metric scoreboard on the **optimization split**, with BHVO-2 /
 EMSLIBS-2019 / the 40% target holdouts **never** entering the loop and
 gibbons2024 in the vault (never evaluated by this tooling at all).
@@ -78,7 +79,14 @@ JAX_PLATFORMS=cpu PYTHONPATH=$PWD .venv/bin/python scripts/campaign1/driver.py i
 `init` evaluates the production baseline once on the exact per-trial sample
 (the FP/failure **death-penalty reference**, `baseline.json`) and enqueues two
 seed trials: the baseline params and the "looser gates" failure-hypothesis
-candidate (design 3.1).
+candidate (design 3.1). The baseline evaluation runs `--n-procs 8` by default
+(eff#5); pass `--n-procs 1` only for tiny smokes.
+
+Trials short-circuit on death penalties (eff#1): FP and failure counts are
+monotone in the accumulated records, so the moment a dataset crosses a death
+threshold the trial stops paying for the remaining spectra/datasets — the
+fitness is identical to the full run by construction, and
+`user_attrs.aborted_after_dataset` records where the abort fired.
 
 ## 4. Submit workers (maintainer)
 
@@ -166,13 +174,17 @@ the `frozen_manifest.json` hashes in the body. CI runs the full suite.
   interrupt GIL-released C/XLA calls — a smoke trial with
   `use_deconvolution=True` wedged inside `jax backend_compile_and_load` for
   13+ minutes. Spectra therefore always run in a spawn pool and the parent
-  hard-kills the pool on wall-deadline overrun, records the timeout as a
-  failure, and resubmits the untouched remainder.
+  hard-kills the pool on wall-deadline overrun (harvesting finished results
+  first), records the timeout as a failure, and resubmits the
+  truly-unfinished remainder. The `use_deconvolution` knob was subsequently
+  **removed from the space** (`c1-knobs-v2`): the wedge cost a SLURM-killed
+  task, ~32 unledgered core-hours, and TPE blindness for an axis whose
+  production default (False) every candidate keeps anyway.
 - **`closure_mode="matrix"` draws die by design**: the scoreboard's
   per-spectrum candidate sets have no globally valid `matrix_element`, so the
   solver raises on every spectrum and the failure death penalty fires
-  (fitness −1e9). TPE learns to avoid the branch (~1/6 of random startup
-  draws wasted); the choice stays in the space because the design doc lists
-  it.
+  (fitness −1e9). The choice was **removed from the space** (e3bff36) after
+  ~1/6 of random startup draws died on it.
 - Death penalties were observed live: two of four smoke trials drew configs
-  whose failures exceeded `1.25 × baseline` and scored −1e9.
+  whose failures exceeded `1.25 × baseline` and scored −1e9. (These now
+  early-abort, eff#1.)

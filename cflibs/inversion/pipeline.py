@@ -24,7 +24,7 @@ The CLI keeps thin backward-compatible aliases (``_build_pipeline_config``,
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.self_absorption_observable import normalize_self_absorption_mode
@@ -124,6 +124,13 @@ class AnalysisPipelineConfig:
     #: contaminated matches (Al I 892.356). The full 0.5 nm global scan still
     #: runs whenever calibration is skipped or fails its quality gate.
     residual_shift_scan_nm: float = 0.0
+    #: Global comb shift-scan half-width (nm) used whenever per-spectrum
+    #: wavelength calibration is disabled, skipped, or fails its quality gate
+    #: (the legacy single-constant scan). A quality-passed calibration replaces
+    #: it with ``residual_shift_scan_nm``. Formerly a magic
+    #: ``detection_overrides["shift_scan_nm"]`` key; now a first-class field
+    #: resolved and logged like every other knob.
+    global_shift_scan_nm: float = 0.5
     #: Degrade per-segment affine calibration fits to pure shift when the
     #: inlier anchors do not cover the segment (bead ye6t): never extrapolate
     #: a dispersion slope past its anchors.
@@ -154,19 +161,42 @@ class AnalysisPipelineConfig:
     #: (Campaign 1 knob plumbing, docs/audit/2026-06-10-goalfirst/
     #: optimization-program-design.md §3.1-B). Plain data only — keys must be
     #: ``detect_line_observations`` parameter names (e.g. ``comb_min_matches``,
-    #: ``kdet_min_score``); values override the pipeline-derived kwargs. The
-    #: special key ``shift_scan_nm`` replaces the legacy 0.5 nm *global* scan
-    #: default only (the post-calibration residual scan stays governed by
-    #: ``residual_shift_scan_nm``). Empty in production.
+    #: ``kdet_min_score``); values override the pipeline-derived kwargs.
+    #: ``shift_scan_nm`` is NOT accepted here: the global scan width is the
+    #: first-class ``global_shift_scan_nm`` field above. Empty in production.
     detection_overrides: dict = field(default_factory=dict)
 
 
-def _first_not_none(*values):
-    """Return the first value that is not ``None`` (all-None -> ``None``)."""
+#: Sentinel marking "knob not provided at this tier". Unlike ``None`` it lets
+#: an explicit ``None`` flow through the resolution chain — several knobs use
+#: ``None`` as a meaningful value (``wavelength_tolerance_nm=None`` = adaptive
+#: R-derived tolerance, ``min_relative_intensity=None`` = floor disabled).
+_UNSET: Any = object()
+
+#: ``AnalysisPipelineConfig`` fields settable through the ``overrides`` tier
+#: of :func:`build_pipeline_config`. ``elements`` is the run's identity, not
+#: a knob.
+_OVERRIDABLE_FIELDS = frozenset(AnalysisPipelineConfig.__dataclass_fields__) - {"elements"}
+
+
+def _resolve(*values):
+    """Return the first provided value (skipping ``_UNSET``; all-unset -> None).
+
+    Tier encoding: dict-backed tiers (``overrides``, YAML ``analysis_cfg``)
+    pass ``dict.get(key, _UNSET)`` so key *presence* decides — an explicit
+    ``None`` value is honoured. The CLI-flag tier cannot express ``None``
+    (argparse uses ``None`` for "flag not given"), so flags are wrapped with
+    :func:`_flag` which maps ``None`` to ``_UNSET``.
+    """
     for value in values:
-        if value is not None:
+        if value is not _UNSET:
             return value
     return None
+
+
+def _flag(value):
+    """CLI-flag tier adapter: argparse ``None`` means "flag not given"."""
+    return _UNSET if value is None else value
 
 
 def build_pipeline_config(
@@ -174,6 +204,7 @@ def build_pipeline_config(
     *,
     preset: Optional[str] = None,
     analysis_cfg: Optional[dict] = None,
+    overrides: Optional[Mapping[str, Any]] = None,
     saha_boltzmann_graph: Optional[bool] = None,
     closure_mode: Optional[str] = None,
     apply_self_absorption: Optional["bool | str"] = None,
@@ -195,18 +226,37 @@ def build_pipeline_config(
 
     Precedence per knob, highest first:
 
-    1. explicit CLI flags (the keyword arguments; ``None`` = not given),
-    2. YAML ``analysis.*`` keys (``analysis_cfg``, used by ``invert``),
-    3. the resolved preset bundle (``--preset`` / ``analysis.preset``,
+    1. ``overrides`` — explicit field overrides keyed by
+       :class:`AnalysisPipelineConfig` field name (campaign/benchmark
+       tooling, e.g. the goal-metric scoreboard). Key *presence* decides, so
+       an explicit ``None`` (= adaptive/disabled for several knobs) is
+       expressible. Unknown keys fail fast: a typo must not silently
+       evaluate the production default.
+    2. explicit CLI flags (the keyword arguments; ``None`` = not given),
+    3. YAML ``analysis.*`` keys (``analysis_cfg``, used by ``invert``;
+       key presence decides, so an explicit ``null`` is an explicit None),
+    4. the resolved preset bundle (``--preset`` / ``analysis.preset``,
        default ``geological``),
-    4. built-in defaults.
+    5. built-in defaults.
 
-    The resolved preset and every knob are logged at INFO so each run
-    records exactly which configuration produced its numbers.
+    Every tier — including ``overrides`` — passes through the same
+    validation (closure mode, preset name) and normalization
+    (``apply_self_absorption``). The resolved preset and every knob are
+    logged at INFO *after* all tiers land, so each run records exactly the
+    configuration that produced its numbers.
     """
     cfg = dict(analysis_cfg or {})
+    ov = dict(overrides or {})
+    unknown = set(ov) - _OVERRIDABLE_FIELDS
+    if unknown:
+        raise ValueError(
+            f"AnalysisPipelineConfig has no knob(s) {sorted(unknown)}. "
+            f"Overridable fields: {sorted(_OVERRIDABLE_FIELDS)}"
+        )
 
-    preset_name = _first_not_none(preset, cfg.get("preset"), DEFAULT_ANALYSIS_PRESET)
+    preset_name = _resolve(
+        ov.get("preset", _UNSET), _flag(preset), cfg.get("preset", _UNSET), DEFAULT_ANALYSIS_PRESET
+    )
     if preset_name not in ANALYSIS_PRESETS:
         raise ValueError(
             f"Unknown analysis preset {preset_name!r}. "
@@ -214,9 +264,11 @@ def build_pipeline_config(
         )
     preset_knobs = ANALYSIS_PRESETS[preset_name]
 
-    resolved_closure_mode = _first_not_none(
-        closure_mode, cfg.get("closure_mode"), preset_knobs["closure_mode"]
-    )
+    def knob(key, flag_value, *fallbacks):
+        """Resolve one knob: overrides > CLI flag > YAML > fallbacks."""
+        return _resolve(ov.get(key, _UNSET), _flag(flag_value), cfg.get(key, _UNSET), *fallbacks)
+
+    resolved_closure_mode = knob("closure_mode", closure_mode, preset_knobs["closure_mode"])
     if resolved_closure_mode not in CLOSURE_MODES:
         raise ValueError(
             f"Unknown closure mode {resolved_closure_mode!r}. "
@@ -226,71 +278,56 @@ def build_pipeline_config(
     pipeline = AnalysisPipelineConfig(
         preset=preset_name,
         elements=list(elements),
-        min_relative_intensity=_first_not_none(
-            min_relative_intensity, cfg.get("min_relative_intensity")
-        ),
-        top_k_per_element=cfg.get("top_k_per_element", 60),
-        resolving_power=_first_not_none(resolving_power, cfg.get("resolving_power")),
-        wavelength_tolerance_nm=_first_not_none(
-            wavelength_tolerance_nm, cfg.get("wavelength_tolerance_nm"), 0.1
-        ),
-        min_peak_height=_first_not_none(min_peak_height, cfg.get("min_peak_height"), 0.01),
-        peak_width_nm=_first_not_none(peak_width_nm, cfg.get("peak_width_nm"), 0.2),
+        min_relative_intensity=knob("min_relative_intensity", min_relative_intensity),
+        top_k_per_element=knob("top_k_per_element", None, 60),
+        resolving_power=knob("resolving_power", resolving_power),
+        wavelength_tolerance_nm=knob("wavelength_tolerance_nm", wavelength_tolerance_nm, 0.1),
+        min_peak_height=knob("min_peak_height", min_peak_height, 0.01),
+        peak_width_nm=knob("peak_width_nm", peak_width_nm, 0.2),
         apply_self_absorption=normalize_self_absorption_mode(
-            _first_not_none(apply_self_absorption, cfg.get("apply_self_absorption"), False)
+            knob("apply_self_absorption", apply_self_absorption, False)
         ),
-        exclude_resonance=_first_not_none(exclude_resonance, cfg.get("exclude_resonance")),
-        min_snr=cfg.get("min_snr", 10.0),
-        min_energy_spread_ev=cfg.get("min_energy_spread_ev", 2.0),
-        min_lines_per_element=cfg.get("min_lines_per_element", 3),
-        isolation_wavelength_nm=cfg.get("isolation_wavelength_nm", 0.1),
-        max_lines_per_element=cfg.get("max_lines_per_element", 20),
-        wavelength_calibration=bool(
-            _first_not_none(wavelength_calibration, cfg.get("wavelength_calibration"), True)
-        ),
-        shift_coherence_veto=bool(
-            _first_not_none(shift_coherence_veto, cfg.get("shift_coherence_veto"), True)
-        ),
+        exclude_resonance=knob("exclude_resonance", exclude_resonance),
+        min_snr=knob("min_snr", None, 10.0),
+        min_energy_spread_ev=knob("min_energy_spread_ev", None, 2.0),
+        min_lines_per_element=knob("min_lines_per_element", None, 3),
+        isolation_wavelength_nm=knob("isolation_wavelength_nm", None, 0.1),
+        max_lines_per_element=knob("max_lines_per_element", None, 20),
+        wavelength_calibration=bool(knob("wavelength_calibration", wavelength_calibration, True)),
+        shift_coherence_veto=bool(knob("shift_coherence_veto", shift_coherence_veto, True)),
         residual_shift_scan_nm=float(
-            _first_not_none(
+            knob(
+                "residual_shift_scan_nm",
                 residual_shift_scan_nm,
-                cfg.get("residual_shift_scan_nm"),
                 preset_knobs["residual_shift_scan_nm"],
             )
         ),
+        global_shift_scan_nm=float(knob("global_shift_scan_nm", None, 0.5)),
         affine_coverage_gate=bool(
-            _first_not_none(
-                affine_coverage_gate,
-                cfg.get("affine_coverage_gate"),
-                preset_knobs["affine_coverage_gate"],
-            )
+            knob("affine_coverage_gate", affine_coverage_gate, preset_knobs["affine_coverage_gate"])
         ),
         line_residual_gate=bool(
-            _first_not_none(
-                line_residual_gate,
-                cfg.get("line_residual_gate"),
-                preset_knobs["line_residual_gate"],
-            )
+            knob("line_residual_gate", line_residual_gate, preset_knobs["line_residual_gate"])
         ),
-        response_curve=_first_not_none(response_curve, cfg.get("response_curve")),
-        max_iterations=cfg.get("max_iterations", 20),
-        t_tolerance_k=cfg.get("t_tolerance_k", 100.0),
-        ne_tolerance_frac=cfg.get("ne_tolerance_frac", 0.1),
-        pressure_pa=cfg.get("pressure_pa", None) or cfg.get("pressure", 101325.0),
-        boltzmann_weight_cap=cfg.get("boltzmann_weight_cap", 5.0),
-        min_boltzmann_r2=cfg.get("min_boltzmann_r2", 0.3),
+        response_curve=knob("response_curve", response_curve),
+        max_iterations=knob("max_iterations", None, 20),
+        t_tolerance_k=knob("t_tolerance_k", None, 100.0),
+        ne_tolerance_frac=knob("ne_tolerance_frac", None, 0.1),
+        pressure_pa=_resolve(
+            ov.get("pressure_pa", _UNSET),
+            cfg.get("pressure_pa", None) or cfg.get("pressure", 101325.0),
+        ),
+        boltzmann_weight_cap=knob("boltzmann_weight_cap", None, 5.0),
+        min_boltzmann_r2=knob("min_boltzmann_r2", None, 0.3),
         saha_boltzmann_graph=bool(
-            _first_not_none(
-                saha_boltzmann_graph,
-                cfg.get("saha_boltzmann_graph"),
-                preset_knobs["saha_boltzmann_graph"],
-            )
+            knob("saha_boltzmann_graph", saha_boltzmann_graph, preset_knobs["saha_boltzmann_graph"])
         ),
         closure_mode=resolved_closure_mode,
-        closure_kwargs=dict(cfg.get("closure_kwargs", {})),
-        matrix_element=cfg.get("matrix_element"),
-        oxide_elements=cfg.get("oxide_elements"),
-        stark_ne=bool(_first_not_none(stark_ne, cfg.get("stark_ne"), preset_knobs["stark_ne"])),
+        closure_kwargs=dict(knob("closure_kwargs", None, {})),
+        matrix_element=knob("matrix_element", None),
+        oxide_elements=knob("oxide_elements", None),
+        stark_ne=bool(knob("stark_ne", stark_ne, preset_knobs["stark_ne"])),
+        detection_overrides=dict(ov.get("detection_overrides", None) or {}),
     )
     _log_pipeline_config(pipeline)
     return pipeline
@@ -303,13 +340,14 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
         "stark_ne=%s, "
         "apply_self_absorption=%s, exclude_resonance=%s, min_relative_intensity=%s, "
         "top_k_per_element=%s, resolving_power=%s, wavelength_calibration=%s, "
-        "shift_coherence_veto=%s, residual_shift_scan_nm=%s, "
+        "shift_coherence_veto=%s, residual_shift_scan_nm=%s, global_shift_scan_nm=%s, "
         "affine_coverage_gate=%s, line_residual_gate=%s, "
         "wavelength_tolerance_nm=%s, min_peak_height=%s, peak_width_nm=%s, "
         "min_snr=%s, min_energy_spread_ev=%s, min_lines_per_element=%s, "
         "max_lines_per_element=%s, isolation_wavelength_nm=%s, max_iterations=%s, "
         "t_tolerance_k=%s, ne_tolerance_frac=%s, pressure_pa=%s, "
-        "boltzmann_weight_cap=%s, min_boltzmann_r2=%s, response_curve=%s, elements=%s",
+        "boltzmann_weight_cap=%s, min_boltzmann_r2=%s, response_curve=%s, elements=%s, "
+        "detection_overrides=%s",
         pipeline.preset,
         pipeline.saha_boltzmann_graph,
         pipeline.closure_mode,
@@ -322,6 +360,7 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
         pipeline.wavelength_calibration,
         pipeline.shift_coherence_veto,
         pipeline.residual_shift_scan_nm,
+        pipeline.global_shift_scan_nm,
         pipeline.affine_coverage_gate,
         pipeline.line_residual_gate,
         pipeline.wavelength_tolerance_nm,
@@ -340,6 +379,7 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
         pipeline.min_boltzmann_r2,
         pipeline.response_curve,
         pipeline.elements,
+        pipeline.detection_overrides,
     )
 
 
@@ -367,6 +407,7 @@ def detect_and_select_lines(
     wavelength_calibration: bool = True,
     shift_coherence_veto: bool = True,
     residual_shift_scan_nm: float = 0.0,
+    global_shift_scan_nm: float = 0.5,
     affine_coverage_gate: bool = True,
     line_residual_gate: bool = True,
     detection_overrides: Optional[dict] = None,
@@ -443,9 +484,14 @@ def detect_and_select_lines(
         (its objective maximizes match count), displacing every element's
         residual cluster and admitting contaminated matches up to
         ``tolerance + 0.05`` away (Al I 892.356: +10.4 wt% Al on BHVO-2 loc1).
-        When calibration is skipped or fails its quality gate the full legacy
-        0.5 nm global scan still runs — this knob only controls the
-        post-calibration scan.
+        When calibration is skipped or fails its quality gate the full
+        ``global_shift_scan_nm`` scan still runs — this knob only controls
+        the post-calibration scan.
+    global_shift_scan_nm : float
+        Half-width (nm) of the legacy single-constant global comb shift-scan
+        used whenever calibration is disabled, skipped, or fails its quality
+        gate (default 0.5). A quality-passed calibration replaces it with
+        ``residual_shift_scan_nm``.
     affine_coverage_gate : bool
         Degrade per-segment affine calibration fits to a pure shift when the
         inlier anchors do not cover the segment (see
@@ -458,9 +504,10 @@ def detect_and_select_lines(
         Extra keyword overrides forwarded verbatim to
         ``detect_line_observations`` (Campaign 1 knob plumbing; see
         :class:`AnalysisPipelineConfig.detection_overrides`). ``shift_scan_nm``
-        is special-cased: it replaces the legacy 0.5 nm *global* scan default
-        only — the post-calibration residual scan stays governed by
-        ``residual_shift_scan_nm``.
+        is rejected here — the global scan width is the first-class
+        ``global_shift_scan_nm`` parameter (a verbatim forward would clobber
+        the post-calibration residual scan as well, which the old magic key
+        never did).
     return_diagnostics : bool
         When True, also return a diagnostics dict recording which requested
         elements were dropped and at which stage (``detection`` = no matched
@@ -499,10 +546,16 @@ def detect_and_select_lines(
     # no seams), aligning the axis robustly. After calibration only a small
     # residual ``shift_scan_nm`` is needed to mop up sub-tolerance jitter.
     overrides = dict(detection_overrides or {})
+    if "shift_scan_nm" in overrides:
+        raise ValueError(
+            "detection_overrides['shift_scan_nm'] is no longer accepted: the global "
+            "comb shift-scan width is the first-class 'global_shift_scan_nm' pipeline "
+            "knob (AnalysisPipelineConfig.global_shift_scan_nm)."
+        )
     # Legacy global scan width (used when calibration is disabled or fails its
-    # quality gate). Overridable via detection_overrides["shift_scan_nm"]; the
-    # post-calibration residual scan below stays residual_shift_scan_nm.
-    shift_scan_nm = float(overrides.pop("shift_scan_nm", 0.5))
+    # quality gate); a quality-passed calibration replaces it with the
+    # residual_shift_scan_nm mop-up below.
+    shift_scan_nm = float(global_shift_scan_nm)
     if wavelength_calibration:
         _cal_t0 = time.perf_counter()
         try:
@@ -752,6 +805,7 @@ def run_pipeline(
         wavelength_calibration=pipeline.wavelength_calibration,
         shift_coherence_veto=pipeline.shift_coherence_veto,
         residual_shift_scan_nm=pipeline.residual_shift_scan_nm,
+        global_shift_scan_nm=pipeline.global_shift_scan_nm,
         affine_coverage_gate=pipeline.affine_coverage_gate,
         line_residual_gate=pipeline.line_residual_gate,
         detection_overrides=pipeline.detection_overrides,

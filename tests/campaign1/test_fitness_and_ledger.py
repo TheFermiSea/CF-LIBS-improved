@@ -135,6 +135,39 @@ def test_missing_baseline_dataset_raises():
 
 
 @pytest.mark.unit
+def test_death_reasons_helper_is_single_source():
+    """compute_fitness and the eff#1 early-abort check share
+    death_reasons_for_counts — identical reasons (and fitness) by construction."""
+    rows = _rows(real_wt=_row("real_wt", basis="element_wt", rmse=5.0, fp=3, n_failed=4))
+    report = objective_mod.compute_fitness(rows, BASE_REF)
+    assert report.death
+    union = []
+    for row in rows:
+        union += objective_mod.death_reasons_for_counts(
+            row["name"],
+            objective_mod.dataset_kind(row) == "synthetic",
+            row["id_metrics"]["fp"],
+            row["n_failed"],
+            BASE_REF[row["name"]],
+        )
+    assert union == report.death_reasons
+
+
+@pytest.mark.unit
+def test_prefix_death_fitness_identical_to_full_run():
+    """eff#1 monotonicity: once one dataset dies, the prefix board scores the
+    exact DEATH_FITNESS the full board would (remaining datasets are moot)."""
+    dying = _row("real_wt", basis="element_wt", rmse=5.0, fp=5)
+    full = objective_mod.compute_fitness(_rows(real_wt=dying), BASE_REF)
+    prefix = objective_mod.compute_fitness([dying], {"real_wt": BASE_REF["real_wt"]})
+    assert full.death and prefix.death
+    assert prefix.fitness == full.fitness == objective_mod.DEATH_FITNESS
+    # And the default report records no abort.
+    assert full.aborted_after_dataset is None
+    assert "aborted_after_dataset" in full.to_dict()
+
+
+@pytest.mark.unit
 def test_paired_bootstrap_delta_f1_sign_and_ci():
     cand = [_row("d", f1=1.0)]
     base = [_row("d", f1=1.0)]

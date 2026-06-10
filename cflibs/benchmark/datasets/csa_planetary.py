@@ -48,6 +48,12 @@ from typing import Dict, Iterator, Optional
 
 import numpy as np
 
+from cflibs.benchmark.datasets._common import (
+    PRESENCE_CUTOFF_WT,
+    SpectrumTruth,
+    enforce_strictly_increasing,
+    presence_set,
+)
 from cflibs.benchmark.datasets.usgs import OXIDE_TO_ELEMENT_FACTOR
 
 logger = logging.getLogger(__name__)
@@ -178,12 +184,6 @@ def _oxides_to_elements(oxides: Dict[str, float]) -> tuple[Dict[str, float], flo
 
 def iter_spectra(root: Path) -> Iterator[tuple]:
     """Yield ``SpectrumRecord`` tuples for the CSA dataset (see contract)."""
-    from cflibs.benchmark.adapters_extended import (
-        PRESENCE_CUTOFF_WT,
-        SpectrumTruth,
-        enforce_strictly_increasing,
-    )
-
     table = _load_large_set_table(root / "Sample_Composition_Data_LargeSet.csv")
     graphite = _load_graphite_row(root / "Sample_Composition_Data_SubSet.csv")
 
@@ -235,7 +235,7 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
                 )
                 continue
 
-            present = frozenset(el for el, wt in element_wt.items() if wt >= PRESENCE_CUTOFF_WT)
+            present = presence_set(element_wt)
             if not present:
                 logger.warning("CSA sample %r skipped: empty element panel.", comp_name)
                 continue
@@ -259,7 +259,6 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
             truth = SpectrumTruth(
                 elements_present=present,
                 composition_wt={el: round(wt, 6) for el, wt in sorted(element_wt.items())},
-                composition_basis="element_wt",
                 resolving_power=None,
                 notes=notes,
             )

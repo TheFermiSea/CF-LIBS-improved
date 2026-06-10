@@ -19,25 +19,44 @@ capitalization (``Fe``, ``Si``). Trace elements below the adapter's
 documented cutoff (~0.01 wt%) may be excluded from ``elements_present`` with
 the cutoff recorded in ``notes``.
 
-This module is intentionally tiny and dependency-free (stdlib only) so both
-the harness branch and the datasets branch can build against it without
-import-order coupling.
+This module is intentionally tiny (numpy + stdlib only) so both the harness
+branch and the datasets branch can build against it without import-order
+coupling.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Iterator, Optional, Tuple
+from typing import Callable, Iterable, Iterator, Mapping, Optional, Tuple
+
+import numpy as np
 
 #: What one adapter yield looks like: (spectrum_id, wavelength_nm, intensity, truth).
-#: Arrays are typed ``Any`` here to keep this module numpy-free.
-AdapterYield = Tuple[str, Any, Any, "SpectrumTruth"]
+AdapterYield = Tuple[str, np.ndarray, np.ndarray, "SpectrumTruth"]
 
 #: A zero-argument generator function producing the dataset's spectra.
 AdapterFactory = Callable[[], Iterator[AdapterYield]]
 
 #: Valid values of :attr:`SpectrumTruth.composition_basis`.
 COMPOSITION_BASES = ("element_wt", "presence_only")
+
+#: Trace-element presence cutoff (wt%): certified elements below this are
+#: excluded from ``elements_present`` (recorded in each adapter's notes; see
+#: the contract in the module docstring).
+PRESENCE_CUTOFF_WT = 0.01
+
+
+def presence_set(composition_wt: Mapping[str, float]) -> frozenset[str]:
+    """Elements of ``composition_wt`` (wt%) at or above :data:`PRESENCE_CUTOFF_WT`."""
+    return frozenset(el for el, wt in composition_wt.items() if wt >= PRESENCE_CUTOFF_WT)
+
+
+#: Valid values of :attr:`DatasetEntry.tier` (campaign design 2.1):
+#: ``optimization`` datasets may be queried freely; ``holdout`` datasets are
+#: the adoption gate (default scoreboard runs exclude them; pass
+#: ``include_holdout=True`` / ``--include-holdout`` explicitly); ``vault``
+#: datasets are end-of-program material and are NEVER run by the scoreboard.
+DATASET_TIERS = ("optimization", "holdout", "vault")
 
 
 @dataclass(frozen=True)
@@ -68,6 +87,8 @@ class SpectrumTruth:
     notes: str = ""
 
     def __post_init__(self) -> None:
+        # The basis is fully determined by composition_wt, so after this check
+        # it is always one of COMPOSITION_BASES — no separate membership check.
         derived = "element_wt" if self.composition_wt is not None else "presence_only"
         if not self.composition_basis:
             object.__setattr__(self, "composition_basis", derived)
@@ -77,20 +98,32 @@ class SpectrumTruth:
                 f"composition_wt={'given' if self.composition_wt is not None else 'None'} "
                 f"(expected {derived!r})"
             )
-        if self.composition_basis not in COMPOSITION_BASES:
-            raise ValueError(
-                f"composition_basis must be one of {COMPOSITION_BASES}, "
-                f"got {self.composition_basis!r}"
-            )
 
 
 @dataclass(frozen=True)
 class DatasetEntry:
-    """One registered scoreboard dataset."""
+    """One registered scoreboard dataset.
+
+    ``tier`` is a property of the dataset itself, declared at registration
+    (single source of truth — ``scripts/campaign1/splits.py`` derives its
+    holdout/vault name sets from here): ``"optimization"`` (default),
+    ``"holdout"`` (adoption gate) or ``"vault"`` (end-of-program only).
+
+    ``notes`` is the dataset-level provenance line shown on the board. When
+    left empty, the harness falls back to the first yielded spectrum's truth
+    notes (used by adapters whose provenance is only known at run time, e.g.
+    the synthetic corpus path + sha256).
+    """
 
     name: str
     adapter_factory: AdapterFactory
     tags: frozenset[str] = field(default_factory=frozenset)
+    tier: str = "optimization"
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        if self.tier not in DATASET_TIERS:
+            raise ValueError(f"tier must be one of {DATASET_TIERS}, got {self.tier!r}")
 
 
 #: Module-level registry, insertion-ordered. Tests monkeypatch this dict.
@@ -102,6 +135,8 @@ def register_dataset(
     adapter_factory: AdapterFactory,
     *,
     tags: Iterable[str] = (),
+    tier: str = "optimization",
+    notes: str = "",
     replace: bool = False,
 ) -> DatasetEntry:
     """Register a dataset adapter under ``name``.
@@ -114,6 +149,12 @@ def register_dataset(
         Zero-argument generator function (see module docstring contract).
     tags : Iterable[str]
         Filter tags, e.g. ``("real", "geological")`` or ``("synthetic",)``.
+    tier : str
+        One of :data:`DATASET_TIERS` (default ``"optimization"``). See
+        :class:`DatasetEntry`.
+    notes : str
+        Dataset-level provenance line (see :class:`DatasetEntry`; empty =
+        harness falls back to the first spectrum's truth notes).
     replace : bool
         Allow overwriting an existing registration (default False: duplicate
         names raise ``ValueError`` so two branches cannot silently shadow
@@ -121,7 +162,9 @@ def register_dataset(
     """
     if name in _REGISTRY and not replace:
         raise ValueError(f"Scoreboard dataset {name!r} is already registered (use replace=True).")
-    entry = DatasetEntry(name=name, adapter_factory=adapter_factory, tags=frozenset(tags))
+    entry = DatasetEntry(
+        name=name, adapter_factory=adapter_factory, tags=frozenset(tags), tier=tier, notes=notes
+    )
     _REGISTRY[name] = entry
     return entry
 
@@ -161,3 +204,18 @@ def iter_datasets(
 def registered_names() -> list[str]:
     """Names of all registered datasets, in registration order."""
     return list(_REGISTRY)
+
+
+def ensure_default_datasets() -> None:
+    """Idempotently register the default scoreboard datasets (core + extended).
+
+    The one-call replacement for the register_core_adapters() +
+    register_extended_adapters() ritual every harness entry point used to
+    repeat. Late imports avoid a registry <-> adapters cycle; both
+    registration functions use ``replace=True`` so repeated calls are safe.
+    """
+    from cflibs.benchmark.adapters_core import register_core_adapters
+    from cflibs.benchmark.adapters_extended import register_extended_adapters
+
+    register_core_adapters()
+    register_extended_adapters()

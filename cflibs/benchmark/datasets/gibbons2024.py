@@ -41,6 +41,8 @@ from typing import Iterator
 
 import numpy as np
 
+from cflibs.benchmark.datasets._common import SpectrumTruth, enforce_strictly_increasing
+
 logger = logging.getLogger(__name__)
 
 SHEET = "Nitrates_UnnormalizedSpectra"
@@ -54,11 +56,6 @@ NO3_TO_N = 14.007 / (14.007 + 3 * 15.999)
 def iter_spectra(root: Path) -> Iterator[tuple]:
     """Yield ``SpectrumRecord`` tuples for the Gibbons nitrate series."""
     import openpyxl
-
-    from cflibs.benchmark.adapters_extended import (
-        SpectrumTruth,
-        enforce_strictly_increasing,
-    )
 
     workbook = openpyxl.load_workbook(
         root / "SI_Raw_Spectral_Data.xlsx", read_only=True, data_only=True
@@ -116,7 +113,6 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
                 truth = SpectrumTruth(
                     elements_present=frozenset({"N", str(cation)}),
                     composition_wt={"N": round(n_wt, 6)},
-                    composition_basis="element_wt",
                     resolving_power=None,
                     notes=common_notes.format(fname=fname, truth_detail=truth_detail),
                 )
@@ -131,7 +127,6 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
                 truth = SpectrumTruth(
                     elements_present=frozenset({"N", str(cation)}),
                     composition_wt=None,
-                    composition_basis="presence_only",
                     resolving_power=None,
                     notes=common_notes.format(fname=fname, truth_detail=truth_detail),
                 )

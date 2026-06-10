@@ -32,6 +32,8 @@ the one with the best worst-dataset score (design 3.4).
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import hashlib
 import json
 import sys
 import time
@@ -54,9 +56,21 @@ MIN_DELTA_F1 = 0.02
 RUNTIME_FACTOR = 1.5
 HOLDOUT_QUOTA_DAYS = 7
 
+#: Below this per-dataset spectrum count a paired bootstrap CI is
+#: uninformative (BHVO-2's n=4 can never exclude 0; design 2.4), so the
+#: per-dataset regression gate falls back to a point-wise F1 comparison.
+#: With production splits only bhvo2_chemcam (n=4) is under this; every
+#: other holdout dataset has n >= 37. Smoke runs with a tiny
+#: ``--spectra-per-dataset`` cap gate everything point-wise — smoke only.
+MIN_BOOTSTRAP_N = 8
 
-def _fmt(value, spec=".3f"):
-    return format(value, spec) if value is not None else "—"
+#: Cached baseline boards (the expensive, candidate-independent half of a
+#: holdout evaluation), keyed by a fingerprint of everything they depend on.
+BASELINE_CACHE_FILENAME = "holdout_baseline_cache.json"
+
+
+from cflibs.benchmark.scoreboard import _json_default  # noqa: E402
+from cflibs.benchmark.scoreboard import fmt_metric as _fmt  # noqa: E402
 
 
 def top_k_trials(study: optuna.Study, k: int) -> list[optuna.trial.FrozenTrial]:
@@ -78,6 +92,50 @@ def top_k_trials(study: optuna.Study, k: int) -> list[optuna.trial.FrozenTrial]:
         if len(picked) >= k:
             break
     return picked
+
+
+def baseline_cache_key(cfg: dict[str, Any], seed: int, spectra_per_dataset: Optional[int]) -> str:
+    """Fingerprint of everything the baseline boards depend on (eff#4).
+
+    Code identity (git sha/dirty; the staged cluster copy has no .git and
+    records None — a re-stage there usually means a new study dir), atomic-DB
+    sha256, splits-manifest sha256, the bootstrap seed (= sample seed of the
+    eval contexts), and the evaluation caps. Any mismatch forces a recompute.
+    """
+    ident = {
+        "git": knob_space._git_describe(knob_space.REPO_ROOT),
+        "db_sha256": knob_space._sha256_file(Path(cfg["db_path"])),
+        "splits_manifest_sha256": knob_space._sha256_file(Path(cfg["splits_manifest_path"])),
+        "seed": seed,
+        "spectra_per_dataset": spectra_per_dataset,
+        "per_spectrum_timeout_s": cfg.get("per_spectrum_timeout_s", 120.0),
+        "datasets": list(cfg["datasets"]),
+        "preset": cfg.get("preset"),
+    }
+    return hashlib.sha256(json.dumps(ident, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def load_cached_baseline_boards(study_dir: Path, key: str) -> Optional[tuple[dict, dict]]:
+    """The cached (base_opt, base_hold) boards, or None on miss/key mismatch."""
+    path = Path(study_dir) / BASELINE_CACHE_FILENAME
+    if not path.exists():
+        return None
+    try:
+        cache = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    if cache.get("key") != key:
+        return None
+    return cache["base_opt"], cache["base_hold"]
+
+
+def store_baseline_boards(study_dir: Path, key: str, base_opt: dict, base_hold: dict) -> None:
+    (Path(study_dir) / BASELINE_CACHE_FILENAME).write_text(
+        json.dumps(
+            {"key": key, "base_opt": base_opt, "base_hold": base_hold},
+            default=_json_default,
+        )
+    )
 
 
 def enforce_holdout_quota(study_dir: Path, force: bool) -> None:
@@ -124,8 +182,9 @@ def _gate_results(
             [row], [base_row], n_boot=n_boot, seed=seed
         )
         regressed = ds_boot["ci_high"] < 0.0
-        if row["name"] == "bhvo2_chemcam":
-            # n=4 can never pass a bootstrap alone (design 2.4): gate point-wise.
+        if row["n_run"] < MIN_BOOTSTRAP_N:
+            # Too few spectra for a meaningful bootstrap (BHVO-2: n=4;
+            # design 2.4): gate point-wise on F1 itself.
             regressed = row["id_metrics"]["f1"] < base_row["id_metrics"]["f1"]
         g2_no_regression &= not regressed
         per_holdout[row["name"]] = {
@@ -279,13 +338,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     manifest = splits.load_manifest(cfg["splits_manifest_path"])
 
     enforce_holdout_quota(study_dir, args.force)
+    # Quota marker only — the per-evaluation "holdout_eval" entries below
+    # carry the actual wall_s charged to the core-hour ledger.
     driver.append_ledger(
         study_dir,
         {
             "kind": "holdout_query",
             "top_k": args.top_k,
             "cpus": driver.detect_cpus(),
-            "wall_s": 0.0,  # updated by trial entries below
+            "wall_s": 0.0,
         },
     )
 
@@ -294,7 +355,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not candidates:
         raise SystemExit("No completed trials in the study.")
 
-    holdout_datasets = tuple(manifest["holdout"].keys())
     ctx_opt = objective_mod.EvalContext(
         db_path=Path(cfg["db_path"]),
         manifest=manifest,
@@ -305,16 +365,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         n_procs=args.n_procs,
         per_spectrum_timeout_s=cfg.get("per_spectrum_timeout_s", 120.0),
     )
-    ctx_hold = objective_mod.EvalContext(
-        db_path=Path(cfg["db_path"]),
-        manifest=manifest,
-        datasets=holdout_datasets,
-        spectra_per_dataset=args.spectra_per_dataset,
-        sample_seed=args.seed,
-        preset=cfg.get("preset"),
-        n_procs=args.n_procs,
-        per_spectrum_timeout_s=cfg.get("per_spectrum_timeout_s", 120.0),
-    )
+    # The holdout context differs from the optimization one ONLY in datasets.
+    ctx_hold = dataclasses.replace(ctx_opt, datasets=tuple(manifest["holdout"].keys()))
 
     def _timed_eval(label: str, overrides, ctx, section: str, allow: bool):
         t0 = time.perf_counter()
@@ -336,10 +388,20 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     baseline_params = knob_space.baseline_params()
     baseline_overrides = knob_space.params_to_overrides(baseline_params)
-    print("Evaluating baseline on the optimization split ...")
-    base_opt = _timed_eval("baseline", baseline_overrides, ctx_opt, "optimization", False)
-    print("Evaluating baseline on the holdout split ...")
-    base_hold = _timed_eval("baseline", baseline_overrides, ctx_hold, "holdout", True)
+    # eff#4: the baseline boards are candidate-independent and by far the
+    # most expensive repeated part of a holdout evaluation. Cache them in the
+    # study dir keyed by everything they depend on; recompute on mismatch.
+    cache_key = baseline_cache_key(cfg, args.seed, args.spectra_per_dataset)
+    cached = load_cached_baseline_boards(study_dir, cache_key)
+    if cached is not None:
+        print(f"Baseline boards: cache hit ({BASELINE_CACHE_FILENAME}, key {cache_key[:12]}…).")
+        base_opt, base_hold = cached
+    else:
+        print("Evaluating baseline on the optimization split ...")
+        base_opt = _timed_eval("baseline", baseline_overrides, ctx_opt, "optimization", False)
+        print("Evaluating baseline on the holdout split ...")
+        base_hold = _timed_eval("baseline", baseline_overrides, ctx_hold, "holdout", True)
+        store_baseline_boards(study_dir, cache_key, base_opt, base_hold)
 
     results = []
     for trial in candidates:

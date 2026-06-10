@@ -91,13 +91,21 @@ def test_adapter_skips_with_log_when_data_absent(name, factory, k, tmp_path, cap
 
 
 def test_manifest_shape_and_unique_names():
+    from cflibs.benchmark.scoreboard_registry import DATASET_TIERS
+
     assert len(MANIFEST) == 5
     names = [entry[0] for entry in MANIFEST]
     assert len(set(names)) == len(names)
-    for name, factory, tags, notes in MANIFEST:
+    for name, factory, tags, tier, notes in MANIFEST:
         assert callable(factory)
         assert isinstance(tags, tuple) and tags
+        assert tier in DATASET_TIERS
         assert isinstance(notes, str) and notes
+    tiers = {name: tier for name, _factory, _tags, tier, _notes in MANIFEST}
+    # Campaign design 2.1: the adoption gate and the vault are properties of
+    # the dataset itself, declared at registration.
+    assert tiers["emslibs2019"] == "holdout"
+    assert tiers["gibbons2024"] == "vault"
 
 
 def test_spectrum_truth_basis_consistency_enforced():
