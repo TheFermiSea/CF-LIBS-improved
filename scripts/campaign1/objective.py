@@ -391,7 +391,7 @@ def evaluate_overrides(
                 records,
                 n_total=len(ctx.manifest[section][name]),
                 sampled=len(items) < len(ctx.manifest[section][name]),
-                notes=items[0][3].notes if items else "",
+                notes=entry.notes or (items[0][3].notes if items else ""),
             )
         )
     return {

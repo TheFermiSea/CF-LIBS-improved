@@ -331,4 +331,4 @@ def register_extended_adapters(*, replace: bool = True) -> None:
     from cflibs.benchmark.scoreboard_registry import register_dataset
 
     for name, factory, tags, tier, notes in MANIFEST:
-        register_dataset(name, factory, tags=tags, tier=tier, replace=replace)
+        register_dataset(name, factory, tags=tags, tier=tier, notes=notes, replace=replace)

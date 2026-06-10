@@ -107,12 +107,18 @@ class DatasetEntry:
     (single source of truth — ``scripts/campaign1/splits.py`` derives its
     holdout/vault name sets from here): ``"optimization"`` (default),
     ``"holdout"`` (adoption gate) or ``"vault"`` (end-of-program only).
+
+    ``notes`` is the dataset-level provenance line shown on the board. When
+    left empty, the harness falls back to the first yielded spectrum's truth
+    notes (used by adapters whose provenance is only known at run time, e.g.
+    the synthetic corpus path + sha256).
     """
 
     name: str
     adapter_factory: AdapterFactory
     tags: frozenset[str] = field(default_factory=frozenset)
     tier: str = "optimization"
+    notes: str = ""
 
     def __post_init__(self) -> None:
         if self.tier not in DATASET_TIERS:
@@ -129,6 +135,7 @@ def register_dataset(
     *,
     tags: Iterable[str] = (),
     tier: str = "optimization",
+    notes: str = "",
     replace: bool = False,
 ) -> DatasetEntry:
     """Register a dataset adapter under ``name``.
@@ -144,6 +151,9 @@ def register_dataset(
     tier : str
         One of :data:`DATASET_TIERS` (default ``"optimization"``). See
         :class:`DatasetEntry`.
+    notes : str
+        Dataset-level provenance line (see :class:`DatasetEntry`; empty =
+        harness falls back to the first spectrum's truth notes).
     replace : bool
         Allow overwriting an existing registration (default False: duplicate
         names raise ``ValueError`` so two branches cannot silently shadow
@@ -152,7 +162,7 @@ def register_dataset(
     if name in _REGISTRY and not replace:
         raise ValueError(f"Scoreboard dataset {name!r} is already registered (use replace=True).")
     entry = DatasetEntry(
-        name=name, adapter_factory=adapter_factory, tags=frozenset(tags), tier=tier
+        name=name, adapter_factory=adapter_factory, tags=frozenset(tags), tier=tier, notes=notes
     )
     _REGISTRY[name] = entry
     return entry

@@ -377,15 +377,46 @@ def register_core_adapters(*, replace: bool = True) -> None:
         bhvo2_chemcam_adapter,
         tags=("real", "geological"),
         tier="holdout",
+        notes=(
+            "Real ChemCam (LANL testbed) LIBS of USGS BHVO-2 basalt (4 locations); "
+            "truth = USGS/GeoReM certified oxide composition as element wt%."
+        ),
         replace=replace,
     )
-    register_dataset("aalto", aalto_adapter, tags=("real", "minerals"), replace=replace)
     register_dataset(
-        "nist_srm_612", nist_srm_612_adapter, tags=("real", "placeholder"), replace=replace
+        "aalto",
+        aalto_adapter,
+        tags=("real", "minerals"),
+        notes=(
+            "Aalto University LIBS spectral library: 13 pure-element standards + "
+            "61 mineral samples; presence-only truth from labels / idealized "
+            "mineral-formula stoichiometry."
+        ),
+        replace=replace,
     )
     register_dataset(
-        "nist_steel", nist_steel_adapter, tags=("real", "placeholder"), replace=replace
+        "nist_srm_612",
+        nist_srm_612_adapter,
+        tags=("real", "placeholder"),
+        notes=(
+            "Placeholder: no public SRM 612 LIBS spectra ingested "
+            "(data/nist_srm_612/README.md, bead CF-LIBS-improved-9jvd)."
+        ),
+        replace=replace,
     )
+    register_dataset(
+        "nist_steel",
+        nist_steel_adapter,
+        tags=("real", "placeholder"),
+        notes=(
+            "Placeholder: no validated public NIST steel-SRM LIBS spectra ingested "
+            "(certs already transcribed in cflibs.benchmark.datasets.nist_steel)."
+        ),
+        replace=replace,
+    )
+    # notes deliberately empty: this dataset's provenance (resolved corpus
+    # path + sha256) is only known when it runs, so the board falls back to
+    # the first yielded truth notes (see DatasetEntry.notes).
     register_dataset(
         "synthetic_fixedforward",
         synthetic_fixedforward_adapter,

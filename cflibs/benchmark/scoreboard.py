@@ -369,7 +369,9 @@ def run_scoreboard(
         indices = _sample_indices(n_total, max_spectra, seed)
         if indices is not None:
             items = [items[i] for i in indices]
-        notes = items[0][3].notes if items else ""
+        # Registration-time notes win; fall back to the first spectrum's truth
+        # notes for adapters whose provenance is only known at run time.
+        notes = entry.notes or (items[0][3].notes if items else "")
         records = [
             _score_spectrum(
                 atomic_db, sid, wl, inten, truth, preset=preset, config_overrides=config_overrides
