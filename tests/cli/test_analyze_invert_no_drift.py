@@ -11,14 +11,28 @@ Na-dominated composition (RMSE 33.69 wt%, Na ~98%) while ``invert`` produced a
 balanced estimate (RMSE ~14.83). The fix extracts a single shared helper,
 ``_detect_and_select_lines``, that both commands call.
 
+The detection-cascade fix (PR #223, commit dfdb8a1) then RETIRED the absolute
+relative-intensity floor: it deleted whole real elements (Mg/K and the Al I
+394.4/396.2 resonance doublet all sit below rel_int 100). It was replaced by an
+element-relative top-K gA-Boltzmann strength selection plus a shift-coherence
+veto in ``detect_line_observations``. Those two gates also suppress the
+Boltzmann-faint high-E_k Na Rydberg lines (413-421 nm) that drove the blowup,
+so the absolute floor is no longer the pruning mechanism and the default
+``min_relative_intensity`` is now ``None`` across helper, argparse, and
+invert/analyze config-resolution paths.
+
 These tests pin the contract so the paths cannot silently re-drift:
 
 1. The argparse defaults and the helper signature default agree on the
-   relative-intensity floor (100.0) — a pure unit test, no DB.
-2. On a real BHVO-2 spectrum, the helper invoked with ``analyze``'s default
-   parameters and with ``invert``'s default parameters yields the SAME
-   selected-line count and the SAME set of (element, wavelength) lines — i.e.
-   the two entry points resolve to byte-identical detection+selection.
+   relative-intensity floor (now ``None``) — a pure unit test, no DB.
+2. On a real BHVO-2 spectrum, the helper invoked with ``analyze``'s production
+   default parameters and with ``invert``'s production default parameters
+   yields the SAME selected-line count and the SAME set of (element,
+   wavelength) lines — i.e. the two entry points resolve to byte-identical
+   detection+selection.
+3. On a real BHVO-2 spectrum, the default detection path (``min_relative_
+   intensity=None``) does NOT admit the spurious Na Rydberg lines, because the
+   gA-Boltzmann comb strength + shift-coherence veto prune them.
 """
 
 from __future__ import annotations
@@ -96,38 +110,44 @@ def test_helper_exclude_resonance_tied_to_self_absorption():
 @pytest.mark.integration
 def test_analyze_and_invert_select_identical_lines(production_db):
     """
-    On real BHVO-2, the helper called with analyze's default params and with
-    invert's default params produces the SAME selected-line set — the no-drift
-    contract. Both default to min_relative_intensity=100.0 and SA off.
+    On real BHVO-2, the helper called with ``analyze``'s production-default
+    params and with ``invert``'s production-default params produces the SAME
+    selected-line set — the no-drift contract.
+
+    ``analyze_cmd`` passes only ``min_relative_intensity`` (None),
+    ``resolving_power`` (None) and ``apply_self_absorption`` (False), letting
+    everything else fall through to the helper signature defaults.
+    ``invert_cmd`` resolves the same parameters from an empty ``analysis_cfg``
+    via ``analysis_cfg.get(key, DEFAULT)`` where each DEFAULT equals the
+    helper's own default — so with no config the two entry points pass
+    byte-identical kwargs and must select the identical line set.
     """
     if not _BHVO2_SPECTRUM.exists():
         pytest.skip("BHVO-2 spectrum not available")
     wl, inten = load_spectrum(str(_BHVO2_SPECTRUM))
 
-    # analyze path: bare good defaults (min_relative_intensity=100.0, SA off).
     analyze_obs = _detect_and_select_lines(
         wl,
         inten,
         production_db,
         _ELEMENTS,
-        min_relative_intensity=100.0,
+        min_relative_intensity=None,
+        resolving_power=None,
         apply_self_absorption=False,
     )
 
-    # invert path: same params but plumbed through its config-derived kwargs
-    # (which, with no config, resolve to the identical good defaults).
     invert_obs = _detect_and_select_lines(
         wl,
         inten,
         production_db,
         _ELEMENTS,
-        min_relative_intensity=100.0,
+        min_relative_intensity=None,
         resolving_power=None,
         wavelength_tolerance_nm=0.1,
         min_peak_height=0.01,
         peak_width_nm=0.2,
         apply_self_absorption=False,
-        exclude_resonance=True,
+        exclude_resonance=None,
         min_snr=10.0,
         min_energy_spread_ev=2.0,
         min_lines_per_element=3,
@@ -144,32 +164,24 @@ def test_analyze_and_invert_select_identical_lines(production_db):
 
 @pytest.mark.requires_db
 @pytest.mark.integration
-def test_default_floor_kills_na_rydberg_blowup(production_db):
+def test_default_path_prunes_na_rydberg_lines(production_db):
     """
-    The unified default floor (100.0) prunes the spurious Na Rydberg lines that
-    drove the catastrophic Na ~98% blowup on the old bare ``analyze`` path.
+    The default detection path (``min_relative_intensity=None``) must not
+    admit the spurious high-E_k Na Rydberg lines (413-421 nm) that drove the
+    catastrophic Na ~98% blowup. With the absolute floor retired (PR #223),
+    the gA-Boltzmann top-K strength selection and shift-coherence veto are
+    the pruning mechanism.
     """
     if not _BHVO2_SPECTRUM.exists():
         pytest.skip("BHVO-2 spectrum not available")
     wl, inten = load_spectrum(str(_BHVO2_SPECTRUM))
 
-    # No floor (the old analyze behaviour) admits Na Rydberg lines...
-    no_floor = _detect_and_select_lines(
+    default_obs = _detect_and_select_lines(
         wl, inten, production_db, _ELEMENTS, min_relative_intensity=None
     )
-    na_no_floor = {round(o.wavelength_nm, 1) for o in no_floor if o.element == "Na"}
+    na_default = {round(o.wavelength_nm, 1) for o in default_obs if o.element == "Na"}
 
-    # ...the unified default floor prunes them.
-    with_floor = _detect_and_select_lines(
-        wl, inten, production_db, _ELEMENTS, min_relative_intensity=100.0
-    )
-    na_with_floor = {round(o.wavelength_nm, 1) for o in with_floor if o.element == "Na"}
-
-    assert na_no_floor & _NA_RYDBERG_NM, (
-        "Expected the no-floor path to admit Na Rydberg lines; "
-        f"got Na lines {sorted(na_no_floor)}."
-    )
-    assert not (na_with_floor & _NA_RYDBERG_NM), (
-        "The default floor must prune the weak high-E_k Na Rydberg lines; "
-        f"survivors: {sorted(na_with_floor & _NA_RYDBERG_NM)}."
+    assert not (na_default & _NA_RYDBERG_NM), (
+        "The default detection path must prune the weak high-E_k Na Rydberg lines; "
+        f"survivors: {sorted(na_default & _NA_RYDBERG_NM)}."
     )

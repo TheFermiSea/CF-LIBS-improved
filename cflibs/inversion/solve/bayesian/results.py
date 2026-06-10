@@ -139,8 +139,19 @@ class MCMCResult:
                 param_names.append(f"C_{el}")
                 param_data.append(conc_samples[:, i])
 
-        data_matrix = np.vstack(param_data).T
-        corr_matrix = np.corrcoef(data_matrix.T)
+        data_matrix = np.vstack(param_data)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            corr_matrix = np.atleast_2d(np.corrcoef(data_matrix))
+        # A zero-variance (stuck/degenerate) chain has undefined Pearson
+        # correlation and would poison its whole row/column with NaN. Report
+        # 0 against every other parameter (no detectable linear association)
+        # and 1 on its own diagonal so the result stays a valid, finite
+        # correlation matrix. ``~(std > 0)`` also catches NaN samples.
+        degenerate = ~(data_matrix.std(axis=1) > 0.0)
+        if degenerate.any():
+            corr_matrix[degenerate, :] = 0.0
+            corr_matrix[:, degenerate] = 0.0
+            np.fill_diagonal(corr_matrix, 1.0)
         T_log_ne_corr = corr_matrix[0, 1]
 
         return {
