@@ -227,7 +227,7 @@ with effective `σ² = σ_D² + σ_inst²` and Lorentzian wing `γ_Stark`.
 ---
 
 **Inversion.** The iterative CF-LIBS solver
-(`cflibs.inversion.solver.IterativeCFLIBSSolver`) inverts the forward
+(`cflibs.inversion.solve.iterative.IterativeCFLIBSSolver`) inverts the forward
 model. The algorithm is standard Ciucci/Tognoni CF-LIBS with refinements
 documented below.
 

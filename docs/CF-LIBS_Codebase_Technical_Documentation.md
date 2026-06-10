@@ -584,7 +584,7 @@ def calculate_spectrum_emissivity(
 - `cflibs.inversion.solve/` — Plasma parameter inference (iterative CF-LIBS, ILR solver, Bayesian MCMC, manifold)
 - `cflibs.inversion.runtime/` — Real-time systems (DAQ streaming, temporal gate optimization, hardware interface)
 
-**Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work.
+**Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solve.iterative import X`) still work.
 
 For the CLI and configuration schema used by classic CF-LIBS inversion, see
 `docs/User_Guide.md` (Inversion section) and `docs/API_Reference.md` (CLI options).
@@ -712,7 +712,7 @@ See `docs/User_Guide.md` for the `analysis` configuration fields that control
 line detection and selection.
 
 ```python
-from cflibs.inversion.line_detection import detect_line_observations
+from cflibs.inversion.identify.line_detection import detect_line_observations
 
 result = detect_line_observations(
     wavelength,
