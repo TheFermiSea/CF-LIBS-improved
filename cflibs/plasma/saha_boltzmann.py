@@ -3,7 +3,8 @@ Saha-Boltzmann solver for LTE plasma.
 """
 
 import threading
-from typing import Dict, Optional, Protocol, Tuple
+from dataclasses import dataclass
+from typing import Callable, Dict, Optional, Protocol, Tuple
 
 import numpy as np
 
@@ -35,6 +36,104 @@ class DebyeHuckelIPD:
 logger = get_logger("plasma.saha_boltzmann")
 _MISSING_LEVEL_WARNED: set[tuple[str, int]] = set()
 _MISSING_LEVEL_WARNED_LOCK = threading.Lock()
+
+
+@dataclass(frozen=True)
+class SpeciesStageState:
+    """Per-(element, ionization stage) plasma state for line emissivities.
+
+    Carries everything the forward model needs to compute the upper-level
+    population of *any* transition of this species directly from the
+    transition's own ``(g_k, E_k)`` (stored in the lines table)::
+
+        n_k = number_density_cm3 * (g_k / partition_function) * exp(-E_k / kT)
+
+    with ``n_k = 0`` for ``E_k > max_energy_ev`` — levels above the
+    IPD-lowered ionization potential have merged into the continuum.
+
+    This replaces the historical float-keyed level-population dict join
+    between the ``lines`` and ``energy_levels`` tables, which silently
+    dropped ~98 % of lines because the two tables encode the same physical
+    level with ~1e-7 eV differences (audit 2026-06-09 F1, bead
+    CF-LIBS-improved-z3cg).
+
+    Attributes
+    ----------
+    number_density_cm3 : float
+        Total number density of this ionization stage in cm^-3.
+    partition_function : float
+        Partition function U(T) evaluated with the same IPD-lowered energy
+        cutoff used for ``max_energy_ev``.
+    max_energy_ev : float
+        IPD-lowered maximum bound-level energy in eV. Transitions whose
+        upper level exceeds this cutoff must receive zero population.
+    """
+
+    number_density_cm3: float
+    partition_function: float
+    max_energy_ev: float
+
+
+def _ipd_max_energy_ev(
+    atomic_db: AtomicDataSource,
+    ipd_model: "IPDModel",
+    element: str,
+    ionization_stage: int,
+    T_e_eV: float,
+    n_e_cm3: Optional[float],
+) -> float:
+    """IPD-lowered maximum bound-level energy for a species (eV).
+
+    Mirrors the cutoff convention of ``solve_level_population``: with
+    ``n_e_cm3`` available the Debye-Hückel-lowered ionization potential is
+    used; without it, 98 % of the IP (excluding autoionizing levels);
+    50 eV when the IP is unknown.
+    """
+    ip = atomic_db.get_ionization_potential(element, ionization_stage)
+    if n_e_cm3 is not None and ip is not None:
+        T_K = T_e_eV * EV_TO_K
+        delta_chi = ipd_model.calculate_lowering(n_e_cm3, T_K)
+        return max(ip - delta_chi, 0.0)
+    return ip * 0.98 if ip else 50.0
+
+
+def _solve_species_states_impl(
+    solver,
+    plasma: SingleZoneLTEPlasma,
+    partition_fn: Callable[[str, int, float, float], float],
+) -> Dict[Tuple[str, int], SpeciesStageState]:
+    """Shared ``solve_species_states`` body for the NumPy and JAX solvers.
+
+    ``partition_fn(element, stage, T_e_eV, max_energy_ev)`` abstracts over
+    the two solvers' ``calculate_partition_function`` signatures.
+    """
+    T_e_eV = plasma.T_e_eV
+    n_e_cm3 = plasma.n_e
+    states: Dict[Tuple[str, int], SpeciesStageState] = {}
+    for element, total_density in plasma.species.items():
+        stage_densities = solver.solve_ionization_balance(element, T_e_eV, n_e_cm3, total_density)
+        for stage, stage_density in stage_densities.items():
+            if stage_density <= 0:
+                continue
+            max_energy_ev = _ipd_max_energy_ev(
+                solver.atomic_db, solver.ipd_model, element, stage, T_e_eV, n_e_cm3
+            )
+            U = partition_fn(element, stage, T_e_eV, max_energy_ev)
+            if U <= 0.0:
+                logger.warning(
+                    "Non-positive partition function for %s stage %d at T_e_eV=%g; "
+                    "skipping species state.",
+                    element,
+                    stage,
+                    T_e_eV,
+                )
+                continue
+            states[(element, stage)] = SpeciesStageState(
+                number_density_cm3=float(stage_density),
+                partition_function=float(U),
+                max_energy_ev=float(max_energy_ev),
+            )
+    return states
 
 
 class SahaBoltzmannSolver(SolverStrategy):
@@ -327,13 +426,9 @@ class SahaBoltzmannSolver(SolverStrategy):
             Dictionary mapping (element, stage, energy_ev) to population density
         """
         # Determine max energy based on IPD if electron density is provided
-        ip = self.atomic_db.get_ionization_potential(element, ionization_stage)
-        if n_e_cm3 is not None and ip is not None:
-            T_K = T_e_eV * EV_TO_K
-            delta_chi = self.ipd_model.calculate_lowering(n_e_cm3, T_K)
-            max_energy_ev = max(ip - delta_chi, 0.0)
-        else:
-            max_energy_ev = ip * 0.98 if ip else 50.0
+        max_energy_ev = _ipd_max_energy_ev(
+            self.atomic_db, self.ipd_model, element, ionization_stage, T_e_eV, n_e_cm3
+        )
 
         # Pass n_e_cm3 so the direct-sum provider truncates U at the SAME
         # IPD-lowered cutoff the per-level loop below uses (max_energy_ev),
@@ -399,6 +494,35 @@ class SahaBoltzmannSolver(SolverStrategy):
 
         logger.debug(f"Solved Saha-Boltzmann for {len(plasma.species)} species")
         return all_populations
+
+    def solve_species_states(
+        self, plasma: SingleZoneLTEPlasma
+    ) -> Dict[Tuple[str, int], SpeciesStageState]:
+        """Solve the Saha balance and return per-(element, stage) states.
+
+        The returned :class:`SpeciesStageState` objects carry the stage
+        number density, the partition function and the IPD-lowered energy
+        cutoff — everything needed to compute the upper-level population of
+        any transition from its own ``(g_k, E_k)`` without joining against
+        the ``energy_levels`` table (audit F1, bead CF-LIBS-improved-z3cg).
+
+        Parameters
+        ----------
+        plasma : SingleZoneLTEPlasma
+            Plasma state.
+
+        Returns
+        -------
+        Dict[Tuple[str, int], SpeciesStageState]
+            Mapping ``(element, ionization_stage) -> SpeciesStageState``.
+        """
+
+        def _partition(element: str, stage: int, T_e_eV: float, max_energy_ev: float) -> float:
+            return self.calculate_partition_function(
+                element, stage, T_e_eV, max_energy_ev=max_energy_ev, n_e_cm3=plasma.n_e
+            )
+
+        return _solve_species_states_impl(self, plasma, _partition)
 
 
 # ---------------------------------------------------------------------------
@@ -739,13 +863,9 @@ class SahaBoltzmannSolverJax(SolverStrategy):
         T_e_eV: float,
         n_e_cm3: Optional[float] = None,
     ) -> Dict[Tuple[str, int, float], float]:
-        ip = self.atomic_db.get_ionization_potential(element, ionization_stage)
-        if n_e_cm3 is not None and ip is not None:
-            T_K = T_e_eV * EV_TO_K
-            delta_chi = self.ipd_model.calculate_lowering(n_e_cm3, T_K)
-            max_energy_ev = max(ip - delta_chi, 0.0)
-        else:
-            max_energy_ev = ip * 0.98 if ip else 50.0
+        max_energy_ev = _ipd_max_energy_ev(
+            self.atomic_db, self.ipd_model, element, ionization_stage, T_e_eV, n_e_cm3
+        )
 
         U = self.calculate_partition_function(
             element, ionization_stage, T_e_eV, max_energy_ev=max_energy_ev
@@ -802,3 +922,20 @@ class SahaBoltzmannSolverJax(SolverStrategy):
                     all_populations.update(populations)
         logger.debug(f"Solved Saha-Boltzmann (JAX) for {len(plasma.species)} species")
         return all_populations
+
+    def solve_species_states(
+        self, plasma: SingleZoneLTEPlasma
+    ) -> Dict[Tuple[str, int], SpeciesStageState]:
+        """Per-(element, stage) emissivity states — JAX-solver counterpart.
+
+        Same contract as :meth:`SahaBoltzmannSolver.solve_species_states`;
+        partition functions are evaluated through this class's JAX
+        direct-sum path.
+        """
+
+        def _partition(element: str, stage: int, T_e_eV: float, max_energy_ev: float) -> float:
+            return self.calculate_partition_function(
+                element, stage, T_e_eV, max_energy_ev=max_energy_ev
+            )
+
+        return _solve_species_states_impl(self, plasma, _partition)

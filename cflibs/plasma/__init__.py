@@ -12,6 +12,7 @@ from cflibs.plasma.state import PlasmaState, SingleZoneLTEPlasma, SingleZoneLTEP
 from cflibs.plasma.saha_boltzmann import (
     SahaBoltzmannSolver,
     SahaBoltzmannSolverJax,
+    SpeciesStageState,
     ionization_potential_lowering,
 )
 from cflibs.plasma.lte_validator import LTEValidator, LTEReport, LTECheckResult
@@ -22,6 +23,7 @@ __all__ = [
     "SingleZoneLTEPlasmaJax",
     "SahaBoltzmannSolver",
     "SahaBoltzmannSolverJax",
+    "SpeciesStageState",
     "ionization_potential_lowering",
     "LTEValidator",
     "LTEReport",
