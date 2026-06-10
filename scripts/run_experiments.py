@@ -39,11 +39,8 @@ from cflibs.inversion.physics.boltzmann import (  # noqa: E402
     FitMethod,
     LineObservation,
 )
-from cflibs.inversion.physics.self_absorption import (  # noqa: E402
-    SelfAbsorptionCorrector,
-)
-from cflibs.inversion.physics.self_absorption_inputs import (  # noqa: E402
-    build_self_absorption_inputs,
+from cflibs.inversion.physics.self_absorption_observable import (  # noqa: E402
+    ObservableSelfAbsorptionCorrector,
 )
 
 # ---------------------------------------------------------------------------
@@ -238,68 +235,30 @@ def _apply_cdsb_pipeline(
 ) -> Dict[str, Any]:
     """Self-absorption-corrected Boltzmann pipeline.
 
-    Corrects the observed intensities with the production
-    :class:`SelfAbsorptionCorrector` (curve-of-growth escape-factor
-    correction), then runs the existing per-element Boltzmann intercept ->
-    closure logic on the CORRECTED observations. This replaces the dead,
-    audit-buggy ``CDSBPlotter`` (bugs #14b/#14c/#13c); the numbers may differ
-    from historical runs, which is expected for this tooling harness.
-
-    Argument mapping for ``correct()`` (all derived by the single
-    :func:`~cflibs.inversion.physics.self_absorption_inputs.build_self_absorption_inputs`
-    builder — the SAME derivation the shipped solver uses):
-
-    * ``temperature_K`` from a quick per-element Boltzmann fit on the raw
-      observations (mean of valid element temperatures), falling back to
-      10000.0 K — the same fallback the closure step below uses.
-    * ``concentrations`` = uniform mass-fraction prior (no composition known
-      pre-solve; the corrector renormalises internally).
-    * ``partition_funcs`` = canonical fallback ladder (this Gaussian-fallback
-      experiment harness has no atomic-DB handle, so the builder is called with
-      ``atomic_db=None``; its neutral default 25.0 matches the corrector's
-      own missing-entry default, so this is numerically equivalent to the old
-      empty-``partition_funcs`` path).
-    * ``lower_level_energies`` now derived EXACTLY (``E_i = E_k - hc/lambda``)
-      per line — fixing the prior defect where E_i was omitted and silently
-      defaulted to the ground state (0 eV), making every line look like a
-      maximally self-absorbed resonance line (CF-LIBS-improved-4bgt). The
-      self-absorption numbers therefore change intentionally for this tooling.
+    Corrects the observed intensities with the production OBSERVABLE-GATED
+    corrector
+    (:class:`cflibs.inversion.physics.self_absorption_observable.ObservableSelfAbsorptionCorrector`,
+    bead 0jvr): doublet/multiplet intensity ratios drive the correction;
+    lines with no usable observable that match the SA-risk signature are
+    down-weighted, never boosted. The old plasma-state ``correct()`` driven
+    by a uniform composition prior was deleted with the composition-feedback
+    path (audit 2026-06-09, 02-inversion-solver.md F4); the numbers may
+    differ from historical runs, which is expected for this tooling harness.
     """
     fitter = BoltzmannPlotFitter(method=fit_method)
 
-    # Quick temperature estimate from the raw observations for the SA tau model.
-    raw_temps: List[float] = []
-    for elem in elements:
-        elem_obs = [o for o in observations if o.element == elem]
-        if len(elem_obs) < 2:
-            continue
-        res = fitter.fit(elem_obs)
-        if res.temperature_K > 0 and np.isfinite(res.temperature_K):
-            raw_temps.append(res.temperature_K)
-    T = float(np.mean(raw_temps)) if raw_temps else 10000.0
-
-    # Uniform mass-fraction prior; no DB handle in this harness.
-    n_el = len(elements)
-    concentrations = {el: 1.0 / n_el for el in elements} if n_el else {}
-
     corrected_obs = observations
     try:
-        inputs = build_self_absorption_inputs(
-            observations,
-            temperature_K=T,
-            concentrations=concentrations,
-            total_number_density_cm3=1e16,
-            atomic_db=None,
-        )
-        corrector = SelfAbsorptionCorrector(plasma_length_cm=0.1)
-        sa_result = corrector.correct(observations, **inputs.as_correct_kwargs())
-        if len(sa_result.corrected_observations) >= 2:
-            corrected_obs = sa_result.corrected_observations
+        corrector = ObservableSelfAbsorptionCorrector()
+        sa_result = corrector.correct(observations)
+        if len(sa_result.observations) >= 2:
+            corrected_obs = sa_result.observations
     except Exception:
         corrected_obs = observations
 
     # Per-element Boltzmann intercepts for closure, on the CORRECTED obs.
     element_intercepts: Dict[str, float] = {}
+    element_temps: List[float] = []
     for elem in elements:
         elem_obs = [o for o in corrected_obs if o.element == elem]
         if len(elem_obs) < 2:
@@ -307,6 +266,9 @@ def _apply_cdsb_pipeline(
         res = fitter.fit(elem_obs)
         if res.temperature_K > 0 and np.isfinite(res.intercept):
             element_intercepts[elem] = res.intercept
+            if np.isfinite(res.temperature_K):
+                element_temps.append(res.temperature_K)
+    T = float(np.mean(element_temps)) if element_temps else 10000.0
 
     if not element_intercepts:
         n = len(elements)

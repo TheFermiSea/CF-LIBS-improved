@@ -970,8 +970,10 @@ def _add_pipeline_flags(parser) -> None:
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "Apply the curve-of-growth self-absorption correction in the solver "
-            "and retain strong resonance lines (default: off)"
+            "Apply the observable-gated self-absorption correction "
+            "(doublet intensity ratios; SA-suspect resonance lines are "
+            "down-weighted) to the measured line intensities before the "
+            "Boltzmann fit (default: off)"
         ),
     )
     parser.add_argument(

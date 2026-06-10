@@ -52,7 +52,7 @@ class TestPresetResolution:
         assert cfg.top_k_per_element == 60
         assert cfg.min_relative_intensity is None
         assert cfg.exclude_resonance is None  # helper resolves None -> keep
-        assert cfg.apply_self_absorption is False
+        assert cfg.apply_self_absorption == "off"
         # n_e is MEASURED from Stark widths by default (bead pxex / audit
         # 02-F2); the pressure-balance fallback only fires when no
         # literature-grade line qualifies.
@@ -303,8 +303,6 @@ class TestAnalysisConfigValidation:
             "ne_tolerance_frac",
             "pressure_pa",
             "pressure",
-            "self_absorption_column_density_cm3",
-            "self_absorption_plasma_length_cm",
             "boltzmann_weight_cap",
             "min_boltzmann_r2",
             "saha_boltzmann_graph",

@@ -91,6 +91,11 @@ _ATTRIBUTE_EXPORT_GROUPS = {
         "SelfAbsorptionCorrector",
         "estimate_optical_depth_from_intensity_ratio",
     ],
+    "cflibs.inversion.physics.self_absorption_observable": [
+        "ObservableLineCorrection",
+        "ObservableSAResult",
+        "ObservableSelfAbsorptionCorrector",
+    ],
     "cflibs.inversion.physics.cdsb": [
         "CDSBLineObservation",
         "create_cdsb_observation",
@@ -273,6 +278,9 @@ __all__ = [
     "SelfAbsorptionResult",
     "SelfAbsorptionCorrector",
     "estimate_optical_depth_from_intensity_ratio",
+    "ObservableLineCorrection",
+    "ObservableSAResult",
+    "ObservableSelfAbsorptionCorrector",
     "CDSBLineObservation",
     "create_cdsb_observation",
     "from_transition",

@@ -60,11 +60,8 @@ from cflibs.inversion.physics.boltzmann import (  # noqa: E402
     LineObservation,
 )
 from cflibs.inversion.physics.closure import ClosureEquation  # noqa: E402
-from cflibs.inversion.physics.self_absorption import (  # noqa: E402
-    SelfAbsorptionCorrector,
-)
-from cflibs.inversion.physics.self_absorption_inputs import (  # noqa: E402
-    build_self_absorption_inputs,
+from cflibs.inversion.physics.self_absorption_observable import (  # noqa: E402
+    ObservableSelfAbsorptionCorrector,
 )
 from cflibs.inversion.line_detection import detect_line_observations  # noqa: E402
 from cflibs.inversion.solve.iterative import CFLIBSResult, IterativeCFLIBSSolver  # noqa: E402
@@ -497,68 +494,28 @@ def apply_cdsb_correction(
     n_e: float = 1e17,
     initial_T_K: float = 10000.0,
 ) -> List[LineObservation]:
-    """Apply self-absorption correction to line observations.
+    """Apply the observable-gated self-absorption correction (bead 0jvr).
 
-    Uses the production :class:`SelfAbsorptionCorrector` (the same curve-of-
-    growth escape-factor correction the shipped iterative solver applies). The
-    legacy ``CDSBPlotter`` this used to call was dead, audit-buggy code (bugs
-    #14b/#14c/#13c); the numbers produced here may therefore differ from the
-    historical ablation runs — that is expected and intended.
-
-    Argument mapping (mirrors the shipped solver's call in
-    ``IterativeCFLIBSSolver._apply_self_absorption_correction``):
-
-    * ``temperature_K`` = ``initial_T_K`` (this correction runs *before* the
-      solver, so no fitted temperature is available yet).
-    * ``concentrations`` = UNIFORM mass fractions over the detected elements.
-      Self-absorption here precedes solving, so no composition is known; a flat
-      prior is the only unbiased choice (the corrector renormalises internally).
-    * ``total_number_density_cm3`` anchored to a LIBS-realistic heavy-particle
-      column (1e16), exactly as the shipped solver does — feeding the STP
-      ``n_e`` (~1e18) saturates every strong line and erases per-line
-      discrimination. ``n_e`` is retained in the signature for call-site
-      compatibility but is intentionally not used as the absorbing column.
-    * ``partition_funcs`` = stage-I U(T) from the atomic DB at ``initial_T_K``.
-    * ``lower_level_energies`` = ``{wavelength_nm: E_i_ev}`` per line.
-
-    Both physics-derived inputs now come from the single
-    :func:`~cflibs.inversion.physics.self_absorption_inputs.build_self_absorption_inputs`
-    builder — the SAME derivation the shipped solver uses. This replaces the
-    prior ad-hoc derivation (a fuzzy ±0.05 nm DB lookup for ``E_i`` and a
-    non-canonical ``U(T)=1.0`` fallback), so the self-absorption numbers change
-    intentionally (CF-LIBS-improved-4bgt): ``E_i`` is now exact
-    (``E_i = E_k - hc/lambda``) and ``U(T)`` follows the canonical
-    direct-sum-preferred policy with the 25.0 / 15.0 / 2.0 fallback ladder.
+    Uses the production
+    :class:`cflibs.inversion.physics.self_absorption_observable.ObservableSelfAbsorptionCorrector`:
+    doublet/multiplet intensity-ratio pairs drive the per-line correction,
+    and SA-risk lines (bright, low-E_i) without a usable observable are
+    down-weighted, never boosted. The previous plasma-state correction
+    (uniform composition prior + curve-of-growth escape factor) was deleted
+    together with the composition-feedback path it shared machinery with
+    (audit 2026-06-09, 02-inversion-solver.md F4) — its tau estimate had no
+    observable gate, so on optically thin spectra it over-boosted low-E_k
+    lines. ``atomic_db``, ``n_e`` and ``initial_T_K`` are retained in the
+    signature for call-site compatibility but are no longer consulted (the
+    doublet observable is temperature-independent).
     """
     if len(observations) < 3:
         return observations
 
-    elements: Set[str] = {obs.element for obs in observations}
-    if not elements:
-        return observations
-
-    # Uniform mass-fraction prior over detected elements (no composition known
-    # before solving). LIBS-realistic absorbing column (see docstring;
-    # deliberately not n_e).
-    concentrations: Dict[str, float] = {el: 1.0 / len(elements) for el in elements}
-
     try:
-        inputs = build_self_absorption_inputs(
-            observations,
-            temperature_K=initial_T_K,
-            concentrations=concentrations,
-            total_number_density_cm3=1e16,
-            atomic_db=atomic_db,
-        )
-        corrector = SelfAbsorptionCorrector(
-            optical_depth_threshold=0.1,
-            mask_threshold=3.0,
-            max_iterations=10,
-            convergence_tolerance=0.02,
-            plasma_length_cm=0.1,
-        )
-        result = corrector.correct(observations, **inputs.as_correct_kwargs())
-        corrected = result.corrected_observations
+        corrector = ObservableSelfAbsorptionCorrector()
+        result = corrector.correct(observations)
+        corrected = result.observations
         if len(corrected) >= 2:
             return corrected
         return observations

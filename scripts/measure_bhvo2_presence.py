@@ -102,7 +102,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--apply-self-absorption",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="Curve-of-growth self-absorption correction (default: CLI default, off).",
+        help="Legacy boolean alias for --sa-mode (True -> observable).",
+    )
+    ap.add_argument(
+        "--sa-mode",
+        choices=["off", "observable"],
+        default=None,
+        help=(
+            "Self-absorption mode (bead 0jvr): 'observable' applies the "
+            "doublet-ratio-gated pre-fit correction; 'off' (default) applies none."
+        ),
     )
     ap.add_argument(
         "--closure-mode",
@@ -170,12 +179,14 @@ def build_pipeline_from_args(args: argparse.Namespace) -> AnalysisPipelineConfig
         preset=args.preset,
         closure_mode=args.closure_mode,
         saha_boltzmann_graph=args.saha_boltzmann_graph,
-        apply_self_absorption=args.apply_self_absorption,
         min_relative_intensity=args.min_relative_intensity,
         exclude_resonance=excl,
         wavelength_calibration=args.wavelength_calibration,
         shift_coherence_veto=args.shift_coherence_veto,
         stark_ne=args.stark_ne,
+        apply_self_absorption=(
+            args.sa_mode if args.sa_mode is not None else args.apply_self_absorption
+        ),
     )
 
 
@@ -262,7 +273,13 @@ def main(argv: list[str] | None = None) -> None:
     for e in cert_elems:
         c, p = cert[e] * 100, pred.get(e, 0.0) * 100
         print(f"  {e:<4}{c:>11.3f}{p:>11.3f}{p-c:>9.3f}{obs_counts.get(e,0):>7}")
+    qm = result.quality_metrics or {}
     print(f"\n  Al observation lines surviving detection: {obs_counts.get('Al',0)}")
+    print(
+        f"  SA diagnostics         : corrected={qm.get('n_lines_sa_corrected', 0.0):.0f} "
+        f"suspect={qm.get('n_lines_sa_suspect', 0.0):.0f} "
+        f"max_tau={qm.get('max_tau_estimate', 0.0):.3f}"
+    )
     print(f"  RMSE (cert-10)        : {rmse*100:.3f} wt%")
     print(f"  Dropped majors (<{EPS_PRESENT}): {dropped}")
     print(f"  FP confounders present : { {k: round(v*100,3) for k,v in fps.items()} or 'NONE'}")
@@ -287,6 +304,9 @@ def main(argv: list[str] | None = None) -> None:
             "confounders": bool(args.confounders),
             "elements": list(pipeline.elements),
         },
+        "n_lines_sa_corrected": result.quality_metrics.get("n_lines_sa_corrected", 0.0),
+        "n_lines_sa_suspect": result.quality_metrics.get("n_lines_sa_suspect", 0.0),
+        "max_tau_estimate": result.quality_metrics.get("max_tau_estimate", 0.0),
         "T_K": result.temperature_K,
         "ne": result.electron_density_cm3,
         "converged": result.converged,

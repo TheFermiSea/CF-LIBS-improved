@@ -153,8 +153,6 @@ VALID_ANALYSIS_KEYS = frozenset(
         "ne_tolerance_frac",
         "pressure_pa",
         "pressure",
-        "self_absorption_column_density_cm3",
-        "self_absorption_plasma_length_cm",
         "boltzmann_weight_cap",
         "min_boltzmann_r2",
         "saha_boltzmann_graph",
