@@ -339,6 +339,18 @@ def _harvest_finished(asyncs: list[tuple[int, Any]], results: dict[int, dict[str
             pass
 
 
+def _record_pool_failure(
+    exc: BaseException, payload: tuple, hard: float, results: dict, i: int
+) -> None:
+    """Record a hard-timeout or child-crash failure for one payload."""
+    sid, _wl, _inten, truth = payload[:4]
+    results[i] = _timeout_record(sid, truth, hard)
+    if isinstance(exc, mp.TimeoutError):
+        results[i]["error"] += " (hard kill: stuck in C/XLA, pool terminated)"
+    else:  # child crashed (e.g. OOM-kill)
+        results[i]["error"] = f"{type(exc).__name__}: pool child crashed: {exc}"
+
+
 def _iter_payload_records(payloads: list[tuple], ctx: "EvalContext"):
     """Stream per-spectrum records for ``payloads`` in submission order.
 
@@ -380,17 +392,8 @@ def _iter_payload_records(payloads: list[tuple], ctx: "EvalContext"):
             deadline = batch_t0 + (position // n_procs + 1) * (hard + HARD_TIMEOUT_GRACE_S)
             try:
                 results[i] = handle.get(timeout=max(deadline - time.monotonic(), 1.0))
-            except mp.TimeoutError:
-                sid, _wl, _inten, truth = payloads[i][:4]
-                results[i] = _timeout_record(sid, truth, hard)
-                results[i]["error"] += " (hard kill: stuck in C/XLA, pool terminated)"
-                _harvest_finished(asyncs[position + 1 :], results)
-                _terminate_pool()
-                timed_out = True
-            except Exception as exc:  # child crashed (e.g. OOM-kill)
-                sid, _wl, _inten, truth = payloads[i][:4]
-                results[i] = _timeout_record(sid, truth, hard)
-                results[i]["error"] = f"{type(exc).__name__}: pool child crashed: {exc}"
+            except Exception as exc:  # TimeoutError or child crash — helper distinguishes
+                _record_pool_failure(exc, payloads[i], hard, results, i)
                 _harvest_finished(asyncs[position + 1 :], results)
                 _terminate_pool()
                 timed_out = True
