@@ -377,6 +377,14 @@ def invert_cmd(args):
 
     analysis_cfg = config.get("analysis", {}) if isinstance(config, dict) else {}
 
+    # A response-curve path in the YAML is resolved relative to the config
+    # file (like atomic_database), so shipped configs can use short paths.
+    if analysis_cfg.get("response_curve") and args.config:
+        analysis_cfg = dict(analysis_cfg)
+        analysis_cfg["response_curve"] = str(
+            _resolve_existing_path(analysis_cfg["response_curve"], relative_to=args.config)
+        )
+
     elements = _resolve_invert_elements(args, config, analysis_cfg)
 
     db_path = _resolve_db_path(config.get("atomic_database"), relative_to=args.config)
@@ -397,6 +405,7 @@ def invert_cmd(args):
         wavelength_tolerance_nm=getattr(args, "tolerance_nm", None),
         min_peak_height=getattr(args, "min_peak_height", None),
         peak_width_nm=getattr(args, "peak_width_nm", None),
+        response_curve=getattr(args, "response_curve", None),
     )
 
     result, diagnostics = _run_pipeline(wavelength, intensity, atomic_db, pipeline)
@@ -434,6 +443,7 @@ def analyze_cmd(args):
         apply_self_absorption=getattr(args, "apply_self_absorption", None),
         min_relative_intensity=getattr(args, "min_relative_intensity", None),
         resolving_power=getattr(args, "resolving_power", None),
+        response_curve=getattr(args, "response_curve", None),
     )
 
     uncertainty_mode = getattr(args, "uncertainty", "none")
@@ -719,6 +729,7 @@ def batch_cmd(args):
         apply_self_absorption=getattr(args, "apply_self_absorption", None),
         min_relative_intensity=getattr(args, "min_relative_intensity", None),
         resolving_power=getattr(args, "resolving_power", None),
+        response_curve=getattr(args, "response_curve", None),
     )
 
     csv_files = sorted(directory.glob("*.csv"))
@@ -946,6 +957,20 @@ def _add_pipeline_flags(parser) -> None:
         help=(
             "Apply the curve-of-growth self-absorption correction in the solver "
             "and retain strong resonance lines (default: off)"
+        ),
+    )
+    parser.add_argument(
+        "--response-curve",
+        type=str,
+        default=None,
+        help=(
+            "Path to a spectral-response curve (CSV 'wavelength_nm,relative_efficiency' "
+            "or YAML with those two keys). Measured intensities are divided by the "
+            "interpolated relative detection efficiency E(lambda) before line "
+            "extraction — mandatory for CF-LIBS on uncalibrated spectrometers "
+            "(Tognoni et al. 2010). Only the relative shape matters; the curve is "
+            "normalized to max=1. Default: no correction. Do NOT use on ChemCam CCS "
+            "data (already response-corrected upstream)."
         ),
     )
 

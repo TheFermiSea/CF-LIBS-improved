@@ -39,6 +39,15 @@ analysis:
   # strength) plus a shift-coherence veto. Set a number only to re-enable the
   # legacy floor.
   min_relative_intensity: null
+
+  # Spectral-response correction (Tognoni et al. 2010 prerequisite): path to a
+  # CSV/YAML curve of (wavelength_nm, relative_efficiency). Measured
+  # intensities are divided by the interpolated E(lambda) before line
+  # extraction. REQUIRED for spectrometers without upstream radiometric
+  # calibration; leave unset for ChemCam CCS data (already corrected).
+  # A relative path resolves against this config file.
+  # response_curve: lamp_response.csv
+
   # closure_kwargs:
   #   matrix_element: Fe
   #   oxide_elements: ["Si", "Al", "Ca"]
