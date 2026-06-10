@@ -150,6 +150,15 @@ class AnalysisPipelineConfig:
     #: Stark-broadening n_e diagnostic (bead pxex): measure n_e from observed
     #: literature-grade line widths; falls back (with warning) when none qualify.
     stark_ne: bool = True
+    #: Extra keyword overrides passed verbatim to ``detect_line_observations``
+    #: (Campaign 1 knob plumbing, docs/audit/2026-06-10-goalfirst/
+    #: optimization-program-design.md §3.1-B). Plain data only — keys must be
+    #: ``detect_line_observations`` parameter names (e.g. ``comb_min_matches``,
+    #: ``kdet_min_score``); values override the pipeline-derived kwargs. The
+    #: special key ``shift_scan_nm`` replaces the legacy 0.5 nm *global* scan
+    #: default only (the post-calibration residual scan stays governed by
+    #: ``residual_shift_scan_nm``). Empty in production.
+    detection_overrides: dict = field(default_factory=dict)
 
 
 def _first_not_none(*values):
@@ -360,6 +369,7 @@ def detect_and_select_lines(
     residual_shift_scan_nm: float = 0.0,
     affine_coverage_gate: bool = True,
     line_residual_gate: bool = True,
+    detection_overrides: Optional[dict] = None,
     return_diagnostics: bool = False,
 ):
     """
@@ -444,6 +454,13 @@ def detect_and_select_lines(
         Drop individual matched lines whose residual is incoherent with the
         consensus residual shift (see ``detect_line_observations``). Default
         True (bead ye6t).
+    detection_overrides : dict or None
+        Extra keyword overrides forwarded verbatim to
+        ``detect_line_observations`` (Campaign 1 knob plumbing; see
+        :class:`AnalysisPipelineConfig.detection_overrides`). ``shift_scan_nm``
+        is special-cased: it replaces the legacy 0.5 nm *global* scan default
+        only — the post-calibration residual scan stays governed by
+        ``residual_shift_scan_nm``.
     return_diagnostics : bool
         When True, also return a diagnostics dict recording which requested
         elements were dropped and at which stage (``detection`` = no matched
@@ -481,7 +498,11 @@ def detect_and_select_lines(
     # channel independently (degrading to a single global affine when there are
     # no seams), aligning the axis robustly. After calibration only a small
     # residual ``shift_scan_nm`` is needed to mop up sub-tolerance jitter.
-    shift_scan_nm = 0.5  # legacy global scan (used when calibration disabled)
+    overrides = dict(detection_overrides or {})
+    # Legacy global scan width (used when calibration is disabled or fails its
+    # quality gate). Overridable via detection_overrides["shift_scan_nm"]; the
+    # post-calibration residual scan below stays residual_shift_scan_nm.
+    shift_scan_nm = float(overrides.pop("shift_scan_nm", 0.5))
     if wavelength_calibration:
         _cal_t0 = time.perf_counter()
         try:
@@ -516,7 +537,7 @@ def detect_and_select_lines(
             )
         calibration_s = time.perf_counter() - _cal_t0
 
-    detection = detect_line_observations(
+    detect_kwargs = dict(
         wavelength=wavelength,
         intensity=intensity,
         atomic_db=atomic_db,
@@ -532,6 +553,10 @@ def detect_and_select_lines(
         line_residual_gate=line_residual_gate,
         residual_gate_min_kept_lines=min_lines_per_element,
     )
+    # Campaign-1 knob plumbing: remaining overrides win over the pipeline-
+    # derived kwargs (an unknown key fails fast as TypeError below).
+    detect_kwargs.update(overrides)
+    detection = detect_line_observations(**detect_kwargs)
 
     for warning in detection.warnings:
         logger.warning(f"Line detection warning: {warning}")
@@ -729,6 +754,7 @@ def run_pipeline(
         residual_shift_scan_nm=pipeline.residual_shift_scan_nm,
         affine_coverage_gate=pipeline.affine_coverage_gate,
         line_residual_gate=pipeline.line_residual_gate,
+        detection_overrides=pipeline.detection_overrides,
         return_diagnostics=True,
     )
     _detect_s = time.perf_counter() - _t_detect0
