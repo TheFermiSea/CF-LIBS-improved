@@ -18,6 +18,7 @@ import numpy as np
 
 from cflibs.core.constants import KB, KB_EV, EV_TO_K, SAHA_CONST_CM3
 from cflibs.core.logging_config import get_logger
+from cflibs.plasma.partition import canonical_partition_fallback
 from cflibs.inversion.physics.boltzmann import LineObservation
 
 logger = get_logger("validation.round_trip")
@@ -408,18 +409,10 @@ class GoldenSpectrumGenerator:
         except Exception:
             pass
 
-        # Fallback: rough estimates for common elements
-        fallback = {
-            ("Fe", 1): 25.0,
-            ("Fe", 2): 15.0,
-            ("Cu", 1): 2.0,
-            ("Cu", 2): 1.0,
-            ("Al", 1): 6.0,
-            ("Al", 2): 1.0,
-            ("Ti", 1): 30.0,
-            ("Ti", 2): 20.0,
-        }
-        return fallback.get((element, ion_stage), 10.0)
+        # Canonical physics-grounded fallback ladder (closed-shell exact
+        # values -> g0 -> warned generic constant) — replaces a per-species
+        # rough-estimate dict that silently defaulted to 10.0.
+        return canonical_partition_fallback(element, ion_stage, self.atomic_db)
 
     def _get_ionization_potential(self, element: str, stage: int = 1) -> float | None:
         """Get ionization potential from database or estimate.

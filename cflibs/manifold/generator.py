@@ -197,10 +197,18 @@ class ManifoldGenerator:
         tmax = np.full((num_elements, max_stages), 25000.0, dtype=np.float32)
         g0 = np.ones((num_elements, max_stages), dtype=np.float32)
 
-        # Set defaults for coeffs (approximate log(U))
-        coeffs[:, 0, 0] = np.log(25.0)
-        coeffs[:, 1, 0] = np.log(15.0)
-        coeffs[:, 2, 0] = np.log(10.0)
+        # Seed defaults from the canonical fallback ladder; species the
+        # factory resolves below overwrite these.  Closed-shell ions keep
+        # their exact U (e.g. Na II -> 1.0) instead of the old generic
+        # ln(25)/ln(15)/ln(10) constants.  warn=False: a warning here would
+        # be misleading because most entries are overwritten.
+        from cflibs.plasma.partition import canonical_partition_fallback
+
+        for el_idx, el in enumerate(self.config.elements):
+            for stage_idx in range(max_stages):
+                coeffs[el_idx, stage_idx, 0] = np.log(
+                    canonical_partition_fallback(el, stage_idx + 1, warn=False)
+                )
 
         self._load_partition_physics(el_map, placeholders, max_stages, coeffs, ips, tmin, tmax, g0)
 

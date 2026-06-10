@@ -26,6 +26,7 @@ from cflibs.inversion.physics.self_absorption_inputs import (
     evaluate_partition_function as _build_evaluate_partition_function,
     lower_level_energy_ev as _build_lower_level_energy_ev,
 )
+from cflibs.plasma.partition import canonical_partition_fallback, lookup_partition_function
 from cflibs.core.logging_config import get_logger
 
 
@@ -441,6 +442,12 @@ class _AtomicSnapshot:
         fallback_II = np.full(E, 15.0, dtype=np.float64)
 
         for i, el in enumerate(elements):
+            # Canonical per-species fallbacks for the scalar-fallback regime
+            # (read by _eval_partition_jax only when neither direct levels nor
+            # a polynomial resolved — the NaN-coefficient sentinel).  Closed-
+            # shell ions get their exact U here (e.g. Na II → 1.0, not 15.0).
+            fallback_I[i] = canonical_partition_fallback(el, 1, solver.atomic_db, warn=False)
+            fallback_II[i] = canonical_partition_fallback(el, 2, solver.atomic_db, warn=False)
             # Stage-I IP (the only one used by the loop; for IPD/Saha)
             ip = solver.atomic_db.get_ionization_potential(el, 1)
             if ip is None:
@@ -466,6 +473,14 @@ class _AtomicSnapshot:
                     coeffs_I,
                     coeffs_II,
                 )
+
+        # Warn (once per species) where the scalar fallback WILL actually be
+        # read: neither direct levels nor polynomial coefficients resolved.
+        for i, el in enumerate(elements):
+            if not use_direct[i, 0] and np.any(np.isnan(coeffs_I[i])):
+                canonical_partition_fallback(el, 1, solver.atomic_db, warn=True)
+            if not use_direct[i, 1] and np.any(np.isnan(coeffs_II[i])):
+                canonical_partition_fallback(el, 2, solver.atomic_db, warn=True)
 
         # Pad ragged level arrays per stage
         gI_pad, mI = _pad_ragged_arrays(g_I)
@@ -1145,8 +1160,8 @@ class IterativeCFLIBSSolver:
         # not a specific literature prescription.
         corona_sensitive = {"Si", "Fe", "Ca", "Al", "Mg"}
         for el in elements:
-            U_I = partition_funcs_I.get(el, 25.0)
-            U_II = partition_funcs_II.get(el, 15.0)
+            U_I = lookup_partition_function(partition_funcs_I, el, 1, self.atomic_db)
+            U_II = lookup_partition_function(partition_funcs_II, el, 2, self.atomic_db)
 
             T_saha = T_K
             if T_corona is not None and el in corona_sensitive:
@@ -1187,8 +1202,8 @@ class IterativeCFLIBSSolver:
         corona_sensitive = {"Si", "Fe", "Ca", "Al", "Mg"}
         multipliers: Dict[str, "Any"] = {}
         for el in elements:
-            U_I = partition_funcs_I.get(el, 25.0)
-            U_II = partition_funcs_II.get(el, 15.0)
+            U_I = lookup_partition_function(partition_funcs_I, el, 1, self.atomic_db)
+            U_II = lookup_partition_function(partition_funcs_II, el, 2, self.atomic_db)
 
             T_saha = T_K
             if T_corona is not None and el in corona_sensitive:
@@ -1764,8 +1779,8 @@ class IterativeCFLIBSSolver:
         # eps_s = n_II / (n_I + n_II) = S / (1+S) (electrons per atom).
         total_eps = 0.0
         for el, C_s in concentrations.items():
-            U_I = partition_funcs.get(el, 25.0)
-            U_II = partition_funcs_II.get(el, 15.0)
+            U_I = lookup_partition_function(partition_funcs, el, 1, self.atomic_db)
+            U_II = lookup_partition_function(partition_funcs_II, el, 2, self.atomic_db)
             S = self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el])
             eps_s = S / (1.0 + S)
             total_eps += C_s * eps_s

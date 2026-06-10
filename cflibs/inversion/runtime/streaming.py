@@ -1272,7 +1272,11 @@ class EdgeOptimizedModel:
         """
         key = (element, stage)
         if key not in self._partition_coeffs:
-            return 25.0  # Default fallback
+            # Canonical physics-grounded fallback (closed-shell exact values
+            # -> warned generic constant) instead of a silent 25.0.
+            from cflibs.plasma.partition import canonical_partition_fallback
+
+            return canonical_partition_fallback(element, stage)
 
         coeffs = self._partition_coeffs[key]
         log_T = np.log10(T_K)

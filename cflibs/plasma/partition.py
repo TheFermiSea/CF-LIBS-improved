@@ -49,9 +49,12 @@ import numpy as np
 
 from cflibs.core.constants import C_LIGHT, E_CHARGE, J_TO_EV, KB, KB_EV
 from cflibs.core.jax_runtime import HAS_JAX, jit_if_available, jnp, vmap_if_available
+from cflibs.core.logging_config import get_logger
 
 jit = jit_if_available
 vmap = vmap_if_available
+
+logger = get_logger("plasma.partition")
 
 
 # ---------------------------------------------------------------------------
@@ -558,6 +561,45 @@ class PartitionFunctionSpec:
 _spec_cache: Dict[Tuple[str, str, int], "PartitionFunctionSpec"] = {}
 
 
+#: Stored ``partition_functions.source`` values that outrank the direct-sum
+#: fit over our (possibly incomplete) ``energy_levels`` table.  Barklem &
+#: Collet 2016 (A&A 588, A96) is computed from complete NIST level lists,
+#: whereas the in-DB level scrape drops high-Rydberg levels (Ca I −25 %,
+#: Na I −30 %, K I −40 % at 1e4 K — audit 2026-06-09, finding 01-F3).  The
+#: shipped production DB carries no rows with these sources, so this
+#: preference is inert until a patched DB (see
+#: ``scripts/patch_partition_functions_bc2016.py``) is explicitly wired in.
+AUTHORITATIVE_PF_SOURCES = frozenset({"BarklemCollet2016"})
+
+
+def _stored_polynomial_spec(
+    atomic_db: Any, element: str, ionization_stage: int, g0: float
+) -> Optional["PartitionFunctionSpec"]:
+    """Build a :class:`PartitionFunctionSpec` from the stored polynomial row.
+
+    Returns ``None`` when the ``partition_functions`` table has no row for the
+    species.  ``t_min``/``t_max`` default to ``[2000, 25000] K`` when NULL.
+    """
+    try:
+        pf = atomic_db.get_partition_coefficients(element, ionization_stage)
+    except Exception:  # pragma: no cover - defensive
+        pf = None
+    if pf is None:
+        return None
+    coeffs_list = list(pf.coefficients)
+    coeffs_list += [0.0] * (5 - len(coeffs_list))
+    return PartitionFunctionSpec(
+        element=element,
+        ionization_stage=int(ionization_stage),
+        coefficients=tuple(float(c) for c in coeffs_list[:5]),
+        t_min=float(pf.t_min) if pf.t_min is not None else 2000.0,
+        t_max=float(pf.t_max) if pf.t_max is not None else 25000.0,
+        g0=g0,
+        source=str(pf.source or ""),
+        from_direct_sum=False,
+    )
+
+
 def derive_partition_spec(
     atomic_db: Any,
     element: str,
@@ -567,6 +609,11 @@ def derive_partition_spec(
 
     This is THE one place the partition-function policy lives:
 
+    0. If the stored ``partition_functions`` row carries an AUTHORITATIVE
+       source (:data:`AUTHORITATIVE_PF_SOURCES`, e.g. a Barklem & Collet 2016
+       refit), it wins outright — such rows derive from complete level lists,
+       which beat a direct-sum over our incomplete ``energy_levels`` scrape.
+       Inert for the shipped DB (no authoritative rows yet).
     1. If the species has tabulated ``energy_levels`` *and* a fittable
        (``>= 2``) level count, fit the direct-sum to a guarded ln-polynomial
        via :func:`direct_sum_fit_coeffs` (``source="direct_sum_fit"``).
@@ -597,6 +644,12 @@ def derive_partition_spec(
         return cached
 
     g0 = float(get_ground_state_g(atomic_db, element, ionization_stage))
+
+    # (0) Authoritative stored rows (complete-level-list provenance) win.
+    stored = _stored_polynomial_spec(atomic_db, element, ionization_stage, g0)
+    if stored is not None and stored.source in AUTHORITATIVE_PF_SOURCES:
+        _spec_cache[cache_key] = stored
+        return stored
 
     # (1) Prefer the direct-sum fit when energy levels are present.
     ip_ev: Optional[float] = None
@@ -636,27 +689,11 @@ def derive_partition_spec(
             _spec_cache[cache_key] = spec
             return spec
 
-    # (2) Fall back to the stored polynomial.
-    try:
-        pf = atomic_db.get_partition_coefficients(element, ionization_stage)
-    except Exception:  # pragma: no cover - defensive
-        pf = None
-    if pf is None:
+    # (2) Fall back to the stored polynomial (prefetched in step 0).
+    if stored is None:
         return None
-    coeffs_list = list(pf.coefficients)
-    coeffs_list += [0.0] * (5 - len(coeffs_list))
-    spec = PartitionFunctionSpec(
-        element=element,
-        ionization_stage=int(ionization_stage),
-        coefficients=tuple(float(c) for c in coeffs_list[:5]),
-        t_min=float(pf.t_min) if pf.t_min is not None else 2000.0,
-        t_max=float(pf.t_max) if pf.t_max is not None else 25000.0,
-        g0=g0,
-        source=str(pf.source or ""),
-        from_direct_sum=False,
-    )
-    _spec_cache[cache_key] = spec
-    return spec
+    _spec_cache[cache_key] = stored
+    return stored
 
 
 # ---------------------------------------------------------------------------
@@ -763,6 +800,217 @@ def get_ground_state_g(
     except Exception:
         return default
     return float(g0) if g0 and g0 > 0 else default
+
+
+# ---------------------------------------------------------------------------
+# Canonical last-resort fallback ladder (ONE helper for the whole package)
+# ---------------------------------------------------------------------------
+#
+# Historically every consumer carried its own hardcoded U(T) fallback
+# (25.0 / 15.0 / 2.0 — and 10.0, ln 2, per-species dicts elsewhere) for
+# species the provider factory cannot resolve.  That was silently and
+# catastrophically wrong for closed-shell ions: the production DB has ZERO
+# energy levels and ZERO stored polynomials for Na II / Li II / H II, so the
+# stage-II constant 15.0 was used for Na II whose true U is ~1.00 (Ne-like
+# closed shell, first excited level ≈ 33 eV) — a ~15× error feeding straight
+# into the Saha multiplier of a basalt major (audit 2026-06-09, finding
+# 02-F1; bead CF-LIBS-improved-16m7).
+#
+# The ladder below replaces all of those sites:
+#
+#   (a) EXACT values from isoelectronic structure: bare nuclei (U = 1),
+#       hydrogen-like ions (ground ²S₁/₂, g = 2; first excited ≥ 10.2 eV so
+#       U = 2 across the LIBS band), and noble-gas-like closed shells
+#       (¹S₀ ground, first excited ≳ 10 eV, U ≈ 1).
+#   (b) the species' ground-level degeneracy g₀ from ``energy_levels`` when
+#       a database handle is available (U ≥ g₀ is a strict lower bound and
+#       the dominant term for low-lying-sparse species) — logged, because it
+#       can still be a large underestimate for open-shell species;
+#   (c) only then the legacy generic constants, with a WARNING naming the
+#       species — silent wrong physics is the bug, not the constant itself.
+
+# Symbols indexed by atomic number (Z = index + 1), H..U.  Self-contained so
+# this module keeps zero non-core imports.
+_ELEMENT_SYMBOLS: Tuple[str, ...] = (
+    "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
+    "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca",
+    "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
+    "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Y", "Zr",
+    "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn",
+    "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", "Nd",
+    "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb",
+    "Lu", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th",
+    "Pa", "U",
+)  # fmt: skip
+_ATOMIC_NUMBERS: Dict[str, int] = {sym: z + 1 for z, sym in enumerate(_ELEMENT_SYMBOLS)}
+
+#: Electron counts with a noble-gas (closed-shell ¹S₀) configuration.
+_NOBLE_GAS_ELECTRON_COUNTS = frozenset({2, 10, 18, 36, 54, 86})
+
+#: Legacy generic constants — tier (c) of the ladder, by ionization stage.
+_GENERIC_PARTITION_FALLBACK: Dict[int, float] = {1: 25.0, 2: 15.0}
+_GENERIC_PARTITION_FALLBACK_DEFAULT = 2.0
+
+# Warn-once registry so per-iteration solver loops do not spam the log.
+_FALLBACK_WARNED: set = set()
+
+
+def _closed_shell_partition_value(element: str, ionization_stage: int) -> Optional[float]:
+    """Tier (a): exact U for bare / hydrogen-like / noble-gas-like species.
+
+    Electron counting: a stage-``s`` ion of element ``Z`` carries
+    ``Z - (s - 1)`` electrons.  Returns ``None`` when the species is not one
+    of the exactly-known configurations (or the element symbol is unknown).
+
+    Examples: H II (0 e⁻) → 1; H I / He II (1 e⁻) → 2; He I / Li II (2 e⁻,
+    He-like) → 1; Na II / Mg III (10 e⁻, Ne-like) → 1; K II / Ca III (18 e⁻,
+    Ar-like) → 1.  First excited levels of all of these lie ≥ 10 eV above
+    ground, so the ground term is exact to <0.5 % across the LIBS band
+    (T ≤ ~2 eV).
+    """
+    z = _ATOMIC_NUMBERS.get(element)
+    if z is None or ionization_stage < 1:
+        return None
+    n_electrons = z - (ionization_stage - 1)
+    if n_electrons == 0:
+        return 1.0  # bare nucleus
+    if n_electrons == 1:
+        return 2.0  # hydrogen-like: ²S₁/₂ ground, g = 2
+    if n_electrons in _NOBLE_GAS_ELECTRON_COUNTS:
+        return 1.0  # noble-gas-like closed shell: ¹S₀ ground, g = 1
+    return None
+
+
+def _ground_degeneracy_partition_value(
+    atomic_db: Any, element: str, ionization_stage: int
+) -> Optional[float]:
+    """Tier (b): the species' ground-level degeneracy g₀ from ``energy_levels``.
+
+    Returns ``None`` when no database handle is supplied or the species has
+    no tabulated levels (so the caller can distinguish "no data" from the
+    sentinel ``default`` that :func:`get_ground_state_g` would return).
+    """
+    if atomic_db is None:
+        return None
+    try:
+        levels = atomic_db.get_energy_levels(element, ionization_stage)
+    except Exception:
+        return None
+    if not levels:
+        return None
+    g0 = get_ground_state_g(atomic_db, element, ionization_stage)
+    return float(g0)
+
+
+def _warn_partition_fallback(element: str, ionization_stage: int, tier: str, value: float) -> None:
+    """Warn once per (species, tier) that a partition fallback engaged."""
+    key = (element, int(ionization_stage), tier)
+    if key in _FALLBACK_WARNED:
+        return
+    _FALLBACK_WARNED.add(key)
+    if tier == "g0":
+        logger.warning(
+            "Partition function for %s %s unresolved (no provider); using "
+            "ground-level degeneracy g0=%.1f as U(T). This is a strict lower "
+            "bound and may underestimate U for open-shell species.",
+            element,
+            _roman(ionization_stage),
+            value,
+        )
+    else:
+        logger.warning(
+            "Partition function for %s %s unresolved (no energy levels, no "
+            "stored polynomial); falling back to the GENERIC constant U=%.1f. "
+            "This is NOT a physical value — ingest atomic data for this "
+            "species (e.g. scripts/patch_partition_functions_bc2016.py).",
+            element,
+            _roman(ionization_stage),
+            value,
+        )
+
+
+def _roman(stage: int) -> str:
+    """Spectroscopic stage notation for log messages (1 → 'I', 2 → 'II', …)."""
+    numerals = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V"}
+    return numerals.get(int(stage), str(stage))
+
+
+def canonical_partition_fallback(
+    element: str,
+    ionization_stage: int,
+    atomic_db: Any = None,
+    *,
+    warn: bool = True,
+) -> float:
+    """THE canonical last-resort U(T) estimate for unresolvable species.
+
+    Physically-grounded fallback ladder (see the section comment above):
+
+    1. Exact isoelectronic values — bare nuclei (1), hydrogen-like (2),
+       noble-gas-like closed shells (≈1).  These are temperature-independent
+       to <0.5 % across the LIBS band because the first excited levels lie
+       ≥ 10 eV above ground.
+    2. The ground-level degeneracy ``g0`` from ``energy_levels`` when a
+       database handle is available (strict lower bound on U).
+    3. The legacy generic constants 25.0 / 15.0 / 2.0 by stage, with a
+       warning naming the species — never silently.
+
+    Parameters
+    ----------
+    element : str
+        Element symbol.
+    ionization_stage : int
+        Ionization stage (1 = neutral).
+    atomic_db : optional
+        Atomic data source for the tier-(b) ``g0`` lookup.  ``None`` skips
+        straight from tier (a) to tier (c).
+    warn : bool, default True
+        Emit the (warn-once) log message for tiers (b)/(c).  Pass ``False``
+        from pre-seeding contexts that fill default arrays which may never be
+        read (e.g. snapshot scaffolding), to avoid misleading warnings.
+
+    Returns
+    -------
+    float
+        Fallback partition function estimate.
+    """
+    exact = _closed_shell_partition_value(element, ionization_stage)
+    if exact is not None:
+        return exact
+
+    g0_value = _ground_degeneracy_partition_value(atomic_db, element, ionization_stage)
+    if g0_value is not None:
+        if warn:
+            _warn_partition_fallback(element, ionization_stage, "g0", g0_value)
+        return g0_value
+
+    generic = _GENERIC_PARTITION_FALLBACK.get(
+        int(ionization_stage), _GENERIC_PARTITION_FALLBACK_DEFAULT
+    )
+    if warn:
+        _warn_partition_fallback(element, ionization_stage, "generic", generic)
+    return generic
+
+
+def lookup_partition_function(
+    partition_funcs: Dict[str, float],
+    element: str,
+    ionization_stage: int,
+    atomic_db: Any = None,
+) -> float:
+    """Dict lookup with the canonical physics-grounded fallback.
+
+    Replaces the historical ``partition_funcs.get(el, 25.0)`` /
+    ``.get(el, 15.0)`` pattern scattered across the inversion package: a
+    missing entry now routes through :func:`canonical_partition_fallback`
+    (exact closed-shell values first, then ``g0``, then a *warned* generic
+    constant) instead of a silent hardcoded number.
+    """
+    value = partition_funcs.get(element)
+    if value is not None:
+        return float(value)
+    return canonical_partition_fallback(element, ionization_stage, atomic_db)
 
 
 def polynomial_partition_function(
