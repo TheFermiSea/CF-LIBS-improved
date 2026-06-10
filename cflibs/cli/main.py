@@ -251,9 +251,7 @@ def _build_pipeline_config(
         closure_kwargs=dict(cfg.get("closure_kwargs", {})),
         matrix_element=cfg.get("matrix_element"),
         oxide_elements=cfg.get("oxide_elements"),
-        stark_ne=bool(
-            _first_not_none(stark_ne, cfg.get("stark_ne"), preset_knobs["stark_ne"])
-        ),
+        stark_ne=bool(_first_not_none(stark_ne, cfg.get("stark_ne"), preset_knobs["stark_ne"])),
     )
     _log_pipeline_config(pipeline)
     return pipeline
@@ -787,6 +785,13 @@ def _trust_report(result, diagnostics: Optional[dict] = None) -> tuple[list, lis
         if scatter > 0:
             detail += f", scatter {scatter:.1e} cm^-3"
         info.append(f"n_e source  : Stark-width diagnostic (measured, {detail})")
+        ne_value = float(getattr(result, "electron_density_cm3", 0.0) or 0.0)
+        if scatter > 0 and ne_value > 0 and scatter > ne_value:
+            warnings_out.append(
+                f"WARNING: Stark n_e line-to-line scatter ({scatter:.1e} cm^-3) exceeds "
+                f"the measured median ({ne_value:.1e} cm^-3); the diagnostic lines "
+                "disagree — treat n_e as an order-of-magnitude measurement."
+            )
     elif ne_source == "pressure_balance_fallback":
         info.append("n_e source  : 1-atm pressure-balance fallback (ASSUMED)")
         warnings_out.append(

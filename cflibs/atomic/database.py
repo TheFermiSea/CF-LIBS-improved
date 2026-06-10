@@ -773,9 +773,9 @@ class AtomicDatabase(AtomicDataSource):
 
     def get_stark_parameters_with_source(
         self, element: str, ionization_stage: int, wavelength_nm: float, tolerance_nm: float = 0.01
-    ) -> tuple[float | None, float | None, str | None]:
+    ) -> tuple[float | None, float | None, str | None, bool | None]:
         """
-        Get Stark width, alpha and the width's provenance for a specific line.
+        Get Stark width, alpha, the width's provenance and the resonance flag.
 
         The ``stark_w_source`` column records how the stored width was obtained
         (e.g. ``'stark_b'`` = literature-grade Stark-B / Sahal-Brechot tables;
@@ -798,13 +798,16 @@ class AtomicDatabase(AtomicDataSource):
 
         Returns
         -------
-        tuple[float | None, float | None, str | None]
-            (stark_w, stark_alpha, stark_w_source) or (None, None, None).
-            ``stark_w`` is the electron-impact FWHM at n_e = 1e17 cm^-3,
-            T = 10000 K (project-wide convention, see cflibs/radiation/stark.py).
+        tuple[float | None, float | None, str | None, bool | None]
+            (stark_w, stark_alpha, stark_w_source, is_resonance) or
+            (None, None, None, None). ``stark_w`` is the electron-impact FWHM
+            at n_e = 1e17 cm^-3, T = 10000 K (project-wide convention, see
+            cflibs/radiation/stark.py). ``is_resonance`` lets the n_e
+            diagnostic down-rank optically-thick-prone resonance lines whose
+            self-absorption inflates the apparent width (biasing n_e high).
         """
         query = """
-            SELECT stark_w, stark_alpha, stark_w_source
+            SELECT stark_w, stark_alpha, stark_w_source, is_resonance
             FROM lines
             WHERE element = ? AND sp_num = ?
             AND ABS(wavelength_nm - ?) < ?
@@ -821,16 +824,17 @@ class AtomicDatabase(AtomicDataSource):
         except sqlite3.OperationalError:
             # Pre-provenance schema (no stark_w_source column): treat every
             # width as provenance-unknown so the diagnostic gates it out.
-            return (None, None, None)
+            return (None, None, None, None)
 
         if not res:
-            return (None, None, None)
+            return (None, None, None, None)
 
         stark_w = float(res[0]) if res[0] is not None else None
         stark_alpha = float(res[1]) if res[1] is not None else None
         stark_w_source = str(res[2]) if res[2] is not None else None
+        is_resonance = bool(res[3]) if res[3] is not None else None
 
-        return (stark_w, stark_alpha, stark_w_source)
+        return (stark_w, stark_alpha, stark_w_source, is_resonance)
 
     def get_available_elements(self) -> list[str]:
         """Get list of elements available in the database."""

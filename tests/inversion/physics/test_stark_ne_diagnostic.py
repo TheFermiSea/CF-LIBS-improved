@@ -147,16 +147,14 @@ def stark_b_db_path():
     db_fd, db_path = tempfile.mkstemp(suffix=".db")
     os.close(db_fd)
     conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE lines (
             id INTEGER PRIMARY KEY, element TEXT, sp_num INTEGER,
             wavelength_nm REAL, aki REAL, ei_ev REAL, ek_ev REAL,
             gi INTEGER, gk INTEGER, rel_int REAL,
             stark_w REAL, stark_alpha REAL, stark_w_source TEXT
         )
-        """
-    )
+        """)
     conn.execute(
         "CREATE TABLE energy_levels (element TEXT, sp_num INTEGER,"
         " g_level INTEGER, energy_ev REAL)"
@@ -278,9 +276,7 @@ class TestSyntheticRoundTrip:
             LineObservation(371.99, 1000.0, 10.0, "Fe", 1, 3.33, 11, 1.0e7),
             LineObservation(375.00, 800.0, 10.0, "Fe", 1, 3.40, 9, 1.0e7),
         ]
-        result = measure_stark_ne(
-            wl, inten, observations, db, instrument_fwhm_nm=0.01, T_K=10000.0
-        )
+        result = measure_stark_ne(wl, inten, observations, db, instrument_fwhm_nm=0.01, T_K=10000.0)
         assert not result.usable
         assert result.rejected.get("not_literature_grade", 0) == 2
         assert "stark_b" in LITERATURE_STARK_SOURCES
@@ -356,9 +352,7 @@ class TestSolverMultiLineStark:
         # the median within the ne tolerance; allow 15%.
         assert res.electron_density_cm3 == pytest.approx(5.0e17, rel=0.15)
         # Independent MAD oracle: median |x - 5e17| = 1e17 -> 1.4826e17.
-        assert res.quality_metrics["stark_ne_scatter_cm3"] == pytest.approx(
-            1.4826e17, rel=0.01
-        )
+        assert res.quality_metrics["stark_ne_scatter_cm3"] == pytest.approx(1.4826e17, rel=0.01)
         assert res.electron_density_uncertainty_cm3 == pytest.approx(1.4826e17, rel=0.01)
 
     def test_single_line_backward_compatible(self, mock_db):

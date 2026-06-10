@@ -108,6 +108,7 @@ class StarkLineMeasurement:
     stark_w_source: str
     snr: float
     isolation_nm: float
+    is_resonance: bool
     instrument_fwhm_nm: float
     doppler_fwhm_nm: float
     lorentz_fwhm_nm: float
@@ -323,11 +324,71 @@ def _preference_factor(element: str, stage: int, wavelength_nm: float) -> float:
 def _isolation_nm(obs: LineObservation, observations: Sequence[LineObservation]) -> float:
     """Distance (nm) to the nearest *other* observed line."""
     dists = [
-        abs(other.wavelength_nm - obs.wavelength_nm)
-        for other in observations
-        if other is not obs
+        abs(other.wavelength_nm - obs.wavelength_nm) for other in observations if other is not obs
     ]
     return float(min(dists)) if dists else np.inf
+
+
+def _has_strong_multiplet_neighbour(
+    atomic_db,
+    obs: LineObservation,
+    window_nm: float,
+    T_eV: float,
+    strength_fraction: float = 0.25,
+) -> bool:
+    """Detect same-element multiplet blends inside the fit window.
+
+    The observation-level isolation gate only sees *selected* observations;
+    strong multiplet companions that were not independently selected (e.g.
+    the Mg I b triplet 516.7/517.3/518.4 nm) still sit inside the profile-fit
+    window and contaminate the width. Query the DB for same-species
+    transitions in the window and reject when any companion's thermal
+    gA-Boltzmann strength exceeds ``strength_fraction`` of the candidate's.
+    """
+
+    def _strength(g_k: float, A_ki: float, E_k_ev: float) -> float:
+        return float(g_k) * float(A_ki) * float(np.exp(-E_k_ev / max(T_eV, 0.1)))
+
+    own = _strength(obs.g_k, obs.A_ki, obs.E_k_ev)
+    if own <= 0:
+        return False
+    try:
+        transitions = atomic_db.get_transitions(
+            obs.element,
+            ionization_stage=obs.ionization_stage,
+            wavelength_min=obs.wavelength_nm - window_nm,
+            wavelength_max=obs.wavelength_nm + window_nm,
+        )
+        for t in transitions:
+            if abs(t.wavelength_nm - obs.wavelength_nm) < 0.05:
+                continue  # the candidate itself (or an unresolvable FS twin)
+            if t.A_ki is None or t.g_k is None or t.E_k_ev is None:
+                continue
+            if _strength(t.g_k, t.A_ki, t.E_k_ev) > strength_fraction * own:
+                return True
+    except Exception:  # pragma: no cover - DB without range query / stub DB
+        return False
+    return False
+
+
+def _trim_cohort_outliers(
+    measurements: List[StarkLineMeasurement],
+    max_log10_dev: float = 1.0,
+) -> Tuple[List[StarkLineMeasurement], int]:
+    """Reject per-line densities further than ``max_log10_dev`` decades from
+    the cohort median (log-space MAD-style trim, n >= 3 only).
+
+    A line whose n_e disagrees with the cohort by more than an order of
+    magnitude is a failed fit or an unrecognised blend, not a plasma
+    measurement; keeping it would inflate the reported scatter (the median
+    itself is already robust). Returns ``(kept, n_trimmed)``.
+    """
+    if len(measurements) < 3:
+        return measurements, 0
+    log_ne = np.log10([m.ne_cm3 for m in measurements])
+    med = float(np.median(log_ne))
+    kept = [m for m, lv in zip(measurements, log_ne) if abs(lv - med) <= max_log10_dev]
+    return kept, len(measurements) - len(kept)
 
 
 def measure_stark_ne(
@@ -422,7 +483,7 @@ def measure_stark_ne(
     # --- candidate selection ----------------------------------------------
     candidates = []
     for obs in observations:
-        w_ref, alpha, source = atomic_db.get_stark_parameters_with_source(
+        w_ref, alpha, source, is_resonance = atomic_db.get_stark_parameters_with_source(
             obs.element, obs.ionization_stage, obs.wavelength_nm, wavelength_tolerance_nm
         )
         if source not in allowed_sources or w_ref is None or w_ref <= 0:
@@ -449,18 +510,44 @@ def measure_stark_ne(
             continue
         score = (min(snr, 1e6)) * min(iso, 10.0 * gauss)
         score *= _preference_factor(obs.element, obs.ionization_stage, obs.wavelength_nm)
-        candidates.append((score, obs, w_ref, alpha if alpha is not None else 0.5, source, snr, iso, instr, dopp, gauss))
+        # Resonance lines are the most self-absorption-prone: optical depth
+        # inflates the apparent width and biases n_e HIGH (El Sherbini et al.
+        # 2005, Spectrochim. Acta B 60, 1573, use exactly that inflation to
+        # measure SA). Down-rank — but do not exclude — them, so they are
+        # used only when nothing optically thinner qualifies.
+        if is_resonance:
+            score *= 0.5
+        candidates.append(
+            (
+                score,
+                obs,
+                w_ref,
+                alpha if alpha is not None else 0.5,
+                source,
+                snr,
+                iso,
+                bool(is_resonance),
+                instr,
+                dopp,
+                gauss,
+            )
+        )
 
     candidates.sort(key=lambda c: -c[0])
 
     # --- per-line Voigt fit + width -> n_e inversion -----------------------
     ne_values: List[float] = []
-    for score, obs, w_ref, alpha, source, snr, iso, instr, dopp, gauss in candidates:
+    for score, obs, w_ref, alpha, source, snr, iso, is_resonance, instr, dopp, gauss in candidates:
         if len(out.measurements) >= max_lines:
             break
         # Window: wide enough for the Lorentzian wings, capped at half the
         # distance to the nearest neighbour so blends stay out of the fit.
         window = min(max(4.0 * gauss, 0.3), max(iso / 2.0, 2.0 * gauss))
+        # Same-species multiplet companions (not necessarily selected as
+        # observations) inside the fit window contaminate the width.
+        if _has_strong_multiplet_neighbour(atomic_db, obs, window, T_eV):
+            _reject("multiplet_blend")
+            continue
         center = _recenter_on_local_peak(
             wavelength, intensity, obs.wavelength_nm, search_nm=max(0.5 * gauss, 0.15)
         )
@@ -498,6 +585,7 @@ def measure_stark_ne(
                 stark_w_source=source,
                 snr=float(snr),
                 isolation_nm=float(iso),
+                is_resonance=bool(is_resonance),
                 instrument_fwhm_nm=float(instr),
                 doppler_fwhm_nm=float(dopp),
                 lorentz_fwhm_nm=float(lorentz_fwhm),
@@ -516,6 +604,36 @@ def measure_stark_ne(
             )
         )
         ne_values.append(float(ne))
+
+    # Cohort consistency trim: drop lines more than a decade from the cohort
+    # median (failed fits / unrecognised blends), then rebuild the
+    # solver-ready diagnostics from the surviving measurements.
+    if ne_values:
+        kept, n_trimmed = _trim_cohort_outliers(out.measurements)
+        if n_trimmed:
+            out.rejected["cohort_outlier"] = out.rejected.get("cohort_outlier", 0) + n_trimmed
+            trimmed = [m for m in out.measurements if m not in kept]
+            logger.info(
+                "Stark n_e diagnostic: trimmed %d cohort outlier(s): %s",
+                n_trimmed,
+                ", ".join(
+                    f"{m.element} {m.wavelength_nm:.2f} (ne={m.ne_cm3:.2e})" for m in trimmed
+                ),
+            )
+            out.measurements = kept
+            # Rebuild the solver-ready diagnostics from the survivors.
+            out.diagnostics = [
+                StarkDiagnosticLine(
+                    measured_fwhm_nm=m.lorentz_fwhm_nm,
+                    stark_w_ref_nm=m.stark_w_ref_nm,
+                    stark_alpha=m.stark_alpha,
+                    instrument_fwhm_nm=0.0,
+                    doppler_fwhm_nm=0.0,
+                    wavelength_nm=m.wavelength_nm,
+                )
+                for m in kept
+            ]
+            ne_values = [m.ne_cm3 for m in kept]
 
     if ne_values:
         arr = np.asarray(ne_values, dtype=float)
