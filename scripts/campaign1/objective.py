@@ -278,8 +278,15 @@ def _harvest_finished(asyncs: list[tuple[int, Any]], results: dict[int, dict[str
             pass
 
 
-def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, Any]]:
-    """Score payloads with a HARD per-spectrum timeout.
+def _iter_payload_records(payloads: list[tuple], ctx: "EvalContext"):
+    """Stream per-spectrum records for ``payloads`` in submission order.
+
+    The whole batch (typically every dataset of a trial, merged — eff#3) is
+    submitted to the pool up front; records are yielded strictly in payload
+    order as they complete, so a consumer can slice them back per dataset and
+    react at dataset boundaries (the eff#1 early-abort hook). A consumer that
+    stops iterating early MUST call :func:`_terminate_pool` to actually kill
+    the queued/in-flight remainder.
 
     Two timeout layers (the smoke run caught the gap): the in-child SIGALRM
     interrupts Python-level overruns gracefully at ``per_spectrum_timeout_s``,
@@ -292,14 +299,14 @@ def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, A
     a timeout failure, and resubmits the truly-unfinished remainder to a
     fresh pool.
     """
-    if not payloads:
-        return []
     hard = float(ctx.per_spectrum_timeout_s or 0.0)
     n_procs = max(int(ctx.n_procs), 1)
-    if hard <= 0.0:  # no timeout: plain pool map
-        return _get_pool(n_procs, ctx.db_path).map(_score_one, payloads)
+    if hard <= 0.0:  # no timeout: plain order-preserving pool stream
+        yield from _get_pool(n_procs, ctx.db_path).imap(_score_one, payloads)
+        return
 
     results: dict[int, dict[str, Any]] = {}
+    next_emit = 0
     pending = list(enumerate(payloads))
     while pending:
         pool = _get_pool(n_procs, ctx.db_path)
@@ -319,7 +326,6 @@ def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, A
                 _harvest_finished(asyncs[position + 1 :], results)
                 _terminate_pool()
                 timed_out = True
-                break
             except Exception as exc:  # child crashed (e.g. OOM-kill)
                 sid, _wl, _inten, truth = payloads[i][:4]
                 results[i] = _timeout_record(sid, truth, hard)
@@ -327,11 +333,17 @@ def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, A
                 _harvest_finished(asyncs[position + 1 :], results)
                 _terminate_pool()
                 timed_out = True
+            # Emit everything contiguous from the front (harvested results
+            # beyond a still-pending gap wait in ``results`` until the gap
+            # is filled by the resubmit round).
+            while next_emit in results:
+                yield results[next_emit]
+                next_emit += 1
+            if timed_out:
                 break
         pending = [(i, payload) for i, payload in pending if i not in results]
         if not timed_out and pending:  # pragma: no cover - defensive
             raise RuntimeError("pool returned without completing all payloads")
-    return [results[i] for i in range(len(payloads))]
 
 
 # ---------------------------------------------------------------------------
@@ -381,11 +393,17 @@ def evaluate_overrides(
 
     from cflibs.benchmark.scoreboard import DEFAULT_PRESET_LABEL, _aggregate_dataset
 
-    rows = []
+    # ONE merged pool batch for every dataset (eff#3): a single submission
+    # keeps all n_procs workers busy across dataset boundaries. Records come
+    # back in submission order, so each dataset's records are a contiguous
+    # slice of the stream.
+    per_dataset: list[tuple[str, Any, list]] = []
+    payloads: list[tuple] = []
     for name in names:
         entry = _dataset_entry(name)
         items = _get_eval_items(ctx, section, name, spectrum_ids[name])
-        payloads = [
+        per_dataset.append((name, entry, items))
+        payloads.extend(
             (
                 sid,
                 wl,
@@ -397,8 +415,12 @@ def evaluate_overrides(
                 str(ctx.db_path),
             )
             for sid, wl, inten, truth in items
-        ]
-        records = _run_payloads(payloads, ctx)
+        )
+
+    record_stream = _iter_payload_records(payloads, ctx)
+    rows = []
+    for name, entry, items in per_dataset:
+        records = [next(record_stream) for _ in items]
         rows.append(
             _aggregate_dataset(
                 name,
