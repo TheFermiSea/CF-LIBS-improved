@@ -183,6 +183,7 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
         SpectrumTruth,
         enforce_strictly_increasing,
     )
+    from cflibs.benchmark.scoreboard_registry import presence_set
 
     table = _load_large_set_table(root / "Sample_Composition_Data_LargeSet.csv")
     graphite = _load_graphite_row(root / "Sample_Composition_Data_SubSet.csv")
@@ -235,7 +236,7 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
                 )
                 continue
 
-            present = frozenset(el for el, wt in element_wt.items() if wt >= PRESENCE_CUTOFF_WT)
+            present = presence_set(element_wt)
             if not present:
                 logger.warning("CSA sample %r skipped: empty element panel.", comp_name)
                 continue

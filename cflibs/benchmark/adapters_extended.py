@@ -74,13 +74,13 @@ DATA_ROOT = Path(__file__).resolve().parents[2] / "data"
 """Repository ``data/`` directory holding (symlinked) external datasets."""
 
 
-PRESENCE_CUTOFF_WT = 0.01
-"""Element wt% below which an analyte is excluded from ``elements_present``."""
-
-
-# The shared contract type lives in the scoreboard registry (bead A1);
-# re-exported here so adapter callers and tests can import either path.
-from cflibs.benchmark.scoreboard_registry import SpectrumTruth  # noqa: E402
+# The shared contract types and the presence cutoff live in the scoreboard
+# registry (bead A1); re-exported here so adapter callers and tests can
+# import either path.
+from cflibs.benchmark.scoreboard_registry import (  # noqa: E402
+    PRESENCE_CUTOFF_WT,
+    SpectrumTruth,
+)
 
 SpectrumRecord = Tuple[str, np.ndarray, np.ndarray, SpectrumTruth]
 """One adapter yield: ``(spectrum_id, wavelength_nm, intensity, truth)``."""

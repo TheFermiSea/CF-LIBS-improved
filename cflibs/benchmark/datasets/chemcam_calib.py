@@ -81,6 +81,7 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
         SpectrumTruth,
         enforce_strictly_increasing,
     )
+    from cflibs.benchmark.scoreboard_registry import presence_set
 
     comp_table = _load_compositions(root / "ccam_calibration_compositions.csv")
 
@@ -123,7 +124,7 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
             for oxide, wt in sample["oxides"].items():
                 element, factor = _FACTORS[oxide]
                 element_wt[element] = element_wt.get(element, 0.0) + wt * factor
-            present = frozenset(el for el, wt in element_wt.items() if wt >= PRESENCE_CUTOFF_WT)
+            present = presence_set(element_wt)
             notes = (
                 "MSL ChemCam preflight cleanroom calibration spectrum (PDS "
                 "MSL-M-CHEMCAM-LIBS-4/5-RDR-V1.0, MSL_CCAM_LIBS_CALIB.CSV, "

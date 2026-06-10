@@ -27,7 +27,7 @@ import-order coupling.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Iterator, Optional, Tuple
+from typing import Any, Callable, Iterable, Iterator, Mapping, Optional, Tuple
 
 #: What one adapter yield looks like: (spectrum_id, wavelength_nm, intensity, truth).
 #: Arrays are typed ``Any`` here to keep this module numpy-free.
@@ -38,6 +38,17 @@ AdapterFactory = Callable[[], Iterator[AdapterYield]]
 
 #: Valid values of :attr:`SpectrumTruth.composition_basis`.
 COMPOSITION_BASES = ("element_wt", "presence_only")
+
+#: Trace-element presence cutoff (wt%): certified elements below this are
+#: excluded from ``elements_present`` (recorded in each adapter's notes; see
+#: the contract in the module docstring).
+PRESENCE_CUTOFF_WT = 0.01
+
+
+def presence_set(composition_wt: Mapping[str, float]) -> frozenset[str]:
+    """Elements of ``composition_wt`` (wt%) at or above :data:`PRESENCE_CUTOFF_WT`."""
+    return frozenset(el for el, wt in composition_wt.items() if wt >= PRESENCE_CUTOFF_WT)
+
 
 #: Valid values of :attr:`DatasetEntry.tier` (campaign design 2.1):
 #: ``optimization`` datasets may be queried freely; ``holdout`` datasets are

@@ -46,8 +46,10 @@ import numpy as np
 
 from cflibs.core.logging_config import get_logger
 from cflibs.benchmark.scoreboard_registry import (
+    PRESENCE_CUTOFF_WT,
     AdapterYield,
     SpectrumTruth,
+    presence_set,
     register_dataset,
 )
 
@@ -55,10 +57,6 @@ logger = get_logger("benchmark.adapters_core")
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DATA_DIR = _REPO_ROOT / "data"
-
-#: Trace-element presence cutoff (wt%): certified elements below this are
-#: excluded from ``elements_present`` (documented in each adapter's notes).
-PRESENCE_CUTOFF_WT = 0.01
 
 # ---------------------------------------------------------------------------
 # bhvo2_chemcam — real ChemCam spectra of USGS BHVO-2 basalt
@@ -79,9 +77,7 @@ def bhvo2_chemcam_adapter() -> Iterator[AdapterYield]:
 
     data_dir = _DATA_DIR / "bhvo2_usgs"
     composition_wt = {el: 100.0 * frac for el, frac in BHVO2_BASALT_USGS.items()}
-    elements_present = frozenset(
-        el for el, wt in composition_wt.items() if wt >= PRESENCE_CUTOFF_WT
-    )
+    elements_present = presence_set(composition_wt)
     notes = (
         "ChemCam (LANL testbed) LIBS of USGS BHVO-2 Hawaiian basalt; "
         "truth = USGS/GeoReM certified oxide composition converted to element wt% "
@@ -261,9 +257,7 @@ def nist_srm_612_adapter() -> Iterator[AdapterYield]:
     from cflibs.io.spectrum import load_spectrum
 
     composition_wt = {el: 100.0 * frac for el, frac in NIST_SRM_612_GLASS.items()}
-    elements_present = frozenset(
-        el for el, wt in composition_wt.items() if wt >= PRESENCE_CUTOFF_WT
-    )
+    elements_present = presence_set(composition_wt)
     for path in spectra:
         wavelength, intensity = load_spectrum(str(path))
         truth = SpectrumTruth(
@@ -348,9 +342,7 @@ def synthetic_fixedforward_adapter() -> Iterator[AdapterYield]:
     ) + str(corpus_path)
     for spec in corpus["spectra"]:
         composition_wt = {el: 100.0 * float(frac) for el, frac in spec["true_composition"].items()}
-        elements_present = frozenset(
-            el for el, wt in composition_wt.items() if wt >= PRESENCE_CUTOFF_WT
-        )
+        elements_present = presence_set(composition_wt)
         rp_estimate = spec.get("rp_estimate")
         truth = SpectrumTruth(
             elements_present=elements_present,
