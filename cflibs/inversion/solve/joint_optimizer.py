@@ -34,7 +34,7 @@ import numpy as np
 from cflibs.core.constants import EV_TO_K
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy
-from cflibs.inversion.result_base import ResultTableMixin, StatisticsMixin
+from cflibs.inversion.common.result_base import ResultTableMixin, StatisticsMixin
 
 logger = get_logger("inversion.joint_optimizer")
 

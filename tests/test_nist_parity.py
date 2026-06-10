@@ -91,7 +91,7 @@ def test_partition_functions(solver, element, stage, T_K, nist_U):
     Direct summation from our DB will not match the NIST reference JSON exactly
     because:
     - The reference was computed before the autoionizing-level cleanup script
-      (scripts/cleanup_autoionizing_levels.py) removed spurious high-energy
+      (scripts/archive/migrations/cleanup_autoionizing_levels.py) removed spurious high-energy
       levels, so the reference sums include dissolved Rydberg states.
     - At high T (>= 15000 K), those missing high-E levels cause larger
       divergence because their Boltzmann weights become non-negligible.

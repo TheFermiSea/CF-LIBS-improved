@@ -1,7 +1,7 @@
 # Physics: Iterative CF-LIBS Inversion Algorithm
 
 This is a step-by-step walkthrough of the iterative CF-LIBS solver
-(`cflibs.inversion.solver.IterativeCFLIBSSolver`). It is a companion to
+(`cflibs.inversion.solve.iterative.IterativeCFLIBSSolver`). It is a companion to
 [Equations](Equations.md), which states the equations, and
 [Assumptions and Validity](Assumptions_And_Validity.md), which explains
 when those equations are physically valid.
@@ -21,7 +21,7 @@ preceding peak-detection and element-identification workflow, see
 - A list of `LineObservation` objects, each carrying `(wavelength_nm,
   intensity, intensity_error, element, ionization_stage, A_ki, g_k,
   E_k_ev)`. The line-detection step
-  (`cflibs.inversion.line_detection.detect_line_observations`) produces
+  (`cflibs.inversion.identify.line_detection.detect_line_observations`) produces
   these from a measured spectrum and an atomic database.
 - Configuration: tolerances, closure mode, max iterations, pressure.
 - Optional: initial `T`, initial `n_e`. Both are auto-estimated if not
@@ -62,7 +62,7 @@ REPEAT:
   ── Step 2: Common-slope Boltzmann fit ────────────────────────────
   fit a single line through { (E_k, ln(I·λ/(g_k·A_ki)) + correction) }
   with all elements sharing the slope (= -1/(k_B T)) and per-element
-  intercepts q_s. Method: SIGMA_CLIP / WEIGHTED_LS / RANSAC / HUBER.
+  intercepts q_s. Method: SIGMA_CLIP / RANSAC / HUBER.
   
   T_new ← -1 / (k_B · slope)
 
@@ -119,15 +119,15 @@ UNCERTAINTY (selectable):
 
 | Step | Module |
 |------|--------|
-| Peak detection and line matching | `cflibs.inversion.line_detection.detect_line_observations`; see [Peak Identification and Line Matching](../user/Peak_Identification_Guide.md) |
-| Line scoring + selection | `cflibs.inversion.line_selection.LineSelector` |
-| Saha correction | `IterativeCFLIBSSolver._saha_correction` |
-| Common-slope Boltzmann fit | `cflibs.inversion.physics.boltzmann_fit` (and `boltzmann.py` shim) |
+| Peak detection and line matching | `cflibs.inversion.identify.line_detection.detect_line_observations`; see [Peak Identification and Line Matching](../user/Peak_Identification_Guide.md) |
+| Line scoring + selection | `cflibs.inversion.physics.line_selection.LineSelector` |
+| Saha correction | `IterativeCFLIBSSolver._apply_saha_correction` |
+| Common-slope Boltzmann fit | `IterativeCFLIBSSolver._fit_common_boltzmann_plane` (single-element fitting: `cflibs.inversion.physics.boltzmann.BoltzmannPlotFitter`) |
 | Closure equation | `cflibs.inversion.physics.closure.ClosureEquation` |
-| `n_e` update | `IterativeCFLIBSSolver._update_electron_density` |
-| Quality assessment | `cflibs.inversion.quality.QualityAssessor` |
-| Analytical UQ | `cflibs.inversion.uncertainty.create_boltzmann_uncertainties` |
-| Monte Carlo UQ | `cflibs.inversion.uncertainty.MonteCarloUQ` |
+| `n_e` update | `IterativeCFLIBSSolver._update_ne_python` (pressure balance: `_pressure_balance_ne`) |
+| Quality assessment | `cflibs.inversion.physics.quality.QualityAssessor` |
+| Analytical UQ | `cflibs.inversion.physics.uncertainty.create_boltzmann_uncertainties` |
+| Monte Carlo UQ | `cflibs.inversion.physics.uncertainty.MonteCarloUQ` |
 | Bayesian | `cflibs.inversion.solve.bayesian` (separate solver) |
 
 ---

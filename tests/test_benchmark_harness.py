@@ -1,5 +1,5 @@
 """
-Tests for cflibs.benchmarks — corpus, metrics, and harness.
+Tests for cflibs.benchmark — corpus, composition metrics, and harness.
 """
 
 import json

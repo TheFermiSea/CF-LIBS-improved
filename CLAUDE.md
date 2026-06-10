@@ -69,7 +69,7 @@ Test markers: `requires_db`, `requires_jax`, `requires_bayesian`, `requires_unce
 
 ### Running tests inside Claude Agent sub-tasks
 
-**The full suite (`pytest tests/`) takes ~6m 44s** on this codebase — mostly JAX warm-up + the inversion suites. The Claude Agent stream-idle watchdog kills sub-agents after **~600s (10 min)** of no observable stream output, and a quiet pytest run is invisible to the watchdog. Multiple sub-agent failures in 2026-05 were traced to this race, not to model issues.
+**The full suite (`pytest tests/`) takes ~57 min** on this codebase when the `requires_db` suites run (the older ~6m 44s figure predates the DB-backed inversion suites). The Claude Agent stream-idle watchdog kills sub-agents after **~600s (10 min)** of no observable stream output, and a quiet pytest run is invisible to the watchdog. Multiple sub-agent failures in 2026-05 were traced to this race, not to model issues.
 
 Rules for any task that spawns sub-agents:
 
@@ -120,6 +120,8 @@ python scripts/generate_model_library.py consolidate --output-dir output/model_l
 python scripts/generate_model_library.py build-index --output-dir output/model_library
 python scripts/generate_model_library.py submit --n-chunks 32 --output-dir output/model_library
 ```
+
+**Worktree trap:** running `python scripts/<x>.py` by path puts `scripts/` (not the repo root) at `sys.path[0]`, so a worktree silently imports `cflibs` from whichever checkout is installed in the venv. Always run scripts as `PYTHONPATH=$PWD python scripts/<x>.py` from the worktree root and check any printed `cflibs=` provenance line.
 
 ## Code Intelligence (use Serena first)
 
@@ -193,7 +195,7 @@ The `cflibs/inversion/` package is organized into sub-packages reflecting the CF
 | `solve/` | Plasma parameter inference: iterative CF-LIBS loop, closed-form ILR solver, Bayesian (NumPyro NUTS + dynesty), joint L-BFGS-B optimizer, manifold coarse-to-fine |
 | `runtime/` | Real-time: DAQ streaming, temporal gate optimization, hardware interface |
 
-Backward-compatible shims exist at all old flat paths (`from cflibs.inversion.solver import X` still works).
+The old flat module paths (`cflibs.inversion.solver`, `cflibs.inversion.line_detection`, ...) are **gone** — PR #210 removed the first batch and the 2026-06 cleanliness sweep removed the remaining 18 shims. Import from the canonical sub-package paths only. `cflibs/inversion/pipeline.py` and `cflibs/inversion/candidate_prefilter.py` are real top-level modules, not shims.
 
 ### Key Abstractions
 
@@ -210,11 +212,11 @@ JAX is optional throughout — code gracefully degrades if unavailable. Three ba
 
 ### Uncertainty Propagation
 
-Two approaches in `cflibs/inversion/uncertainty.py`:
+Two approaches in `cflibs/inversion/physics/uncertainty.py`:
 1. **Analytical** (via `uncertainties` package): fast, correlation-aware via Boltzmann covariance matrix
 2. **Monte Carlo** (`MonteCarloUQ`): full pipeline re-runs with perturbed inputs, captures non-linear effects
 
-Optional Bayesian inference via NumPyro (`cflibs/inversion/bayesian.py`).
+Optional Bayesian inference via NumPyro (`cflibs/inversion/solve/bayesian/`).
 
 ## Coding Style
 
@@ -225,7 +227,6 @@ Optional Bayesian inference via NumPyro (`cflibs/inversion/bayesian.py`).
 ## Cluster Notes
 
 - Use `cflibs generate-manifold` for manifold builds.
-- Do not launch the legacy `manifold-generator.py` with `mpirun`/`srun`; it is not MPI-aware.
 
 ## Commit Style
 

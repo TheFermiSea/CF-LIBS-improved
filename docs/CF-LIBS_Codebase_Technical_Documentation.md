@@ -584,7 +584,7 @@ def calculate_spectrum_emissivity(
 - `cflibs.inversion.solve/` — Plasma parameter inference (iterative CF-LIBS, ILR solver, Bayesian MCMC, manifold)
 - `cflibs.inversion.runtime/` — Real-time systems (DAQ streaming, temporal gate optimization, hardware interface)
 
-**Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work.
+**Backward compatibility:** The old flat import paths (e.g., `from cflibs.inversion.solver import X`) were **removed** in the 2026-06 cleanup (bead 38xr); the shim modules are gone. Imports must use the canonical sub-package paths, e.g. `from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver`.
 
 For the CLI and configuration schema used by classic CF-LIBS inversion, see
 `docs/User_Guide.md` (Inversion section) and `docs/API_Reference.md` (CLI options).
@@ -655,7 +655,6 @@ class BoltzmannPlotData:
 
 class FitMethod(Enum):
     """Available fitting methods."""
-    WEIGHTED_LS = "weighted_least_squares"
     SIGMA_CLIP = "sigma_clipping"
     RANSAC = "ransac"
     HUBER = "huber"
@@ -673,7 +672,7 @@ class BoltzmannPlotFitter:
 
     def __init__(
         self,
-        method: FitMethod = FitMethod.WEIGHTED_LS,
+        method: FitMethod = FitMethod.SIGMA_CLIP,
         sigma_threshold: float = 3.0,
         max_iterations: int = 10,
         min_inliers: int = 3
@@ -712,7 +711,7 @@ See `docs/User_Guide.md` for the `analysis` configuration fields that control
 line detection and selection.
 
 ```python
-from cflibs.inversion.line_detection import detect_line_observations
+from cflibs.inversion.identify.line_detection import detect_line_observations
 
 result = detect_line_observations(
     wavelength,
@@ -1151,7 +1150,7 @@ class MADOutlierDetector:
 
 ## Bayesian Methods
 
-**Location**: `cflibs/inversion/bayesian.py`
+**Location**: `cflibs/inversion/solve/bayesian/`
 
 ### Overview
 
@@ -2119,7 +2118,7 @@ print(f"Concentrations: {result.concentrations}")
 ### Bayesian Inference
 
 ```python
-from cflibs.inversion.bayesian import (
+from cflibs.inversion.solve.bayesian import (
     BayesianForwardModel, MCMCSampler, PriorConfig
 )
 

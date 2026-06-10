@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple, TypedDict, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from cflibs.inversion.deconvolution import VoigtFitResult
+    from cflibs.inversion.preprocess.deconvolution import VoigtFitResult
 
 import numpy as np
 
@@ -548,6 +548,10 @@ class LineDetectionResult:
     unmatched_peaks: int
     applied_shift_nm: float = 0.0
     warnings: List[str] = field(default_factory=list)
+    #: Per-line residual-gate diagnostics (bead ye6t): consensus residual,
+    #: band, and the matches dropped as contaminated. ``None`` when the gate
+    #: never ran (no accepted elements).
+    residual_gate: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -670,7 +674,7 @@ def _run_deconvolution(
     behaviour exactly.
     """
     try:
-        from cflibs.inversion.deconvolution import deconvolve_peaks
+        from cflibs.inversion.preprocess.deconvolution import deconvolve_peaks
 
         # Collect all peak wavelengths for deconvolution
         peak_wl_arr = np.array([pw for _, pw in peaks], dtype=float)
@@ -791,6 +795,12 @@ def _collect_observations(
     matched_peak_indices: Set[int],
     observations: List[LineObservation],
     resonance_lines: Set[Tuple[str, int, float]],
+    residual_center_nm: Optional[float] = None,
+    residual_band_nm: float = float("inf"),
+    residual_gate_diag: Optional[Dict[str, Any]] = None,
+    coherence_min_lines: int = 2,
+    coherence_min_fraction: float = 0.5,
+    residual_gate_min_kept_lines: int = 3,
 ) -> None:
     """Build observations for every accepted element (in-place accumulation).
 
@@ -798,6 +808,23 @@ def _collect_observations(
     elements by (f1, matched_lines) descending, then for each element run the
     comb-transition matcher followed by the per-peak nearest matcher, building
     one observation per unique line key.
+
+    When ``residual_center_nm`` is given, every match is additionally gated on
+    per-line residual coherence (bead ye6t): a matched line whose signed
+    residual deviates from the consensus by more than ``residual_band_nm`` is
+    dropped as a contaminated match and recorded in ``residual_gate_diag``.
+    An element whose match set turns out to be MOSTLY contamination (post-gate
+    coherent fraction below ``coherence_min_fraction`` — the same threshold
+    the element-level veto uses) is dropped entirely: a lucky-coherent FP line
+    set (the BHVO-2 Sn confounder: 6 lines scattered across the Fe/Ti UV
+    forest, 2 coherent by chance) must not reach the solver on its rump.
+
+    Gating also enables per-peak OWNERSHIP across elements: a peak claimed by
+    a stronger (higher-f1) element's match set cannot double-count as evidence
+    for a weaker claimant through the per-peak nearest matcher (BHVO-2: Sn
+    "matched" 248.341/277.981 on the very peaks Fe I 248.327 and Mg 277.983
+    already own — separations of 0.014/0.002 nm, unresolvable). Within one
+    element the per-peak loop behaves exactly as before.
     """
 
     def _score_key(element: str) -> Tuple[float, int]:
@@ -808,17 +835,28 @@ def _collect_observations(
 
     accepted_elements.sort(key=_score_key, reverse=True)
 
+    # Per-peak ownership (only with the residual gate, so the legacy path is
+    # untouched): peaks claimed by stronger elements are off-limits to weaker
+    # claimants' per-peak nearest matcher.
+    peak_ownership = residual_center_nm is not None
+
     used_peaks: Set[int] = set()
     for element in accepted_elements:
         transitions = comb_transitions_by_element.get(element, [])
         if not transitions:
             continue
+        gated_out: List[Tuple[Transition, float, float]] = []
+        n_obs_before = len(observations)
+        owned_by_stronger = set(used_peaks)
         matches = _match_transitions_to_peaks(
             peaks=peaks,
             transitions=transitions,
             tolerance_nm=wavelength_tolerance_nm,
             shift_nm=applied_shift_nm,
             used_peaks=used_peaks,
+            residual_center_nm=residual_center_nm,
+            residual_band_nm=residual_band_nm,
+            gated_out=gated_out,
         )
         for transition, peak_idx, peak_wl, _delta in matches:
             _register_observation(
@@ -832,11 +870,19 @@ def _collect_observations(
                 resonance_lines,
             )
         for peak_idx, peak_wl in peaks:
+            if peak_ownership and peak_idx in owned_by_stronger:
+                continue
             transition = _match_transition(
-                peak_wl + applied_shift_nm, transitions, wavelength_tolerance_nm
+                peak_wl + applied_shift_nm,
+                transitions,
+                wavelength_tolerance_nm,
+                residual_center_nm=residual_center_nm,
+                residual_band_nm=residual_band_nm,
             )
             if transition is None:
                 continue
+            if peak_ownership:
+                used_peaks.add(peak_idx)
             _register_observation(
                 ctx,
                 transition,
@@ -847,6 +893,97 @@ def _collect_observations(
                 observations,
                 resonance_lines,
             )
+        # Gated transitions that were rescued by the per-peak loop (matched a
+        # different, coherent peak) are kept, not contamination.
+        gated_effective = [
+            (t, pw, res)
+            for t, pw, res in gated_out
+            if (t.element, t.ionization_stage, t.wavelength_nm) not in seen_keys
+        ]
+        if residual_gate_diag is not None and gated_effective:
+            residual_gate_diag["n_gated"] = residual_gate_diag.get("n_gated", 0) + len(
+                gated_effective
+            )
+            residual_gate_diag.setdefault("gated_lines", []).extend(
+                {
+                    "element": t.element,
+                    "ionization_stage": t.ionization_stage,
+                    "wavelength_nm": float(t.wavelength_nm),
+                    "peak_wl_nm": peak_wl,
+                    "residual_nm": residual,
+                }
+                for t, peak_wl, residual in gated_effective
+            )
+        _drop_element_if_mostly_gated(
+            element,
+            n_kept=len(observations) - n_obs_before,
+            n_gated=len(gated_effective),
+            coherence_min_lines=coherence_min_lines,
+            coherence_min_fraction=coherence_min_fraction,
+            min_kept_lines=residual_gate_min_kept_lines,
+            observations=observations,
+            n_obs_before=n_obs_before,
+            resonance_lines=resonance_lines,
+            residual_gate_diag=residual_gate_diag,
+        )
+
+
+def _drop_element_if_mostly_gated(
+    element: str,
+    *,
+    n_kept: int,
+    n_gated: int,
+    coherence_min_lines: int,
+    coherence_min_fraction: float,
+    min_kept_lines: int,
+    observations: List[LineObservation],
+    n_obs_before: int,
+    resonance_lines: Set[Tuple[str, int, float]],
+    residual_gate_diag: Optional[Dict[str, Any]],
+) -> None:
+    """Drop an element whose match set was mostly residual-gated contamination.
+
+    The element-level shift-coherence veto judges coherence on loose
+    per-transition residuals BEFORE observation build; an FP line set can
+    scrape past it and then be pruned to a small coherent rump by the per-line
+    gate (BHVO-2 Sn: 6 matches, 2 coherent by chance — 2.1 wt% of phantom
+    mass). Once the gate has PROVEN contamination in an element's match set
+    (``n_gated > 0``), its presence must rest on solid coherent evidence:
+
+    - at least ``coherence_min_fraction`` of its matches coherent (the same
+      threshold the element veto uses, now on accurate deduped counts), AND
+    - at least ``min_kept_lines`` coherent lines (the solver's own
+      min-lines-per-element quality bar; a dense-catalog confounder like Th
+      retains 2 chance-coherent lines on BHVO-2 loc3/4 — 2 coherent matches
+      of a dense catalog are not evidence of presence).
+
+    Elements with NO gated matches are never touched here, so sparse-but-clean
+    real elements are unaffected. A dropped element's claimed peaks
+    deliberately stay claimed: releasing them would only offer them to even
+    weaker claimants.
+    """
+    n_total = n_kept + n_gated
+    if n_gated == 0 or n_total < coherence_min_lines:
+        return
+    if n_kept / n_total >= coherence_min_fraction and n_kept >= min_kept_lines:
+        return
+    removed = [obs for obs in observations[n_obs_before:] if obs.element == element]
+    del observations[n_obs_before:]
+    for obs in removed:
+        resonance_lines.discard((obs.element, obs.ionization_stage, obs.wavelength_nm))
+    if residual_gate_diag is not None:
+        residual_gate_diag.setdefault("dropped_elements", {})[element] = {
+            "kept": n_kept,
+            "gated": n_gated,
+        }
+    logger.info(
+        "Per-line residual gate dropped element %s: only %d of %d matches "
+        "coherent with the consensus shift (min fraction %.2f).",
+        element,
+        n_kept,
+        n_total,
+        coherence_min_fraction,
+    )
 
 
 def _apply_kdet_filter(
@@ -933,6 +1070,7 @@ def _assemble_line_detection_result(
     matched_peak_indices: Set[int],
     applied_shift_nm: float,
     warnings: List[str],
+    residual_gate: Optional[Dict[str, Any]] = None,
 ) -> LineDetectionResult:
     """Compute matched/unmatched counts and build the final result.
 
@@ -954,6 +1092,7 @@ def _assemble_line_detection_result(
         unmatched_peaks=unmatched_peaks,
         applied_shift_nm=applied_shift_nm,
         warnings=warnings,
+        residual_gate=residual_gate,
     )
 
 
@@ -985,6 +1124,8 @@ def detect_line_observations(
     shift_coherence_veto: bool = True,
     coherence_min_lines: int = 2,
     coherence_min_fraction: float = 0.5,
+    line_residual_gate: bool = True,
+    residual_gate_min_kept_lines: int = 3,
     use_deconvolution: bool = False,
     poisson_floor_scale: float = 1.0,
     use_jax_kdet: bool = False,
@@ -1071,6 +1212,23 @@ def detect_line_observations(
     coherence_min_fraction : float
         Minimum fraction of an element's matched lines that must be coherent
         with the consensus residual shift to survive the veto.
+    line_residual_gate : bool
+        If True (default), gate each individual matched line on residual
+        coherence at observation build (bead ye6t): the line's signed residual
+        ``(peak + shift) - line`` must sit within one third of the matching
+        tolerance of the pooled consensus residual (the same resolution-aware
+        band the shift-coherence veto uses), else the match is dropped as
+        contaminated and the peak stays available to its rightful owner. The
+        element-level veto only rejects whole elements; surviving elements
+        otherwise *carry* their incoherent lines into the Boltzmann fit (the
+        Al I 892.356 class) and lucky-coherent FP line sets (Sn) survive.
+        Gated drops are reported in ``LineDetectionResult.residual_gate``.
+    residual_gate_min_kept_lines : int
+        Once the per-line gate has proven contamination in an element's match
+        set (any gated line), the element must retain at least this many
+        coherent lines to survive (default 3 — the same min-lines-per-element
+        quality bar the line selector documents). Elements with no gated
+        matches are never subject to this bar.
     use_deconvolution : bool
         If True, apply Voigt deconvolution to resolve overlapping peaks
         before building line observations (default: False).
@@ -1247,7 +1405,30 @@ def detect_line_observations(
     if use_deconvolution:
         deconv_results_by_wl = _run_deconvolution(wavelength, intensity, peaks, peak_width_nm)
 
+    residual_gate_diag: Optional[Dict[str, Any]] = None
     if accepted_elements:
+        # Per-line residual gate (bead ye6t): consensus = the pooled median
+        # residual the shift-coherence veto already trusts; band = tolerance/3
+        # (resolution-aware: the tolerance itself scales with resolving power
+        # when set). NOT a global tolerance tightening — probe C falsified
+        # that (a sub-pixel global tolerance deletes Al and Fe entirely).
+        residual_center_nm: Optional[float] = None
+        residual_band_nm = wavelength_tolerance_nm / 3.0
+        if line_residual_gate:
+            residual_center_nm = _pooled_residual_consensus(
+                accepted_elements,
+                peaks,
+                comb_transitions_by_element,
+                applied_shift_nm,
+                wavelength_tolerance_nm,
+            )
+            residual_gate_diag = {
+                "enabled": True,
+                "consensus_nm": residual_center_nm,
+                "band_nm": residual_band_nm,
+                "n_gated": 0,
+                "gated_lines": [],
+            }
         build_ctx = _ObservationBuildContext(
             wavelength=wavelength,
             intensity=intensity,
@@ -1269,7 +1450,17 @@ def detect_line_observations(
             matched_peak_indices,
             observations,
             resonance_lines,
+            residual_center_nm=residual_center_nm,
+            residual_band_nm=residual_band_nm,
+            residual_gate_diag=residual_gate_diag,
+            coherence_min_lines=coherence_min_lines,
+            coherence_min_fraction=coherence_min_fraction,
+            residual_gate_min_kept_lines=residual_gate_min_kept_lines,
         )
+        if residual_gate_diag is not None and residual_gate_diag["n_gated"] > 0:
+            warnings.append("line_residual_gated_matches")
+        if residual_gate_diag is not None and residual_gate_diag.get("dropped_elements"):
+            warnings.append("line_residual_gate_dropped_elements")
 
     return _assemble_line_detection_result(
         observations=observations,
@@ -1278,6 +1469,7 @@ def detect_line_observations(
         matched_peak_indices=matched_peak_indices,
         applied_shift_nm=applied_shift_nm,
         warnings=warnings,
+        residual_gate=residual_gate_diag,
     )
 
 
@@ -1730,7 +1922,20 @@ def _match_transitions_to_peaks(
     tolerance_nm: float,
     shift_nm: float,
     used_peaks: Optional[Set[int]] = None,
+    residual_center_nm: Optional[float] = None,
+    residual_band_nm: float = float("inf"),
+    gated_out: Optional[List[Tuple[Transition, float, float]]] = None,
 ) -> List[Tuple[Transition, int, float, float]]:
+    """Greedy nearest-peak matching of transitions, with optional residual gate.
+
+    When ``residual_center_nm`` is given, a candidate peak only matches if its
+    signed residual ``(peak + shift) - line`` sits within ``residual_band_nm``
+    of that consensus center (bead ye6t per-line residual gate). Candidates
+    rejected *solely* by the band (in tolerance, but off-consensus) are
+    recorded in ``gated_out`` as ``(transition, peak_wl, signed_residual)`` so
+    the contaminated matches are visible in diagnostics; crucially they do not
+    consume the peak, leaving it available to its rightful owner.
+    """
     if not peaks or not transitions:
         return []
     used = used_peaks if used_peaks is not None else set()
@@ -1741,7 +1946,8 @@ def _match_transitions_to_peaks(
 
     matches: List[Tuple[Transition, int, float, float]] = []
     for transition in transitions:
-        deltas = np.abs(shifted_peaks - transition.wavelength_nm)
+        signed = shifted_peaks - transition.wavelength_nm
+        deltas = np.abs(signed)
         candidate_indices = np.where(deltas <= tolerance_nm)[0]
         if candidate_indices.size == 0:
             continue
@@ -1749,6 +1955,24 @@ def _match_transitions_to_peaks(
         available = [idx for idx in candidate_indices if int(peak_indices[idx]) not in used]
         if not available:
             continue
+        if residual_center_nm is not None:
+            coherent = [
+                idx
+                for idx in available
+                if abs(float(signed[idx]) - residual_center_nm) <= residual_band_nm
+            ]
+            if not coherent:
+                if gated_out is not None:
+                    nearest = min(available, key=lambda idx: deltas[idx])
+                    gated_out.append(
+                        (
+                            transition,
+                            float(peak_wavelengths[nearest]),
+                            float(signed[nearest]),
+                        )
+                    )
+                continue
+            available = coherent
         best_idx = min(available, key=lambda idx: deltas[idx])
         peak_idx = int(peak_indices[best_idx])
         used.add(peak_idx)
@@ -2028,6 +2252,38 @@ def _element_match_residuals(
     return np.asarray(residuals, dtype=float)
 
 
+def _pooled_residual_consensus(
+    elements: List[str],
+    peaks: List[Tuple[int, float]],
+    transitions_by_element: Dict[str, List[Transition]],
+    applied_shift_nm: float,
+    tolerance_nm: float,
+) -> Optional[float]:
+    """Consensus residual shift (nm) pooled across the accepted elements.
+
+    The median of every accepted element's per-line nearest-peak residuals at
+    the applied shift — the same consensus the shift-coherence veto uses. This
+    is the single instrument residual offset every *real* matched line should
+    share; per-line deviations from it flag contaminated matches (bead ye6t).
+    Returns ``None`` when no in-tolerance residuals exist.
+    """
+    peak_wavelengths = np.array([p[1] for p in peaks], dtype=float)
+    if peak_wavelengths.size == 0:
+        return None
+    pooled: List[float] = []
+    for element in elements:
+        res = _element_match_residuals(
+            peak_wavelengths,
+            transitions_by_element.get(element, []),
+            applied_shift_nm,
+            tolerance_nm,
+        )
+        pooled.extend(res.tolist())
+    if not pooled:
+        return None
+    return float(np.median(pooled))
+
+
 def _shift_coherence_veto(
     elements: List[str],
     peaks: List[Tuple[int, float]],
@@ -2131,14 +2387,29 @@ def _match_transition(
     peak_wavelength: float,
     transitions: List[Transition],
     tolerance_nm: float,
+    residual_center_nm: Optional[float] = None,
+    residual_band_nm: float = float("inf"),
 ) -> Optional[Transition]:
+    """Nearest transition within tolerance of an (already-shifted) peak.
+
+    With ``residual_center_nm`` set, candidates whose signed residual
+    ``peak - line`` deviates from the consensus by more than
+    ``residual_band_nm`` are skipped (bead ye6t per-line residual gate).
+    """
     best_match = None
     best_distance = float("inf")
     for transition in transitions:
-        distance = abs(transition.wavelength_nm - peak_wavelength)
-        if distance <= tolerance_nm and distance < best_distance:
-            best_match = transition
-            best_distance = distance
+        signed = peak_wavelength - transition.wavelength_nm
+        distance = abs(signed)
+        # Positive-form comparison: NaN distances (NaN peak or axis) fail
+        # every branch and match nothing. The De Morgan inversion
+        # ``distance > tol or distance >= best`` let NaN through.
+        if not (distance <= tolerance_nm and distance < best_distance):
+            continue
+        if residual_center_nm is not None and abs(signed - residual_center_nm) > residual_band_nm:
+            continue
+        best_match = transition
+        best_distance = distance
     return best_match
 
 

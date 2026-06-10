@@ -3,10 +3,14 @@
 import numpy as np
 import pytest
 
+from cflibs.inversion.preprocess import wavelength_calibration as wcal_mod
 from cflibs.inversion.preprocess.wavelength_calibration import (
     WavelengthCalibrationResult,
+    _apply_segment_coverage_gate,
     _compute_bic,
+    _coverage_extrapolation_nm,
     _dedupe_one_to_one,
+    _dense_anchor_hull,
     _eval_model,
     _fit_model,
     _is_monotonic_on_grid,
@@ -263,3 +267,166 @@ class TestDetectCcdSeams:
         assert np.all(np.diff(seams) > 0) if seams.size > 1 else True
         assert np.all(seams >= 0)
         assert np.all(seams < wl.size - 1)
+
+
+# ---------------------------------------------------------------------------
+# Bead ye6t: affine coverage gate (never extrapolate a slope past its anchors)
+# ---------------------------------------------------------------------------
+
+
+def _result(model, coefficients, seg_wl, anchors, n_inliers=20, rmse=0.02):
+    return WavelengthCalibrationResult(
+        success=True,
+        model=model,
+        coefficients=tuple(coefficients),
+        corrected_wavelength=wcal_mod._eval_model(seg_wl, model, coefficients),
+        bic=-100.0,
+        rmse_nm=rmse,
+        n_inliers=n_inliers,
+        n_peaks=50,
+        n_candidates=80,
+        matched_peak_fraction=0.5,
+        quality_passed=True,
+        quality_reason="passed",
+        details={"inlier_anchor_wl_nm": sorted(float(a) for a in anchors)},
+    )
+
+
+class TestDenseAnchorHull:
+    def test_uniform_anchors_cover_their_span(self):
+        anchors = np.linspace(500.0, 900.0, 30)
+        lo, hi = _dense_anchor_hull(anchors)
+        # 80% of 30 = 24 anchors -> ~80% of the span.
+        assert abs((hi - lo) / 400.0 - 0.8) <= 0.05
+
+    def test_stray_anchors_do_not_stretch_the_hull(self):
+        """A handful of circularly-matched red anchors (the ChemCam VNIR
+        failure mode) must not fake full-span coverage."""
+        anchors = np.sort(np.concatenate([np.linspace(475.0, 650.0, 26), [854.3, 877.6, 892.6]]))
+        lo, hi = _dense_anchor_hull(anchors)
+        assert lo == pytest.approx(475.0)
+        assert hi <= 660.0  # the dense mass, not the stray tail
+
+    def test_empty_returns_nan(self):
+        lo, hi = _dense_anchor_hull(np.array([]))
+        assert np.isnan(lo) and np.isnan(hi)
+
+
+class TestCoverageExtrapolation:
+    def test_shift_model_never_extrapolates(self):
+        seg_wl = np.linspace(473.0, 906.0, 100)
+        assert _coverage_extrapolation_nm(seg_wl, "shift", (-0.1,), 475.0, 650.0) == pytest.approx(
+            0.0, abs=0
+        )
+
+    def test_affine_drift_is_slope_times_uncovered_distance(self):
+        seg_wl = np.linspace(473.0, 906.0, 100)
+        a_minus_1 = -6.0e-4
+        drift = _coverage_extrapolation_nm(seg_wl, "affine", (1.0 + a_minus_1, 0.2), 475.0, 650.0)
+        assert drift == pytest.approx(abs(a_minus_1) * (906.0 - 650.0), rel=1e-6)
+
+    def test_hull_covering_segment_has_no_drift(self):
+        seg_wl = np.linspace(473.0, 906.0, 100)
+        drift = _coverage_extrapolation_nm(seg_wl, "affine", (0.9994, 0.2), 473.0, 906.0)
+        assert drift == pytest.approx(0.0, abs=1e-12)
+
+
+class TestSegmentCoverageGate:
+    """Rigged anchors spanning half the segment -> shift model chosen."""
+
+    SEG_WL = np.linspace(473.2, 905.6, 2048)  # ~0.21 nm/px, like ChemCam VNIR
+
+    def _gate(self, seg_cal, monkeypatch, shift_trusted=True):
+        shift_result = _result("shift", (-0.13,), self.SEG_WL, [500.0, 600.0], n_inliers=30)
+
+        def _fake_calibrate(**kwargs):
+            assert tuple(kwargs["candidate_models"]) == ("shift",)
+            return shift_result
+
+        monkeypatch.setattr(wcal_mod, "calibrate_wavelength_axis", _fake_calibrate)
+        return _apply_segment_coverage_gate(
+            seg_cal,
+            self.SEG_WL,
+            np.ones_like(self.SEG_WL),
+            atomic_db=None,
+            elements=["Fe"],
+            coverage_min_anchor_span_fraction=0.6,
+            coverage_max_extrapolation_px=1.0,
+            inlier_tolerance_nm=0.08,
+            max_pair_window_nm=2.0,
+            random_seed=42,
+            calibrate_kwargs={},
+        )
+
+    def test_half_segment_anchors_degrade_affine_to_shift(self, monkeypatch):
+        anchors = np.linspace(475.0, 650.0, 26).tolist() + [854.3, 877.6, 892.6]
+        seg_cal = _result("affine", (0.999396, 0.1896), self.SEG_WL, anchors, n_inliers=29)
+        gated, status, extrap = self._gate(seg_cal, monkeypatch)
+        assert status == "degraded_to_shift"
+        assert gated.model == "shift"
+        assert extrap > 0.1  # the ~0.12 nm VNIR red-end drift
+
+    def test_full_coverage_affine_passes(self, monkeypatch):
+        anchors = np.linspace(475.0, 904.0, 30)
+        seg_cal = _result("affine", (1.0 - 2.0e-5, 0.01), self.SEG_WL, anchors)
+        gated, status, _extrap = self._gate(seg_cal, monkeypatch)
+        assert status == "passed"
+        assert gated is seg_cal
+
+
+class TestGlobalCoverageGate:
+    """The coverage gate must also fire on SEAM-FREE axes and gate the
+    per-segment fallback offsets (PR #282 review MF1): single-channel
+    instruments hit the same anchored-in-one-region extrapolation failure
+    as the ChemCam VNIR segment, and previously the global fit bypassed
+    _apply_segment_coverage_gate entirely."""
+
+    AXIS = np.linspace(400.0, 900.0, 2400)
+
+    def _run(self, monkeypatch, global_result):
+        calls = []
+
+        def _fake_calibrate(**kwargs):
+            calls.append(tuple(kwargs.get("candidate_models", ())))
+            if tuple(kwargs.get("candidate_models", ())) == ("shift",):
+                return _result("shift", (-0.1,), self.AXIS, [450.0, 550.0], n_inliers=30)
+            return global_result
+
+        monkeypatch.setattr(wcal_mod, "calibrate_wavelength_axis", _fake_calibrate)
+        monkeypatch.setattr(wcal_mod, "detect_ccd_seams", lambda *a, **k: np.array([]))
+        cal = wcal_mod.calibrate_wavelength_axis_segmented(
+            wavelength=self.AXIS,
+            intensity=np.ones_like(self.AXIS),
+            atomic_db=None,
+            elements=["Fe"],
+        )
+        return cal, calls
+
+    def test_seam_free_clustered_anchors_degrade_to_shift(self, monkeypatch):
+        # Affine anchored only at 420-600 nm of a 400-900 nm axis:
+        # extrapolated drift at the red end far exceeds 1 px.
+        rigged = _result(
+            "affine",
+            (1.0 - 8.0e-4, 0.2),
+            self.AXIS,
+            np.linspace(420.0, 600.0, 25).tolist(),
+            n_inliers=25,
+        )
+        cal, calls = self._run(monkeypatch, rigged)
+        assert cal.model == "shift"
+        assert cal.details["coverage_gate"] == "degraded_to_shift"
+        assert ("shift",) in calls
+        assert cal.details["segments"] == 1
+
+    def test_seam_free_full_coverage_affine_passes(self, monkeypatch):
+        rigged = _result(
+            "affine",
+            (1.0 - 1.0e-5, 0.02),
+            self.AXIS,
+            np.linspace(405.0, 895.0, 40).tolist(),
+            n_inliers=40,
+        )
+        cal, calls = self._run(monkeypatch, rigged)
+        assert cal.model == "affine"
+        assert cal.details["coverage_gate"] == "passed"
+        assert ("shift",) not in calls

@@ -129,7 +129,7 @@ class TestStarkCalculation:
 
 # Canonical convention anchors. The stored ``lines.stark_w`` is the published
 # electron-impact FWHM at the reference conditions n_e=1e17 cm^-3, T=10000 K
-# (Konjević et al. 2002; see scripts/ingest_stark_b.py and
+# (Konjević et al. 2002; see scripts/archive/migrations/ingest_stark_b.py and
 # tests/test_stark_provenance.py). At those exact conditions the runtime
 # omega_stark (FWHM) must therefore equal the stored value EXACTLY — not the
 # x20-inflated value the pre-A4-CONV-2 runtime produced

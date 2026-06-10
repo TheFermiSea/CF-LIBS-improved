@@ -72,7 +72,7 @@ The canonical implementation is:
 Relevant entry points:
 
 ```python
-from cflibs.inversion.preprocessing import (
+from cflibs.inversion.preprocess.preprocessing import (
     BaselineMethod,
     detect_peaks_auto,
     estimate_baseline,
@@ -127,7 +127,7 @@ different questions.
 
 ### Classic Line Observations
 
-`cflibs.inversion.line_detection.detect_line_observations` is the path used by
+`cflibs.inversion.identify.line_detection.detect_line_observations` is the path used by
 `cflibs analyze`, `cflibs invert`, and `cflibs batch`. It converts a candidate
 element list into `LineObservation` objects for the Boltzmann/Saha inversion.
 
@@ -249,9 +249,9 @@ and an uninspectable element list.
 ```python
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.io.spectrum import load_spectrum
-from cflibs.inversion.line_detection import detect_line_observations
-from cflibs.inversion.line_selection import LineSelector
-from cflibs.inversion.solver import IterativeCFLIBSSolver
+from cflibs.inversion.identify.line_detection import detect_line_observations
+from cflibs.inversion.physics.line_selection import LineSelector
+from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
 
 wl, intensity = load_spectrum("my_spectrum.csv")
 

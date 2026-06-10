@@ -240,7 +240,7 @@ def _pipeline_hybrid_manifold(
 ) -> Dict[str, Any]:
     """Hybrid solver: manifold NN + L-BFGS refinement (falls back to SpectralFitter)."""
     try:
-        from cflibs.inversion.hybrid import SpectralFitter
+        from cflibs.inversion.solve.coarse_to_fine import SpectralFitter
         from cflibs.inversion.solve.joint_optimizer import create_simple_forward_model
 
         line_centers: Dict[str, List[float]] = {}

@@ -36,11 +36,3 @@ def test_process_spectrum_empty():
 
     with pytest.raises(ValueError):
         process_spectrum(wavelength, intensity)
-
-
-def test_shim_exports_process_spectrum():
-    """Test the backward compatibility shim exports the function."""
-    import cflibs.inversion.daq_interface as shim
-
-    assert hasattr(shim, "process_spectrum")
-    assert shim.process_spectrum is process_spectrum

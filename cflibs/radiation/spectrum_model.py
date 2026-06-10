@@ -13,6 +13,7 @@ from cflibs.plasma.saha_boltzmann import (
     SpeciesStageState,
 )
 from cflibs.atomic.database import AtomicDatabase
+from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES
 from cflibs.instrument.model import InstrumentModel
 from cflibs.radiation.profiles import BroadeningMode
 from cflibs.instrument.convolution import apply_instrument_function
@@ -133,36 +134,8 @@ class SpectrumModel:
             f"mode={broadening_mode.value}"
         )
 
-    _FALLBACK_MASSES = {
-        "H": 1.008,
-        "He": 4.003,
-        "Li": 6.941,
-        "Be": 9.012,
-        "B": 10.81,
-        "C": 12.01,
-        "N": 14.01,
-        "O": 16.00,
-        "Na": 22.99,
-        "Mg": 24.31,
-        "Al": 26.98,
-        "Si": 28.09,
-        "P": 30.97,
-        "S": 32.07,
-        "K": 39.10,
-        "Ca": 40.08,
-        "Ti": 47.87,
-        "V": 50.94,
-        "Cr": 52.00,
-        "Mn": 54.94,
-        "Fe": 55.85,
-        "Co": 58.93,
-        "Ni": 58.69,
-        "Cu": 63.55,
-        "Zn": 65.38,
-        "Sr": 87.62,
-        "Ba": 137.33,
-        "W": 183.84,
-    }
+    # Canonical standard atomic-mass table (cflibs.atomic.masses).
+    _FALLBACK_MASSES = STANDARD_ATOMIC_MASSES
 
     def _get_element_mass(self, element: str) -> float:
         """Get atomic mass for an element, with fallback."""

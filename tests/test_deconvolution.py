@@ -3,7 +3,7 @@
 import pytest
 import numpy as np
 
-from cflibs.inversion.deconvolution import (
+from cflibs.inversion.preprocess.deconvolution import (
     VoigtFitResult,
     DeconvolutionResult,
     group_peaks,

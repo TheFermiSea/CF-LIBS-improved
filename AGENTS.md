@@ -6,7 +6,7 @@
 - `tests/` holds pytest suites and fixtures.
 - `docs/` contains user-facing documentation and API references.
 - `examples/` has runnable configs and sample workflows.
-- Root scripts like `datagen_v2.py` and `manifold-generator.py` are utilities for database and manifold generation.
+- `datagen_v2.py` at the repository root generates the atomic database; manifold generation is handled by the `cflibs generate-manifold` CLI subcommand.
 
 ## Build, Test, and Development Commands
 - `just setup` creates a Python 3.12 `uv` environment with the baseline dev toolchain.
@@ -95,9 +95,8 @@ Full guidance: see [`CLAUDE.md` § Code Intelligence](CLAUDE.md#code-intelligenc
 - `python scripts/generate_model_library.py consolidate --output-dir output/model_library` merges chunk outputs into one library.
 - `python scripts/generate_model_library.py build-index --output-dir output/model_library` builds FAISS search index for the library.
 - `python scripts/generate_model_library.py submit --n-chunks 32 --output-dir output/model_library` emits/submits SLURM array jobs for cluster generation.
-- Multi-node manifold generation should use `cflibs generate-manifold`; the legacy
-  `manifold-generator.py` script is not MPI-aware and should not be launched via
-  `mpirun` or `srun` unless explicit MPI support is added first.
+- Multi-node manifold generation should use `cflibs generate-manifold` (the legacy
+  `manifold-generator.py` script was removed in the 2026-06 cleanup).
 
 ## Commit & Pull Request Guidelines
 - Commit messages: short imperative summary (<=50 chars) with optional body explaining what/why.

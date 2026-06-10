@@ -10,7 +10,7 @@ from typing import Optional, Tuple
 import numpy as np
 from pathlib import Path
 
-from cflibs.inversion.pca import PCAPipeline
+from cflibs.inversion.common.pca import PCAPipeline
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("manifold.vector_index")

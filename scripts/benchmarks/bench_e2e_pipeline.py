@@ -314,8 +314,8 @@ def run_gpu_pipeline(
     - Component breakdown via separate stage timing
     """
     from cflibs.manifold.batch_forward import batch_forward_model
-    from cflibs.inversion.boltzmann_jax import batched_boltzmann_fit
-    from cflibs.inversion.softmax_closure import softmax_closure
+    from cflibs.inversion.physics.boltzmann_jax import batched_boltzmann_fit
+    from cflibs.inversion.physics.softmax_closure import softmax_closure
 
     batch_size = T_eV.shape[0]
 

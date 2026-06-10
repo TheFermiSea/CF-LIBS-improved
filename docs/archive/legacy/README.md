@@ -42,13 +42,12 @@ Early implementation of line identification with:
 - Baseline correction → `cflibs.inversion.baseline` (planned)
 
 ### `datagen.py` and `datagen_v2.py`
-**Status**: Active - Essential database generation scripts
+**Status**: `datagen.py` removed (2026-06 cleanup); `datagen_v2.py` active
 
-**IMPORTANT**: These scripts are **required** for generating the atomic database (`libs_production.db`) that CF-LIBS depends on. They are **NOT** legacy code.
-
-Scripts for generating atomic database from NIST:
-- `datagen.py`: Original version
-- `datagen_v2.py`: Enhanced version with energy levels and filtering (recommended)
+`datagen.py` (the original generator) was removed from the repository in the
+2026-06 cleanup. `datagen_v2.py` remains the active script for generating the
+atomic database (`libs_production.db`) that CF-LIBS depends on. It lives at the
+repository root and is **NOT** legacy code.
 
 **Usage**:
 ```bash
@@ -59,15 +58,11 @@ python datagen_v2.py
 cflibs generate-db
 ```
 
-**Note**: These scripts have been moved back to the root directory as they are essential utilities.
-
 ### `manifold-generator.py`
-**Status**: Active - Migrated to `cflibs.manifold`
+**Status**: Removed (2026-06 cleanup) - Functionality migrated to `cflibs.manifold`
 
-**IMPORTANT**: This script has been integrated into the `cflibs.manifold` module.
-
-The manifold generator is **essential** for high-throughput inference and should be
-used before implementing inversion algorithms.
+The root `manifold-generator.py` script was removed; its functionality lives in
+the `cflibs.manifold` module and the `cflibs generate-manifold` CLI command.
 
 **Migration**: 
 - Core functionality → `cflibs.manifold.ManifoldGenerator`
