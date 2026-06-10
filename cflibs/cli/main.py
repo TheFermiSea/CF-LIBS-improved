@@ -758,6 +758,19 @@ def _trust_report(result, diagnostics: Optional[dict] = None) -> tuple[list, lis
     return info, warnings_out
 
 
+def _json_default(obj):
+    """``json.dumps`` fallback: unwrap numpy scalars (bool_/float64/int64).
+
+    The solver's quality gates produce numpy scalars (e.g. ``converged`` is a
+    numpy bool on the Saha-Boltzmann-graph path, now the default), which the
+    stdlib json encoder rejects.
+    """
+    item = getattr(obj, "item", None)
+    if callable(item):
+        return item()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 def _trust_json(result, diagnostics: Optional[dict] = None) -> dict:
     """Machine-readable trust block for JSON output paths."""
     qm = result.quality_metrics or {}
@@ -765,8 +778,8 @@ def _trust_json(result, diagnostics: Optional[dict] = None) -> dict:
     r2 = qm.get("boltzmann_r_squared", qm.get("r_squared_last"))
     n_fit = qm.get("n_elements_fit")
     return {
-        "converged": result.converged,
-        "boltzmann_r_squared": r2,
+        "converged": bool(result.converged),
+        "boltzmann_r_squared": float(r2) if r2 is not None else None,
         "n_elements_fit": int(n_fit) if n_fit is not None else None,
         "ne_source": _ne_source_label(qm),
         "boltzmann_degenerate": bool(qm.get("boltzmann_degenerate", 0.0)),
@@ -964,7 +977,7 @@ def _output_analyze_result(result, fmt: str, diagnostics: Optional[dict] = None)
             "quality_metrics": result.quality_metrics,
             "trust": _trust_json(result, diagnostics),
         }
-        print(json.dumps(output, indent=2))
+        print(json.dumps(output, indent=2, default=_json_default))
     elif fmt == "csv":
         print("element,concentration,uncertainty")
         for el, conc in result.concentrations.items():
@@ -1246,7 +1259,7 @@ def batch_cmd(args):
     output_path = getattr(args, "output", None)
     if output_path and str(output_path).endswith(".json"):
         with open(output_path, "w", encoding="utf-8") as fh:
-            json.dump(aggregate, fh, indent=2)
+            json.dump(aggregate, fh, indent=2, default=_json_default)
         print(f"Results written to {output_path}")
         _print_batch_summary(aggregate, n_failed, sys.stdout)
     elif output_path:
