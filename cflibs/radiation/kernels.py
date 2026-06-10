@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
+from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES
 from cflibs.core.constants import (
     C_LIGHT,
     EV_TO_J,
@@ -87,66 +88,10 @@ ChunkPlan = object  # type: ignore[misc,assignment]
 _HC_OVER_4PI = H_PLANCK * C_LIGHT / (4.0 * np.pi)
 
 # Standard atomic masses (amu) for elements we cannot look up directly from the
-# snapshot. The snapshot does not currently carry per-species mass, so we keep
-# a host-side table identical to ``SpectrumModel._FALLBACK_MASSES``. T2-2 will
-# fold ``mass_amu`` into ``AtomicSnapshot`` and we will drop this dependency.
-_FALLBACK_MASSES = {
-    "H": 1.008,
-    "He": 4.003,
-    "Li": 6.941,
-    "Be": 9.012,
-    "B": 10.81,
-    "C": 12.01,
-    "N": 14.01,
-    "O": 16.00,
-    "F": 19.00,
-    "Ne": 20.18,
-    "Na": 22.99,
-    "Mg": 24.31,
-    "Al": 26.98,
-    "Si": 28.09,
-    "P": 30.97,
-    "S": 32.07,
-    "Cl": 35.45,
-    "Ar": 39.95,
-    "K": 39.10,
-    "Ca": 40.08,
-    "Sc": 44.96,
-    "Ti": 47.87,
-    "V": 50.94,
-    "Cr": 52.00,
-    "Mn": 54.94,
-    "Fe": 55.85,
-    "Co": 58.93,
-    "Ni": 58.69,
-    "Cu": 63.55,
-    "Zn": 65.38,
-    "Ga": 69.72,
-    "Ge": 72.63,
-    "As": 74.92,
-    "Se": 78.97,
-    "Br": 79.90,
-    "Kr": 83.80,
-    "Rb": 85.47,
-    "Sr": 87.62,
-    "Y": 88.91,
-    "Zr": 91.22,
-    "Nb": 92.91,
-    "Mo": 95.95,
-    "Ag": 107.87,
-    "Cd": 112.41,
-    "Sn": 118.71,
-    "Sb": 121.76,
-    "I": 126.90,
-    "Cs": 132.91,
-    "Ba": 137.33,
-    "W": 183.84,
-    "Pt": 195.08,
-    "Au": 196.97,
-    "Hg": 200.59,
-    "Pb": 207.20,
-    "U": 238.03,
-}
+# snapshot. The snapshot does not currently carry per-species mass, so we use
+# the canonical host-side table from cflibs.atomic.masses. T2-2 will fold
+# ``mass_amu`` into ``AtomicSnapshot`` and we will drop this dependency.
+_FALLBACK_MASSES = STANDARD_ATOMIC_MASSES
 
 
 def _species_mass_array(snapshot: "AtomicSnapshot") -> np.ndarray:
@@ -175,7 +120,7 @@ def _polynomial_partition_function_jax(T_K, coeffs, t_min=None, t_max=None, g0=N
     """ln U = sum_n a_n (ln T_K)^n. Returns U on the active dtype.
 
     The Irwin (1981) partition-function coefficients shipped in the
-    canonical atomic DB (see ``scripts/populate_partition_functions.py``)
+    canonical atomic DB (see ``scripts/archive/migrations/populate_partition_functions.py``)
     are NATURAL-log basis: ``ln U = sum a_n (ln T)^n``. The previous
     version of this helper used log10 + ``power(10, ...)`` which
     produced an ~18-orders-of-magnitude error (Fe I @ 10000 K: true
