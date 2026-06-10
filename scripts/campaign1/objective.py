@@ -87,6 +87,9 @@ class FitnessReport:
     runtime_median_s: Optional[float] = None
     runtime_penalty: float = 0.0
     per_dataset: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: Dataset at which the evaluation short-circuited on a death penalty
+    #: (eff#1; its row may be partial). None = full evaluation.
+    aborted_after_dataset: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -358,6 +361,7 @@ def evaluate_overrides(
     section: str = "optimization",
     datasets: Optional[Iterable[str]] = None,
     allow_restricted: bool = False,
+    death_penalty_ref: Optional[Mapping[str, Mapping[str, Any]]] = None,
 ) -> dict[str, Any]:
     """Run the scoreboard for one candidate config on one split section.
 
@@ -366,6 +370,15 @@ def evaluate_overrides(
     ``section='holdout'`` additionally requires ``allow_restricted=True`` —
     only ``holdout_eval.py`` passes it, and every such run is ledger-logged.
     Vault datasets are refused unconditionally.
+
+    ``death_penalty_ref`` (the per-dataset baseline FP/failure reference;
+    objective trials only) arms the eff#1 early abort: FP and failure counts
+    are monotone in the accumulated records, so the moment a dataset's
+    running counts cross a death threshold the trial's fitness is already
+    pinned at ``DEATH_FITNESS`` — the evaluation short-circuits, the pool is
+    terminated (killing the queued remainder), and the board records
+    ``aborted_after_dataset``. The returned fitness is identical to the full
+    run by construction (see :func:`death_reasons_for_counts`).
     """
     names = tuple(datasets) if datasets is not None else ctx.datasets
     splits.assert_not_vault(names)
@@ -419,8 +432,31 @@ def evaluate_overrides(
 
     record_stream = _iter_payload_records(payloads, ctx)
     rows = []
+    aborted_at: Optional[str] = None
     for name, entry, items in per_dataset:
-        records = [next(record_stream) for _ in items]
+        base: Optional[Mapping[str, Any]] = None
+        if death_penalty_ref is not None:
+            if name not in death_penalty_ref:
+                # Same contract (and message) as compute_fitness, just earlier.
+                raise KeyError(f"Baseline reference missing dataset {name!r}")
+            base = death_penalty_ref[name]
+        synthetic = "synthetic" in entry.tags
+        records: list[dict[str, Any]] = []
+        fp_count = failed_count = 0
+        dead = False
+        for _ in items:
+            record = next(record_stream)
+            records.append(record)
+            if base is None:
+                continue
+            # Cheap per-record death check (eff#1): both counts are monotone
+            # in the accumulated records, so crossing a threshold here means
+            # the full run would die too — fitness is identical either way.
+            fp_count += len(record["fp"])
+            failed_count += record["status"] == "error"
+            if death_reasons_for_counts(name, synthetic, fp_count, failed_count, base):
+                dead = True
+                break
         rows.append(
             _aggregate_dataset(
                 name,
@@ -431,7 +467,11 @@ def evaluate_overrides(
                 notes=entry.notes or (items[0][3].notes if items else ""),
             )
         )
-    return {
+        if dead:
+            aborted_at = name
+            _terminate_pool()  # kill the queued/in-flight remainder of the batch
+            break
+    board: dict[str, Any] = {
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "section": section,
         "preset": ctx.preset or DEFAULT_PRESET_LABEL,
@@ -440,6 +480,9 @@ def evaluate_overrides(
         "config_overrides": dict(config_overrides),
         "datasets": rows,
     }
+    if aborted_at is not None:
+        board["aborted_after_dataset"] = aborted_at
+    return board
 
 
 # ---------------------------------------------------------------------------
@@ -455,6 +498,39 @@ def dataset_kind(row: Mapping[str, Any]) -> str:
         r.get("composition_basis") == "element_wt" for r in row.get("spectra", [])
     )
     return "real_element_wt" if basis_element_wt else "real_presence_only"
+
+
+def death_reasons_for_counts(
+    name: str,
+    synthetic: bool,
+    fp: int,
+    n_failed: int,
+    base: Mapping[str, Any],
+) -> list[str]:
+    """Death-penalty reasons for one dataset's (possibly partial) counts.
+
+    THE single source for the death thresholds: used by
+    :func:`compute_fitness` on full dataset rows AND by the eff#1 early-abort
+    check on running counts. Both ``fp`` and ``n_failed`` are monotone
+    non-decreasing in the accumulated per-spectrum records (a record can add
+    FP entries or a failure, never remove one), and ``compute_fitness`` ORs
+    death over datasets — so a non-empty result on a *partial* count already
+    pins the trial's fitness at ``DEATH_FITNESS`` regardless of every
+    remaining spectrum and dataset. Aborting there returns a bit-identical
+    fitness by construction.
+    """
+    reasons: list[str] = []
+    if not synthetic and fp > int(base["fp"]) + FP_DEATH_MARGIN:
+        reasons.append(
+            f"{name}: FP {fp} > baseline {base['fp']} + {FP_DEATH_MARGIN} "
+            "(precision is the asset)"
+        )
+    if n_failed > FAILURE_DEATH_FACTOR * float(base["n_failed"]):
+        reasons.append(
+            f"{name}: n_failed {n_failed} > {FAILURE_DEATH_FACTOR} * baseline "
+            f"{base['n_failed']} (no trading failures for F1)"
+        )
+    return reasons
 
 
 def dataset_weight(row: Mapping[str, Any]) -> float:
@@ -522,16 +598,9 @@ def compute_fitness(
         fp = int(row["id_metrics"]["fp"])
         n_failed = int(row["n_failed"])
         kind = dataset_kind(row)
-        if kind != "synthetic" and fp > int(base["fp"]) + FP_DEATH_MARGIN:
-            death_reasons.append(
-                f"{name}: FP {fp} > baseline {base['fp']} + {FP_DEATH_MARGIN} "
-                "(precision is the asset)"
-            )
-        if n_failed > FAILURE_DEATH_FACTOR * float(base["n_failed"]):
-            death_reasons.append(
-                f"{name}: n_failed {n_failed} > {FAILURE_DEATH_FACTOR} * baseline "
-                f"{base['n_failed']} (no trading failures for F1)"
-            )
+        death_reasons.extend(
+            death_reasons_for_counts(name, kind == "synthetic", fp, n_failed, base)
+        )
         score = dataset_score(row)
         weight = dataset_weight(row)
         scores.append(score)
@@ -573,9 +642,18 @@ def evaluate_candidate(
     ctx: EvalContext,
     baseline_ref: Mapping[str, Mapping[str, Any]],
 ) -> tuple[FitnessReport, dict[str, Any]]:
-    """Objective body: optimization-split scoreboard run -> composite fitness."""
-    board = evaluate_overrides(config_overrides, ctx, section="optimization")
+    """Objective body: optimization-split scoreboard run -> composite fitness.
+
+    Passing ``baseline_ref`` as the death-penalty reference arms the eff#1
+    early abort: a candidate that crosses a death threshold stops paying for
+    the remaining spectra/datasets, and ``report.aborted_after_dataset``
+    records where. Fitness is identical to the full run by construction.
+    """
+    board = evaluate_overrides(
+        config_overrides, ctx, section="optimization", death_penalty_ref=baseline_ref
+    )
     report = compute_fitness(board["datasets"], baseline_ref)
+    report.aborted_after_dataset = board.get("aborted_after_dataset")
     return report, board
 
 

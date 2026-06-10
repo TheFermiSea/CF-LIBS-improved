@@ -241,6 +241,9 @@ def make_objective(ctx, baseline_ref, study_dir: Path, cpus: int, worker_id: str
             )
         trial.set_user_attr("wall_s", wall)
         trial.set_user_attr("fitness_report", report.to_dict())
+        # eff#1: where (if anywhere) the death-penalty early abort fired;
+        # None = full evaluation. Fitness is identical either way.
+        trial.set_user_attr("aborted_after_dataset", report.aborted_after_dataset)
         trial.set_user_attr(
             "per_dataset_metrics",
             {
