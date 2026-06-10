@@ -123,7 +123,7 @@ Backward-compatible shims at old flat paths (`from cflibs.inversion.solver impor
 |---------|---------|
 | `cflibs/core/` | Physical constants (SI + plasma units), YAML config loading/validation, JAX backend detection |
 | `cflibs/io/` | Spectrum I/O (CSV, JSON, HDF5), exporters |
-| `cflibs/cli/` | CLI subcommands: forward, invert, analyze, bayesian, batch, generate-db, generate-manifold |
+| `cflibs/cli/` | CLI subcommands: forward, invert, analyze, bayesian, batch, scoreboard, generate-db, generate-manifold |
 | `cflibs/pds/` | ChemCam/SuperCam planetary data system interface |
 | `cflibs/hpc/` | Cluster utilities, SLURM integration |
 | `cflibs/evolution/` | LLM-driven algorithm optimization tooling (hierarchical-ES, blocklist scanner). The only place under `cflibs/` where ML libraries are permitted. |
@@ -156,6 +156,15 @@ cflibs bayesian spectrum.csv --elements Fe,Cu --output posterior.json
 ```bash
 cflibs batch ./spectra --elements Fe,Cu --output-dir output/batch_results
 ```
+
+### Goal-Metric Scoreboard
+```bash
+# ONE command: element-ID accuracy, composition accuracy and runtime across
+# every truth-bearing dataset (real BHVO-2 + Aalto; synthetic tracked separately).
+JAX_PLATFORMS=cpu cflibs scoreboard --max-spectra 74 --seed 20260610
+```
+Writes `scoreboard.json` + `scoreboard.md` to `--output-dir` (default `output/scoreboard`).
+Latest committed baseline: `docs/benchmarks/SCOREBOARD-2026-06-10-baseline.md`.
 
 ### Manifold Generation (GPU-accelerated)
 ```bash
