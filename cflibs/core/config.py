@@ -160,6 +160,7 @@ VALID_ANALYSIS_KEYS = frozenset(
         "closure_kwargs",
         "matrix_element",
         "oxide_elements",
+        "stark_ne",
     }
 )
 
