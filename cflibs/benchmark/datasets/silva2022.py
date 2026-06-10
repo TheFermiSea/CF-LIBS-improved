@@ -99,7 +99,6 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
         truth = SpectrumTruth(
             elements_present=frozenset(present),
             composition_wt=None,
-            composition_basis="presence_only",
             resolving_power=None,
             notes=(
                 "Silva et al. 2022 tropical-soil LIBS spectrum (LIBS_data.txt, "

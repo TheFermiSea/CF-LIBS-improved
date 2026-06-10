@@ -116,7 +116,6 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
                 truth = SpectrumTruth(
                     elements_present=frozenset({"N", str(cation)}),
                     composition_wt={"N": round(n_wt, 6)},
-                    composition_basis="element_wt",
                     resolving_power=None,
                     notes=common_notes.format(fname=fname, truth_detail=truth_detail),
                 )
@@ -131,7 +130,6 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
                 truth = SpectrumTruth(
                     elements_present=frozenset({"N", str(cation)}),
                     composition_wt=None,
-                    composition_basis="presence_only",
                     resolving_power=None,
                     notes=common_notes.format(fname=fname, truth_detail=truth_detail),
                 )

@@ -143,7 +143,6 @@ def iter_spectra(root: Path) -> Iterator[tuple]:
             truth = SpectrumTruth(
                 elements_present=present,
                 composition_wt={el: round(wt, 6) for el, wt in sorted(element_wt.items())},
-                composition_basis="element_wt",
                 resolving_power=RESOLVING_POWER_HINT,
                 notes=notes,
             )

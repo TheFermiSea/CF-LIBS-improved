@@ -106,7 +106,6 @@ def iter_spectra(root: Path, shots_per_sample: int = SHOTS_PER_SAMPLE_CAP) -> It
                 truth = SpectrumTruth(
                     elements_present=panel,
                     composition_wt=None,
-                    composition_basis="presence_only",
                     resolving_power=None,
                     notes=(
                         "EMSLIBS 2019 contest train spectrum (Vrabel/Kepes et al. "

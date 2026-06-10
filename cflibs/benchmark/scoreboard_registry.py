@@ -86,6 +86,8 @@ class SpectrumTruth:
     notes: str = ""
 
     def __post_init__(self) -> None:
+        # The basis is fully determined by composition_wt, so after this check
+        # it is always one of COMPOSITION_BASES — no separate membership check.
         derived = "element_wt" if self.composition_wt is not None else "presence_only"
         if not self.composition_basis:
             object.__setattr__(self, "composition_basis", derived)
@@ -94,11 +96,6 @@ class SpectrumTruth:
                 f"composition_basis={self.composition_basis!r} inconsistent with "
                 f"composition_wt={'given' if self.composition_wt is not None else 'None'} "
                 f"(expected {derived!r})"
-            )
-        if self.composition_basis not in COMPOSITION_BASES:
-            raise ValueError(
-                f"composition_basis must be one of {COMPOSITION_BASES}, "
-                f"got {self.composition_basis!r}"
             )
 
 
