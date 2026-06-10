@@ -227,9 +227,8 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
             )
     for name, ids in vault.items():
         for tier in (optimization, holdout):
-            for other, other_ids in tier.items():
-                if other == name and set(ids) & set(other_ids):
-                    raise HoldoutViolation(f"Vault ids of {name!r} leaked into a tier")
+            if set(ids) & set(tier.get(name, [])):
+                raise HoldoutViolation(f"Vault ids of {name!r} leaked into a tier")
 
 
 def assert_not_vault(datasets: Iterable[str]) -> None:
