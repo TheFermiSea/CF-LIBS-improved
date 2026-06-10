@@ -76,6 +76,7 @@ from cflibs.core.constants import (
 )
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.boltzmann import LineObservation
+from cflibs.plasma.partition import lookup_partition_function
 
 logger = get_logger("inversion.self_absorption")
 
@@ -1118,7 +1119,7 @@ class SelfAbsorptionCorrector:
         """
         element = obs.element
         C_s = concentrations.get(element, 0.0)
-        U_T = partition_funcs.get(element, 25.0)
+        U_T = lookup_partition_function(partition_funcs, element, 1)
 
         if C_s <= 0 or U_T <= 0:
             # Silent skip — but emit a DEBUG line so the cause is recoverable

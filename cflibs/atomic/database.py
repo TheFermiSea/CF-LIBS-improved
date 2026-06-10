@@ -1024,11 +1024,15 @@ class AtomicDatabase(AtomicDataSource):
             partition_t_max_list.append(float(spec.t_max))
             partition_g0_list.append(float(spec.g0))
         else:
-            # Neither energy levels nor a stored polynomial row: use the
-            # conservative U = 2 placeholder and default window so the
-            # snapshot stays serializable and consumers always receive
-            # concrete bounds.
-            partition_rows.append([float(np.log(2.0)), 0.0, 0.0, 0.0, 0.0])
+            # Neither energy levels nor a stored polynomial row: bake the
+            # canonical fallback ladder's constant (closed-shell ions get
+            # their exact U, e.g. Na II -> 1.0 instead of the old U = 2
+            # placeholder) so the snapshot stays serializable and consumers
+            # always receive concrete bounds.
+            from cflibs.plasma.partition import canonical_partition_fallback
+
+            u_fallback = canonical_partition_fallback(element, stage, self)
+            partition_rows.append([float(np.log(u_fallback)), 0.0, 0.0, 0.0, 0.0])
             partition_t_min_list.append(2000.0)
             partition_t_max_list.append(25000.0)
             partition_g0_list.append(1.0)

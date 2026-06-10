@@ -5,7 +5,9 @@ Main CLI entry point for CF-LIBS.
 import argparse
 import importlib.util
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 from cflibs.core.logging_config import setup_logging, get_logger
 
@@ -72,6 +74,214 @@ def _float_config_value(config: dict, key: str, section: str) -> float:
         raise ValueError(f"{section} config missing required field: {key}") from exc
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{section}.{key} must be numeric; got {config.get(key)!r}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Shared analyze/invert/batch pipeline configuration (bead l4a8)
+# ---------------------------------------------------------------------------
+
+#: Closure modes accepted by the iterative solver / CLI.
+CLOSURE_MODES = ("standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residual")
+
+#: Preset bundles for the accuracy-critical solver knobs, measured on real
+#: ChemCam BHVO-2 (docs/audit/2026-06-09-overhaul/04-pipeline-defaults.md):
+#: the default ``analyze`` path scored RMSE 10.29 wt% (Fe 39 vs certified
+#: 8.6) while ``--saha-boltzmann-graph --closure-mode oxide`` scored 4.03.
+#: ``geological`` (the default) IS that measured-best configuration;
+#: ``metallic`` keeps the pooled SB-graph but uses the standard closure
+#: (oxide stoichiometry is wrong physics for alloys); ``raw`` reproduces the
+#: legacy defaults for comparison runs.
+ANALYSIS_PRESETS = {
+    "geological": {"saha_boltzmann_graph": True, "closure_mode": "oxide"},
+    "metallic": {"saha_boltzmann_graph": True, "closure_mode": "standard"},
+    "raw": {"saha_boltzmann_graph": False, "closure_mode": "standard"},
+}
+
+DEFAULT_ANALYSIS_PRESET = "geological"
+
+
+@dataclass
+class AnalysisPipelineConfig:
+    """Fully resolved configuration for the shared CF-LIBS analysis pipeline.
+
+    One instance describes everything ``analyze``, ``invert`` and ``batch``
+    feed into detection, selection and the iterative solver. Building it
+    through :func:`_build_pipeline_config` is what guarantees the three
+    entry points cannot drift apart (the pre-fix ``batch`` wiring kept the
+    exact raw-detection + bare-``LineSelector`` path whose drift caused the
+    Na=98% blowup).
+    """
+
+    preset: str
+    elements: list
+    # Detection + selection knobs (mirror ``_detect_and_select_lines``).
+    min_relative_intensity: Optional[float] = None
+    top_k_per_element: Optional[int] = 60
+    resolving_power: Optional[float] = None
+    wavelength_tolerance_nm: float = 0.1
+    min_peak_height: float = 0.01
+    peak_width_nm: float = 0.2
+    apply_self_absorption: bool = False
+    exclude_resonance: Optional[bool] = None
+    min_snr: float = 10.0
+    min_energy_spread_ev: float = 2.0
+    min_lines_per_element: int = 3
+    isolation_wavelength_nm: float = 0.1
+    max_lines_per_element: int = 20
+    wavelength_calibration: bool = True
+    # Iterative-solver knobs (mirror ``IterativeCFLIBSSolver``).
+    max_iterations: int = 20
+    t_tolerance_k: float = 100.0
+    ne_tolerance_frac: float = 0.1
+    pressure_pa: float = 101325.0
+    self_absorption_column_density_cm3: float = 1.0e16
+    self_absorption_plasma_length_cm: float = 0.1
+    boltzmann_weight_cap: float = 5.0
+    min_boltzmann_r2: float = 0.3
+    saha_boltzmann_graph: bool = True
+    closure_mode: str = "oxide"
+    closure_kwargs: dict = field(default_factory=dict)
+    matrix_element: Optional[str] = None
+    oxide_elements: Optional[list] = None
+
+
+def _first_not_none(*values):
+    """Return the first value that is not ``None`` (all-None -> ``None``)."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _build_pipeline_config(
+    elements,
+    *,
+    preset: Optional[str] = None,
+    analysis_cfg: Optional[dict] = None,
+    saha_boltzmann_graph: Optional[bool] = None,
+    closure_mode: Optional[str] = None,
+    apply_self_absorption: Optional[bool] = None,
+    min_relative_intensity: Optional[float] = None,
+    resolving_power: Optional[float] = None,
+    wavelength_tolerance_nm: Optional[float] = None,
+    min_peak_height: Optional[float] = None,
+    peak_width_nm: Optional[float] = None,
+) -> AnalysisPipelineConfig:
+    """Resolve the shared pipeline configuration for analyze/invert/batch.
+
+    Precedence per knob, highest first:
+
+    1. explicit CLI flags (the keyword arguments; ``None`` = not given),
+    2. YAML ``analysis.*`` keys (``analysis_cfg``, used by ``invert``),
+    3. the resolved preset bundle (``--preset`` / ``analysis.preset``,
+       default ``geological``),
+    4. built-in defaults.
+
+    The resolved preset and every knob are logged at INFO so each run
+    records exactly which configuration produced its numbers.
+    """
+    cfg = dict(analysis_cfg or {})
+
+    preset_name = _first_not_none(preset, cfg.get("preset"), DEFAULT_ANALYSIS_PRESET)
+    if preset_name not in ANALYSIS_PRESETS:
+        raise ValueError(
+            f"Unknown analysis preset {preset_name!r}. "
+            f"Valid presets: {sorted(ANALYSIS_PRESETS)}"
+        )
+    preset_knobs = ANALYSIS_PRESETS[preset_name]
+
+    resolved_closure_mode = _first_not_none(
+        closure_mode, cfg.get("closure_mode"), preset_knobs["closure_mode"]
+    )
+    if resolved_closure_mode not in CLOSURE_MODES:
+        raise ValueError(
+            f"Unknown closure mode {resolved_closure_mode!r}. "
+            f"Valid modes: {list(CLOSURE_MODES)}"
+        )
+
+    pipeline = AnalysisPipelineConfig(
+        preset=preset_name,
+        elements=list(elements),
+        min_relative_intensity=_first_not_none(
+            min_relative_intensity, cfg.get("min_relative_intensity")
+        ),
+        top_k_per_element=cfg.get("top_k_per_element", 60),
+        resolving_power=_first_not_none(resolving_power, cfg.get("resolving_power")),
+        wavelength_tolerance_nm=_first_not_none(
+            wavelength_tolerance_nm, cfg.get("wavelength_tolerance_nm"), 0.1
+        ),
+        min_peak_height=_first_not_none(min_peak_height, cfg.get("min_peak_height"), 0.01),
+        peak_width_nm=_first_not_none(peak_width_nm, cfg.get("peak_width_nm"), 0.2),
+        apply_self_absorption=bool(
+            _first_not_none(apply_self_absorption, cfg.get("apply_self_absorption"), False)
+        ),
+        exclude_resonance=cfg.get("exclude_resonance"),
+        min_snr=cfg.get("min_snr", 10.0),
+        min_energy_spread_ev=cfg.get("min_energy_spread_ev", 2.0),
+        min_lines_per_element=cfg.get("min_lines_per_element", 3),
+        isolation_wavelength_nm=cfg.get("isolation_wavelength_nm", 0.1),
+        max_lines_per_element=cfg.get("max_lines_per_element", 20),
+        wavelength_calibration=bool(cfg.get("wavelength_calibration", True)),
+        max_iterations=cfg.get("max_iterations", 20),
+        t_tolerance_k=cfg.get("t_tolerance_k", 100.0),
+        ne_tolerance_frac=cfg.get("ne_tolerance_frac", 0.1),
+        pressure_pa=cfg.get("pressure_pa", None) or cfg.get("pressure", 101325.0),
+        self_absorption_column_density_cm3=cfg.get("self_absorption_column_density_cm3", 1.0e16),
+        self_absorption_plasma_length_cm=cfg.get("self_absorption_plasma_length_cm", 0.1),
+        boltzmann_weight_cap=cfg.get("boltzmann_weight_cap", 5.0),
+        min_boltzmann_r2=cfg.get("min_boltzmann_r2", 0.3),
+        saha_boltzmann_graph=bool(
+            _first_not_none(
+                saha_boltzmann_graph,
+                cfg.get("saha_boltzmann_graph"),
+                preset_knobs["saha_boltzmann_graph"],
+            )
+        ),
+        closure_mode=resolved_closure_mode,
+        closure_kwargs=dict(cfg.get("closure_kwargs", {})),
+        matrix_element=cfg.get("matrix_element"),
+        oxide_elements=cfg.get("oxide_elements"),
+    )
+    _log_pipeline_config(pipeline)
+    return pipeline
+
+
+def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
+    """Log the resolved preset and every pipeline knob at INFO."""
+    logger.info(
+        "Resolved analysis preset '%s': saha_boltzmann_graph=%s, closure_mode=%s, "
+        "apply_self_absorption=%s, exclude_resonance=%s, min_relative_intensity=%s, "
+        "top_k_per_element=%s, resolving_power=%s, wavelength_calibration=%s, "
+        "wavelength_tolerance_nm=%s, min_peak_height=%s, peak_width_nm=%s, "
+        "min_snr=%s, min_energy_spread_ev=%s, min_lines_per_element=%s, "
+        "max_lines_per_element=%s, isolation_wavelength_nm=%s, max_iterations=%s, "
+        "t_tolerance_k=%s, ne_tolerance_frac=%s, pressure_pa=%s, "
+        "boltzmann_weight_cap=%s, min_boltzmann_r2=%s, elements=%s",
+        pipeline.preset,
+        pipeline.saha_boltzmann_graph,
+        pipeline.closure_mode,
+        pipeline.apply_self_absorption,
+        pipeline.exclude_resonance,
+        pipeline.min_relative_intensity,
+        pipeline.top_k_per_element,
+        pipeline.resolving_power,
+        pipeline.wavelength_calibration,
+        pipeline.wavelength_tolerance_nm,
+        pipeline.min_peak_height,
+        pipeline.peak_width_nm,
+        pipeline.min_snr,
+        pipeline.min_energy_spread_ev,
+        pipeline.min_lines_per_element,
+        pipeline.max_lines_per_element,
+        pipeline.isolation_wavelength_nm,
+        pipeline.max_iterations,
+        pipeline.t_tolerance_k,
+        pipeline.ne_tolerance_frac,
+        pipeline.pressure_pa,
+        pipeline.boltzmann_weight_cap,
+        pipeline.min_boltzmann_r2,
+        pipeline.elements,
+    )
 
 
 def forward_model_cmd(args):
@@ -179,6 +389,7 @@ def _detect_and_select_lines(
     max_lines_per_element: int = 20,
     wavelength_calibration: bool = True,
     residual_shift_scan_nm: float = 0.05,
+    return_diagnostics: bool = False,
 ):
     """
     Detect spectral lines and apply the line-selection quality gate.
@@ -242,11 +453,19 @@ def _detect_and_select_lines(
         successful wavelength calibration. Small by design (default 0.05 nm):
         the calibration has already aligned the axis, so only sub-tolerance
         jitter remains.
+    return_diagnostics : bool
+        When True, also return a diagnostics dict recording which requested
+        elements were dropped and at which stage (``detection`` = no matched
+        lines; ``selection`` = matched lines failed the quality gate). This
+        feeds the CLI trust report: requested-but-dropped elements used to
+        vanish silently while the run still printed ``converged=True``.
 
     Returns
     -------
-    list
-        The selected ``LineObservation`` list (``selection.selected_lines``).
+    list or (list, dict)
+        The selected ``LineObservation`` list (``selection.selected_lines``);
+        with ``return_diagnostics=True``, a ``(selected_lines, diagnostics)``
+        tuple.
     """
     import numpy as np
 
@@ -340,7 +559,24 @@ def _detect_and_select_lines(
         detection.observations,
         resonance_lines=detection.resonance_lines,
     )
-    return selection.selected_lines
+    if not return_diagnostics:
+        return selection.selected_lines
+
+    detected_elements = {o.element for o in detection.observations}
+    selected_elements = {o.element for o in selection.selected_lines}
+    dropped: dict = {}
+    for el in elements:
+        if el not in detected_elements:
+            dropped[el] = "detection"
+        elif el not in selected_elements:
+            dropped[el] = "selection"
+    diagnostics = {
+        "requested_elements": list(elements),
+        "detected_elements": sorted(detected_elements),
+        "selected_elements": sorted(selected_elements),
+        "dropped_elements": dropped,
+    }
+    return selection.selected_lines, diagnostics
 
 
 def _resolve_invert_elements(args, config: dict, analysis_cfg: dict):
@@ -358,37 +594,14 @@ def _resolve_invert_elements(args, config: dict, analysis_cfg: dict):
     return elements
 
 
-def _resolve_invert_line_params(args, analysis_cfg: dict) -> tuple[float, float, float]:
-    """Resolve wavelength tolerance and peak detection params (CLI overrides config)."""
-    cli_tolerance = getattr(args, "tolerance_nm", None)
-    cli_min_peak_height = getattr(args, "min_peak_height", None)
-    cli_peak_width_nm = getattr(args, "peak_width_nm", None)
-    wavelength_tolerance = (
-        cli_tolerance
-        if cli_tolerance is not None
-        else analysis_cfg.get("wavelength_tolerance_nm", 0.1)
-    )
-    min_peak_height = (
-        cli_min_peak_height
-        if cli_min_peak_height is not None
-        else analysis_cfg.get("min_peak_height", 0.01)
-    )
-    peak_width_nm = (
-        cli_peak_width_nm
-        if cli_peak_width_nm is not None
-        else analysis_cfg.get("peak_width_nm", 0.2)
-    )
-    return wavelength_tolerance, min_peak_height, peak_width_nm
-
-
-def _build_invert_closure_kwargs(analysis_cfg: dict, closure_mode: str, observations) -> dict:
-    """Build closure kwargs for ``invert``, applying matrix/oxide defaults."""
-    closure_kwargs = dict(analysis_cfg.get("closure_kwargs", {}))
-    if closure_mode == "matrix" and "matrix_element" in analysis_cfg:
-        closure_kwargs.setdefault("matrix_element", analysis_cfg["matrix_element"])
-    if closure_mode == "oxide":
-        if "oxide_elements" in analysis_cfg:
-            closure_kwargs.setdefault("oxide_elements", analysis_cfg["oxide_elements"])
+def _finalize_closure_kwargs(pipeline: AnalysisPipelineConfig, observations) -> dict:
+    """Build the closure kwargs for a solve, applying matrix/oxide defaults."""
+    closure_kwargs = dict(pipeline.closure_kwargs)
+    if pipeline.closure_mode == "matrix" and pipeline.matrix_element is not None:
+        closure_kwargs.setdefault("matrix_element", pipeline.matrix_element)
+    if pipeline.closure_mode == "oxide":
+        if pipeline.oxide_elements is not None:
+            closure_kwargs.setdefault("oxide_elements", pipeline.oxide_elements)
         # Default geological molar-oxygen stoichiometry (O atoms per cation) when
         # the config does not supply an explicit oxide_stoichiometry map.
         if "oxide_stoichiometry" not in closure_kwargs:
@@ -399,9 +612,188 @@ def _build_invert_closure_kwargs(analysis_cfg: dict, closure_mode: str, observat
     return closure_kwargs
 
 
-def _output_invert_result(result, args) -> None:
+def _run_pipeline(
+    wavelength,
+    intensity,
+    atomic_db,
+    pipeline: AnalysisPipelineConfig,
+    uncertainty_mode: str = "none",
+):
+    """Run the shared detection -> selection -> iterative-solve pipeline.
+
+    The single execution path behind ``analyze``, ``invert`` and ``batch``.
+    Returns ``(result, diagnostics)`` where ``diagnostics`` carries the
+    resolved preset and the requested-but-dropped element map for the trust
+    report.
+    """
+    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+
+    observations, diagnostics = _detect_and_select_lines(
+        wavelength,
+        intensity,
+        atomic_db,
+        pipeline.elements,
+        min_relative_intensity=pipeline.min_relative_intensity,
+        top_k_per_element=pipeline.top_k_per_element,
+        resolving_power=pipeline.resolving_power,
+        wavelength_tolerance_nm=pipeline.wavelength_tolerance_nm,
+        min_peak_height=pipeline.min_peak_height,
+        peak_width_nm=pipeline.peak_width_nm,
+        apply_self_absorption=pipeline.apply_self_absorption,
+        exclude_resonance=pipeline.exclude_resonance,
+        min_snr=pipeline.min_snr,
+        min_energy_spread_ev=pipeline.min_energy_spread_ev,
+        min_lines_per_element=pipeline.min_lines_per_element,
+        isolation_wavelength_nm=pipeline.isolation_wavelength_nm,
+        max_lines_per_element=pipeline.max_lines_per_element,
+        wavelength_calibration=pipeline.wavelength_calibration,
+        return_diagnostics=True,
+    )
+    diagnostics["preset"] = pipeline.preset
+    diagnostics["saha_boltzmann_graph"] = pipeline.saha_boltzmann_graph
+    diagnostics["closure_mode"] = pipeline.closure_mode
+
+    if len(observations) == 0:
+        raise ValueError("No usable spectral lines detected for inversion.")
+
+    solver = IterativeCFLIBSSolver(
+        atomic_db=atomic_db,
+        max_iterations=pipeline.max_iterations,
+        t_tolerance_k=pipeline.t_tolerance_k,
+        ne_tolerance_frac=pipeline.ne_tolerance_frac,
+        pressure_pa=pipeline.pressure_pa,
+        apply_self_absorption=pipeline.apply_self_absorption,
+        self_absorption_column_density_cm3=pipeline.self_absorption_column_density_cm3,
+        self_absorption_plasma_length_cm=pipeline.self_absorption_plasma_length_cm,
+        min_boltzmann_r2=pipeline.min_boltzmann_r2,
+        boltzmann_weight_cap=pipeline.boltzmann_weight_cap,
+        saha_boltzmann_graph=pipeline.saha_boltzmann_graph,
+    )
+
+    closure_kwargs = _finalize_closure_kwargs(pipeline, observations)
+    result = _solve_analyze_result(
+        solver, observations, pipeline.closure_mode, closure_kwargs, uncertainty_mode
+    )
+
+    # Solver-stage drops: requested elements that survived detection and
+    # selection but ended the solve with no mass attributed.
+    dropped = diagnostics["dropped_elements"]
+    for el in pipeline.elements:
+        if el not in dropped and result.concentrations.get(el, 0.0) <= 0.0:
+            dropped[el] = "solve"
+    return result, diagnostics
+
+
+def _ne_source_label(quality_metrics: dict) -> Optional[str]:
+    """Map the ``ne_from_stark`` provenance flag to a human-readable source."""
+    ne_from_stark = quality_metrics.get("ne_from_stark")
+    if ne_from_stark is None:
+        return None
+    return "stark" if ne_from_stark else "pressure_balance_fallback"
+
+
+def _trust_report(result, diagnostics: Optional[dict] = None) -> tuple[list, list]:
+    """Build ``(info_lines, warning_lines)`` for the CLI trust/quality report.
+
+    Surfaces what the solver already knows but stdout never showed: the
+    convergence verdict, the Boltzmann-plane R^2, the n_e provenance (a
+    Stark-width measurement vs the physically-non-standard 1-atm
+    pressure-balance fallback), the degeneracy gates, and any requested
+    elements that were dropped before the fit.
+    """
+    qm = result.quality_metrics or {}
+    info: list = []
+    warnings_out: list = []
+
+    if diagnostics and diagnostics.get("preset"):
+        info.append(
+            f"Preset      : {diagnostics['preset']} "
+            f"(saha_boltzmann_graph={diagnostics.get('saha_boltzmann_graph')}, "
+            f"closure_mode={diagnostics.get('closure_mode')})"
+        )
+    r2 = qm.get("boltzmann_r_squared", qm.get("r_squared_last"))
+    if r2 is not None:
+        info.append(f"Boltzmann R2: {r2:.3f}")
+    n_fit = qm.get("n_elements_fit")
+    if n_fit is not None:
+        info.append(f"Elements fit: {int(n_fit)}")
+
+    ne_source = _ne_source_label(qm)
+    if ne_source == "stark":
+        info.append("n_e source  : Stark-width diagnostic (measured)")
+    elif ne_source == "pressure_balance_fallback":
+        info.append("n_e source  : 1-atm pressure-balance fallback (ASSUMED)")
+        warnings_out.append(
+            "WARNING: n_e was ASSUMED from the 1-atm pressure-balance fallback, not "
+            "measured (no Stark-width diagnostic available). Treat n_e as a coarse "
+            "order-of-magnitude estimate."
+        )
+
+    if not result.converged:
+        warnings_out.append(f"WARNING: solver did NOT converge ({result.iterations} iterations).")
+    if qm.get("boltzmann_degenerate"):
+        warnings_out.append(
+            "WARNING: Boltzmann fit DEGENERATE (non-physical slope or R^2 below the "
+            "quality gate); the temperature is unconstrained."
+        )
+    if qm.get("closure_degenerate"):
+        warnings_out.append(
+            "WARNING: closure DEGENERATE (one element soaks >80% of the closure "
+            "mass); the composition is untrustworthy."
+        )
+    lte_ok = qm.get("lte_mcwhirter_satisfied")
+    if lte_ok is not None and not lte_ok:
+        warnings_out.append(
+            f"WARNING: McWhirter criterion NOT satisfied "
+            f"(n_e ratio = {qm.get('lte_n_e_ratio', 0):.2f})"
+        )
+
+    dropped = (diagnostics or {}).get("dropped_elements") or {}
+    if dropped:
+        detail = ", ".join(f"{el} ({stage})" for el, stage in sorted(dropped.items()))
+        warnings_out.append(f"WARNING: requested elements dropped: {detail}")
+
+    if not result.converged or qm.get("boltzmann_degenerate") or qm.get("closure_degenerate"):
+        warnings_out.append("RESULT UNRELIABLE: see warnings above.")
+    return info, warnings_out
+
+
+def _json_default(obj):
+    """``json.dumps`` fallback: unwrap numpy scalars (bool_/float64/int64).
+
+    The solver's quality gates produce numpy scalars (e.g. ``converged`` is a
+    numpy bool on the Saha-Boltzmann-graph path, now the default), which the
+    stdlib json encoder rejects.
+    """
+    item = getattr(obj, "item", None)
+    if callable(item):
+        return item()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
+def _trust_json(result, diagnostics: Optional[dict] = None) -> dict:
+    """Machine-readable trust block for JSON output paths."""
+    qm = result.quality_metrics or {}
+    _, warning_lines = _trust_report(result, diagnostics)
+    r2 = qm.get("boltzmann_r_squared", qm.get("r_squared_last"))
+    n_fit = qm.get("n_elements_fit")
+    return {
+        "converged": bool(result.converged),
+        "boltzmann_r_squared": float(r2) if r2 is not None else None,
+        "n_elements_fit": int(n_fit) if n_fit is not None else None,
+        "ne_source": _ne_source_label(qm),
+        "boltzmann_degenerate": bool(qm.get("boltzmann_degenerate", 0.0)),
+        "closure_degenerate": bool(qm.get("closure_degenerate", 0.0)),
+        "dropped_elements": (diagnostics or {}).get("dropped_elements", {}),
+        "warnings": warning_lines,
+    }
+
+
+def _output_invert_result(result, args, diagnostics: Optional[dict] = None) -> None:
     """Export or print the ``invert`` result depending on ``args.output``."""
     from cflibs.io.exporters import create_exporter
+
+    info_lines, warning_lines = _trust_report(result, diagnostics)
 
     if args.output:
         output_path = Path(args.output)
@@ -413,26 +805,36 @@ def _output_invert_result(result, args) -> None:
         exporter = create_exporter(ext)
         exporter.export(result, str(output_path))
         print(f"Inversion results saved to {output_path}")
+        for line in warning_lines:
+            print(line)
         return
 
     print("CF-LIBS inversion results:")
     print(f"  Temperature: {result.temperature_K:.0f} ± {result.temperature_uncertainty_K:.0f} K")
     print(f"  Electron density: {result.electron_density_cm3:.3e} cm^-3")
+    print(f"  Converged: {result.converged} ({result.iterations} iterations)")
+    for line in info_lines:
+        print(f"  {line}")
     print("  Concentrations:")
     for element, concentration in result.concentrations.items():
         unc = result.concentration_uncertainties.get(element, 0.0)
         print(f"    {element}: {concentration:.4f} ± {unc:.4f}")
+    for line in warning_lines:
+        print(line)
 
 
 def invert_cmd(args):
     """
     Inversion command.
 
-    Runs classic CF-LIBS inversion using detected spectral lines.
+    Runs classic CF-LIBS inversion using detected spectral lines, through the
+    same shared pipeline as ``analyze``/``batch`` (see
+    :func:`_build_pipeline_config` / :func:`_run_pipeline`). YAML
+    ``analysis.*`` keys and CLI flags resolve through the same precedence
+    rules, so the flag and config paths cannot drift apart.
     """
     from cflibs.atomic.database import AtomicDatabase
-    from cflibs.core.config import load_config
-    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+    from cflibs.core.config import load_config, validate_analysis_config
     from cflibs.io.spectrum import load_spectrum
 
     logger.info("Inversion command (classic CF-LIBS)")
@@ -442,6 +844,10 @@ def invert_cmd(args):
     config = {}
     if args.config:
         config = load_config(args.config)
+        # Hard-error on unknown analysis.* keys: a typo'd knob
+        # (``saha_boltzman_graph``) used to silently revert the run to
+        # defaults with no indication anything was wrong.
+        validate_analysis_config(config)
 
     analysis_cfg = config.get("analysis", {}) if isinstance(config, dict) else {}
 
@@ -454,103 +860,36 @@ def invert_cmd(args):
     wavelength, intensity = load_spectrum(args.spectrum)
     atomic_db = AtomicDatabase(db_path)
 
-    wavelength_tolerance, min_peak_height, peak_width_nm = _resolve_invert_line_params(
-        args, analysis_cfg
-    )
-    # Default to a non-None relative-intensity floor (physics-audit /
-    # composition-pipeline-diagnosis: IDENT-RYDBERG). With no floor, weak
-    # high-lying (Rydberg) transitions with relative_intensity ~ 0 (e.g. the
-    # Na I 413-421 nm lines, E_k ~ 5 eV, unobservable in a ~1 eV ps-LIBS
-    # plasma) are matched to bright wrong-element peaks and, because the
-    # Boltzmann ordinate divides by their tiny A_ki, extrapolate the closure to
-    # a huge spurious abundance (Na ~ 77-98 wt% vs certified 1.65 on BHVO-2).
-    # As of the detection-cascade fix the default floor is OFF (None): an
-    # absolute rel_int floor deletes whole real elements (Mg/K and the Al I
-    # resonance doublet all sit below 100), so it is replaced by an
-    # element-relative top-K (gA-Boltzmann strength) plus a shift-coherence
-    # veto, which suppress the weak-Rydberg false matches the floor was
-    # guarding against without deleting real majors. Set a numeric
-    # ``min_relative_intensity`` in the analysis config to re-enable the
-    # legacy floor.
-    min_relative_intensity = analysis_cfg.get("min_relative_intensity", None)
-    resolving_power = (
-        args.resolving_power
-        if args.resolving_power is not None
-        else analysis_cfg.get("resolving_power")
-    )
-
-    # Self-absorption correction (physics-audit 2026-05-27 defects B1/B2).
-    # ``apply_self_absorption`` (default False) wires the curve-of-growth
-    # correction into the iterative solver for known optically-thick samples
-    # (e.g. the BHVO-2 basalt majors). When it is enabled we ALSO retain the
-    # strong low-E_i resonance lines (Ca II H/K, Na D, Mg I 285, Al I 396) that
-    # dominate the majors, because the solver now *corrects* them rather than
-    # the selector dropping them for "self-absorption risk" (B2; Aragón &
-    # Aguilera 2008 §7). When SA is off we keep the original safe behaviour of
-    # excluding resonance lines (uncorrected resonance lines are self-absorbed
-    # and bias the Boltzmann plot). Both are config-overridable.
-    apply_self_absorption = bool(analysis_cfg.get("apply_self_absorption", False))
-    # Default ``None`` -> ``_detect_and_select_lines`` keeps resonance lines
-    # (the brightest persistent LIBS lines, sole detectable lines for some
-    # majors). Set ``exclude_resonance`` in the analysis config to override.
-    exclude_resonance = analysis_cfg.get("exclude_resonance", None)
-
-    # Shared detection + selection path (identical to ``analyze``; see
-    # ``_detect_and_select_lines``). Keeping both CLI entry points on one
-    # helper prevents the default-path Na-blowup regression from re-emerging.
-    observations = _detect_and_select_lines(
-        wavelength,
-        intensity,
-        atomic_db,
+    pipeline = _build_pipeline_config(
         elements,
-        min_relative_intensity=min_relative_intensity,
-        resolving_power=resolving_power,
-        wavelength_tolerance_nm=wavelength_tolerance,
-        min_peak_height=min_peak_height,
-        peak_width_nm=peak_width_nm,
-        apply_self_absorption=apply_self_absorption,
-        exclude_resonance=exclude_resonance,
-        min_snr=analysis_cfg.get("min_snr", 10.0),
-        min_energy_spread_ev=analysis_cfg.get("min_energy_spread_ev", 2.0),
-        min_lines_per_element=analysis_cfg.get("min_lines_per_element", 3),
-        isolation_wavelength_nm=analysis_cfg.get("isolation_wavelength_nm", 0.1),
-        max_lines_per_element=analysis_cfg.get("max_lines_per_element", 20),
+        preset=getattr(args, "preset", None),
+        analysis_cfg=analysis_cfg,
+        saha_boltzmann_graph=getattr(args, "saha_boltzmann_graph", None),
+        closure_mode=getattr(args, "closure_mode", None),
+        apply_self_absorption=getattr(args, "apply_self_absorption", None),
+        resolving_power=getattr(args, "resolving_power", None),
+        wavelength_tolerance_nm=getattr(args, "tolerance_nm", None),
+        min_peak_height=getattr(args, "min_peak_height", None),
+        peak_width_nm=getattr(args, "peak_width_nm", None),
     )
 
-    if len(observations) == 0:
-        raise ValueError("No usable spectral lines detected for inversion.")
+    result, diagnostics = _run_pipeline(wavelength, intensity, atomic_db, pipeline)
 
-    solver = IterativeCFLIBSSolver(
-        atomic_db=atomic_db,
-        max_iterations=analysis_cfg.get("max_iterations", 20),
-        t_tolerance_k=analysis_cfg.get("t_tolerance_k", 100.0),
-        ne_tolerance_frac=analysis_cfg.get("ne_tolerance_frac", 0.1),
-        pressure_pa=analysis_cfg.get("pressure_pa", None) or analysis_cfg.get("pressure", 101325.0),
-        apply_self_absorption=apply_self_absorption,
-        self_absorption_column_density_cm3=analysis_cfg.get(
-            "self_absorption_column_density_cm3", 1.0e16
-        ),
-        self_absorption_plasma_length_cm=analysis_cfg.get("self_absorption_plasma_length_cm", 0.1),
-        saha_boltzmann_graph=bool(analysis_cfg.get("saha_boltzmann_graph", False)),
-    )
-
-    closure_mode = analysis_cfg.get("closure_mode", "standard")
-    closure_kwargs = _build_invert_closure_kwargs(analysis_cfg, closure_mode, observations)
-
-    result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
-
-    _output_invert_result(result, args)
+    _output_invert_result(result, args, diagnostics)
 
 
 def analyze_cmd(args):
     """
-    End-to-end analysis command with sensible defaults.
+    End-to-end analysis command with the validated defaults.
 
-    Loads a CSV spectrum, runs line detection + iterative CF-LIBS inversion,
-    and outputs results in the requested format.
+    Loads a CSV spectrum, runs the shared detection + selection + iterative
+    CF-LIBS pipeline (:func:`_run_pipeline`), and outputs results in the
+    requested format. With no flags, the ``geological`` preset resolves to
+    the measured-best configuration on real geological standards: pooled
+    Saha-Boltzmann graph intercepts + oxide closure (+ the always-on
+    Boltzmann weight cap and per-spectrum wavelength calibration).
     """
     from cflibs.atomic.database import AtomicDatabase
-    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
     from cflibs.io.spectrum import load_spectrum
 
     db_path = _resolve_db_path(args.db_path)
@@ -561,56 +900,23 @@ def analyze_cmd(args):
     wavelength, intensity = load_spectrum(args.spectrum)
     atomic_db = AtomicDatabase(db_path)
 
-    # Shared detection + selection path — identical to ``invert`` (see
-    # ``_detect_and_select_lines``). Previously ``analyze`` called
-    # ``detect_line_observations(...)`` with no relative-intensity floor and a
-    # bare ``LineSelector()``, which admitted spurious weak Na Rydberg lines
-    # and produced a catastrophic Na-dominated composition (RMSE 33.69 wt%, Na
-    # ~98 % on BHVO-2). Using the same helper with the good defaults kills that
-    # default-path blowup. ``--min-relative-intensity`` / ``--resolving-power``
-    # / ``--apply-self-absorption`` opt-in flags override the defaults.
-    apply_self_absorption = bool(getattr(args, "apply_self_absorption", False))
-    min_relative_intensity = getattr(args, "min_relative_intensity", None)
-    resolving_power = getattr(args, "resolving_power", None)
-
-    observations = _detect_and_select_lines(
-        wavelength,
-        intensity,
-        atomic_db,
+    pipeline = _build_pipeline_config(
         elements,
-        min_relative_intensity=min_relative_intensity,
-        resolving_power=resolving_power,
-        apply_self_absorption=apply_self_absorption,
+        preset=getattr(args, "preset", None),
+        saha_boltzmann_graph=getattr(args, "saha_boltzmann_graph", None),
+        closure_mode=getattr(args, "closure_mode", None),
+        apply_self_absorption=getattr(args, "apply_self_absorption", None),
+        min_relative_intensity=getattr(args, "min_relative_intensity", None),
+        resolving_power=getattr(args, "resolving_power", None),
     )
-
-    if len(observations) == 0:
-        raise ValueError("No usable spectral lines detected.")
-
-    saha_boltzmann_graph = bool(getattr(args, "saha_boltzmann_graph", False))
-    closure_mode = getattr(args, "closure_mode", "standard")
-
-    solver = IterativeCFLIBSSolver(
-        atomic_db=atomic_db,
-        apply_self_absorption=apply_self_absorption,
-        saha_boltzmann_graph=saha_boltzmann_graph,
-    )
-
-    # Build closure kwargs; oxide closure gets the default molar-oxygen
-    # stoichiometry (O atoms per cation) over the detected elements.
-    closure_kwargs: dict = {}
-    if closure_mode == "oxide":
-        from cflibs.inversion.physics.closure import default_oxide_stoichiometry
-
-        els = [o.element for o in observations]
-        closure_kwargs["oxide_stoichiometry"] = default_oxide_stoichiometry(els)
 
     uncertainty_mode = getattr(args, "uncertainty", "none")
-    result = _solve_analyze_result(
-        solver, observations, closure_mode, closure_kwargs, uncertainty_mode
+    result, diagnostics = _run_pipeline(
+        wavelength, intensity, atomic_db, pipeline, uncertainty_mode=uncertainty_mode
     )
 
     fmt = getattr(args, "output_format", "table")
-    _output_analyze_result(result, fmt)
+    _output_analyze_result(result, fmt, diagnostics)
 
 
 def _solve_analyze_result(
@@ -648,8 +954,15 @@ def _solve_analyze_result(
         return solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
 
 
-def _output_analyze_result(result, fmt: str) -> None:
-    """Print the ``analyze`` result in the requested format (json/csv/table)."""
+def _output_analyze_result(result, fmt: str, diagnostics: Optional[dict] = None) -> None:
+    """Print the ``analyze`` result in the requested format (json/csv/table).
+
+    Every format carries the trust report (:func:`_trust_report`): JSON gets a
+    machine-readable ``trust`` block, CSV prints warnings to stderr (keeping
+    stdout parseable), and the table prints the quality lines and warnings
+    inline.
+    """
+    info_lines, warning_lines = _trust_report(result, diagnostics)
     if fmt == "json":
         import json
 
@@ -662,29 +975,97 @@ def _output_analyze_result(result, fmt: str) -> None:
             "converged": result.converged,
             "iterations": result.iterations,
             "quality_metrics": result.quality_metrics,
+            "trust": _trust_json(result, diagnostics),
         }
-        print(json.dumps(output, indent=2))
+        print(json.dumps(output, indent=2, default=_json_default))
     elif fmt == "csv":
         print("element,concentration,uncertainty")
         for el, conc in result.concentrations.items():
             unc = result.concentration_uncertainties.get(el, 0.0)
             print(f"{el},{conc:.6f},{unc:.6f}")
+        for line in warning_lines:
+            print(line, file=sys.stderr)
     else:
         print(
             f"Temperature : {result.temperature_K:.0f} ± {result.temperature_uncertainty_K:.0f} K"
         )
         print(f"n_e         : {result.electron_density_cm3:.3e} cm^-3")
         print(f"Converged   : {result.converged} ({result.iterations} iterations)")
-        lte_ok = result.quality_metrics.get("lte_mcwhirter_satisfied", None)
-        if lte_ok is not None and not lte_ok:
-            print(
-                f"WARNING: McWhirter criterion NOT satisfied "
-                f"(n_e ratio = {result.quality_metrics.get('lte_n_e_ratio', 0):.2f})"
-            )
+        for line in info_lines:
+            print(line)
+        for line in warning_lines:
+            print(line)
         print("\nConcentrations:")
         for el, conc in sorted(result.concentrations.items()):
             unc = result.concentration_uncertainties.get(el, 0.0)
             print(f"  {el:4s}: {conc:.4f} ± {unc:.4f}")
+
+
+def _bayesian_prefilter_elements(args, elements: list, wavelength, intensity) -> list:
+    """Apply the mandatory NNLS candidate prefilter before Bayesian MCMC.
+
+    Full-element MCMC is intractable (CLAUDE.md: ``select_candidate_elements``
+    is mandatory), so the candidate set must be bounded by ``k_max`` before it
+    reaches :class:`BayesianForwardModel`. Small requested sets pass through
+    unchanged; oversized sets are reduced with the NNLS prefilter (requires a
+    pre-computed basis library) or rejected with instructions.
+    """
+    k_max = int(getattr(args, "prefilter_k", None) or 15)
+    if len(elements) <= k_max:
+        logger.info(
+            "Candidate prefilter: %d requested element(s) <= k_max=%d; all kept.",
+            len(elements),
+            k_max,
+        )
+        return elements
+
+    basis_path = getattr(args, "basis_library", None)
+    if not basis_path:
+        raise ValueError(
+            f"{len(elements)} candidate elements exceed the tractable MCMC limit "
+            f"(k_max={k_max}); full-element MCMC is intractable and the NNLS "
+            "candidate prefilter is mandatory. Provide --basis-library <basis.h5> "
+            "so the prefilter can run, raise --prefilter-k, or reduce --elements."
+        )
+
+    from cflibs.inversion.candidate_prefilter import select_candidate_elements
+    from cflibs.inversion.identify.spectral_nnls import SpectralNNLSIdentifier
+    from cflibs.manifold.basis_library import BasisLibrary
+
+    identifier = SpectralNNLSIdentifier(
+        basis_library=BasisLibrary(str(basis_path)),
+        detection_snr=3.0,
+        continuum_degree=3,
+        fallback_T_K=8000.0,
+        fallback_ne_cm3=1e17,
+    )
+    prefiltered = select_candidate_elements(
+        identifier=identifier,
+        wavelength=wavelength,
+        intensity=intensity,
+        force_include=[],
+        k_max=k_max,
+        k_min=3,
+    )
+    requested = set(elements)
+    prefiltered = [el for el in prefiltered if el in requested]
+    if not prefiltered:
+        logger.warning(
+            "Candidate prefilter returned no requested elements; "
+            "falling back to the first k_max=%d requested.",
+            k_max,
+        )
+        prefiltered = elements[:k_max]
+    dropped = [el for el in elements if el not in prefiltered]
+    logger.info(
+        "Candidate prefilter (NNLS) kept %d/%d elements: %s",
+        len(prefiltered),
+        len(elements),
+        prefiltered,
+    )
+    if dropped:
+        print(f"Candidate prefilter (NNLS) dropped before MCMC: {', '.join(dropped)}")
+    return prefiltered
 
 
 def bayesian_cmd(args):
@@ -713,12 +1094,21 @@ def bayesian_cmd(args):
     elements = [e.strip() for e in args.elements.split(",")]
     wavelength, intensity = load_spectrum(args.spectrum)
 
+    # Mandatory tractability guard: bound the element set before MCMC.
+    elements = _bayesian_prefilter_elements(args, elements, wavelength, intensity)
+
     wl_min, wl_max = float(np.min(wavelength)), float(np.max(wavelength))
+
+    forward_model_kwargs = {}
+    resolving_power = getattr(args, "resolving_power", None)
+    if resolving_power is not None:
+        forward_model_kwargs["resolving_power"] = float(resolving_power)
 
     forward_model = BayesianForwardModel(
         db_path=db_path,
         elements=elements,
         wavelength_range=(wl_min, wl_max),
+        **forward_model_kwargs,
     )
     sampler = MCMCSampler(forward_model=forward_model)
 
@@ -745,17 +1135,78 @@ def bayesian_cmd(args):
             print(result.summary_table())
 
 
+def _batch_row(filename: str, result, diagnostics: dict, elements: list) -> dict:
+    """Build one per-spectrum batch summary row including the trust fields."""
+    qm = result.quality_metrics or {}
+    r2 = qm.get("boltzmann_r_squared", qm.get("r_squared_last"))
+    n_fit = qm.get("n_elements_fit")
+    dropped = diagnostics.get("dropped_elements") or {}
+    return {
+        "file": filename,
+        "temperature_K": result.temperature_K,
+        "electron_density_cm3": result.electron_density_cm3,
+        "converged": result.converged,
+        "boltzmann_r_squared": r2,
+        "n_elements_fit": int(n_fit) if n_fit is not None else None,
+        "ne_source": _ne_source_label(qm) or "",
+        "boltzmann_degenerate": bool(qm.get("boltzmann_degenerate", 0.0)),
+        "closure_degenerate": bool(qm.get("closure_degenerate", 0.0)),
+        "dropped_elements": ";".join(f"{el}:{stage}" for el, stage in sorted(dropped.items())),
+        **{f"C_{el}": result.concentrations.get(el, 0.0) for el in elements},
+    }
+
+
+def _print_batch_summary(aggregate: list, n_failed: int, stream) -> None:
+    """Print the aggregate batch trust summary to ``stream``."""
+    n = len(aggregate)
+    n_converged = sum(1 for row in aggregate if row["converged"])
+    n_assumed_ne = sum(1 for row in aggregate if row["ne_source"] == "pressure_balance_fallback")
+    n_dropped = sum(1 for row in aggregate if row["dropped_elements"])
+    n_degenerate = sum(
+        1 for row in aggregate if row["boltzmann_degenerate"] or row["closure_degenerate"]
+    )
+    print(
+        f"Batch summary: {n} spectra processed ({n_failed} failed), "
+        f"{n_converged}/{n} converged.",
+        file=stream,
+    )
+    if n_assumed_ne:
+        print(
+            f"WARNING: {n_assumed_ne}/{n} spectra used the 1-atm pressure-balance n_e "
+            "fallback - n_e was ASSUMED, not measured.",
+            file=stream,
+        )
+    if n_degenerate:
+        print(
+            f"WARNING: {n_degenerate}/{n} spectra hit a degeneracy gate "
+            "(boltzmann_degenerate/closure_degenerate columns); those results are "
+            "unreliable.",
+            file=stream,
+        )
+    if n_dropped:
+        print(
+            f"WARNING: {n_dropped}/{n} spectra dropped requested elements before the "
+            "fit (see the 'dropped_elements' column).",
+            file=stream,
+        )
+
+
 def batch_cmd(args):
     """
     Batch analysis: process all CSV files in a directory.
+
+    Runs every spectrum through the SAME shared pipeline as ``analyze``
+    (:func:`_build_pipeline_config` + :func:`_run_pipeline`), so per-spectrum
+    results are identical to single-spectrum ``analyze`` runs with the same
+    flags. The previous wiring bypassed the shared helper entirely — raw
+    ``detect_line_observations`` (no top-K bound, no wavelength calibration)
+    plus a bare ``LineSelector()`` — i.e. the exact pre-fix path whose drift
+    caused the Na=98% blowup.
     """
     import csv as csv_mod
     import json
 
     from cflibs.atomic.database import AtomicDatabase
-    from cflibs.inversion.line_detection import detect_line_observations
-    from cflibs.inversion.line_selection import LineSelector
-    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
     from cflibs.io.spectrum import load_spectrum
 
     directory = Path(args.directory)
@@ -764,11 +1215,20 @@ def batch_cmd(args):
 
     db_path = _resolve_db_path(args.db_path)
     if not db_path.exists():
-        raise FileNotFoundError(f"Atomic database not found: {db_path}.")
+        raise FileNotFoundError(_missing_db_message(db_path))
 
     elements = [e.strip() for e in args.elements.split(",")]
     atomic_db = AtomicDatabase(db_path)
-    solver = IterativeCFLIBSSolver(atomic_db=atomic_db)
+
+    pipeline = _build_pipeline_config(
+        elements,
+        preset=getattr(args, "preset", None),
+        saha_boltzmann_graph=getattr(args, "saha_boltzmann_graph", None),
+        closure_mode=getattr(args, "closure_mode", None),
+        apply_self_absorption=getattr(args, "apply_self_absorption", None),
+        min_relative_intensity=getattr(args, "min_relative_intensity", None),
+        resolving_power=getattr(args, "resolving_power", None),
+    )
 
     csv_files = sorted(directory.glob("*.csv"))
     if not csv_files:
@@ -776,46 +1236,32 @@ def batch_cmd(args):
         return
 
     aggregate = []
+    n_failed = 0
     for csv_path in csv_files:
         try:
             wavelength, intensity = load_spectrum(str(csv_path))
-            detection = detect_line_observations(
-                wavelength=wavelength,
-                intensity=intensity,
-                atomic_db=atomic_db,
-                elements=elements,
-            )
-            selector = LineSelector()
-            selection = selector.select(
-                detection.observations, resonance_lines=detection.resonance_lines
-            )
-            if not selection.selected_lines:
-                logger.warning(f"{csv_path.name}: no lines detected, skipping")
-                continue
-            result = solver.solve(selection.selected_lines)
-            row = {
-                "file": csv_path.name,
-                "temperature_K": result.temperature_K,
-                "electron_density_cm3": result.electron_density_cm3,
-                "converged": result.converged,
-                **{f"C_{el}": result.concentrations.get(el, 0.0) for el in elements},
-            }
-            aggregate.append(row)
+            result, diagnostics = _run_pipeline(wavelength, intensity, atomic_db, pipeline)
+            aggregate.append(_batch_row(csv_path.name, result, diagnostics, elements))
+            _, warning_lines = _trust_report(result, diagnostics)
+            for line in warning_lines:
+                logger.warning(f"{csv_path.name}: {line}")
             logger.info(
                 f"{csv_path.name}: T={result.temperature_K:.0f} K, converged={result.converged}"
             )
         except Exception as e:
+            n_failed += 1
             logger.error(f"{csv_path.name}: {e}")
 
     if not aggregate:
-        print("No spectra processed successfully.")
+        print(f"No spectra processed successfully ({n_failed} failed).")
         return
 
     output_path = getattr(args, "output", None)
     if output_path and str(output_path).endswith(".json"):
         with open(output_path, "w", encoding="utf-8") as fh:
-            json.dump(aggregate, fh, indent=2)
+            json.dump(aggregate, fh, indent=2, default=_json_default)
         print(f"Results written to {output_path}")
+        _print_batch_summary(aggregate, n_failed, sys.stdout)
     elif output_path:
         fieldnames = list(aggregate[0].keys())
         with open(output_path, "w", newline="") as fh:
@@ -823,12 +1269,15 @@ def batch_cmd(args):
             writer.writeheader()
             writer.writerows(aggregate)
         print(f"Results written to {output_path}")
+        _print_batch_summary(aggregate, n_failed, sys.stdout)
     else:
-        # Default: CSV to stdout
+        # Default: CSV to stdout; the trust summary goes to stderr so the
+        # CSV stream stays machine-parseable.
         fieldnames = list(aggregate[0].keys())
         writer = csv_mod.DictWriter(sys.stdout, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(aggregate)
+        _print_batch_summary(aggregate, n_failed, sys.stderr)
 
 
 def dbgen_cmd(args):
@@ -952,6 +1401,69 @@ def manifold_cmd(args):
         sys.exit(1)
 
 
+def _add_pipeline_flags(parser) -> None:
+    """Add the shared preset/solver flags to an analysis-capable subcommand.
+
+    Used by ``analyze``, ``invert`` and ``batch`` so the three entry points
+    expose identical knobs. All defaults are ``None`` ("not given"): the
+    actual values resolve in :func:`_build_pipeline_config` with precedence
+    CLI flag > YAML ``analysis.*`` key > preset > built-in default.
+    """
+    parser.add_argument(
+        "--preset",
+        type=str,
+        choices=sorted(ANALYSIS_PRESETS),
+        default=None,
+        help=(
+            "Analysis preset bundling the validated solver knobs (default: "
+            f"{DEFAULT_ANALYSIS_PRESET}). 'geological' = pooled Saha-Boltzmann "
+            "graph + oxide closure (measured best on real geological standards: "
+            "BHVO-2 RMSE 10.29 -> 4.03 wt%%); 'metallic' = Saha-Boltzmann graph "
+            "+ standard closure; 'raw' = legacy defaults (no SB-graph, standard "
+            "closure). Explicit --closure-mode / --saha-boltzmann-graph "
+            "override the preset."
+        ),
+    )
+    parser.add_argument(
+        "--closure-mode",
+        type=str,
+        default=None,
+        choices=list(CLOSURE_MODES),
+        help=(
+            "Closure equation used to normalize Boltzmann intercepts to "
+            "concentrations (default: from --preset; 'oxide' for the default "
+            "geological preset). 'oxide' applies the default molar-oxygen "
+            "stoichiometry automatically."
+        ),
+    )
+    parser.add_argument(
+        "--saha-boltzmann-graph",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Use the pooled Saha-Boltzmann graph intercept extraction "
+            "(Aguilera & Aragon 2004): one global regression over all lines of "
+            "all species, shifting ion lines onto the neutral plane. Orthogonal "
+            "to --closure-mode; stacks with oxide closure (default: from "
+            "--preset; ON for geological/metallic)."
+        ),
+    )
+    parser.add_argument(
+        "--apply-self-absorption",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Apply the curve-of-growth self-absorption correction in the solver "
+            "and retain strong resonance lines (default: off)"
+        ),
+    )
+
+
+def _min_relative_intensity_arg(value: str):
+    """Parse ``--min-relative-intensity`` ('none' keeps the floor disabled)."""
+    return None if str(value).lower() == "none" else float(value)
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -1027,6 +1539,7 @@ def main():
         default=None,
         help="Output file path for results (default: print to stdout)",
     )
+    _add_pipeline_flags(invert_parser)
     invert_parser.set_defaults(func=invert_cmd)
 
     # Analyze command (end-to-end with defaults)
@@ -1066,7 +1579,7 @@ def main():
     )
     analyze_parser.add_argument(
         "--min-relative-intensity",
-        type=lambda s: None if str(s).lower() == "none" else float(s),
+        type=_min_relative_intensity_arg,
         default=None,
         help=(
             "Absolute relative-intensity floor for database lines. Default None: "
@@ -1077,36 +1590,7 @@ def main():
             "the legacy floor, or 'none' to keep it disabled."
         ),
     )
-    analyze_parser.add_argument(
-        "--apply-self-absorption",
-        action="store_true",
-        help=(
-            "Apply the curve-of-growth self-absorption correction in the solver "
-            "and retain strong resonance lines (default: off)"
-        ),
-    )
-    analyze_parser.add_argument(
-        "--closure-mode",
-        type=str,
-        default="standard",
-        choices=["standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residual"],
-        help=(
-            "Closure equation used to normalize Boltzmann intercepts to "
-            "concentrations (default: standard). Use 'oxide' for geological "
-            "samples; the default molar-oxygen stoichiometry is applied "
-            "automatically."
-        ),
-    )
-    analyze_parser.add_argument(
-        "--saha-boltzmann-graph",
-        action="store_true",
-        help=(
-            "Use the pooled Saha-Boltzmann graph intercept extraction "
-            "(Aguilera & Aragon 2004): one global regression over all lines of "
-            "all species, shifting ion lines onto the neutral plane. Orthogonal "
-            "to --closure-mode; stacks with oxide closure (default: off)."
-        ),
-    )
+    _add_pipeline_flags(analyze_parser)
     analyze_parser.set_defaults(func=analyze_cmd)
 
     # Bayesian command
@@ -1129,6 +1613,36 @@ def main():
     bayesian_parser.add_argument(
         "--output", type=str, default=None, help="Output NetCDF path for ArviZ trace"
     )
+    bayesian_parser.add_argument(
+        "--resolving-power",
+        type=float,
+        default=None,
+        help=(
+            "Instrument resolving power lambda/delta_lambda; enables the "
+            "resolving-power broadening mode of the forward model (default: "
+            "fixed-FWHM mode)"
+        ),
+    )
+    bayesian_parser.add_argument(
+        "--basis-library",
+        type=str,
+        default=None,
+        help=(
+            "Pre-computed single-element basis library (HDF5) used by the "
+            "mandatory NNLS candidate prefilter when more elements are "
+            "requested than --prefilter-k allows"
+        ),
+    )
+    bayesian_parser.add_argument(
+        "--prefilter-k",
+        type=int,
+        default=15,
+        help=(
+            "Maximum tractable number of candidate elements for MCMC "
+            "(default: 15). Larger requested sets are reduced with the NNLS "
+            "candidate prefilter (requires --basis-library)."
+        ),
+    )
     bayesian_parser.set_defaults(func=bayesian_cmd)
 
     # Batch command
@@ -1144,6 +1658,22 @@ def main():
         default=None,
         help="Output file path (.json for JSON, else CSV to stdout)",
     )
+    batch_parser.add_argument(
+        "--resolving-power",
+        type=float,
+        default=None,
+        help="Instrument resolving power lambda/delta_lambda (default: None)",
+    )
+    batch_parser.add_argument(
+        "--min-relative-intensity",
+        type=_min_relative_intensity_arg,
+        default=None,
+        help=(
+            "Absolute relative-intensity floor for database lines "
+            "(default None; see 'cflibs analyze --help')."
+        ),
+    )
+    _add_pipeline_flags(batch_parser)
     batch_parser.set_defaults(func=batch_cmd)
 
     # Setup diagnostics command

@@ -739,11 +739,21 @@ class TestEdgeOptimizedModel:
         assert pf > 0
 
     def test_get_partition_function_missing(self, mock_atomic_db):
-        """Test partition function for missing element."""
+        """Test partition function for missing element.
+
+        Missing entries route through the canonical fallback ladder
+        (bead CF-LIBS-improved-16m7): Xe I is a noble-gas closed shell, so
+        the exact U ~ 1.0 is returned rather than the old generic 25.0; an
+        open-shell species without data still gets the warned generic 25.0.
+        """
         model = EdgeOptimizedModel(mock_atomic_db, elements=["Fe"], compile_jax=False)
 
-        # Should return default
+        # Closed-shell neutral: exact value from the isoelectronic ladder.
         pf = model.get_partition_function("Xe", 1, 10000.0)
+        assert pf == pytest.approx(1.0)
+
+        # Open-shell species with no data: generic constant (warned).
+        pf = model.get_partition_function("W", 1, 10000.0)
         assert pf == 25.0
 
     def test_get_ionization_potential(self, mock_atomic_db):

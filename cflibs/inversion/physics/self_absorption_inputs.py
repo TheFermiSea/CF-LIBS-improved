@@ -46,6 +46,7 @@ from typing import Dict, List, Sequence
 
 from cflibs.core.constants import C_LIGHT, H_PLANCK_EV
 from cflibs.inversion.physics.boltzmann import LineObservation
+from cflibs.plasma.partition import canonical_partition_fallback
 
 
 def lower_level_energy_ev(obs: LineObservation) -> float:
@@ -63,15 +64,6 @@ def lower_level_energy_ev(obs: LineObservation) -> float:
     """
     photon_ev = (H_PLANCK_EV * C_LIGHT) / (obs.wavelength_nm * 1e-9)
     return max(0.0, obs.E_k_ev - photon_ev)
-
-
-def _canonical_partition_fallback(ionization_stage: int) -> float:
-    """Canonical U(T) estimate for species the provider factory cannot resolve."""
-    if ionization_stage == 1:
-        return 25.0
-    if ionization_stage == 2:
-        return 15.0
-    return 2.0
 
 
 def evaluate_partition_function(
@@ -98,13 +90,15 @@ def evaluate_partition_function(
     :meth:`SahaBoltzmannSolver.calculate_partition_function`.
 
     When ``atomic_db`` is ``None`` (callers with no atomic-data handle) the
-    function short-circuits to the canonical fallback ladder below; the
-    shipped solver always passes a real database, so this guard never fires on
-    the solver path and the rest of this function is the solver's verbatim
+    function short-circuits to the canonical fallback ladder
+    (:func:`cflibs.plasma.partition.canonical_partition_fallback`: exact
+    closed-shell values → ``g0`` → warned generic constant); the shipped
+    solver always passes a real database, so this guard never fires on the
+    solver path and the rest of this function is the solver's verbatim
     fallback-ladder logic.
     """
     if atomic_db is None:
-        return _canonical_partition_fallback(ionization_stage)
+        return canonical_partition_fallback(element, ionization_stage)
 
     if hasattr(atomic_db, "partition_function_for"):
         provider = atomic_db.partition_function_for(element, ionization_stage)
@@ -127,7 +121,7 @@ def evaluate_partition_function(
         if pf:
             return PartitionFunctionEvaluator.evaluate(T_K, pf.coefficients)
 
-    return _canonical_partition_fallback(ionization_stage)
+    return canonical_partition_fallback(element, ionization_stage, atomic_db)
 
 
 @dataclass(frozen=True)
@@ -209,11 +203,12 @@ def build_self_absorption_inputs(
         Atomic-data backend; only used to source partition functions. When
         ``None`` (callers with no DB handle, e.g. the Gaussian-fallback
         experiment harness) partition functions fall back to the canonical
-        25.0 / 15.0 / 2.0 ladder — never an empty dict. The ladder's neutral
-        default (25.0) matches the substitution
-        :meth:`SelfAbsorptionCorrector.correct` makes for a missing entry, so
-        the DB-less path is numerically equivalent to passing an empty
-        ``partition_funcs``.
+        ladder (:func:`cflibs.plasma.partition.canonical_partition_fallback`:
+        exact closed-shell values, then ``g0``, then a warned generic
+        constant) — never an empty dict. The same helper backs the
+        missing-entry substitution inside
+        :meth:`SelfAbsorptionCorrector.correct`, so the DB-less path stays
+        numerically equivalent to passing an empty ``partition_funcs``.
     ionization_stage : int, default 1
         Stage whose partition function is evaluated (1 = neutral). The
         self-absorption corrector keys ``partition_funcs`` by element, so a

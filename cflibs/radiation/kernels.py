@@ -280,8 +280,21 @@ def _saha_partition_functions(snapshot, T_K, dtype):
     return jnp.maximum(_polynomial_partition_function_jax(T_K, pf_all), 1e-30)
 
 
-def _saha_two_stage_populations(plasma_state, snapshot):
+def _saha_two_stage_populations(plasma_state, snapshot, total_species_density_cm3=None):
     """Two-stage (I, II) Saha-Boltzmann populations per snapshot line.
+
+    Parameters
+    ----------
+    plasma_state : SingleZoneLTEPlasma
+        Plasma state (pytree-registered).
+    snapshot : AtomicSnapshot
+        Frozen atomic snapshot.
+    total_species_density_cm3 : float or traced scalar, optional
+        Heavy-particle total density override. ``None`` (default) keeps the
+        legacy proxy ``N_total = n_e``. Line emissivities scale linearly
+        with this value (bead z3cg: it was previously accepted by
+        :func:`forward_model` but silently ignored, so spectra at fixed
+        ``n_e`` were independent of the heavy-particle density).
 
     Returns
     -------
@@ -295,10 +308,6 @@ def _saha_two_stage_populations(plasma_state, snapshot):
     stages contribute negligibly to LIBS at ``T_e <= 2 eV``. Per-element
     concentrations are derived from ``plasma_state.species`` densities --
     we keep the values as jnp scalars so the function stays vmap-clean.
-
-    Heavy-particle density proxy: ``N_total = n_e`` (matches the legacy
-    Bayesian/manifold convention). T1-6 will refine this with an optional
-    ``total_species_density_cm3`` override.
     """
     T_eV = jnp.asarray(plasma_state.T_e_eV)
     n_e = jnp.asarray(plasma_state.n_e)
@@ -372,7 +381,12 @@ def _saha_two_stage_populations(plasma_state, snapshot):
     )
 
     C_per_line = concentrations[line_element_idx]
-    N_total = n_e
+    # Heavy-particle total density: explicit override when supplied, else the
+    # legacy ``N_total = n_e`` proxy (bit-identical to pre-z3cg behaviour).
+    if total_species_density_cm3 is None:
+        N_total = n_e
+    else:
+        N_total = jnp.asarray(total_species_density_cm3)
     boltz = (line_g_k / U_line) * jnp.exp(-line_E_k_ev / jnp.maximum(T_eV, 1e-10))
     return C_per_line * N_total * pop_fraction * boltz
 
@@ -407,7 +421,7 @@ def _per_line_instrument_sigma(snapshot, instrument):
     return jnp.full(wl.shape, sigma_scalar, dtype=wl.dtype)
 
 
-def _per_line_stark_gamma(snapshot, n_e, T_eV):
+def _per_line_stark_gamma(snapshot, n_e, T_eV, disable_t_factor: Optional[bool] = None):
     """Per-line Lorentzian Stark HWHM (nm).
 
     ``snapshot.line_stark_w`` is the stored electron-impact **FWHM** at
@@ -431,17 +445,31 @@ def _per_line_stark_gamma(snapshot, n_e, T_eV):
     the temperature factor entirely, which silently dropped the
     BayesianForwardModel's Stark T-dependence after the T1-6 migration.
 
-    Env-var override: ``CFLIBS_DISABLE_STARK_T_FACTOR=1`` collapses
-    ``factor_T`` to 1.0, reproducing the pre-vjbh kernel for ablation /
-    benchmark comparisons (CF-LIBS-improved-4rwe). Off by default. The
-    check is host-side: it resolves at jit-trace time so the toggled
-    kernel keeps a separate jit cache key from the default one and
-    runtime cost is zero in either branch.
+    Ablation toggle: ``disable_t_factor=True`` collapses ``factor_T`` to
+    1.0, reproducing the pre-vjbh kernel for ablation / benchmark
+    comparisons (CF-LIBS-improved-4rwe). Off by default. Callers thread it
+    from :func:`forward_model` / :func:`forward_model_chunked`
+    ``disable_stark_t_factor`` (constructor param on
+    ``BayesianForwardModel``). Default ``None`` SEEDS the flag from the
+    DEPRECATED ``CFLIBS_DISABLE_STARK_T_FACTOR=1`` env var (with a warning)
+    so existing ablation scripts keep working; an explicit ``True``/``False``
+    is authoritative. The check is host-side: it resolves at jit-trace time
+    so the toggled kernel keeps a separate jit cache key from the default
+    one and runtime cost is zero in either branch.
     """
+    if disable_t_factor is None:
+        disable_t_factor = os.environ.get("CFLIBS_DISABLE_STARK_T_FACTOR", "0") == "1"
+        if disable_t_factor:
+            logger.warning(
+                "CFLIBS_DISABLE_STARK_T_FACTOR=1 (env var) is deprecated; pass "
+                "disable_stark_t_factor=True explicitly (e.g. "
+                "forward_model(..., disable_stark_t_factor=True) or "
+                "BayesianForwardModel(disable_stark_t_factor=True))."
+            )
     stark_w = jnp.asarray(snapshot.line_stark_w)
     # stark_w is FWHM at REF_NE=1e17; 0.5 * (n_e/1e17) converts to a HWHM at
     # the live density (single source of truth: cflibs.radiation.stark.REF_NE).
-    if os.environ.get("CFLIBS_DISABLE_STARK_T_FACTOR", "0") == "1":
+    if disable_t_factor:
         return 0.5 * stark_w * (n_e / _STARK_REF_NE)
     alpha = jnp.asarray(snapshot.line_stark_alpha)
     REF_T_EV = 0.86173  # 10000 K — Griem / NIST reference temperature.
@@ -541,6 +569,7 @@ def _forward_emissivity(
     broadening_mode: BroadeningMode,
     fold_instrument_sigma: bool,
     apply_stark: bool,
+    disable_stark_t_factor: Optional[bool] = None,
 ):
     """Mode-dispatched per-line broadening for :func:`forward_model`.
 
@@ -570,7 +599,9 @@ def _forward_emissivity(
         else:
             sigma_per_line = sigma_doppler
         if apply_stark:
-            gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
+            gamma_per_line = jnp.maximum(
+                _per_line_stark_gamma(atomic_snapshot, n_e, T_eV, disable_stark_t_factor), 1e-12
+            )
             sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
             return _voigt_sum_per_line(
                 wl, line_centers, epsilon_line, sigma_per_line, gamma_per_line
@@ -609,6 +640,7 @@ def forward_model(
     apply_stark: bool = False,
     total_species_density_cm3: Optional[float] = None,
     line_mask=None,
+    disable_stark_t_factor: Optional[bool] = None,
     _precomputed_n_upper_per_line=None,
 ):
     """Unified forward kernel -- one source of truth for CF-LIBS forward physics.
@@ -650,7 +682,16 @@ def forward_model(
         ``SpectrumModel`` legacy path uses False.
     total_species_density_cm3 : float, optional
         Override heavy-particle total density. ``None`` -> legacy proxy
-        ``N_total = n_e``.
+        ``N_total = n_e``. Line emissivities scale linearly with this value;
+        ignored when ``_precomputed_n_upper_per_line`` is supplied (the
+        injected populations already carry their own density scale).
+    disable_stark_t_factor : bool, optional
+        Ablation toggle: collapse the Stark temperature factor
+        ``(T/T_ref)^(-alpha)`` to 1.0 (pre-vjbh kernel; see
+        :func:`_per_line_stark_gamma`). Default ``None`` seeds from the
+        DEPRECATED ``CFLIBS_DISABLE_STARK_T_FACTOR`` env var; an explicit
+        value is authoritative. Host-side static — resolved at jit-trace
+        time.
     line_mask : array, optional, shape (N_lines,)
         Per-line activation mask. ``None`` (default) ⇒ all lines contribute
         and the call is bit-identical to the pre-T1-5 behaviour. When
@@ -689,7 +730,9 @@ def forward_model(
 
     # ---- Populations (snapshot path) or injected (legacy parity path) ----
     if _precomputed_n_upper_per_line is None:
-        n_upper = _saha_two_stage_populations(plasma_state, atomic_snapshot)
+        n_upper = _saha_two_stage_populations(
+            plasma_state, atomic_snapshot, total_species_density_cm3
+        )
     else:
         n_upper = jnp.asarray(_precomputed_n_upper_per_line)
 
@@ -732,6 +775,7 @@ def forward_model(
         broadening_mode=broadening_mode,
         fold_instrument_sigma=fold_instrument_sigma,
         apply_stark=apply_stark,
+        disable_stark_t_factor=disable_stark_t_factor,
     )
 
     if not apply_self_absorption:
@@ -907,6 +951,7 @@ def _chunk_per_line_widths(
     broadening_mode: BroadeningMode,
     fold_instrument_sigma: bool,
     apply_stark: bool,
+    disable_stark_t_factor: Optional[bool] = None,
 ):
     """Chunk-invariant per-line broadening widths for the chunked scan.
 
@@ -930,7 +975,9 @@ def _chunk_per_line_widths(
         else:
             sigma_per_line = sigma_doppler
         if apply_stark:
-            gamma_per_line = jnp.maximum(_per_line_stark_gamma(atomic_snapshot, n_e, T_eV), 1e-12)
+            gamma_per_line = jnp.maximum(
+                _per_line_stark_gamma(atomic_snapshot, n_e, T_eV, disable_stark_t_factor), 1e-12
+            )
             sigma_per_line = jnp.maximum(sigma_per_line, 1e-12)
     elif broadening_mode == BroadeningMode.LDM_GAUSSIAN:
         line_mass_amu = _species_mass_array(atomic_snapshot)[
@@ -995,6 +1042,7 @@ def _forward_model_per_chunk(
     apply_self_absorption: bool,
     fold_instrument_sigma: bool,
     apply_stark: bool,
+    total_species_density_cm3: Optional[float] = None,
 ):
     """Forward model on one wavelength chunk with a per-line activation mask.
 
@@ -1015,6 +1063,7 @@ def _forward_model_per_chunk(
         apply_self_absorption=apply_self_absorption,
         fold_instrument_sigma=fold_instrument_sigma,
         apply_stark=apply_stark,
+        total_species_density_cm3=total_species_density_cm3,
         line_mask=line_mask,
     )
 
@@ -1036,6 +1085,8 @@ def forward_model_chunked(
     apply_self_absorption: bool = False,
     fold_instrument_sigma: bool = True,
     apply_stark: bool = False,
+    total_species_density_cm3: Optional[float] = None,
+    disable_stark_t_factor: Optional[bool] = None,
     output_length: Optional[int] = None,
 ):
     """Chunked forward model over the wavelength axis (ADR-0001 T1-5).
@@ -1088,6 +1139,11 @@ def forward_model_chunked(
         Self-absorption switch — same as :func:`forward_model`.
     fold_instrument_sigma, apply_stark : bool
         See :func:`forward_model`.
+    total_species_density_cm3 : float, optional
+        Heavy-particle total density override — see :func:`forward_model`.
+        ``None`` keeps the legacy ``N_total = n_e`` proxy.
+    disable_stark_t_factor : bool, optional
+        See :func:`forward_model`.
     output_length : int, optional
         Length of the original wavelength grid. Required when
         ``nstitch > 1``; ignored otherwise. The chunked spectrum is
@@ -1138,6 +1194,8 @@ def forward_model_chunked(
             apply_self_absorption=apply_self_absorption,
             fold_instrument_sigma=fold_instrument_sigma,
             apply_stark=apply_stark,
+            total_species_density_cm3=total_species_density_cm3,
+            disable_stark_t_factor=disable_stark_t_factor,
         )
 
     _validate_chunked_inputs(broadening_mode, chunk_wavelength_grids, line_masks, output_length)
@@ -1156,7 +1214,7 @@ def forward_model_chunked(
     # wall-time tax that the previous implementation paid per chunk
     # iteration. The scan body now only multiplies in the chunk mask and
     # dispatches the broadening kernel against the chunk's wavelengths.
-    n_upper = _saha_two_stage_populations(plasma_state, atomic_snapshot)
+    n_upper = _saha_two_stage_populations(plasma_state, atomic_snapshot, total_species_density_cm3)
     line_wl_nm = jnp.asarray(atomic_snapshot.line_wavelengths_nm)
     line_A_ki = jnp.asarray(atomic_snapshot.line_A_ki)
     n_upper_m3 = n_upper * 1.0e6
@@ -1182,6 +1240,7 @@ def forward_model_chunked(
         broadening_mode=broadening_mode,
         fold_instrument_sigma=fold_instrument_sigma,
         apply_stark=apply_stark,
+        disable_stark_t_factor=disable_stark_t_factor,
     )
 
     policy = _resolve_checkpoint_policy()

@@ -104,6 +104,12 @@ def _jax_boltzmann_composition_enabled() -> bool:
     ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION=1`` to enable. See
     ``docs/jax-port/iterative-boltzmann-consultation.md`` for design
     rationale.
+
+    This function only SEEDS the constructor default of
+    :class:`FastAnalyzer` (c5 env-var lift, matching
+    ``IterativeCFLIBSSolver.use_jax_boltzmann``): passing an explicit
+    ``use_jax_boltzmann=True/False`` to the analyzer is authoritative and
+    overrides the environment.
     """
     return os.environ.get("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", "0") == "1"
 
@@ -639,6 +645,11 @@ class FastAnalyzer(BaseStreamingAnalyzer):
         Elements to analyze
     config : StreamingConfig
         Streaming configuration
+    use_jax_boltzmann : bool, optional
+        Route the inner Boltzmann sigma-clip WLS step through the JAX kernel.
+        Default ``None`` seeds from the (deprecated for direct use)
+        ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION`` env var; an explicit value
+        overrides the environment.
     """
 
     def __init__(
@@ -646,13 +657,25 @@ class FastAnalyzer(BaseStreamingAnalyzer):
         atomic_db: Any,
         elements: List[str],
         config: Optional[StreamingConfig] = None,
+        use_jax_boltzmann: Optional[bool] = None,
     ):
         self.atomic_db = atomic_db
         self.elements = elements
         self.config = config or StreamingConfig(mode=AnalysisMode.FAST)
+        # JAX numerical-path selector lifted onto the interface (c5 pattern,
+        # matching ``IterativeCFLIBSSolver.use_jax_boltzmann``). Default
+        # ``None`` SEEDS the flag from ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION``
+        # so default construction is byte-identical to the historical
+        # env-driven behavior; an explicit ``True``/``False`` is authoritative
+        # and overrides the env var.
+        self.use_jax_boltzmann = (
+            _jax_boltzmann_composition_enabled()
+            if use_jax_boltzmann is None
+            else bool(use_jax_boltzmann)
+        )
         self._boltzmann_fitter = BoltzmannPlotFitter(
             outlier_sigma=3.0,
-            use_jax=_jax_boltzmann_composition_enabled(),
+            use_jax=self.use_jax_boltzmann,
         )
         self._line_selector = LineSelector(min_snr=5.0, min_lines_per_element=2)
 
@@ -1272,7 +1295,11 @@ class EdgeOptimizedModel:
         """
         key = (element, stage)
         if key not in self._partition_coeffs:
-            return 25.0  # Default fallback
+            # Canonical physics-grounded fallback (closed-shell exact values
+            # -> warned generic constant) instead of a silent 25.0.
+            from cflibs.plasma.partition import canonical_partition_fallback
+
+            return canonical_partition_fallback(element, stage)
 
         coeffs = self._partition_coeffs[key]
         log_T = np.log10(T_K)

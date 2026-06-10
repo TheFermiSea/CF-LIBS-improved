@@ -720,9 +720,18 @@ class TestMCMCSampling:
         observed = np.array(synthetic) + rng.normal(0, 10, len(synthetic))
         observed = np.maximum(observed, 1.0)
 
-        # Run MCMC
+        # Run MCMC. The budget must be large enough that NUTS adaptation
+        # actually moves every chain: at 10 warmup / 30 samples the T_eV
+        # chain had zero variance (stuck at the init point), which made the
+        # correlation test vacuous. 100/100 gives mixing chains and still
+        # runs in well under a minute on CPU.
         sampler = MCMCSampler(model)
-        result = sampler.run(observed, num_warmup=10, num_samples=30, seed=42, progress_bar=False)
+        result = sampler.run(observed, num_warmup=100, num_samples=100, seed=42, progress_bar=False)
+
+        # The budget contract: every sampled chain must have variance, so the
+        # correlations below are computed from real posterior structure.
+        assert np.std(np.asarray(result.samples["T_eV"])) > 0.0
+        assert np.std(np.asarray(result.samples["log_ne"])) > 0.0
 
         # Test correlation matrix
         corr_data = result.correlation_matrix()
@@ -733,6 +742,7 @@ class TestMCMCSampling:
         # Check matrix properties
         matrix = corr_data["matrix"]
         assert matrix.shape[0] == matrix.shape[1]  # Square
+        assert np.all(np.isfinite(matrix))  # No NaN/inf entries
         assert np.allclose(np.diag(matrix), 1.0)  # Diagonal is 1
         assert np.allclose(matrix, matrix.T)  # Symmetric
 
@@ -743,6 +753,56 @@ class TestMCMCSampling:
 
         # Check correlation is a valid value
         assert -1.0 <= corr_data["T_log_ne_corr"] <= 1.0
+
+    def test_correlation_matrix_zero_variance_guard(self):
+        """A stuck (zero-variance) chain must yield a finite correlation matrix.
+
+        Degenerate chains have undefined Pearson correlation; the contract is
+        that ``correlation_matrix()`` reports 0 for the degenerate parameter's
+        cross-correlations and 1 on the diagonal, leaving the correlations of
+        the healthy parameters untouched.
+        """
+        from cflibs.inversion.solve.bayesian import MCMCResult
+
+        n = 50
+        samples = {
+            "T_eV": np.full(n, 1.0),  # stuck chain: zero variance
+            "log_ne": np.linspace(16.9, 17.1, n),
+            "concentrations": np.column_stack(
+                [np.linspace(0.55, 0.65, n), np.linspace(0.45, 0.35, n)]
+            ),
+        }
+        result = MCMCResult(
+            samples=samples,
+            T_eV_mean=1.0,
+            T_eV_std=0.0,
+            T_eV_q025=1.0,
+            T_eV_q975=1.0,
+            log_ne_mean=17.0,
+            log_ne_std=0.06,
+            log_ne_q025=16.9,
+            log_ne_q975=17.1,
+            concentrations_mean={"Fe": 0.6, "Cu": 0.4},
+            concentrations_std={"Fe": 0.03, "Cu": 0.03},
+            concentrations_q025={"Fe": 0.55, "Cu": 0.35},
+            concentrations_q975={"Fe": 0.65, "Cu": 0.45},
+        )
+
+        corr_data = result.correlation_matrix()
+        matrix = corr_data["matrix"]
+        labels = corr_data["labels"]
+
+        assert np.all(np.isfinite(matrix))
+        assert np.allclose(np.diag(matrix), 1.0)
+        assert np.allclose(matrix, matrix.T)
+        # The stuck T_eV chain has no defined correlation -> reported as 0.
+        assert corr_data["T_log_ne_corr"] == pytest.approx(0.0, abs=1e-12)
+        # Healthy parameters keep their true correlation (log_ne vs C_Fe are
+        # perfectly linearly related here).
+        i, j = labels.index("log_ne"), labels.index("C_Fe")
+        assert matrix[i, j] == pytest.approx(1.0)
+        j = labels.index("C_Cu")
+        assert matrix[i, j] == pytest.approx(-1.0)
 
     def test_mcmc_result_correlation_table(self, bayesian_db):
         """Test correlation table string formatting."""
@@ -939,9 +999,24 @@ class TestNestedSampling:
 
         assert isinstance(comparison, str)
         assert "Model Comparison" in comparison
-        assert "Δln(Z)" in comparison
         assert "Bayes factor" in comparison
         assert "Model A" in comparison
+
+        # Assert on the DATA in the report, not on label spelling (the
+        # "Δln(Z)" label was reworded to ASCII "Delta ln(Z)"): the evidence
+        # difference, its propagated error, and the Bayes factor K = e^Δln(Z)
+        # must all appear with their computed values.
+        delta_ln_z = result_a.log_evidence - result_b.log_evidence  # 5.0
+        err = np.sqrt(result_a.log_evidence_err**2 + result_b.log_evidence_err**2)
+        assert f"{delta_ln_z:.2f}" in comparison
+        assert f"{err:.2f}" in comparison
+        assert f"{np.exp(delta_ln_z):.2e}" in comparison
+
+        # Δln(Z) = 5 ⇒ the higher-evidence model (A) must be preferred in the
+        # interpretation line.
+        interp_lines = [ln for ln in comparison.splitlines() if "Interpretation" in ln]
+        assert interp_lines, f"no Interpretation line in report:\n{comparison}"
+        assert "Model A" in interp_lines[0]
 
     def test_nested_sampler_import(self):
         """Test NestedSampler can be imported."""

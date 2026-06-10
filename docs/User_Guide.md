@@ -352,20 +352,77 @@ cflibs invert spectrum.csv --elements Fe Cu --config examples/inversion_config_e
   --output inversion_results.json
 ```
 
+### Analysis Presets
+
+`analyze`, `invert` and `batch` share one pipeline and one set of
+accuracy-critical solver knobs, bundled into presets
+(`--preset` flag or `analysis.preset` YAML key):
+
+| Preset | `saha_boltzmann_graph` | `closure_mode` | Use for |
+|---|---|---|---|
+| `geological` (**default**) | `true` | `oxide` | rocks, soils, minerals — oxygen-bound matrices |
+| `metallic` | `true` | `standard` | alloys, metals (oxide stoichiometry would be wrong physics) |
+| `raw` | `false` | `standard` | legacy-default comparison runs |
+
+The default is `geological`: on the real ChemCam BHVO-2 basalt standard the
+legacy defaults scored RMSE 10.29 wt% (Fe 39 wt% vs certified 8.6) while the
+geological bundle scored **4.03 wt%** — the validated-best configuration is
+now what a flagless run uses. Explicit `--closure-mode` /
+`--saha-boltzmann-graph` flags (and the corresponding YAML keys) override the
+preset. Every run logs the resolved preset and all knobs at INFO.
+
+Reproduce the BHVO-2 reference result (RMSE ~4.03 wt%) with no flags:
+
+```bash
+cflibs analyze data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv \
+  --elements Si,Ti,Al,Fe,Mn,Mg,Ca,Na,K,P \
+  --db-path ASD_da/libs_production.db
+```
+
+(equivalent to `--preset geological`, i.e. `--saha-boltzmann-graph
+--closure-mode oxide`; use `--preset raw` to reproduce the legacy 10.29
+baseline).
+
+### Closure Modes
+
+Six closure modes are available (`--closure-mode` / `analysis.closure_mode`):
+
+- `standard` — Σ C_s = 1 over elemental fractions.
+- `matrix` — fixes a known matrix-element concentration (`matrix_element`).
+- `oxide` — geological closure: cations carry stoichiometric oxygen
+  (default molar-oxygen stoichiometry applied automatically; override via
+  `closure_kwargs.oxide_stoichiometry` / `oxide_elements`).
+- `ilr` — isometric log-ratio (compositional-geometry) closure.
+- `pwlr` — pairwise log-ratio closure.
+- `dirichlet_residual` — Dirichlet residual-weighted closure.
+
+### Trust Report
+
+Every output path (`analyze` table, `invert` stdout, batch rows, JSON `trust`
+block) reports: `converged`, the Boltzmann-plane R², the number of elements
+fit, the n_e provenance (Stark-width diagnostic vs the 1-atm pressure-balance
+fallback — the fallback prints a visible `WARNING` because n_e was ASSUMED,
+not measured), the degeneracy gates (`boltzmann_degenerate`,
+`closure_degenerate`), and any requested elements that were dropped before
+the fit, with the dropping stage (`detection`, `selection` or `solve`).
+
 ### Inversion Configuration
 
-Inversion settings live under the `analysis` section. Minimal schema:
+Inversion settings live under the `analysis` section. Unknown keys are a
+hard error (typos cannot silently fall back to defaults). Minimal schema:
 
 ```yaml
 atomic_database: libs_production.db
 
 analysis:
   elements: ["Fe", "Cu"]
-  closure_mode: standard  # standard | matrix | oxide
+  preset: geological      # geological | metallic | raw
+  # closure_mode: oxide   # explicit override of the preset (see Closure Modes)
+  # saha_boltzmann_graph: true
   min_snr: 10.0
   min_energy_spread_ev: 2.0
   min_lines_per_element: 3
-  exclude_resonance: true
+  exclude_resonance: false   # keep resonance lines (sole detectable lines for some majors)
   isolation_wavelength_nm: 0.1
   max_lines_per_element: 20
   wavelength_tolerance_nm: 0.1
@@ -376,6 +433,10 @@ analysis:
   ne_tolerance_frac: 0.1
   pressure_pa: 101325.0
   min_relative_intensity: null
+  # boltzmann_weight_cap: 5.0
+  # min_boltzmann_r2: 0.3
+  # top_k_per_element: 60
+  # wavelength_calibration: true
   # closure_kwargs:
   #   matrix_element: Fe
   #   oxide_elements: ["Si", "Al", "Ca"]

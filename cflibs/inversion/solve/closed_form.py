@@ -26,6 +26,7 @@ from collections import defaultdict
 from cflibs.core.constants import KB, KB_EV, SAHA_CONST_CM3, STP_PRESSURE, EV_TO_K
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.inversion.physics.boltzmann import LineObservation
+from cflibs.plasma.partition import canonical_partition_fallback, lookup_partition_function
 from cflibs.inversion.physics.closure import (
     _helmert_basis,
     default_oxide_stoichiometry,
@@ -122,11 +123,7 @@ class ClosedFormILRSolver:
         provider = self.atomic_db.partition_function_for(element, ionization_stage)
         if provider is not None:
             return float(provider.at(T_K))
-        if ionization_stage == 1:
-            return 25.0
-        if ionization_stage == 2:
-            return 15.0
-        return 2.0
+        return canonical_partition_fallback(element, ionization_stage, self.atomic_db)
 
     def _compute_saha_ratio(
         self,
@@ -154,8 +151,8 @@ class ClosedFormILRSolver:
         """Compute M_s = 1 + S_s for each element."""
         multipliers: Dict[str, float] = {}
         for el in elements:
-            U_I = partition_funcs_I.get(el, 25.0)
-            U_II = partition_funcs_II.get(el, 15.0)
+            U_I = lookup_partition_function(partition_funcs_I, el, 1, self.atomic_db)
+            U_II = lookup_partition_function(partition_funcs_II, el, 2, self.atomic_db)
             S = self._compute_saha_ratio(el, T_K, n_e_cm3, U_I, U_II, ips[el])
             multipliers[el] = 1.0 + max(S, 0.0)
         return multipliers
@@ -286,7 +283,7 @@ class ClosedFormILRSolver:
 
         for el in element_order:
             obs_list = corrected_obs.get(el, [])
-            U_s = partition_funcs.get(el, 25.0)
+            U_s = lookup_partition_function(partition_funcs, el, 1, self.atomic_db)
             M_s = abundance_multipliers.get(el, 1.0)
             s_idx = el_to_idx[el]
 
@@ -480,8 +477,8 @@ class ClosedFormILRSolver:
             ne_prev = n_e
             total_eps = 0.0
             for el, C_s in compositions.items():
-                U_I = pf_I_all.get(el, 25.0)
-                U_II = pf_II_all.get(el, 15.0)
+                U_I = lookup_partition_function(pf_I_all, el, 1, self.atomic_db)
+                U_II = lookup_partition_function(pf_II_all, el, 2, self.atomic_db)
                 S = self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el])
                 total_eps += C_s * S / (1.0 + S)
             avg_Z = total_eps

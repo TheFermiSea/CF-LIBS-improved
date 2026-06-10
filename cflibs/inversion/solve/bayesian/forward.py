@@ -131,6 +131,12 @@ class BayesianForwardModel:
     path_length_m : float, default 0.0
         Plasma path length (m) consulted only when ``apply_self_absorption`` is
         True.
+    disable_stark_t_factor : bool, optional
+        Ablation toggle: collapse the Stark temperature factor
+        ``(T/T_ref)^(-alpha)`` to 1.0 in the broadening kernel (pre-vjbh
+        behaviour; CF-LIBS-improved-4rwe). Default ``None`` seeds from the
+        DEPRECATED ``CFLIBS_DISABLE_STARK_T_FACTOR`` env var; an explicit
+        value is authoritative.
     """
 
     def __init__(
@@ -144,6 +150,7 @@ class BayesianForwardModel:
         resolving_power: Optional[float] = None,
         apply_self_absorption: bool = False,
         path_length_m: float = 0.0,
+        disable_stark_t_factor: Optional[bool] = None,
     ):
         if not HAS_JAX:
             raise ImportError("JAX required. Install with: pip install jax jaxlib")
@@ -169,6 +176,7 @@ class BayesianForwardModel:
         self.resolving_power = resolving_power
         self.apply_self_absorption = apply_self_absorption
         self.path_length_m = path_length_m
+        self.disable_stark_t_factor = disable_stark_t_factor
 
         if wavelength_grid is not None:
             self.wavelength = _as_jax_real(wavelength_grid)
@@ -355,6 +363,7 @@ class BayesianForwardModel:
             fold_instrument_sigma=True,
             apply_stark=True,
             total_species_density_cm3=total_species_density,
+            disable_stark_t_factor=self.disable_stark_t_factor,
         )
         # Preserve the legacy non-negativity / overflow guard so downstream
         # likelihoods see clipped intensities.

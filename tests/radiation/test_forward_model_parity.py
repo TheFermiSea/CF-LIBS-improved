@@ -81,14 +81,24 @@ def test_spectrum_model_kernel_thin_wrapper_parity(atomic_db, mode, instrument_b
         min_relative_intensity=min_ri,
     )
     solver = SahaBoltzmannSolver(atomic_db)
-    populations = solver.solve_plasma(plasma)
+    species_states = solver.solve_species_states(plasma)
     n_lines = int(np.asarray(snapshot.line_wavelengths_nm).shape[0])
     n_upper = np.zeros(n_lines, dtype=np.float64)
+    line_g_k = np.asarray(snapshot.line_g_k, dtype=np.float64)
     for li in range(n_lines):
         sp_idx = int(snapshot.line_species_index[li])
         el, stage = snapshot.species[sp_idx]
+        state = species_states.get((el, stage))
+        if state is None:
+            continue
         E_k_ev = float(snapshot.line_E_k_ev[li])
-        n_upper[li] = populations.get((el, stage, round(E_k_ev, 8)), 0.0)
+        if E_k_ev > state.max_energy_ev:
+            continue  # IPD cutoff: level merged into the continuum
+        n_upper[li] = (
+            state.number_density_cm3
+            * (float(line_g_k[li]) / state.partition_function)
+            * np.exp(-E_k_ev / plasma.T_e_eV)
+        )
     wl_grid = np.arange(lambda_min, lambda_max + delta_lambda, delta_lambda)
     # ``apply_stark`` only takes effect under ``PHYSICAL_DOPPLER`` (see
     # ``cflibs/radiation/kernels.py:forward_model``). Mirror the
