@@ -632,7 +632,9 @@ class SahaBoltzmannSolverJax(SolverStrategy):
                 )
         energy_levels = self.atomic_db.get_energy_levels(element, ionization_stage)
         if not energy_levels:
-            return 2.0
+            # Mirror the NumPy solver path exactly (parity requirement):
+            # closed-shell ions get their exact U, e.g. H II -> 1.0.
+            return canonical_partition_fallback(element, ionization_stage)
         if max_energy_ev is None:
             ip = self.atomic_db.get_ionization_potential(element, ionization_stage)
             max_energy_ev = ip * 0.98 if ip else 50.0
