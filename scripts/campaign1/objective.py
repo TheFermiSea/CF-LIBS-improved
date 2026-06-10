@@ -185,20 +185,16 @@ def _alarm_handler(signum, frame):  # pragma: no cover - signal path
 
 
 def _timeout_record(sid: str, truth: Any, timeout_s: float) -> dict[str, Any]:
-    from cflibs.benchmark.scoreboard import CONFOUNDER_ELEMENTS, presence_confusion
+    from cflibs.benchmark.scoreboard import CONFOUNDER_ELEMENTS, failure_record
 
     candidates = sorted(set(truth.elements_present) | set(CONFOUNDER_ELEMENTS))
-    record: dict[str, Any] = {
-        "spectrum_id": sid,
-        "truth_elements": sorted(truth.elements_present),
-        "candidates": candidates,
-        "composition_basis": truth.composition_basis,
-        "status": "error",
-        "error": f"TimeoutError: per-spectrum timeout ({timeout_s:.0f}s) exceeded",
-        "wall_s": timeout_s,
-    }
-    record.update(presence_confusion({}, truth.elements_present, candidates))
-    return record
+    return failure_record(
+        sid,
+        truth,
+        candidates,
+        f"TimeoutError: per-spectrum timeout ({timeout_s:.0f}s) exceeded",
+        timeout_s,
+    )
 
 
 # Module globals for pool children (set by _pool_init).
@@ -362,7 +358,7 @@ def evaluate_overrides(
     if section == "optimization":
         splits.assert_optimization_only(ctx.manifest, names, spectrum_ids)
 
-    from cflibs.benchmark.scoreboard import _aggregate_dataset
+    from cflibs.benchmark.scoreboard import DEFAULT_PRESET_LABEL, _aggregate_dataset
 
     rows = []
     for name in names:
@@ -395,7 +391,7 @@ def evaluate_overrides(
     return {
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "section": section,
-        "preset": ctx.preset or "geological (production default)",
+        "preset": ctx.preset or DEFAULT_PRESET_LABEL,
         "sample_seed": ctx.sample_seed,
         "spectra_per_dataset": ctx.spectra_per_dataset,
         "config_overrides": dict(config_overrides),

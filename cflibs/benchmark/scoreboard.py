@@ -86,6 +86,11 @@ PRESENCE_EPS_MASSFRAC = 5e-3
 #: Default sampling seed (date-stamped; recorded in every artifact).
 DEFAULT_SEED = 20260610
 
+#: Artifact label for ``preset=None`` (the production default). Shared with
+#: the campaign objective (scripts/campaign1/objective.py) so boards from
+#: both harnesses report the same provenance string.
+DEFAULT_PRESET_LABEL = "geological (production default)"
+
 
 # ---------------------------------------------------------------------------
 # Scoring math (unit-tested without any pipeline/DB)
@@ -108,6 +113,34 @@ def presence_confusion(
         "fp": sorted(called - truth),
         "fn": sorted(truth - called),
     }
+
+
+def failure_record(
+    spectrum_id: str,
+    truth: SpectrumTruth,
+    candidates: Sequence[str],
+    error: str,
+    wall_s: float,
+) -> dict[str, Any]:
+    """Scoreboard record for a spectrum whose pipeline run produced no result.
+
+    A failed solve calls nothing present: every truth element counts as a
+    false negative (the end user gets no answer). Shared by the scoreboard's
+    pipeline except-path and the campaign objective's timeout/crash records
+    (``scripts/campaign1/objective.py``) so the two failure shapes can never
+    drift apart.
+    """
+    record: dict[str, Any] = {
+        "spectrum_id": spectrum_id,
+        "truth_elements": sorted(truth.elements_present),
+        "candidates": list(candidates),
+        "composition_basis": truth.composition_basis,
+        "status": "error",
+        "error": error,
+        "wall_s": wall_s,
+    }
+    record.update(presence_confusion({}, truth.elements_present, candidates))
+    return record
 
 
 def precision_recall_f1(n_tp: int, n_fp: int, n_fn: int) -> tuple[float, float, float]:
@@ -177,11 +210,13 @@ def _score_spectrum(
         )
         result, diagnostics = run_pipeline(wavelength, intensity, atomic_db, pipeline)
     except Exception as exc:  # noqa: BLE001 — the board must never crash
-        record["status"] = "error"
-        record["error"] = f"{type(exc).__name__}: {exc}"
-        record["wall_s"] = time.perf_counter() - t0
-        # A failed solve calls nothing present: all truth elements are FN.
-        record.update(presence_confusion({}, truth.elements_present, candidates))
+        record = failure_record(
+            spectrum_id,
+            truth,
+            candidates,
+            f"{type(exc).__name__}: {exc}",
+            time.perf_counter() - t0,
+        )
         logger.warning("scoreboard: %s failed: %s", spectrum_id, record["error"])
         return record
 
@@ -338,7 +373,7 @@ def run_scoreboard(
     board: dict[str, Any] = {
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "cflibs_path": str(Path(cflibs.__file__).resolve().parent),
-        "preset": preset or "geological (production default)",
+        "preset": preset or DEFAULT_PRESET_LABEL,
         "seed": seed,
         "max_spectra": max_spectra,
         "presence_eps_massfrac": PRESENCE_EPS_MASSFRAC,
