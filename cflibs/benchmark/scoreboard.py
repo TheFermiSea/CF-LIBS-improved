@@ -413,7 +413,8 @@ def run_scoreboard(
 # ---------------------------------------------------------------------------
 
 
-def _fmt(value: Optional[float], spec: str = ".3f") -> str:
+def fmt_metric(value: Optional[float], spec: str = ".3f") -> str:
+    """Format an optional metric value for a report ("—" for missing)."""
     return format(value, spec) if value is not None else "—"
 
 
@@ -471,12 +472,12 @@ def render_markdown(board: Mapping[str, Any]) -> str:
             continue
         m = ds["id_metrics"]
         comp = ds["composition"]
-        rmse = _fmt(comp["rmse_wt_median"], ".2f") if comp else "—"
+        rmse = fmt_metric(comp["rmse_wt_median"], ".2f") if comp else "—"
         lines.append(
             f"| {ds['name']} | {', '.join(ds['tags'])} | {ds['n_run']}/{ds['n_total']}"
             f"{' (sampled)' if ds['sampled'] else ''} "
             f"| {m['precision']:.3f} | {m['recall']:.3f} | {m['f1']:.3f} "
-            f"| {rmse} | {_fmt(ds['runtime']['median_wall_s'], '.1f')} "
+            f"| {rmse} | {fmt_metric(ds['runtime']['median_wall_s'], '.1f')} "
             f"| {ds['n_failed']} |"
         )
     lines.append("")
@@ -498,11 +499,11 @@ def render_markdown(board: Mapping[str, Any]) -> str:
         )
         rt = ds["runtime"]
         lines.append(
-            f"- Runtime medians (s): total={_fmt(rt['median_wall_s'], '.2f')}, "
-            f"calibration={_fmt(rt['median_calibration_s'], '.2f')}, "
-            f"detection+ID={_fmt(rt['median_detection_id_s'], '.2f')}, "
-            f"stark n_e={_fmt(rt['median_stark_ne_s'], '.2f')}, "
-            f"solve={_fmt(rt['median_solve_s'], '.2f')}"
+            f"- Runtime medians (s): total={fmt_metric(rt['median_wall_s'], '.2f')}, "
+            f"calibration={fmt_metric(rt['median_calibration_s'], '.2f')}, "
+            f"detection+ID={fmt_metric(rt['median_detection_id_s'], '.2f')}, "
+            f"stark n_e={fmt_metric(rt['median_stark_ne_s'], '.2f')}, "
+            f"solve={fmt_metric(rt['median_solve_s'], '.2f')}"
         )
         if ds["sampled"]:
             lines.append(
@@ -513,7 +514,7 @@ def render_markdown(board: Mapping[str, Any]) -> str:
             comp = ds["composition"]
             lines.append(
                 f"- Composition (n={comp['n_scored']}): RMSE wt% median="
-                f"{_fmt(comp['rmse_wt_median'], '.2f')}, mean={_fmt(comp['rmse_wt_mean'], '.2f')}"
+                f"{fmt_metric(comp['rmse_wt_median'], '.2f')}, mean={fmt_metric(comp['rmse_wt_mean'], '.2f')}"
             )
             lines.append("")
             lines.append("| Element | mean signed error (wt%) |")

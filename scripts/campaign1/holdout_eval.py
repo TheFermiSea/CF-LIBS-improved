@@ -55,8 +55,7 @@ RUNTIME_FACTOR = 1.5
 HOLDOUT_QUOTA_DAYS = 7
 
 
-def _fmt(value, spec=".3f"):
-    return format(value, spec) if value is not None else "—"
+from cflibs.benchmark.scoreboard import fmt_metric as _fmt  # noqa: E402
 
 
 def top_k_trials(study: optuna.Study, k: int) -> list[optuna.trial.FrozenTrial]:
