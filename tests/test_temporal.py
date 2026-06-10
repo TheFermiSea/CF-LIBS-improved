@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from unittest.mock import MagicMock
 
-from cflibs.inversion.temporal import (
+from cflibs.inversion.runtime.temporal import (
     PlasmaPhase,
     TemporalGateConfig,
     TimeResolvedSpectrum,

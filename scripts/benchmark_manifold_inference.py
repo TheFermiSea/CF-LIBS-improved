@@ -13,7 +13,7 @@ from cflibs.manifold.config import ManifoldConfig
 from cflibs.manifold.generator import ManifoldGenerator
 from cflibs.manifold.loader import ManifoldLoader
 from cflibs.manifold.vector_index import VectorIndexConfig
-from cflibs.inversion.hybrid import HybridInverter
+from cflibs.inversion.solve.coarse_to_fine import HybridInverter
 from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
 from cflibs.validation.round_trip import GoldenSpectrumGenerator, NoiseModel
 

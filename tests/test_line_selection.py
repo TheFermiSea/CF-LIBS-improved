@@ -1,5 +1,5 @@
 """
-Unit and integration tests for cflibs.inversion.line_selection module.
+Unit and integration tests for cflibs.inversion.physics.line_selection module.
 
 Tests cover:
 - LineSelector initialization and selection
@@ -12,7 +12,7 @@ Tests cover:
 import pytest
 import numpy as np
 
-from cflibs.inversion.line_selection import (
+from cflibs.inversion.physics.line_selection import (
     LineSelector,
     LineScore,
     LineSelectionResult,

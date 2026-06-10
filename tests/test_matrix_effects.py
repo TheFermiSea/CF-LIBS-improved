@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from cflibs.inversion.matrix_effects import (
+from cflibs.inversion.physics.matrix_effects import (
     AblationRegime,
     MatrixType,
     CorrectionFactor,

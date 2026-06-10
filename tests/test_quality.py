@@ -1,5 +1,5 @@
 """
-Unit and integration tests for cflibs.inversion.quality module.
+Unit and integration tests for cflibs.inversion.physics.quality module.
 
 Tests cover:
 - QualityMetrics dataclass
@@ -10,7 +10,7 @@ Tests cover:
 import pytest
 import numpy as np
 
-from cflibs.inversion.quality import (
+from cflibs.inversion.physics.quality import (
     QualityMetrics,
     QualityAssessor,
     compute_reconstruction_chi_squared,

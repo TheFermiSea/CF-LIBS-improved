@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from cflibs.inversion.model_selection import (
+from cflibs.inversion.identify.model_selection import (
     ModelSelectionResult,
     bic_prune_elements,
     boltzmann_consistency_filter,

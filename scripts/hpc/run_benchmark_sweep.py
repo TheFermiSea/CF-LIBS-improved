@@ -467,7 +467,7 @@ def _run_voigt_alias(
 
     from cflibs.atomic.database import AtomicDatabase
     from cflibs.inversion.identify.alias import ALIASIdentifier
-    from cflibs.inversion.deconvolution import deconvolve_peaks
+    from cflibs.inversion.preprocess.deconvolution import deconvolve_peaks
     from cflibs.inversion.preprocess.preprocessing import estimate_baseline
 
     baseline = estimate_baseline(wavelength, spectrum)

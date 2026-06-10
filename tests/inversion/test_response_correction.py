@@ -351,7 +351,7 @@ RESPONSE_CURVE = np.column_stack(
 
 
 def _detect(wavelength, intensity, atomic_db):
-    from cflibs.inversion.line_detection import detect_line_observations
+    from cflibs.inversion.identify.line_detection import detect_line_observations
 
     detection = detect_line_observations(
         wavelength,

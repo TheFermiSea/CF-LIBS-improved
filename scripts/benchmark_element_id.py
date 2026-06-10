@@ -361,7 +361,7 @@ def make_voigt_alias_configs(
     db: AtomicDatabase,
 ) -> List[Tuple[str, Dict, Callable]]:
     """Generate Voigt deconvolution + ALIAS pathway configurations."""
-    from cflibs.inversion.deconvolution import deconvolve_peaks
+    from cflibs.inversion.preprocess.deconvolution import deconvolve_peaks
     from cflibs.inversion.preprocess.preprocessing import estimate_baseline
     from scipy.signal import find_peaks
 

@@ -2,7 +2,7 @@
 Experiment runner for CF-LIBS benchmark evaluation.
 
 Registers named pipeline functions, runs them on a
-:class:`~cflibs.benchmarks.corpus.BenchmarkCorpus`, and collects timing
+:class:`~cflibs.benchmark.corpus.BenchmarkCorpus`, and collects timing
 and compositional accuracy data into a structured
 :class:`BenchmarkReport`.
 """

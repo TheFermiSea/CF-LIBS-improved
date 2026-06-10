@@ -22,7 +22,7 @@ import jax.numpy as jnp  # noqa: E402
 
 h5py = pytest.importorskip("h5py")
 
-from cflibs.inversion.hybrid import (  # noqa: E402
+from cflibs.inversion.solve.coarse_to_fine import (  # noqa: E402
     HybridInverter,
     HybridInversionResult,
     SpectralFitter,

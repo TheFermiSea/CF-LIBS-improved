@@ -7,7 +7,7 @@ import pytest
 
 h5py = pytest.importorskip("h5py")
 
-from cflibs.inversion.spectral_refiner import RefinementResult, SpectralRefiner  # noqa: E402
+from cflibs.inversion.solve.spectral_refiner import RefinementResult, SpectralRefiner  # noqa: E402
 
 pytestmark = [pytest.mark.requires_db]
 

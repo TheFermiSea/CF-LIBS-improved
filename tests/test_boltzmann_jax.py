@@ -15,7 +15,7 @@ jax = pytest.importorskip("jax")
 import jax.numpy as jnp  # noqa: E402
 
 from cflibs.core.constants import KB_EV  # noqa: E402
-from cflibs.inversion.boltzmann_jax import (  # noqa: E402
+from cflibs.inversion.physics.boltzmann_jax import (  # noqa: E402
     batched_boltzmann_fit,
     boltzmann_temperature_jax,
 )

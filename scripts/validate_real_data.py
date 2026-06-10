@@ -40,7 +40,7 @@ from cflibs.inversion.identify.alias import ALIASIdentifier
 from cflibs.inversion.identify.comb import CombIdentifier
 from cflibs.inversion.identify.correlation import CorrelationIdentifier
 from cflibs.inversion.common.element_id import ElementIdentificationResult
-from cflibs.inversion.wavelength_calibration import calibrate_wavelength_axis
+from cflibs.inversion.preprocess.wavelength_calibration import calibrate_wavelength_axis
 
 
 # ============================================================================

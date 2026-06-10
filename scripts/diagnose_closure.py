@@ -35,7 +35,7 @@ from cflibs.benchmark.synthetic_eval import (
     run_inversion_pipeline,
     derive_truth_elements,
 )
-from cflibs.inversion.softmax_closure import softmax_closure as jax_softmax_closure
+from cflibs.inversion.physics.softmax_closure import softmax_closure as jax_softmax_closure
 
 
 def compute_rmsep(predictions: np.ndarray, true_values: np.ndarray) -> float:
