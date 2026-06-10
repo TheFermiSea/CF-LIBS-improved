@@ -35,7 +35,10 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.atomic.masses import DEFAULT_ATOMIC_MASS_AMU, STANDARD_ATOMIC_MASSES
 from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
-from cflibs.plasma.partition import polynomial_partition_function_jax
+from cflibs.plasma.partition import (
+    ionization_potential_depression_jax,
+    polynomial_partition_function_jax,
+)
 from cflibs.radiation.ldm import DEFAULT_N_SIGMA, build_sigma_grid
 from cflibs.radiation.profiles import BroadeningMode, doppler_sigma_jax
 
@@ -471,30 +474,67 @@ class ManifoldGenerator:
         partition_coeffs = atomic_data[7]
         coeffs_0 = partition_coeffs[lines_el_idx, 0]
         coeffs_1 = partition_coeffs[lines_el_idx, 1]
+        coeffs_2 = partition_coeffs[lines_el_idx, 2]
         partition_t_min = atomic_data[12]
         partition_t_max = atomic_data[13]
         partition_g0 = atomic_data[14]
         tmin_0 = partition_t_min[lines_el_idx, 0]
         tmin_1 = partition_t_min[lines_el_idx, 1]
+        tmin_2 = partition_t_min[lines_el_idx, 2]
         tmax_0 = partition_t_max[lines_el_idx, 0]
         tmax_1 = partition_t_max[lines_el_idx, 1]
+        tmax_2 = partition_t_max[lines_el_idx, 2]
         g0_0 = partition_g0[lines_el_idx, 0]
         g0_1 = partition_g0[lines_el_idx, 1]
+        g0_2 = partition_g0[lines_el_idx, 2]
         u0 = polynomial_partition_function_jax(t_k, coeffs_0, t_min=tmin_0, t_max=tmax_0, g0=g0_0)
         u1 = polynomial_partition_function_jax(t_k, coeffs_1, t_min=tmin_1, t_max=tmax_1, g0=g0_1)
-        return u0, u1
+        u2 = polynomial_partition_function_jax(t_k, coeffs_2, t_min=tmin_2, t_max=tmax_2, g0=g0_2)
+        return u0, u1, u2
 
     @staticmethod
-    def _calculate_saha_fractions(t_ev, n_e, u0, u1, atomic_data):
-        """Calculates the Saha ionization population fractions."""
+    def _calculate_saha_fractions(t_ev, n_e, u0, u1, u2, atomic_data):
+        """Calculates the three-stage Saha ionization population fractions.
+
+        Solves the same Δχ-lowered system as
+        :meth:`SahaBoltzmannSolver.solve_ionization_balance` (audit 01-F4,
+        bead CF-LIBS-improved-rs7e)::
+
+            S1 = (C/n_e) T^1.5 (U_II /U_I ) exp(-(ip_I  - Δχ)/kT)
+            S2 = (C/n_e) T^1.5 (U_III/U_II) exp(-(ip_II - Δχ)/kT)
+            f0 = 1/(1 + S1 + S1·S2),  f1 = S1·f0,  f2 = S2·f1
+
+        with the canonical Gaussian-CGS Debye-Hückel Δχ
+        (:func:`cflibs.plasma.partition.ionization_potential_depression_jax`).
+        Pre-rs7e this was the raw-IP two-stage balance, which under-ionized
+        by ~9 % at 0.8 eV / 1e17 cm^-3 and re-assigned the doubly-ionized
+        population to stage II at the hot manifold edge (Ca II ×2.9 at
+        1.3 eV).  Elements without a catalogued stage-II ionization potential
+        (``ips[el, 1] == 0`` builder default) get ``S2 = 0`` via
+        ``jnp.where``, matching the CPU solver's ``ip_II is None`` branch.
+
+        Returns ``(frac0, frac1, frac2, delta_chi)``.
+        """
         lines_el_idx = atomic_data[6]
         ionization_potentials = atomic_data[8]
         ip_i = ionization_potentials[lines_el_idx, 0]
+        ip_ii = ionization_potentials[lines_el_idx, 1]
+        t_k = t_ev * EV_TO_K
+        delta_chi = ionization_potential_depression_jax(n_e, t_k)
+        eff_ip_i = jnp.maximum(ip_i - delta_chi, 0.0)
+        eff_ip_ii = jnp.maximum(ip_ii - delta_chi, 0.0)
         saha_factor = (SAHA_CONST_CM3 / n_e) * (t_ev**1.5)
-        ratio_n1_n0 = saha_factor * (u1 / u0) * jnp.exp(-ip_i / t_ev)
-        frac0 = 1.0 / (1.0 + ratio_n1_n0)
-        frac1 = ratio_n1_n0 / (1.0 + ratio_n1_n0)
-        return frac0, frac1
+        s1 = saha_factor * (u1 / u0) * jnp.exp(-eff_ip_i / t_ev)
+        s2 = jnp.where(
+            ip_ii > 0.0,
+            saha_factor * (u2 / u1) * jnp.exp(-eff_ip_ii / t_ev),
+            0.0,
+        )
+        denom = 1.0 + s1 + s1 * s2
+        frac0 = 1.0 / denom
+        frac1 = s1 / denom
+        frac2 = s1 * s2 / denom
+        return frac0, frac1, frac2, delta_chi
 
     @staticmethod
     def _calculate_boltzmann_populations(
@@ -502,22 +542,37 @@ class ManifoldGenerator:
         saha_state,
         atomic_data,
     ):
-        """Calculates upper level populations using the Boltzmann equation."""
+        """Calculates upper level populations using the Boltzmann equation.
+
+        Stage dispatch: ``z == 0`` (neutral) → ``(frac0, u0)``, ``z == 1``
+        (singly ionized) → ``(frac1, u1)``, ``z >= 2`` → ``(frac2, u2)``
+        (the handful of catalogued stage-IV lines are approximated as
+        stage III; pre-rs7e they were silently treated as stage II).
+        Upper levels above the Δχ-lowered ionization potential of the
+        line's own species have merged into the continuum and carry zero
+        population (the CPU ``max_energy_ev`` cutoff).
+        """
         t_ev, n_e, concentration_map = plasma_state
-        u0, u1, frac0, frac1 = saha_state
+        u0, u1, u2, frac0, frac1, frac2, delta_chi = saha_state
 
         lines_ek = atomic_data[2]
         lines_gk = atomic_data[3]
+        lines_ip = atomic_data[4]
         lines_z = atomic_data[5]
         lines_el_idx = atomic_data[6]
 
-        pop_fraction = jnp.where(lines_z == 0, frac0, frac1)
-        u_val = jnp.where(lines_z == 0, u0, u1)
+        pop_fraction = jnp.where(
+            lines_z == 0, frac0, jnp.where(lines_z == 1, frac1, frac2)
+        )
+        u_val = jnp.where(lines_z == 0, u0, jnp.where(lines_z == 1, u1, u2))
         element_conc = concentration_map[lines_el_idx]
         n_species_total = element_conc * n_e
         n_species = n_species_total * pop_fraction
         n_upper = n_species * (lines_gk / u_val) * jnp.exp(-lines_ek / t_ev)
-        return n_upper
+        # IPD level cutoff: zero population for upper levels above the
+        # lowered ionization potential of the line's own species.
+        level_bound = lines_ek <= jnp.maximum(lines_ip - delta_chi, 0.0)
+        return n_upper * level_bound
 
     @staticmethod
     @jit
@@ -550,13 +605,15 @@ class ManifoldGenerator:
         """
         t_k = T_eV * EV_TO_K
 
-        u0, u1 = ManifoldGenerator._calculate_partition_functions(t_k, atomic_data)
+        u0, u1, u2 = ManifoldGenerator._calculate_partition_functions(t_k, atomic_data)
 
-        frac0, frac1 = ManifoldGenerator._calculate_saha_fractions(T_eV, n_e, u0, u1, atomic_data)
+        frac0, frac1, frac2, delta_chi = ManifoldGenerator._calculate_saha_fractions(
+            T_eV, n_e, u0, u1, u2, atomic_data
+        )
 
         n_upper = ManifoldGenerator._calculate_boltzmann_populations(
             (T_eV, n_e, concentration_map),
-            (u0, u1, frac0, frac1),
+            (u0, u1, u2, frac0, frac1, frac2, delta_chi),
             atomic_data,
         )
 
