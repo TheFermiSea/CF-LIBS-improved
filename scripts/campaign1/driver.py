@@ -261,12 +261,15 @@ def make_objective(ctx, baseline_ref, study_dir: Path, cpus: int, worker_id: str
 
 
 def _n_finished_trials(study: optuna.Study) -> int:
+    """Terminal trials only. RUNNING is deliberately NOT counted: a killed
+    worker leaves zombie RUNNING trials in the journal forever, and counting
+    them could make the target unreachable. Concurrent workers may overshoot
+    the target by at most the worker count — acceptable."""
     return len(
         study.get_trials(
             deepcopy=False,
             states=(
                 optuna.trial.TrialState.COMPLETE,
-                optuna.trial.TrialState.RUNNING,
                 optuna.trial.TrialState.FAIL,
                 optuna.trial.TrialState.PRUNED,
             ),

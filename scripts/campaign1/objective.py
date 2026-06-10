@@ -27,10 +27,11 @@ ordering):
 
 from __future__ import annotations
 
+import multiprocessing as mp
 import signal
 import sys
+import time
 import zlib
-from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -233,25 +234,85 @@ def _score_one(payload: tuple) -> dict[str, Any]:
             signal.signal(signal.SIGALRM, old_handler)
 
 
-_POOL: Optional[ProcessPoolExecutor] = None
+#: Grace added to the in-child SIGALRM before the parent hard-kills (s).
+HARD_TIMEOUT_GRACE_S = 30.0
+
+_POOL = None
 _POOL_PROCS = 0
 
 
-def _get_pool(n_procs: int, db_path: Path | str) -> ProcessPoolExecutor:
+def _get_pool(n_procs: int, db_path: Path | str):
     global _POOL, _POOL_PROCS
     if _POOL is None or _POOL_PROCS != n_procs:
-        if _POOL is not None:
-            _POOL.shutdown()
+        _terminate_pool()
         import multiprocessing as mp
 
-        _POOL = ProcessPoolExecutor(
-            max_workers=n_procs,
-            mp_context=mp.get_context("spawn"),
-            initializer=_pool_init,
-            initargs=(str(db_path),),
+        _POOL = mp.get_context("spawn").Pool(
+            processes=n_procs, initializer=_pool_init, initargs=(str(db_path),)
         )
         _POOL_PROCS = n_procs
     return _POOL
+
+
+def _terminate_pool() -> None:
+    global _POOL
+    if _POOL is not None:
+        _POOL.terminate()
+        _POOL.join()
+        _POOL = None
+
+
+def _run_payloads(payloads: list[tuple], ctx: "EvalContext") -> list[dict[str, Any]]:
+    """Score payloads with a HARD per-spectrum timeout.
+
+    Two timeout layers (the smoke run caught the gap): the in-child SIGALRM
+    interrupts Python-level overruns gracefully at ``per_spectrum_timeout_s``,
+    but it cannot interrupt long GIL-released C/XLA calls (measured:
+    ``use_deconvolution=True`` wedged a worker inside
+    ``backend_compile_and_load`` indefinitely). So spectra always run in a
+    spawn pool and the parent enforces wall deadlines via
+    ``AsyncResult.get(timeout)``; a hard overrun terminates the pool (the only
+    way to kill stuck C code), records a timeout failure, and resubmits the
+    untouched remainder to a fresh pool.
+    """
+    if not payloads:
+        return []
+    hard = float(ctx.per_spectrum_timeout_s or 0.0)
+    n_procs = max(int(ctx.n_procs), 1)
+    if hard <= 0.0:  # no timeout: plain pool map
+        return _get_pool(n_procs, ctx.db_path).map(_score_one, payloads)
+
+    results: dict[int, dict[str, Any]] = {}
+    pending = list(enumerate(payloads))
+    while pending:
+        pool = _get_pool(n_procs, ctx.db_path)
+        batch_t0 = time.monotonic()
+        asyncs = [(i, pool.apply_async(_score_one, (payload,))) for i, payload in pending]
+        timed_out = False
+        for position, (i, handle) in enumerate(asyncs):
+            # Tasks queue n_procs-wide behind each other: the k-th task's
+            # worst-case start is after floor(k/n_procs) full timeouts.
+            deadline = batch_t0 + (position // n_procs + 1) * (hard + HARD_TIMEOUT_GRACE_S)
+            try:
+                results[i] = handle.get(timeout=max(deadline - time.monotonic(), 1.0))
+            except mp.TimeoutError:
+                sid, _wl, _inten, truth = payloads[i][:4]
+                results[i] = _timeout_record(sid, truth, hard)
+                results[i]["error"] += " (hard kill: stuck in C/XLA, pool terminated)"
+                _terminate_pool()
+                timed_out = True
+                break
+            except Exception as exc:  # child crashed (e.g. OOM-kill)
+                sid, _wl, _inten, truth = payloads[i][:4]
+                results[i] = _timeout_record(sid, truth, hard)
+                results[i]["error"] = f"{type(exc).__name__}: pool child crashed: {exc}"
+                _terminate_pool()
+                timed_out = True
+                break
+        pending = [(i, payload) for i, payload in pending if i not in results]
+        if not timed_out and pending:  # pragma: no cover - defensive
+            raise RuntimeError("pool returned without completing all payloads")
+    return [results[i] for i in range(len(payloads))]
 
 
 # ---------------------------------------------------------------------------
@@ -316,11 +377,7 @@ def evaluate_overrides(
             )
             for sid, wl, inten, truth in items
         ]
-        if ctx.n_procs > 1:
-            pool = _get_pool(ctx.n_procs, ctx.db_path)
-            records = list(pool.map(_score_one, payloads))
-        else:
-            records = [_score_one(p) for p in payloads]
+        records = _run_payloads(payloads, ctx)
         rows.append(
             _aggregate_dataset(
                 name,
