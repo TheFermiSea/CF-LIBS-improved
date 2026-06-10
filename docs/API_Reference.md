@@ -655,7 +655,7 @@ The inversion module is organized into 6 physics-aligned sub-packages that refle
 | `cflibs.inversion.solve` | Plasma inference (iterative CF-LIBS, ILR solver, Bayesian MCMC, manifold coarse-to-fine) |
 | `cflibs.inversion.runtime` | Real-time: DAQ streaming, temporal gate optimization, hardware interface |
 
-**Backward compatibility:** Old flat import paths (e.g., `from cflibs.inversion.solver import X`) still work via compatibility shims.
+**No flat-path shims:** the old flat import paths (e.g., `cflibs.inversion.solver`, `cflibs.inversion.line_detection`) were removed (PR #210 and the 2026-06 cleanliness sweep). Import from the canonical sub-package paths above.
 
 **Physics-only constraint:** The shipped CF-LIBS algorithm is physics-only (no neural networks or trained models). See [Evolution_Framework.md](Evolution_Framework.md) for the full forbidden/allowed specification and enforcement.
 

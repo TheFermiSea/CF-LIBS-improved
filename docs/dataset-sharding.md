@@ -85,7 +85,7 @@ Stride is preferred over contiguous blocks (`spectra[0:n], [n:2n],
   (`union = full corpus, no overlap`) is trivial to verify from the
   stride formula. The aggregator enforces it as a runtime invariant.
 
-See `docs/dataset-sharding-consultation.md` for the full design
+See `docs/archive/dataset-sharding-consultation.md` for the full design
 discussion (Codex + Gemini consultation).
 
 ## Sharding is applied **after** the per-sample shot cap
