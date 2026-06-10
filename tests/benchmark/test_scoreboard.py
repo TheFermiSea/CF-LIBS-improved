@@ -253,8 +253,7 @@ class TestScoringMath:
         monkeypatch.setattr(reg, "_REGISTRY", {})
 
         def empty_adapter():
-            return
-            yield  # pragma: no cover
+            yield from ()
 
         register_dataset("ghost", empty_adapter, tags=("placeholder",))
         board = sb.run_scoreboard(atomic_db=None)

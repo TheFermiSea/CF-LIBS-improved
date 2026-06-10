@@ -297,8 +297,7 @@ def nist_steel_adapter() -> Iterator[AdapterYield]:
         len(spectra),
         data_dir,
     )
-    return
-    yield  # pragma: no cover — unreachable; makes this function a generator
+    yield from ()  # empty generator: dataset yields nothing when skipped
 
 
 # ---------------------------------------------------------------------------
