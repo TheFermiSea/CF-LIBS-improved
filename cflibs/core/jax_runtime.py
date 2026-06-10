@@ -526,6 +526,29 @@ class AtomicSnapshot:
     # ``None`` is treated as "all-zero" by the forward kernel, i.e. no shift.
     line_stark_d: Any = None
 
+    # --- Stage-III Saha extension (audit 01-F4, bead CF-LIBS-improved-rs7e) ---
+    # Per-SPECIES-row arrays carrying the row's ELEMENT's stage-III
+    # (doubly-ionized) partition spec, duplicated across that element's
+    # stage-I and stage-II rows so the kernel gathers them with the same
+    # species-axis indices it already uses for U_I / U_II.  Baked from
+    # ``partition_spec_for(element, 3)`` with the canonical fallback ladder
+    # (closed-shell values exact, warn-once otherwise) when no spec exists.
+    # ``None`` on snapshots built before the rollout — the kernel then
+    # degrades to the two-stage balance (S2 = 0).
+    partition_coeffs_iii: Any = None  # (N_species, 5)
+    partition_t_min_iii: Any = None  # (N_species,)
+    partition_t_max_iii: Any = None  # (N_species,)
+    partition_g0_iii: Any = None  # (N_species,)
+
+    # Per-species flag (1.0/0.0): the CPU scalar adapter for this species row
+    # evaluates the EXACT direct sum over its energy levels
+    # (``PartitionFunctionSpec.from_direct_sum``).  When the snapshot also
+    # carries the padded level arrays (``include_levels=True``) the forward
+    # kernel mirrors that exact IPD-truncated sum for flagged species,
+    # restoring <1 % ionization-fraction parity with the CPU solver at
+    # n_e = 1e18 cm^-3 where the IPD truncation of U is no longer negligible.
+    partition_from_direct_sum: Any = None  # (N_species,)
+
 
 # Register AtomicSnapshot as a pytree so it can flow through jit/vmap.
 if HAS_JAX:
@@ -549,6 +572,11 @@ if HAS_JAX:
         "partition_t_min",
         "partition_t_max",
         "partition_g0",
+        "partition_coeffs_iii",
+        "partition_t_min_iii",
+        "partition_t_max_iii",
+        "partition_g0_iii",
+        "partition_from_direct_sum",
     )
 
     def _snapshot_flatten(snap: AtomicSnapshot):

@@ -843,6 +843,11 @@ class AtomicDatabase(AtomicDataSource):
             partition_g0_list,
             level_g_rows,
             level_E_rows,
+            partition_rows_iii,
+            partition_t_min_iii_list,
+            partition_t_max_iii_list,
+            partition_g0_iii_list,
+            from_direct_sum_list,
         ) = self._collect_species_partitions(elements, pad_to_n_elements, include_levels)
 
         species_to_idx = {key: i for i, key in enumerate(species_keys)}
@@ -879,11 +884,21 @@ class AtomicDatabase(AtomicDataSource):
             partition_t_min = _xp.asarray(partition_t_min_list, dtype=_real_dtype)
             partition_t_max = _xp.asarray(partition_t_max_list, dtype=_real_dtype)
             partition_g0 = _xp.asarray(partition_g0_list, dtype=_real_dtype)
+            partition_coeffs_iii = _xp.asarray(partition_rows_iii, dtype=_real_dtype)
+            partition_t_min_iii = _xp.asarray(partition_t_min_iii_list, dtype=_real_dtype)
+            partition_t_max_iii = _xp.asarray(partition_t_max_iii_list, dtype=_real_dtype)
+            partition_g0_iii = _xp.asarray(partition_g0_iii_list, dtype=_real_dtype)
+            partition_from_direct_sum = _xp.asarray(from_direct_sum_list, dtype=_real_dtype)
         else:
             partition_coeffs = _xp.zeros((0, 5), dtype=_real_dtype)
             partition_t_min = _xp.zeros((0,), dtype=_real_dtype)
             partition_t_max = _xp.zeros((0,), dtype=_real_dtype)
             partition_g0 = _xp.zeros((0,), dtype=_real_dtype)
+            partition_coeffs_iii = _xp.zeros((0, 5), dtype=_real_dtype)
+            partition_t_min_iii = _xp.zeros((0,), dtype=_real_dtype)
+            partition_t_max_iii = _xp.zeros((0,), dtype=_real_dtype)
+            partition_g0_iii = _xp.zeros((0,), dtype=_real_dtype)
+            partition_from_direct_sum = _xp.zeros((0,), dtype=_real_dtype)
         ionization_potential_ev = _xp.asarray(ip_list, dtype=_real_dtype)
 
         level_g_out, level_E_ev_out, level_mask_out = self._pad_level_arrays(
@@ -911,6 +926,11 @@ class AtomicDatabase(AtomicDataSource):
             partition_t_min=partition_t_min,
             partition_t_max=partition_t_max,
             partition_g0=partition_g0,
+            partition_coeffs_iii=partition_coeffs_iii,
+            partition_t_min_iii=partition_t_min_iii,
+            partition_t_max_iii=partition_t_max_iii,
+            partition_g0_iii=partition_g0_iii,
+            partition_from_direct_sum=partition_from_direct_sum,
         )
 
     def _collect_species_partitions(
@@ -927,6 +947,11 @@ class AtomicDatabase(AtomicDataSource):
         list[float],
         list[list[float]],
         list[list[float]],
+        list[list[float]],
+        list[float],
+        list[float],
+        list[float],
+        list[float],
     ]:
         """Gather per-species ionization/partition data for :meth:`snapshot`.
 
@@ -934,6 +959,12 @@ class AtomicDatabase(AtomicDataSource):
         partition-polynomial rows (with per-species ``t_min``/``t_max``/``g0``),
         and optional energy-level rows, then applies the optional zero-padding
         up to ``pad_to_n_elements``.
+
+        Stage-III extension (bead CF-LIBS-improved-rs7e): every species row
+        also carries its ELEMENT's stage-III partition spec (duplicated across
+        the element's stage-I/II rows) plus a ``from_direct_sum`` flag for the
+        row's own spec, so the three-stage Saha kernel can gather both with
+        the species-axis indices it already uses.
         """
         species_keys: list[tuple[str, int]] = []
         ip_list: list[float] = []
@@ -948,6 +979,11 @@ class AtomicDatabase(AtomicDataSource):
         partition_g0_list: list[float] = []
         level_g_rows: list[list[float]] = []
         level_E_rows: list[list[float]] = []
+        partition_rows_iii: list[list[float]] = []
+        partition_t_min_iii_list: list[float] = []
+        partition_t_max_iii_list: list[float] = []
+        partition_g0_iii_list: list[float] = []
+        from_direct_sum_list: list[float] = []
 
         for element in elements:
             for stage in (1, 2):
@@ -964,6 +1000,18 @@ class AtomicDatabase(AtomicDataSource):
                     partition_t_min_list,
                     partition_t_max_list,
                     partition_g0_list,
+                    from_direct_sum_list=from_direct_sum_list,
+                )
+                # Element's stage-III spec on every species row (the
+                # ``derive_partition_spec`` cache makes the second per-element
+                # call a hit, so this stays one fit per (element, 3)).
+                self._append_species_partition_row(
+                    element,
+                    3,
+                    partition_rows_iii,
+                    partition_t_min_iii_list,
+                    partition_t_max_iii_list,
+                    partition_g0_iii_list,
                 )
                 if include_levels:
                     stage_levels = self.get_energy_levels(element, stage)
@@ -981,6 +1029,11 @@ class AtomicDatabase(AtomicDataSource):
             partition_g0_list,
             level_g_rows,
             level_E_rows,
+            partition_rows_iii,
+            partition_t_min_iii_list,
+            partition_t_max_iii_list,
+            partition_g0_iii_list,
+            from_direct_sum_list,
         )
 
         return (
@@ -992,6 +1045,11 @@ class AtomicDatabase(AtomicDataSource):
             partition_g0_list,
             level_g_rows,
             level_E_rows,
+            partition_rows_iii,
+            partition_t_min_iii_list,
+            partition_t_max_iii_list,
+            partition_g0_iii_list,
+            from_direct_sum_list,
         )
 
     def _append_species_partition_row(
@@ -1002,6 +1060,7 @@ class AtomicDatabase(AtomicDataSource):
         partition_t_min_list: list[float],
         partition_t_max_list: list[float],
         partition_g0_list: list[float],
+        from_direct_sum_list: list[float] | None = None,
     ) -> None:
         """Append one species' partition-polynomial row for :meth:`snapshot`.
 
@@ -1023,6 +1082,8 @@ class AtomicDatabase(AtomicDataSource):
             partition_t_min_list.append(float(spec.t_min))
             partition_t_max_list.append(float(spec.t_max))
             partition_g0_list.append(float(spec.g0))
+            if from_direct_sum_list is not None:
+                from_direct_sum_list.append(1.0 if spec.from_direct_sum else 0.0)
         else:
             # Neither energy levels nor a stored polynomial row: bake the
             # canonical fallback ladder's constant (closed-shell ions get
@@ -1036,6 +1097,8 @@ class AtomicDatabase(AtomicDataSource):
             partition_t_min_list.append(2000.0)
             partition_t_max_list.append(25000.0)
             partition_g0_list.append(1.0)
+            if from_direct_sum_list is not None:
+                from_direct_sum_list.append(0.0)
 
     def _pad_species_partitions(
         self,
@@ -1049,6 +1112,11 @@ class AtomicDatabase(AtomicDataSource):
         partition_g0_list: list[float],
         level_g_rows: list[list[float]],
         level_E_rows: list[list[float]],
+        partition_rows_iii: list[list[float]],
+        partition_t_min_iii_list: list[float],
+        partition_t_max_iii_list: list[float],
+        partition_g0_iii_list: list[float],
+        from_direct_sum_list: list[float],
     ) -> None:
         """Zero-pad the species-axis accumulators up to ``pad_to_n_elements``.
 
@@ -1063,6 +1131,11 @@ class AtomicDatabase(AtomicDataSource):
             partition_t_min_list.extend([2000.0] * pad)
             partition_t_max_list.extend([25000.0] * pad)
             partition_g0_list.extend([1.0] * pad)
+            partition_rows_iii.extend([[0.0] * 5 for _ in range(pad)])
+            partition_t_min_iii_list.extend([2000.0] * pad)
+            partition_t_max_iii_list.extend([25000.0] * pad)
+            partition_g0_iii_list.extend([1.0] * pad)
+            from_direct_sum_list.extend([0.0] * pad)
             if include_levels:
                 level_g_rows.extend([[] for _ in range(pad)])
                 level_E_rows.extend([[] for _ in range(pad)])
