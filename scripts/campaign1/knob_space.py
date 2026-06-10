@@ -19,8 +19,9 @@ without the optimizer installed. The physics-only constraint applies to
 
 A candidate is fully described by a flat Optuna params dict;
 :func:`params_to_overrides` turns it into the single ``config_overrides``
-dict consumed by ``cflibs.benchmark.scoreboard.apply_config_overrides``
-(detection-layer knobs nest under the ``detection_overrides`` field added to
+dict consumed by the ``overrides`` tier of
+``cflibs.inversion.pipeline.build_pipeline_config`` (detection-layer knobs
+nest under the ``detection_overrides`` field added to
 ``AnalysisPipelineConfig`` for this campaign).
 """
 
@@ -206,10 +207,15 @@ SPACE: tuple[Knob, ...] = (
         0.05,
         0.5,
     ),
+    # Optuna param name "shift_scan_nm" is FROZEN for the live campaign1-phaseA
+    # journal; it now routes to the first-class pipeline field
+    # ``global_shift_scan_nm`` (formerly the magic
+    # detection_overrides["shift_scan_nm"] key) with identical effective
+    # behavior: the global comb scan used when calibration fails/is skipped.
     Knob(
         "shift_scan_nm",
-        "detection",
-        "shift_scan_nm",
+        "pipeline",
+        "global_shift_scan_nm",
         "float",
         0.5,
         0.1,
@@ -299,8 +305,8 @@ def suggest_params(trial: Any) -> dict[str, Any]:
 def params_to_overrides(params: Mapping[str, Any]) -> dict[str, Any]:
     """Map a flat params dict to one ``config_overrides`` dict.
 
-    The result is consumed by
-    ``cflibs.benchmark.scoreboard.apply_config_overrides``: pipeline knobs are
+    The result is consumed by the ``overrides`` tier of
+    ``cflibs.inversion.pipeline.build_pipeline_config``: pipeline knobs are
     top-level ``AnalysisPipelineConfig`` field overrides; detection knobs nest
     under ``detection_overrides``.
     """

@@ -148,6 +148,7 @@ VALID_ANALYSIS_KEYS = frozenset(
         "wavelength_calibration",
         "shift_coherence_veto",
         "residual_shift_scan_nm",
+        "global_shift_scan_nm",
         "affine_coverage_gate",
         "line_residual_gate",
         "response_curve",

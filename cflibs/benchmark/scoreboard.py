@@ -124,23 +124,6 @@ def _median(values: Sequence[float]) -> Optional[float]:
     return float(np.median(np.asarray(values, dtype=float))) if values else None
 
 
-def apply_config_overrides(pipeline: Any, config_overrides: Optional[Mapping[str, Any]]) -> Any:
-    """Apply knob overrides onto a built :class:`AnalysisPipelineConfig`.
-
-    Campaign-tooling hook (docs/audit/2026-06-10-goalfirst/
-    optimization-program-design.md): the optimization layer searches over
-    pipeline knobs by overriding fields on the *resolved* production config,
-    so a candidate differs from production by exactly the recorded dict.
-    Unknown field names fail fast — a typo must not silently evaluate the
-    production default.
-    """
-    for key, value in (config_overrides or {}).items():
-        if not hasattr(pipeline, key):
-            raise AttributeError(f"AnalysisPipelineConfig has no knob {key!r}")
-        setattr(pipeline, key, value)
-    return pipeline
-
-
 # ---------------------------------------------------------------------------
 # Per-spectrum execution
 # ---------------------------------------------------------------------------
@@ -172,8 +155,8 @@ def _score_spectrum(
             candidates,
             preset=preset,
             resolving_power=truth.resolving_power,
+            overrides=config_overrides,
         )
-        apply_config_overrides(pipeline, config_overrides)
         result, diagnostics = run_pipeline(wavelength, intensity, atomic_db, pipeline)
     except Exception as exc:  # noqa: BLE001 — the board must never crash
         record["status"] = "error"
@@ -318,9 +301,11 @@ def run_scoreboard(
         Pipeline preset override; ``None`` = the production default
         (``geological``). Exposed for ablation runs only.
     config_overrides : Mapping[str, Any] or None
-        Knob overrides applied to every resolved pipeline config (see
-        :func:`apply_config_overrides`). Campaign tooling only; recorded in
-        the artifact so every board is attributable to an exact config.
+        Knob overrides routed through the top precedence tier of
+        :func:`cflibs.inversion.pipeline.build_pipeline_config` (validated,
+        normalized and logged like every other tier). Campaign tooling only;
+        recorded in the artifact so every board is attributable to an exact
+        config.
     """
     import cflibs
 

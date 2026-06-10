@@ -55,7 +55,6 @@ def test_knob_count_matches_design():
 def test_suggestion_roundtrip_builds_valid_config(seed):
     import numpy as np
 
-    from cflibs.benchmark.scoreboard import apply_config_overrides
     from cflibs.inversion.pipeline import build_pipeline_config
 
     trial = _RandomTrial(np.random.default_rng(seed))
@@ -66,14 +65,20 @@ def test_suggestion_roundtrip_builds_valid_config(seed):
     pipeline_keys = set(overrides) - {"detection_overrides"}
     assert pipeline_keys <= _pipeline_field_names()
     assert set(detection) <= _detection_param_names()
+    # The global comb scan is a first-class pipeline field, never a magic
+    # detection key (altitude#2).
+    assert "shift_scan_nm" not in detection
+    assert "global_shift_scan_nm" in overrides
     assert isinstance(detection["kdet_weight_clip"], tuple)
     lo, hi = detection["kdet_weight_clip"]
     assert 0.05 <= lo <= 1.0 < hi <= 10.0
 
-    # Overrides must apply cleanly onto a resolved production config.
-    pipeline = build_pipeline_config(["Fe", "Si"])
-    apply_config_overrides(pipeline, overrides)
+    # Overrides must resolve cleanly through the production builder's top tier.
+    pipeline = build_pipeline_config(["Fe", "Si"], overrides=overrides)
     assert pipeline.detection_overrides == detection
+    assert pipeline.global_shift_scan_nm == pytest.approx(overrides["global_shift_scan_nm"])
+    for key in pipeline_keys:
+        assert getattr(pipeline, key) == overrides[key], key
     if overrides["closure_mode"] is not None:
         assert pipeline.closure_mode in (
             "standard",
@@ -83,6 +88,19 @@ def test_suggestion_roundtrip_builds_valid_config(seed):
             "pwlr",
             "dirichlet_residual",
         )
+
+
+@pytest.mark.unit
+def test_unknown_override_key_fails_fast():
+    """A typo'd knob must never silently evaluate the production default
+    (same strength as the deleted ``apply_config_overrides`` guard)."""
+    from cflibs.inversion.pipeline import build_pipeline_config
+
+    with pytest.raises(ValueError, match="no knob"):
+        build_pipeline_config(["Fe"], overrides={"saha_boltzman_graph": True})
+    # And the validation/normalization tiers apply to overrides too.
+    with pytest.raises(ValueError, match="Valid modes"):
+        build_pipeline_config(["Fe"], overrides={"closure_mode": "softmax"})
 
 
 @pytest.mark.unit
@@ -109,13 +127,11 @@ def test_conditional_knobs():
 
 @pytest.mark.unit
 def test_baseline_params_reproduce_production_defaults():
-    from cflibs.benchmark.scoreboard import apply_config_overrides
     from cflibs.inversion.pipeline import build_pipeline_config
 
     overrides = knob_space.params_to_overrides(knob_space.baseline_params())
     reference = build_pipeline_config(["Fe"])
-    candidate = build_pipeline_config(["Fe"])
-    apply_config_overrides(candidate, overrides)
+    candidate = build_pipeline_config(["Fe"], overrides=overrides)
     # The baseline candidate must equal the untouched production config on
     # every searched pipeline field. exclude_resonance is special: the
     # production config carries None, which detect_and_select_lines resolves
