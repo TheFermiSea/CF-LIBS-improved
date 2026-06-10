@@ -67,6 +67,7 @@ import numpy as np
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
 from cflibs.benchmark.scoreboard_registry import SpectrumTruth, iter_datasets
+from cflibs.benchmark.synthetic_eval import compute_binary_metrics
 
 logger = get_logger("benchmark.scoreboard")
 
@@ -105,11 +106,13 @@ def presence_confusion(
 
 
 def precision_recall_f1(n_tp: int, n_fp: int, n_fn: int) -> tuple[float, float, float]:
-    """Micro precision/recall/F1 from confusion counts (0.0 on empty denominators)."""
-    precision = n_tp / (n_tp + n_fp) if (n_tp + n_fp) > 0 else 0.0
-    recall = n_tp / (n_tp + n_fn) if (n_tp + n_fn) > 0 else 0.0
-    f1 = 2.0 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    return precision, recall, f1
+    """Micro precision/recall/F1 from confusion counts (0.0 on empty denominators).
+
+    Thin delegate to :func:`cflibs.benchmark.synthetic_eval.compute_binary_metrics`
+    — the single source for this metric math (TN plays no role in micro P/R/F1).
+    """
+    metrics = compute_binary_metrics(n_tp, n_fp, n_fn, 0)
+    return metrics["precision"], metrics["recall"], metrics["f1"]
 
 
 def composition_errors(
