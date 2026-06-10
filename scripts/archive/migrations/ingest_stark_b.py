@@ -11,7 +11,7 @@ Stark FWHM values at the canonical reference conditions
 REPLACING the ``(λ/λ_ref)^2`` Konjević fallback from
 ``populate_stark_widths.py`` (PR #99) for any line that has a
 literature value. Provenance is recorded in ``lines.stark_w_source``
-(must be migrated first via ``scripts/migrate_add_broadening_columns.py``).
+(must be migrated first via ``scripts/archive/migrations/migrate_add_broadening_columns.py``).
 
 Two input paths are supported:
 
@@ -59,9 +59,9 @@ Embedded table sources
 Usage
 -----
 
-    python scripts/ingest_stark_b.py
-    python scripts/ingest_stark_b.py --db ASD_da/libs_production.db --raw-dir /cluster/shared/cf-libs-data/stark_b/raw
-    python scripts/ingest_stark_b.py --dry-run
+    python scripts/archive/migrations/ingest_stark_b.py
+    python scripts/archive/migrations/ingest_stark_b.py --db ASD_da/libs_production.db --raw-dir /cluster/shared/cf-libs-data/stark_b/raw
+    python scripts/archive/migrations/ingest_stark_b.py --dry-run
 
 Behavior
 --------

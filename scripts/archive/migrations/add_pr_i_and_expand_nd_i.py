@@ -27,8 +27,8 @@ Nd I ground:  4f^4 6s^2  ⁵I_4         g = 9
 
 Usage
 -----
-    python scripts/add_pr_i_and_expand_nd_i.py --db ASD_da/libs_production.db
-    python scripts/add_pr_i_and_expand_nd_i.py --dry-run
+    python scripts/archive/migrations/add_pr_i_and_expand_nd_i.py --db ASD_da/libs_production.db
+    python scripts/archive/migrations/add_pr_i_and_expand_nd_i.py --dry-run
 """
 from __future__ import annotations
 

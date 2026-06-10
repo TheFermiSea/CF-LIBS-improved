@@ -35,8 +35,8 @@ electron-density estimation from non-Hα lines and Stark-aware
 wavelength tolerance per validation/protocol.yaml.
 
 Usage:
-    python scripts/populate_stark_widths.py --db ASD_da/libs_production.db
-    python scripts/populate_stark_widths.py --db ASD_da/libs_production.db --dry-run
+    python scripts/archive/migrations/populate_stark_widths.py --db ASD_da/libs_production.db
+    python scripts/archive/migrations/populate_stark_widths.py --db ASD_da/libs_production.db --dry-run
 
 Acceptance (matches CF-LIBS-improved-3ww0):
 - After population, ``SELECT COUNT(*) FROM lines WHERE stark_w > 0`` is
@@ -190,7 +190,7 @@ def populate_stark_widths(db_path: Path, dry_run: bool = False) -> dict[str, int
     for each line where the (element, sp_num) has a reference entry.
 
     Provenance: when ``stark_w_source`` exists in the schema (post
-    ``scripts/migrate_add_broadening_columns.py``), this function
+    ``scripts/archive/migrations/migrate_add_broadening_columns.py``), this function
 
       * leaves rows that already have ``stark_w_source = "stark_b"``
         (line-specific literature value) untouched,

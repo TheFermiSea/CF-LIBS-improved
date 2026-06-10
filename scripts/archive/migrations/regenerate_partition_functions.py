@@ -44,8 +44,8 @@ What this script does
 
 Usage
 -----
-    python scripts/regenerate_partition_functions.py --db-path ASD_da/libs_production.db
-    python scripts/regenerate_partition_functions.py --db-path ASD_da/libs_production.db --dry-run
+    python scripts/archive/migrations/regenerate_partition_functions.py --db-path ASD_da/libs_production.db
+    python scripts/archive/migrations/regenerate_partition_functions.py --db-path ASD_da/libs_production.db --dry-run
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ if str(ROOT) not in sys.path:
 KB_EV = 8.617333262145e-5  # Boltzmann constant in eV/K
 
 # Fit grid (matches the ``direct_sum_fit_v1`` recipe in
-# scripts/populate_partition_functions.py, extended to start at 2000 K).
+# scripts/archive/migrations/populate_partition_functions.py, extended to start at 2000 K).
 T_FIT_MIN = 2000.0
 T_FIT_MAX = 25000.0
 N_FIT_POINTS = 60

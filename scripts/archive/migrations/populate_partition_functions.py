@@ -50,8 +50,8 @@ for conversion.
 
 Usage
 -----
-    python scripts/populate_partition_functions.py --db ASD_da/libs_production.db
-    python scripts/populate_partition_functions.py --db ASD_da/libs_production.db --dry-run
+    python scripts/archive/migrations/populate_partition_functions.py --db ASD_da/libs_production.db
+    python scripts/archive/migrations/populate_partition_functions.py --db ASD_da/libs_production.db --dry-run
 """
 
 from __future__ import annotations

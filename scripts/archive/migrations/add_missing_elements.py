@@ -23,8 +23,8 @@ Sources:
   estimated for entries with NIST accuracy code "C" or worse.
 
 Usage:
-    python scripts/add_missing_elements.py --db ASD_da/libs_production.db
-    python scripts/add_missing_elements.py --db ASD_da/libs_production.db --dry-run
+    python scripts/archive/migrations/add_missing_elements.py --db ASD_da/libs_production.db
+    python scripts/archive/migrations/add_missing_elements.py --db ASD_da/libs_production.db --dry-run
 
 Acceptance:
 - Zr / Nb / Re lines present after run; SELECT DISTINCT element

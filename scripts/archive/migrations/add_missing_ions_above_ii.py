@@ -76,9 +76,9 @@ Schema discipline
 
 Usage
 -----
-    python scripts/add_missing_ions_above_ii.py \
+    python scripts/archive/migrations/add_missing_ions_above_ii.py \
         --db ASD_da/libs_production.db
-    python scripts/add_missing_ions_above_ii.py --dry-run
+    python scripts/archive/migrations/add_missing_ions_above_ii.py --dry-run
 """
 from __future__ import annotations
 

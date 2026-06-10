@@ -10,8 +10,8 @@ For elements with missing ground state data (E_min > 0.5 eV), adds
 the known ground state degeneracy from NIST before computing U(T).
 
 Usage:
-    python scripts/expand_partition_functions.py --db libs_production.db
-    python scripts/expand_partition_functions.py --db libs_production.db --dry-run
+    python scripts/archive/migrations/expand_partition_functions.py --db libs_production.db
+    python scripts/archive/migrations/expand_partition_functions.py --db libs_production.db --dry-run
 """
 
 import argparse

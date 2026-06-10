@@ -6,8 +6,8 @@ Fits degree-4 polynomials: log(U) = sum(a_n * (log T)^n) to NIST reference
 values, validates max relative error < 2%, and inserts into the database.
 
 Usage:
-    python scripts/fit_partition_coefficients.py --db libs_production.db
-    python scripts/fit_partition_coefficients.py --db libs_production.db --dry-run
+    python scripts/archive/migrations/fit_partition_coefficients.py --db libs_production.db
+    python scripts/archive/migrations/fit_partition_coefficients.py --db libs_production.db --dry-run
 """
 
 import argparse

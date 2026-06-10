@@ -37,8 +37,8 @@ range for Mo II resonance + secondary lines).
 
 Usage
 -----
-    python scripts/add_mo_ii.py --db ASD_da/libs_production.db
-    python scripts/add_mo_ii.py --dry-run
+    python scripts/archive/migrations/add_mo_ii.py --db ASD_da/libs_production.db
+    python scripts/archive/migrations/add_mo_ii.py --dry-run
 """
 from __future__ import annotations
 

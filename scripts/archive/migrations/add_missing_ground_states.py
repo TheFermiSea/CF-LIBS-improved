@@ -16,8 +16,8 @@ stores the statistical weight (2J+1).
 
 Usage
 -----
-    python scripts/add_missing_ground_states.py --db ASD_da/libs_production.db
-    python scripts/add_missing_ground_states.py --db ASD_da/libs_production.db --dry-run
+    python scripts/archive/migrations/add_missing_ground_states.py --db ASD_da/libs_production.db
+    python scripts/archive/migrations/add_missing_ground_states.py --db ASD_da/libs_production.db --dry-run
 """
 
 from __future__ import annotations

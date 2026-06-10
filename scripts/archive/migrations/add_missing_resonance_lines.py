@@ -34,8 +34,8 @@ Each line is INSERTed only if not already present via UNIQUE
 
 Usage
 -----
-    python scripts/add_missing_resonance_lines.py --db ASD_da/libs_production.db
-    python scripts/add_missing_resonance_lines.py --dry-run
+    python scripts/archive/migrations/add_missing_resonance_lines.py --db ASD_da/libs_production.db
+    python scripts/archive/migrations/add_missing_resonance_lines.py --dry-run
 """
 from __future__ import annotations
 

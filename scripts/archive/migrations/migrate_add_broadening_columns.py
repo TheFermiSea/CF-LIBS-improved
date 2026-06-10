@@ -40,8 +40,8 @@ New columns
 Usage
 -----
 
-    python scripts/migrate_add_broadening_columns.py
-    python scripts/migrate_add_broadening_columns.py --db ASD_da/libs_production.db
+    python scripts/archive/migrations/migrate_add_broadening_columns.py
+    python scripts/archive/migrations/migrate_add_broadening_columns.py --db ASD_da/libs_production.db
 """
 from __future__ import annotations
 

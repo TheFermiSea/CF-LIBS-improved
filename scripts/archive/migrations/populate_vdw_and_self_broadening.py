@@ -5,7 +5,7 @@ Approximation
 -------------
 
 This script populates ``gamma_vdw_log`` and ``gamma_self_log`` (added by
-``scripts/migrate_add_broadening_columns.py``) using the Anstee-O'Mara
+``scripts/archive/migrations/migrate_add_broadening_columns.py``) using the Anstee-O'Mara
 unified Unsöld theory in its simplified Mihalas-Kurucz form
 (Kurucz 1981 SAO Special Report 391; Mihalas 1978 "Stellar
 Atmospheres" §9-3). This is a CRUDE physics-based estimate — better
@@ -311,7 +311,7 @@ def populate(db_path: Path, dry_run: bool = False) -> dict[str, int]:
     if "gamma_vdw_log" not in cols or "gamma_self_log" not in cols:
         conn.close()
         raise RuntimeError(
-            "Required columns missing — run scripts/migrate_add_broadening_columns.py first"
+            "Required columns missing — run scripts/archive/migrations/migrate_add_broadening_columns.py first"
         )
 
     cur.execute(

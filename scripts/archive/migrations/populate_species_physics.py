@@ -12,8 +12,8 @@ Workflow:
   6. Verify every energy_levels species now has non-NULL ip_ev in species_physics
 
 Usage:
-  python scripts/populate_species_physics.py --db-path ASD_da/libs_production.db
-  python scripts/populate_species_physics.py --db-path ASD_da/libs_production.db --dry-run
+  python scripts/archive/migrations/populate_species_physics.py --db-path ASD_da/libs_production.db
+  python scripts/archive/migrations/populate_species_physics.py --db-path ASD_da/libs_production.db --dry-run
 """
 
 from __future__ import annotations

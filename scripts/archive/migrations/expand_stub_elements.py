@@ -46,8 +46,8 @@ have NIST A/B accuracy grades; we include those.
 
 Usage
 -----
-    python scripts/expand_stub_elements.py --db ASD_da/libs_production.db
-    python scripts/expand_stub_elements.py --dry-run
+    python scripts/archive/migrations/expand_stub_elements.py --db ASD_da/libs_production.db
+    python scripts/archive/migrations/expand_stub_elements.py --dry-run
 """
 from __future__ import annotations
 

@@ -25,7 +25,7 @@ from cflibs.radiation.kernels import (  # noqa: E402
 
 
 # Real Irwin (1981) coefficients for Fe I (natural-log basis), pulled
-# from scripts/populate_partition_functions.py. At 10000 K the true
+# from scripts/archive/migrations/populate_partition_functions.py. At 10000 K the true
 # value is U ~= 33.84; the pre-fix kernel returned U ~= 1.95e+20.
 FE_I_COEFFS = jnp.asarray([239.34, -113.17, 20.30, -1.62, 0.049])
 

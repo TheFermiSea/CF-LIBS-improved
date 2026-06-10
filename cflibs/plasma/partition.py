@@ -33,7 +33,7 @@ The 30–60 % poly-vs-direct-sum discrepancy noted in the audit was caused
 by *stale fit data* (the polynomial coefficients were fit against an
 older energy_levels snapshot than the one currently in the DB), not by a
 math/convention mismatch.  Re-fitting from the current EL table — which
-is what :mod:`scripts.populate_partition_functions` does — restores the
+is what :mod:`scripts.archive.migrations.populate_partition_functions` does — restores the
 consistency.
 """
 
@@ -382,7 +382,7 @@ else:
 
 # Fit grid + LIBS validation band for :func:`direct_sum_fit_coeffs`.  These
 # mirror the standalone regeneration recipe in
-# ``scripts/regenerate_partition_functions.py`` so the load-time fallback and
+# ``scripts/archive/migrations/regenerate_partition_functions.py`` so the load-time fallback and
 # the persisted DB rows agree by construction.
 _DSFIT_T_MIN = 2000.0
 _DSFIT_T_MAX = 25000.0
@@ -600,7 +600,7 @@ _spec_cache: Dict[Tuple[str, str, int], "PartitionFunctionSpec"] = {}
 #: Na I −30 %, K I −40 % at 1e4 K — audit 2026-06-09, finding 01-F3).  The
 #: shipped production DB carries no rows with these sources, so this
 #: preference is inert until a patched DB (see
-#: ``scripts/patch_partition_functions_bc2016.py``) is explicitly wired in.
+#: ``scripts/archive/migrations/patch_partition_functions_bc2016.py``) is explicitly wired in.
 AUTHORITATIVE_PF_SOURCES = frozenset({"BarklemCollet2016"})
 
 
@@ -955,7 +955,7 @@ def _warn_partition_fallback(element: str, ionization_stage: int, tier: str, val
             "Partition function for %s %s unresolved (no energy levels, no "
             "stored polynomial); falling back to the GENERIC constant U=%.1f. "
             "This is NOT a physical value — ingest atomic data for this "
-            "species (e.g. scripts/patch_partition_functions_bc2016.py).",
+            "species (e.g. scripts/archive/migrations/patch_partition_functions_bc2016.py).",
             element,
             _roman(ionization_stage),
             value,
