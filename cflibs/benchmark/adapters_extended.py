@@ -40,18 +40,17 @@ Gibbons 2024 nitrogen  working   element wt% for N (nitrate-doped MGS-1);
 =====================  ========  ==========================================
 
 Per-dataset parsing lives in small helper modules under
-:mod:`cflibs.benchmark.datasets`; this module owns the contract types, the
-thin generator wrappers, and :data:`MANIFEST`, the registration list the
-scoreboard maintainer wires at integration time.
+:mod:`cflibs.benchmark.datasets`; this module owns the thin generator
+wrappers and :data:`MANIFEST`, the registration list the scoreboard
+maintainer wires at integration time. The contract types come from
+:mod:`cflibs.benchmark.scoreboard_registry` (re-exported here).
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable, Iterator, Tuple
-
-import numpy as np
+from typing import Iterator
 
 __all__ = [
     "DATA_ROOT",
@@ -75,39 +74,18 @@ DATA_ROOT = Path(__file__).resolve().parents[2] / "data"
 
 
 # The shared contract types and the presence cutoff live in the scoreboard
-# registry (bead A1); re-exported here so adapter callers and tests can
-# import either path.
+# registry (bead A1); the wavelength-grid helper in datasets._common. All are
+# re-exported here so adapter callers and tests can import either path.
 from cflibs.benchmark.scoreboard_registry import (  # noqa: E402
     PRESENCE_CUTOFF_WT,
+    AdapterFactory,
+    AdapterYield,
     SpectrumTruth,
 )
+from cflibs.benchmark.datasets._common import enforce_strictly_increasing  # noqa: E402
 
-SpectrumRecord = Tuple[str, np.ndarray, np.ndarray, SpectrumTruth]
+SpectrumRecord = AdapterYield
 """One adapter yield: ``(spectrum_id, wavelength_nm, intensity, truth)``."""
-
-
-def enforce_strictly_increasing(
-    wavelength_nm: np.ndarray, intensity: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Return a strictly increasing wavelength grid and matching intensities.
-
-    Multi-channel spectrometers occasionally repeat (or slightly fold back)
-    wavelengths at channel boundaries. This helper stable-sorts by wavelength
-    and drops any point whose wavelength does not strictly exceed the previous
-    kept point, keeping the first occurrence. Deterministic; a no-op for grids
-    that are already strictly increasing.
-    """
-    wl = np.asarray(wavelength_nm, dtype=float)
-    inten = np.asarray(intensity, dtype=float)
-    if wl.size and np.all(np.diff(wl) > 0):
-        return wl, inten
-    order = np.argsort(wl, kind="stable")
-    wl, inten = wl[order], inten[order]
-    keep = np.empty(wl.shape, dtype=bool)
-    keep[0] = True
-    np.greater(wl[1:], np.maximum.accumulate(wl)[:-1], out=keep[1:])
-    return wl[keep], inten[keep]
 
 
 def _missing(dataset: str, path: Path, needs: str) -> None:
@@ -121,8 +99,8 @@ def _missing(dataset: str, path: Path, needs: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Generator wrappers (lazy imports keep module import free of heavy I/O and
-# avoid import cycles with the per-dataset helper modules).
+# Generator wrappers (the per-dataset parser modules stay lazy-imported so
+# importing this module never touches their heavy dependencies).
 # ---------------------------------------------------------------------------
 
 
@@ -270,8 +248,6 @@ def iter_gibbons2024_spectra(data_dir: Path | None = None) -> Iterator[SpectrumR
 # sets from these registrations): emslibs2019 is HOLDOUT (adoption gate),
 # gibbons2024 is VAULT (end-of-program only — never run by the scoreboard).
 # ---------------------------------------------------------------------------
-
-AdapterFactory = Callable[[], Iterator[SpectrumRecord]]
 
 MANIFEST: list[tuple[str, AdapterFactory, tuple[str, ...], str, str]] = [
     (

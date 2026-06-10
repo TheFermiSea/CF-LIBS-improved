@@ -48,6 +48,12 @@ from typing import Dict, Iterator, Optional
 
 import numpy as np
 
+from cflibs.benchmark.datasets._common import (
+    PRESENCE_CUTOFF_WT,
+    SpectrumTruth,
+    enforce_strictly_increasing,
+    presence_set,
+)
 from cflibs.benchmark.datasets.usgs import OXIDE_TO_ELEMENT_FACTOR
 
 logger = logging.getLogger(__name__)
@@ -178,13 +184,6 @@ def _oxides_to_elements(oxides: Dict[str, float]) -> tuple[Dict[str, float], flo
 
 def iter_spectra(root: Path) -> Iterator[tuple]:
     """Yield ``SpectrumRecord`` tuples for the CSA dataset (see contract)."""
-    from cflibs.benchmark.adapters_extended import (
-        PRESENCE_CUTOFF_WT,
-        SpectrumTruth,
-        enforce_strictly_increasing,
-    )
-    from cflibs.benchmark.scoreboard_registry import presence_set
-
     table = _load_large_set_table(root / "Sample_Composition_Data_LargeSet.csv")
     graphite = _load_graphite_row(root / "Sample_Composition_Data_SubSet.csv")
 

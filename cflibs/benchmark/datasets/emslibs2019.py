@@ -39,6 +39,8 @@ from typing import Dict, Iterator
 
 import numpy as np
 
+from cflibs.benchmark.datasets._common import PRESENCE_CUTOFF_WT, SpectrumTruth
+
 logger = logging.getLogger(__name__)
 
 ANALYTE_COLUMNS = ("Al", "Ca", "Cr", "Cu", "Fe", "K", "Mg", "Na", "Pb", "Si", "Ti")
@@ -80,8 +82,6 @@ def _class_panels(
 def iter_spectra(root: Path, shots_per_sample: int = SHOTS_PER_SAMPLE_CAP) -> Iterator[tuple]:
     """Yield ``SpectrumRecord`` tuples for the EMSLIBS 2019 train split."""
     import h5py
-
-    from cflibs.benchmark.adapters_extended import PRESENCE_CUTOFF_WT, SpectrumTruth
 
     panels, ore_names, members = _class_panels(root / "support_tables.xlsx", PRESENCE_CUTOFF_WT)
 

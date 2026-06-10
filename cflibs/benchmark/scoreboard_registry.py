@@ -19,19 +19,20 @@ capitalization (``Fe``, ``Si``). Trace elements below the adapter's
 documented cutoff (~0.01 wt%) may be excluded from ``elements_present`` with
 the cutoff recorded in ``notes``.
 
-This module is intentionally tiny and dependency-free (stdlib only) so both
-the harness branch and the datasets branch can build against it without
-import-order coupling.
+This module is intentionally tiny (numpy + stdlib only) so both the harness
+branch and the datasets branch can build against it without import-order
+coupling.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Iterator, Mapping, Optional, Tuple
+from typing import Callable, Iterable, Iterator, Mapping, Optional, Tuple
+
+import numpy as np
 
 #: What one adapter yield looks like: (spectrum_id, wavelength_nm, intensity, truth).
-#: Arrays are typed ``Any`` here to keep this module numpy-free.
-AdapterYield = Tuple[str, Any, Any, "SpectrumTruth"]
+AdapterYield = Tuple[str, np.ndarray, np.ndarray, "SpectrumTruth"]
 
 #: A zero-argument generator function producing the dataset's spectra.
 AdapterFactory = Callable[[], Iterator[AdapterYield]]

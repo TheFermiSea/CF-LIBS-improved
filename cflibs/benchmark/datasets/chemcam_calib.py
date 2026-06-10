@@ -37,6 +37,12 @@ from typing import Dict, Iterator
 
 import numpy as np
 
+from cflibs.benchmark.datasets._common import (
+    PRESENCE_CUTOFF_WT,
+    SpectrumTruth,
+    enforce_strictly_increasing,
+    presence_set,
+)
 from cflibs.benchmark.datasets.usgs import OXIDE_TO_ELEMENT_FACTOR
 
 logger = logging.getLogger(__name__)
@@ -76,13 +82,6 @@ def _load_compositions(comp_csv: Path) -> Dict[str, dict]:
 
 def iter_spectra(root: Path) -> Iterator[tuple]:
     """Yield ``SpectrumRecord`` tuples for the ChemCam preflight calibration set."""
-    from cflibs.benchmark.adapters_extended import (
-        PRESENCE_CUTOFF_WT,
-        SpectrumTruth,
-        enforce_strictly_increasing,
-    )
-    from cflibs.benchmark.scoreboard_registry import presence_set
-
     comp_table = _load_compositions(root / "ccam_calibration_compositions.csv")
 
     spectra_csv = root / "msl_ccam_libs_calib.csv"
