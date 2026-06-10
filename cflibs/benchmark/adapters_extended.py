@@ -48,7 +48,6 @@ scoreboard maintainer wires at integration time.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, Tuple
 
@@ -79,43 +78,9 @@ PRESENCE_CUTOFF_WT = 0.01
 """Element wt% below which an analyte is excluded from ``elements_present``."""
 
 
-@dataclass(frozen=True)
-class SpectrumTruth:
-    """
-    Ground truth attached to one benchmark spectrum.
-
-    Attributes
-    ----------
-    elements_present : frozenset[str]
-        Ground-truth element set (the ID-scoring target). May be a *partial*
-        panel when the dataset only certifies some analytes; ``notes``
-        documents the panel and its caveats.
-    composition_wt : dict[str, float] | None
-        Element wt% (oxide certificates are converted to element basis in the
-        adapter). ``None`` when only presence truth exists.
-    composition_basis : str
-        ``"element_wt"`` if ``composition_wt`` is given, else
-        ``"presence_only"``.
-    resolving_power : float | None
-        Instrument resolving-power hint when known.
-    notes : str
-        Provenance: instrument, source file/column, references, caveats.
-    """
-
-    elements_present: frozenset[str]
-    composition_wt: dict[str, float] | None
-    composition_basis: str
-    resolving_power: float | None = None
-    notes: str = ""
-
-    def __post_init__(self) -> None:
-        expected = "element_wt" if self.composition_wt is not None else "presence_only"
-        if self.composition_basis != expected:
-            raise ValueError(
-                f"composition_basis={self.composition_basis!r} inconsistent with "
-                f"composition_wt={'given' if self.composition_wt is not None else 'None'}"
-            )
-
+# The shared contract type lives in the scoreboard registry (bead A1);
+# re-exported here so adapter callers and tests can import either path.
+from cflibs.benchmark.scoreboard_registry import SpectrumTruth  # noqa: E402
 
 SpectrumRecord = Tuple[str, np.ndarray, np.ndarray, SpectrumTruth]
 """One adapter yield: ``(spectrum_id, wavelength_nm, intensity, truth)``."""
@@ -348,3 +313,14 @@ MANIFEST: list[tuple[str, AdapterFactory, tuple[str, ...], str]] = [
         "NO3- ion wt%; matrix elements uncertified (partial panel).",
     ),
 ]
+
+
+def register_extended_adapters(*, replace: bool = True) -> None:
+    """Register every MANIFEST dataset into the scoreboard registry.
+
+    Idempotent like :func:`cflibs.benchmark.adapters_core.register_core_adapters`.
+    """
+    from cflibs.benchmark.scoreboard_registry import register_dataset
+
+    for name, factory, tags, notes in MANIFEST:
+        register_dataset(name, factory, tags=tags, replace=replace)
