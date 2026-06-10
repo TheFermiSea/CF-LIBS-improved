@@ -56,6 +56,10 @@ if str(_REPO_ROOT) not in sys.path:
 import cflibs  # noqa: E402
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
 from cflibs.benchmark.reference_compositions import BHVO2_BASALT_USGS  # noqa: E402
+from cflibs.benchmark.scoreboard import (  # noqa: E402
+    CONFOUNDER_ELEMENTS,
+    PRESENCE_EPS_MASSFRAC,
+)
 from cflibs.inversion.pipeline import (  # noqa: E402
     ANALYSIS_PRESETS,
     CLOSURE_MODES,
@@ -66,9 +70,10 @@ from cflibs.inversion.pipeline import (  # noqa: E402
 from cflibs.io.spectrum import load_spectrum  # noqa: E402
 
 # Known FP confounders: neutral-resonance lines in the BHVO-2 band, same
-# thermal E_k band as the real majors (29p1 Root cause B).
-CONFOUNDERS = ["Ag", "Sn", "W", "Bi", "Th"]
-EPS_PRESENT = 5e-3  # mass-fraction above which an element counts as "called present"
+# thermal E_k band as the real majors (29p1 Root cause B). Local names are
+# aliases for the scoreboard's single source of truth.
+CONFOUNDERS = list(CONFOUNDER_ELEMENTS)
+EPS_PRESENT = PRESENCE_EPS_MASSFRAC  # "called present" mass-fraction threshold
 
 
 def _resolve_db() -> Path:
