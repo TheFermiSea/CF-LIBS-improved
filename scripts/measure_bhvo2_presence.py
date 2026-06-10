@@ -138,6 +138,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "behavior, default on). --no-confounders requests only the 10 "
         "certified elements, matching a plain CLI invocation.",
     )
+    ap.add_argument(
+        "--stark-ne",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Measure n_e from the Stark widths of observed literature-grade lines "
+            "(mirrors the production geological-preset default; --no-stark-ne for "
+            "the legacy 1-atm pressure-balance fallback)."
+        ),
+    )
     ap.add_argument("--label", default="baseline")
     return ap.parse_args(argv)
 
@@ -165,6 +175,7 @@ def build_pipeline_from_args(args: argparse.Namespace) -> AnalysisPipelineConfig
         exclude_resonance=excl,
         wavelength_calibration=args.wavelength_calibration,
         shift_coherence_veto=args.shift_coherence_veto,
+        stark_ne=args.stark_ne,
     )
 
 
@@ -184,6 +195,28 @@ def main(argv: list[str] | None = None) -> None:
     db = AtomicDatabase(_resolve_db())
 
     result, diagnostics = run_pipeline(wl, inten, db, pipeline)
+
+    # Stark n_e info for the JSON artifact (measured inside run_pipeline —
+    # the bead-vj82 contract forbids this script from running pipeline
+    # stages itself).
+    stark_diag = diagnostics.get("stark_ne")
+    if stark_diag is not None:
+        stark_info: dict = {
+            "enabled": True,
+            "n_lines": stark_diag["n_lines"],
+            "ne_cm3": stark_diag["ne_cm3"],
+            "ne_scatter_cm3": stark_diag["ne_scatter_cm3"],
+            "instrument_fwhm_source": stark_diag["instrument_fwhm_source"],
+            "lines": [
+                f"{m['element']} {'I' if m['ionization_stage'] == 1 else 'II'} "
+                f"{m['wavelength_nm']:.2f} -> {m['ne_cm3']:.2e}"
+                for m in stark_diag["lines"]
+            ],
+            "rejected": dict(stark_diag["rejected"]),
+        }
+    else:
+        stark_info = {"enabled": bool(pipeline.stark_ne), "n_lines": 0}
+
     pred = dict(result.concentrations)
     obs_counts: dict[str, int] = dict(diagnostics["observation_counts"])
     n_obs = int(diagnostics["n_observations"])
@@ -213,6 +246,17 @@ def main(argv: list[str] | None = None) -> None:
         f"  T={result.temperature_K:.0f}K  ne={result.electron_density_cm3:.2e}  "
         f"converged={result.converged}  n_obs={n_obs}"
     )
+    ne_source = (
+        "stark"
+        if result.quality_metrics.get("ne_from_stark")
+        else "pressure_balance_fallback (ASSUMED)"
+    )
+    print(
+        f"  n_e source={ne_source}  stark_lines={stark_info.get('n_lines', 0)}  "
+        f"scatter={stark_info.get('ne_scatter_cm3', 0.0) or 0.0:.2e}"
+    )
+    for line_desc in stark_info.get("lines", []) or []:
+        print(f"    stark line: {line_desc}")
     print("=" * 72)
     print(f"  {'el':<4}{'cert(wt%)':>11}{'pred(wt%)':>11}{'err':>9}{'n_obs':>7}")
     for e in cert_elems:
@@ -247,6 +291,10 @@ def main(argv: list[str] | None = None) -> None:
         "ne": result.electron_density_cm3,
         "converged": result.converged,
         "pred": {e: pred.get(e, 0.0) for e in pipeline.elements},
+        "ne_source": (
+            "stark" if result.quality_metrics.get("ne_from_stark") else "pressure_balance"
+        ),
+        "stark_ne": stark_info,
         "obs_counts": obs_counts,
         "dropped": dropped,
         "fps": fps,

@@ -5,7 +5,7 @@ Iterative solver for Classic CF-LIBS.
 import os
 import warnings
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, NamedTuple, Any
+from typing import List, Dict, Optional, Sequence, Tuple, NamedTuple, Any
 import numpy as np
 from collections import defaultdict
 
@@ -1064,6 +1064,9 @@ class IterativeCFLIBSSolver:
         self.apply_self_absorption = apply_self_absorption
         self.self_absorption_corrector: Optional[SelfAbsorptionCorrector] = None
         self._last_sa_max_tau: float = 0.0
+        # Stark n_e diagnostic stats from the most recent _update_ne_python
+        # call (line count + MAD scatter), surfaced in quality_metrics.
+        self._last_stark_stats: Dict[str, float] = {"n_lines": 0, "scatter_cm3": 0.0}
         if apply_self_absorption:
             self.self_absorption_corrector = SelfAbsorptionCorrector(
                 optical_depth_threshold=0.1,
@@ -1283,6 +1286,38 @@ class IterativeCFLIBSSolver:
             instrument_fwhm_nm=stark_diagnostic.instrument_fwhm_nm,
             doppler_fwhm_nm=stark_diagnostic.doppler_fwhm_nm,
         )
+
+    def _estimate_ne_from_stark_multi(
+        self,
+        stark_diagnostics: Sequence["StarkDiagnosticLine"],
+        T_K: float,
+    ) -> Tuple[Optional[float], int, float]:
+        """Combine several Stark diagnostic lines into one robust ``n_e``.
+
+        Each line is inverted independently at the *current* iteration
+        temperature (the ``(T/T_ref)^alpha`` factor is the only T-dependent
+        term left once the Gaussian components are deconvolved), then the
+        per-line densities are combined with the median; the scatter is the
+        robust 1.4826*MAD (std for n=2, 0 for a single line).
+
+        Returns ``(ne_median, n_lines_used, scatter_cm3)``; ``ne_median`` is
+        ``None`` when no line yields a usable density.
+        """
+        values: List[float] = []
+        for diag in stark_diagnostics:
+            ne = self._estimate_ne_from_stark(diag, T_K)
+            if ne is not None:
+                values.append(float(ne))
+        if not values:
+            return None, 0, 0.0
+        arr = np.asarray(values, dtype=float)
+        ne_median = float(np.median(arr))
+        if len(arr) >= 2:
+            mad = float(np.median(np.abs(arr - ne_median)))
+            scatter = 1.4826 * mad if mad > 0 else float(np.std(arr))
+        else:
+            scatter = 0.0
+        return ne_median, len(values), scatter
 
     def _apply_saha_correction(
         self,
@@ -1627,6 +1662,7 @@ class IterativeCFLIBSSolver:
         observations: List[LineObservation],
         closure_mode: str = "standard",
         stark_diagnostic: Optional["StarkDiagnosticLine"] = None,
+        stark_diagnostics: Optional[Sequence["StarkDiagnosticLine"]] = None,
         **closure_kwargs,
     ) -> CFLIBSResult:
         """
@@ -1641,7 +1677,8 @@ class IterativeCFLIBSSolver:
         Parameters:
             observations (List[LineObservation]): Spectral line observations to invert; lines are grouped by element.
             closure_mode (str): Closure method for converting Boltzmann intercepts to concentrations. One of "standard", "matrix", "oxide", "ilr", "pwlr", or "dirichlet_residual".
-            stark_diagnostic (StarkDiagnosticLine, optional): Measured isolated line used as the PRIMARY per-iteration ``n_e`` diagnostic via its Stark width (Tognoni 2010; Aragón & Aguilera 2010). When absent, ``n_e`` falls back to the (physically invalid for LIBS) 1-atm pressure balance, which logs a warning.
+            stark_diagnostic (StarkDiagnosticLine, optional): Single measured isolated line used as the PRIMARY per-iteration ``n_e`` diagnostic via its Stark width (Tognoni 2010; Aragón & Aguilera 2010). When no diagnostic is available, ``n_e`` falls back to the (physically invalid for LIBS) 1-atm pressure balance, which logs a warning.
+            stark_diagnostics (Sequence[StarkDiagnosticLine], optional): Multiple measured Stark diagnostic lines; the per-line densities are combined robustly (median, MAD scatter) each iteration. May be combined with ``stark_diagnostic``. Typically produced by :func:`cflibs.inversion.physics.stark_ne.measure_stark_ne`.
             **closure_kwargs: Additional keyword arguments forwarded to the chosen closure method (for example, a matrix_element for "matrix" mode).
 
         Returns:
@@ -1666,23 +1703,28 @@ class IterativeCFLIBSSolver:
         # lax common-slope kernel), so it forces the Python loop as well.
         # The Stark n_e diagnostic is only wired into the Python reference loop
         # (the lax body's n_e update is a traced pressure-balance kernel), so a
-        # supplied stark_diagnostic forces the Python path.
+        # supplied stark diagnostic forces the Python path.
+        diags: List["StarkDiagnosticLine"] = []
+        if stark_diagnostic is not None:
+            diags.append(stark_diagnostic)
+        if stark_diagnostics:
+            diags.extend(stark_diagnostics)
         if (
             HAS_JAX
             and self.use_lax_while_loop
             and not self.apply_self_absorption
             and not self.saha_boltzmann_graph
-            and stark_diagnostic is None
+            and not diags
         ):
             try:
                 return self._solve_lax(observations, closure_mode, **closure_kwargs)
             except _LaxFallback as exc:
                 logger.info("lax.while_loop path bailed out (%s); using Python loop", exc)
                 return self._solve_python(
-                    observations, closure_mode, stark_diagnostic=stark_diagnostic, **closure_kwargs
+                    observations, closure_mode, stark_diagnostics=diags, **closure_kwargs
                 )
         return self._solve_python(
-            observations, closure_mode, stark_diagnostic=stark_diagnostic, **closure_kwargs
+            observations, closure_mode, stark_diagnostics=diags, **closure_kwargs
         )
 
     def _prefetch_ips_python(self, elements: List[str]) -> Dict[str, float]:
@@ -1813,7 +1855,7 @@ class IterativeCFLIBSSolver:
 
     def _update_ne_python(
         self,
-        stark_diagnostic: Optional["StarkDiagnosticLine"],
+        stark_diagnostics: Sequence["StarkDiagnosticLine"],
         T_K: float,
         n_e: float,
         concentrations: Dict[str, float],
@@ -1823,16 +1865,22 @@ class IterativeCFLIBSSolver:
     ) -> Tuple[float, bool]:
         """Compute the next ``n_e`` and its provenance flag (``_solve_python`` helper).
 
-        PRIMARY: Stark-width diagnostic (canonical LIBS n_e). FALLBACK: the
-        physically-invalid isobaric 1-atm pressure balance, which logs a warning.
-        Returns ``(ne_new, ne_from_stark)``.
+        PRIMARY: Stark-width diagnostic (canonical LIBS n_e; multiple lines
+        are combined by the median with MAD scatter — Ciucci 1999 / Tognoni
+        2010 treat the Stark n_e as an INPUT to the Saha terms, not a closure
+        iterate). FALLBACK: the physically-invalid isobaric 1-atm pressure
+        balance, which logs a warning. Returns ``(ne_new, ne_from_stark)``;
+        the per-call line count and scatter are stashed on
+        ``self._last_stark_stats`` for the quality metrics.
         """
-        ne_stark = self._estimate_ne_from_stark(stark_diagnostic, T_K)
+        ne_stark, n_lines, scatter = self._estimate_ne_from_stark_multi(stark_diagnostics, T_K)
         if ne_stark is not None:
+            self._last_stark_stats = {"n_lines": n_lines, "scatter_cm3": scatter}
             return ne_stark, True
-        if stark_diagnostic is not None:
+        self._last_stark_stats = {"n_lines": 0, "scatter_cm3": 0.0}
+        if stark_diagnostics:
             logger.warning(
-                "Stark diagnostic line supplied but yielded no usable n_e "
+                "Stark diagnostic line(s) supplied but yielded no usable n_e "
                 "(width fully accounted for by instrument+Doppler, or no "
                 "reference Stark width); falling back to 1-atm pressure balance."
             )
@@ -1853,7 +1901,7 @@ class IterativeCFLIBSSolver:
         obs_by_element: Dict[str, List[LineObservation]],
         ips: Dict[str, float],
         closure_mode: str,
-        stark_diagnostic: Optional["StarkDiagnosticLine"],
+        stark_diagnostics: Sequence["StarkDiagnosticLine"],
         closure_kwargs: Dict[str, Any],
         *,
         T_K: float,
@@ -2003,7 +2051,7 @@ class IterativeCFLIBSSolver:
         # 1 atm in the analysis window — so it is demoted to a last resort
         # and emits a warning whenever it drives the n_e update.
         ne_new, ne_from_stark = self._update_ne_python(
-            stark_diagnostic,
+            stark_diagnostics,
             T_K,
             n_e,
             concentrations,
@@ -2094,6 +2142,8 @@ class IterativeCFLIBSSolver:
         ne_from_stark: bool,
         self_absorption_applied: bool,
         last_max_tau: float,
+        stark_n_lines: int = 0,
+        stark_ne_scatter_cm3: float = 0.0,
     ) -> Dict[str, float]:
         """Assemble the post-loop ``quality_metrics`` dict.
 
@@ -2138,6 +2188,10 @@ class IterativeCFLIBSSolver:
             # the final n_e, 0.0 when the physically-invalid 1-atm pressure
             # balance fallback was used.
             "ne_from_stark": float(ne_from_stark),
+            # Number of literature-grade Stark lines combined for the final n_e
+            # and their robust (1.4826*MAD) scatter — the n_e trust surface.
+            "stark_n_lines": float(stark_n_lines),
+            "stark_ne_scatter_cm3": float(stark_ne_scatter_cm3),
         }
         quality_metrics.update(lte_report.quality_metrics)
         # Self-absorption diagnostics: max optical depth seen on the final
@@ -2160,6 +2214,7 @@ class IterativeCFLIBSSolver:
     ) -> Dict[str, float]:
         """Assemble the post-loop ``quality_metrics`` dict (``_solve_python`` helper)."""
         fit_r2_final = last_common_fit.r_squared if last_common_fit is not None else 0.0
+        stark_stats = getattr(self, "_last_stark_stats", None) or {}
         return self._assemble_quality_metrics(
             observations,
             T_K,
@@ -2171,6 +2226,10 @@ class IterativeCFLIBSSolver:
             ne_from_stark=ne_from_stark,
             self_absorption_applied=self.apply_self_absorption,
             last_max_tau=last_max_tau,
+            stark_n_lines=int(stark_stats.get("n_lines", 0)) if ne_from_stark else 0,
+            stark_ne_scatter_cm3=(
+                float(stark_stats.get("scatter_cm3", 0.0)) if ne_from_stark else 0.0
+            ),
         )
 
     def _solve_python(
@@ -2178,6 +2237,7 @@ class IterativeCFLIBSSolver:
         observations: List[LineObservation],
         closure_mode: str = "standard",
         stark_diagnostic: Optional["StarkDiagnosticLine"] = None,
+        stark_diagnostics: Optional[Sequence["StarkDiagnosticLine"]] = None,
         **closure_kwargs,
     ) -> CFLIBSResult:
         """Reference Python ``for``-loop implementation of :meth:`solve`.
@@ -2190,6 +2250,13 @@ class IterativeCFLIBSSolver:
         T_K = 10000.0
         T_corona = None
         n_e = 1.0e17
+
+        # Normalise the single/multi Stark-diagnostic inputs into one list.
+        diags: List["StarkDiagnosticLine"] = []
+        if stark_diagnostic is not None:
+            diags.append(stark_diagnostic)
+        if stark_diagnostics:
+            diags.extend(stark_diagnostics)
 
         # Cache static data (IPs, atomic data)
         # Group observations by element
@@ -2220,7 +2287,7 @@ class IterativeCFLIBSSolver:
                 obs_by_element,
                 ips,
                 closure_mode,
-                stark_diagnostic,
+                diags,
                 closure_kwargs,
                 T_K=T_K,
                 n_e=n_e,
@@ -2281,6 +2348,11 @@ class IterativeCFLIBSSolver:
             # specific literature attribution.
             T_corona = 0.8 * T_K
 
+        # When the Stark diagnostic drove n_e, the multi-line scatter is a real
+        # measurement uncertainty — surface it (0.0 for a single line or the
+        # pressure-balance fallback, whose uncertainty is unquantifiable).
+        ne_uncertainty = float(quality_metrics.get("stark_ne_scatter_cm3", 0.0))
+
         return CFLIBSResult(
             temperature_K=T_K,
             temperature_uncertainty_K=0.0,  # See solve_with_uncertainty for propagation
@@ -2291,7 +2363,7 @@ class IterativeCFLIBSSolver:
             converged=converged,
             temperature_corona_K=T_corona,
             quality_metrics=quality_metrics,
-            electron_density_uncertainty_cm3=0.0,
+            electron_density_uncertainty_cm3=ne_uncertainty,
             boltzmann_covariance=None,
         )
 
@@ -2602,6 +2674,7 @@ class IterativeCFLIBSSolver:
         observations: List[LineObservation],
         closure_mode: str = "standard",
         n_e_relative_uncertainty: float = 0.0,
+        stark_diagnostics: Optional[Sequence["StarkDiagnosticLine"]] = None,
         **closure_kwargs,
     ) -> CFLIBSResult:
         """
@@ -2632,7 +2705,9 @@ class IterativeCFLIBSSolver:
             ImportError: If the external `uncertainties`-based utilities are not available.
         """
         # First run the standard solver to convergence
-        result = self.solve(observations, closure_mode, **closure_kwargs)
+        result = self.solve(
+            observations, closure_mode, stark_diagnostics=stark_diagnostics, **closure_kwargs
+        )
 
         # Import uncertainty utilities (will raise ImportError if not available).
         # The closure-propagation and ufloat helpers are imported inside the
@@ -3264,6 +3339,7 @@ class IterativeCFLIBSSolverJax(IterativeCFLIBSSolver):
         observations: List[LineObservation],
         closure_mode: str = "standard",
         stark_diagnostic: Optional["StarkDiagnosticLine"] = None,
+        stark_diagnostics: Optional[Sequence["StarkDiagnosticLine"]] = None,
         **closure_kwargs,
     ) -> CFLIBSResult:
         """Deprecated thin shim for the JAX iterative path (T1-3).
@@ -3288,12 +3364,13 @@ class IterativeCFLIBSSolverJax(IterativeCFLIBSSolver):
             stacklevel=2,
         )
         # The Stark-width n_e diagnostic is implemented only on the parent
-        # Python path; force it when a diagnostic line is supplied.
-        if stark_diagnostic is not None:
+        # Python path; force it when any diagnostic line is supplied.
+        if stark_diagnostic is not None or stark_diagnostics:
             return super().solve(
                 observations,
                 closure_mode,
                 stark_diagnostic=stark_diagnostic,
+                stark_diagnostics=stark_diagnostics,
                 **closure_kwargs,
             )
         if not HAS_JAX:

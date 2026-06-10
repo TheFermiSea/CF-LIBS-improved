@@ -246,7 +246,19 @@ def _trust_report(result, diagnostics: Optional[dict] = None) -> tuple[list, lis
 
     ne_source = _ne_source_label(qm)
     if ne_source == "stark":
-        info.append("n_e source  : Stark-width diagnostic (measured)")
+        n_lines = int(qm.get("stark_n_lines", 0) or 0)
+        scatter = float(qm.get("stark_ne_scatter_cm3", 0.0) or 0.0)
+        detail = f"{n_lines} line{'s' if n_lines != 1 else ''}" if n_lines else "supplied"
+        if scatter > 0:
+            detail += f", scatter {scatter:.1e} cm^-3"
+        info.append(f"n_e source  : Stark-width diagnostic (measured, {detail})")
+        ne_value = float(getattr(result, "electron_density_cm3", 0.0) or 0.0)
+        if scatter > 0 and ne_value > 0 and scatter > ne_value:
+            warnings_out.append(
+                f"WARNING: Stark n_e line-to-line scatter ({scatter:.1e} cm^-3) exceeds "
+                f"the measured median ({ne_value:.1e} cm^-3); the diagnostic lines "
+                "disagree — treat n_e as an order-of-magnitude measurement."
+            )
     elif ne_source == "pressure_balance_fallback":
         info.append("n_e source  : 1-atm pressure-balance fallback (ASSUMED)")
         warnings_out.append(
@@ -401,6 +413,7 @@ def invert_cmd(args):
         saha_boltzmann_graph=getattr(args, "saha_boltzmann_graph", None),
         closure_mode=getattr(args, "closure_mode", None),
         apply_self_absorption=getattr(args, "apply_self_absorption", None),
+        stark_ne=getattr(args, "stark_ne", None),
         resolving_power=getattr(args, "resolving_power", None),
         wavelength_tolerance_nm=getattr(args, "tolerance_nm", None),
         min_peak_height=getattr(args, "min_peak_height", None),
@@ -441,6 +454,7 @@ def analyze_cmd(args):
         saha_boltzmann_graph=getattr(args, "saha_boltzmann_graph", None),
         closure_mode=getattr(args, "closure_mode", None),
         apply_self_absorption=getattr(args, "apply_self_absorption", None),
+        stark_ne=getattr(args, "stark_ne", None),
         min_relative_intensity=getattr(args, "min_relative_intensity", None),
         resolving_power=getattr(args, "resolving_power", None),
         response_curve=getattr(args, "response_curve", None),
@@ -727,6 +741,7 @@ def batch_cmd(args):
         saha_boltzmann_graph=getattr(args, "saha_boltzmann_graph", None),
         closure_mode=getattr(args, "closure_mode", None),
         apply_self_absorption=getattr(args, "apply_self_absorption", None),
+        stark_ne=getattr(args, "stark_ne", None),
         min_relative_intensity=getattr(args, "min_relative_intensity", None),
         resolving_power=getattr(args, "resolving_power", None),
         response_curve=getattr(args, "response_curve", None),
@@ -971,6 +986,18 @@ def _add_pipeline_flags(parser) -> None:
             "(Tognoni et al. 2010). Only the relative shape matters; the curve is "
             "normalized to max=1. Default: no correction. Do NOT use on ChemCam CCS "
             "data (already response-corrected upstream)."
+        ),
+    )
+    parser.add_argument(
+        "--stark-ne",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Measure n_e from the Stark widths of observed literature-grade "
+            "lines (pinned-Gaussian Voigt fit; Gigosos 2014, Konjevic 2002) "
+            "instead of assuming the 1-atm pressure-balance fallback. Degrades "
+            "gracefully to the (warned) fallback when no line qualifies "
+            "(default: from --preset; ON for geological/metallic, OFF for raw)."
         ),
     )
 

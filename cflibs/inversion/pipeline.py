@@ -47,9 +47,9 @@ CLOSURE_MODES = ("standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residu
 #: (oxide stoichiometry is wrong physics for alloys); ``raw`` reproduces the
 #: legacy defaults for comparison runs.
 ANALYSIS_PRESETS = {
-    "geological": {"saha_boltzmann_graph": True, "closure_mode": "oxide"},
-    "metallic": {"saha_boltzmann_graph": True, "closure_mode": "standard"},
-    "raw": {"saha_boltzmann_graph": False, "closure_mode": "standard"},
+    "geological": {"saha_boltzmann_graph": True, "closure_mode": "oxide", "stark_ne": True},
+    "metallic": {"saha_boltzmann_graph": True, "closure_mode": "standard", "stark_ne": True},
+    "raw": {"saha_boltzmann_graph": False, "closure_mode": "standard", "stark_ne": False},
 }
 
 DEFAULT_ANALYSIS_PRESET = "geological"
@@ -102,6 +102,9 @@ class AnalysisPipelineConfig:
     closure_kwargs: dict = field(default_factory=dict)
     matrix_element: Optional[str] = None
     oxide_elements: Optional[list] = None
+    #: Stark-broadening n_e diagnostic (bead pxex): measure n_e from observed
+    #: literature-grade line widths; falls back (with warning) when none qualify.
+    stark_ne: bool = True
 
 
 def _first_not_none(*values):
@@ -129,6 +132,7 @@ def build_pipeline_config(
     wavelength_calibration: Optional[bool] = None,
     shift_coherence_veto: Optional[bool] = None,
     response_curve: Optional[str] = None,
+    stark_ne: Optional[bool] = None,
 ) -> AnalysisPipelineConfig:
     """Resolve the shared pipeline configuration for analyze/invert/batch.
 
@@ -210,6 +214,7 @@ def build_pipeline_config(
         closure_kwargs=dict(cfg.get("closure_kwargs", {})),
         matrix_element=cfg.get("matrix_element"),
         oxide_elements=cfg.get("oxide_elements"),
+        stark_ne=bool(_first_not_none(stark_ne, cfg.get("stark_ne"), preset_knobs["stark_ne"])),
     )
     _log_pipeline_config(pipeline)
     return pipeline
@@ -219,6 +224,7 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
     """Log the resolved preset and every pipeline knob at INFO."""
     logger.info(
         "Resolved analysis preset '%s': saha_boltzmann_graph=%s, closure_mode=%s, "
+        "stark_ne=%s, "
         "apply_self_absorption=%s, exclude_resonance=%s, min_relative_intensity=%s, "
         "top_k_per_element=%s, resolving_power=%s, wavelength_calibration=%s, "
         "shift_coherence_veto=%s, "
@@ -230,6 +236,7 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
         pipeline.preset,
         pipeline.saha_boltzmann_graph,
         pipeline.closure_mode,
+        pipeline.stark_ne,
         pipeline.apply_self_absorption,
         pipeline.exclude_resonance,
         pipeline.min_relative_intensity,
@@ -494,26 +501,44 @@ def _finalize_closure_kwargs(pipeline: AnalysisPipelineConfig, observations) -> 
 
 
 def _solve_analyze_result(
-    solver, observations, closure_mode: str, closure_kwargs: dict, uncertainty_mode: str
+    solver,
+    observations,
+    closure_mode: str,
+    closure_kwargs: dict,
+    uncertainty_mode: str,
+    stark_diagnostics=None,
 ):
     """Run the solver for ``analyze`` honouring the requested uncertainty mode."""
     if uncertainty_mode == "analytical":
         try:
             return solver.solve_with_uncertainty(
-                observations, closure_mode=closure_mode, **closure_kwargs
+                observations,
+                closure_mode=closure_mode,
+                stark_diagnostics=stark_diagnostics,
+                **closure_kwargs,
             )
         except ImportError:
             logger.warning(
                 "uncertainties package not installed; falling back to solve() without UQ. "
                 "Install with: pip install uncertainties"
             )
-            return solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
+            return solver.solve(
+                observations,
+                closure_mode=closure_mode,
+                stark_diagnostics=stark_diagnostics,
+                **closure_kwargs,
+            )
     elif uncertainty_mode == "mc":
         from cflibs.inversion.physics.uncertainty import MonteCarloUQ
 
         mc = MonteCarloUQ(solver, n_samples=200)
         mc_result = mc.run(observations)
-        result = solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
+        result = solver.solve(
+            observations,
+            closure_mode=closure_mode,
+            stark_diagnostics=stark_diagnostics,
+            **closure_kwargs,
+        )
         return result.__class__(
             temperature_K=mc_result.T_mean,
             temperature_uncertainty_K=mc_result.T_std,
@@ -525,7 +550,12 @@ def _solve_analyze_result(
             quality_metrics=result.quality_metrics,
         )
     else:
-        return solver.solve(observations, closure_mode=closure_mode, **closure_kwargs)
+        return solver.solve(
+            observations,
+            closure_mode=closure_mode,
+            stark_diagnostics=stark_diagnostics,
+            **closure_kwargs,
+        )
 
 
 def run_pipeline(
@@ -605,6 +635,47 @@ def run_pipeline(
     if len(observations) == 0:
         raise ValueError("No usable spectral lines detected for inversion.")
 
+    # Stark-broadening n_e diagnostic (bead pxex; audit 02-F2): measure n_e
+    # from the widths of observed literature-grade lines so it enters the Saha
+    # terms as a measurement, not the 1-atm pressure-balance assumption. When
+    # no line qualifies, stark_diagnostics stays None and the solver keeps the
+    # existing (warned) fallback path — behaviour unchanged.
+    stark_diagnostics = None
+    if pipeline.stark_ne:
+        from cflibs.inversion.physics.stark_ne import measure_stark_ne
+
+        try:
+            stark_result = measure_stark_ne(
+                wavelength,
+                intensity,
+                observations,
+                atomic_db,
+                resolving_power=pipeline.resolving_power,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(f"Stark n_e diagnostic failed ({exc!r}); using solver fallback n_e.")
+            stark_result = None
+        if stark_result is not None:
+            diagnostics["stark_ne"] = {
+                "n_lines": stark_result.n_lines,
+                "ne_cm3": stark_result.ne_median_cm3,
+                "ne_scatter_cm3": stark_result.ne_scatter_cm3,
+                "instrument_fwhm_source": stark_result.instrument_fwhm_source,
+                "lines": [
+                    {
+                        "element": m.element,
+                        "ionization_stage": m.ionization_stage,
+                        "wavelength_nm": m.wavelength_nm,
+                        "lorentz_fwhm_nm": m.lorentz_fwhm_nm,
+                        "ne_cm3": m.ne_cm3,
+                    }
+                    for m in stark_result.measurements
+                ],
+                "rejected": dict(stark_result.rejected),
+            }
+            if stark_result.usable:
+                stark_diagnostics = stark_result.diagnostics
+
     solver = IterativeCFLIBSSolver(
         atomic_db=atomic_db,
         max_iterations=pipeline.max_iterations,
@@ -621,7 +692,12 @@ def run_pipeline(
 
     closure_kwargs = _finalize_closure_kwargs(pipeline, observations)
     result = _solve_analyze_result(
-        solver, observations, pipeline.closure_mode, closure_kwargs, uncertainty_mode
+        solver,
+        observations,
+        pipeline.closure_mode,
+        closure_kwargs,
+        uncertainty_mode,
+        stark_diagnostics=stark_diagnostics,
     )
 
     # Solver-stage drops: requested elements that survived detection and
