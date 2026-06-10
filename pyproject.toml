@@ -179,10 +179,6 @@ ignore_errors = true
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-# datagen.py: legacy Colab notebook (starts with `!pip install …`), kept only
-# for historical reference per docs/archive/legacy/README.md. Ruff can't parse
-# IPython magics; excluding the whole file is cheaper than rewriting.
-extend-exclude = ["tests/validation/validation", "datagen.py"]
 
 [tool.ruff.lint]
 # Enable flake8-tidy-imports (TID) so we can ban ML libraries in the shipped

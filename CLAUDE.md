@@ -225,7 +225,6 @@ Optional Bayesian inference via NumPyro (`cflibs/inversion/bayesian.py`).
 ## Cluster Notes
 
 - Use `cflibs generate-manifold` for manifold builds.
-- Do not launch the legacy `manifold-generator.py` with `mpirun`/`srun`; it is not MPI-aware.
 
 ## Commit Style
 
