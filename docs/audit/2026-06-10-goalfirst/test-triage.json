@@ -1,0 +1,1642 @@
+{
+ "counts": {
+  "mixed": 44,
+  "physics-truth": 72,
+  "implementation-pin": 12,
+  "unit-utility": 60,
+  "goal-metric": 23
+ },
+ "purgeList": [
+  {
+   "path": "tests/benchmark/test_alias_sweep_workflows_registered.py",
+   "reason": "Pins exact kwargs dicts, cell ordering, and r2-gate of the historical 8-cell alias-fix sweep (jaunty-weaving-mist Phase C campaign). Constant==literal tautologies preserving a finished experiment's configuration; measures no accuracy. Experiment archaeology."
+  },
+  {
+   "path": "tests/benchmark/test_jax_workflows_xfail_check.py",
+   "reason": "Meta-test asserting a stale @xfail marker string still exists in another test file's source; self-described as delete-when-fixed housekeeping for bead 359q. Pure archaeology, protects nothing."
+  },
+  {
+   "path": "tests/inversion/test_bayesian_back_compat.py",
+   "reason": "Pure back-compat shim suite: legacy flat-path names must resolve after the bayesian.py->package split. With zero users no back-compat is owed; test_flat_and_package_paths_agree imports the same module twice and asserts identity (tautological). Any real consumer test covers the imports that matter. PURGE."
+  },
+  {
+   "path": "tests/inversion/test_bayesian_samplers.py",
+   "reason": "Entirely back-compat surface pins: alias identity (NumPyroNUTSSampler is MCMCSampler), legacy run() keyword-set preservation, Protocol duck-typing tautologies, frozen-dataclass shape. No assertion failing here would ever mean identification/composition accuracy or runtime got worse \u2014 only that the API was renamed."
+  },
+  {
+   "path": "tests/test_boltzmann_outlier_tuning.py",
+   "reason": "Pins tuned fitter defaults as exact values (outlier_sigma==2.5, max_iterations==10, huber_epsilon==1.2); remaining asserts are constructor-assignment tautologies and weak smoke already covered by test_boltzmann.py."
+  },
+  {
+   "path": "tests/test_comb_precision.py",
+   "reason": "Pins tuned Tier-2 detection thresholds (Mn/Na/K) and exact CombIdentifier defaults (0.12, 2.0) on contrived inputs. Whether these thresholds help F1 is a benchmark question, not a unit invariant."
+  },
+  {
+   "path": "tests/test_comb_recall.py",
+   "reason": "Pins the capped-denominator scoring formula (score 2/10 vs old 2/50) under hand-tuned parameters; explicit old-vs-new behavior archaeology. A benchmark-better scoring change would fail it without any recall regression."
+  },
+  {
+   "path": "tests/test_daq_interface.py",
+   "reason": "process_spectrum is an explicit placeholder; tests pin its hardcoded dummy plasma parameters (T==12000 K, ne==1e17) \u2014 asserting a stub returns its stub values. Nothing goal- or physics-protecting."
+  },
+  {
+   "path": "tests/test_jax_import_hygiene.py",
+   "reason": "AST lint enforcing that only a hardcoded carve-out list may use literal 'try: import jax' and kernels.py must not import host.py. Pure architectural-conformance pin (ADR-0001/T1-1 archaeology); failing never indicates the goal got worse."
+  },
+  {
+   "path": "tests/test_kernel_module_layout.py",
+   "reason": "Asserts kernels.py module layout exists per ADR and that host modules re-export private kernel symbols 'for back-compat with existing callers'. Module-layout and shim re-export pins; no physics or goal protection."
+  },
+  {
+   "path": "tests/test_repo_health.py",
+   "reason": "Enforces an 800-LOC-per-file ceiling on bayesian/*.py (ADR/spec acceptance criterion). Pure code-organization policing; failing can never indicate identification/composition accuracy or runtime got worse."
+  },
+  {
+   "path": "tests/test_vrabel2020_cdsb.py",
+   "reason": "Empty tombstone: docstring-only module documenting that the legacy CDSBPlotter tests were removed with the class; coverage now lives in test_self_absorption.py. Zero assertions, pure deleted-feature remnant \u2014 delete the file."
+  }
+ ],
+ "mixed": [
+  {
+   "path": "tests/bandit/test_parameter_sweep_bandit_integration.py",
+   "pinned": [
+    "test_bandit_zero_produces_no_arm_fields_in_manifest"
+   ]
+  },
+  {
+   "path": "tests/benchmark/test_alias_high_recall_workflow.py",
+   "pinned": [
+    "test_strict_alias_still_registered_unchanged"
+   ]
+  },
+  {
+   "path": "tests/benchmark/test_bayesian_config.py",
+   "pinned": [
+    "test_bayesian_pipeline_config_applied"
+   ]
+  },
+  {
+   "path": "tests/cli/test_analyze_invert_no_drift.py",
+   "pinned": [
+    "test_helper_and_analyze_default_floor_agree",
+    "test_helper_exclude_resonance_tied_to_self_absorption",
+    "test_analyze_and_invert_select_identical_lines"
+   ]
+  },
+  {
+   "path": "tests/cli/test_pipeline_defaults.py",
+   "pinned": [
+    "TestPresetResolution::test_default_preset_is_geological_best_validated",
+    "TestPresetResolution::test_metallic_preset",
+    "TestPresetResolution::test_raw_preset_is_legacy_defaults",
+    "TestPresetResolution::test_preset_registry_contents",
+    "TestPresetResolution::test_axis_alignment_knobs_default_fixed_raw_keeps_legacy",
+    "TestBatchAnalyzeParity::test_default_pipeline_is_measured_best"
+   ]
+  },
+  {
+   "path": "tests/cli/test_response_curve_plumbing.py",
+   "pinned": [
+    "test_run_pipeline_identity_is_bit_identical"
+   ]
+  },
+  {
+   "path": "tests/evolution/test_prompts.py",
+   "pinned": [
+    "test_render_preamble_states_the_hard_constraint",
+    "test_render_preamble_clarifies_ml_is_ok_in_optimization"
+   ]
+  },
+  {
+   "path": "tests/inversion/identify/test_alias_jax_boltzmann.py",
+   "pinned": [
+    "TestALIASIdentifierFlag::test_constructor_accepts_flag"
+   ]
+  },
+  {
+   "path": "tests/inversion/identify/test_alias_jax_nnls.py",
+   "pinned": [
+    "TestALIASIdentifierJaxFlags::test_all_flags_accepted",
+    "TestALIASIdentifierJaxFlags::test_default_is_cpu"
+   ]
+  },
+  {
+   "path": "tests/inversion/identify/test_alias_presets.py",
+   "pinned": [
+    "test_all_expected_presets_registered",
+    "test_strict_preset_uses_fixed_gate",
+    "test_v2_preset_uses_adaptive_gates",
+    "test_high_recall_v2_is_v2_plus_high_recall",
+    "test_consensus_voter_matches_v2_physics"
+   ]
+  },
+  {
+   "path": "tests/inversion/identify/test_candidate_count_invariance.py",
+   "pinned": [
+    "TestStandaloneNNLSCountInvariance::test_sum_normalized_floor_mechanism_is_count_scaling"
+   ]
+  },
+  {
+   "path": "tests/inversion/identify/test_comb_wavelength_tolerance.py",
+   "pinned": [
+    "test_comb_legacy_defaults_unchanged_without_resolving_power"
+   ]
+  },
+  {
+   "path": "tests/inversion/identify/test_residual_gates.py",
+   "pinned": [
+    "TestEdgeRidingScanRegression::test_legacy_mop_up_scan_rides_edge_and_admits_contaminated_match",
+    "TestPerPeakOwnership::test_legacy_path_still_double_counts"
+   ]
+  },
+  {
+   "path": "tests/inversion/physics/test_boltzmann_jax_composition.py",
+   "pinned": [
+    "TestBehaviorContracts::test_default_use_jax_is_false"
+   ]
+  },
+  {
+   "path": "tests/inversion/solve/bayesian/test_vmap_chain_method.py",
+   "pinned": [
+    "test_mcmcsampler_uses_vectorized_chain_method",
+    "test_mcmcsampler_max_tree_depth_default_is_8"
+   ]
+  },
+  {
+   "path": "tests/inversion/test_bayesian_forward_model_kernel_migration.py",
+   "pinned": [
+    "test_forward_py_body_does_not_call_adapter",
+    "test_mcmc_sampler_default_chain_method_is_vectorized"
+   ]
+  },
+  {
+   "path": "tests/inversion/test_bayesian_priors.py",
+   "pinned": [
+    "test_prior_config_defaults",
+    "test_noise_parameters_defaults"
+   ]
+  },
+  {
+   "path": "tests/inversion/test_candidate_prefilter_falsy_zero.py",
+   "pinned": [
+    "TestFalsyZeroEstimate::test_zero_estimated_T_is_used_not_fallback",
+    "TestFalsyZeroEstimate::test_zero_estimated_ne_is_used_not_fallback"
+   ]
+  },
+  {
+   "path": "tests/inversion/test_comb_fp_reduction.py",
+   "pinned": [
+    "test_tier2_defaults_are_strict",
+    "test_tier2_strict_disabled_matches_baseline"
+   ]
+  },
+  {
+   "path": "tests/inversion/test_response_correction.py",
+   "pinned": [
+    "TestSpectralResponseCorrection::test_identity_none_is_bit_identical",
+    "test_argon_branching_ratio_stub_raises_with_citation"
+   ]
+  },
+  {
+   "path": "tests/manifold/test_generator_physics_w3.py",
+   "pinned": [
+    "TestDopplerSigmaParity::test_voigt_path_doppler_sigma_matches_profiles"
+   ]
+  },
+  {
+   "path": "tests/manifold/test_sampling_guard.py",
+   "pinned": [
+    "TestNyquistGuard::test_default_pixels_is_18432",
+    "TestNyquistGuard::test_yaml_default_pixels_is_18432"
+   ]
+  },
+  {
+   "path": "tests/radiation/test_forward_model_parity.py",
+   "pinned": [
+    "test_bayesian_forward_kernel_parity_deferred"
+   ]
+  },
+  {
+   "path": "tests/radiation/test_kernel_saha_three_stage.py",
+   "pinned": [
+    "TestBackCompat::test_two_stage_alias_points_at_three_stage",
+    "TestBackCompat::test_legacy_snapshot_runs_and_has_no_stage_three"
+   ]
+  },
+  {
+   "path": "tests/radiation/test_stark_t_factor_toggle.py",
+   "pinned": [
+    "test_toggle_on_disables_t_factor",
+    "test_toggle_value_must_be_exactly_1"
+   ]
+  },
+  {
+   "path": "tests/scripts/test_measure_bhvo2_harness.py",
+   "pinned": [
+    "test_default_knobs_are_cli_defaults",
+    "test_maintainer_gate_flags_resolve_to_defaults",
+    "test_preset_flag_resolves_bundle",
+    "test_script_does_not_hand_build_pipeline"
+   ]
+  },
+  {
+   "path": "tests/test_alias.py",
+   "pinned": [
+    "test_default_detection_threshold",
+    "test_max_lines_per_element_parameter"
+   ]
+  },
+  {
+   "path": "tests/test_alias_unit.py",
+   "pinned": [
+    "test_alias_default_is_strict",
+    "test_alias_high_recall_lowers_thresholds",
+    "test_per_ion_stage_default_off_byte_identical",
+    "test_temperature_estimator_legacy_byte_identical",
+    "test_r2_gate_fixed_mode_byte_identical",
+    "test_default_r2_gate_mode_is_adaptive_t"
+   ]
+  },
+  {
+   "path": "tests/test_closure_strategy.py",
+   "pinned": [
+    "TestSoftmaxClosureParity::test_bit_identical_1d",
+    "TestSoftmaxClosureParity::test_bit_identical_batched",
+    "TestSoftmaxClosureParity::test_bit_identical_extreme_values",
+    "TestILRClosureParity::test_matches_apply_ilr",
+    "TestPWLRClosureParity::test_matches_apply_pwlr"
+   ]
+  },
+  {
+   "path": "tests/test_comb.py",
+   "pinned": [
+    "test_default_min_correlation_remains_benchmark_gated",
+    "test_max_lines_per_element_parameter",
+    "test_coverage_penalty_reduces_score"
+   ]
+  },
+  {
+   "path": "tests/test_correlation_identifier.py",
+   "pinned": [
+    "test_instrument_fwhm_parameter",
+    "test_max_lines_per_element_parameter",
+    "test_default_min_confidence_lowered"
+   ]
+  },
+  {
+   "path": "tests/test_dirichlet_prior.py",
+   "pinned": [
+    "TestStickBreakingTransform::test_stick_breaking_produces_valid_simplex",
+    "TestStickBreakingTransform::test_stick_breaking_with_sparse_alpha",
+    "TestStickBreakingTransform::test_stick_breaking_uniform_alpha_is_uniform_on_simplex",
+    "TestStickBreakingTransform::test_stick_breaking_peaked_alpha_concentrates_mass",
+    "TestDirichletProperties::test_dirichlet_sum_to_one",
+    "TestDirichletProperties::test_dirichlet_all_positive",
+    "TestDirichletProperties::test_dirichlet_mean_equals_normalized_alpha",
+    "TestDirichletProperties::test_asymmetric_alpha_encodes_prior_knowledge"
+   ]
+  },
+  {
+   "path": "tests/test_distributed_mcmc.py",
+   "pinned": [
+    "TestDistributedMCMCConfig::test_default_values",
+    "TestDistributedMCMCResult::test_creation",
+    "TestGPUConfig::test_gpu_info_dataclass"
+   ]
+  },
+  {
+   "path": "tests/test_element_id.py",
+   "pinned": [
+    "test_identified_line_creation",
+    "test_identified_line_defaults",
+    "test_element_identification_creation",
+    "test_element_identification_result_creation",
+    "test_element_identification_result_consistency"
+   ]
+  },
+  {
+   "path": "tests/test_hybrid_consensus_2of3.py",
+   "pinned": [
+    "TestHybridIdentifierDefaultPreservation::test_require_both_default_is_true",
+    "TestHybridIdentifierDefaultPreservation::test_new_consensus_class_does_not_replace_hybrid_identifier"
+   ]
+  },
+  {
+   "path": "tests/test_line_selection.py",
+   "pinned": [
+    "TestLineSelectorInit::test_default_parameters",
+    "TestIsolationFactor::test_isolation_formula",
+    "TestScoringFormula::test_score_formula",
+    "TestScoringFormula::test_score_with_default_uncertainty",
+    "TestLineScore::test_dataclass_creation",
+    "TestLineSelectionResult::test_dataclass_creation"
+   ]
+  },
+  {
+   "path": "tests/test_matrix_effects.py",
+   "pinned": [
+    "TestPsRegimeGating::test_ns_defaults_unchanged",
+    "TestPsRegimeGating::test_ns_correction_alters_carbon"
+   ]
+  },
+  {
+   "path": "tests/test_no_hidden_x64_enablement.py",
+   "pinned": [
+    "test_jax_identifier_flags_for_does_not_mutate_x64"
+   ]
+  },
+  {
+   "path": "tests/test_partition_function_provider.py",
+   "pinned": [
+    "test_spec_is_cached_compute_once",
+    "test_derive_partition_spec_does_not_refit"
+   ]
+  },
+  {
+   "path": "tests/test_preprocessing_low_snr.py",
+   "pinned": [
+    "test_default_baseline_method_is_median_not_als"
+   ]
+  },
+  {
+   "path": "tests/test_quality.py",
+   "pinned": [
+    "TestQualityAssessorInit::test_default_thresholds",
+    "TestQualityMetrics::test_dataclass_creation"
+   ]
+  },
+  {
+   "path": "tests/test_spectral_nnls.py",
+   "pinned": [
+    "TestHybridUnionRecallFloor::test_standalone_default_is_count_invariant",
+    "TestHybridUnionRecallFloor::test_hybrid_union_arm_defaults_to_recall_favoring_floor",
+    "TestSpectralNNLSIdentifier::test_estimated_params_stored"
+   ]
+  },
+  {
+   "path": "tests/test_spectrum_model.py",
+   "pinned": [
+    "test_spectrum_model_legacy_mode_unchanged"
+   ]
+  },
+  {
+   "path": "tests/test_two_region_fit.py",
+   "pinned": [
+    "test_solver_two_region_flag"
+   ]
+  }
+ ],
+ "all": [
+  {
+   "path": "tests/bandit/test_parameter_sweep_bandit_integration.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_bandit_zero_produces_no_arm_fields_in_manifest"
+   ],
+   "reason": "Sweep-script wiring tests with stubs: round-robin allocation (yfbg compute-waste regression) and bandit posterior plumbing catch real breakage. The named test is a 'T1.1 byte-shape' legacy-output pin (manifest must be field-identical to pre-bandit format when --bandit 0)."
+  },
+  {
+   "path": "tests/bandit/test_thompson_allocator.py",
+   "category": "physics-truth",
+   "reason": "Mathematical/statistical correctness vs analytic oracle: known true arm means, >=70% allocation, sub-linear regret, bootstrap-CI shrinkage, determinism, NaN/Inf rejection. Failing means the allocator math is wrong, which wastes benchmark compute."
+  },
+  {
+   "path": "tests/benchmark/test_alias_high_recall_workflow.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_strict_alias_still_registered_unchanged"
+   ],
+   "reason": "Registry wiring plus test_high_recall_configs_omit_threshold_kwargs (guards silent preset override that would collapse recall mode to strict) are keepers. The pinned test asserts tuned thresholds 3.0/0.02 as exact values \u2014 benchmark gating, not this pin, is the real protection."
+  },
+  {
+   "path": "tests/benchmark/test_alias_sweep_workflows_registered.py",
+   "category": "implementation-pin",
+   "reason": "Pins exact kwargs dicts, cell ordering, and r2-gate of the historical 8-cell alias-fix sweep (jaunty-weaving-mist Phase C campaign). Constant==literal tautologies preserving a finished experiment's configuration; measures no accuracy. Experiment archaeology."
+  },
+  {
+   "path": "tests/benchmark/test_bayesian_config.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_bayesian_pipeline_config_applied"
+   ],
+   "reason": "test_bayesian_predictor_caching protects benchmark runtime (sampler cache across spectra) \u2014 keep. The pinned test is mock-call assertions plus an inspect.signature pin of MCMCSampler.run default chain_method=='vectorized' \u2014 pins how code is configured, not what must be true."
+  },
+  {
+   "path": "tests/benchmark/test_dataset_shard.py",
+   "category": "unit-utility",
+   "reason": "Shard partition is a disjoint cover (corrupted/overlapping shards would silently corrupt benchmark results), CLI parser bounds, parquet aggregator fail-fast on overlap. Cheap, catches real breakage."
+  },
+  {
+   "path": "tests/benchmark/test_jax_workflows.py",
+   "category": "unit-utility",
+   "reason": "Workflow registry exposure, end-to-end prediction shape, honest RuntimeError without jax/numpyro (vs silent CPU fallback), record field parity. Harness plumbing that catches real breakage of the benchmark gate."
+  },
+  {
+   "path": "tests/benchmark/test_jax_workflows_xfail_check.py",
+   "category": "implementation-pin",
+   "reason": "Meta-test asserting a stale @xfail marker string still exists in another test file's source; self-described as delete-when-fixed housekeeping for bead 359q. Pure archaeology, protects nothing."
+  },
+  {
+   "path": "tests/benchmark/test_nist_steel.py",
+   "category": "physics-truth",
+   "reason": "NIST SRM 1261a-1265a certified compositions as external truth: Fe-balance closure to 100 wt%, mass fractions sum to 1, certified-vs-information-value Fe cross-check, uncertainty table completeness. Plus cheap adapter I/O checks."
+  },
+  {
+   "path": "tests/benchmark/test_physical_consistency.py",
+   "category": "physics-truth",
+   "reason": "McWhirter LTE floor formula, Cristoforetti 2010 criterion (0.15), temperature physicality bounds, closure conservation, and block/alarm aggregation honesty \u2014 the Tier-1 physical trust gate."
+  },
+  {
+   "path": "tests/benchmark/test_posterior_metrics.py",
+   "category": "goal-metric",
+   "reason": "Bidirectional posterior-calibration gates against constructed ground truth: coverage band, R-hat, ESS, divergent transitions, PIT. Trust-surface for Bayesian uncertainty honesty \u2014 directly protects result trustworthiness."
+  },
+  {
+   "path": "tests/benchmark/test_reference_dataset_loading.py",
+   "category": "unit-utility",
+   "reason": "BHVO-2/SRM-612 loaders: certified compositions propagate to every spectrum, finite arrays, graceful None pre-ingest, registry aggregation, unknown-id ValueError. Cheap I/O correctness for benchmark ground truth."
+  },
+  {
+   "path": "tests/benchmark/test_results_parquet.py",
+   "category": "unit-utility",
+   "reason": "Parquet round-trip preserving all record fields, NaN preservation, append/shard concatenation, DuckDB query correctness and speed budget, checkpoint restart safety. Results-pipeline I/O that catches real breakage."
+  },
+  {
+   "path": "tests/benchmark/test_robustness.py",
+   "category": "goal-metric",
+   "reason": "Validates the robustness battery measures the right thing: robust estimator beats L2 under outlier injection (metric direction), identity perturbation gives zero delta-d_A, deterministic dropout/injection, thresholds match protocol. Protects validity of robustness measurements."
+  },
+  {
+   "path": "tests/benchmark/test_stratified_metrics.py",
+   "category": "goal-metric",
+   "reason": "Majors/minors/traces accuracy gates (5%/20% RD per validation protocol), LOQ handling, and the 'majors win must not mask trace regression' trust-surface. Directly defines composition-accuracy pass/fail."
+  },
+  {
+   "path": "tests/benchmark/test_subcompositional_ratios.py",
+   "category": "goal-metric",
+   "reason": "Mathematical properties of the log-ratio composition metric: zero for identical compositions, scale invariance, closure-distortion invariance, NaN/inf handling, biased-element detection. Metric correctness underpinning all composition-accuracy scoring."
+  },
+  {
+   "path": "tests/benchmark/test_usgs.py",
+   "category": "physics-truth",
+   "reason": "Stoichiometric oxide-to-element factors against chemical truth (Si/SiO2=0.4674, Fe/Fe2O3=0.6994), certified USGS standard compositions summing to ~100 wt%, uncertainty scaling, basalt-to-granite Si ordering. Plus cheap adapter I/O."
+  },
+  {
+   "path": "tests/benchmarks/test_real_data_benchmarks.py",
+   "category": "goal-metric",
+   "reason": "Composition-recovery accuracy on analytic synthetic oracles: 50/50 binary, 70/30 brass-like, ternary closure, mixed neutral+ionic Saha correction, all with convergence asserted. Directly measures solver composition accuracy."
+  },
+  {
+   "path": "tests/cli/test_analyze_invert_no_drift.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_helper_and_analyze_default_floor_agree",
+    "test_helper_exclude_resonance_tied_to_self_absorption",
+    "test_analyze_and_invert_select_identical_lines"
+   ],
+   "reason": "Pins: signature-default pins and the analyze==invert byte-identical entry-point drift pin, structurally redundant since bead l4a8 unified _run_pipeline. Keeper: test_default_path_admits_no_na_rydberg_lines \u2014 real BHVO-2 suppression of the Na false matches behind the Na~98% blowup (identification accuracy)."
+  },
+  {
+   "path": "tests/cli/test_pipeline_defaults.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestPresetResolution::test_default_preset_is_geological_best_validated",
+    "TestPresetResolution::test_metallic_preset",
+    "TestPresetResolution::test_raw_preset_is_legacy_defaults",
+    "TestPresetResolution::test_preset_registry_contents",
+    "TestPresetResolution::test_axis_alignment_knobs_default_fixed_raw_keeps_legacy",
+    "TestBatchAnalyzeParity::test_default_pipeline_is_measured_best"
+   ],
+   "reason": "Pins: exact tuned-default/preset-content pins including 'raw preset == legacy'. Keepers: flag>YAML>preset precedence semantics, YAML typo hard-error (silent default reversion trust bug), batch==analyze config parity, shipped example-config safety, ResidualScanGlue calibration-fallback wiring."
+  },
+  {
+   "path": "tests/cli/test_response_curve_plumbing.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_run_pipeline_identity_is_bit_identical"
+   ],
+   "reason": "Keepers: flag/YAML precedence, response-division math vs np.interp, coverage hard-error, config-relative path resolution. The pinned test asserts the identical array object (no copy) reaches detection \u2014 explicit bit-identity-to-pre-hook pin; a value-equality assert would suffice."
+  },
+  {
+   "path": "tests/core/test_jax_runtime.py",
+   "category": "unit-utility",
+   "reason": "jit/vmap graceful fallbacks, x64 enforcement (numerical-precision trust), AtomicSnapshot mirrors SQLite transitions at rtol 1e-12 (data integrity into the JAX path), pytree registration enabling vmap. Infrastructure correctness that catches real breakage."
+  },
+  {
+   "path": "tests/evolution/test_blocklist.py",
+   "category": "unit-utility",
+   "reason": "Enforces the project's hard physics-only constraint on evolved candidates, including adversarial aliases/nested imports. Cheap and guards a stated hard constraint."
+  },
+  {
+   "path": "tests/evolution/test_cli.py",
+   "category": "unit-utility",
+   "reason": "Exit codes, stderr content, stdin handling, syntax-error-as-violation for the blocklist CLI. Cheap real-breakage coverage of constraint tooling."
+  },
+  {
+   "path": "tests/evolution/test_config.py",
+   "category": "unit-utility",
+   "reason": "EvolutionDriverConfig validation, frozen/immutable semantics, copied user dicts, invalid-value rejection. Generic config-correctness tests that cost nothing."
+  },
+  {
+   "path": "tests/evolution/test_prompts.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_render_preamble_states_the_hard_constraint",
+    "test_render_preamble_clarifies_ml_is_ok_in_optimization"
+   ],
+   "reason": "Keepers: preamble stays in sync with FORBIDDEN_PREFIXES/ALLOWED_PRIMITIVES (real drift catch). Pins: exact-phrase wording asserts ('HARD CONSTRAINT', 'fitness = -inf', 'NEVER') that fail on any rewording with zero goal impact."
+  },
+  {
+   "path": "tests/instrument/test_model_jax.py",
+   "category": "physics-truth",
+   "reason": "InstrumentModelJax numerical equivalence to the reference numpy model (sigma in fixed-FWHM and resolving-power modes, response application) at rtol 1e-5. Divergence means the JAX forward model computes different physics."
+  },
+  {
+   "path": "tests/inversion/common/test_get_wavelength_tolerance.py",
+   "category": "physics-truth",
+   "reason": "Stark-broadened wavelength tolerance: protocol quadrature formula, analytic linear n_e scaling of Stark FWHM, Konjevi\u0107 reference defaults, exact consistency with radiation/stark.py single source of truth. Regression for a typo that zeroed Stark widths."
+  },
+  {
+   "path": "tests/inversion/identify/test_alias_jax_boltzmann.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestALIASIdentifierFlag::test_constructor_accepts_flag"
+   ],
+   "reason": "Overwhelmingly physics-truth: exact noiseless T round-trip, JAX-vs-linregress parity to 1e-5/machine precision, identical inf/NaN sentinel control flow, degenerate-input handling. The pinned test is a tautological 'constructor stores the flag' assert."
+  },
+  {
+   "path": "tests/inversion/identify/test_alias_jax_nnls.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestALIASIdentifierJaxFlags::test_all_flags_accepted",
+    "TestALIASIdentifierJaxFlags::test_default_is_cpu"
+   ],
+   "reason": "Overwhelmingly physics-truth: JAX NNLS/sparse-NNLS/attribution/template/P_SNR numerical parity to documented tolerances vs scipy references, plus end-to-end identical element detection CPU-vs-JAX. The pinned tests are tautological flag-storage/default-flag asserts."
+  },
+  {
+   "path": "tests/inversion/identify/test_alias_presets.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_all_expected_presets_registered",
+    "test_strict_preset_uses_fixed_gate",
+    "test_v2_preset_uses_adaptive_gates",
+    "test_high_recall_v2_is_v2_plus_high_recall",
+    "test_consensus_voter_matches_v2_physics"
+   ],
+   "reason": "Pins: exact tuned-cocktail contents of each ALIAS preset (registry table pins, only fail on deliberate retuning). Keepers: alias_preset round-trip (registry kwargs actually reach the constructor \u2014 silent misapplication would invisibly change identification), KeyError fail-fast, override-merge semantics."
+  },
+  {
+   "path": "tests/inversion/identify/test_candidate_count_invariance.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestStandaloneNNLSCountInvariance::test_sum_normalized_floor_mechanism_is_count_scaling"
+   ],
+   "reason": "Recall-non-decreasing-with-candidate-count tests on real BHVO-2 are goal-metric (would have caught PR #216). The pinned test asserts the LEGACY fraction-of-sum metadata still shrinks (#216 bug archaeology); fails if that legacy metadata is removed, even though goal unaffected. The gate decision-boundary test protects a known FP/TP split, keep."
+  },
+  {
+   "path": "tests/inversion/identify/test_comb_jax_correlate.py",
+   "category": "physics-truth",
+   "reason": "Kernel cross-checked against scipy.stats.pearsonr (external math oracle); CPU/JAX are both live shipping backends, so end-to-end parity protects identification-score correctness, not legacy archaeology. ImportError test is cheap utility."
+  },
+  {
+   "path": "tests/inversion/identify/test_comb_wavelength_tolerance.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_comb_legacy_defaults_unchanged_without_resolving_power"
+   ],
+   "reason": "Adaptive-tolerance FP-reduction test is goal-metric (fewer wrong-element matches on Fe-only synthetic). The pinned test demands byte-identical legacy 0.1/0.2 defaults 'for existing callers' \u2014 pure back-compat contract with zero users. Explicit-override test is a harmless config contract."
+  },
+  {
+   "path": "tests/inversion/identify/test_correlation_jax_classic.py",
+   "category": "physics-truth",
+   "reason": "Fused JAX kernel vs scipy pearsonr reference on the (T,n_e) correlation grid; both backends ship, so divergence would silently change identification scores. Degenerate-input and end-to-end parity protect active correctness."
+  },
+  {
+   "path": "tests/inversion/identify/test_intensity_floor_removal.py",
+   "category": "physics-truth",
+   "reason": "All expected values are independent analytic oracles (Gaussian area h*FWHM*sqrt(pi/4ln2), hand-computed trapezoid/FWHM interpolation); protects units consistency of the Boltzmann ordinate. Exemplary physics test."
+  },
+  {
+   "path": "tests/inversion/identify/test_line_detection_jax.py",
+   "category": "unit-utility",
+   "reason": "Cheap NumPy/JAX kernel-equivalence and edge-case tests for live opt-in flags (searchsorted tolerance, kdet counts, peak fallback) plus public-API parity. Both paths ship for the optional-JAX matrix; divergence is real breakage. Costs nothing."
+  },
+  {
+   "path": "tests/inversion/identify/test_min_relative_intensity_default.py",
+   "category": "goal-metric",
+   "reason": "On the real BHVO-2 ChemCam spectrum, spurious Na Rydberg lines must not be admitted (they previously detonated Na to 77-98 wt% vs certified 1.65 wt%). Directly protects composition accuracy against a catastrophic known failure."
+  },
+  {
+   "path": "tests/inversion/identify/test_model_selection_jax.py",
+   "category": "physics-truth",
+   "reason": "BIC pruning and subset-NNLS checked against scipy.optimize.nnls oracle AND against constructed ground truth (selected elements == planted active set). Protects identification correctness of the active dual-backend path."
+  },
+  {
+   "path": "tests/inversion/identify/test_nnls_jax_kernel.py",
+   "category": "physics-truth",
+   "reason": "FISTA NNLS validated against scipy Lawson-Hanson oracle on residual norm, KKT conditions, non-negativity constraint, determinism \u2014 math-oracle correctness with correctly-reasoned tolerances for non-unique minimizers."
+  },
+  {
+   "path": "tests/inversion/identify/test_residual_gates.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestEdgeRidingScanRegression::test_legacy_mop_up_scan_rides_edge_and_admits_contaminated_match",
+    "TestPerPeakOwnership::test_legacy_path_still_double_counts"
+   ],
+   "reason": "Gate/ownership/NaN tests protect identification accuracy (contaminated matches rejected, real lines kept, BHVO-2 Sn/Th FP cases). The two pinned tests REPRODUCE pre-fix buggy behavior on legacy paths \u2014 they fail if the legacy defect is ever fixed, i.e., they pin the bug, not the truth."
+  },
+  {
+   "path": "tests/inversion/identify/test_voigt_area_poisson_floor.py",
+   "category": "physics-truth",
+   "reason": "Shot-noise (Poisson sqrt(N)) uncertainty floor with analytic expected values; protects Boltzmann-plot weight honesty (over-confident Voigt sigma cannot over-weight a point). Disable-knob test is cheap config coverage."
+  },
+  {
+   "path": "tests/inversion/physics/test_boltzmann_jax_composition.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestBehaviorContracts::test_default_use_jax_is_false"
+   ],
+   "reason": "CPU/JAX fit parity (slope/T/covariance/outlier rejection over 100 spectra) and finite-T recovery near 11604 K are keepers. The pinned test asserts use_jax defaults to False 'so existing callers are byte-for-byte unchanged' \u2014 back-compat default pin with zero users; parity tests already guarantee equivalence."
+  },
+  {
+   "path": "tests/inversion/physics/test_self_absorption_observable.py",
+   "category": "physics-truth",
+   "reason": "Hand-computed escape factors, Planck radiance round-trips, slab radiative-transfer recovery toward thin truth, published V\u00f6lker & Gornushkin validity gate, numerical-integral oracle for Doppler COG escape factor; suspect lines never boosted (trust surface)."
+  },
+  {
+   "path": "tests/inversion/physics/test_stark_ne_diagnostic.py",
+   "category": "physics-truth",
+   "reason": "Explicitly independent oracles: hand-computed width-to-n_e conversion, known-Lorentzian recovery, forward-model round-trip at known n_e, MAD scatter oracle, literature-provenance gating, fallback warning preserved (trust surface)."
+  },
+  {
+   "path": "tests/inversion/solve/bayesian/test_convergence_diagnostics.py",
+   "category": "goal-metric",
+   "reason": "Convergence honesty: non-mixing chains must NOT be reported CONVERGED (kills the fabricated r_hat=1.0/ess=N diagnostic), with ArviZ and brute-force autocorrelation oracles. Trust-surface protection of result trustworthiness."
+  },
+  {
+   "path": "tests/inversion/solve/bayesian/test_vmap_chain_method.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_mcmcsampler_uses_vectorized_chain_method",
+    "test_mcmcsampler_max_tree_depth_default_is_8"
+   ],
+   "reason": "test_compute_spectrum_vmap_safe is a keeper (vmap rows must match unbatched spectra \u2014 guards chain cross-contamination). The pins introspect a constructor kwarg and a signature default (max_tree_depth==8): tuned-value pins that fail on any deliberate retune; a runtime benchmark would protect the actual throughput goal."
+  },
+  {
+   "path": "tests/inversion/solve/test_boltzmann_weight_cap.py",
+   "category": "goal-metric",
+   "reason": "Constructed truth (two elements with identical honest lines must get equal intercepts); asserts uncapped WLS misranks intercepts, the cap shrinks the spurious gap, and the effect is monotone in K. Directly protects composition accuracy against single-bright-line hijack."
+  },
+  {
+   "path": "tests/inversion/solve/test_iterative_ne_stark.py",
+   "category": "physics-truth",
+   "reason": "Independent Olivero-Longbothum Voigt and Stark-law oracles, known-n_e recovery, plus trust-surface gates (pressure-balance fallback warning, degenerate-composition/positive-slope flags with converged=False, binary-alloy non-flagging). All goal-protective."
+  },
+  {
+   "path": "tests/inversion/solve/test_lax_quality_parity.py",
+   "category": "goal-metric",
+   "reason": "Trust-surface parity between the two live solve paths: the lax path may not green-light a keystone-collapsed composition or omit quality_metrics keys (previously reported converged=True with missing r_squared). Protects convergence honesty."
+  },
+  {
+   "path": "tests/inversion/solve/test_saha_boltzmann_graph.py",
+   "category": "physics-truth",
+   "reason": "Planted slope/intercept recovery, Saha ion-to-neutral shift consistency, unweighted-fit property (validated Aguilera & Aragon SB-graph), intercept-to-closure identity recovering a planted composition, oxide molar-oxygen balance. Pure math/physics oracles."
+  },
+  {
+   "path": "tests/inversion/solve/test_self_absorption_wiring.py",
+   "category": "goal-metric",
+   "reason": "Forward-models a known 50:50 Mg/Ca plasma, attenuates a doublet with physical escape factors, asserts the observable-gated correction reduces composition error to ~50:50 and never boosts unpaired lines (the deleted feedback-loop failure mode). Composition accuracy against planted truth."
+  },
+  {
+   "path": "tests/inversion/test_bayesian_back_compat.py",
+   "category": "implementation-pin",
+   "reason": "Pure back-compat shim suite: legacy flat-path names must resolve after the bayesian.py->package split. With zero users no back-compat is owed; test_flat_and_package_paths_agree imports the same module twice and asserts identity (tautological). Any real consumer test covers the imports that matter. PURGE."
+  },
+  {
+   "path": "tests/inversion/test_bayesian_forward_model_kernel_migration.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_forward_py_body_does_not_call_adapter",
+    "test_mcmc_sampler_default_chain_method_is_vectorized"
+   ],
+   "reason": "Stark gamma power-law/clamp/alpha=0 tests check the Griem formula against direct references (keep); kernel-vs-wrapper agreement guards the Bayesian model against divergent physics (keep). Pins: a source-text grep asserting forward.py never mentions an adapter name (migration archaeology), and a signature-default pin (chain_method=='vectorized')."
+  },
+  {
+   "path": "tests/inversion/test_bayesian_priors.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_prior_config_defaults",
+    "test_noise_parameters_defaults"
+   ],
+   "reason": "cube_transform tests are analytic math oracles (uniform midpoint, log-uniform geometric mean, normal PPF) \u2014 keep. test_prior_config_defaults and test_noise_parameters_defaults pin arbitrary tuned defaults (T range (0.5,3.0), gain=1.0, readout=10.0) as exact values."
+  },
+  {
+   "path": "tests/inversion/test_bayesian_samplers.py",
+   "category": "implementation-pin",
+   "reason": "Entirely back-compat surface pins: alias identity (NumPyroNUTSSampler is MCMCSampler), legacy run() keyword-set preservation, Protocol duck-typing tautologies, frozen-dataclass shape. No assertion failing here would ever mean identification/composition accuracy or runtime got worse \u2014 only that the API was renamed."
+  },
+  {
+   "path": "tests/inversion/test_candidate_prefilter_falsy_zero.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestFalsyZeroEstimate::test_zero_estimated_T_is_used_not_fallback",
+    "TestFalsyZeroEstimate::test_zero_estimated_ne_is_used_not_fallback"
+   ],
+   "reason": "None-routing and nonzero-estimate tests protect real fallback semantics of the multi-T prefilter (keep). The zero-estimate tests pin the post-fix 'honor T=0.0 K / ne=0.0' behavior \u2014 physically meaningless values whose handling never affects the goal; heavily coupled to deepcopy/fallback-mutation internals."
+  },
+  {
+   "path": "tests/inversion/test_comb_fp_reduction.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_tier2_defaults_are_strict",
+    "test_tier2_strict_disabled_matches_baseline"
+   ],
+   "reason": "Mn/Na/K false-positive rejection on synthetic spectra and strict/lax scoping tests directly protect identification accuracy (goal-metric). The two named tests pin exact tuned thresholds (0.7/0.5) and 'byte-identical pre-PR' baseline via a private method \u2014 tuned-value/legacy pins."
+  },
+  {
+   "path": "tests/inversion/test_forward_models_registry.py",
+   "category": "unit-utility",
+   "reason": "Cheap registry-wiring tests: documented keys resolve, unknown name raises KeyError, self-absorption/two-region entries are distinct callables (catches mis-wired flags). test_forward_model_fn_is_protocol is trivially weak but harmless."
+  },
+  {
+   "path": "tests/inversion/test_identifier_protocol.py",
+   "category": "unit-utility",
+   "reason": "Structural conformance across all five identifiers: identify(wavelength, intensity) signature drift would break the unified benchmark predictor builders. Cheap, catches real internal interop breakage."
+  },
+  {
+   "path": "tests/inversion/test_iterative_lax.py",
+   "category": "physics-truth",
+   "reason": "lax.while_loop fast path vs Python reference parity (rtol 1e-5) across all six closure modes on analytic Saha-Boltzmann fixtures, \u03a3c=1 conservation under vmap, and zero-DB-queries-in-loop efficiency guard. Protects that the efficiency path computes identical compositions."
+  },
+  {
+   "path": "tests/inversion/test_response_correction.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestSpectralResponseCorrection::test_identity_none_is_bit_identical",
+    "test_argon_branching_ratio_stub_raises_with_citation"
+   ],
+   "reason": "Core is physics-truth: \u0394q = ln E(\u03bb) analytic intercept-bias oracle, forward/inverse round trip, coverage hard-errors (trust surface); loader tests are utility. Pins: object-identity (`out is intensity`) for the None default, and citation-string content of an unimplemented-stub NotImplementedError."
+  },
+  {
+   "path": "tests/inversion/test_solver_jax_parity.py",
+   "category": "physics-truth",
+   "reason": "JAX solver vs numpy solver composition parity on analytic Boltzmann/Saha fixtures (Aalto-style T=8000K), plus recovery of known T and concentration from noiseless data. Protects composition accuracy of the accelerated path."
+  },
+  {
+   "path": "tests/inversion/test_wavelength_calibration.py",
+   "category": "unit-utility",
+   "reason": "Calibration helpers against analytic oracles (fits recover known polynomial coefficients, BIC edge cases, dedupe), CCD seam detection on realistic axes, and the coverage gate guarding the real ChemCam VNIR red-end extrapolation failure mode. Cheap and goal-protective."
+  },
+  {
+   "path": "tests/manifold/test_generator_physics_w3.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestDopplerSigmaParity::test_voigt_path_doppler_sigma_matches_profiles"
+   ],
+   "reason": "Mostly physics-truth: Doppler \u03c3 = sqrt(kT/mc\u00b2) Maxwell std vs open-coded buggy form, \u03a3 C_s = 1 simplex closure, cooling-trail (1+t/t0)^exp analytic integration. The named test is a tautology \u2014 it calls doppler_sigma_jax twice and compares it to itself, never touching the generator."
+  },
+  {
+   "path": "tests/manifold/test_sampling_guard.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestNyquistGuard::test_default_pixels_is_18432",
+    "TestNyquistGuard::test_yaml_default_pixels_is_18432"
+   ],
+   "reason": "Nyquist \u22653 px/FWHM validate() guard (literature-standard sampling criterion, boundary case included) is physics-truth protecting manifold spectral fidelity. The two named tests pin the arbitrary exact default 18432 \u2014 any Nyquist-safe value would do and validate() already enforces the real constraint."
+  },
+  {
+   "path": "tests/observability/test_element_confusion.py",
+   "category": "unit-utility",
+   "reason": "Verifies confusion-matrix aggregation (TP/FP/FN, precision/recall/F1, over-prediction rates) against a hand-computed oracle \u2014 protects integrity of identification-accuracy reporting that goal decisions are based on. Markdown-header asserts are minor."
+  },
+  {
+   "path": "tests/observability/test_failure_attribution.py",
+   "category": "unit-utility",
+   "reason": "Failure-mode attribution tooling verified against a hand-built fixture (each mode fires exactly where triggered, cross-workflow rollup, empty inputs). Cheap; protects diagnostics used to debug identification failures."
+  },
+  {
+   "path": "tests/observability/test_telemetry_report.py",
+   "category": "unit-utility",
+   "reason": "Cluster telemetry script: JSONL loader window filtering, malformed-line skipping, percentile interpolation math, sparkline, CLI exit codes. Generic utility tests that catch real breakage and cost nothing; not goal physics but harmless keepers."
+  },
+  {
+   "path": "tests/parameter_sweep_server/test_e2e.py",
+   "category": "unit-utility",
+   "reason": "Server framing/queue/overload/error-envelope behavior with fake runner (utility), plus an opt-in slow perf gate asserting \u22654x warm-vs-cold benchmark amortization \u2014 a genuine runtime goal-metric. Keep whole."
+  },
+  {
+   "path": "tests/parameter_sweep_server/test_protocol.py",
+   "category": "unit-utility",
+   "reason": "Wire-format round trips and FrameError rejection (zero-length, oversize-before-allocation, short body, bad JSON). Classic cheap I/O utility tests catching real breakage."
+  },
+  {
+   "path": "tests/pds/test_vrabel2020.py",
+   "category": "unit-utility",
+   "reason": "Vrabel2020 dataset loader round-trips on hermetic synthetic HDF5/xlsx fixtures plus real-data schema/label-alignment smoke when files present. Protects integrity of benchmark ground-truth data feeding goal metrics."
+  },
+  {
+   "path": "tests/plasma/test_lte_mcwhirter_deltae.py",
+   "category": "physics-truth",
+   "reason": "McWhirter LTE criterion validated against the documented formula (Cristoforetti 2010) with an independent in-test oracle for \u0394E term-scheme convention and n_e_required; protects trustworthiness of LTE gating (non-LTE plasmas must fail)."
+  },
+  {
+   "path": "tests/plasma/test_partition_fallback.py",
+   "category": "physics-truth",
+   "reason": "Partition-function fallback ladder against exact isoelectronic physics (U(Na II)\u22481 closed shell \u2014 the 15x Saha inflation audit case), g0 tier, and warn-once trust-surface for generic constants. External-truth values plus result-honesty warnings."
+  },
+  {
+   "path": "tests/plasma/test_saha_boltzmann_jax.py",
+   "category": "physics-truth",
+   "reason": "JAX vs NumPy Saha-Boltzmann numerical equivalence (partition functions, ionization balance, full solve_plasma) across the 6000-15000 K / 1e15-1e17 LIBS regime, plus a guard that the JAX kernel is actually on the call path (no silent numpy fallback)."
+  },
+  {
+   "path": "tests/plasma/test_state_jax.py",
+   "category": "unit-utility",
+   "reason": "JAX plasma-state wrapper preserves the numpy surface and exposes numerically identical jnp tensor views with consistent species ordering. Cheap wiring tests that catch real breakage in the manifold/forward-model input path."
+  },
+  {
+   "path": "tests/radiation/test_chunked_scan.py",
+   "category": "physics-truth",
+   "reason": "Chunked forward kernel parity vs un-chunked reference across nstitch sweep, gradient parity, analytic overlap_and_add oracle, under-sized-overlap canary, NIST_PARITY rejection, line-mask semantics. Protects spectral correctness of the memory-efficiency path."
+  },
+  {
+   "path": "tests/radiation/test_forward_model_parity.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_bayesian_forward_kernel_parity_deferred"
+   ],
+   "reason": "Main test rebuilds the reference via an independent Boltzmann n_upper computation and asserts SpectrumModel wrapper parity (physics-truth); manifold adapter smoke is fine. The named sentinel only asserts hasattr(BayesianForwardModel, '_compute_spectrum') \u2014 a structural pin of a private name."
+  },
+  {
+   "path": "tests/radiation/test_forward_model_vmap.py",
+   "category": "physics-truth",
+   "reason": "vmap-batched forward model matches Python-loop reference to rtol 1e-5 over 16 plasma states, plus NIST_PARITY per-line sigma finite-output smoke. Protects spectral correctness of the batched manifold path."
+  },
+  {
+   "path": "tests/radiation/test_kernel_saha_three_stage.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestBackCompat::test_two_stage_alias_points_at_three_stage",
+    "TestBackCompat::test_legacy_snapshot_runs_and_has_no_stage_three"
+   ],
+   "reason": "Bulk is strong physics-truth: three-stage Saha + Debye-H\u00fcckel IPD kernel vs CPU oracle across the rs7e grid, hard physical pins (Ca III dominance), IPD level cutoff. TestBackCompat is shim territory: alias object-identity and pre-rs7e legacy-snapshot degrade behavior."
+  },
+  {
+   "path": "tests/radiation/test_ldm_broaden.py",
+   "category": "physics-truth",
+   "reason": "LDM broadening vs per-line Gaussian reference (integrated-intensity rtol 1e-4), O(dx_\u03c3\u00b2) convergence law, vmap parity, edge clipping, zero-line inertness, plus a runtime speedup floor vs Voigt. Math correctness plus the efficiency rationale for the kernel."
+  },
+  {
+   "path": "tests/radiation/test_line_population_coverage.py",
+   "category": "physics-truth",
+   "reason": "Regression for the float-key bug that silently dropped ~98% of line populations: >95% of Fe lines must receive non-zero n_upper and the spectrum must be a dense forest, against the production DB. Directly protects forward-model physical completeness."
+  },
+  {
+   "path": "tests/radiation/test_memory_bench.py",
+   "category": "goal-metric",
+   "reason": "Slow memory benchmark: chunked (nstitch=4) peak-memory proxy must be \u22640.5x the un-chunked baseline, with a correctness parity gate first. Directly measures the computational-efficiency goal of the chunked kernel."
+  },
+  {
+   "path": "tests/radiation/test_spectrum_model_jax.py",
+   "category": "physics-truth",
+   "reason": "SpectrumModelJax vs SpectrumModel parity (Planck radiance, LEGACY, NIST_PARITY, Stark on/off) plus independent profile-shape oracles (FWHM and wing-flux fraction) proving apply_stark yields Voigt not Gaussian \u2014 the audit Family 1 physics regression."
+  },
+  {
+   "path": "tests/radiation/test_spectrum_model_stark_default.py",
+   "category": "physics-truth",
+   "reason": "Asserts default forward model includes Stark broadening (FWHM physically wider, Aragon-Aguilera grounding); regression here would revert templates to Doppler-only and degrade line identification."
+  },
+  {
+   "path": "tests/radiation/test_stark_shift.py",
+   "category": "physics-truth",
+   "reason": "Stark line-center shift verified against independent analytic oracle (d_ref*ne/1e17), linearity in n_e, end-to-end peak movement. Pure physics validation gate."
+  },
+  {
+   "path": "tests/radiation/test_stark_t_factor_toggle.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_toggle_on_disables_t_factor",
+    "test_toggle_value_must_be_exactly_1"
+   ],
+   "reason": "test_toggle_off_default_applies_t_factor checks the canonical T-power-law formula vs analytic oracle (keep). The two pinned tests reproduce pre-vjbh legacy behavior via an env toggle that exists only for ablation archaeology."
+  },
+  {
+   "path": "tests/scripts/test_basis_libraries.py",
+   "category": "unit-utility",
+   "reason": "Basis-library build tooling: filename/loader regex coherence, dir-resolver priority, tiny end-to-end build with schema and normalization sanity, idempotence. Cheap, catches real tooling breakage."
+  },
+  {
+   "path": "tests/scripts/test_bench_pause.py",
+   "category": "unit-utility",
+   "reason": "Operational pause/resume mechanism for the post-merge benchmark dispatcher (external beefcake-swarm script, skipped when absent). Protects against accidental SLURM submissions; pure ops plumbing."
+  },
+  {
+   "path": "tests/scripts/test_jax_compile_cache.py",
+   "category": "unit-utility",
+   "reason": "Env-var plumbing for the JAX persistent compile cache (setdefault semantics, cluster default). Supports runtime efficiency infrastructure; cheap config tests."
+  },
+  {
+   "path": "tests/scripts/test_measure_bhvo2_harness.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_default_knobs_are_cli_defaults",
+    "test_maintainer_gate_flags_resolve_to_defaults",
+    "test_preset_flag_resolves_bundle",
+    "test_script_does_not_hand_build_pipeline"
+   ],
+   "reason": "Shared-builder equality and knob round-trips protect BHVO-2 benchmark comparability (keep). Pins: exact tuned-default values, 'raw preset == legacy' bundle, gate-flags==defaults, and source-string matching against forbidden identifiers."
+  },
+  {
+   "path": "tests/scripts/test_nfs_data_dir.py",
+   "category": "unit-utility",
+   "reason": "NFS benchmark-data mount smoke checks (skipped off-cluster) plus docs/test lockstep. Catches half-populated data mounts that would silently break goal benchmarks."
+  },
+  {
+   "path": "tests/scripts/test_parameter_sweep.py",
+   "category": "unit-utility",
+   "reason": "Sweep harness plumbing: arg parsing, per-iter seeding, manifest layout, error containment, iter-0==baseline determinism. Protects benchmark reproducibility; mocked at the workflow seam."
+  },
+  {
+   "path": "tests/test_aki_uncertainty.py",
+   "category": "physics-truth",
+   "reason": "NIST accuracy-grade-to-uncertainty mapping (external NIST convention), DB grade coverage/validity bounds, and uncertainty wiring. Atomic-data truth feeding uncertainty propagation."
+  },
+  {
+   "path": "tests/test_alias.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_default_detection_threshold",
+    "test_max_lines_per_element_parameter"
+   ],
+   "reason": "Bulk is ALIAS scoring correctness vs the published formula (CL product, erf P_SNR), FP-on-noise suppression, double-counting fixes \u2014 identification-accuracy behavior. Pins: exact tuned default threshold 0.02 and max_lines default 50."
+  },
+  {
+   "path": "tests/test_alias_unit.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_alias_default_is_strict",
+    "test_alias_high_recall_lowers_thresholds",
+    "test_per_ion_stage_default_off_byte_identical",
+    "test_temperature_estimator_legacy_byte_identical",
+    "test_r2_gate_fixed_mode_byte_identical",
+    "test_default_r2_gate_mode_is_adaptive_t"
+   ],
+   "reason": "Keepers: resonance-filter behavior, robust-T recovery on Vrabel/BHVO fixtures, adaptive R2-gate physics, validation. Pins: exact tuned default thresholds, byte-identical legacy estimator/gate modes, default-off/default-mode pins \u2014 benchmark is the real arbiter."
+  },
+  {
+   "path": "tests/test_anderson_solver.py",
+   "category": "physics-truth",
+   "reason": "Saha solver convergence, Anderson==Picard fixed point, analytic single-element Saha check, vmap parity, plus >1.5x iteration speedup (efficiency). Physics and numerics correctness."
+  },
+  {
+   "path": "tests/test_atomic.py",
+   "category": "unit-utility",
+   "reason": "AtomicDatabase query/filter correctness, data structures, SQL-injection guard, Fe ionization potential sanity. Cheap DB-layer coverage that catches real breakage feeding all physics."
+  },
+  {
+   "path": "tests/test_basis_index.py",
+   "category": "unit-utility",
+   "reason": "BasisIndex build/query/save-load round-trip, weighted-median math, error paths. Loose-range estimate sanity; protects manifold-inference machinery cheaply."
+  },
+  {
+   "path": "tests/test_basis_index_voting.py",
+   "category": "goal-metric",
+   "reason": "Per-element neighbor voting must recover the correct (T, ne) on a synthetic two-element library and never blend chemically distinct families \u2014 directly protects plasma-parameter estimation accuracy."
+  },
+  {
+   "path": "tests/test_basis_library.py",
+   "category": "physics-truth",
+   "reason": "Voigt/Doppler line-shape physics (FWHM grows with T, sigma scales with wavelength, Voigt wings beat Gaussian), area normalization, Fe peak position, interpolation symmetry \u2014 plus loader utility. No pins."
+  },
+  {
+   "path": "tests/test_batch_forward.py",
+   "category": "physics-truth",
+   "reason": "Batch GPU forward model: batch-vs-sequential parity to 1e-12, temperature/density physical response, zero-concentration nulling, non-negativity, dimensional consistency."
+  },
+  {
+   "path": "tests/test_bayesian.py",
+   "category": "physics-truth",
+   "reason": "Bayesian forward model vs physics oracles: Doppler sigma vs profiles oracle, Saha Ca III charge balance, Poisson/Cash likelihood oracle, McWhirter penalty smoothness, self-reversal, two-zone reduction; MCMC smoke. Legacy-default tests are valid API-equivalence checks."
+  },
+  {
+   "path": "tests/test_bayesian_sparse_id.py",
+   "category": "unit-utility",
+   "reason": "Benchmark-workflow config grid and _empty_result helpers: required keys, distinct names, sane bounds, error-result structure. Cheap harness plumbing."
+  },
+  {
+   "path": "tests/test_benchmark.py",
+   "category": "unit-utility",
+   "reason": "Benchmark dataset structures, metric math (RMSEP/MAE/bias/R-squared vs hand values), synthetic generator reproducibility, JSON/HDF5 round-trips. Measurement-integrity utility for the goal harness."
+  },
+  {
+   "path": "tests/test_benchmark_harness.py",
+   "category": "physics-truth",
+   "reason": "Aitchison/ILR composition-metric math: symmetry, triangle inequality, scale invariance, isometry, round-trips \u2014 analytic oracles for the goal's measuring stick \u2014 plus harness registration/report plumbing."
+  },
+  {
+   "path": "tests/test_boltzmann.py",
+   "category": "physics-truth",
+   "reason": "Temperature recovery from synthetic Boltzmann data, robust outlier rejection (sigma-clip/RANSAC/Huber) vs known T, y-value formula, multiplet aggregation invariance (singleton==ungrouped is a degenerate-case identity, not a legacy pin)."
+  },
+  {
+   "path": "tests/test_boltzmann_jax.py",
+   "category": "physics-truth",
+   "reason": "JAX batched WLS kernel vs numpy/polyfit reference and known-T recovery, masking semantics, MC-validated sigma_T, finite gradients, degenerate-det safety."
+  },
+  {
+   "path": "tests/test_boltzmann_outlier_tuning.py",
+   "category": "implementation-pin",
+   "reason": "Pins tuned fitter defaults as exact values (outlier_sigma==2.5, max_iterations==10, huber_epsilon==1.2); remaining asserts are constructor-assignment tautologies and weak smoke already covered by test_boltzmann.py."
+  },
+  {
+   "path": "tests/test_boltzmann_weighting.py",
+   "category": "physics-truth",
+   "reason": "A_ki-uncertainty weighting must pull the fit toward the true slope by down-weighting a high-uncertainty outlier \u2014 correctness of weighted fitting against an analytic expectation."
+  },
+  {
+   "path": "tests/test_boltzmann_weighting_convention.py",
+   "category": "physics-truth",
+   "reason": "WLS weighting convention (1/sigma^2, not the buggy 1/sigma^4) verified against closed-form normal-equation oracle; protects temperature (hence composition) correctness."
+  },
+  {
+   "path": "tests/test_cache.py",
+   "category": "unit-utility",
+   "reason": "LRU cache semantics, TTL, eviction, key hashing, decorator behavior, global stats. Generic utility supporting query-cache efficiency; cheap and real."
+  },
+  {
+   "path": "tests/test_candidate_prefilter.py",
+   "category": "unit-utility",
+   "reason": "NNLS prefilter contract on fakes: coefficient ranking, SNR gating, stage aggregation, k_min/k_max, force_include, multi-T union, input validation. Functional semantics of a mandatory pipeline stage, not threshold pins."
+  },
+  {
+   "path": "tests/test_cdsb.py",
+   "category": "physics-truth",
+   "reason": "Oscillator strength from A_ki (f_ik = 1.499e-14 (g_k/g_i) lambda^2 A_ki), Boltzmann y-value formula, resonance auto-detection \u2014 physical conversion formulas plus light factory coverage."
+  },
+  {
+   "path": "tests/test_cli.py",
+   "category": "unit-utility",
+   "reason": "CLI error handling, config parsing (scientific-notation strings), DB path resolution, doctor/version output. Cheap interface coverage."
+  },
+  {
+   "path": "tests/test_cli_manifold_format.py",
+   "category": "unit-utility",
+   "reason": "Regression for a real CLI crash (format-code ValueError on YAML string ranges). Cheap; catches genuine breakage."
+  },
+  {
+   "path": "tests/test_closed_form_solver.py",
+   "category": "physics-truth",
+   "reason": "Closed-form ILR solver recovers known T and compositions from analytically constructed Boltzmann data, Saha mixed-stage handling, matrix/oxide closure math, simplex properties, loose cross-check vs iterative solver."
+  },
+  {
+   "path": "tests/test_closure.py",
+   "category": "physics-truth",
+   "reason": "Closure equation vs hand-computed values: standard normalization (sum=1), matrix mode, oxide stoichiometry, abundance multipliers, plus degeneracy-flag trust surface."
+  },
+  {
+   "path": "tests/test_closure_dirichlet.py",
+   "category": "physics-truth",
+   "reason": "Dark-element residual closure: missing-mass capture without inflating detected elements, ratio preservation, scale invariance under intensity rescaling, warning-honesty gating \u2014 conservation and invariance properties."
+  },
+  {
+   "path": "tests/test_closure_ilr.py",
+   "category": "physics-truth",
+   "reason": "Helmert basis orthonormality, CLR/ILR round-trips, isometry (Aitchison distance), simplex validity, apply_ilr==standard for single pass \u2014 all analytic math oracles."
+  },
+  {
+   "path": "tests/test_closure_pwlr.py",
+   "category": "physics-truth",
+   "reason": "PLR coordinates vs closed-form Hron 2012 oracle, isometry, round-trip identities, ALR non-isometry contrast, zero-handling with sum-to-one conservation."
+  },
+  {
+   "path": "tests/test_closure_strategy.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestSoftmaxClosureParity::test_bit_identical_1d",
+    "TestSoftmaxClosureParity::test_bit_identical_batched",
+    "TestSoftmaxClosureParity::test_bit_identical_extreme_values",
+    "TestILRClosureParity::test_matches_apply_ilr",
+    "TestPWLRClosureParity::test_matches_apply_pwlr"
+   ],
+   "reason": "Keepers: gradient_check trust surface (vanishing softmax gradients), JAX-backend guards preventing silently wrong gradients, sum-to-one/zero-safety/validation. Pins: bit-identity to a function the adapter directly delegates to (tautological) and adapter-vs-ClosureEquation drift parity."
+  },
+  {
+   "path": "tests/test_comb.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_default_min_correlation_remains_benchmark_gated",
+    "test_max_lines_per_element_parameter",
+    "test_coverage_penalty_reduces_score"
+   ],
+   "reason": "Keepers: comb identifier detects Fe/H on synthetic spectra, no FP on pure noise, baseline/correlation mechanics, edge cases. Pins: exact tuned defaults (min_correlation==0.12, max_lines==50) and the legacy full-coverage penalty value."
+  },
+  {
+   "path": "tests/test_comb_precision.py",
+   "category": "implementation-pin",
+   "reason": "Pins tuned Tier-2 detection thresholds (Mn/Na/K) and exact CombIdentifier defaults (0.12, 2.0) on contrived inputs. Whether these thresholds help F1 is a benchmark question, not a unit invariant."
+  },
+  {
+   "path": "tests/test_comb_recall.py",
+   "category": "implementation-pin",
+   "reason": "Pins the capped-denominator scoring formula (score 2/10 vs old 2/50) under hand-tuned parameters; explicit old-vs-new behavior archaeology. A benchmark-better scoring change would fail it without any recall regression."
+  },
+  {
+   "path": "tests/test_comb_rust.py",
+   "category": "physics-truth",
+   "reason": "Rust core verified against hand-computable oracles (known match counts, shift recovery, F1 components) and analytic partition limits (zero coeffs U=1, linear U=T) plus Python reference parity. Failing means the accelerated identification/partition math is wrong."
+  },
+  {
+   "path": "tests/test_config.py",
+   "category": "unit-utility",
+   "reason": "YAML/JSON config load/save round-trips and validation error paths. Cheap, catches real breakage in config handling."
+  },
+  {
+   "path": "tests/test_constants.py",
+   "category": "physics-truth",
+   "reason": "Physical constants sanity and unit-conversion inverse relationships (eV<->J, K<->eV). Weak but protects unit correctness."
+  },
+  {
+   "path": "tests/test_correlation_identifier.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_instrument_fwhm_parameter",
+    "test_max_lines_per_element_parameter",
+    "test_default_min_confidence_lowered"
+   ],
+   "reason": "Keepers: Fe detection on synthetic spectra, noise-only no-false-detection, finite scores on sparse data, vector-mode semantics (goal-metric). Pins: the three named tests assert tuned default values (min_confidence==0.03, fwhm==0.05, max_lines==100) and attribute storage \u2014 tautological default pins."
+  },
+  {
+   "path": "tests/test_daq_interface.py",
+   "category": "implementation-pin",
+   "reason": "process_spectrum is an explicit placeholder; tests pin its hardcoded dummy plasma parameters (T==12000 K, ne==1e17) \u2014 asserting a stub returns its stub values. Nothing goal- or physics-protecting."
+  },
+  {
+   "path": "tests/test_database_generator.py",
+   "category": "unit-utility",
+   "reason": "Verifies the wrapper forwards CLI args to datagen_v2.py correctly. Cheap and catches real DB-generation arg breakage."
+  },
+  {
+   "path": "tests/test_deconvolution.py",
+   "category": "physics-truth",
+   "reason": "Recovers known Voigt centers/areas from synthetic spectra (analytic ground-truth oracles), including overlapping peaks and noise; peak grouping semantics. Two trivial dataclass tests ride along but are negligible."
+  },
+  {
+   "path": "tests/test_detection_coverage.py",
+   "category": "goal-metric",
+   "reason": "Trust-surface: four-layer detection-coverage telemetry that explains why an element was missed (Si has DB lines but zero peak matches gets flagged). Protects diagnosability/honesty of identification results."
+  },
+  {
+   "path": "tests/test_dirichlet_prior.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestStickBreakingTransform::test_stick_breaking_produces_valid_simplex",
+    "TestStickBreakingTransform::test_stick_breaking_with_sparse_alpha",
+    "TestStickBreakingTransform::test_stick_breaking_uniform_alpha_is_uniform_on_simplex",
+    "TestStickBreakingTransform::test_stick_breaking_peaked_alpha_concentrates_mass",
+    "TestDirichletProperties::test_dirichlet_sum_to_one",
+    "TestDirichletProperties::test_dirichlet_all_positive",
+    "TestDirichletProperties::test_dirichlet_mean_equals_normalized_alpha",
+    "TestDirichletProperties::test_asymmetric_alpha_encodes_prior_knowledge"
+   ],
+   "reason": "Pinned classes re-implement stick-breaking inline and test numpy/scipy Dirichlet \u2014 they never call cflibs code, so they protect nothing in the codebase. Keepers: PriorConfig preset semantics (geological alpha<1 etc.) and create_concentration_prior smoke tests."
+  },
+  {
+   "path": "tests/test_distributed_mcmc.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestDistributedMCMCConfig::test_default_values",
+    "TestDistributedMCMCResult::test_creation",
+    "TestGPUConfig::test_gpu_info_dataclass"
+   ],
+   "reason": "Keepers: configure_gpu env-var behavior, _merge_results chain combination, SLURM script generation content. Pins: dataclass construct-and-assert tautologies and exact default values (num_warmup==500, target_accept_prob==0.8) \u2014 arbitrary tuned defaults pinned exactly."
+  },
+  {
+   "path": "tests/test_e2e_pipeline.py",
+   "category": "goal-metric",
+   "reason": "Full forward->detect->identify->solve round trips with ground-truth T, ne, composition; asserts T recovery within tolerance and composition MAE <=0.05/0.08, including production-DB variants. Directly measures the project goal."
+  },
+  {
+   "path": "tests/test_echelle.py",
+   "category": "unit-utility",
+   "reason": "Echellogram extraction: mock calibration, save/load round trip, order extraction sanity, error paths. Cheap instrument-IO coverage."
+  },
+  {
+   "path": "tests/test_element_id.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_identified_line_creation",
+    "test_identified_line_defaults",
+    "test_element_identification_creation",
+    "test_element_identification_result_creation",
+    "test_element_identification_result_consistency"
+   ],
+   "reason": "Keepers: to_line_observations bridge semantics (skips interfered, deduplicates, uncertainty floor, uses theoretical wavelength) feeding the Boltzmann fit. Pins: named construct-and-assert dataclass tests; test_element_identification_result_consistency asserts a relationship the test itself builds \u2014 tautological."
+  },
+  {
+   "path": "tests/test_evolution_evaluator.py",
+   "category": "unit-utility",
+   "reason": "Guards assert_benchmark_relevance in evolution tooling (evolved diffs must touch benchmark-exercised files). Cheap, catches real breakage of the evolution gate."
+  },
+  {
+   "path": "tests/test_exporters.py",
+   "category": "unit-utility",
+   "reason": "CSV/HDF5/JSON exporter round trips, NaN/inf handling, factory function, edge cases. Generic I/O utility tests that catch real breakage."
+  },
+  {
+   "path": "tests/test_generate_model_library.py",
+   "category": "unit-utility",
+   "reason": "CLI arg validation, chunk mode produces non-zero spectra in HDF5, build-index creates artifacts. Cheap smoke for model-library tooling."
+  },
+  {
+   "path": "tests/test_grouped_benchmark.py",
+   "category": "goal-metric",
+   "reason": "Protects the measurement instrument: grouped k-fold/LOOCV keep perturbation variants together (no leakage), bootstrap CI, McNemar, Friedman-Nemenyi correctness. Identifier changes are benchmark-gated, so this stack's integrity is goal-critical."
+  },
+  {
+   "path": "tests/test_hybrid_consensus_2of3.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestHybridIdentifierDefaultPreservation::test_require_both_default_is_true",
+    "TestHybridIdentifierDefaultPreservation::test_new_consensus_class_does_not_replace_hybrid_identifier"
+   ],
+   "reason": "Keepers: consensus voting semantics with analytic mini-oracles (2-of-3 keeps Mg, union vs unanimous, weighted voting), constructor validation. Pins: the DefaultPreservation tests exist only to assert pre-existing HybridIdentifier behavior stayed byte-identical \u2014 legacy-contract pins."
+  },
+  {
+   "path": "tests/test_hybrid_inversion.py",
+   "category": "unit-utility",
+   "reason": "Coarse-to-fine inverter smoke tests with mock manifold: invert runs, real L-BFGS optimization actually executes (no silent fallback), edge cases. Assertions are validity/positivity, not accuracy, but catch real solver-path breakage cheaply."
+  },
+  {
+   "path": "tests/test_import_safety.py",
+   "category": "unit-utility",
+   "reason": "Subprocess import-safety regression tests: optional JAX/Bayesian stacks must not break imports; lazy exports resolve. Catches real breakage that would take down the whole library."
+  },
+  {
+   "path": "tests/test_instrument.py",
+   "category": "physics-truth",
+   "reason": "FWHM=2.355*sigma conversions, sigma=lambda/R scaling in resolving-power mode, convolution preserves integral (flux conservation), non-uniform-grid error. Mathematical/physical correctness of the instrument model."
+  },
+  {
+   "path": "tests/test_integration.py",
+   "category": "unit-utility",
+   "reason": "Forward-model workflow smoke tests (config->spectrum, multi-species, T/ne scans produce differing spectra). Sanity-level asserts; cheap integration coverage of the forward pipeline."
+  },
+  {
+   "path": "tests/test_integration_element_id.py",
+   "category": "goal-metric",
+   "reason": "Full identify->to_line_observations->Boltzmann-fit pipeline for all three identifiers on the same spectrum, plus golden-spectrum round trip. Directly exercises identification accuracy end to end."
+  },
+  {
+   "path": "tests/test_io.py",
+   "category": "unit-utility",
+   "reason": "Spectrum load/save round trips, alternative column names, error paths. Generic I/O utility."
+  },
+  {
+   "path": "tests/test_jax_import_hygiene.py",
+   "category": "implementation-pin",
+   "reason": "AST lint enforcing that only a hardcoded carve-out list may use literal 'try: import jax' and kernels.py must not import host.py. Pure architectural-conformance pin (ADR-0001/T1-1 archaeology); failing never indicates the goal got worse."
+  },
+  {
+   "path": "tests/test_joint_optimizer.py",
+   "category": "goal-metric",
+   "reason": "JointOptimizer recovers true T/ne/concentrations, softmax simplex invariant, multi-start escapes local minima, profile likelihood, full-Jacobian sigma_c validated against Monte Carlo. Directly measures composition-inference accuracy and uncertainty honesty."
+  },
+  {
+   "path": "tests/test_joint_vs_iterative.py",
+   "category": "goal-metric",
+   "reason": "Joint optimizer recovers true parameters on round-trip spectra, convergence, simplex guarantee, uncertainty estimates \u2014 accuracy comparison addressing acceptance criteria of the joint solver."
+  },
+  {
+   "path": "tests/test_kernel_module_layout.py",
+   "category": "implementation-pin",
+   "reason": "Asserts kernels.py module layout exists per ADR and that host modules re-export private kernel symbols 'for back-compat with existing callers'. Module-layout and shim re-export pins; no physics or goal protection."
+  },
+  {
+   "path": "tests/test_line_detection.py",
+   "category": "goal-metric",
+   "reason": "detect_line_observations matches synthetic peaks to known Fe lines (371.99/373.49 nm) within tolerance and flags resonance lines \u2014 directly measures line-identification correctness."
+  },
+  {
+   "path": "tests/test_line_selection.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestLineSelectorInit::test_default_parameters",
+    "TestIsolationFactor::test_isolation_formula",
+    "TestScoringFormula::test_score_formula",
+    "TestScoringFormula::test_score_with_default_uncertainty",
+    "TestLineScore::test_dataclass_creation",
+    "TestLineSelectionResult::test_dataclass_creation"
+   ],
+   "reason": "Keepers: selection improves Boltzmann fit quality, auto-selection prefers high SNR/avoids blends, rejection/warning trust surface, crowded-spectra robustness (goal-metric). Pins: exact tuned default thresholds, heuristic scoring/isolation formula echoes (test re-derives the same formula), dataclass tautologies."
+  },
+  {
+   "path": "tests/test_logging.py",
+   "category": "unit-utility",
+   "reason": "Logging setup, levels, format, logger hierarchy. Generic utility."
+  },
+  {
+   "path": "tests/test_lte_validator.py",
+   "category": "physics-truth",
+   "reason": "McWhirter criterion against the analytic formula 1.6e12*sqrt(T)*dE^3, cubic dE scaling, temporal equilibration check, Cristoforetti term-scheme dE convention, plus LTE warning trust surface."
+  },
+  {
+   "path": "tests/test_manifold.py",
+   "category": "unit-utility",
+   "reason": "ManifoldConfig validation/loading, HDF5/Zarr loader nearest-spectrum search, context manager, empty-manifold rejection. Infrastructure coverage for manifold inference path."
+  },
+  {
+   "path": "tests/test_manifold_config_broadening.py",
+   "category": "unit-utility",
+   "reason": "broadening_mode config plumbing (defaults, YAML parsing, invalid-value rejection) and generator dispatch between Voigt and LDM paths. Misrouting would silently apply wrong broadening, so dispatch checks earn their keep."
+  },
+  {
+   "path": "tests/test_manifold_physics.py",
+   "category": "physics-truth",
+   "reason": "JAX physics kernels vs NumPy reference; Doppler sqrt(T/m) scaling laws, Stark density scaling, Voigt reduces to Gaussian/Lorentzian limits, vmap correctness. Analytic limiting-case oracles."
+  },
+  {
+   "path": "tests/test_matrix_effects.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestPsRegimeGating::test_ns_defaults_unchanged",
+    "TestPsRegimeGating::test_ns_correction_alters_carbon"
+   ],
+   "reason": "Keepers: ps-regime stoichiometric identity (physics, Russo 2002), uncalibrated-defaults warnings (trust surface), classification/renormalization/uncertainty propagation behavior. Pins: the named tests reproduce 'historical empirical factors exactly' (C==0.85 etc.) \u2014 self-declared uncalibrated generic defaults pinned as exact legacy values."
+  },
+  {
+   "path": "tests/test_model_selection.py",
+   "category": "goal-metric",
+   "reason": "BIC pruning removes spurious elements while keeping true ones (identification accuracy on synthetic mixtures); Boltzmann-consistency filter passes physical/rejects random data; BIC math properties."
+  },
+  {
+   "path": "tests/test_nist_parity.py",
+   "category": "physics-truth",
+   "reason": "Partition functions, ionization fractions, and spectral output validated against NIST ASD reference data; direct-sum vs polynomial self-consistency. Canonical external-truth tests."
+  },
+  {
+   "path": "tests/test_no_hidden_x64_enablement.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_jax_identifier_flags_for_does_not_mutate_x64"
+   ],
+   "reason": "Keepers: fail-fast guard preventing silent float32 FISTA (~95% coefficient error) and configure/round-trip behavior \u2014 trust surface. Pin: the named purity canary asserts a helper does not touch jax.config \u2014 bead-archaeology shape pin; failing only means the side-effect seam moved."
+  },
+  {
+   "path": "tests/test_outliers.py",
+   "category": "physics-truth",
+   "reason": "SAM angles verified against analytic geometry (0/45/90/180 degrees, scale invariance, symmetry), MAD detection of planted outliers, realistic shot-to-shot and plasma-failure scenarios. Math-oracle correctness of preprocessing that guards data quality."
+  },
+  {
+   "path": "tests/test_partition.py",
+   "category": "physics-truth",
+   "reason": "Polynomial partition function analytic checks, NIST reference coverage/physical bounds/monotonicity, polynomial-fit accuracy at key temperatures, solver integration and fallback."
+  },
+  {
+   "path": "tests/test_partition_function_extrapolation.py",
+   "category": "physics-truth",
+   "reason": "Extrapolation guards vs direct-sum truth (Ca I no 560x explosion, Nb I floored at g0), in-range values unchanged, JAX twin matches NumPy; 'legacy' no-kwargs test actually verifies the analytic exp(sum a_n (ln T)^n) formula by hand."
+  },
+  {
+   "path": "tests/test_partition_function_parity.py",
+   "category": "physics-truth",
+   "reason": "Stored partition polynomial vs full direct-sum over NIST energy levels and Barklem & Collet 2016 Fe I reference; coverage/ground-state/finiteness gates on the production DB. External-truth anchored, replaces an earlier tautology."
+  },
+  {
+   "path": "tests/test_partition_function_provider.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_spec_is_cached_compute_once",
+    "test_derive_partition_spec_does_not_refit"
+   ],
+   "reason": "Core tests are direct-sum parity, g0 floor, T-clamp, CPU/JAX adapter agreement (physics-truth). The two named tests pin the caching mechanism itself (object identity `s1 is s2`, fit call-count==1) \u2014 a valid refactor of the cache would fail them with no goal impact."
+  },
+  {
+   "path": "tests/test_partition_path_consistency.py",
+   "category": "physics-truth",
+   "reason": "Gates every U(T) consumer path (CPU scalar, manifold/JAX snapshot, Bayesian arrays) against the direct-sum reference over DB energy levels; explicitly the gate that would have caught the 40-60%-low PF-1..PF-4 defect."
+  },
+  {
+   "path": "tests/test_pca.py",
+   "category": "unit-utility",
+   "reason": "Generic in-house PCA utility: mathematical properties (variance decreasing, reconstruction, denoising reduces RMSE vs clean signal), NumPy/JAX backend agreement, error handling. Cheap, catches real breakage."
+  },
+  {
+   "path": "tests/test_pca_tolerance.py",
+   "category": "unit-utility",
+   "reason": "Tightened reconstruction tolerances (machine-precision round-trip on low-rank data) \u2014 analytic property of PCA, added because the original rtol=0.15 couldn't catch inverse-transform regressions."
+  },
+  {
+   "path": "tests/test_pds.py",
+   "category": "unit-utility",
+   "reason": "ChemCam/SuperCam parser, cache, corpus and validation-schema mapping against checked-in fixtures; supplies ground truth for real-data validation. I/O and metadata correctness, cheap, real breakage detection."
+  },
+  {
+   "path": "tests/test_physics_invariants.py",
+   "category": "physics-truth",
+   "reason": "Forward-model invariants: non-negative finite intensity, Boltzmann line-ratio monotonicity with T, self-absorption path-length bounds I(2L)<=2I(L), Saha fraction sum-to-one and Le Chatelier trends, eV/K unit consistency."
+  },
+  {
+   "path": "tests/test_pipeline_e2e.py",
+   "category": "goal-metric",
+   "reason": "End-to-end: synthetic Fe/Cu spectrum with known composition -> detection -> ALIAS identification -> iterative solve; asserts recovered concentrations within 0.05 of ground truth and correct element set. Directly measures identification + composition accuracy."
+  },
+  {
+   "path": "tests/test_plasma.py",
+   "category": "physics-truth",
+   "reason": "Saha conservation, 3-stage coupling vs closed-form n_I = n_tot/(1+S1+S1*S2), Debye-H\u00fcckel IPD against independent Gaussian-CGS oracle, IPD-consistent partition cutoff with hand-computed Boltzmann sums, composition conversion math."
+  },
+  {
+   "path": "tests/test_platform_config.py",
+   "category": "unit-utility",
+   "reason": "JAX backend selection/fallback (Darwin forces CPU, missing-GPU graceful fallback, x64 enabled, warning honesty). Cheap config-layer tests that catch real environment breakage."
+  },
+  {
+   "path": "tests/test_preprocessing.py",
+   "category": "unit-utility",
+   "reason": "Baseline (median/SNIP/ALS), noise estimation, and peak detection verified against synthetic spectra with known baselines/peaks/noise sigma. Functional signal-processing correctness underpinning detection; not pins."
+  },
+  {
+   "path": "tests/test_preprocessing_low_snr.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_default_baseline_method_is_median_not_als"
+   ],
+   "reason": "Weak-peak sensitivity and AUTO-selector tests are functional keepers; the four dispatch tests guard a real PR #114 silent-rewiring bug class. The named test pins the tuned default (MEDIAN) as an exact value \u2014 a deliberate, benchmarked default change would fail it without any goal regression."
+  },
+  {
+   "path": "tests/test_profiles.py",
+   "category": "physics-truth",
+   "reason": "Gaussian/Lorentzian integrals = amplitude, Voigt limiting cases, Weideman Faddeeva vs scipy.wofz to 1e-6, Doppler width physics, JAX gradient finiteness across LIBS conditions. Analytic and external oracles."
+  },
+  {
+   "path": "tests/test_profiles_jax.py",
+   "category": "physics-truth",
+   "reason": "voigt_spectrum_jax vs scipy.special.wofz reference (1e-6 across 100-case sweep), unit normalization, Gaussian/Lorentzian limits, gradient finiteness, float64 \u2014 forward-model line-shape correctness against an external oracle."
+  },
+  {
+   "path": "tests/test_quality.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestQualityAssessorInit::test_default_thresholds",
+    "TestQualityMetrics::test_dataclass_creation"
+   ],
+   "reason": "Chi-squared math, closure-residual correctness, and warning emission (trust surface) are keepers. test_default_thresholds pins arbitrary tuned quality thresholds (0.95/0.90/0.80, 0.01/0.05/0.10) as exact values; test_dataclass_creation is tautological field-storage."
+  },
+  {
+   "path": "tests/test_radiation.py",
+   "category": "physics-truth",
+   "reason": "Emissivity linear in population, area-preserving broadening (wider sigma -> lower peak), per-line == scalar broadening equivalence, resolving-power sigma formula, Doppler T-scaling, NumPy/JAX path agreement."
+  },
+  {
+   "path": "tests/test_radiation_kernels_partition_parity.py",
+   "category": "physics-truth",
+   "reason": "Inlined kernels.py partition evaluator must equal the canonical ln-basis implementation (rtol 1e-12) plus order-of-magnitude physical sanity; the duplicate is live forward-model code and the guarded drift was an 18-orders-of-magnitude physics bug (CF-LIBS-improved-ddwh)."
+  },
+  {
+   "path": "tests/test_reference_compositions.py",
+   "category": "physics-truth",
+   "reason": "Certified CRM compositions (BHVO-2, BIR-1, NIST SRM 612) checked against GeoReM/NIST published oxide values via stoichiometric conversion, mass balance, and trace/minor strata rules \u2014 external truth for composition-accuracy benchmarks."
+  },
+  {
+   "path": "tests/test_repo_health.py",
+   "category": "implementation-pin",
+   "reason": "Enforces an 800-LOC-per-file ceiling on bayesian/*.py (ADR/spec acceptance criterion). Pure code-organization policing; failing can never indicate identification/composition accuracy or runtime got worse."
+  },
+  {
+   "path": "tests/test_result_base.py",
+   "category": "unit-utility",
+   "reason": "Result-table formatting mixin and CI/quantile helpers (correct 68/95% percentile levels vs np.percentile, NaN handling for <2 samples). Cheap output-layer tests that catch real breakage."
+  },
+  {
+   "path": "tests/test_round_trip.py",
+   "category": "goal-metric",
+   "reason": "Forward->invert round-trip validation against known T/ne/concentrations including noise and self-consistent n_e recovery (T within 15%, n_e within 50%); plus generator/noise-model reproducibility supporting the validator. Directly measures composition/parameter accuracy."
+  },
+  {
+   "path": "tests/test_self_absorption.py",
+   "category": "physics-truth",
+   "reason": "f(tau)=(1-exp(-tau))/tau vs published tabulated values, curve-of-growth regimes (linear slope~1, saturation~0), doublet-ratio recovery of injected tau, optical-depth scaling laws (linear in density, Doppler T-scaling), Si resonance escape factors. A few trivial dataclass tests, but overwhelmingly literature/analytic-oracle physics."
+  },
+  {
+   "path": "tests/test_slurm.py",
+   "category": "unit-utility",
+   "reason": "SBATCH script generation, array/dependency directives, env-var name validation, dry-run workflow. HPC infrastructure correctness without a cluster; cheap and catches real breakage."
+  },
+  {
+   "path": "tests/test_softmax_closure.py",
+   "category": "physics-truth",
+   "reason": "Closure-map mathematics: sum-to-one (conservation), positivity, inverse round-trip, analytical Jacobian vs autodiff, rank D-1, extreme-value stability, batch consistency \u2014 analytic oracles for the composition closure used in solving."
+  },
+  {
+   "path": "tests/test_solver.py",
+   "category": "physics-truth",
+   "reason": "IterativeCFLIBSSolver recovers known T/composition from analytically constructed Boltzmann data; Saha correction verified against the closed-form transform; pressure-balance n_e vs hand-iterated equilibrium; degenerate-fit gate reports non-converged (trust surface)."
+  },
+  {
+   "path": "tests/test_spectral_nnls.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "TestHybridUnionRecallFloor::test_standalone_default_is_count_invariant",
+    "TestHybridUnionRecallFloor::test_hybrid_union_arm_defaults_to_recall_favoring_floor",
+    "TestSpectralNNLSIdentifier::test_estimated_params_stored"
+   ],
+   "reason": "Detection accuracy on synthetic spectra (Fe detected/dominant, mixtures, noise rejection) and gate monotonicity are goal keepers. The named tests pin tuned defaults as exact values via inspect.signature (DETECTION_SNR==4.0, min_relative_coeff==0.0) and a private attribute \u2014 re-tuning after benchmarking fails them with no goal signal."
+  },
+  {
+   "path": "tests/test_spectral_refiner.py",
+   "category": "goal-metric",
+   "reason": "L-BFGS-B refinement recovers true T within 20% and correct Fe>Cr ordering on synthetic basis-library spectra; convergence on clean data, chi2_red sanity, residual non-increase. Directly measures composition/parameter accuracy of the refiner."
+  },
+  {
+   "path": "tests/test_spectral_refiner_closure.py",
+   "category": "physics-truth",
+   "reason": "Closure constraint sum(C)=1 enforced with exposed residual, composition recovery against an optimizer-independent oracle (Fe=0.7/Ni=0.3), and amplitude-composition decoupling under 1e3 intensity rescale \u2014 conservation-law and invariance gates."
+  },
+  {
+   "path": "tests/test_spectral_refiner_coverage.py",
+   "category": "unit-utility",
+   "reason": "Coverage backfill with a fake basis library: empty/unknown-element paths, bounds clipping, resampling, finite chi2, non-negative residual. Cheap robustness tests; one tautological dataclass check is harmless."
+  },
+  {
+   "path": "tests/test_spectrum_model.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_spectrum_model_legacy_mode_unchanged"
+   ],
+   "reason": "Path-length linear scaling, temperature dependence, non-negativity, invalid-plasma rejection, and mode dispatch checks are keepers. The named test pins 'default == LEGACY mode, identical to old behavior' \u2014 a deliberate default-mode improvement fails it with no goal regression (classic legacy-contract pin)."
+  },
+  {
+   "path": "tests/test_stark.py",
+   "category": "physics-truth",
+   "reason": "Stark FWHM/HWHM scaling laws with n_e and T, shift scaling, Konjevi\u0107-anchored convention tests (stored FWHM at reference conditions, Al I/Ca II/Fe II anchors) that killed the x20 inflation bug, JAX/NumPy agreement."
+  },
+  {
+   "path": "tests/test_stark_provenance.py",
+   "category": "physics-truth",
+   "reason": "Production DB stark_w for five anchor lines vs published STARK-B/Konjevi\u0107 2002 widths within 20%, coverage gates (95% stark_w, 80% vdW/self), and provenance-tag integrity. External literature truth on shipped atomic data."
+  },
+  {
+   "path": "tests/test_stark_tolerance.py",
+   "category": "unit-utility",
+   "reason": "get_wavelength_tolerance: quadrature sqrt(inst^2 + stark^2) analytic check plus None/zero/custom fallback handling. Small, cheap matching-tolerance utility tests."
+  },
+  {
+   "path": "tests/test_streaming.py",
+   "category": "unit-utility",
+   "reason": "Real-time pipeline: ring-buffer semantics and thread safety, latency-monitor statistics, fast/standard analyzers, edge-model quantization, end-to-end streaming flow with mocked DB. Runtime infrastructure correctness, catches real breakage."
+  },
+  {
+   "path": "tests/test_synthetic_corpus.py",
+   "category": "unit-utility",
+   "reason": "Benchmark-corpus helpers: mass->number fraction normalization, monotonic wavelength distortion with correct mean shift, factorial perturbation counts, recipe filtering. Cheap support for the goal-metric corpus machinery."
+  },
+  {
+   "path": "tests/test_synthetic_eval.py",
+   "category": "unit-utility",
+   "reason": "Benchmark scoring helpers: confusion counts, precision/recall/F1 arithmetic, failed-row handling, perturbation-axis grouping, identifier-runner suite composition. Correctness of the goal-measurement machinery itself."
+  },
+  {
+   "path": "tests/test_temporal.py",
+   "category": "unit-utility",
+   "reason": "Temporal module: evolution-model decay trends, LTE validity, gate-timing optimization sanity, optical-depth time decay, and joint multi-gate fits that recover constant composition with lower uncertainty than per-gate (goal-relevant keepers). No purge-worthy pins found."
+  },
+  {
+   "path": "tests/test_two_region_fit.py",
+   "category": "mixed",
+   "pinned_tests": [
+    "test_solver_two_region_flag"
+   ],
+   "reason": "TwoRegionPlasma validation and unphysical-gradient warning (trust surface) are keepers. The named test pins the hard-coded stub T_corona == 0.8*T_K ('in our implementation') \u2014 pure implementation-pin of an arbitrary factor; any real two-region physics would break it."
+  },
+  {
+   "path": "tests/test_uncertainty.py",
+   "category": "physics-truth",
+   "reason": "Correlation-aware propagation: covariance preserved through Boltzmann->T->closure, sum-to-one under closure, n_e uncertainty budget enlarges sigma_C without moving point estimates, MC statistics, Poisson low-count unbiasedness (Gaussian-floor bias regression). Statistical truth + trust surface."
+  },
+  {
+   "path": "tests/test_units.py",
+   "category": "physics-truth",
+   "reason": "Unit conversions (K/eV/C, cm^-3/m^-3, nm/m/wavenumber) with round-trips and known values (~0.86 eV, ~20000 cm^-1) \u2014 exactly the unit-conversion truth class."
+  },
+  {
+   "path": "tests/test_usgs_integration.py",
+   "category": "physics-truth",
+   "reason": "USGS certified geostandard compositions (BHVO-2 etc.) verified via stoichiometric oxide->element factors against published wt% values, plus spectrum loading and renormalization logic feeding the accuracy benchmarks."
+  },
+  {
+   "path": "tests/test_vector_index.py",
+   "category": "unit-utility",
+   "reason": "Manifold FAISS index: embed/search exact-match, save/load round-trip, and IVF under-training guards (n_lists reduction / flat fallback with logged warning) preventing silently degenerate nearest-neighbor inference. Infrastructure for fast inference."
+  },
+  {
+   "path": "tests/test_visualization.py",
+   "category": "unit-utility",
+   "reason": "Optional-dependency export gating, HTML escaping of user input, and PosteriorViewer input validation. Cheap presentation-layer tests catching real breakage."
+  },
+  {
+   "path": "tests/test_vrabel2020_cdsb.py",
+   "category": "implementation-pin",
+   "reason": "Empty tombstone: docstring-only module documenting that the legacy CDSBPlotter tests were removed with the class; coverage now lives in test_self_absorption.py. Zero assertions, pure deleted-feature remnant \u2014 delete the file."
+  }
+ ]
+}

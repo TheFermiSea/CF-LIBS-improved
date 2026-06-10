@@ -61,6 +61,21 @@ _LAZY_ATTRIBUTE_GROUPS = {
         "build_id_workflow_registry",
         "load_default_datasets",
     ],
+    # Goal-metric scoreboard (bead A1)
+    "cflibs.benchmark.scoreboard_registry": [
+        "DatasetEntry",
+        "SpectrumTruth",
+        "iter_datasets",
+        "register_dataset",
+    ],
+    "cflibs.benchmark.scoreboard": [
+        "render_markdown",
+        "run_scoreboard",
+        "write_artifacts",
+    ],
+    "cflibs.benchmark.adapters_core": [
+        "register_core_adapters",
+    ],
 }
 
 __all__ = [
@@ -125,6 +140,15 @@ __all__ = [
     "line_dropout_perturbation",
     "outlier_injection_perturbation",
     "run_perturbation_battery",
+    # Goal-metric scoreboard (bead A1)
+    "DatasetEntry",
+    "SpectrumTruth",
+    "iter_datasets",
+    "register_dataset",
+    "register_core_adapters",
+    "render_markdown",
+    "run_scoreboard",
+    "write_artifacts",
     # I/O
     "load_benchmark",
     "save_benchmark",
