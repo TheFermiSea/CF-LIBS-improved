@@ -244,6 +244,7 @@ def test_vmap_batched_solve(mock_db, lax_enabled):
         intercepts=jnp.zeros(E),
         concentrations=jnp.zeros(E),
         r_squared=jnp.asarray(0.0),
+        boltzmann_degenerate=jnp.asarray(True),
     )
 
     # Stack 16 perturbed observation arrays (perturb intensities ±1%)
@@ -326,6 +327,7 @@ def test_grad_smoke(mock_db, lax_enabled):
             intercepts=jnp.zeros(E),
             concentrations=jnp.zeros(E),
             r_squared=jnp.asarray(0.0),
+            boltzmann_degenerate=jnp.asarray(True),
         )
         final = iterative_mod._run_lax_while_loop(
             state,
