@@ -127,6 +127,11 @@ def test_conditional_knobs():
 
 @pytest.mark.unit
 def test_baseline_params_reproduce_production_defaults():
+    """The derivation contract (simp#8/#9): knob defaults are DERIVED from
+    AnalysisPipelineConfig / detect_line_observations, so the baseline
+    candidate must resolve to the untouched production config. This pins the
+    derivation machinery (factory routing, mode-selector defaults, condition
+    gating), not hand-copied numbers."""
     from cflibs.inversion.pipeline import build_pipeline_config
 
     overrides = knob_space.params_to_overrides(knob_space.baseline_params())
@@ -135,7 +140,8 @@ def test_baseline_params_reproduce_production_defaults():
     # The baseline candidate must equal the untouched production config on
     # every searched pipeline field. exclude_resonance is special: the
     # production config carries None, which detect_and_select_lines resolves
-    # to False — the knob space encodes the resolved value directly.
+    # to False — the knob space encodes the resolved value directly (the one
+    # deliberately non-derived default).
     for key in set(overrides) - {"detection_overrides", "exclude_resonance"}:
         assert getattr(candidate, key) == getattr(reference, key), key
     assert candidate.exclude_resonance is False
@@ -146,6 +152,9 @@ def test_baseline_params_reproduce_production_defaults():
     sig = inspect.signature(detect_line_observations)
     for key, value in overrides["detection_overrides"].items():
         assert value == sig.parameters[key].default, key
+    # The wedge axis stays out of the space (eff#1 pathology, c1-knobs-v2).
+    assert "use_deconvolution" not in {k.param for k in knob_space.SPACE}
+    assert "use_deconvolution" not in overrides["detection_overrides"]
 
 
 @pytest.mark.unit
