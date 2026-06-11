@@ -34,6 +34,12 @@ them at iteration time so importing this package stays free of heavy I/O.
   soils (presence-only exchangeable-fertility panel).
 - :mod:`cflibs.benchmark.datasets.gibbons2024` -- Gibbons et al. nitrate-doped
   Mars Global Simulant series (quantitative N).
+- :mod:`cflibs.benchmark.datasets.supercam_labcal` -- SuperCam laboratory LIBS
+  calibration database (Anderson et al. 2022; oxide certificates in the same
+  table -> element wt%), streamed row-by-row from the 721 MB PDS4 CSV.
+- :mod:`cflibs.benchmark.datasets.supercam_scct` -- SuperCam onboard
+  calibration-target spectra from the Mars surface (CL1 FITS products; truth
+  joined to the lab table's SCCT chip rows). Requires astropy.
 """
 
 from cflibs.benchmark.datasets.nist_steel import (

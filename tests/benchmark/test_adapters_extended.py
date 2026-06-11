@@ -93,7 +93,7 @@ def test_adapter_skips_with_log_when_data_absent(name, factory, k, tmp_path, cap
 def test_manifest_shape_and_unique_names():
     from cflibs.benchmark.scoreboard_registry import DATASET_TIERS
 
-    assert len(MANIFEST) == 5
+    assert len(MANIFEST) == 7
     names = [entry[0] for entry in MANIFEST]
     assert len(set(names)) == len(names)
     for name, factory, tags, tier, notes in MANIFEST:
@@ -106,6 +106,8 @@ def test_manifest_shape_and_unique_names():
     # the dataset itself, declared at registration.
     assert tiers["emslibs2019"] == "holdout"
     assert tiers["gibbons2024"] == "vault"
+    assert tiers["supercam_labcal"] == "optimization"
+    assert tiers["supercam_scct"] == "holdout"  # real-Mars adoption-gate material
 
 
 def test_spectrum_truth_basis_consistency_enforced():

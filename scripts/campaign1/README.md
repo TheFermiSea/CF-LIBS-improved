@@ -19,8 +19,9 @@ adoption gate.
 |---|---|
 | `knob_space.py` | Search-space definition (design 3.1 A+B), params ↔ `config_overrides` mapping, `FROZEN_MANIFEST` writer |
 | `splits.py` | Optimization / holdout / vault split builder + structural holdout refusal (`HoldoutViolation`) |
-| `objective.py` | Candidate evaluation (scoreboard internals) + composite fitness (design 2.2) + paired bootstrap |
-| `driver.py` | Optuna study: `init` / `worker` / `status` / `stop`; journal storage, STOP file, core-hour ledger |
+| `objective.py` | Candidate evaluation (scoreboard internals) + composite fitness (design 2.2; v1 flat death penalties / v2 graded penalties) + paired bootstrap |
+| `driver.py` | Optuna study: `init` / `worker` / `status` / `stop`; journal storage, STOP file, core-hour ledger, fitness-version pin, warm-start enqueue |
+| `rescore.py` | Offline FITNESS-V2 regrade of an existing journal (no re-evaluation); ranked report + warm-start list for run2 |
 | `holdout_eval.py` | Top-K re-evaluation on full optimization + holdout splits; adoption-gate verdict report |
 | `slurm/` | `worker_array.sbatch`, `holdout_eval.sbatch`, `stage.sh` |
 
@@ -82,11 +83,39 @@ seed trials: the baseline params and the "looser gates" failure-hypothesis
 candidate (design 3.1). The baseline evaluation runs `--n-procs 8` by default
 (eff#5); pass `--n-procs 1` only for tiny smokes.
 
-Trials short-circuit on death penalties (eff#1): FP and failure counts are
-monotone in the accumulated records, so the moment a dataset crosses a death
-threshold the trial stops paying for the remaining spectra/datasets — the
-fitness is identical to the full run by construction, and
-`user_attrs.aborted_after_dataset` records where the abort fired.
+Trials short-circuit on pinned fitness (eff#1): FP/failure counts (and hence
+the v2 graded penalties) are monotone in the accumulated records, so the
+moment the trial's fitness is already decided (v1: a dataset crosses a death
+threshold; v2: the accumulated penalty exceeds the catastrophic floor) the
+trial stops paying for the remaining spectra/datasets — the fitness is
+identical to the full run by construction (determinism proof:
+`objective.EarlyAbortTracker`), and `user_attrs.aborted_after_dataset`
+records where the abort fired.
+
+### Fitness versions
+
+`init --fitness-version {1,2}` (default **2**) pins the fitness math for the
+whole study — in `study_config.json` *and* `frozen_manifest.json`; a worker
+started with a contradicting `--fitness-version` is refused (a journal must
+never mix fitness maths).
+
+- **v1** (run1, kept selectable for artifact reproducibility): flat death
+  penalties — `FP_d > base+1` on a real dataset or
+  `n_failed_d > 1.25 × base` anywhere ⇒ fitness −1e9. Measured outcome on
+  run1: 79/80 trials at −1e9, zero ranking signal for TPE, several killed
+  trials with `weighted_score` above the surviving baseline.
+- **v2** (FITNESS-V2, default): the same composite minus **graded**
+  penalties, `LAMBDA_FP = 0.05` per excess FP (beyond base+1, real datasets)
+  and `LAMBDA_FAIL = 0.02` per excess failure (beyond the largest integer
+  count that does not cross the v1 `n_failed_d > 1.25 × base` threshold).
+  Sizing: one excess FP must cost more than any plausible single-step score
+  gain (observed run1 weighted_score range ~0.30–0.56). Once the total
+  penalty exceeds `CATASTROPHIC_PENALTY = 1.0` the trial gets the flat
+  `CATASTROPHIC_FITNESS = −1e3` — far below all real scores, far above −1e9
+  so the journal distinguishes v2 catastrophics from v1 deaths/structural
+  failures. A trial with zero excess counts scores identically under v1 and
+  v2. The hard no-regression constraint stays at **adoption**
+  (`holdout_eval` G-gates) — the search keeps its gradient.
 
 ## 4. Submit workers (maintainer)
 
@@ -139,6 +168,48 @@ on real holdout datasets; **G4** holdout runtime ≤ 1.5× baseline. Verdict:
 candidates is the best worst-dataset score (design 3.4). Every holdout query is
 ledger-logged; a second query within 7 days requires a human `--force`.
 
+## Run2 procedure (FITNESS-V2 + run1 warm starts)
+
+Run1's flat v1 landscape (79/80 trials at −1e9) is recoverable offline: the
+journal already holds every trial's per-dataset FP/failure/score data.
+
+1. **Re-score run1 offline** (cluster, where the run1 journal lives; no
+   re-evaluation, seconds not core-hours):
+
+   ```bash
+   JAX_PLATFORMS=cpu PYTHONPATH=$PWD .venv/bin/python scripts/campaign1/rescore.py \
+       --study-dir /cluster/shared/cf-libs-bench/campaign1/results/run1 --top-k 10
+   ```
+
+   Artifacts under `<study>/rescore_v2/`: `rescore_v2.md` + `.json` (every
+   COMPLETE trial regraded and ranked by fitness-v2) and
+   `warm_start_top10.json` (top-K param dicts, catastrophics excluded).
+   Trials that early-aborted under v1 are flagged `partial` — their regraded
+   fitness is an estimate (dataset-prefix only; penalty is a lower bound).
+
+2. **Initialize run2** with fitness v2 (the default) and the warm starts:
+
+   ```bash
+   JAX_PLATFORMS=cpu PYTHONPATH=$PWD .venv/bin/python scripts/campaign1/driver.py init \
+       --study-dir /cluster/shared/cf-libs-bench/campaign1/results/run2 \
+       --db ASD_da/libs_production.db \
+       --spectra-per-dataset 74 --target-trials 800 --budget-core-hours 600 \
+       --fitness-version 2 \
+       --enqueue-from /cluster/shared/cf-libs-bench/campaign1/results/run1/rescore_v2/warm_start_top10.json
+   ```
+
+   The version is pinned in `study_config.json` + `frozen_manifest.json`
+   (with the grading constants); workers read the pin, and an explicit
+   contradicting `--fitness-version` is refused.
+
+3. **Knob-space v2 interplay:** run1 predates `c1-knobs-v2`, so its params
+   may carry `use_deconvolution` (removed axis). `rescore.py` strips
+   removed params from the warm-start output, and `init --enqueue-from`
+   drops any remaining unknown params again with a warning — enqueued run1 v1 params
+   containing `use_deconvolution` can never re-enter the space.
+
+4. Submit workers exactly as in step 4 above.
+
 ## 8. Adopt
 
 Ship the winning `config_overrides` as updated `ANALYSIS_PRESETS` values /
@@ -156,7 +227,11 @@ the `frozen_manifest.json` hashes in the body. CI runs the full suite.
   strictly more preemption-tolerant, same controls (STOP file, ledger cap).
 - **Death penalties return -1e9, not -inf** (recorded with reasons in
   `user_attrs.fitness_report`): TPE handles finite values better and the
-  ordering is unchanged.
+  ordering is unchanged. *Superseded for new studies by FITNESS-V2* (see
+  "Fitness versions"): run1 proved the flat -1e9 landscape starves TPE of
+  ranking signal; v1 stays selectable (`--fitness-version 1`) only to
+  reproduce run1 artifacts. -1e9 remains the value of structural failures
+  (Optuna FAIL states) under both versions.
 - **Per-generation synthetic-subsample seed rotation** (design 2.4 option) is
   not implemented: TPE has no generations; the per-trial sample is frozen at
   the study seed. Revisit for the phase-B CMA-ES run.
