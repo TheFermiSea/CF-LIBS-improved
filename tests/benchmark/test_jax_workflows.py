@@ -225,6 +225,9 @@ def test_iterative_jax_uses_jax_path_when_available(synthetic_spectrum, context)
     not (HAS_JAX and HAS_NUMPYRO and _DEFAULT_DB_PATH.exists()),
     reason="bayesian workflow needs jax + numpyro + atomic DB",
 )
+@pytest.mark.requires_jax
+@pytest.mark.requires_bayesian
+@pytest.mark.slow
 @pytest.mark.xfail(
     strict=False,
     reason=(

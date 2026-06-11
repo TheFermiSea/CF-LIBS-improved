@@ -32,30 +32,36 @@ def _rows(**overrides):
 @pytest.mark.unit
 def test_graded_excess_counts_exact_thresholds():
     base = {"fp": 2, "n_failed": 4}
-    # FP allowance = base + 1; failure allowance = ceil(1.25 * base) = 5.
+    # FP allowance = base + 1; failure allowance is the largest integer
+    # count that does not cross the v1 strict threshold.
     assert objective_mod.graded_excess_counts(False, 3, 5, base) == (0, 0)
     assert objective_mod.graded_excess_counts(False, 4, 6, base) == (1, 1)
     assert objective_mod.graded_excess_counts(False, 9, 12, base) == (6, 7)
     # Synthetic datasets are FP-exempt (mirrors the v1 death condition).
     assert objective_mod.graded_excess_counts(True, 99, 6, base) == (0, 1)
-    # Zero-failure baseline: ceil(0) = 0, ANY failure is excess.
+    # Small baselines must not get one extra free failure from ceil rounding.
+    assert objective_mod.graded_excess_counts(False, 0, 1, {"fp": 0, "n_failed": 1}) == (0, 0)
+    assert objective_mod.graded_excess_counts(False, 0, 2, {"fp": 0, "n_failed": 1}) == (0, 1)
+    assert objective_mod.graded_excess_counts(False, 0, 2, {"fp": 0, "n_failed": 2}) == (0, 0)
+    assert objective_mod.graded_excess_counts(False, 0, 3, {"fp": 0, "n_failed": 2}) == (0, 1)
+    # Zero-failure baseline: ANY failure is excess.
     assert objective_mod.graded_excess_counts(False, 0, 1, {"fp": 0, "n_failed": 0}) == (0, 1)
 
 
 @pytest.mark.unit
 def test_graded_penalties_exact_values():
     # real_wt: fp=3 (base 0, allowed 1 -> excess 2), n_failed=4 (base 1,
-    # allowed ceil(1.25)=2 -> excess 2).
+    # allowed floor(1.25)=1 -> excess 3).
     rows = _rows(real_wt=_row("real_wt", basis="element_wt", rmse=5.0, fp=3, n_failed=4))
     v2 = objective_mod.compute_fitness(rows, BASE_REF, fitness_version=2)
-    expected_penalty = 2 * objective_mod.LAMBDA_FP + 2 * objective_mod.LAMBDA_FAIL
+    expected_penalty = 2 * objective_mod.LAMBDA_FP + 3 * objective_mod.LAMBDA_FAIL
     assert v2.graded_total_penalty == pytest.approx(expected_penalty)
     assert v2.fitness_version == 2
     assert not v2.catastrophic and not v2.death
     pd = v2.per_dataset["real_wt"]
-    assert (pd["excess_fp"], pd["excess_failed"]) == (2, 2)
+    assert (pd["excess_fp"], pd["excess_failed"]) == (2, 3)
     assert pd["penalty_fp"] == pytest.approx(2 * objective_mod.LAMBDA_FP)
-    assert pd["penalty_failed"] == pytest.approx(2 * objective_mod.LAMBDA_FAIL)
+    assert pd["penalty_failed"] == pytest.approx(3 * objective_mod.LAMBDA_FAIL)
     # fitness = the clean composite minus the graded penalty.
     clean = objective_mod.compute_fitness(_rows(), BASE_REF, fitness_version=2)
     assert v2.fitness == pytest.approx(clean.fitness - expected_penalty)
@@ -72,9 +78,9 @@ def test_synthetic_fp_not_penalized_failures_are():
     )
     v2 = objective_mod.compute_fitness(rows, BASE_REF, fitness_version=2)
     pd = v2.per_dataset["synth"]
-    # base n_failed=5 -> allowed ceil(6.25)=7 -> excess 1; FP exempt.
-    assert (pd["excess_fp"], pd["excess_failed"]) == (0, 1)
-    assert v2.graded_total_penalty == pytest.approx(objective_mod.LAMBDA_FAIL)
+    # base n_failed=5 -> allowed floor(6.25)=6 -> excess 2; FP exempt.
+    assert (pd["excess_fp"], pd["excess_failed"]) == (0, 2)
+    assert v2.graded_total_penalty == pytest.approx(2 * objective_mod.LAMBDA_FAIL)
 
 
 @pytest.mark.unit
@@ -85,8 +91,8 @@ def test_clean_trial_scores_identically_under_v1_and_v2():
     assert not v1.death and not v2.catastrophic
     assert v2.fitness == pytest.approx(v1.fitness)
     assert v2.graded_total_penalty == pytest.approx(0.0, abs=0)
-    # In-allowance counts are free: fp = base+1, n_failed = ceil(1.25*base).
-    rows = _rows(real_wt=_row("real_wt", basis="element_wt", rmse=5.0, fp=1, n_failed=2))
+    # In-allowance counts are free: fp = base+1, n_failed = floor(1.25*base).
+    rows = _rows(real_wt=_row("real_wt", basis="element_wt", rmse=5.0, fp=1, n_failed=1))
     graded = objective_mod.compute_fitness(rows, BASE_REF, fitness_version=2)
     assert graded.graded_total_penalty == pytest.approx(0.0, abs=0)
 
@@ -339,7 +345,7 @@ def test_regrade_recorded_v1_report_matches_direct_v2():
     assert regraded["v1_death"] is True
     assert regraded["v1_fitness"] == objective_mod.DEATH_FITNESS
     pd = regraded["per_dataset"]["real_wt"]
-    assert (pd["excess_fp"], pd["excess_failed"]) == (2, 2)
+    assert (pd["excess_fp"], pd["excess_failed"]) == (2, 3)
 
 
 @pytest.mark.unit

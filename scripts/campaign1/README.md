@@ -106,7 +106,8 @@ never mix fitness maths).
   trials with `weighted_score` above the surviving baseline.
 - **v2** (FITNESS-V2, default): the same composite minus **graded**
   penalties, `LAMBDA_FP = 0.05` per excess FP (beyond base+1, real datasets)
-  and `LAMBDA_FAIL = 0.02` per excess failure (beyond `ceil(1.25 × base)`).
+  and `LAMBDA_FAIL = 0.02` per excess failure (beyond the largest integer
+  count that does not cross the v1 `n_failed_d > 1.25 × base` threshold).
   Sizing: one excess FP must cost more than any plausible single-step score
   gain (observed run1 weighted_score range ~0.30–0.56). Once the total
   penalty exceeds `CATASTROPHIC_PENALTY = 1.0` the trial gets the flat

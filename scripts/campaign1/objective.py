@@ -628,8 +628,8 @@ def graded_excess_counts(
     early-abort tracker on running counts, and by :func:`regrade_report_v2`
     on recorded v1 reports. Mirrors the v1 death conditions
     (:func:`death_reasons_for_counts`): the FP threshold applies to real
-    datasets only, and the failure allowance is ``ceil(1.25 x baseline)``
-    (the integer-count form of the v1 ``> 1.25 x baseline`` condition).
+    datasets only, and the failure allowance is the largest integer count
+    that does not trip the v1 ``> 1.25 x baseline`` condition.
 
     Both excesses are monotone non-decreasing in ``fp`` / ``n_failed``, which
     are themselves monotone non-decreasing in the accumulated per-spectrum
@@ -637,7 +637,7 @@ def graded_excess_counts(
     (see :class:`EarlyAbortTracker`).
     """
     excess_fp = 0 if synthetic else max(0, fp - (int(base["fp"]) + FP_DEATH_MARGIN))
-    allowed_failed = math.ceil(FAILURE_DEATH_FACTOR * float(base["n_failed"]))
+    allowed_failed = math.floor(FAILURE_DEATH_FACTOR * float(base["n_failed"]))
     excess_failed = max(0, n_failed - allowed_failed)
     return excess_fp, excess_failed
 
