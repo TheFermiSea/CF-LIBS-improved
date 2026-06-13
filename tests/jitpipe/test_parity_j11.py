@@ -315,21 +315,20 @@ def test_vmap_batch16_and_grad_finite():
 
 
 def test_kernel_imports_no_sqlite_or_host():
-    """The autodiff kernel must not pull in sqlite3 / atomic.database / jitpipe.host."""
-    import importlib
-    import sys
+    """The autodiff kernel SOURCE must not import sqlite3 / atomic.database / jitpipe.host.
 
-    for mod in ("sqlite3", "cflibs.atomic.database", "cflibs.jitpipe.host"):
-        sys.modules.pop(mod, None)
-    # Re-import the kernel fresh and assert no SQLite-touching module loaded.
-    importlib.reload(ad)
-    assert "sqlite3" not in sys.modules, "kernel imported sqlite3"
-    assert "cflibs.atomic.database" not in sys.modules, "kernel imported atomic.database"
-    assert "cflibs.jitpipe.host" not in sys.modules, "kernel imported jitpipe.host"
-    # Source-level guard: no banned strings in the kernel module file.
-    import cflibs.jitpipe.autodiff as fresh
-
-    src = open(fresh.__file__).read()
+    Source-level on purpose. A ``sys.modules`` runtime probe is the wrong tool
+    here: importing this kernel necessarily runs the ``cflibs.jitpipe`` package
+    ``__init__``, which legitimately pulls in the sqlite-backed ``host`` carve-out
+    for the public ``run_batch`` API -- so a runtime probe tests the package, not
+    the kernel. The previous version worked around that by ``sys.modules.pop(...)``
+    + ``importlib.reload(ad)`` IN PROCESS, which swapped ``cflibs.atomic.database``
+    for a fresh module object mid-session and broke pickling of every later
+    ``@cached`` AtomicDatabase call (tests/plasma/test_saha_boltzmann_jax.py).
+    The AST-level no-sqlite/no-host boundary across ALL kernel modules is enforced
+    by tests/jitpipe/test_import_hygiene.py; this is the autodiff-specific guard.
+    """
+    src = open(ad.__file__).read()
     assert "import sqlite3" not in src
     assert "atomic.database" not in src
     assert "jitpipe.host" not in src
