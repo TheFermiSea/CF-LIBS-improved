@@ -149,8 +149,11 @@ def test_run_one_matches_reference_synthetic(db, snapshot):
     """run_one reproduces run_pipeline end-to-end on a synthetic spectrum.
 
     Exercises the full COMPOSITION: response/preprocess -> calibrate -> detect
-    + identify -> solve. The solve spine runs the jit ``scan_solve`` kernel; the
-    reference runs its own solve on the same observations. M1 tolerances.
+    + identify -> solve. This case pins the **reference-delegated** front-end
+    (``ondevice_front_end=False``) so it stays a stable baseline alongside the
+    on-device-front-end cases below (the Wave-3 deliverable). The solve spine
+    runs the jit ``scan_solve`` kernel; the reference runs its own solve on the
+    same observations. M1 tolerances.
     """
     from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
     from cflibs.jitpipe import PipelineParams, run_one
@@ -169,6 +172,7 @@ def test_run_one_matches_reference_synthetic(db, snapshot):
         _static_for(snapshot),
         atomic_db=db,
         pipeline_config=cfg,
+        ondevice_front_end=False,
     )
     _assert_m1_parity(ref, got, elements=elements)
 
@@ -203,7 +207,11 @@ def test_run_one_returns_cflibs_result_type(db, snapshot):
     not _REAL_SPECTRUM.exists(), reason="real ChemCam BHVO-2 fixture not present in worktree"
 )
 def test_run_one_matches_reference_real_chemcam(db, snapshot):
-    """run_one reproduces run_pipeline on a REAL ChemCam BHVO-2 spectrum (M1 headline)."""
+    """run_one reproduces run_pipeline on a REAL ChemCam BHVO-2 spectrum (M1 headline).
+
+    Reference-delegated front-end baseline (``ondevice_front_end=False``); the
+    on-device counterpart is ``test_ondevice_*`` below.
+    """
     from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
     from cflibs.jitpipe import PipelineParams, run_one
 
@@ -222,6 +230,7 @@ def test_run_one_matches_reference_real_chemcam(db, snapshot):
         _static_for(snapshot),
         atomic_db=db,
         pipeline_config=cfg,
+        ondevice_front_end=False,
     )
     _assert_m1_parity(ref, got, elements=elements)
 
@@ -273,6 +282,7 @@ def test_run_one_matches_reference_production_synthetic(db, snapshot, preset, cl
         _static_for(snapshot, closure_mode=closure_mode),
         atomic_db=db,
         pipeline_config=cfg,
+        ondevice_front_end=False,
     )
     _assert_m1_parity(ref, got, elements=elements)
 
@@ -309,6 +319,7 @@ def test_run_one_matches_reference_production_real_chemcam(db, snapshot):
         _static_for(snapshot, closure_mode="oxide"),
         atomic_db=db,
         pipeline_config=cfg,
+        ondevice_front_end=False,
     )
     assert got.converged
     # Element-call agreement >= 95 % (here all present elements must match).
@@ -462,3 +473,253 @@ def test_solve_stage_bucket_invariance(db, snapshot):
         np.testing.assert_allclose(
             r30.concentrations[el], r20.concentrations[el], rtol=1e-9, atol=1e-12
         )
+
+
+# ---------------------------------------------------------------------------
+# 6. ON-DEVICE FRONT-END parity (Wave 3, the J9/M2 prerequisite; ADR R8).
+#
+# ``run_one(ondevice_front_end=True)`` runs the detect + identify gate stack as
+# the parity-tested JIT kernels (J1 detect, J3 comb scan / shift select / veto /
+# observation build, trapezoid intensity) instead of byte-for-byte delegating to
+# the reference ``detect_and_select_lines``. The catalog SQL + gA-Boltzmann comb
+# ranking, the segmented wavelength calibration, the kdet pre-filter and the
+# post-detection ``LineSelector`` stay host-side (the host gathers MAY be
+# dynamic-shaped pre-jit; calibration / kdet / selector are not yet composed
+# on-device — see ``cflibs/jitpipe/host.py`` module note). The CONTRACT is that
+# the on-device gate stack reproduces the reference front-end observation set
+# (accepted elements + line-keys, floor Jaccard >= 0.98) AND that ``run_one``
+# stays within the M1 end-to-end tolerances.
+# ---------------------------------------------------------------------------
+
+
+def _ref_front_end_obs(db, wl, inten, cfg):
+    """Run the REAL reference ``detect_and_select_lines`` front-end (parity oracle)."""
+    from cflibs.inversion.pipeline import detect_and_select_lines
+
+    observations, _diag = detect_and_select_lines(
+        wl,
+        inten,
+        db,
+        cfg.elements,
+        min_relative_intensity=cfg.min_relative_intensity,
+        top_k_per_element=cfg.top_k_per_element,
+        resolving_power=cfg.resolving_power,
+        wavelength_tolerance_nm=cfg.wavelength_tolerance_nm,
+        min_peak_height=cfg.min_peak_height,
+        peak_width_nm=cfg.peak_width_nm,
+        apply_self_absorption=cfg.apply_self_absorption,
+        exclude_resonance=cfg.exclude_resonance,
+        min_snr=cfg.min_snr,
+        min_energy_spread_ev=cfg.min_energy_spread_ev,
+        min_lines_per_element=cfg.min_lines_per_element,
+        isolation_wavelength_nm=cfg.isolation_wavelength_nm,
+        max_lines_per_element=cfg.max_lines_per_element,
+        wavelength_calibration=cfg.wavelength_calibration,
+        shift_coherence_veto=cfg.shift_coherence_veto,
+        residual_shift_scan_nm=cfg.residual_shift_scan_nm,
+        global_shift_scan_nm=cfg.global_shift_scan_nm,
+        affine_coverage_gate=cfg.affine_coverage_gate,
+        line_residual_gate=cfg.line_residual_gate,
+        detection_overrides=cfg.detection_overrides,
+        return_diagnostics=True,
+    )
+    return observations
+
+
+def _obs_line_keys(observations):
+    return {(o.element, o.ionization_stage, round(o.wavelength_nm, 4)) for o in observations}
+
+
+def _jaccard(a, b):
+    union = len(a | b)
+    return 1.0 if union == 0 else len(a & b) / union
+
+
+@pytest.mark.parametrize("preset", ["raw", "geological"])
+def test_ondevice_front_end_matches_reference_obs_synthetic(db, snapshot, preset):
+    """ON-DEVICE front-end observation set == reference front-end (synthetic).
+
+    The Wave-3 contract: the on-device J1-detect + J3-identify gate stack
+    reproduces the reference ``detect_and_select_lines`` accepted-element set and
+    observation line-keys (floor Jaccard >= 0.98 — here exact).
+    """
+    from cflibs.inversion.pipeline import build_pipeline_config
+    from cflibs.jitpipe.host import run_front_end_ondevice
+
+    wl, inten, elements = _synthetic_spectrum(db)
+    overrides = _PARITY_OVERRIDES if preset == "raw" else None
+    cfg = build_pipeline_config(elements, preset=preset, overrides=overrides)
+
+    ref_obs = _ref_front_end_obs(db, wl, inten, cfg)
+    dev = run_front_end_ondevice(wl, inten, db, cfg, snapshot)
+
+    ref_keys = _obs_line_keys(ref_obs)
+    dev_keys = _obs_line_keys(dev.observations)
+    assert {o.element for o in ref_obs} == {o.element for o in dev.observations}
+    assert _jaccard(ref_keys, dev_keys) >= 0.98, (
+        f"line-key Jaccard < 0.98 for preset={preset}: "
+        f"only_ref={sorted(ref_keys - dev_keys)[:8]} only_dev={sorted(dev_keys - ref_keys)[:8]}"
+    )
+
+
+@pytest.mark.skipif(
+    not _REAL_SPECTRUM.exists(), reason="real ChemCam BHVO-2 fixture not present in worktree"
+)
+@pytest.mark.parametrize("preset", ["raw", "geological"])
+def test_ondevice_front_end_matches_reference_obs_real_chemcam(db, snapshot, preset):
+    """ON-DEVICE front-end observation set == reference front-end (real BHVO-2).
+
+    The highest-concentration hazard (ADR R8): the BHVO-2 confounder spectrum
+    fires the residual gate + min-kept-bars drop (Sn/Th class). The on-device
+    gate stack must reproduce the reference accepted/kept element set + line-keys
+    (floor Jaccard >= 0.98).
+    """
+    from cflibs.inversion.pipeline import build_pipeline_config
+    from cflibs.jitpipe.host import run_front_end_ondevice
+
+    wl, inten = _load_real_spectrum()
+    elements = ["Si", "Ti", "Al", "Fe", "Mn", "Mg", "Ca", "Na", "K"]
+    overrides = _PARITY_OVERRIDES if preset == "raw" else None
+    cfg = build_pipeline_config(elements, preset=preset, overrides=overrides)
+
+    ref_obs = _ref_front_end_obs(db, wl, inten, cfg)
+    dev = run_front_end_ondevice(wl, inten, db, cfg, snapshot)
+
+    ref_keys = _obs_line_keys(ref_obs)
+    dev_keys = _obs_line_keys(dev.observations)
+    assert {o.element for o in ref_obs} == {o.element for o in dev.observations}
+    assert _jaccard(ref_keys, dev_keys) >= 0.98, (
+        f"line-key Jaccard < 0.98 for preset={preset}: "
+        f"only_ref={sorted(ref_keys - dev_keys)[:8]} only_dev={sorted(dev_keys - ref_keys)[:8]}"
+    )
+
+
+def test_ondevice_run_one_matches_reference_synthetic(db, snapshot):
+    """run_one(ondevice_front_end=True) == run_pipeline end-to-end (synthetic, raw).
+
+    The full on-device composition: J1 detect + J3 identify gate stack -> jit
+    ``scan_solve`` -> ``CFLIBSResult``. M1 tolerances vs the reference.
+    """
+    from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
+    from cflibs.jitpipe import PipelineParams, run_one
+
+    wl, inten, elements = _synthetic_spectrum(db)
+    cfg = build_pipeline_config(elements, preset="raw", overrides=_PARITY_OVERRIDES)
+
+    ref, diag = run_pipeline(wl, inten, db, cfg)
+    assert diag["n_observations"] > 0
+
+    got = run_one(
+        inten,
+        wl,
+        snapshot,
+        PipelineParams(),
+        _static_for(snapshot),
+        atomic_db=db,
+        pipeline_config=cfg,
+        ondevice_front_end=True,
+    )
+    _assert_m1_parity(ref, got, elements=elements)
+
+
+@pytest.mark.skipif(
+    not _REAL_SPECTRUM.exists(), reason="real ChemCam BHVO-2 fixture not present in worktree"
+)
+def test_ondevice_run_one_matches_reference_real_chemcam(db, snapshot):
+    """run_one(ondevice_front_end=True) == run_pipeline on REAL BHVO-2 (raw preset)."""
+    from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
+    from cflibs.jitpipe import PipelineParams, run_one
+
+    wl, inten = _load_real_spectrum()
+    elements = ["Si", "Ti", "Al", "Fe", "Mn", "Mg", "Ca", "Na", "K"]
+    cfg = build_pipeline_config(elements, preset="raw", overrides=_PARITY_OVERRIDES)
+
+    ref, diag = run_pipeline(wl, inten, db, cfg)
+    assert diag["n_observations"] > 0
+
+    got = run_one(
+        inten,
+        wl,
+        snapshot,
+        PipelineParams(),
+        _static_for(snapshot),
+        atomic_db=db,
+        pipeline_config=cfg,
+        ondevice_front_end=True,
+    )
+    _assert_m1_parity(ref, got, elements=elements)
+
+
+@pytest.mark.skipif(
+    not _REAL_SPECTRUM.exists(), reason="real ChemCam BHVO-2 fixture not present in worktree"
+)
+def test_ondevice_run_one_matches_reference_production_real_chemcam(db, snapshot):
+    """run_one(ondevice_front_end=True) == run_pipeline on REAL BHVO-2 (GEOLOGICAL).
+
+    The Wave-3 M1 headline: the production geological preset
+    (``saha_boltzmann_graph=True`` + ``closure_mode='oxide'`` + ``stark_ne=True``)
+    with the ON-DEVICE front-end on the real ChemCam BHVO-2 confounder spectrum.
+    Element calls >= 95 %, T within 2 %, n_e within 10 %, conc rtol 5 % / atol
+    0.01 — the same gate the reference-delegated case meets, now with the gate
+    stack running as JIT kernels.
+    """
+    from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
+    from cflibs.jitpipe import PipelineParams, run_one
+
+    wl, inten = _load_real_spectrum()
+    elements = ["Si", "Ti", "Al", "Fe", "Mn", "Mg", "Ca", "Na", "K"]
+    cfg = build_pipeline_config(elements, preset="geological")
+    assert cfg.saha_boltzmann_graph is True
+    assert cfg.closure_mode == "oxide"
+
+    ref, diag = run_pipeline(wl, inten, db, cfg)
+    assert diag["n_observations"] > 0
+    assert ref.converged
+
+    got = run_one(
+        inten,
+        wl,
+        snapshot,
+        PipelineParams(),
+        _static_for(snapshot, closure_mode="oxide"),
+        atomic_db=db,
+        pipeline_config=cfg,
+        ondevice_front_end=True,
+    )
+    assert got.converged
+    ref_calls = {k for k, v in ref.concentrations.items() if v > 0.0}
+    got_calls = {k for k, v in got.concentrations.items() if v > 0.0}
+    assert len(ref_calls) > 0
+    n_agree = len(ref_calls & got_calls) + len({e for e in elements} - ref_calls - got_calls)
+    assert n_agree / len(elements) >= 0.95, f"calls: jit={got_calls} ref={ref_calls}"
+    _assert_m1_parity(ref, got, elements=elements)
+
+
+def test_ondevice_failure_policy_parity(db, snapshot):
+    """ON-DEVICE front-end failure policy: flat spectrum -> same all-FN record (AC4)."""
+    from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
+    from cflibs.jitpipe import PipelineParams, run_one
+
+    wl = np.arange(240.0, 450.0, 0.02)
+    flat = np.ones_like(wl)
+    elements = ["Fe", "Ca", "Ti"]
+    cfg = build_pipeline_config(elements, preset="raw", overrides=_PARITY_OVERRIDES)
+
+    with pytest.raises(ValueError, match="No usable spectral lines"):
+        run_pipeline(wl, flat, db, cfg)
+
+    got = run_one(
+        flat,
+        wl,
+        snapshot,
+        PipelineParams(),
+        _static_for(snapshot),
+        atomic_db=db,
+        pipeline_config=cfg,
+        ondevice_front_end=True,
+    )
+    assert got.converged is False
+    assert set(got.concentrations) == set(elements)
+    assert all(v == 0.0 for v in got.concentrations.values())
+    assert np.isfinite(got.temperature_K)
+    assert np.isfinite(got.electron_density_cm3)

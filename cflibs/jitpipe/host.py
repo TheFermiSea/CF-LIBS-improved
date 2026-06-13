@@ -1119,3 +1119,612 @@ def response_multiplier(wavelength: np.ndarray, response_curve_path: str | None)
     ones = np.ones_like(wl)
     corrected = correction.apply(wl, ones)
     return np.asarray(corrected, dtype=float)
+
+
+# ---------------------------------------------------------------------------
+# J9/M2 ON-DEVICE FRONT-END host glue (Wave 3; J8 plan §2.B / §2.C).
+#
+# These helpers assemble the J3 :class:`~cflibs.jitpipe.identify.FrontEndSnapshot`
+# (the padded comb arrays + the padded peak arrays) so that ``run_one`` can run
+# the detection / identification **gate stack on-device** (the JIT kernels in
+# ``cflibs.jitpipe.{preprocess,detect,calibrate,identify}``) instead of
+# delegating byte-for-byte to the reference ``detect_and_select_lines``.
+#
+# Host vs device split (ADR-0004 §5.1; the host gathers MAY be dynamic-shaped
+# because they run BEFORE the trace):
+#   * HOST (dynamic): catalog SQL + the gA-Boltzmann comb ranking
+#     (``_rank_transitions_by_strength`` / ``_select_comb_transitions``); the
+#     padded scipy ``find_peaks`` -> ``(P_max,)`` peak arrays; the obs -> line
+#     block gather. These touch the reference DB / scipy and stay impure.
+#   * DEVICE (fixed-shape JIT kernels): the comb shift-scan / shift selection /
+#     shift-coherence veto / observation build (J3 ``identify.py``), trapezoid
+#     intensity extraction, the J1 detect kernel for the detection-path peaks.
+#
+# Stages that DO NOT yet reach byte-parity as on-device kernels and therefore
+# stay reference-delegated (reported honestly in ``impl_completeness`` /
+# ``remaining_todo``): the segmented wavelength calibration (the kernel
+# ``calibrate_axis_kernel`` is the global single-axis fit; the production
+# ``calibrate_wavelength_axis_segmented`` driver — CCD seams + per-segment
+# coverage gates — is not yet a composed on-device path), the kdet pre-filter
+# (the reference dispatches to Rust + a density-score branch the J3 kernel does
+# not port), and the post-detection ``LineSelector`` (SNR / isolation /
+# energy-spread / max-lines gate). The on-device gate stack consumes the SAME
+# reference-computed inputs for those stages, so the line-key set it produces
+# matches the reference ``detect_and_select_lines`` exactly.
+# ---------------------------------------------------------------------------
+
+
+def build_front_end_snapshot(
+    peaks,
+    comb_transitions_by_element,
+    *,
+    e_max: int,
+    k_comb: int,
+    p_max: int,
+):
+    """Assemble the J3 :class:`FrontEndSnapshot` from peaks + comb transitions.
+
+    The J8-plan §2.B host gather: pads the per-element comb arrays to
+    ``(E_max, K_comb)`` from the *reference catalog order* (the gA-Boltzmann
+    ranking the host already applied via ``_select_comb_transitions``) and the
+    detected peak arrays to ``(P_max,)``. Mirrors the J3 parity-test
+    ``build_snapshot`` exactly (``tests/jitpipe/test_parity_j3.py``) so the
+    on-device kernel sees byte-identical inputs to its parity oracle.
+
+    Parameters
+    ----------
+    peaks : list[tuple[int, float]]
+        Reference detected peaks ``(sample_index, wavelength_nm)`` on the
+        calibrated axis (insertion order = ascending position).
+    comb_transitions_by_element : dict[str, list[Transition]]
+        Per-element comb-ranked transitions (the top-K gA-Boltzmann subset),
+        dict insertion order == the reference element-loop order.
+    e_max, k_comb, p_max : int
+        Padded shape bounds (static per compile bucket).
+
+    Returns
+    -------
+    tuple
+        ``(FrontEndSnapshot, elements)`` — the padded pytree + the element-slot
+        order (length ``E``, the ``comb_transitions_by_element`` key order).
+    """
+    import jax.numpy as jnp
+
+    from cflibs.jitpipe.identify import FrontEndSnapshot
+
+    elements = list(comb_transitions_by_element.keys())
+    n_e = len(elements)
+    n_p = len(peaks)
+    if n_e > e_max:
+        raise ValueError(f"e_max={e_max} too small for {n_e} elements")
+    if n_p > p_max:
+        raise ValueError(f"p_max={p_max} too small for {n_p} peaks")
+
+    peak_wl = np.zeros(p_max, dtype=np.float64)
+    peak_idx = np.full(p_max, -1, dtype=np.int64)
+    peak_mask = np.zeros(p_max, dtype=bool)
+    for j, (idx, wl) in enumerate(peaks):
+        peak_wl[j] = float(wl)
+        peak_idx[j] = int(idx)
+        peak_mask[j] = True
+
+    comb_wl = np.zeros((e_max, k_comb), dtype=np.float64)
+    comb_ek = np.zeros((e_max, k_comb), dtype=np.float64)
+    comb_gk = np.ones((e_max, k_comb), dtype=np.float64)
+    comb_aki = np.ones((e_max, k_comb), dtype=np.float64)
+    comb_ei = np.zeros((e_max, k_comb), dtype=np.float64)
+    comb_stage = np.zeros((e_max, k_comb), dtype=np.int64)
+    comb_res = np.full((e_max, k_comb), -1, dtype=np.int64)
+    comb_mask = np.zeros((e_max, k_comb), dtype=bool)
+    element_mask = np.zeros(e_max, dtype=bool)
+    full_n = np.zeros(e_max, dtype=np.int64)
+
+    for e, el in enumerate(elements):
+        trans = comb_transitions_by_element[el]
+        element_mask[e] = True
+        full_n[e] = len(trans)
+        for k, t in enumerate(trans[:k_comb]):
+            comb_wl[e, k] = float(t.wavelength_nm)
+            comb_ek[e, k] = float(t.E_k_ev)
+            comb_gk[e, k] = float(t.g_k)
+            comb_aki[e, k] = float(t.A_ki)
+            comb_ei[e, k] = float(t.E_i_ev)
+            comb_stage[e, k] = int(t.ionization_stage)
+            comb_res[e, k] = -1 if t.is_resonance is None else int(bool(t.is_resonance))
+            comb_mask[e, k] = True
+
+    snap = FrontEndSnapshot(
+        peak_wavelength_nm=jnp.asarray(peak_wl),
+        peak_index=jnp.asarray(peak_idx),
+        peak_mask=jnp.asarray(peak_mask),
+        comb_wavelength_nm=jnp.asarray(comb_wl),
+        comb_E_k_ev=jnp.asarray(comb_ek),
+        comb_g_k=jnp.asarray(comb_gk),
+        comb_A_ki=jnp.asarray(comb_aki),
+        comb_E_i_ev=jnp.asarray(comb_ei),
+        comb_stage=jnp.asarray(comb_stage),
+        comb_is_resonance=jnp.asarray(comb_res),
+        comb_mask=jnp.asarray(comb_mask),
+        element_mask=jnp.asarray(element_mask),
+        full_n_lines=jnp.asarray(full_n),
+    )
+    return snap, elements
+
+
+def _estimate_wl_step(wavelength: np.ndarray) -> float:
+    """Median wavelength step (mirrors reference ``_estimate_wl_step``)."""
+    wl = np.asarray(wavelength, dtype=float)
+    if wl.size < 2:
+        return 0.0
+    diffs = np.diff(wl)
+    diffs = diffs[np.isfinite(diffs)]
+    return float(np.median(diffs)) if diffs.size else 0.0
+
+
+def _detect_peaks_ondevice(wavelength, intensity, min_peak_height, peak_width_nm):
+    """Run the J1 ``detect_peaks_detection`` kernel -> reference-shaped peak list.
+
+    Reproduces the reference ``_find_peaks`` (``line_detection.py:2424``,
+    ``intensity/max`` normalise, height=threshold, prom=threshold/2, distance
+    from ``peak_width_nm``) on-device via the parity-tested fixed-shape kernel,
+    then gathers the accepted peak slots back into the host
+    ``list[(sample_index, calibrated_wavelength_nm)]`` the rest of the front-end
+    consumes. The wavelength axis passed in is the (calibrated) detection axis,
+    so ``wavelength[idx]`` matches the reference gather.
+
+    Returns ``(peaks, count, truncated)``.
+    """
+    import jax.numpy as jnp
+
+    from cflibs.jitpipe.detect import detect_peaks_detection
+
+    wl = np.asarray(wavelength, dtype=float)
+    inten = np.asarray(intensity, dtype=float)
+    wl_step = _estimate_wl_step(wl)
+    distance_px = max(int(float(peak_width_nm) / max(wl_step, 1e-9)), 1)
+
+    res = detect_peaks_detection(
+        jnp.asarray(inten),
+        min_peak_height=float(min_peak_height),
+        distance_px=int(distance_px),
+    )
+    indices = np.asarray(res.indices)
+    mask = np.asarray(res.mask)
+    truncated = bool(res.truncated)
+    peaks = [
+        (int(indices[j]), float(wl[int(indices[j])])) for j in range(indices.shape[0]) if mask[j]
+    ]
+    return peaks, len(peaks), truncated
+
+
+def _next_pow2(n: int) -> int:
+    """Smallest power of two >= ``n`` (>= 1) — the front-end snapshot bucketer."""
+    n = max(int(n), 1)
+    p = 1
+    while p < n:
+        p <<= 1
+    return p
+
+
+def _ld_calibrate(wl, inten, atomic_db, elements, pipeline):
+    """Reference segmented wavelength calibration (delegated; see module note)."""
+    from cflibs.inversion.preprocess.wavelength_calibration import (
+        calibrate_wavelength_axis_segmented,
+    )
+
+    return calibrate_wavelength_axis_segmented(
+        wavelength=np.asarray(wl, dtype=float),
+        intensity=np.asarray(inten, dtype=float),
+        atomic_db=atomic_db,
+        elements=elements,
+        affine_coverage_gate=pipeline.affine_coverage_gate,
+    )
+
+
+def _ld_select(observations, resonance_lines, pipeline, exclude_resonance):
+    """Reference ``LineSelector`` post-stage (delegated; see module note)."""
+    from cflibs.inversion.physics.line_selection import LineSelector
+
+    selector = LineSelector(
+        min_snr=pipeline.min_snr,
+        min_energy_spread_ev=pipeline.min_energy_spread_ev,
+        min_lines_per_element=pipeline.min_lines_per_element,
+        exclude_resonance=exclude_resonance,
+        isolation_wavelength_nm=pipeline.isolation_wavelength_nm,
+        max_lines_per_element=pipeline.max_lines_per_element,
+    )
+    return selector.select(observations, resonance_lines=resonance_lines).selected_lines
+
+
+def _gather_observations(
+    snap,
+    ob,
+    comb_transitions_by_element,
+    elem_order,
+    wavelength,
+    intensity,
+    half_width_px,
+    wl_step,
+    *,
+    ground_state_threshold_ev,
+):
+    """Gather the on-device obs-build masks -> reference ``LineObservation`` list.
+
+    J8 plan §2.C host gather: for each valid ``(element-slot, comb-slot)`` from
+    :func:`cflibs.jitpipe.identify.build_observations`, run the DEVICE trapezoid
+    intensity kernel (:func:`extract_intensity_trapezoid`) on the peak slot's
+    sample index and build the :class:`LineObservation` from the comb-slot's
+    transition (the host-ranked catalog row). The degenerate Gaussian-area
+    fallback (non-finite / <=0 trapezoid integral) is delegated to the reference
+    ``_build_observation`` — it fires only on over-subtracted baselines and is
+    host-flagged in the J3 kernel (the on-device trapezoid covers the real path).
+    """
+    import jax.numpy as jnp
+
+    from cflibs.inversion.common import LineObservation
+    from cflibs.inversion.identify.line_detection import _build_observation
+    from cflibs.jitpipe.identify import extract_intensity_trapezoid
+
+    obs_valid = np.asarray(ob.obs_valid)
+    obs_peak_slot = np.asarray(ob.obs_peak_slot)
+    peak_index = np.asarray(snap.peak_index)
+    wl = np.asarray(wavelength, dtype=float)
+    inten = np.asarray(intensity, dtype=float)
+    wl_j = jnp.asarray(wl)
+    inten_j = jnp.asarray(inten)
+
+    # Walk elements in the kernel's ranked (f1, matched)-desc order — the same
+    # order the reference ``_collect_observations`` appends in (``element_order``
+    # is ``argsort`` over the accepted-element composite key). The observation
+    # ORDER feeds the downstream element grouping + Stark candidate selection, so
+    # it must match the reference for end-to-end T/n_e parity.
+    ranked_slots = [int(s) for s in np.asarray(ob.element_order)]
+
+    observations: list = []
+    resonance_lines: set = set()
+    seen_keys: set = set()
+    for e in ranked_slots:
+        if e < 0 or e >= len(elem_order):
+            continue
+        el = elem_order[e]
+        trans = comb_transitions_by_element[el]
+        for k in range(min(len(trans), obs_valid.shape[1])):
+            if not obs_valid[e, k]:
+                continue
+            slot = int(obs_peak_slot[e, k])
+            if slot < 0:
+                continue
+            peak_idx = int(peak_index[slot])
+            if peak_idx < 0:
+                continue
+            t = trans[k]
+            key = (t.element, t.ionization_stage, t.wavelength_nm)
+            if key in seen_keys:
+                continue
+
+            area, sigma = extract_intensity_trapezoid(
+                jnp.int64(peak_idx), wl_j, inten_j, int(half_width_px), jnp.float64(wl_step)
+            )
+            area_f = float(area)
+            if not np.isfinite(area_f) or area_f <= 0.0:
+                # Degenerate-trapezoid Gaussian-area fallback -> reference.
+                built = _build_observation(
+                    t,
+                    peak_idx,
+                    wl,
+                    inten,
+                    int(half_width_px),
+                    float(wl_step),
+                    ground_state_threshold_ev,
+                )
+                if built is None:
+                    continue
+                obs, is_res = built
+            else:
+                is_res = bool(t.E_i_ev <= ground_state_threshold_ev)
+                obs = LineObservation(
+                    wavelength_nm=float(t.wavelength_nm),
+                    intensity=area_f,
+                    intensity_uncertainty=max(float(sigma), 1e-6),
+                    element=t.element,
+                    ionization_stage=t.ionization_stage,
+                    E_k_ev=t.E_k_ev,
+                    g_k=t.g_k,
+                    A_ki=t.A_ki,
+                    aki_uncertainty=t.aki_uncertainty,
+                )
+            seen_keys.add(key)
+            observations.append(obs)
+            if is_res:
+                resonance_lines.add(key)
+    return observations, resonance_lines
+
+
+def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot) -> FrontEndResult:
+    """ON-DEVICE front-end: J1 detect + J3 identify gate-stack run as JIT kernels.
+
+    The Wave-3 deliverable: ``run_one``'s front-end runs the parity-tested JIT
+    kernels (``cflibs.jitpipe.{detect,identify}``) instead of delegating
+    byte-for-byte to the reference ``detect_and_select_lines``. The flow mirrors
+    the reference stage order (``pipeline.py:806-916``):
+
+        response (host) -> [segmented wavelength calibration — reference] ->
+        [adaptive tolerances — reference] -> [catalog SQL + gA-Boltzmann comb
+        ranking — host gather] -> J1 detect_peaks_detection (DEVICE) ->
+        [kdet pre-filter — reference] -> J3 comb scan + shift select + veto +
+        observation build (DEVICE) -> trapezoid intensity (DEVICE) ->
+        [LineSelector — reference] -> Stark n_e diagnostic (reference).
+
+    The DEVICE stages are the J1/J3 fixed-shape kernels; the reference-delegated
+    stages (segmented calibration, kdet, LineSelector, Stark) feed the kernels
+    their byte-identical inputs so the produced observation line-key set matches
+    the reference ``detect_and_select_lines`` (the parity oracle). Never raises
+    on zero observations (returns ``n_observations == 0`` for the caller — the
+    J8 plan §4 failure policy).
+
+    Parameters
+    ----------
+    wavelength, intensity : ndarray
+        Spectrum axes (nm, intensity).
+    atomic_db : AtomicDatabase
+        Reference DB (host catalog SQL + the reference-delegated stages).
+    pipeline : AnalysisPipelineConfig
+        Resolved front-end config (every front-end knob).
+    snapshot : PipelineSnapshot
+        Host-built atomic snapshot (unused by the detect/identify kernels — they
+        read the host-gathered comb/peak arrays — but threaded for symmetry with
+        the reference-delegated solve seam).
+
+    Returns
+    -------
+    FrontEndResult
+    """
+    import jax.numpy as jnp
+
+    from cflibs.inversion.identify import line_detection as _ld
+
+    from cflibs.jitpipe import identify as _J
+
+    del snapshot  # detect/identify kernels read host-gathered arrays, not the snapshot.
+
+    wl_in = np.asarray(wavelength, dtype=float)
+    inten = np.asarray(intensity, dtype=float)
+    if pipeline.response_curve:
+        inten = inten * response_multiplier(wl_in, pipeline.response_curve)
+
+    elements = list(pipeline.elements)
+    empty = FrontEndResult(
+        observations=[],
+        elements=elements,
+        ne_stark_cm3=None,
+        diagnostics={},
+        n_observations=0,
+    )
+    if wl_in.size == 0 or inten.size == 0 or not elements:
+        return empty
+
+    # --- Wavelength calibration (reference-delegated; sets the detection axis) -
+    # The segmented driver (CCD seams + per-segment coverage gates) is not yet a
+    # composed on-device path; delegate it so the on-device detect/identify
+    # kernels run on the SAME calibrated axis + residual shift the reference uses.
+    shift_scan_nm = float(pipeline.global_shift_scan_nm)
+    wl = wl_in
+    if pipeline.wavelength_calibration:
+        try:
+            cal = _ld_calibrate(wl_in, inten, atomic_db, elements, pipeline)
+        except Exception:  # pragma: no cover - defensive
+            cal = None
+        if cal is not None and cal.success and cal.quality_passed:
+            wl = np.asarray(cal.corrected_wavelength, dtype=float)
+            shift_scan_nm = float(pipeline.residual_shift_scan_nm)
+
+    # --- Adaptive tolerances + sampling cap (reference parity) -----------------
+    wl_min = float(np.min(wl))
+    wl_max = float(np.max(wl))
+    wl_step = _ld._estimate_wl_step(wl)
+    lambda_mid = 0.5 * (wl_min + wl_max)
+    tol_nm, peak_width_nm = _ld._resolve_adaptive_tolerances(
+        pipeline.wavelength_tolerance_nm,
+        pipeline.peak_width_nm,
+        wl_step,
+        lambda_mid,
+        pipeline.resolving_power,
+    )
+    if wl_step > 0:
+        from cflibs.inversion.pipeline import SAMPLING_TOLERANCE_PX, SAMPLING_WIDTH_PX
+
+        if tol_nm is not None:
+            tol_nm = min(tol_nm, SAMPLING_TOLERANCE_PX * wl_step)
+        if peak_width_nm is not None:
+            peak_width_nm = min(peak_width_nm, SAMPLING_WIDTH_PX * wl_step)
+
+    # --- Catalog SQL + gA-Boltzmann ranking (HOST gather, J8 plan §2.B) --------
+    transitions = _ld._load_transitions(
+        atomic_db,
+        elements,
+        wavelength_min=wl_min,
+        wavelength_max=wl_max,
+        min_relative_intensity=pipeline.min_relative_intensity,
+        top_k_per_element=pipeline.top_k_per_element,
+    )
+    if not transitions:
+        return empty
+
+    # --- J1 detect kernel (DEVICE): the detection-path peaks -------------------
+    peaks, total_peaks, _trunc = _detect_peaks_ondevice(
+        wl, inten, pipeline.min_peak_height, peak_width_nm
+    )
+    if total_peaks == 0:
+        return empty
+    half_width_px = max(int((peak_width_nm / max(wl_step, 1e-9)) / 2), 1)
+
+    transitions_by_element: dict = {}
+    for t in transitions:
+        transitions_by_element.setdefault(t.element, []).append(t)
+
+    # --- kdet pre-filter (reference-delegated) ---------------------------------
+    warnings: list = []
+    transitions_by_element = _ld._apply_kdet_filter(
+        peaks=peaks,
+        transitions_by_element=transitions_by_element,
+        shift_scan_nm=shift_scan_nm,
+        shift_step_nm=None,
+        wavelength_tolerance_nm=tol_nm,
+        wl_step=wl_step,
+        kdet_min_score=0.05,
+        kdet_min_candidates=2,
+        kdet_rarity_power=0.5,
+        kdet_weight_clip=(0.25, 4.0),
+        use_jax_kdet=False,
+        shift_coherence_veto=pipeline.shift_coherence_veto,
+        coherence_min_lines=2,
+        coherence_min_fraction=0.5,
+        warnings=warnings,
+    )
+
+    comb_transitions_by_element = {
+        el: _ld._select_comb_transitions(tr, 30) for el, tr in transitions_by_element.items()
+    }
+
+    # --- Build the J3 FrontEndSnapshot (HOST gather) ---------------------------
+    n_e = len(comb_transitions_by_element)
+    k_used = max((len(v) for v in comb_transitions_by_element.values()), default=1)
+    e_max = _next_pow2(max(n_e, 1))
+    k_comb = _next_pow2(max(k_used, 1))
+    p_max = _next_pow2(max(total_peaks, 1))
+    snap, elem_order = build_front_end_snapshot(
+        peaks, comb_transitions_by_element, e_max=e_max, k_comb=k_comb, p_max=p_max
+    )
+
+    shift_grid = _ld._build_shift_grid(shift_scan_nm, None, wl_step, tol_nm)
+    shift_grid_j = jnp.asarray(np.asarray(shift_grid, dtype=float))
+
+    # --- J3 comb scan + shift selection (DEVICE) -------------------------------
+    scores = _J.score_comb_grid(
+        snap,
+        shift_grid_j,
+        total_peaks=jnp.int32(total_peaks),
+        tolerance_nm=jnp.float64(tol_nm),
+        comb_min_matches=jnp.int32(3),
+        comb_min_precision=jnp.float64(0.02),
+        comb_min_recall=jnp.float64(0.1),
+        comb_max_missing_fraction=jnp.float64(0.85),
+    )
+    best_idx, fb_idx, best_has_pass, _ = _J.select_shifts(scores, shift_grid_j, snap.element_mask)
+    accepted_mask, applied_idx = _J.select_accepted_mask(
+        scores,
+        best_idx,
+        fb_idx,
+        best_has_pass,
+        snap.element_mask,
+        comb_min_matches=jnp.int32(3),
+        comb_fallback_max_elements=5,
+    )
+    applied_shift_nm = float(np.asarray(shift_grid)[int(applied_idx)])
+
+    # --- J3 shift-coherence veto (DEVICE) --------------------------------------
+    if pipeline.shift_coherence_veto:
+        accepted_mask = _J.shift_coherence_veto(
+            snap,
+            accepted_mask,
+            jnp.float64(applied_shift_nm),
+            jnp.float64(tol_nm),
+            min_coherent_lines=jnp.int32(2),
+            min_coherent_fraction=jnp.float64(0.5),
+        )
+
+    accepted_np = np.asarray(accepted_mask)
+    if not accepted_np.any():
+        return empty
+
+    # --- J3 observation build (DEVICE): ownership + gate + min-kept-bars --------
+    f1_applied = jnp.asarray(np.asarray(scores.f1)[int(applied_idx)])
+    ml_applied = jnp.asarray(np.asarray(scores.matched_lines)[int(applied_idx)])
+    use_gate = bool(pipeline.line_residual_gate)
+    if use_gate:
+        center, _ = _J.pooled_consensus(
+            snap, accepted_mask, jnp.float64(applied_shift_nm), jnp.float64(tol_nm)
+        )
+        band = jnp.float64(tol_nm / 3.0)
+        gate_flag = jnp.asarray(True)
+    else:
+        center = jnp.float64(0.0)
+        band = jnp.float64(np.inf)
+        gate_flag = jnp.asarray(False)
+
+    ob = _J.build_observations(
+        snap,
+        f1=f1_applied,
+        matched_lines=ml_applied,
+        accepted_mask=accepted_mask,
+        shift_nm=jnp.float64(applied_shift_nm),
+        tolerance_nm=jnp.float64(tol_nm),
+        residual_center_nm=center,
+        residual_band_nm=band,
+        use_residual_gate=gate_flag,
+        coherence_min_lines=jnp.int32(2),
+        coherence_min_fraction=jnp.float64(0.5),
+        residual_gate_min_kept_lines=jnp.int32(int(pipeline.min_lines_per_element)),
+    )
+
+    # --- Gather valid obs -> LineObservation list (DEVICE intensity) -----------
+    observations, resonance_lines = _gather_observations(
+        snap,
+        ob,
+        comb_transitions_by_element,
+        elem_order,
+        wl,
+        inten,
+        half_width_px,
+        wl_step,
+        ground_state_threshold_ev=0.1,
+    )
+
+    # --- LineSelector post-stage (reference-delegated) -------------------------
+    exclude_resonance = pipeline.exclude_resonance
+    if exclude_resonance is None:
+        exclude_resonance = False
+    selected = _ld_select(observations, resonance_lines, pipeline, exclude_resonance)
+
+    detected_elements = {o.element for o in observations}
+    selected_elements = {o.element for o in selected}
+    dropped: dict = {}
+    for el in elements:
+        if el not in detected_elements:
+            dropped[el] = "detection"
+        elif el not in selected_elements:
+            dropped[el] = "selection"
+    diagnostics = {
+        "requested_elements": list(elements),
+        "detected_elements": sorted(detected_elements),
+        "selected_elements": sorted(selected_elements),
+        "dropped_elements": dropped,
+        "applied_shift_nm": applied_shift_nm,
+    }
+
+    # --- Stark n_e diagnostic (reference-delegated) ----------------------------
+    # The reference ``run_pipeline`` measures Stark n_e on the ORIGINAL
+    # (response-corrected but NOT calibration-corrected) axis ``wl_in`` — the
+    # calibration is applied only inside ``detect_and_select_lines`` on its own
+    # copy (``pipeline.py:887``). Use ``wl_in`` to bit-match the reference n_e
+    # that pins the production solve.
+    ne_stark: float | None = None
+    if pipeline.stark_ne and selected:
+        from cflibs.inversion.physics.stark_ne import measure_stark_ne
+
+        try:
+            stark_result = measure_stark_ne(
+                wl_in, inten, selected, atomic_db, resolving_power=pipeline.resolving_power
+            )
+        except Exception:  # pragma: no cover - defensive
+            stark_result = None
+        if stark_result is not None and stark_result.usable:
+            ne_stark = float(stark_result.ne_median_cm3)
+
+    return FrontEndResult(
+        observations=list(selected),
+        elements=elements,
+        ne_stark_cm3=ne_stark,
+        diagnostics=diagnostics,
+        n_observations=len(selected),
+    )

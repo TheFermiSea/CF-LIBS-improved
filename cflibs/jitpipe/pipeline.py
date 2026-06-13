@@ -291,8 +291,9 @@ def run_one(
     *,
     atomic_db: Any = None,
     pipeline_config: Any = None,
+    ondevice_front_end: bool = True,
 ):
-    """Run the full jittable inversion pipeline on ONE spectrum (J8).
+    """Run the full jittable inversion pipeline on ONE spectrum (J8/Wave-3).
 
     Composes every stage in the reference order
     (:func:`cflibs.inversion.pipeline.run_pipeline`): response/preprocess ->
@@ -300,6 +301,23 @@ def run_one(
     fit/solve -> closure. Returns a :class:`CFLIBSResult` — the same dataclass
     the reference returns, so downstream consumers and parity adapters see
     identical types.
+
+    Front-end routing (the Wave-3 J9/M2 prerequisite)
+    -------------------------------------------------
+    * ``ondevice_front_end=True`` (default): the detect + identify gate stack
+      runs the parity-tested JIT kernels
+      (:func:`cflibs.jitpipe.host.run_front_end_ondevice` -> J1 detect, J3 comb
+      scan / shift select / veto / observation build, trapezoid intensity). The
+      catalog SQL + gA-Boltzmann comb ranking, the segmented wavelength
+      calibration, the kdet pre-filter and the post-detection ``LineSelector``
+      stay host-side (the host gathers MAY be dynamic-shaped pre-jit; the
+      calibration / kdet / selector are not yet composed on-device — see the
+      ``host.py`` module note). The on-device gate stack reproduces the
+      reference ``detect_and_select_lines`` observation set bit-for-bit
+      (Jaccard 1.0 on synthetic + real ChemCam BHVO-2).
+    * ``ondevice_front_end=False``: the legacy byte-faithful reference
+      delegation (:func:`cflibs.jitpipe.host.run_front_end`), kept for the
+      reference-delegated parity case.
 
     Parameters
     ----------
@@ -321,6 +339,9 @@ def run_one(
         Resolved front-end config. When omitted, one is built from ``params`` +
         ``static`` (geological-equivalent knobs) for the elements in the
         snapshot's species axis.
+    ondevice_front_end : bool
+        Run the detect/identify gate stack on-device (default ``True``). Set
+        ``False`` for the legacy reference-delegated front-end.
 
     Returns
     -------
@@ -328,7 +349,11 @@ def run_one(
         Inversion result (T, n_e, concentrations, diagnostics). At zero usable
         observations: the all-FN failure-policy result (AC4), not a crash.
     """
-    from cflibs.jitpipe.host import build_observation_block, run_front_end
+    from cflibs.jitpipe.host import (
+        build_observation_block,
+        run_front_end,
+        run_front_end_ondevice,
+    )
 
     if atomic_db is None:
         from cflibs.atomic.database import AtomicDatabase
@@ -339,7 +364,10 @@ def run_one(
     if pipeline is None:
         pipeline = _pipeline_config_from(params, static, snapshot)
 
-    front = run_front_end(wavelengths_nm, intensities, atomic_db, pipeline)
+    if ondevice_front_end:
+        front = run_front_end_ondevice(wavelengths_nm, intensities, atomic_db, pipeline, snapshot)
+    else:
+        front = run_front_end(wavelengths_nm, intensities, atomic_db, pipeline)
     if front.n_observations == 0:
         return _host.all_fn_result(list(pipeline.elements))
 
@@ -413,6 +441,7 @@ def run_batch(
     *,
     atomic_db: Any = None,
     pipeline_configs: Any = None,
+    ondevice_front_end: bool = True,
 ):
     """Run the pipeline on a BATCH of spectra (J8 host-loop; vmap spine in J9).
 
@@ -457,6 +486,7 @@ def run_batch(
                 static,
                 atomic_db=atomic_db,
                 pipeline_config=cfg_b,
+                ondevice_front_end=ondevice_front_end,
             )
         )
     return results
