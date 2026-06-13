@@ -709,5 +709,424 @@ def test_multiplet_blend_mask_no_db(monkeypatch):
     assert bool(blend[1]) is False  # idx2 isolated
 
 
+# ---------------------------------------------------------------------------
+# Candidate SELECTION + RANKING parity vs measure_stark_ne (stark_ne.py:484-541):
+# source-class / SNR / instrument-width / isolation gates; score ranking;
+# preference (2x) / resonance (0.5x) factors; top_k=5 cap.
+# ---------------------------------------------------------------------------
+
+
+def _ref_select_set(observations, stub, *, instr_fwhm, T_K, min_snr=5.0, isolation_factor=1.5):
+    """Re-run the reference candidate-selection block (stark_ne.py:484-541) and
+    return the ordered list of accepted ``(score, wl)`` BEFORE the per-line fit.
+
+    This mirrors the reference loop exactly using the SAME public helpers the
+    reference uses (``_isolation_nm``, ``_preference_factor``, ``doppler_width``,
+    ``resolve_element_mass``), so the comparison is against the frozen oracle's
+    own arithmetic, not a reimplementation.
+    """
+    import numpy as _np
+
+    from cflibs.atomic.masses import resolve_element_mass
+    from cflibs.core.constants import EV_TO_K
+    from cflibs.inversion.physics.stark_ne import (
+        _isolation_nm,
+        _preference_factor,
+    )
+    from cflibs.radiation.profiles import doppler_width
+
+    T_eV = max(T_K, 1000.0) / EV_TO_K
+    cands = []
+    for obs in observations:
+        w_ref, alpha, source, is_res = stub.get_stark_parameters_with_source(
+            obs.element, obs.ionization_stage, obs.wavelength_nm, 0.1
+        )
+        if source not in ("stark_b",) or w_ref is None or w_ref <= 0:
+            continue
+        snr = (
+            obs.intensity / obs.intensity_uncertainty
+            if obs.intensity_uncertainty and obs.intensity_uncertainty > 0
+            else _np.inf
+        )
+        if snr < min_snr:
+            continue
+        if instr_fwhm is None or instr_fwhm <= 0:
+            continue
+        mass = resolve_element_mass(obs.element, stub)
+        dopp = doppler_width(obs.wavelength_nm, T_eV, mass)
+        gauss = float(_np.hypot(instr_fwhm, dopp))
+        iso = _isolation_nm(obs, observations)
+        if iso < isolation_factor * gauss:
+            continue
+        score = min(snr, 1e6) * min(iso, 10.0 * gauss)
+        score *= _preference_factor(obs.element, obs.ionization_stage, obs.wavelength_nm)
+        if is_res:
+            score *= 0.5
+        cands.append((score, obs.wavelength_nm, dopp, gauss, snr, iso))
+    cands.sort(key=lambda c: -c[0])
+    return cands
+
+
+def _build_selection_arrays(observations, stub, *, instr_fwhm, T_K):
+    """Build the kernel's per-candidate input arrays from the same observations +
+    stub the reference consumes (literature-grade / dopp / preferred / resonance
+    are all atomic-data-only host-side lookups, exactly as the snapshot split)."""
+    from cflibs.atomic.masses import resolve_element_mass
+    from cflibs.core.constants import EV_TO_K
+    from cflibs.inversion.physics.stark_ne import _preference_factor
+    from cflibs.radiation.profiles import doppler_width
+
+    T_eV = max(T_K, 1000.0) / EV_TO_K
+    intensity, intensity_unc, wl = [], [], []
+    instr, dopp, lit, pref, res = [], [], [], [], []
+    for obs in observations:
+        w_ref, _alpha, source, is_res = stub.get_stark_parameters_with_source(
+            obs.element, obs.ionization_stage, obs.wavelength_nm, 0.1
+        )
+        intensity.append(obs.intensity)
+        intensity_unc.append(obs.intensity_uncertainty)
+        wl.append(obs.wavelength_nm)
+        instr.append(instr_fwhm)
+        mass = resolve_element_mass(obs.element, stub)
+        dopp.append(float(doppler_width(obs.wavelength_nm, T_eV, mass)))
+        lit.append(source in ("stark_b",) and w_ref is not None and w_ref > 0)
+        pref.append(_preference_factor(obs.element, obs.ionization_stage, obs.wavelength_nm) > 1.0)
+        res.append(bool(is_res))
+    return (
+        jnp.asarray(intensity),
+        jnp.asarray(intensity_unc),
+        jnp.asarray(wl),
+        jnp.asarray(instr),
+        jnp.asarray(dopp),
+        jnp.asarray(lit, dtype=bool),
+        jnp.asarray(pref, dtype=bool),
+        jnp.asarray(res, dtype=bool),
+        jnp.ones(len(observations), dtype=bool),
+    )
+
+
+def _make_obs(wl, intensity, unc, element="Fe", stage=1):
+    from cflibs.inversion.common.data_structures import LineObservation
+
+    return LineObservation(
+        wavelength_nm=wl,
+        intensity=intensity,
+        intensity_uncertainty=unc,
+        element=element,
+        ionization_stage=stage,
+        E_k_ev=4.0,
+        g_k=5,
+        A_ki=1e7,
+    )
+
+
+def test_selection_gate_codes_match_reference_ladder():
+    """Each SEL_* gate fires on the same observation the reference rejects."""
+    # idx0/1 blended (0.05 apart); idx2 low snr; idx3 not lit; idx4 no instr; idx5 pad.
+    obs = [
+        _make_obs(400.0, 100.0, 1.0),  # blended w/ idx1
+        _make_obs(400.05, 100.0, 1.0),  # blended w/ idx0
+        _make_obs(410.0, 100.0, 50.0),  # snr = 2 < 5
+        _make_obs(420.0, 100.0, 1.0, element="Xx"),  # not literature-grade
+        _make_obs(430.0, 100.0, 1.0),  # instr 0 -> no width
+    ]
+    stub = _StubDB(
+        [
+            (400.0, (0.05, 0.5, "stark_b", False)),
+            (400.05, (0.05, 0.5, "stark_b", False)),
+            (410.0, (0.05, 0.5, "stark_b", False)),
+            # 420.0 (Xx) returns (None, ...) -> not literature-grade.
+            (430.0, (0.05, 0.5, "stark_b", False)),
+        ],
+        mass=1e6,  # kill Doppler so gauss == instr
+    )
+    instr_fwhm = 0.08
+
+    intensity, unc, wl, instr, dopp, lit, pref, res, cmask = _build_selection_arrays(
+        obs, stub, instr_fwhm=instr_fwhm, T_K=10000.0
+    )
+    # idx4 had a real instr_fwhm built; override its instrument width to 0.
+    instr = instr.at[4].set(0.0)
+
+    sel = stark.select_stark_candidates(intensity, unc, wl, instr, dopp, lit, pref, res, cmask)
+    code = np.asarray(sel.sel_code)
+    assert code[0] == stark.SEL_BLENDED
+    assert code[1] == stark.SEL_BLENDED
+    assert code[2] == stark.SEL_LOW_SNR
+    assert code[3] == stark.SEL_NOT_LITERATURE_GRADE
+    assert code[4] == stark.SEL_NO_INSTRUMENT_WIDTH
+
+
+def test_selection_set_and_order_match_reference():
+    """Selected set + score-descending rank == the reference candidate list/order."""
+    # 7 isolated literature-grade lines, varied SNR -> reference keeps top 5 ranked.
+    centers = [390.0, 396.0, 402.0, 408.0, 414.0, 420.0, 426.0]
+    snrs = [7.0, 50.0, 12.0, 100.0, 30.0, 6.0, 80.0]  # all >= 5; distinct
+    obs = [_make_obs(c, 100.0, 100.0 / s) for c, s in zip(centers, snrs)]
+    stub = _StubDB([(c, (0.05, 0.5, "stark_b", False)) for c in centers], mass=1e6)
+    instr_fwhm = 0.08
+
+    ref = _ref_select_set(obs, stub, instr_fwhm=instr_fwhm, T_K=10000.0)
+    ref_top5_wl = [c[1] for c in ref[:5]]  # reference order after sort + break@5
+
+    arrays = _build_selection_arrays(obs, stub, instr_fwhm=instr_fwhm, T_K=10000.0)
+    sel = stark.select_stark_candidates(*arrays, top_k=5)
+    selected = np.asarray(sel.selected)
+    rank = np.asarray(sel.rank)
+    wl = np.asarray(arrays[2])
+
+    # Selected SET equality (unordered).
+    kernel_sel_wl = sorted(wl[selected].tolist())
+    assert kernel_sel_wl == sorted(ref_top5_wl), (kernel_sel_wl, sorted(ref_top5_wl))
+    assert int(selected.sum()) == 5
+
+    # ORDER equality: rank 0..4 reproduce the reference sort order exactly.
+    kernel_order_wl = [float(wl[np.where(rank == r)[0][0]]) for r in range(5)]
+    assert kernel_order_wl == ref_top5_wl, (kernel_order_wl, ref_top5_wl)
+
+
+def test_selection_score_parity_with_preference_and_resonance():
+    """Kernel score == reference arithmetic incl. 2x preference / 0.5x resonance."""
+    # H-alpha 656.28 is a canonical diagnostic (2x); plant one resonance line.
+    obs = [
+        _make_obs(656.28, 100.0, 5.0, element="H", stage=1),  # preferred (2x)
+        _make_obs(500.0, 100.0, 4.0),  # plain
+        _make_obs(520.0, 100.0, 3.0),  # resonance (0.5x)
+    ]
+    stub = _StubDB(
+        [
+            (656.28, (0.05, 0.5, "stark_b", False)),
+            (500.0, (0.05, 0.5, "stark_b", False)),
+            (520.0, (0.05, 0.5, "stark_b", True)),  # resonance
+        ],
+        mass=1e6,
+    )
+    instr_fwhm = 0.08
+    ref = _ref_select_set(obs, stub, instr_fwhm=instr_fwhm, T_K=10000.0)
+    # Map reference wl -> score.
+    ref_score = {c[1]: c[0] for c in ref}
+
+    arrays = _build_selection_arrays(obs, stub, instr_fwhm=instr_fwhm, T_K=10000.0)
+    sel = stark.select_stark_candidates(*arrays, top_k=5)
+    score = np.asarray(sel.score)
+    wl = np.asarray(arrays[2])
+    for i, w in enumerate(wl):
+        assert abs(score[i] - ref_score[float(w)]) <= 1e-9 * abs(ref_score[float(w)]), (
+            float(w),
+            score[i],
+            ref_score[float(w)],
+        )
+
+
+def test_selection_full_stage_set_matches_measure_stark_ne():
+    """End-to-end: kernel selected set == ``measure_stark_ne`` fitted set.
+
+    With clean Voigt profiles every selected candidate fits successfully, so the
+    reference ``measurements`` list IS its selection set. 6 isolated diagnostics
+    with distinct SNR + top_k=5 forces one drop, exercising the cap end-to-end.
+    """
+    from cflibs.inversion.common.data_structures import LineObservation
+    from cflibs.inversion.physics.stark_ne import measure_stark_ne
+    from cflibs.radiation.profiles import voigt_profile
+
+    wl = np.linspace(380.0, 430.0, 10001)
+    centers = [385.0, 393.0, 401.0, 409.0, 417.0, 425.0]
+    snrs = [6.0, 40.0, 12.0, 90.0, 25.0, 70.0]  # idx0 (snr 6) is the lowest -> dropped@5
+    gamma = 0.07
+    instr_fwhm = 0.08
+    T_K = 10000.0
+    sigma_g = instr_fwhm / _FWHM_PER_SIGMA  # mass huge -> doppler ~ 0
+    inten = np.full_like(wl, 0.5)
+    for c in centers:
+        inten = inten + np.asarray(voigt_profile(wl, c, sigma_g, gamma, amplitude=3.0))
+
+    observations = [
+        LineObservation(
+            wavelength_nm=c,
+            intensity=100.0,
+            intensity_uncertainty=100.0 / s,
+            element="Fe",
+            ionization_stage=1,
+            E_k_ev=4.0,
+            g_k=5,
+            A_ki=1e7,
+        )
+        for c, s in zip(centers, snrs)
+    ]
+    stub = _StubDB(
+        [(c, (0.05, 0.5, "stark_b", False)) for c in centers],
+        mass=1e6,
+    )
+
+    ref = measure_stark_ne(
+        wl, inten, observations, stub, instrument_fwhm_nm=instr_fwhm, T_K=T_K, max_lines=5
+    )
+    assert ref.usable
+    ref_fitted_wl = sorted(m.wavelength_nm for m in ref.measurements)
+    assert len(ref_fitted_wl) == 5  # 6 candidates, cap 5
+
+    arrays = _build_selection_arrays(observations, stub, instr_fwhm=instr_fwhm, T_K=T_K)
+    sel = stark.select_stark_candidates(*arrays, top_k=5)
+    kernel_sel_wl = sorted(np.asarray(arrays[2])[np.asarray(sel.selected)].tolist())
+    assert kernel_sel_wl == ref_fitted_wl, (kernel_sel_wl, ref_fitted_wl)
+
+
+def test_selection_tiebreak_lower_index_wins():
+    """Genuine score ties keep the lower original index (stable-sort tiebreak).
+
+    The reference Python ``list.sort`` is stable, so on equal scores it preserves
+    the observation order (lower index first). Feed three candidates with byte-
+    identical inputs (equal snr/iso/gauss/dopp) so the scores are *exactly* equal,
+    then assert the lower-index pair wins the top_k=2 slots — bit-identical to the
+    reference stable sort, no float perturbation.
+    """
+    C = 3
+    intensity = jnp.full(C, 100.0)
+    unc = jnp.full(C, 5.0)  # snr = 20 for all
+    # Same instrument width and ZERO Doppler -> identical gauss; well-separated so
+    # every line has the same nearest-neighbour distance (the middle spacing).
+    wl = jnp.asarray([400.0, 410.0, 420.0])
+    instr = jnp.full(C, 0.08)
+    dopp = jnp.zeros(C)  # exact zero -> identical gauss across lines
+    lit = jnp.ones(C, bool)
+    pref = jnp.zeros(C, bool)
+    res = jnp.zeros(C, bool)
+    cmask = jnp.ones(C, bool)
+
+    sel = stark.select_stark_candidates(
+        intensity, unc, wl, instr, dopp, lit, pref, res, cmask, top_k=2
+    )
+    score = np.asarray(sel.score)
+    rank = np.asarray(sel.rank)
+    selected = np.asarray(sel.selected)
+    # Scores are exactly equal (genuine tie) — guard the premise.
+    assert score[0] == score[1] == score[2]
+    # The lower-index pair (idx0, idx1) must win the 2 slots; idx2 loses the cap.
+    assert bool(selected[0]) and bool(selected[1])
+    assert not bool(selected[2])
+    assert rank[0] == 0 and rank[1] == 1 and rank[2] == 2
+    assert sel.sel_code[2] == stark.SEL_NOT_TOPK
+
+
+def test_selection_padding_invariance():
+    """Selected SET on the real candidates is invariant to extra padding slots."""
+    centers = [400.0, 408.0, 416.0, 424.0]
+    snrs = [40.0, 10.0, 80.0, 25.0]
+    obs = [_make_obs(c, 100.0, 100.0 / s) for c, s in zip(centers, snrs)]
+    stub = _StubDB([(c, (0.05, 0.5, "stark_b", False)) for c in centers], mass=1e6)
+    a = _build_selection_arrays(obs, stub, instr_fwhm=0.08, T_K=10000.0)
+    sel_small = stark.select_stark_candidates(*a, top_k=5)
+
+    # Pad to 8 candidates (4 real + 4 padding).
+    C = len(centers)
+    C2 = 8
+    intensity, unc, wl, instr, dopp, lit, pref, res, _cmask = a
+
+    def pad(arr, fill, dt=None):
+        return jnp.concatenate([arr, jnp.full(C2 - C, fill, dtype=dt or arr.dtype)])
+
+    sel_big = stark.select_stark_candidates(
+        pad(intensity, 0.0),
+        pad(unc, 1.0),
+        pad(wl, 0.0),
+        pad(instr, 0.08),
+        pad(dopp, 0.0),
+        pad(lit.astype(bool), True, bool),
+        pad(pref.astype(bool), False, bool),
+        pad(res.astype(bool), False, bool),
+        jnp.asarray([True] * C + [False] * (C2 - C)),
+        top_k=5,
+    )
+    np.testing.assert_array_equal(np.asarray(sel_big.selected)[:C], np.asarray(sel_small.selected))
+    np.testing.assert_array_equal(np.asarray(sel_big.rank)[:C], np.asarray(sel_small.rank))
+    np.testing.assert_allclose(
+        np.asarray(sel_big.score)[:C], np.asarray(sel_small.score), rtol=0, atol=0
+    )
+
+
+def test_selection_vmap_jit_batch16():
+    """jit + vmap over a (B, C) candidate batch -> fixed-shape selection."""
+    B, C = 16, 7
+    rng = np.random.default_rng(11)
+    intensity = jnp.asarray(rng.uniform(50.0, 200.0, (B, C)))
+    unc = jnp.asarray(rng.uniform(1.0, 10.0, (B, C)))
+    wl = jnp.asarray(np.stack([np.linspace(400.0, 430.0, C) for _ in range(B)]))
+    instr = jnp.full((B, C), 0.08)
+    dopp = jnp.zeros((B, C))
+    lit = jnp.ones((B, C), bool)
+    pref = jnp.zeros((B, C), bool)
+    res = jnp.zeros((B, C), bool)
+    cmask = jnp.ones((B, C), bool)
+
+    @jax.jit
+    def run(intensity, unc, wl, instr, dopp, lit, pref, res, cmask):
+        return jax.vmap(stark.select_stark_candidates)(
+            intensity, unc, wl, instr, dopp, lit, pref, res, cmask
+        )
+
+    sel = run(intensity, unc, wl, instr, dopp, lit, pref, res, cmask)
+    assert sel.selected.shape == (B, C)
+    # Each batch member keeps exactly top_k=5 (all 7 are isolated lit-grade).
+    assert np.all(np.asarray(sel.selected).sum(axis=1) == 5)
+
+
+def test_selection_score_grad_finite():
+    """The ranking score is differentiable wrt intensity (gradient finite).
+
+    Selection itself is a discrete decision (tested for exactness above), but the
+    score that drives it is smooth in the measured intensity; a soft selection
+    surrogate in J7 would backprop through it, so the score gradient must be
+    finite (ADR §5.4 grad-smoke -> hard assert pattern; soft top-K is §5.3-allowed
+    only in tuning objectives).
+    """
+    C = 6
+    wl = jnp.asarray(np.linspace(400.0, 425.0, C))
+    unc = jnp.ones(C)
+    instr = jnp.full(C, 0.08)
+    dopp = jnp.zeros(C)
+    lit = jnp.ones(C, bool)
+    pref = jnp.zeros(C, bool)
+    res = jnp.zeros(C, bool)
+    cmask = jnp.ones(C, bool)
+
+    def loss(intensity):
+        sel = stark.select_stark_candidates(
+            intensity, unc, wl, instr, dopp, lit, pref, res, cmask, top_k=5
+        )
+        # Sum of finite scores (the gate-rejected slots are -inf; all pass here).
+        sc = sel.score
+        return jnp.sum(jnp.where(jnp.isfinite(sc), sc, 0.0))
+
+    g = np.asarray(jax.grad(loss)(jnp.full(C, 100.0)))
+    assert np.all(np.isfinite(g))
+    assert np.any(g != 0.0)
+
+
+def test_is_preferred_diagnostic_no_db(monkeypatch):
+    """Canonical-diagnostic membership reproduces ``_preference_factor``, no SQLite."""
+    import sqlite3
+
+    def _boom(*a, **k):
+        raise AssertionError("sqlite3.connect called inside is_preferred_diagnostic")
+
+    monkeypatch.setattr(sqlite3, "connect", _boom)
+
+    # snapshot lines: idx0 H-alpha (sp 0), idx1 Ca II K (sp 1), idx2 plain (sp 2).
+    class _Snap:
+        line_wavelength_nm = jnp.asarray([656.30, 393.40, 500.0])
+        line_species_index = jnp.asarray([0, 1, 2])
+
+    # Canonical table (host-resolved): H sp0 @ 656.28, Ca II sp1 @ 393.37.
+    preferred_species = jnp.asarray([0, 1])
+    preferred_wl = jnp.asarray([656.28, 393.37])
+    cand_idx = jnp.asarray([0, 1, 2])
+    pref = np.asarray(
+        stark.is_preferred_diagnostic(cand_idx, _Snap(), preferred_species, preferred_wl)
+    )
+    assert bool(pref[0]) is True  # H-alpha within 0.3 nm
+    assert bool(pref[1]) is True  # Ca II K within 0.3 nm
+    assert bool(pref[2]) is False  # plain line, no match
+
+
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(pytest.main([__file__, "-q"]))

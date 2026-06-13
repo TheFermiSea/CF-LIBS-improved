@@ -111,6 +111,34 @@ QC_UNRESOLVED: int = 4  # lorentz_fwhm below the resolvability floor
 QC_IMPLAUSIBLE_NE: int = 5  # n_e outside the sanity band
 QC_COHORT_OUTLIER: int = 6  # > 1 decade from the cohort log10 median
 
+#: uint8 candidate-*selection* rejection codes (the device replacement for the
+#: ``_reject`` reason strings emitted *before* the per-line fit). ``SEL_OK == 0``
+#: means the candidate survives selection and is fit; a non-zero code is the
+#: first failing selection gate, in the reference's gate order. ``SEL_NOT_TOPK``
+#: is applied separately after ranking (the candidate passed every gate but lost
+#: a ``top_k`` slot to a higher-scoring sibling).
+SEL_OK: int = 0
+SEL_PAD: int = 1  # padding slot, never a real observation
+SEL_NOT_LITERATURE_GRADE: int = 2  # source not in allowed_sources / w_ref <= 0
+SEL_LOW_SNR: int = 3  # snr < min_snr
+SEL_NO_INSTRUMENT_WIDTH: int = 4  # instrument FWHM <= 0
+SEL_BLENDED: int = 5  # isolation < isolation_factor * gauss
+SEL_NOT_TOPK: int = 6  # gate-passed but ranked below the top_k cap
+
+#: Reference candidate-selection knobs (``measure_stark_ne`` defaults).
+#: ``cflibs/inversion/physics/stark_ne.py:403-405``.
+MIN_SNR: float = 5.0
+ISOLATION_FACTOR: float = 1.5
+MAX_LINES: int = 5
+#: Score caps mirrored exactly from ``stark_ne.py:511``
+#: (``score = min(snr, 1e6) * min(iso, 10*gauss)``).
+_SNR_SCORE_CAP: float = 1.0e6
+_ISO_SCORE_GAUSS_MULT: float = 10.0
+#: Canonical-diagnostic preference bonus and resonance down-rank
+#: (``stark_ne.py:320,519``; ``_preference_factor`` returns 2.0 on a match).
+PREFERENCE_FACTOR: float = 2.0
+RESONANCE_DOWNRANK: float = 0.5
+
 #: Default fixed iteration count for the LM solve (ADR §4: "K~20").
 LM_ITERS: int = 20
 #: LM damping schedule constants (Marquardt up/down factors + bounds).
@@ -881,6 +909,290 @@ def multiplet_blend_mask(
     has_blend = jnp.any(hit, axis=1)
     # Reference returns False when own strength is non-positive.
     return jnp.where(own > 0, has_blend, jnp.asarray(False))
+
+
+# ---------------------------------------------------------------------------
+# Piece 4 — candidate SELECTION + RANKING (fixed-shape host/device split).
+# Parity vs measure_stark_ne candidate selection (stark_ne.py:484-541):
+# the source-class / SNR / instrument-width / isolation gates, the
+# ``score = min(snr,1e6) * min(iso,10*gauss) * preference * (0.5 if resonance)``
+# ranking, and the ``max_lines=5`` cap — all as fixed-shape masks + ``top_k``.
+# ---------------------------------------------------------------------------
+
+
+class StarkCandidateSelection(NamedTuple):
+    """Output of :func:`select_stark_candidates` (all leaves ``(C,)``).
+
+    Attributes
+    ----------
+    snr : array
+        Per-candidate SNR ``intensity / intensity_uncertainty`` (``+inf`` when
+        the uncertainty is non-positive — the reference convention,
+        ``stark_ne.py:492-496``).
+    isolation_nm : array
+        Distance (nm) to the nearest *other* observation
+        (``stark_ne.py:324-329``; ``+inf`` for a lone observation).
+    gaussian_fwhm_nm : array
+        ``hypot(instrument_fwhm, doppler_fwhm)`` per candidate, nm — the pinned
+        Gaussian feeding the isolation gate and the LM fit.
+    score : array
+        Ranking score ``min(snr,1e6) * min(iso,10*gauss) * preference * (0.5 if
+        resonance)`` (``stark_ne.py:511-519``); ``-inf`` for any gate-rejected
+        or padded candidate so it never wins a ``top_k`` slot.
+    sel_code : array of uint8
+        First failing selection gate per candidate (``SEL_*``). ``SEL_OK`` only
+        for candidates that passed every gate AND survived the ``top_k`` cap;
+        gate survivors that lost the cap carry :data:`SEL_NOT_TOPK`.
+    selected : array of bool
+        ``sel_code == SEL_OK`` — the final fitted diagnostic set (``<= top_k``
+        ``True`` entries), matching the reference's post-``break`` measurement
+        list.
+    rank : array of int32
+        0-based rank of each candidate in the global score-descending order with
+        a lower-original-index tiebreak (``-1`` for gate-rejected / padded). The
+        first ``top_k`` ranks are :data:`SEL_OK`.
+    """
+
+    snr: Any
+    isolation_nm: Any
+    gaussian_fwhm_nm: Any
+    score: Any
+    sel_code: Any
+    selected: Any
+    rank: Any
+
+
+def candidate_snr(intensity: Any, intensity_unc: Any) -> Any:
+    """Per-line SNR exactly as ``measure_stark_ne`` (``stark_ne.py:492-496``).
+
+    ``snr = intensity / intensity_uncertainty`` when the uncertainty is strictly
+    positive, else ``+inf`` (the reference treats a missing/zero uncertainty as
+    infinite SNR — it never gates out such a line on SNR).
+    """
+    inten = jnp.asarray(intensity, dtype=jnp.float64)
+    unc = jnp.asarray(intensity_unc, dtype=jnp.float64)
+    has_unc = unc > 0.0
+    return jnp.where(has_unc, inten / jnp.where(has_unc, unc, 1.0), jnp.inf)
+
+
+def isolation_nm(wavelength_nm: Any, candidate_mask: Any) -> Any:
+    """Distance (nm) to the nearest *other* observation (``stark_ne.py:324-329``).
+
+    Masked pairwise min over the *real* (non-padding) observations, excluding
+    self. A lone observation has no neighbour, so the reference returns ``inf``;
+    we do likewise. Padding rows are excluded both as a candidate (their result
+    is irrelevant — they are gated out elsewhere) and as a neighbour.
+    """
+    wl = jnp.asarray(wavelength_nm, dtype=jnp.float64)
+    real = jnp.asarray(candidate_mask, dtype=bool)
+    n = wl.shape[0]
+    dwl = jnp.abs(wl[:, None] - wl[None, :])  # (C, C)
+    eye = jnp.eye(n, dtype=bool)
+    neighbour_ok = real[None, :] & (~eye)  # exclude self + padding neighbours
+    dwl = jnp.where(neighbour_ok, dwl, jnp.inf)
+    return jnp.min(dwl, axis=1)  # +inf when no real neighbour exists
+
+
+def preference_factor(is_preferred: Any) -> Any:
+    """Canonical-diagnostic ranking bonus (``stark_ne.py:316-321``).
+
+    The reference returns :data:`PREFERENCE_FACTOR` (2.0) when an observation
+    matches one of :data:`PREFERRED_DIAGNOSTIC_LINES` (H-alpha, Ca II H/K, Mg II
+    doublet) within 0.3 nm, else 1.0. Matching against the canonical line table
+    is atomic-data-only, so it is precomputed host-side (a boolean per candidate)
+    exactly as the multiplet-blend gate is — see :func:`is_preferred_diagnostic`.
+    """
+    pref = jnp.asarray(is_preferred, dtype=bool)
+    return jnp.where(pref, PREFERENCE_FACTOR, 1.0)
+
+
+def candidate_score(
+    snr: Any,
+    isolation_nm: Any,
+    gaussian_fwhm_nm: Any,
+    is_preferred: Any,
+    is_resonance: Any,
+) -> Any:
+    """Ranking score, bit-faithful to ``stark_ne.py:511-519``.
+
+    ``score = min(snr, 1e6) * min(iso, 10*gauss) * preference``, then ``*0.5``
+    for a resonance line. The two ``min`` caps prevent a single bright or far-
+    isolated line from dominating the rank; the resonance down-rank keeps the
+    self-absorption-prone resonance diagnostics in play only when nothing
+    optically thinner qualifies (El Sherbini 2005).
+    """
+    snr = jnp.asarray(snr, dtype=jnp.float64)
+    iso = jnp.asarray(isolation_nm, dtype=jnp.float64)
+    gauss = jnp.asarray(gaussian_fwhm_nm, dtype=jnp.float64)
+    res = jnp.asarray(is_resonance, dtype=bool)
+
+    snr_capped = jnp.minimum(snr, _SNR_SCORE_CAP)
+    iso_capped = jnp.minimum(iso, _ISO_SCORE_GAUSS_MULT * gauss)
+    score = snr_capped * iso_capped * preference_factor(is_preferred)
+    return jnp.where(res, RESONANCE_DOWNRANK * score, score)
+
+
+def select_stark_candidates(
+    intensity: Any,
+    intensity_unc: Any,
+    wavelength_nm: Any,
+    instrument_fwhm_nm: Any,
+    doppler_fwhm_nm: Any,
+    is_literature_grade: Any,
+    is_preferred: Any,
+    is_resonance: Any,
+    candidate_mask: Any,
+    *,
+    min_snr: float = MIN_SNR,
+    isolation_factor: float = ISOLATION_FACTOR,
+    top_k: int = MAX_LINES,
+) -> StarkCandidateSelection:
+    """Fixed-shape Stark candidate selection + ranking (``stark_ne.py:484-541``).
+
+    The reference iterates the observation list, applies four sequential gates
+    (literature-grade source, SNR, instrument width, isolation), scores the
+    survivors, Python-``sort``s by ``-score``, then ``break``s after
+    ``max_lines`` measurements. Every breaker is a fixed-shape equivalent here:
+
+    * the four gates -> a boolean AND producing a per-candidate ``SEL_*`` code
+      (first failing gate wins, in the reference's order — ``not_literature_grade
+      -> low_snr -> no_instrument_width -> blended``);
+    * the score -> :func:`candidate_score` (NaN/``-inf`` for any rejected slot so
+      it never wins a slot);
+    * the ``sort`` + ``break``-at-``max_lines`` -> a single global stable
+      argsort by ``-score`` (lower original index wins genuine score ties,
+      bit-identical to Python's stable descending sort) capped at ``top_k``.
+
+    The literature-grade / preferred / resonance flags are atomic-data-only and
+    precomputed host-side (the reference's ``get_stark_parameters_with_source``
+    and ``_preference_factor`` are DB / table lookups, not measurement) — exactly
+    the snapshot-side split the module docstring describes; this kernel takes
+    them as boolean arrays.
+
+    Parameters
+    ----------
+    intensity, intensity_unc, wavelength_nm : array, shape (C,)
+        Per-observation measured intensity / its uncertainty / centre, nm.
+    instrument_fwhm_nm, doppler_fwhm_nm : array, shape (C,)
+        Per-observation instrument / Doppler FWHM, nm (the instrument-ladder and
+        Doppler are resolved host-side; ``gauss = hypot(instr, dopp)``).
+    is_literature_grade : array of bool, shape (C,)
+        ``stark_w_source in allowed_sources and w_ref > 0`` (snapshot lookup).
+    is_preferred : array of bool, shape (C,)
+        Canonical-diagnostic match (``_preference_factor`` -> 2.0).
+    is_resonance : array of bool, shape (C,)
+        Resonance-line flag (0.5x down-rank).
+    candidate_mask : array of bool, shape (C,)
+        ``True`` for real observations, ``False`` for padding.
+    min_snr, isolation_factor : float
+        Reference gate thresholds (5.0 / 1.5).
+    top_k : int
+        Static maximum number of fitted diagnostics (reference ``max_lines`` 5).
+
+    Returns
+    -------
+    StarkCandidateSelection
+    """
+    real = jnp.asarray(candidate_mask, dtype=bool)
+    lit = jnp.asarray(is_literature_grade, dtype=bool)
+    instr = jnp.asarray(instrument_fwhm_nm, dtype=jnp.float64)
+    dopp = jnp.asarray(doppler_fwhm_nm, dtype=jnp.float64)
+
+    snr = candidate_snr(intensity, intensity_unc)
+    iso = isolation_nm(wavelength_nm, real)
+    gauss = jnp.hypot(instr, dopp)
+
+    # --- sequential gates -> first-failing SEL_* code (reference gate order) ---
+    g_lit = lit
+    g_snr = snr >= min_snr
+    g_instr = instr > 0.0
+    g_iso = iso >= (isolation_factor * gauss)
+
+    code = jnp.full(real.shape, SEL_OK, dtype=jnp.uint8)
+    code = jnp.where(~g_lit, jnp.uint8(SEL_NOT_LITERATURE_GRADE), code)
+    code = jnp.where(g_lit & ~g_snr, jnp.uint8(SEL_LOW_SNR), code)
+    code = jnp.where(g_lit & g_snr & ~g_instr, jnp.uint8(SEL_NO_INSTRUMENT_WIDTH), code)
+    code = jnp.where(g_lit & g_snr & g_instr & ~g_iso, jnp.uint8(SEL_BLENDED), code)
+    code = jnp.where(real, code, jnp.uint8(SEL_PAD))
+
+    gate_ok = real & g_lit & g_snr & g_instr & g_iso
+
+    score = candidate_score(snr, iso, gauss, is_preferred, is_resonance)
+    # Rejected / padded slots get -inf so they never win a top_k slot and always
+    # sort to the tail (matching the reference, which never adds them to the
+    # candidate list at all).
+    score = jnp.where(gate_ok, score, -jnp.inf)
+
+    # Global stable argsort by -score: equal scores keep the lower original index
+    # (jnp.argsort is stable), bit-identical to the reference Python stable
+    # descending sort (``candidates.sort(key=lambda c: -c[0])``). The first
+    # ``top_k`` ranked slots that are still gate-OK become the measurement set
+    # (the reference ``break`` after ``max_lines``).
+    order = jnp.argsort(-score, stable=True)  # candidate indices, best first
+    n = real.shape[0]
+    rank_of = jnp.zeros(n, dtype=jnp.int32).at[order].set(jnp.arange(n, dtype=jnp.int32))
+    rank = jnp.where(gate_ok, rank_of, -1)
+
+    selected = gate_ok & (rank_of < top_k)
+    # Gate survivors that lost the top_k cap: re-tag from SEL_OK to SEL_NOT_TOPK.
+    code = jnp.where(gate_ok & ~selected, jnp.uint8(SEL_NOT_TOPK), code)
+
+    return StarkCandidateSelection(
+        snr=snr,
+        isolation_nm=iso,
+        gaussian_fwhm_nm=gauss,
+        score=score,
+        sel_code=code,
+        selected=selected,
+        rank=rank,
+    )
+
+
+def is_preferred_diagnostic(
+    cand_line_index: Any,
+    snapshot: "PipelineSnapshot",
+    preferred_species: Any,
+    preferred_wl_nm: Any,
+    *,
+    tol_nm: float = 0.3,
+) -> Any:
+    """Canonical-diagnostic membership as a masked reduction (no DB lookup).
+
+    Device-side replacement for ``stark_ne.py::_preference_factor``'s table scan:
+    a candidate is *preferred* when its (species, wavelength) matches any entry
+    of the canonical diagnostic table (:data:`PREFERRED_DIAGNOSTIC_LINES`,
+    pre-resolved to species indices + wavelengths host-side) within ``tol_nm``.
+
+    Parameters
+    ----------
+    cand_line_index : array of int, shape (C,)
+        Index of each candidate into the snapshot per-line tables.
+    snapshot : PipelineSnapshot
+        Atomic snapshot (per-line wavelength / species index).
+    preferred_species : array of int, shape (P,)
+        Species index of each canonical diagnostic line (host-resolved).
+    preferred_wl_nm : array, shape (P,)
+        Wavelength (nm) of each canonical diagnostic line.
+    tol_nm : float
+        Matching tolerance (reference 0.3 nm).
+
+    Returns
+    -------
+    array of bool, shape (C,)
+        ``True`` where the candidate matches a canonical diagnostic.
+    """
+    wl_all = jnp.asarray(snapshot.line_wavelength_nm)
+    sp_all = jnp.asarray(snapshot.line_species_index)
+    idx = jnp.asarray(cand_line_index)
+    cand_wl = wl_all[idx]  # (C,)
+    cand_sp = sp_all[idx]  # (C,)
+
+    pref_sp = jnp.asarray(preferred_species)  # (P,)
+    pref_wl = jnp.asarray(preferred_wl_nm, dtype=jnp.float64)  # (P,)
+
+    same_sp = cand_sp[:, None] == pref_sp[None, :]  # (C, P)
+    close = jnp.abs(cand_wl[:, None] - pref_wl[None, :]) < tol_nm  # (C, P)
+    return jnp.any(same_sp & close, axis=1)
 
 
 # ---------------------------------------------------------------------------
