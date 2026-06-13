@@ -1011,4 +1011,3 @@ def test_to_line_observations_deduplication_order(mock_transition):
     assert len(observations) == 1
     # Should keep first occurrence
     assert observations[0].intensity == 1000.0
-
