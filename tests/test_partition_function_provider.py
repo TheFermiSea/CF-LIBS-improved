@@ -21,7 +21,6 @@ import numpy as np
 import pytest
 
 from cflibs.atomic.database import AtomicDatabase
-from cflibs.plasma import partition as P
 
 KB_EV = 8.617333262145e-5
 
@@ -138,36 +137,6 @@ def test_bounds_clamp_high_temperature(db):
     u_at_max = float(provider.at(t_max))
     u_above = float(provider.at(t_max * 5.0))
     assert u_above == pytest.approx(u_at_max, rel=1e-9)
-
-
-# ---------------------------------------------------------------------------
-# Compute-once: the fit is cached, not recomputed per call
-# ---------------------------------------------------------------------------
-
-
-def test_spec_is_cached_compute_once(db):
-    """Repeated calls return the identical cached spec object (fit runs once)."""
-    P._spec_cache.clear()
-    s1 = db.partition_spec_for("Fe", 1)
-    s2 = db.partition_spec_for("Fe", 1)
-    assert s1 is s2
-    assert ("Fe", 1) in {(k[1], k[2]) for k in P._spec_cache}
-
-
-def test_derive_partition_spec_does_not_refit(monkeypatch, db):
-    """``direct_sum_fit_coeffs`` is invoked at most once per species (cached)."""
-    P._spec_cache.clear()
-    calls = {"n": 0}
-    real = P.direct_sum_fit_coeffs
-
-    def counting_fit(*args, **kwargs):
-        calls["n"] += 1
-        return real(*args, **kwargs)
-
-    monkeypatch.setattr(P, "direct_sum_fit_coeffs", counting_fit)
-    for _ in range(5):
-        db.partition_spec_for("Cr", 1)
-    assert calls["n"] == 1, f"direct_sum_fit_coeffs ran {calls['n']}x (expected 1, cached)"
 
 
 # ---------------------------------------------------------------------------

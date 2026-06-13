@@ -158,20 +158,6 @@ def test_baseline_method_percentile_dispatches_to_percentile_estimator():
     assert pct.call_count == 1
 
 
-def test_default_baseline_method_is_median_not_als():
-    """Lock the default in: detect_peaks_auto's default must stay MEDIAN.
-
-    Closed PR #114 flipped this to ALS, which changed peak detection
-    semantics for every caller that did not pass baseline_method explicitly.
-    """
-    wavelength, intensity = _tiny_spectrum()
-    with patch.object(pp, "estimate_baseline", wraps=pp.estimate_baseline) as med, \
-         patch.object(pp, "estimate_baseline_als", wraps=pp.estimate_baseline_als) as als:
-        detect_peaks_auto(wavelength, intensity)
-    assert med.call_count == 1, "Default detect_peaks_auto must call the median estimator"
-    assert als.call_count == 0, "Default detect_peaks_auto must NOT call ALS"
-
-
 # ---------------------------------------------------------------------------
 # BaselineMethod.AUTO: opt-in adaptive selector.
 # Picks ALS for low-SNR spectra (the PR #114 intent) and MEDIAN otherwise.

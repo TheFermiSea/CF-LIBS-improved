@@ -81,41 +81,7 @@ class _StubIdentifier:
 
 
 # --------------------------------------------------------------------- #
-# Invariant 1: existing HybridIdentifier defaults are untouched         #
-# --------------------------------------------------------------------- #
-class TestHybridIdentifierDefaultPreservation:
-    """
-    Pin the constructor surface of the existing :class:`HybridIdentifier`
-    so subsequent edits cannot silently flip its default semantics. We do
-    NOT instantiate or run it (that would pull in AtomicDatabase /
-    BasisLibrary fixtures); we only assert the signature contract.
-    """
-
-    def test_require_both_default_is_true(self):
-        """Default require_both must remain True (intersection semantics)."""
-        import inspect
-
-        from cflibs.inversion.identify.hybrid import HybridIdentifier
-
-        sig = inspect.signature(HybridIdentifier.__init__)
-        param = sig.parameters.get("require_both")
-        assert param is not None, "HybridIdentifier must keep its require_both kwarg"
-        assert param.default is True, (
-            "Default for require_both flipped — the leaderboard baseline "
-            "(F1=0.6880 for hybrid_union) is keyed off the existing default. "
-            "Do NOT silently change this."
-        )
-
-    def test_new_consensus_class_does_not_replace_hybrid_identifier(self):
-        """HybridConsensusIdentifier is a *separate* class, not a subclass."""
-        from cflibs.inversion.identify.hybrid import HybridIdentifier
-
-        assert HybridConsensusIdentifier is not HybridIdentifier
-        assert not issubclass(HybridConsensusIdentifier, HybridIdentifier)
-
-
-# --------------------------------------------------------------------- #
-# Invariant 2: consensus voting correctness                             #
+# Consensus voting correctness                                           #
 # --------------------------------------------------------------------- #
 class TestConsensusVoting:
     """

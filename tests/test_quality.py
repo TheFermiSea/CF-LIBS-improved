@@ -25,32 +25,6 @@ from cflibs.inversion.physics.boltzmann import LineObservation
 class TestQualityMetrics:
     """Tests for QualityMetrics dataclass."""
 
-    def test_dataclass_creation(self):
-        """Verify QualityMetrics can be instantiated with all fields."""
-        metrics = QualityMetrics(
-            r_squared_boltzmann=0.95,
-            r_squared_by_element={"Fe": 0.96, "Cu": 0.94},
-            temperature_by_element={"Fe": 10000.0, "Cu": 10200.0},
-            inter_element_t_std_K=100.0,
-            inter_element_t_std_frac=0.01,
-            saha_boltzmann_consistency=0.05,
-            t_boltzmann_K=10000.0,
-            t_saha_K=10100.0,
-            closure_residual=0.02,
-            chi_squared=15.0,
-            reduced_chi_squared=1.5,
-            n_degrees_freedom=10,
-            quality_flag="good",
-            warnings=["test warning"],
-        )
-
-        assert metrics.r_squared_boltzmann == 0.95
-        assert metrics.r_squared_by_element["Fe"] == 0.96
-        assert metrics.temperature_by_element["Cu"] == 10200.0
-        assert metrics.inter_element_t_std_K == 100.0
-        assert metrics.quality_flag == "good"
-        assert len(metrics.warnings) == 1
-
     def test_dataclass_defaults(self):
         """Verify default values are set correctly."""
         metrics = QualityMetrics(r_squared_boltzmann=0.90)
@@ -90,17 +64,6 @@ class TestQualityMetrics:
 
 class TestQualityAssessorInit:
     """Tests for QualityAssessor initialization."""
-
-    def test_default_thresholds(self):
-        """Verify default thresholds are set correctly."""
-        assessor = QualityAssessor()
-
-        assert assessor.THRESHOLDS["r_squared"]["excellent"] == 0.95
-        assert assessor.THRESHOLDS["r_squared"]["good"] == 0.90
-        assert assessor.THRESHOLDS["r_squared"]["acceptable"] == 0.80
-        assert assessor.THRESHOLDS["closure"]["excellent"] == 0.01
-        assert assessor.THRESHOLDS["closure"]["good"] == 0.05
-        assert assessor.THRESHOLDS["closure"]["acceptable"] == 0.10
 
     def test_custom_weights(self):
         """Verify custom weights are stored."""

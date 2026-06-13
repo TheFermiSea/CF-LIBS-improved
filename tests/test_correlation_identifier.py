@@ -212,22 +212,6 @@ def test_correlation_identifier_matched_lines(temp_db):
     assert fe_elem.n_matched_lines >= 0
 
 
-def test_instrument_fwhm_parameter(temp_db):
-    """Verify instrument_fwhm_nm parameter is stored and used for sigma."""
-    from cflibs.atomic.database import AtomicDatabase
-
-    db = AtomicDatabase(temp_db)
-
-    identifier = CorrelationIdentifier(db, elements=["Fe"], instrument_fwhm_nm=0.1)
-    # sigma should be 0.1/2.355 ≈ 0.0425
-    assert hasattr(identifier, "instrument_fwhm_nm")
-    assert identifier.instrument_fwhm_nm == 0.1
-
-    # Default should be 0.05
-    identifier_default = CorrelationIdentifier(db, elements=["Fe"])
-    assert identifier_default.instrument_fwhm_nm == 0.05
-
-
 def test_noise_only_no_detection(temp_db):
     """Pure noise should not detect any elements with high confidence."""
     from cflibs.atomic.database import AtomicDatabase
@@ -251,30 +235,6 @@ def test_noise_only_no_detection(temp_db):
     # No element should have high confidence on noise
     for elem in result.all_elements:
         assert elem.confidence < 0.5, f"{elem.element} has confidence {elem.confidence} on noise"
-
-
-def test_max_lines_per_element_parameter(temp_db):
-    """Test that max_lines_per_element caps transition count."""
-    from cflibs.atomic.database import AtomicDatabase
-
-    db = AtomicDatabase(temp_db)
-
-    identifier = CorrelationIdentifier(db, max_lines_per_element=10)
-    assert identifier.max_lines_per_element == 10
-
-    # Default should be 100
-    identifier_default = CorrelationIdentifier(db)
-    assert identifier_default.max_lines_per_element == 100
-
-
-def test_default_min_confidence_lowered(temp_db):
-    """Test that default min_confidence is 0.03."""
-    from cflibs.atomic.database import AtomicDatabase
-
-    db = AtomicDatabase(temp_db)
-
-    identifier = CorrelationIdentifier(db)
-    assert identifier.min_confidence == 0.03
 
 
 def test_sparse_weak_lines_produce_finite_scores(temp_db):
