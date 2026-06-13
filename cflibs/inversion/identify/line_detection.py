@@ -1991,8 +1991,21 @@ def _shift_coherence_veto(
     if not pooled:
         return elements, []
 
-    consensus = float(np.median(pooled))
     band = tolerance_nm / 3.0
+
+    pooled_arr = np.array(pooled)
+    pooled_arr.sort()
+    best_count = 0
+    consensus = 0.0
+    for i in range(len(pooled_arr)):
+        window_end = pooled_arr[i] + band * 2
+        j = i
+        while j < len(pooled_arr) and pooled_arr[j] <= window_end:
+            j += 1
+        count = j - i
+        if count > best_count:
+            best_count = count
+            consensus = float(np.median(pooled_arr[i:j]))
 
     kept: List[str] = []
     vetoed: List[str] = []
