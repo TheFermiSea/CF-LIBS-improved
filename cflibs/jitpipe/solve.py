@@ -479,16 +479,27 @@ class JointWLSResult(NamedTuple):
     T_K : scalar
         Recovered temperature (K). ``50000`` clamp when slope non-physical.
     n_e_cm3 : scalar
-        Electron density (pinned to the Stark input; pass-through).
+        Electron density (pinned to the J6 Stark measurement when supplied; the
+        isobaric pressure-balance fixed point otherwise — see ``ne_from_stark``).
     concentrations : (E,)
         Recovered simplex composition (sum 1; re-closed host-side for
         oxide/matrix).
     cov_theta : (n_cols, n_cols)
-        WLS parameter covariance ``σ̂² (XᵀWX)⁻¹`` at the converged θ.
+        WLS parameter covariance ``σ̂² (XᵀWX)⁻¹`` at the converged θ, inflated
+        by the Stark MAD-scatter penalty (D>1) propagated through the Saha terms.
     physical : scalar bool
         False when the fitted slope was non-negative (unphysical T).
     n_iter : int
         Static GN step count actually run.
+    ne_from_stark : scalar bool
+        True when ``n_e`` was pinned to the Stark measurement; False when the
+        pressure-balance fallback drove it (ADR-0004 §6.1 audit-F2).
+    ne_scatter_cm3 : scalar
+        Stark multi-line MAD scatter (cm^-3); ``0`` for a single line or the
+        pressure-balance fallback (whose uncertainty is unquantifiable).
+    converged : scalar bool
+        Solve-level convergence flag: ``physical`` AND a finite simplex.
+        Reported hard (ADR-0004 §6.4 "convergence flags reported hard").
     """
 
     theta: Any
@@ -498,6 +509,41 @@ class JointWLSResult(NamedTuple):
     cov_theta: Any
     physical: Any
     n_iter: int
+    ne_from_stark: Any
+    ne_scatter_cm3: Any
+    converged: Any
+
+
+def _pressure_balance_ne(
+    comp: Any,
+    T_K: Any,
+    ne_prev: Any,
+    U_I: Any,
+    U_II: Any,
+    ip0: Any,
+    pressure_pa: float,
+    n_steps: int = 20,
+) -> Any:
+    """Fixed-K isobaric (1-atm) pressure/charge-balance ``n_e`` (cm^-3).
+
+    Differentiable, fixed-shape mirror of
+    :meth:`ClosedFormILRSolver._refine_ne_pressure_balance` /
+    :meth:`IterativeCFLIBSSolver._pressure_balance_ne`: the physically
+    non-standard LIBS fallback used only when no Stark diagnostic is supplied
+    (ADR-0004 §6.1 audit-F2). Runs a *static* ``n_steps`` fixed-point sweep
+    (no data-dependent ``while_loop``) over the Saha ionisation fraction.
+    """
+
+    def _body(ne: Any, _unused: Any):
+        S = _saha_ratio_per_element(T_K, ne, U_I, U_II, ip0)
+        eps = S / (1.0 + S)
+        avg_Z = jnp.sum(comp * eps)
+        n_tot = pressure_pa / (KB * T_K * (1.0 + avg_Z))
+        ne_new = avg_Z * n_tot * 1e-6  # cm^-3
+        return jnp.maximum(ne_new, 1e10), None
+
+    ne_final, _ = jax.lax.scan(_body, jnp.maximum(ne_prev, 1e10), None, length=n_steps)
+    return ne_final
 
 
 def joint_wls_solve(
@@ -505,29 +551,46 @@ def joint_wls_solve(
     *,
     init_T_K: float = 10000.0,
     n_e_cm3: float = 1.0e17,
+    ne_stark_cm3: float | None = None,
+    ne_scatter_cm3: float = 0.0,
     n_gn_steps: int = 1,
     refine_saha: bool = True,
+    sb_graph: bool = False,
     closure_mode: str = "standard",
     oxide_factors: Any = None,
     matrix_idx: int = 0,
     matrix_fraction: float = 0.9,
     lm_damping: float = 0.0,
+    pressure_pa: float = 101325.0,
+    use_custom_root: bool = True,
 ) -> JointWLSResult:
-    """Joint WLS Gauss–Newton CF-LIBS estimator (J7 layer 2; ADR-0004 §6.1).
+    """Joint WLS Gauss–Newton/LM CF-LIBS production estimator (J7 layer 2).
 
-    Minimises the §6.1 objective over ``θ = (m, α, β)`` with ``n_e`` pinned to
-    ``n_e_cm3`` (the J6 Stark measurement). At ``θ_0`` (U_s, M_s frozen at
-    ``init_T_K``) the GN step is algebraically the
-    :class:`cflibs.inversion.solve.closed_form.ClosedFormILRSolver` weighted
-    least-squares solve — the exact parity anchor (rtol 1e-10).
+    Minimises the ADR-0004 §6.1 objective over ``θ = (m, α, β)`` with ``n_e``
+    **pinned to the J6 Stark measurement** (``ne_stark_cm3``, audit-F2) and a
+    MAD-scatter penalty (``ne_scatter_cm3``) propagated into the covariance when
+    ``D>1``; the isobaric pressure balance is a flagged fallback when no Stark
+    n_e is supplied. Ion (stage>1) lines are mapped to the neutral plane with
+    the SAME Saha transform the reference SB-graph uses
+    (``x += IP·(z-1)``, ``y -= ln_S·(z-1)``).
 
-    Implementation: each fixed-K GN step (a) freezes ``U_s(T)``, ``M_s(T, n_e)``
-    at the running ``θ``'s ``T``, (b) builds the affine design ``X``, response
-    ``y_adj`` and weights ``W`` exactly as :meth:`ClosedFormILRSolver._design_row`
-    does, (c) solves the ``(D+1)×(D+1)`` normal system
-    ``θ = (XᵀWX + λI)⁻¹ XᵀWy`` (LM damping ``λ`` optional), all in fixed shape
-    (padded rows carry ``W = 0``). When ``n_gn_steps == 1`` and
-    ``refine_saha`` is irrelevant this is *exactly* GN step 0.
+    **Exact parity anchor (ADR-0004 §6.1 (i), §4 row 6).** Freezing ``U_s``,
+    ``M_s`` at ``init_T_K`` and using **unit weights** (``sb_graph=True``) makes
+    GN step 0 algebraically the reference
+    :meth:`IterativeCFLIBSSolver._fit_saha_boltzmann_graph` global lstsq — the
+    arrow-matrix Schur identity (element-dummy fixed-effects ≡ Helmert-contrast
+    parametrisation: same slope, same simplex). With ``sb_graph=False`` (default)
+    GN step 0 is the inverse-variance
+    :class:`cflibs.inversion.solve.closed_form.ClosedFormILRSolver` WLS instead
+    (rtol 1e-10). This is the GEOLOGICAL production path scan_solve cannot mirror
+    (divergence D-J8-1: ``saha_boltzmann_graph=True`` + Stark n_e).
+
+    Subsequent GN steps re-freeze ``U_s``, ``M_s`` at the running ``T`` to recover
+    the Saha/partition non-linearity the numpy precursor only captured via 1–2
+    hand-rolled passes; autodiff removes that limitation. The fixed-K GN sweep
+    runs to its fixed point, wrapped in :func:`jax.lax.custom_root` so reverse-mode
+    gradients flow via the implicit-function theorem (core-JAX only — jaxopt /
+    optimistix / lineax / equinox are TID251-banned).
 
     Parameters
     ----------
@@ -536,17 +599,36 @@ def joint_wls_solve(
     init_T_K : float
         Warm-start temperature freezing ``U_s``/``M_s`` for GN step 0.
     n_e_cm3 : float
-        Pinned electron density (J6 Stark).
+        Pinned electron density when ``ne_stark_cm3`` is None and no pressure
+        fallback is requested.
+    ne_stark_cm3 : float or None
+        J6 Stark-measured electron density. When supplied, ``n_e`` is pinned to
+        it (``ne_from_stark=True``); when None, the isobaric pressure balance
+        drives ``n_e`` (``ne_from_stark=False``).
+    ne_scatter_cm3 : float
+        Stark multi-line MAD scatter; inflates the covariance via the Saha-term
+        sensitivity ``∂θ/∂ln n_e`` when ``D>1`` (ADR-0004 §6.1 "penalty").
     n_gn_steps : int
-        Static Gauss–Newton step count. ``1`` -> GN step 0 (closed-form anchor).
+        Static Gauss–Newton step count (the fixed-point depth). ``1`` -> the
+        GN-step-0 closed-form anchor.
     refine_saha : bool
         When True (default) GN steps >0 refresh ``U_s``/``M_s`` at the running
         ``T``; when False they stay frozen at ``init_T_K`` (pure linear WLS).
+    sb_graph : bool
+        When True, use **unit weights** (the validated SB-graph; Aguilera &
+        Aragon 2004) — the GEOLOGICAL preset. When False (default), use the
+        inverse-variance obs weights (the ``ClosedFormILRSolver`` path).
     closure_mode, oxide_factors, matrix_idx, matrix_fraction
         Closure mapping applied to the recovered simplex (host re-closure for
         oxide/matrix; the regression itself lands on the standard simplex).
     lm_damping : float
         Levenberg–Marquardt damping added to the normal-matrix diagonal.
+    pressure_pa : float
+        Total pressure for the pressure-balance fallback.
+    use_custom_root : bool
+        Wrap the GN fixed point in :func:`jax.lax.custom_root` for
+        implicit-function-theorem gradients (default). Set False to differentiate
+        through the unrolled GN sweep directly (both are finite & FD-consistent).
 
     Returns
     -------
@@ -566,7 +648,16 @@ def joint_wls_solve(
         V = jnp.zeros((1, 0), dtype=jnp.float64)
         n_cols = 2
 
-    n_e_pinned = jnp.asarray(n_e_cm3, dtype=jnp.float64)
+    # n_e: Stark-primary (pinned) with the pressure-balance fixed point as the
+    # flagged fallback (resolved statically on the host — the route is a config
+    # decision, not a traced branch).
+    use_stark = ne_stark_cm3 is not None
+    ne_from_stark = jnp.asarray(use_stark)
+    ne_scatter = jnp.asarray(ne_scatter_cm3 if use_stark else 0.0, dtype=jnp.float64)
+    if use_stark:
+        n_e_pinned = jnp.asarray(ne_stark_cm3, dtype=jnp.float64)
+    else:
+        n_e_pinned = jnp.asarray(n_e_cm3, dtype=jnp.float64)
 
     # Flatten the (E, N_max) line block to rows; species index per row.
     Nmax = inp.x.shape[1]
@@ -574,17 +665,33 @@ def joint_wls_solve(
     x_flat = inp.x.reshape(-1)
     y_flat = inp.y.reshape(-1)
     w_flat = inp.w.reshape(-1)
+    stage_flat = inp.stage.reshape(-1)
     mask_flat = inp.mask.reshape(-1)
-    # Inverse-variance weight; padded/invalid rows -> 0 (drop without reshaping).
-    W = jnp.where(mask_flat, w_flat, 0.0)
+    ip_per_row = inp.ip0[sp_idx]  # (rows,) stage-I IP for the ion shift
 
-    # Constant design columns (slope col is E_k; ILR cols from V; intercept 1).
+    # Weighting: unit weights for the validated SB-graph (Aguilera & Aragon
+    # 2004 — bright-line domination would re-create over-attribution); else the
+    # inverse-variance obs weights (the closed-form ILR path). Padded/invalid
+    # rows -> 0 weight (dropped without reshaping).
+    if sb_graph:
+        W = jnp.where(mask_flat, 1.0, 0.0)
+    else:
+        W = jnp.where(mask_flat, w_flat, 0.0)
+
+    # Ion -> neutral plane shift (matches ``_saha_correct_kernel``):
+    #   x_shift = E_k + IP·(z-1),  y_shift = y - ln_S·(z-1).
+    # The shifted x is the slope-column lever arm; the constant ILR/intercept
+    # columns are unchanged because the closure consumes the neutral-plane
+    # intercept q_s regardless of stage.
+    z_minus_1 = jnp.where(stage_flat > 1, (stage_flat - 1).astype(jnp.float64), 0.0)
+    x_shift = x_flat + ip_per_row * z_minus_1
+
     if D >= 2:
-        ilr_cols = V[sp_idx, :]  # (E*Nmax, D-1)
+        ilr_cols = V[sp_idx, :]  # (rows, D-1)
     else:
         ilr_cols = jnp.zeros((x_flat.shape[0], 0), dtype=jnp.float64)
     ones_col = jnp.ones((x_flat.shape[0], 1), dtype=jnp.float64)
-    X = jnp.concatenate([x_flat[:, None], ilr_cols, ones_col], axis=1)  # (rows, n_cols)
+    X = jnp.concatenate([x_shift[:, None], ilr_cols, ones_col], axis=1)  # (rows, n_cols)
 
     def _U_at(T_K: Any):
         U_I = _eval_partition_jax(
@@ -609,15 +716,24 @@ def joint_wls_solve(
         )
         return U_I, U_II
 
-    def _y_adj_for(T_freeze: Any):
-        """y_adj = y + ln U_s(T) + ln M_s(T, n_e), per the closed-form solver."""
+    def _y_adj_for(T_freeze: Any, ne_freeze: Any):
+        """y_adj = y_shift + ln U_s(T) + ln M_s(T, n_e).
+
+        The ion ``y -= ln_S·(z-1)`` shift and the ``+ln U_s + ln M_s``
+        pre-adjust together place every line on the neutral plane in the form
+        :meth:`ClosedFormILRSolver._design_row` consumes.
+        """
+        T_eV = jnp.maximum(T_freeze / EV_TO_K, 0.1)
+        safe_ne = jnp.maximum(ne_freeze, 1e10)
+        ln_S = jnp.log((SAHA_CONST_CM3 / safe_ne) * (T_eV**1.5))
+        y_shift = y_flat - ln_S * z_minus_1
         U_I, U_II = _U_at(T_freeze)
-        S = _saha_ratio_per_element(T_freeze, n_e_pinned, U_I, U_II, inp.ip0)
+        S = _saha_ratio_per_element(T_freeze, ne_freeze, U_I, U_II, inp.ip0)
         M = 1.0 + jnp.maximum(S, 0.0)
         lnU = jnp.log(jnp.maximum(U_I, 1e-30))  # (E,)
         lnM = jnp.log(jnp.maximum(M, 1e-30))  # (E,)
         per_row = lnU[sp_idx] + lnM[sp_idx]  # (rows,)
-        return y_flat + per_row
+        return y_shift + per_row
 
     def _wls(y_adj: Any):
         WX = X * W[:, None]
@@ -628,30 +744,83 @@ def joint_wls_solve(
         theta = jnp.linalg.solve(XtWX, XtWy)
         return theta, XtWX
 
-    # GN step 0: freeze at init_T_K (the closed-form anchor & warm start).
-    last_freeze = jnp.asarray(init_T_K, dtype=jnp.float64)
-    y_adj_last = _y_adj_for(last_freeze)
-    theta, XtWX = _wls(y_adj_last)
+    def _one_gn_step(theta_in: Any) -> Any:
+        """One GN/LM step: re-freeze U_s/M_s at the running T, re-solve WLS."""
+        m_in = theta_in[0]
+        T_run = jnp.where(m_in < 0.0, -1.0 / (m_in * KB_EV), 50000.0)
+        T_fr = jnp.where(jnp.asarray(refine_saha), T_run, jnp.asarray(init_T_K, jnp.float64))
+        y_adj = _y_adj_for(T_fr, n_e_pinned)
+        theta_out, _ = _wls(y_adj)
+        return theta_out
 
-    # GN steps >0: refresh the U_s/M_s freeze at the running T (Saha non-linearity).
-    for _ in range(max(0, n_gn_steps - 1)):
-        m = theta[0]
-        T_run = jnp.where(m < 0.0, -1.0 / (m * KB_EV), 50000.0)
-        last_freeze = T_run if refine_saha else jnp.asarray(init_T_K, dtype=jnp.float64)
-        y_adj_last = _y_adj_for(last_freeze)
-        theta, XtWX = _wls(y_adj_last)
+    # GN step 0: freeze at init_T_K (the closed-form / SB-graph anchor & warm
+    # start). theta_0 is computed eagerly so n_gn_steps==1 is *exactly* GN step 0.
+    y_adj0 = _y_adj_for(jnp.asarray(init_T_K, jnp.float64), n_e_pinned)
+    theta0, _ = _wls(y_adj0)
 
-    # Covariance σ̂² (XᵀWX)⁻¹ of the converged WLS step. The residual is taken
-    # at the SAME freeze point as the final fit (``y_adj_last``) so it is the
-    # genuine least-squares residual of the linear system that produced θ — not
-    # a re-frozen one (which would inflate σ̂² and corrupt the covariance).
+    n_extra = max(0, n_gn_steps - 1)
+    if n_extra == 0:
+        theta = theta0
+    elif use_custom_root:
+        # Fixed point of the GN map, differentiated via the implicit-function
+        # theorem (lax.custom_root). residual f(θ) = θ - GN(θ); the GN map is
+        # contractive near the SB-graph optimum so a fixed-K sweep converges.
+        def _residual(th: Any) -> Any:
+            return th - _one_gn_step(th)
+
+        def _gn_solve(f: Any, x0: Any) -> Any:
+            def _scan_body(th: Any, _unused: Any) -> Any:
+                return th - f(th), None
+
+            th_final, _ = jax.lax.scan(_scan_body, x0, None, length=n_extra)
+            return th_final
+
+        def _tangent_solve(g: Any, b: Any) -> Any:
+            # g is the linearised residual (J·δ); solve J·δ = b. J = I - GN'.
+            Jmat = jax.jacobian(g)(jnp.zeros_like(b))
+            return jnp.linalg.solve(Jmat, b)
+
+        theta = jax.lax.custom_root(_residual, theta0, _gn_solve, _tangent_solve)
+    else:
+        theta = theta0
+        for _ in range(n_extra):
+            theta = _one_gn_step(theta)
+
+    # Recompute the converged-step linear system (frozen at the final T) for the
+    # honest least-squares residual and covariance.
     m = theta[0]
     physical = m < 0.0
     T_K = jnp.where(physical, -1.0 / (m * KB_EV), 50000.0)
+    T_final = jnp.where(jnp.asarray(refine_saha) & (n_extra > 0), T_K, jnp.asarray(init_T_K))
+    y_adj_last = _y_adj_for(T_final, n_e_pinned)
+    _, XtWX = _wls(y_adj_last)
+
     residuals = y_adj_last - X @ theta
     dof = jnp.maximum(jnp.sum(W > 0.0) - n_cols, 1.0)
     sigma2 = jnp.sum(W * residuals**2) / dof
-    cov_theta = sigma2 * jnp.linalg.inv(XtWX)
+    XtWX_inv = jnp.linalg.inv(XtWX)
+    cov_theta = sigma2 * XtWX_inv
+
+    # Stark MAD-scatter penalty (ADR-0004 §6.1, D>1): n_e is pinned, but its
+    # measurement scatter propagates into θ through the Saha terms ln M_s and
+    # the ion ln_S shift. Add J_ne·var(ln n_e)·J_neᵀ to the covariance, where
+    # J_ne = ∂θ/∂ln n_e at the optimum (free via autodiff).
+    if D >= 2:
+
+        def _theta_of_lnne(ln_ne: Any) -> Any:
+            ne_v = jnp.exp(ln_ne)
+            ya = _y_adj_for(T_final, ne_v)
+            th, _ = _wls(ya)
+            return th
+
+        ln_ne0 = jnp.log(jnp.maximum(n_e_pinned, 1e10))
+        var_lnne = jnp.where(
+            (ne_scatter > 0.0) & (n_e_pinned > 0.0),
+            (ne_scatter / jnp.maximum(n_e_pinned, 1e10)) ** 2,
+            0.0,
+        )
+        J_ne = jax.jacfwd(_theta_of_lnne)(ln_ne0)  # (n_cols,)
+        cov_theta = cov_theta + var_lnne * jnp.outer(J_ne, J_ne)
 
     if D >= 2:
         alpha = theta[1:D]
@@ -662,14 +831,28 @@ def joint_wls_solve(
     # Closure re-mapping (oxide/matrix) on the standard simplex.
     comp = _apply_closure(comp, closure_mode, oxide_factors, matrix_idx, matrix_fraction)
 
+    # n_e: pinned to Stark, or the pressure-balance fixed point (fallback flag).
+    if not use_stark:
+        U_I_f, U_II_f = _U_at(T_final)
+        n_e_out = _pressure_balance_ne(comp, T_K, n_e_pinned, U_I_f, U_II_f, inp.ip0, pressure_pa)
+    else:
+        n_e_out = n_e_pinned
+
+    # Convergence flag, reported hard (ADR-0004 §6.4): physical slope and a
+    # finite, non-degenerate simplex.
+    converged = jnp.logical_and(physical, jnp.all(jnp.isfinite(comp)) & (jnp.sum(comp) > 0.0))
+
     return JointWLSResult(
         theta=theta,
         T_K=T_K,
-        n_e_cm3=n_e_pinned,
+        n_e_cm3=n_e_out,
         concentrations=comp,
         cov_theta=cov_theta,
         physical=physical,
         n_iter=n_gn_steps,
+        ne_from_stark=ne_from_stark,
+        ne_scatter_cm3=ne_scatter,
+        converged=converged,
     )
 
 

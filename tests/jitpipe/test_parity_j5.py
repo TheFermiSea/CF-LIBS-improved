@@ -157,8 +157,29 @@ def _run_kernel(obs_list, **overrides):
 
 
 def _run_reference(obs_list, **kw):
+    correct_kw = {}
+    for k in ("temperature_K", "peak_spectral_radiance"):
+        if k in kw:
+            correct_kw[k] = kw.pop(k)
     corr = ObservableSelfAbsorptionCorrector(**kw)
-    return corr.correct(obs_list)
+    return corr.correct(obs_list, **correct_kw)
+
+
+def _peak_radiance_arrays(obs_list, peak_by_wl):
+    """Build the kernel's ``(peak_spectral_radiance, peak_radiance_valid)`` pair.
+
+    ``peak_by_wl`` mirrors the reference ``peak_spectral_radiance`` dict
+    (``{wavelength_nm: peak}``); lines absent from it get ``valid=False`` exactly
+    like the reference's ``peak_spectral_radiance.get(wl) is None`` skip.
+    """
+    n = len(obs_list)
+    peak = np.zeros(n, dtype=np.float64)
+    valid = np.zeros(n, dtype=bool)
+    for i, o in enumerate(obs_list):
+        if o.wavelength_nm in peak_by_wl:
+            peak[i] = peak_by_wl[o.wavelength_nm]
+            valid[i] = True
+    return peak, valid
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +261,39 @@ def _suspect_line():
     return [bright, faint1, faint2]
 
 
+def _planck_lines():
+    """Two isolated (no-doublet) lines for the Planck-ceiling pass.
+
+    No shared upper level => find_doublet_pairs yields nothing, so the doublet
+    pass is a no-op and the Planck pass is the only correction path. E_k is set
+    high so E_i = E_k - hc/lambda exceeds the suspect cut (these lines are NOT
+    SA-suspect; the Planck pass is what touches them).
+    """
+    common = dict(
+        element="Fe",
+        ionization_stage=1,
+        g_k=5,
+        aki_uncertainty=0.05,
+        intensity_uncertainty=1.0,
+    )
+    # high E_k => high E_i => not suspect.
+    l0 = LineObservation(wavelength_nm=400.0, intensity=500.0, E_k_ev=10.0, A_ki=1.0e8, **common)
+    l1 = LineObservation(wavelength_nm=500.0, intensity=300.0, E_k_ev=9.0, A_ki=2.0e7, **common)
+    return [l0, l1]
+
+
+def _peak_for_tau(wavelength_nm, temperature_K, tau_target):
+    """Peak spectral radiance producing exactly ``tau_target`` at the ceiling.
+
+    Inverts ``tau = -ln(1 - peak/B)`` => ``peak = B * (1 - exp(-tau))`` using the
+    REAL reference Planck radiance so reference and kernel see identical peaks.
+    """
+    from cflibs.inversion.physics.self_absorption_observable import planck_spectral_radiance
+
+    b = planck_spectral_radiance(wavelength_nm, temperature_K)
+    return b * (1.0 - np.exp(-tau_target))
+
+
 def _adversarial_triplet():
     """Three Fe I lines sharing ONE upper level -> one line in two usable pairs.
 
@@ -290,6 +344,9 @@ def _ref_sets(result, obs_list):
         if i is None:
             continue
         if c.method == "doublet":
+            corrected.add(i)
+            cleared.add(i)
+        elif c.method == "planck":
             corrected.add(i)
             cleared.add(i)
         elif c.method == "doublet-thin":
@@ -442,6 +499,267 @@ def test_observably_thin_doublet_cleared():
     assert int(out.n_corrected) == 0
     # intensities unchanged.
     np.testing.assert_allclose(float(out.intensity[0]), i1, rtol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# Tests — Planck-ceiling pass (ladder step (b)).
+# ---------------------------------------------------------------------------
+
+
+def test_planck_radiance_and_tau_match_reference():
+    """Kernel Planck radiance / ceiling-tau scalars match the real reference."""
+    from cflibs.inversion.physics.self_absorption_observable import (
+        planck_ceiling_optical_depth,
+        planck_spectral_radiance,
+    )
+
+    rng = np.random.default_rng(7)
+    for _ in range(80):
+        wl = float(rng.uniform(200.0, 800.0))
+        T = float(rng.uniform(4000.0, 12000.0))
+        b_ref = planck_spectral_radiance(wl, T)
+        b_ker = float(selfabs.planck_spectral_radiance_arr(jnp.array(wl), jnp.array(T)))
+        np.testing.assert_allclose(b_ker, b_ref, rtol=1e-12, atol=0.0)
+
+        tau_target = float(rng.uniform(0.01, 2.9))
+        peak = b_ref * (1.0 - np.exp(-tau_target))
+        tau_ref = planck_ceiling_optical_depth(peak, wl, T)
+        tau_ker, det = selfabs.planck_ceiling_optical_depth_arr(
+            jnp.array(peak), jnp.array(wl), jnp.array(T)
+        )
+        assert bool(det)
+        np.testing.assert_allclose(float(tau_ker), tau_ref, atol=1e-6)
+
+
+def test_planck_ceiling_none_branches():
+    """Saturated (peak>=B) and B<=0 inputs are 'undeterminable' (ref None)."""
+    from cflibs.inversion.physics.self_absorption_observable import (
+        planck_ceiling_optical_depth,
+        planck_spectral_radiance,
+    )
+
+    wl, T = 400.0, 8000.0
+    b = planck_spectral_radiance(wl, T)
+    # peak >= B => ref returns None.
+    _, det = selfabs.planck_ceiling_optical_depth_arr(
+        jnp.array(b * 1.5), jnp.array(wl), jnp.array(T)
+    )
+    assert not bool(det)
+    assert planck_ceiling_optical_depth(b * 1.5, wl, T) is None
+    # T <= 0 => B == 0 => ref returns None.
+    _, det0 = selfabs.planck_ceiling_optical_depth_arr(
+        jnp.array(b * 0.5), jnp.array(wl), jnp.array(0.0)
+    )
+    assert not bool(det0)
+    # peak <= 0 => ref returns 0.0 (determinable).
+    tau_z, det_z = selfabs.planck_ceiling_optical_depth_arr(
+        jnp.array(0.0), jnp.array(wl), jnp.array(T)
+    )
+    assert bool(det_z)
+    np.testing.assert_allclose(float(tau_z), 0.0, atol=0.0)
+    assert planck_ceiling_optical_depth(0.0, wl, T) == 0.0
+
+
+def test_doppler_cog_escape_factor_matches_reference():
+    """64-term COG series matches the reference over the validity range."""
+    from cflibs.inversion.physics.self_absorption_observable import doppler_cog_escape_factor
+
+    taus = np.concatenate([[0.0, 1e-12, 1e-9], np.linspace(1e-4, 3.0, 60)])
+    ker = np.asarray(selfabs.doppler_cog_escape_factor_arr(jnp.asarray(taus)))
+    for i, t in enumerate(taus):
+        ref = doppler_cog_escape_factor(float(t))
+        np.testing.assert_allclose(ker[i], ref, rtol=1e-12, atol=0.0)
+
+
+def test_planck_pass_intensity_and_counter_parity():
+    """Full kernel Planck pass vs reference: intensity rtol 1e-6, tau atol 1e-6."""
+    obs = _planck_lines()
+    T = 8000.0
+    # land line0 in the valid range (tau~0.8); line1 just over the ceiling.
+    peak0 = _peak_for_tau(obs[0].wavelength_nm, T, 0.8)
+    peak1 = _peak_for_tau(obs[1].wavelength_nm, T, 3.5)  # > PLANCK_TAU_VALIDITY_MAX
+    peak_by_wl = {obs[0].wavelength_nm: peak0, obs[1].wavelength_nm: peak1}
+
+    ref = _run_reference(obs, temperature_K=T, peak_spectral_radiance=peak_by_wl)
+
+    peak, valid = _peak_radiance_arrays(obs, peak_by_wl)
+    inp = _kernel_inputs(obs)
+    out = selfabs.correct_self_absorption_arrays(
+        **inp,
+        peak_spectral_radiance=peak,
+        peak_radiance_valid=valid,
+        temperature_K=T,
+    )
+
+    ref_out = ref.observations
+    for i in range(len(obs)):
+        np.testing.assert_allclose(
+            float(out.intensity[i]), ref_out[i].intensity, rtol=1e-6, atol=0.0
+        )
+        np.testing.assert_allclose(
+            float(out.intensity_unc[i]), ref_out[i].intensity_uncertainty, rtol=1e-6, atol=0.0
+        )
+
+    # line0 corrected via Planck; line1 over-ceiling => untouched (not corrected).
+    assert int(out.method[0]) == selfabs.METHOD_PLANCK
+    assert int(out.method[1]) != selfabs.METHOD_PLANCK
+    np.testing.assert_allclose(float(out.intensity[1]), obs[1].intensity, rtol=1e-12)
+
+    # tau parity for the valid line.
+    ref_corr0 = ref.corrections[obs[0].wavelength_nm]
+    np.testing.assert_allclose(float(out.tau[0]), ref_corr0.tau, atol=1e-6)
+
+    # counters exact.
+    assert int(out.n_corrected) == ref.n_corrected == 1
+    assert int(out.n_suspect) == ref.n_suspect
+    np.testing.assert_allclose(float(out.max_tau), ref.max_tau, atol=1e-6)
+
+
+def test_planck_pass_off_when_no_temperature():
+    """temperature_K<=0 disables the Planck pass entirely (reference no-op)."""
+    obs = _planck_lines()
+    peak_by_wl = {obs[0].wavelength_nm: _peak_for_tau(obs[0].wavelength_nm, 8000.0, 1.0)}
+    peak, valid = _peak_radiance_arrays(obs, peak_by_wl)
+    inp = _kernel_inputs(obs)
+    # T=0 => off. Reference with temperature_K=None also runs no Planck pass.
+    out = selfabs.correct_self_absorption_arrays(
+        **inp, peak_spectral_radiance=peak, peak_radiance_valid=valid, temperature_K=0.0
+    )
+    ref = _run_reference(obs)  # no temperature => no Planck pass
+    for i in range(len(obs)):
+        np.testing.assert_allclose(
+            float(out.intensity[i]), ref.observations[i].intensity, rtol=1e-12
+        )
+        assert int(out.method[i]) != selfabs.METHOD_PLANCK
+    assert int(out.n_corrected) == ref.n_corrected == 0
+
+
+def _doublet_corrected_in_range():
+    """A doublet whose recovered tau lands inside the validity range (<5).
+
+    Unlike ``_doublet_self_absorbed`` (tau_1 ~ 6.6 => force-suspect), this pair
+    is genuinely *corrected* (method='doublet', added to `cleared`), so it must
+    be protected from the later Planck pass.
+    """
+    g_k, e_k = 9, 4.30
+    a1, a2 = 1.0e8, 5.0e7
+    wl1, wl2 = 370.0, 380.0
+    r_thin = (g_k * a1 / wl1) / (g_k * a2 / wl2)
+    common = dict(
+        element="Fe",
+        ionization_stage=1,
+        E_k_ev=e_k,
+        g_k=g_k,
+        aki_uncertainty=0.05,
+        intensity_uncertainty=1.0,
+    )
+    # deviation clears the 0.10 floor but recovered tau stays below the ceiling.
+    i2 = 100.0
+    i1 = r_thin * i2 * 0.8  # 20% below the thin ratio
+    l1 = LineObservation(wavelength_nm=wl1, intensity=i1, A_ki=a1, **common)
+    l2 = LineObservation(wavelength_nm=wl2, intensity=i2, A_ki=a2, **common)
+    return [l1, l2]
+
+
+def test_planck_does_not_touch_doublet_cleared_lines():
+    """Doublet-cleared lines are exempt from the Planck pass (ref ordering)."""
+    obs = _doublet_corrected_in_range()
+    # confirm the fixture is genuinely doublet-corrected (tau < 5).
+    res = correct_via_doublet_ratio(obs[0], obs[1])
+    assert 1e-3 < max(res.tau_1, res.tau_2) < selfabs.DOUBLET_TAU_VALIDITY_MAX
+    T = 9000.0
+    # supply (large) peak radiance for BOTH doublet members; the doublet pass
+    # claims them first, so the Planck pass must leave them as doublet results.
+    peak_by_wl = {
+        obs[0].wavelength_nm: _peak_for_tau(obs[0].wavelength_nm, T, 2.0),
+        obs[1].wavelength_nm: _peak_for_tau(obs[1].wavelength_nm, T, 2.0),
+    }
+    ref = _run_reference(obs, temperature_K=T, peak_spectral_radiance=peak_by_wl)
+    peak, valid = _peak_radiance_arrays(obs, peak_by_wl)
+    inp = _kernel_inputs(obs)
+    out = selfabs.correct_self_absorption_arrays(
+        **inp, peak_spectral_radiance=peak, peak_radiance_valid=valid, temperature_K=T
+    )
+    for i in range(len(obs)):
+        # method stays DOUBLET (Planck never overrides a doublet-cleared line).
+        assert int(out.method[i]) == selfabs.METHOD_DOUBLET
+        np.testing.assert_allclose(
+            float(out.intensity[i]), ref.observations[i].intensity, rtol=1e-6
+        )
+    assert int(out.n_corrected) == ref.n_corrected
+
+
+def test_planck_grad_finite():
+    """grad of corrected intensity wrt (intensity, peak, T) is finite (J7 hook)."""
+    obs = _planck_lines()
+    T0 = 8000.0
+    peak_by_wl = {obs[0].wavelength_nm: _peak_for_tau(obs[0].wavelength_nm, T0, 1.0)}
+    peak, valid = _peak_radiance_arrays(obs, peak_by_wl)
+    inp = _kernel_inputs(obs)
+
+    def loss(intensity, peak_arr, temp):
+        out = selfabs.correct_self_absorption_arrays(
+            intensity,
+            inp["intensity_unc"],
+            inp["aki_unc"],
+            inp["line_index"],
+            inp["line_valid"],
+            inp["line_element"],
+            inp["pair_idx"],
+            inp["pair_valid"],
+            inp["snapshot"],
+            peak_spectral_radiance=peak_arr,
+            peak_radiance_valid=valid,
+            temperature_K=temp,
+        )
+        return jnp.sum(out.intensity) + jnp.sum(jnp.nan_to_num(out.tau))
+
+    g = jax.grad(loss, argnums=(0, 1, 2))(
+        jnp.asarray(inp["intensity"]), jnp.asarray(peak), jnp.asarray(T0)
+    )
+    for gi in g:
+        assert np.all(np.isfinite(np.asarray(gi)))
+
+
+def test_planck_vmap_batch16():
+    """vmap (B=16) over the Planck path; every row matches the single run."""
+    obs = _planck_lines()
+    T = 8000.0
+    peak_by_wl = {obs[0].wavelength_nm: _peak_for_tau(obs[0].wavelength_nm, T, 0.9)}
+    peak, valid = _peak_radiance_arrays(obs, peak_by_wl)
+    inp = _kernel_inputs(obs)
+    single = selfabs.correct_self_absorption_arrays(
+        **inp, peak_spectral_radiance=peak, peak_radiance_valid=valid, temperature_K=T
+    )
+
+    B = 16
+
+    def _call(intensity, peak_arr, valid_arr):
+        return selfabs.correct_self_absorption_arrays(
+            intensity,
+            jnp.asarray(inp["intensity_unc"]),
+            jnp.asarray(inp["aki_unc"]),
+            jnp.asarray(inp["line_index"]),
+            jnp.asarray(inp["line_valid"]),
+            jnp.asarray(inp["line_element"]),
+            jnp.asarray(inp["pair_idx"]),
+            jnp.asarray(inp["pair_valid"]),
+            inp["snapshot"],
+            peak_spectral_radiance=peak_arr,
+            peak_radiance_valid=valid_arr,
+            temperature_K=T,
+        )
+
+    bi = jnp.broadcast_to(jnp.asarray(inp["intensity"]), (B,) + inp["intensity"].shape)
+    bp = jnp.broadcast_to(jnp.asarray(peak), (B,) + peak.shape)
+    bv = jnp.broadcast_to(jnp.asarray(valid), (B,) + valid.shape)
+    res = jax.jit(jax.vmap(_call))(bi, bp, bv)
+    assert res.intensity.shape == (B, len(obs))
+    for b in range(B):
+        np.testing.assert_allclose(
+            np.asarray(res.intensity[b]), np.asarray(single.intensity), rtol=1e-12
+        )
+        assert int(res.n_corrected[b]) == int(single.n_corrected)
 
 
 # ---------------------------------------------------------------------------

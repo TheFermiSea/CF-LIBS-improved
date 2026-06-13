@@ -2,12 +2,18 @@
 
 Fixed-shape, ``vmap``-clean JAX port of
 :meth:`cflibs.inversion.physics.self_absorption_observable.ObservableSelfAbsorptionCorrector.correct`
-restricted to the two *observable-only* ladder steps that run pre-fit as a pure
-``(L,)`` array transform: the **doublet intensity-ratio** correction (ladder
-step (a)) and the **SA-suspect down-weighting** pass (ladder step (c)). The
-Planck-ceiling step (b) is omitted here because it requires per-line absolute
-peak spectral radiance + a temperature estimate, neither of which is part of
-the pre-fit pure array transform (see ``remaining_todo`` in the J5 verdict).
+covering all three ladder steps of the reference corrector as a pure
+fixed-shape ``(L,)`` array transform: the **doublet intensity-ratio**
+correction (ladder step (a)), the **Planck-ceiling closed-form** correction
+(ladder step (b), Völker & Gornushkin 2023), and the **SA-suspect
+down-weighting** pass (ladder step (c)).
+
+The Planck pass (b) only fires for lines that carry a calibrated absolute peak
+spectral radiance *and* a plasma-temperature estimate (the optional
+``temperature_K`` / ``peak_spectral_radiance`` reference arguments). It is a
+no-op when those are absent (``peak_radiance_valid`` all-``False`` or
+``temperature_K <= 0``), so the common pre-fit case (T-independent doublet path
++ suspect flagging) is recovered exactly.
 
 Design (ADR-0004 §1.1, J5 spec §3)
 ----------------------------------
@@ -36,7 +42,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from cflibs.core.constants import C_LIGHT, H_PLANCK_EV
+from cflibs.core.constants import C_LIGHT, H_PLANCK, H_PLANCK_EV, KB
 from cflibs.core.jax_runtime import HAS_JAX
 
 if HAS_JAX:
@@ -72,6 +78,25 @@ THIN_TAU_CEIL: float = 1.0e-3
 #: never boosted (``DOUBLET_TAU_VALIDITY_MAX`` = 5.0).
 DOUBLET_TAU_VALIDITY_MAX: float = 5.0
 
+#: Völker & Gornushkin (2023, JAAS) Planck-ceiling validity ceiling; lines whose
+#: recovered line-center tau exceeds this are not corrected (``valid=False``),
+#: 10% RSD budget (``PLANCK_TAU_VALIDITY_MAX`` = 3.0).
+PLANCK_TAU_VALIDITY_MAX: float = 3.0
+
+#: Number of terms in the Doppler curve-of-growth escape-factor alternating
+#: series (reference ``doppler_cog_escape_factor`` default ``n_terms``).
+COG_N_TERMS: int = 64
+
+#: Small-tau cutoff below which the Doppler COG escape factor is exactly 1
+#: (reference ``doppler_cog_escape_factor``: ``tau_0 < 1e-10 -> 1.0``).
+COG_TAU_FLOOR: float = 1.0e-10
+
+#: Lower bound the reference clamps the COG series sum to (``max(total, 1e-12)``).
+COG_MIN_ESCAPE: float = 1.0e-12
+
+#: Planck-exponent overflow clamp (reference ``min(exponent, 700.0)``).
+PLANCK_EXP_MAX: float = 700.0
+
 #: Absolute floor on the fractional ratio deviation ``|1 - r_meas/r_thin|``
 #: (``min_ratio_deviation`` default, ``self_absorption_observable.py:337``).
 MIN_RATIO_DEVIATION: float = 0.10
@@ -99,6 +124,7 @@ METHOD_NONE: int = 0
 METHOD_DOUBLET: int = 1
 METHOD_DOUBLET_THIN: int = 2
 METHOD_SUSPECT: int = 3
+METHOD_PLANCK: int = 4
 
 
 class SelfAbsorptionResult(NamedTuple):
@@ -178,6 +204,175 @@ def _escape_ref(tau: float) -> float:
     if tau > 50:
         return 1.0 / tau
     return (1.0 - math.exp(-tau)) / tau
+
+
+# ---------------------------------------------------------------------------
+# Planck-ceiling closed form (ladder step (b); Völker & Gornushkin 2023).
+# ---------------------------------------------------------------------------
+
+#: ``2 h c^2`` prefactor for ``B_lambda`` in W m^-2 m^-1 sr^-1 (then * 1e-9 for
+#: per-nm). Pinned to the reference ``planck_spectral_radiance``.
+_PLANCK_PREFACTOR: float = float(2.0 * H_PLANCK * C_LIGHT**2)
+#: ``hc / k_B`` for the dimensionless Planck exponent ``hc / (lambda k_B T)``.
+_HC_OVER_KB: float = float((H_PLANCK * C_LIGHT) / KB)
+
+
+def planck_spectral_radiance_arr(wavelength_nm: Any, temperature_K: Any) -> Any:
+    """Branchless ``B_lambda(T)`` in W m^-2 nm^-1 sr^-1 (reference parity).
+
+    Mirrors
+    :func:`cflibs.inversion.physics.self_absorption_observable.planck_spectral_radiance`:
+    ``B = (2 h c^2 / lambda_m^5) / expm1(min(hc/(lambda_m k_B T), 700)) * 1e-9``,
+    returning ``0`` where ``wavelength_nm <= 0`` or ``temperature_K <= 0`` (the
+    reference's two early-return guards) — implemented as masks so the result is
+    ``vmap``/``grad``-clean. Wavelength/temperature are floored to a tiny
+    positive value before the division so gradients stay finite at the masked-out
+    zeros.
+    """
+    valid = jnp.logical_and(wavelength_nm > 0.0, temperature_K > 0.0)
+    wl_m = jnp.maximum(wavelength_nm, 1.0e-300) * 1.0e-9
+    t_safe = jnp.maximum(temperature_K, 1.0e-300)
+    exponent = jnp.minimum(_HC_OVER_KB / (wl_m * t_safe), PLANCK_EXP_MAX)
+    b_per_m = (_PLANCK_PREFACTOR / wl_m**5) / jnp.expm1(exponent)
+    b_per_nm = b_per_m * 1.0e-9
+    return jnp.where(valid, b_per_nm, 0.0)
+
+
+def planck_ceiling_optical_depth_arr(
+    peak_spectral_radiance: Any, wavelength_nm: Any, temperature_K: Any
+) -> tuple[Any, Any]:
+    """Line-center tau from the measured peak vs the Planck ceiling (masked).
+
+    Branchless port of
+    :func:`cflibs.inversion.physics.self_absorption_observable.planck_ceiling_optical_depth`:
+
+    * ``peak <= 0`` -> ``tau = 0`` (reference returns ``0.0``), determinable;
+    * ``B_lambda <= 0`` or ``peak / B_lambda >= 1`` -> reference returns ``None``
+      ("no usable correction") -> here ``determinable = False``;
+    * otherwise ``tau_0 = -log1p(-peak / B_lambda)``.
+
+    Returns ``(tau_0, determinable)`` where ``determinable`` is the boolean
+    counterpart of "the reference returned a non-``None`` value". The
+    ``peak<=0 -> tau=0`` branch is *determinable* (it is a real ``0.0`` return),
+    matching the reference, but yields ``valid=False`` downstream because
+    ``correct_intensity_planck`` only corrects when ``tau_0`` exceeds the COG
+    floor.
+    """
+    peak_le0 = peak_spectral_radiance <= 0.0
+    b_lambda = planck_spectral_radiance_arr(wavelength_nm, temperature_K)
+    b_le0 = b_lambda <= 0.0
+    ratio = peak_spectral_radiance / jnp.where(b_le0, 1.0, b_lambda)
+    saturated = ratio >= 1.0
+    ratio_safe = jnp.where(jnp.logical_or(b_le0, saturated), 0.0, ratio)
+    tau = -jnp.log1p(-ratio_safe)
+    tau = jnp.where(peak_le0, 0.0, tau)
+    # None in the reference <=> (not peak<=0) and (B<=0 or ratio>=1).
+    none_branch = jnp.logical_and(jnp.logical_not(peak_le0), jnp.logical_or(b_le0, saturated))
+    determinable = jnp.logical_not(none_branch)
+    return tau, determinable
+
+
+def doppler_cog_escape_factor_arr(tau_0: Any, n_terms: int = COG_N_TERMS) -> Any:
+    """Doppler curve-of-growth escape factor, fixed ``n_terms`` series (masked).
+
+    Branchless ``vmap``/``grad``-clean port of
+    :func:`cflibs.inversion.physics.self_absorption_observable.doppler_cog_escape_factor`:
+
+        f_G(tau_0) = sum_{n=1}^{n_terms} (-1)^{n+1} tau_0^{n-1} / (n! sqrt(n))
+
+    via the same forward recurrence on ``term = tau_0^{n-1}/n!`` the reference
+    uses (``term *= tau_0 / (n + 1)``), then ``max(total, 1e-12)``. The
+    reference's ``tau_0 < 1e-10 -> 1.0`` short-circuit is reproduced by a mask so
+    the small-tau limit is exactly ``1.0`` (the series already gives ``1.0`` at
+    ``n=1`` but the explicit mask matches the reference bit-for-bit and keeps the
+    gradient finite at ``tau_0 == 0``).
+    """
+    import jax
+
+    tau_safe = jnp.maximum(tau_0, 0.0)
+
+    def body(carry, n):
+        total, term = carry
+        sign = jnp.where((n % 2) == 1, 1.0, -1.0)  # (-1)^{n+1}
+        total = total + sign * term / jnp.sqrt(n.astype(total.dtype))
+        term = term * tau_safe / (n.astype(term.dtype) + 1.0)
+        return (total, term), None
+
+    init = (jnp.zeros_like(tau_safe), jnp.ones_like(tau_safe))  # term = tau^0/1! at n=1
+    ns = jnp.arange(1, n_terms + 1)
+    (total, _term), _ = jax.lax.scan(body, init, ns)
+    series = jnp.maximum(total, COG_MIN_ESCAPE)
+    return jnp.where(tau_0 < COG_TAU_FLOOR, jnp.ones_like(series), series)
+
+
+def correct_intensity_planck_arr(
+    integrated_intensity: Any,
+    peak_spectral_radiance: Any,
+    wavelength_nm: Any,
+    temperature_K: Any,
+    tau_max: Any = PLANCK_TAU_VALIDITY_MAX,
+) -> tuple[Any, Any, Any, Any]:
+    """Per-line Planck-ceiling correction (masked; reference parity).
+
+    Branchless port of
+    :func:`cflibs.inversion.physics.self_absorption_observable.correct_intensity_planck`:
+    invalid (``correction_factor = 1``, intensity unchanged) when ``tau_0`` is
+    undeterminable or ``> tau_max``; otherwise ``factor = 1 / f_G(tau_0)`` and
+    ``I_thin = I_obs * factor``.
+
+    Returns ``(tau_0, factor, corrected_intensity, valid)``.
+    """
+    tau_0, determinable = planck_ceiling_optical_depth_arr(
+        peak_spectral_radiance, wavelength_nm, temperature_K
+    )
+    over_ceiling = tau_0 > tau_max
+    valid = jnp.logical_and(determinable, jnp.logical_not(over_ceiling))
+    f_g = doppler_cog_escape_factor_arr(tau_0)
+    factor = jnp.where(valid, 1.0 / f_g, 1.0)
+    corrected = integrated_intensity * factor
+    return tau_0, factor, corrected, valid
+
+
+def _planck_radiance_ref(wavelength_nm: float, temperature_K: float) -> float:
+    """Scalar reference Planck radiance (host branchy form) for property tests."""
+    import math
+
+    if wavelength_nm <= 0 or temperature_K <= 0:
+        return 0.0
+    wl_m = wavelength_nm * 1.0e-9
+    exponent = (H_PLANCK * C_LIGHT) / (wl_m * KB * temperature_K)
+    exponent = min(exponent, PLANCK_EXP_MAX)
+    b_per_m = (2.0 * H_PLANCK * C_LIGHT**2 / wl_m**5) / math.expm1(exponent)
+    return b_per_m * 1.0e-9
+
+
+def _planck_tau_ref(peak: float, wavelength_nm: float, temperature_K: float):
+    """Scalar reference Planck-ceiling tau (returns None like the host) — tests."""
+    import math
+
+    if peak <= 0:
+        return 0.0
+    b_lambda = _planck_radiance_ref(wavelength_nm, temperature_K)
+    if b_lambda <= 0:
+        return None
+    ratio = peak / b_lambda
+    if ratio >= 1.0:
+        return None
+    return -math.log1p(-ratio)
+
+
+def _cog_escape_ref(tau_0: float, n_terms: int = COG_N_TERMS) -> float:
+    """Scalar reference Doppler-COG escape factor (host form) — property tests."""
+    import math
+
+    if tau_0 < COG_TAU_FLOOR:
+        return 1.0
+    total = 0.0
+    term = 1.0
+    for n in range(1, n_terms + 1):
+        total += ((-1.0) ** (n + 1)) * term / math.sqrt(n)
+        term *= tau_0 / (n + 1)
+    return max(total, COG_MIN_ESCAPE)
 
 
 def _residual(tau_1: Any, rho: Any, ratio_of_ratios: Any) -> Any:
@@ -291,17 +486,21 @@ def correct_self_absorption_arrays(
     pair_valid: Any,
     snapshot: "PipelineSnapshot",
     *,
+    peak_spectral_radiance: Any = None,
+    peak_radiance_valid: Any = None,
+    temperature_K: float = 0.0,
     doublet_tau_max: float = DOUBLET_TAU_VALIDITY_MAX,
+    planck_tau_max: float = PLANCK_TAU_VALIDITY_MAX,
     min_ratio_deviation: float = MIN_RATIO_DEVIATION,
     min_ratio_significance_sigma: float = MIN_RATIO_SIGNIFICANCE_SIGMA,
     suspect_e_i_max_ev: float = SUSPECT_E_I_MAX_EV,
     suspect_intensity_factor: float = SUSPECT_INTENSITY_FACTOR,
     suspect_uncertainty_inflation: float = SUSPECT_UNCERTAINTY_INFLATION,
 ) -> SelfAbsorptionResult:
-    """Jittable observable-gated self-absorption correction (doublet + suspect).
+    """Jittable observable-gated self-absorption correction (full ladder).
 
-    Fixed-shape, ``vmap``/``grad``-clean. Reproduces the doublet pass (a) and
-    the suspect pass (c) of
+    Fixed-shape, ``vmap``/``grad``-clean. Reproduces the doublet pass (a), the
+    Planck-ceiling pass (b), and the suspect pass (c) of
     :meth:`ObservableSelfAbsorptionCorrector.correct` to the J5 §4 tolerance.
 
     Parameters
@@ -326,8 +525,22 @@ def correct_self_absorption_arrays(
     snapshot : PipelineSnapshot
         Atomic-data snapshot (per-line ``g_k`` / ``A_ki`` / ``wavelength_nm`` /
         ``E_k_ev``).
-    doublet_tau_max, min_ratio_deviation, min_ratio_significance_sigma, \
-suspect_e_i_max_ev, suspect_intensity_factor, suspect_uncertainty_inflation : float
+    peak_spectral_radiance : array, shape (L,), optional
+        Per-line measured continuum-subtracted peak spectral radiance in the
+        SAME absolute units as ``B_lambda`` (W m^-2 nm^-1 sr^-1), for the
+        Planck-ceiling pass (b). ``None`` (default) disables the pass entirely.
+    peak_radiance_valid : array, shape (L,) bool, optional
+        ``True`` where a calibrated peak radiance is supplied (mirrors the
+        reference ``peak_spectral_radiance.get(wl) is not None`` skip). Defaults
+        to all-``False`` when ``peak_spectral_radiance`` is ``None``, otherwise
+        all-``True``.
+    temperature_K : float
+        Plasma-temperature estimate enabling the Planck-ceiling pass. ``0``
+        (default) disables the pass (matches the reference ``temperature_K is
+        None`` guard).
+    doublet_tau_max, planck_tau_max, min_ratio_deviation, \
+min_ratio_significance_sigma, suspect_e_i_max_ev, suspect_intensity_factor, \
+suspect_uncertainty_inflation : float
         Continuous knobs; defaults mirror the reference corrector.
 
     Returns
@@ -343,6 +556,20 @@ suspect_e_i_max_ev, suspect_intensity_factor, suspect_uncertainty_inflation : fl
     pair_valid = jnp.asarray(pair_valid).astype(bool)
 
     n_lines = intensity.shape[0]
+
+    # Planck-pass inputs (ladder step (b)). Absent => all-invalid => no-op.
+    if peak_spectral_radiance is None:
+        peak_radiance = jnp.zeros_like(intensity)
+        peak_valid = jnp.zeros((n_lines,), dtype=bool)
+    else:
+        peak_radiance = jnp.asarray(peak_spectral_radiance)
+        if peak_radiance_valid is None:
+            peak_valid = jnp.ones((n_lines,), dtype=bool)
+        else:
+            peak_valid = jnp.asarray(peak_radiance_valid).astype(bool)
+    # `temperature_K is not None and peak_spectral_radiance` host gate -> mask.
+    temp = jnp.asarray(temperature_K, dtype=intensity.dtype)
+    planck_pass_on = temp > 0.0
 
     wl, aki, gk, ek, _sp = _gather_line_atomics(line_index, snapshot)
 
@@ -478,22 +705,56 @@ suspect_e_i_max_ev, suspect_intensity_factor, suspect_uncertainty_inflation : fl
     claim_pair = claim_pair.at[i1].max(jnp.where(win1, wins_idx, jnp.int32(-1)))
     claim_pair = claim_pair.at[i2].max(jnp.where(win2, wins_idx, jnp.int32(-1)))
 
-    has_claim = claim_pair >= 0
-    cp = jnp.maximum(claim_pair, 0)
-    # is this line the endpoint-1 of its claiming pair?
-    is_ep1 = i1[cp] == jnp.arange(n_lines)
+    if P == 0:
+        # No candidate doublets (static P): the doublet pass is a pure no-op.
+        # Skip the pair->line gather entirely (``i1[cp]`` would index an empty
+        # axis); every line carries its pass-through default into pass (b)/(c).
+        out_intensity = intensity
+        out_unc = intensity_unc
+        out_tau = jnp.full((n_lines,), jnp.nan)
+        out_method = jnp.full((n_lines,), jnp.int32(METHOD_NONE))
+        out_cleared = jnp.zeros((n_lines,), dtype=bool)
+        out_forced = jnp.zeros((n_lines,), dtype=bool)
+    else:
+        has_claim = claim_pair >= 0
+        cp = jnp.maximum(claim_pair, 0)
+        # is this line the endpoint-1 of its claiming pair?
+        is_ep1 = i1[cp] == jnp.arange(n_lines)
 
-    def _gather_line(ep1_vals, ep2_vals, default):
-        chosen = jnp.where(is_ep1, ep1_vals[cp], ep2_vals[cp])
-        return jnp.where(has_claim, chosen, default)
+        def _gather_line(ep1_vals, ep2_vals, default):
+            chosen = jnp.where(is_ep1, ep1_vals[cp], ep2_vals[cp])
+            return jnp.where(has_claim, chosen, default)
 
-    out_intensity = _gather_line(p_int1, p_int2, intensity)
-    out_unc = _gather_line(p_unc1, p_unc2, intensity_unc)
-    out_tau = _gather_line(p_tau1, p_tau2, jnp.full((n_lines,), jnp.nan))
-    # method is a per-pair (not per-endpoint) classification.
-    out_method = jnp.where(has_claim, p_method[cp], jnp.int32(METHOD_NONE))
-    out_cleared = jnp.logical_and(has_claim, p_cleared[cp])
-    out_forced = jnp.logical_and(has_claim, p_forced[cp])
+        out_intensity = _gather_line(p_int1, p_int2, intensity)
+        out_unc = _gather_line(p_unc1, p_unc2, intensity_unc)
+        out_tau = _gather_line(p_tau1, p_tau2, jnp.full((n_lines,), jnp.nan))
+        # method is a per-pair (not per-endpoint) classification.
+        out_method = jnp.where(has_claim, p_method[cp], jnp.int32(METHOD_NONE))
+        out_cleared = jnp.logical_and(has_claim, p_cleared[cp])
+        out_forced = jnp.logical_and(has_claim, p_forced[cp])
+
+    # --- (b) Planck-ceiling pass -----------------------------------------
+    # Reference iterates lines not already corrected/cleared by the doublet
+    # pass; here that is `line_valid AND NOT out_cleared`. A line needs a
+    # supplied calibrated peak radiance (peak_valid) AND the whole pass enabled
+    # (temperature_K > 0). The correction only applies when the closed form is
+    # valid (tau determinable AND tau <= planck_tau_max); invalid lines are
+    # left untouched and remain eligible for the suspect pass.
+    pl_tau, pl_factor, pl_corrected_I, pl_valid = correct_intensity_planck_arr(
+        intensity, peak_radiance, wl, temp, tau_max=planck_tau_max
+    )
+    planck_eligible = jnp.logical_and(
+        line_valid,
+        jnp.logical_and(jnp.logical_not(out_cleared), jnp.logical_and(peak_valid, planck_pass_on)),
+    )
+    planck_apply = jnp.logical_and(planck_eligible, pl_valid)
+
+    out_intensity = jnp.where(planck_apply, pl_corrected_I, out_intensity)
+    out_unc = jnp.where(planck_apply, intensity_unc * pl_factor, out_unc)
+    out_tau = jnp.where(planck_apply, pl_tau, out_tau)
+    out_method = jnp.where(planck_apply, jnp.int32(METHOD_PLANCK), out_method)
+    # Planck-corrected lines join `cleared` (exempt from the suspect pass).
+    out_cleared = jnp.logical_or(out_cleared, planck_apply)
 
     # --- (c) suspect pass ------------------------------------------------
     # Per-element median intensity over positive intensities (real lines only).
@@ -524,10 +785,14 @@ suspect_e_i_max_ev, suspect_intensity_factor, suspect_uncertainty_inflation : fl
     out_suspect = jnp.logical_and(suspect, line_valid)
 
     # --- counters (masked reductions) ------------------------------------
+    # Reference n_corrected = #{corrections: not suspect AND correction_factor>1}.
+    # Doublet-corrected lines have factor 1/f(tau) > 1 iff tau > 0; Planck-
+    # corrected lines have factor 1/f_G(tau_0) > 1 iff f_G < 1 (i.e. pl_factor>1).
+    doublet_corrected_line = jnp.logical_and(out_method == METHOD_DOUBLET, out_tau > 0.0)
+    planck_corrected_line = jnp.logical_and(out_method == METHOD_PLANCK, pl_factor > 1.0)
     is_corrected_line = jnp.logical_and(
-        line_valid, jnp.logical_and(out_method == METHOD_DOUBLET, out_tau > 0.0)
+        line_valid, jnp.logical_or(doublet_corrected_line, planck_corrected_line)
     )
-    # n_corrected counts lines whose correction factor > 1 (tau > 0 => f < 1).
     n_corrected = jnp.sum(is_corrected_line.astype(jnp.int32))
     n_suspect = jnp.sum(out_suspect.astype(jnp.int32))
 

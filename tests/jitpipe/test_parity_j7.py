@@ -741,3 +741,446 @@ def test_covariance_vs_fd_hessian():
     cov_fd = sigma2 * np.linalg.inv(0.5 * H)
 
     np.testing.assert_allclose(cov, cov_fd, rtol=1e-3, atol=1e-8)
+
+
+# ---------------------------------------------------------------------------
+# 9. PRODUCTION joint WLS — SB-graph + Stark + closure modes (divergence D-J8-1)
+#
+# The GEOLOGICAL preset routes ``_solve_python`` with
+# ``saha_boltzmann_graph=True`` (UNIT-weight global lstsq) + Stark n_e — the
+# path ``scan_solve`` does NOT mirror. These tests cover that production
+# configuration for the first time (J7 §4 row 10, §5 AC1/AC5; ADR-0004 §6.1).
+# ---------------------------------------------------------------------------
+
+
+def _make_neutral_ionic_obs(coeffs_map, n_e=1.0e16, T_K=8000.0, seed=None) -> list:
+    """Multi-element neutral+ionic fixture exercising the SB-graph ion shift."""
+    T_eV = T_K / EV_TO_K
+    ip = 7.0
+    ln_S = float(np.log((SAHA_CONST_CM3 / n_e) * (T_eV**1.5)))
+    rng = np.random.default_rng(seed) if seed is not None else None
+    obs: list = []
+    for el, q in {"Fe": 10.0, "Ni": 9.5, "Cr": 9.0}.items():
+        for E_k in [1.0, 2.5, 4.0, 5.5]:
+            y = q - E_k / T_eV
+            scale = 1.0 + rng.normal(0.0, 0.005) if rng is not None else 1.0
+            intensity = float(np.exp(y) * scale)
+            obs.append(
+                LineObservation(
+                    wavelength_nm=500.0,
+                    intensity=intensity,
+                    intensity_uncertainty=max(0.005 * intensity, 1e-9),
+                    element=el,
+                    ionization_stage=1,
+                    E_k_ev=E_k,
+                    g_k=1,
+                    A_ki=1.0,
+                )
+            )
+        for E_k in [3.0, 4.0]:
+            y = q + ln_S - (ip + E_k) / T_eV
+            scale = 1.0 + rng.normal(0.0, 0.005) if rng is not None else 1.0
+            intensity = float(np.exp(y) * scale)
+            obs.append(
+                LineObservation(
+                    wavelength_nm=500.0,
+                    intensity=intensity,
+                    intensity_uncertainty=max(0.005 * intensity, 1e-9),
+                    element=el,
+                    ionization_stage=2,
+                    E_k_ev=E_k,
+                    g_k=1,
+                    A_ki=1.0,
+                )
+            )
+    return obs
+
+
+def _reference_sb_graph_composition(solver, inp, elements_ord, obs_by, T_freeze, n_e, closure):
+    """SB-graph slope + closure composition the REAL reference produces.
+
+    Mirrors the ``_solve_python`` SB-graph path: the global unit-weight
+    ``_fit_saha_boltzmann_graph`` slope/intercepts, then the closure
+    (``ClosureEquation``) using the kernel's FROZEN ``U_s``/``M_s`` at
+    ``T_freeze`` (so the partition source is consistent across both paths — the
+    same convention ``test_gn_step0_anchor_exact`` uses).
+    """
+
+    ips = {el: 7.0 for el in elements_ord}
+    fit = solver._fit_saha_boltzmann_graph(obs_by, T_freeze, n_e, ips)
+    T_ref = -1.0 / (fit.slope * KB_EV)
+    U_I = np.asarray(
+        _eval_partition_jax(
+            jnp.asarray(T_freeze),
+            inp.use_direct[:, 0],
+            inp.g_I,
+            inp.E_I,
+            inp.ip_I,
+            inp.coeffs_I,
+            inp.fallback_I,
+            inp.mask_I,
+        )
+    )
+    U_II = np.asarray(
+        _eval_partition_jax(
+            jnp.asarray(T_freeze),
+            inp.use_direct[:, 1],
+            inp.g_II,
+            inp.E_II,
+            inp.ip_II,
+            inp.coeffs_II,
+            inp.fallback_II,
+            inp.mask_II,
+        )
+    )
+    S = np.asarray(
+        _saha_ratio_per_element(
+            jnp.asarray(T_freeze),
+            jnp.asarray(n_e),
+            jnp.asarray(U_I),
+            jnp.asarray(U_II),
+            inp.ip0,
+        )
+    )
+    M = 1.0 + np.maximum(S, 0.0)
+    pf = {el: float(U_I[i]) for i, el in enumerate(elements_ord)}
+    mult = {el: float(M[i]) for i, el in enumerate(elements_ord)}
+    res = closure(fit.intercepts, pf, mult)
+    return T_ref, res.concentrations
+
+
+def test_sb_graph_gn_step0_anchor_exact():
+    """SB-graph (unit-weight) GN step 0 == ``_fit_saha_boltzmann_graph`` (rtol 1e-10).
+
+    This is the PRODUCTION GEOLOGICAL anchor (ADR-0004 §6.1 (i), §4 row 6): the
+    arrow-matrix Schur identity says the unit-weight joint WLS slope/composition
+    equals the reference global element-dummy lstsq — including the ionic-line
+    Saha shift the closed-form anchor (neutral-only) never exercised.
+    """
+    from cflibs.inversion.physics.closure import ClosureEquation
+
+    coeffs_map = {"Fe": [3.2, 0, 0, 0, 0], "Ni": [2.5, 0, 0, 0, 0], "Cr": [3.9, 0, 0, 0, 0]}
+    db = _mock_db_varying(coeffs_map)
+    obs = _make_neutral_ionic_obs(coeffs_map)
+    solver = IterativeCFLIBSSolver(db, max_iterations=20, saha_boltzmann_graph=True)
+    elements_ord, _, inp, _ = _build_kernel_inputs(solver, obs)
+    obs_by = {el: [o for o in obs if o.element == el] for el in elements_ord}
+    init_T, n_e = 8000.0, 1.0e16
+
+    T_ref, C_ref = _reference_sb_graph_composition(
+        solver,
+        inp,
+        elements_ord,
+        obs_by,
+        init_T,
+        n_e,
+        lambda i, p, m: ClosureEquation.apply_standard(i, p, abundance_multipliers=m),
+    )
+
+    got: JointWLSResult = joint_wls_solve(
+        inp,
+        init_T_K=init_T,
+        ne_stark_cm3=n_e,
+        n_gn_steps=1,
+        sb_graph=True,
+        closure_mode="standard",
+    )
+    np.testing.assert_allclose(float(got.T_K), T_ref, rtol=1e-10)
+    for i, el in enumerate(elements_ord):
+        np.testing.assert_allclose(float(got.concentrations[i]), C_ref[el], rtol=1e-10, atol=1e-12)
+    # Provenance: n_e pinned to the Stark input.
+    assert bool(got.ne_from_stark) is True
+    assert float(got.n_e_cm3) == n_e
+
+
+def test_production_converged_vs_reference_solve_python():
+    """Converged (T, C) of the production joint solve vs the REAL ``_solve_python``.
+
+    Drives the reference ``_solve_python`` in the GEOLOGICAL configuration
+    (``saha_boltzmann_graph=True`` + Stark-pinned n_e via a mocked Stark
+    estimate) and the joint solve with the SAME pinned n_e, then asserts the
+    §4 row-10 contract: **T rtol 1e-3, per-element C atol 0.5 wt %**. The
+    partition provider is made consistent across both paths (the kernel reads
+    the polynomial; the reference closure must read the same U).
+    """
+
+    class _Prov:
+        def __init__(self, a0):
+            self.a0 = a0
+
+        def at(self, _T):
+            return float(np.exp(self.a0))
+
+    coeffs_map = {"Fe": [3.2, 0, 0, 0, 0], "Ni": [2.5, 0, 0, 0, 0], "Cr": [3.9, 0, 0, 0, 0]}
+    db = _mock_db_varying(coeffs_map)
+    db.partition_function_for.side_effect = lambda el, sp: _Prov(coeffs_map[el][0])
+    obs = _make_neutral_ionic_obs(coeffs_map, seed=5)
+    n_e_stark = 1.0e16
+
+    solver = IterativeCFLIBSSolver(
+        db,
+        max_iterations=60,
+        saha_boltzmann_graph=True,
+        t_tolerance_k=1.0,
+        ne_tolerance_frac=1e-4,
+    )
+    # Pin the Stark n_e: mock the multi-line estimator (3 lines, no scatter).
+    solver._estimate_ne_from_stark_multi = MagicMock(return_value=(n_e_stark, 3, 0.0))
+    ref = solver.solve(obs, closure_mode="standard", stark_diagnostics=[MagicMock()] * 3)
+    assert ref.converged
+
+    elements_ord, _, inp, _ = _build_kernel_inputs(solver, obs)
+    got = joint_wls_solve(
+        inp,
+        init_T_K=10000.0,
+        ne_stark_cm3=n_e_stark,
+        n_gn_steps=20,
+        sb_graph=True,
+        refine_saha=True,
+        closure_mode="standard",
+    )
+    assert bool(got.converged) is True
+    np.testing.assert_allclose(float(got.T_K), ref.temperature_K, rtol=1e-3)
+    for i, el in enumerate(elements_ord):
+        # per-element C atol 0.5 wt % (J7 §4 row 10).
+        assert abs(float(got.concentrations[i]) - ref.concentrations[el]) < 5e-3
+
+
+def test_production_self_consistent_fixed_point():
+    """The joint solve's converged point IS the reference SB-graph fixed point.
+
+    At the joint solve's converged T, the reference ``_fit_saha_boltzmann_graph``
+    + ``ClosureEquation`` (kernel-frozen U) reproduce its (T, C) to machine
+    precision — the strongest statement of production parity (no partition-mock
+    mismatch, no damping residual).
+    """
+    from cflibs.inversion.physics.closure import ClosureEquation
+
+    coeffs_map = {"Fe": [3.2, 0, 0, 0, 0], "Ni": [2.5, 0, 0, 0, 0], "Cr": [3.9, 0, 0, 0, 0]}
+    db = _mock_db_varying(coeffs_map)
+    obs = _make_neutral_ionic_obs(coeffs_map, seed=11)
+    n_e = 1.0e16
+    solver = IterativeCFLIBSSolver(db, max_iterations=20, saha_boltzmann_graph=True)
+    elements_ord, _, inp, _ = _build_kernel_inputs(solver, obs)
+    obs_by = {el: [o for o in obs if o.element == el] for el in elements_ord}
+
+    got = joint_wls_solve(
+        inp,
+        init_T_K=10000.0,
+        ne_stark_cm3=n_e,
+        n_gn_steps=15,
+        sb_graph=True,
+        refine_saha=True,
+        closure_mode="standard",
+    )
+    T_ref, C_ref = _reference_sb_graph_composition(
+        solver,
+        inp,
+        elements_ord,
+        obs_by,
+        float(got.T_K),  # freeze the reference at the joint converged T
+        n_e,
+        lambda i, p, m: ClosureEquation.apply_standard(i, p, abundance_multipliers=m),
+    )
+    np.testing.assert_allclose(float(got.T_K), T_ref, rtol=1e-10)
+    for i, el in enumerate(elements_ord):
+        np.testing.assert_allclose(float(got.concentrations[i]), C_ref[el], rtol=1e-9, atol=1e-11)
+
+
+def test_production_oxide_closure_parity():
+    """SB-graph + OXIDE closure parity vs the reference (geological default)."""
+    from cflibs.inversion.physics.closure import ClosureEquation
+
+    coeffs_map = {"Fe": [3.2, 0, 0, 0, 0], "Ni": [2.5, 0, 0, 0, 0], "Cr": [3.9, 0, 0, 0, 0]}
+    stoich = {"Fe": 1.43, "Ni": 1.27, "Cr": 1.46}
+    db = _mock_db_varying(coeffs_map)
+    obs = _make_neutral_ionic_obs(coeffs_map, seed=2)
+    n_e = 1.0e16
+    solver = IterativeCFLIBSSolver(db, max_iterations=20, saha_boltzmann_graph=True)
+    elements_ord, _, inp, _ = _build_kernel_inputs(solver, obs)
+    obs_by = {el: [o for o in obs if o.element == el] for el in elements_ord}
+
+    got = joint_wls_solve(
+        inp,
+        init_T_K=10000.0,
+        ne_stark_cm3=n_e,
+        n_gn_steps=15,
+        sb_graph=True,
+        refine_saha=True,
+        closure_mode="oxide",
+        oxide_factors=jnp.asarray([stoich[el] for el in elements_ord], dtype=jnp.float64),
+    )
+    T_ref, C_ref = _reference_sb_graph_composition(
+        solver,
+        inp,
+        elements_ord,
+        obs_by,
+        float(got.T_K),
+        n_e,
+        lambda i, p, m: ClosureEquation.apply_oxide_mode(
+            i, p, abundance_multipliers=m, oxide_stoichiometry=stoich
+        ),
+    )
+    np.testing.assert_allclose(float(got.T_K), T_ref, rtol=1e-10)
+    for i, el in enumerate(elements_ord):
+        np.testing.assert_allclose(float(got.concentrations[i]), C_ref[el], rtol=1e-8, atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# 10. Stark n_e pinning, MAD penalty, pressure-balance fallback (ADR §6.1)
+# ---------------------------------------------------------------------------
+
+
+def test_stark_mad_penalty_inflates_covariance():
+    """A non-zero Stark MAD scatter inflates the covariance (D>1 penalty term)."""
+    coeffs_map = {"Fe": [3.2, 0, 0, 0, 0], "Ni": [2.5, 0, 0, 0, 0], "Cr": [3.9, 0, 0, 0, 0]}
+    db = _mock_db_varying(coeffs_map)
+    obs = _make_neutral_ionic_obs(coeffs_map, seed=9)
+    solver = IterativeCFLIBSSolver(db, max_iterations=20, saha_boltzmann_graph=True)
+    _, _, inp, _ = _build_kernel_inputs(solver, obs)
+
+    kw = dict(init_T_K=8000.0, n_gn_steps=6, sb_graph=True, closure_mode="standard")
+    no_scatter = joint_wls_solve(inp, ne_stark_cm3=1.0e16, ne_scatter_cm3=0.0, **kw)
+    with_scatter = joint_wls_solve(inp, ne_stark_cm3=1.0e16, ne_scatter_cm3=3.0e15, **kw)
+
+    cov0 = np.asarray(no_scatter.cov_theta)
+    cov1 = np.asarray(with_scatter.cov_theta)
+    assert np.all(np.isfinite(cov1))
+    # The MAD penalty is PSD-additive -> every diagonal element grows (or holds).
+    assert np.all(np.diag(cov1) >= np.diag(cov0) - 1e-18)
+    assert np.trace(cov1) > np.trace(cov0)
+    assert float(with_scatter.ne_scatter_cm3) == 3.0e15
+
+
+def test_pressure_balance_fallback_flag():
+    """No Stark n_e -> pressure-balance fixed point drives n_e; flag is False."""
+    coeffs_map = {"Fe": [3.2, 0, 0, 0, 0], "Ni": [2.5, 0, 0, 0, 0], "Cr": [3.9, 0, 0, 0, 0]}
+    db = _mock_db_varying(coeffs_map)
+    obs = _make_neutral_ionic_obs(coeffs_map, seed=4)
+    solver = IterativeCFLIBSSolver(db, max_iterations=20, saha_boltzmann_graph=True)
+    _, _, inp, _ = _build_kernel_inputs(solver, obs)
+
+    got = joint_wls_solve(
+        inp,
+        init_T_K=10000.0,
+        ne_stark_cm3=None,
+        n_gn_steps=8,
+        sb_graph=True,
+        closure_mode="standard",
+    )
+    assert bool(got.ne_from_stark) is False
+    assert float(got.ne_scatter_cm3) == 0.0
+    assert jnp.isfinite(got.n_e_cm3)
+    assert float(got.n_e_cm3) > 0.0
+
+
+# ---------------------------------------------------------------------------
+# 11. custom_root differentiability: grad finite + FD-verified (HARD asserts)
+# ---------------------------------------------------------------------------
+
+
+def test_production_grad_finite_and_fd_verified():
+    """``jax.grad`` through the custom_root production solve is finite AND FD-close.
+
+    Supersedes the reference try/except smoke (J7 §4 "hard asserts"): the
+    implicit-function-theorem gradient of T w.r.t. the warm-start temperature is
+    checked finite and against a central finite difference (rtol 5e-2 — the
+    fixed-point map's mild conditioning, not a parity statement).
+    """
+    coeffs_map = {"Fe": [3.2, 0, 0, 0, 0], "Ni": [2.5, 0, 0, 0, 0], "Cr": [3.9, 0, 0, 0, 0]}
+    db = _mock_db_varying(coeffs_map)
+    obs = _make_neutral_ionic_obs(coeffs_map, seed=6)
+    solver = IterativeCFLIBSSolver(db, max_iterations=20, saha_boltzmann_graph=True)
+    _, _, inp, _ = _build_kernel_inputs(solver, obs)
+
+    def _T_of_init(init_T):
+        return joint_wls_solve(
+            inp,
+            init_T_K=init_T,
+            ne_stark_cm3=1.0e16,
+            n_gn_steps=6,
+            sb_graph=True,
+            refine_saha=True,
+            closure_mode="standard",
+            use_custom_root=True,
+        ).T_K
+
+    x0 = jnp.asarray(9500.0, dtype=jnp.float64)
+    g = jax.grad(_T_of_init)(x0)
+    assert jnp.isfinite(g), f"production grad non-finite: {g}"
+
+    h = 1.0
+    fd = (float(_T_of_init(x0 + h)) - float(_T_of_init(x0 - h))) / (2 * h)
+    # The converged T is a fixed point: ∂T/∂init_T is ~0 at convergence, so the
+    # FD check is an absolute-tolerance finiteness/agreement guard.
+    np.testing.assert_allclose(float(g), fd, atol=1e-3)
+
+
+def test_production_grad_matches_unrolled():
+    """custom_root IFT gradient == unrolled-sweep gradient (both core-JAX)."""
+    coeffs_map = {"Fe": [3.2, 0, 0, 0, 0], "Ni": [2.5, 0, 0, 0, 0], "Cr": [3.9, 0, 0, 0, 0]}
+    db = _mock_db_varying(coeffs_map)
+    obs = _make_neutral_ionic_obs(coeffs_map, seed=7)
+    solver = IterativeCFLIBSSolver(db, max_iterations=20, saha_boltzmann_graph=True)
+    _, _, inp, _ = _build_kernel_inputs(solver, obs)
+
+    def _maker(use_root):
+        def _f(init_T):
+            return joint_wls_solve(
+                inp,
+                init_T_K=init_T,
+                ne_stark_cm3=1.0e16,
+                n_gn_steps=10,
+                sb_graph=True,
+                refine_saha=True,
+                closure_mode="standard",
+                use_custom_root=use_root,
+            ).T_K
+
+        return _f
+
+    x0 = jnp.asarray(9000.0, dtype=jnp.float64)
+    g_root = jax.grad(_maker(True))(x0)
+    g_unroll = jax.grad(_maker(False))(x0)
+    assert jnp.isfinite(g_root) and jnp.isfinite(g_unroll)
+    np.testing.assert_allclose(float(g_root), float(g_unroll), atol=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# 12. vmap batch=16 over the production joint solve (J7 §5 AC1)
+# ---------------------------------------------------------------------------
+
+
+def test_vmap_production_joint_solve():
+    """``jax.vmap`` over 16 perturbed sets through the SB-graph joint solve."""
+    coeffs_map = {"Fe": [3.2, 0, 0, 0, 0], "Ni": [2.5, 0, 0, 0, 0], "Cr": [3.9, 0, 0, 0, 0]}
+    db = _mock_db_varying(coeffs_map)
+    obs = _make_neutral_ionic_obs(coeffs_map, seed=12)
+    solver = IterativeCFLIBSSolver(db, max_iterations=20, saha_boltzmann_graph=True)
+    _, _, inp, (x, y, w, stage, mask) = _build_kernel_inputs(solver, obs)
+    E = inp.x.shape[0]
+
+    rng = np.random.default_rng(20260613)
+    n_batch = 16
+    y_batch = jnp.asarray(
+        np.stack([y + rng.normal(0.0, 0.01, size=y.shape) for _ in range(n_batch)])
+    )
+
+    def _run_one(y_one):
+        inp_one = inp._replace(y=y_one)
+        return joint_wls_solve(
+            inp_one,
+            init_T_K=9000.0,
+            ne_stark_cm3=1.0e16,
+            n_gn_steps=6,
+            sb_graph=True,
+            refine_saha=True,
+            closure_mode="standard",
+        )
+
+    batched = jax.vmap(_run_one)(y_batch)
+    assert batched.T_K.shape == (n_batch,)
+    assert batched.concentrations.shape == (n_batch, E)
+    assert jnp.all(jnp.isfinite(batched.T_K))
+    sums = jnp.sum(batched.concentrations, axis=1)
+    np.testing.assert_allclose(np.asarray(sums), 1.0, rtol=1e-6)

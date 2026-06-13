@@ -57,6 +57,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from cflibs.core.constants import KB_EV
 from cflibs.radiation.kernels import BroadeningMode, forward_model
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -137,6 +138,48 @@ class ForwardFitResult(NamedTuple):
     best_correlation: Any
     best_config_index: Any
     n_valid_configs: Any
+
+
+class PolishResult(NamedTuple):
+    """Fixed-shape result of the gradient (Gauss-Newton/LM) polish loop.
+
+    The optional refinement step (J10 spec §1 last clause; ADR-0004 §6.1) that the
+    MC-CF prior art lacks entirely: starting from a surviving candidate's
+    coarse ``(T, n_e, C)`` draw, run a fixed-K Levenberg-Marquardt descent on the
+    shape-correlation residual to snap each candidate onto its locally best fit
+    *before* the present/absent call. Every leaf is a fixed-shape array; a leading
+    axis appears when :func:`polish_candidates` ``vmap``-s over a candidate batch.
+
+    Attributes
+    ----------
+    params : ndarray, shape (..., P)
+        Polished parameter vector in the optimizer parameterization
+        ``[ln T_eV, log10 n_e, theta_0..theta_{E-1}]`` — bit-for-bit the
+        ``joint_optimizer.py:16-23`` packing (``P = 2 + E``).
+    temperature_k : ndarray, shape (...)
+        Polished temperature, K (``exp(params[0]) / KB_EV``).
+    electron_density : ndarray, shape (...)
+        Polished electron density, cm^-3 (``10 ** params[1]``).
+    concentrations : ndarray, shape (..., E)
+        Polished number fractions, ``softmax(theta)`` (sum-to-one simplex).
+    correlation : ndarray, shape (...)
+        Shape-correlation of the polished fit vs the measured spectrum
+        (the maximized objective; ``cost = 1 - correlation``).
+    init_correlation : ndarray, shape (...)
+        Correlation at the *start* point — lets the caller assert the polish
+        never regresses (monotone-improvement canary, asserted in tests).
+    n_steps : int scalar
+        Fixed LM step count actually run (a static canary; equals the requested
+        ``max_steps`` since the loop is fixed-K with no early exit).
+    """
+
+    params: Any
+    temperature_k: Any
+    electron_density: Any
+    concentrations: Any
+    correlation: Any
+    init_correlation: Any
+    n_steps: Any
 
 
 # ---------------------------------------------------------------------------
@@ -402,6 +445,323 @@ def forward_fit_presence_scores(
 
 
 # ---------------------------------------------------------------------------
+# Gradient polish (fixed-K Gauss-Newton / Levenberg-Marquardt) — the ~30 % of
+# J10 that the MC-CF prior art lacks (J10 spec §1 last clause; ADR-0004 §6.1).
+#
+# Parameterization (bit-for-bit joint_optimizer.py:16-23, the reference oracle):
+#     x[0] = ln(T_eV),   x[1] = log10(n_e),   x[2:] = theta (softmax logits).
+# The polished composition is C = softmax(theta) — the simplex reparameterization
+# ADR-0004 §6.4 mandates ("physical constraints by reparameterization not
+# relaxation: log-T, log-n_e, softmax/ILR simplex"; §6.1 notes standard ≡ ILR).
+#
+# Objective: forward-fit constrains *shape*, not amplitude (Gornushkin-Volker;
+# correlation_cost above). So we minimize the continuum-removed, unit-norm
+# residual r = meas_u - syn_u, whose ||r||^2 is monotone in (1 - correlation).
+# That gives a genuine (N_wl,)-residual least-squares problem over the
+# P = 2 + E parameters, so LM is real Gauss-Newton (not a rank-1 scalar fit):
+#     (J^T J + lambda diag(J^T J)) delta = J^T r,    x <- x - delta  (if accepted)
+# solved with core-JAX jnp.linalg.solve — NO jaxopt/optimistix/lineax/equinox
+# (banned, ADR-0004 §6.1). Fixed-K lax.scan, accept/reject via jnp.where: no
+# data-dependent control flow, fully vmap-clean and reverse-differentiable.
+# ---------------------------------------------------------------------------
+
+
+def pack_polish_params(temperature_k: Any, electron_density: Any, concentrations: Any) -> Any:
+    """Pack ``(T_K, n_e, C)`` into the optimizer vector ``[lnT_eV, log10 n_e, theta]``.
+
+    Mirrors :meth:`JointOptimizer._pack_params` (``joint_optimizer.py:599``): the
+    temperature enters as ``ln(T_eV)`` with ``T_eV = T_K * KB_EV``, the electron
+    density as ``log10(n_e)``, and the composition as softmax logits
+    ``theta = ln(C)`` (shift-invariant; softmax recovers ``C``). Concentrations are
+    floored at ``1e-10`` exactly as the reference does, so ``ln`` is finite.
+
+    Parameters
+    ----------
+    temperature_k : array-like scalar
+        Temperature, K.
+    electron_density : array-like scalar
+        Electron density, cm^-3.
+    concentrations : array, shape (E,)
+        Number fractions over the element superset.
+
+    Returns
+    -------
+    x : ndarray, shape (E + 2,)
+        Packed parameter vector.
+    """
+    t_k = jnp.asarray(temperature_k)
+    ne = jnp.asarray(electron_density)
+    conc = jnp.asarray(concentrations)
+    t_ev = jnp.maximum(t_k * KB_EV, 0.1 * KB_EV)
+    log_t = jnp.log(jnp.maximum(t_ev, 1e-30))
+    log_ne = jnp.log10(jnp.maximum(ne, 1e10))
+    theta = jnp.log(jnp.maximum(conc, 1e-10))
+    return jnp.concatenate([jnp.stack([log_t, log_ne]), theta])
+
+
+def unpack_polish_params(x: Any) -> tuple[Any, Any, Any]:
+    """Invert :func:`pack_polish_params` => ``(T_K, n_e, C)``.
+
+    ``T_K = exp(x[0]) / KB_EV``, ``n_e = 10 ** x[1]``, ``C = softmax(x[2:])``
+    (log-sum-exp-stable softmax, the simplex map of ``softmax_closure`` written
+    as explicit ``jnp`` so no banned ``jax.nn`` import is needed — ADR-0004 §6.4).
+
+    Returns
+    -------
+    temperature_k, electron_density, concentrations
+    """
+    xx = jnp.asarray(x)
+    t_ev = jnp.exp(xx[0])
+    t_k = t_ev / KB_EV
+    ne = jnp.power(10.0, xx[1])
+    theta = xx[2:]
+    theta_max = jnp.max(theta)
+    w = jnp.exp(theta - theta_max)
+    conc = w / jnp.sum(w)
+    return t_k, ne, conc
+
+
+def _polish_plasma_from_params(x: Any, element_symbols: tuple[str, ...]) -> "SingleZoneLTEPlasma":
+    """Build a traced :class:`SingleZoneLTEPlasma` from a polish parameter vector.
+
+    Constructed via ``object.__new__`` + field set (the pattern the grad-smoke
+    path already uses, ``test_parity_j10.py:300``) so ``__init__``'s f-string
+    logging never runs on a tracer. Differentiable end-to-end in ``x``.
+    """
+    from cflibs.plasma.state import SingleZoneLTEPlasma
+
+    t_k, ne, conc = unpack_polish_params(x)
+    species = {el: conc[j] for j, el in enumerate(element_symbols)}
+    plasma = object.__new__(SingleZoneLTEPlasma)
+    plasma.T_e = t_k
+    plasma.n_e = ne
+    plasma.species = species
+    plasma.T_g = None
+    plasma.pressure = None
+    return plasma
+
+
+def _unit_centered(vec: Any, weights: Any, eps: float) -> Any:
+    """Weighted continuum-removal + unit-norm of a single spectrum.
+
+    ``v_c = v - <v>_w`` then ``v_c / ||sqrt(w) v_c||``. The squared Euclidean
+    distance between two such unit vectors is ``2(1 - corr)``, so least-squares on
+    the difference *is* correlation maximization — the bridge that lets the
+    Gornushkin shape cost be polished by Gauss-Newton.
+    """
+    v = jnp.asarray(vec)
+    w = weights / jnp.maximum(jnp.sum(weights), eps)
+    v_mean = jnp.sum(w * v)
+    v_c = v - v_mean
+    sw = jnp.sqrt(w)
+    scaled = sw * v_c
+    norm = jnp.sqrt(jnp.maximum(jnp.sum(scaled * scaled), eps))
+    return scaled / norm
+
+
+def gauss_newton_polish(
+    x0: Any,
+    measured: Any,
+    snapshot: "PipelineSnapshot",
+    instrument: "InstrumentModel",
+    wavelengths_nm: Any,
+    *,
+    element_symbols: tuple[str, ...],
+    broadening_mode: BroadeningMode = BroadeningMode.NIST_PARITY,
+    path_length_m: float = 0.01,
+    apply_self_absorption: bool = False,
+    apply_stark: bool = False,
+    max_steps: int = 6,
+    lm_init: float = 1e-2,
+    lm_up: float = 3.0,
+    lm_down: float = 0.5,
+    weights: Any = None,
+    eps: float = 1e-30,
+) -> PolishResult:
+    """Fixed-K Levenberg-Marquardt polish of one candidate ``(T, n_e, C)`` draw.
+
+    The differentiable refinement ADR-0004 §6.1 specifies: ``minimize over
+    theta = (ln T, alpha, beta)`` ... ``by fixed-K Gauss-Newton/LM on <= (E+2)
+    parameters``. Here ``alpha`` is the softmax-logit composition block and the
+    objective is the shape-correlation residual (forward-fit fits shape, not the
+    free amplitude ``beta``, so ``beta`` is absorbed by the unit-norm). Each step:
+
+    1. ``r(x) = meas_u - syn_u(x)``  — both continuum-removed + unit-norm, ``(N_wl,)``.
+    2. ``J = dr/dx``  via :func:`jax.jacfwd` (``P`` columns; forward-mode is cheap
+       when ``P << N_wl``), ``(N_wl, P)``.
+    3. damped normal equations ``(J^T J + lambda diag(J^T J)) delta = J^T r``
+       solved by core-JAX :func:`jnp.linalg.solve`.
+    4. trial ``x_new = x - delta``; **accept** (and shrink ``lambda``) iff the
+       correlation strictly improves, else **reject** (keep ``x``, grow ``lambda``)
+       — both branches via :func:`jnp.where`, so the graph is fixed-shape.
+
+    No data-dependent control flow (fixed ``max_steps`` :func:`jax.lax.scan`),
+    so the whole routine is ``vmap``/``jit``/``grad`` clean. NaN-guarded: a
+    non-finite step is rejected, so a degenerate candidate simply keeps ``x0``.
+
+    Parameters
+    ----------
+    x0 : array, shape (P,)
+        Start vector from :func:`pack_polish_params` (``P = E + 2``).
+    measured : array, shape (N_wl,)
+        Measured spectrum.
+    snapshot, instrument, wavelengths_nm :
+        Forward-model inputs (frozen kernel, no duplication).
+    element_symbols : tuple of str
+        Element superset; column order of the ``theta`` block.
+    broadening_mode, path_length_m, apply_self_absorption, apply_stark :
+        Forward-kernel toggles (static).
+    max_steps : int
+        Fixed LM iteration count (keys the compiled graph; no early exit).
+    lm_init, lm_up, lm_down : float
+        LM damping schedule (initial damping, reject-grow, accept-shrink factors).
+    weights : array, shape (N_wl,), optional
+        Per-wavelength weights for continuum-removal + correlation.
+    eps : float
+        Numerical floor.
+
+    Returns
+    -------
+    PolishResult
+        Single-candidate (no leading batch axis). ``vmap`` this over a candidate
+        batch (:func:`polish_candidates`).
+    """
+    atomic = snapshot.to_atomic_snapshot(include_levels=True)
+    wl = jnp.asarray(wavelengths_nm)
+    meas = jnp.asarray(measured)
+    x0 = jnp.asarray(x0)
+    p = x0.shape[0]
+    if weights is None:
+        w = jnp.ones_like(meas)
+    else:
+        w = jnp.asarray(weights)
+
+    meas_u = _unit_centered(meas, w, eps)
+
+    def _forward(x: Any) -> Any:
+        plasma = _polish_plasma_from_params(x, element_symbols)
+        return forward_model(
+            plasma,
+            atomic,
+            instrument,
+            wl,
+            broadening_mode=broadening_mode,
+            path_length_m=path_length_m,
+            apply_self_absorption=apply_self_absorption,
+            apply_stark=apply_stark,
+        )
+
+    def _residual(x: Any) -> Any:
+        syn_u = _unit_centered(_forward(x), w, eps)
+        return meas_u - syn_u  # (N_wl,)
+
+    def _correlation(x: Any) -> Any:
+        # corr = 1 - 0.5 * ||r||^2 for unit vectors; computed directly for clarity.
+        syn_u = _unit_centered(_forward(x), w, eps)
+        return jnp.sum(meas_u * syn_u)
+
+    eye = jnp.eye(p, dtype=x0.dtype)
+
+    def _step(carry: Any, _: Any) -> Any:
+        x, lam, corr = carry
+        r = _residual(x)  # (N_wl,)
+        jac = jax.jacfwd(_residual)(x)  # (N_wl, P)
+        jtj = jac.T @ jac  # (P, P)
+        jtr = jac.T @ r  # (P,)
+        # LM: scale the damping by the diagonal of J^T J (Marquardt's scaling).
+        diag = jnp.clip(jnp.diagonal(jtj), eps, None)
+        a = jtj + lam * (diag[:, None] * eye)
+        delta = jnp.linalg.solve(a, jtr)
+        x_trial = x - delta
+        # Reject non-finite trials outright (keep x, grow damping).
+        finite = jnp.all(jnp.isfinite(x_trial))
+        corr_trial = jnp.where(finite, _correlation(x_trial), jnp.asarray(-jnp.inf, x0.dtype))
+        improved = corr_trial > corr
+        x_new = jnp.where(improved, x_trial, x)
+        corr_new = jnp.where(improved, corr_trial, corr)
+        lam_new = jnp.where(improved, lam * lm_down, lam * lm_up)
+        lam_new = jnp.clip(lam_new, eps, 1e12)
+        return (x_new, lam_new, corr_new), None
+
+    corr0 = _correlation(x0)
+    lam0 = jnp.asarray(lm_init, dtype=x0.dtype)
+    (x_final, _, corr_final), _ = jax.lax.scan(
+        _step, (x0, lam0, corr0), None, length=int(max_steps)
+    )
+
+    t_k, ne, conc = unpack_polish_params(x_final)
+    return PolishResult(
+        params=x_final,
+        temperature_k=t_k,
+        electron_density=ne,
+        concentrations=conc,
+        correlation=corr_final,
+        init_correlation=corr0,
+        n_steps=jnp.asarray(int(max_steps), dtype=jnp.int32),
+    )
+
+
+def polish_candidates(
+    x0_batch: Any,
+    measured: Any,
+    snapshot: "PipelineSnapshot",
+    instrument: "InstrumentModel",
+    wavelengths_nm: Any,
+    *,
+    element_symbols: tuple[str, ...],
+    broadening_mode: BroadeningMode = BroadeningMode.NIST_PARITY,
+    path_length_m: float = 0.01,
+    apply_self_absorption: bool = False,
+    apply_stark: bool = False,
+    max_steps: int = 6,
+    lm_init: float = 1e-2,
+    weights: Any = None,
+) -> PolishResult:
+    """``vmap`` :func:`gauss_newton_polish` over a fixed batch of start vectors.
+
+    The candidate axis is fixed-shape ``(M, P)`` — the surviving-candidate count
+    ``M`` is a *static* selection (the host keeps the top-``M`` by coarse
+    correlation, padding to ``M`` when fewer survive), so a single compiled graph
+    polishes every spectrum. Returns a :class:`PolishResult` whose leaves carry a
+    leading ``(M, ...)`` axis.
+
+    Parameters
+    ----------
+    x0_batch : array, shape (M, P)
+        Stacked start vectors (one per surviving candidate).
+    measured, snapshot, instrument, wavelengths_nm, element_symbols :
+        As :func:`gauss_newton_polish`.
+    broadening_mode, path_length_m, apply_self_absorption, apply_stark,
+    max_steps, lm_init, weights :
+        Polish knobs (shared across the batch).
+
+    Returns
+    -------
+    PolishResult
+        Leaves shaped ``(M, ...)``.
+    """
+
+    def _one(x0: Any) -> PolishResult:
+        return gauss_newton_polish(
+            x0,
+            measured,
+            snapshot,
+            instrument,
+            wavelengths_nm,
+            element_symbols=element_symbols,
+            broadening_mode=broadening_mode,
+            path_length_m=path_length_m,
+            apply_self_absorption=apply_self_absorption,
+            apply_stark=apply_stark,
+            max_steps=max_steps,
+            lm_init=lm_init,
+            weights=weights,
+        )
+
+    return jax.vmap(_one)(jnp.asarray(x0_batch))
+
+
+# ---------------------------------------------------------------------------
 # Host-side candidate-population assembly (the per-spectrum host<->device seam).
 # ---------------------------------------------------------------------------
 
@@ -570,6 +930,9 @@ def forward_fit_identify(
     log10_ne_range: tuple[float, float] = (16.0, 18.0),
     subset_keep_prob: float = 0.5,
     element_weights: Any = None,
+    polish_steps: int = 0,
+    top_m_polish: int = 8,
+    polish_lm_init: float = 1e-2,
 ) -> ForwardFitResult:
     """Run a full population forward-fit identification pass for one spectrum.
 
@@ -578,6 +941,13 @@ def forward_fit_identify(
     states (:func:`stack_plasma_states`). Device: forward-model the population
     (:func:`evaluate_population`), score it (:func:`correlation_cost`,
     :func:`bic_cost`), and call elements (:func:`forward_fit_presence_scores`).
+
+    Optional gradient polish (J10 spec §1 / ADR-0004 §6.1): when
+    ``polish_steps > 0``, the top-``top_m_polish`` candidates by coarse correlation
+    are refined with a fixed-K Levenberg-Marquardt descent on the shape-correlation
+    residual (:func:`polish_candidates`), and their *polished* correlations replace
+    the coarse ones before the present/absent call — this is the refinement the
+    MC-CF prior art lacks and is the binding recall lever (J10 §3 item 1).
 
     Determinism: identical ``(key, snapshot, n_configs, ranges)`` give an
     identical result (counter-based RNG; J10 spec AC4). ``key=None`` uses a fixed
@@ -609,11 +979,21 @@ def forward_fit_identify(
         Population stratification knobs (see :func:`build_candidate_population`).
     element_weights : array, shape (N_wl,), optional
         Per-wavelength correlation weights (element-emphasis / validity mask).
+    polish_steps : int
+        Fixed LM iteration count for the gradient polish. ``0`` (default) skips
+        polishing entirely (pure population forward-fit). Static (keys the graph).
+    top_m_polish : int
+        Number of top-correlation candidates to polish (fixed-shape selection).
+        Clamped to the population size.
+    polish_lm_init : float
+        Initial LM damping for the polish (see :func:`gauss_newton_polish`).
 
     Returns
     -------
     ForwardFitResult
-        ``element_present`` indexes ``snapshot.element_symbols``.
+        ``element_present`` indexes ``snapshot.element_symbols``. When polishing is
+        active, ``best_correlation`` / ``best_config_index`` reflect the polished
+        improvement on the refined candidates.
     """
     if key is None:
         key = jax.random.PRNGKey(0)
@@ -653,6 +1033,24 @@ def forward_fit_identify(
     corr = correlation_cost(spectra, measured_spectrum, weights=element_weights)
     bic = bic_cost(spectra, measured_spectrum, n_params=pop["n_params"])
 
+    if polish_steps and polish_steps > 0:
+        corr, bic = _polish_population_scores(
+            corr,
+            bic,
+            pop,
+            measured_spectrum,
+            wavelengths_nm,
+            snapshot,
+            instrument,
+            element_symbols,
+            broadening_mode=broadening_mode,
+            apply_self_absorption=apply_self_absorption,
+            element_weights=element_weights,
+            polish_steps=int(polish_steps),
+            top_m_polish=int(top_m_polish),
+            polish_lm_init=float(polish_lm_init),
+        )
+
     element_valid = jnp.ones((len(element_symbols),), dtype=spectra.dtype)
     return forward_fit_presence_scores(
         corr,
@@ -662,3 +1060,84 @@ def forward_fit_identify(
         element_valid,
         presence_threshold=presence_threshold,
     )
+
+
+def _polish_population_scores(
+    corr: Any,
+    bic: Any,
+    pop: dict[str, Any],
+    measured_spectrum: Any,
+    wavelengths_nm: Any,
+    snapshot: "PipelineSnapshot",
+    instrument: "InstrumentModel",
+    element_symbols: tuple[str, ...],
+    *,
+    broadening_mode: BroadeningMode,
+    apply_self_absorption: bool,
+    element_weights: Any,
+    polish_steps: int,
+    top_m_polish: int,
+    polish_lm_init: float,
+) -> tuple[Any, Any]:
+    """Refine the top-``M`` candidates by LM polish; scatter improved scores back.
+
+    Fixed-shape: ``M = min(top_m_polish, n_configs)`` is a *static* int, so the
+    polished-candidate batch ``(M, P)`` and the scatter are a single compiled
+    graph per spectrum. Polishing can only *raise* a candidate's correlation (LM
+    accepts steps only when correlation strictly improves), so the scatter uses
+    ``max`` and is order-independent. BIC of polished candidates is recomputed from
+    the polished spectra so the secondary model-selection score stays consistent.
+    """
+    n_configs = int(corr.shape[0])
+    m = min(int(top_m_polish), n_configs)
+
+    # Static top-M selection by coarse correlation (host-side argsort on values).
+    top_idx = jnp.argsort(corr)[::-1][:m]  # (M,)
+
+    t_top = jnp.asarray(pop["temperatures_k"])[top_idx]
+    ne_top = jnp.asarray(pop["electron_densities"])[top_idx]
+    conc_top = jnp.asarray(pop["concentrations"])[top_idx]
+
+    x0_batch = jax.vmap(pack_polish_params)(t_top, ne_top, conc_top)  # (M, P)
+
+    polished = polish_candidates(
+        x0_batch,
+        measured_spectrum,
+        snapshot,
+        instrument,
+        wavelengths_nm,
+        element_symbols=element_symbols,
+        broadening_mode=broadening_mode,
+        apply_self_absorption=apply_self_absorption,
+        max_steps=polish_steps,
+        lm_init=polish_lm_init,
+        weights=element_weights,
+    )
+    polished_corr = polished.correlation  # (M,)
+
+    # Recompute BIC of the polished candidates from their refined spectra so the
+    # secondary score reflects the refinement (uses the same n_params bookkeeping).
+    # Re-forward at the *polished* (T, n_e, C) — the full refined config.
+    polished_plasma = stack_plasma_states(
+        np.asarray(polished.temperature_k),
+        np.asarray(polished.electron_density),
+        np.asarray(polished.concentrations),
+        element_symbols,
+    )
+    polished_spectra = evaluate_population(
+        polished_plasma,
+        snapshot,
+        instrument,
+        wavelengths_nm,
+        broadening_mode=broadening_mode,
+        apply_self_absorption=apply_self_absorption,
+    )
+    n_params_top = jnp.asarray(pop["n_params"])[top_idx]
+    polished_bic = bic_cost(polished_spectra, measured_spectrum, n_params=n_params_top)
+
+    # Scatter the improvements back: correlation takes the max (polish never
+    # regresses); BIC takes the min (lower is better) so the polished, better-fit
+    # config wins the secondary score too.
+    corr_new = corr.at[top_idx].max(polished_corr)
+    bic_new = bic.at[top_idx].min(polished_bic)
+    return corr_new, bic_new

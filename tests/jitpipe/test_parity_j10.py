@@ -421,3 +421,249 @@ def test_module_importable_without_circular(setup):
     )
     leaves = jax.tree_util.tree_leaves(res)
     assert len(leaves) == 6
+
+
+# ---------------------------------------------------------------------------
+# Gradient polish (fixed-K Gauss-Newton / LM) — the J10 §1 / ADR-0004 §6.1 piece.
+#
+# The reference oracle for the PARAMETERIZATION is the shipped joint optimizer
+# (joint_optimizer.py:16-23, _pack_params/_unpack_params): log-T, log10-n_e,
+# softmax(theta) simplex. We instantiate the REAL JointOptimizer and assert our
+# pack/unpack reproduce its packing bit-for-bit. The reference oracle for the
+# REFINED PHYSICS is the frozen forward_model (run, never reimplemented).
+# ---------------------------------------------------------------------------
+
+
+def _ref_joint_optimizer(elements):
+    """A real JointOptimizer instance (default SoftmaxClosure) — the packing
+    oracle. ``forward_model`` is a never-called stub: _pack/_unpack don't use it."""
+    from cflibs.inversion.solve.joint_optimizer import JointOptimizer
+
+    return JointOptimizer(
+        forward_model=lambda *a, **k: None,  # unused by _pack_params/_unpack_params
+        elements=list(elements),
+        wavelength=np.linspace(300.0, 420.0, N_WL),
+    )
+
+
+def test_pack_params_parity_vs_joint_optimizer(setup):
+    """``pack_polish_params`` == ``JointOptimizer._pack_params`` (the oracle).
+
+    Tier-K (pure algebra): log-T / log10-n_e / softmax-logit packing must agree to
+    f64 round-off with the shipped reference parameterization (ADR-0004 §6.1
+    "parameterization matches joint_optimizer.py:16-23").
+    """
+    snap, wl, instr = setup
+    elements = list(snap.element_symbols)
+    opt = _ref_joint_optimizer(elements)
+
+    T_K, n_e = 9300.0, 4.7e16
+    conc = {el: c for el, c in zip(elements, [0.55, 0.30, 0.15] + [1e-6] * (len(elements) - 3))}
+    conc_vec = jnp.asarray([conc[el] for el in elements])
+
+    from cflibs.core.constants import KB_EV
+
+    got = np.asarray(ff.pack_polish_params(T_K, n_e, conc_vec))
+    ref = np.asarray(opt._pack_params(T_K * KB_EV, n_e, conc))
+
+    # log-T and log10-n_e blocks: exact algebra.
+    np.testing.assert_allclose(got[:2], ref[:2], rtol=1e-12, atol=0.0)
+    # theta block is shift-invariant under softmax; compare the *compositions* they
+    # decode to (the physically meaningful, gauge-fixed quantity).
+    c_got = np.asarray(ff.unpack_polish_params(jnp.asarray(got))[2])
+    c_ref = np.asarray(opt.closure.apply(jnp.asarray(ref[2:])))
+    np.testing.assert_allclose(c_got, c_ref, rtol=1e-10, atol=1e-12)
+
+
+def test_unpack_params_parity_vs_joint_optimizer(setup):
+    """``unpack_polish_params`` == ``JointOptimizer._unpack_params`` (the oracle).
+
+    Tier-K: exp(log-T)->T_eV->T_K, 10**log10-n_e->n_e, softmax(theta)->C must all
+    match the reference inverse map to f64 round-off.
+    """
+    snap, wl, instr = setup
+    elements = list(snap.element_symbols)
+    opt = _ref_joint_optimizer(elements)
+
+    from cflibs.core.constants import KB_EV
+
+    rng = np.random.default_rng(3)
+    x = np.concatenate(
+        [
+            [np.log(1.1)],  # log(T_eV)
+            [16.8],  # log10(n_e)
+            rng.normal(size=len(elements)),  # theta
+        ]
+    )
+    t_k, ne, conc = ff.unpack_polish_params(jnp.asarray(x))
+    T_eV_ref, n_e_ref, conc_ref = opt._unpack_params(jnp.asarray(x))
+
+    np.testing.assert_allclose(float(t_k) * KB_EV, float(T_eV_ref), rtol=1e-12, atol=0.0)
+    np.testing.assert_allclose(float(ne), float(n_e_ref), rtol=1e-12, atol=0.0)
+    np.testing.assert_allclose(np.asarray(conc), np.asarray(conc_ref), rtol=1e-12, atol=0.0)
+    # The simplex constraint the parameterization enforces.
+    np.testing.assert_allclose(float(jnp.sum(conc)), 1.0, rtol=0.0, atol=1e-12)
+
+
+def test_polish_recovers_truth_within_one_percent(setup):
+    """Accuracy sanity (J10 §3 item 3): the LM polish recovers the major-element
+    concentrations of a reference-generated spectrum to ~1 % relative.
+
+    Start far from truth in T, n_e, AND composition; assert the polished fit is
+    near-perfect (correlation -> 1) and the recovered majors match truth — the
+    MC-CF prior-art benchmark, which the polish (absent in MC-CF) achieves.
+    """
+    snap, wl, instr = setup
+    els = tuple(snap.element_symbols)
+    truth = {"Fe": 0.7, "Cu": 0.3, "Ca": 0.0}
+    meas = _reference_spectrum(snap, wl, instr, truth, T_K=10000.0, ne=1e17)
+
+    # Deliberately bad start: wrong T, wrong n_e, near-uniform composition.
+    bad = jnp.asarray([0.34, 0.33, 0.33] + [1e-6] * (len(els) - 3))
+    x0 = ff.pack_polish_params(8000.0, 3e17, bad)
+    res = ff.gauss_newton_polish(
+        x0, jnp.asarray(meas), snap, instr, wl, element_symbols=els, max_steps=20
+    )
+
+    assert np.isfinite(float(res.correlation))
+    # Polish drove correlation essentially to 1 from a poor start.
+    assert float(res.correlation) > 0.999, f"polished corr {float(res.correlation):.4f}"
+    assert float(res.correlation) >= float(res.init_correlation)
+
+    c = np.asarray(res.concentrations)
+    idx = {el: i for i, el in enumerate(els)}
+    # Major elements within ~1 % relative of truth (MC-CF benchmark).
+    assert abs(c[idx["Fe"]] - 0.7) <= 0.01, f"Fe {c[idx['Fe']]:.4f}"
+    assert abs(c[idx["Cu"]] - 0.3) <= 0.01, f"Cu {c[idx['Cu']]:.4f}"
+    # Recovered T / n_e back near truth too.
+    assert abs(float(res.temperature_k) - 10000.0) / 10000.0 <= 0.02
+    assert abs(np.log10(float(res.electron_density)) - 17.0) <= 0.2
+
+
+def test_polish_monotone_never_regresses(setup):
+    """LM accept/reject guarantees correlation never decreases (the whole point of
+    the damped step gating) — across a batch of varied, even pathological, starts.
+    """
+    snap, wl, instr = setup
+    els = tuple(snap.element_symbols)
+    meas = _reference_spectrum(snap, wl, instr, {"Fe": 0.5, "Cu": 0.5, "Ca": 0.0})
+
+    starts = jnp.stack(
+        [
+            ff.pack_polish_params(
+                7000.0, 1e16, jnp.asarray([0.5, 0.4, 0.1] + [1e-6] * (len(els) - 3))
+            ),
+            ff.pack_polish_params(
+                13000.0, 1e18, jnp.asarray([0.2, 0.2, 0.6] + [1e-6] * (len(els) - 3))
+            ),
+            ff.pack_polish_params(
+                10000.0, 1e17, jnp.asarray([0.5, 0.5, 0.0] + [1e-6] * (len(els) - 3))
+            ),
+        ]
+    )
+    res = ff.polish_candidates(
+        starts, jnp.asarray(meas), snap, instr, wl, element_symbols=els, max_steps=6
+    )
+    init = np.asarray(res.init_correlation)
+    final = np.asarray(res.correlation)
+    assert np.all(np.isfinite(final))
+    # Hard contract: the polish never makes any candidate worse.
+    assert np.all(final >= init - 1e-12), f"regressed: init={init} final={final}"
+
+
+def test_polish_grad_finite_hard_assert(setup):
+    """ADR-0004 §5.4: grad-finiteness is a **hard** assert for the solve/polish.
+
+    Differentiate the polish residual's ||r||^2 (the LM objective) wrt the FULL
+    polish parameter vector (lnT, log10-n_e, theta) through the frozen forward
+    kernel; gradient must be finite and non-trivial.
+    """
+    snap, wl, instr = setup
+    els = tuple(snap.element_symbols)
+    meas = jnp.asarray(_reference_spectrum(snap, wl, instr, {"Fe": 0.7, "Cu": 0.3, "Ca": 0.0}))
+    atomic = snap.to_atomic_snapshot()
+
+    def sq_resid(x):
+        plasma = ff._polish_plasma_from_params(x, els)
+        spec = forward_model(
+            plasma,
+            atomic,
+            instr,
+            wl,
+            broadening_mode=BroadeningMode.NIST_PARITY,
+            path_length_m=0.01,
+        )
+        return 1.0 - ff.correlation_cost(spec, meas)
+
+    x0 = ff.pack_polish_params(9000.0, 2e17, jnp.asarray([0.5, 0.4, 0.1] + [1e-6] * (len(els) - 3)))
+    g = np.asarray(jax.grad(sq_resid)(x0))
+    assert g.shape == (len(els) + 2,)
+    assert np.all(np.isfinite(g)), "non-finite polish gradient (HARD)"
+    assert np.any(g != 0.0)
+
+
+def test_polish_vmap_smoke_fixed_shape(setup):
+    """vmap the whole polish over a fixed (M, P) start batch; output (M, ...)."""
+    snap, wl, instr = setup
+    els = tuple(snap.element_symbols)
+    meas = _reference_spectrum(snap, wl, instr, {"Fe": 0.6, "Cu": 0.4, "Ca": 0.0})
+
+    m = 8
+    rng = np.random.default_rng(11)
+    starts = []
+    for _ in range(m):
+        c = rng.random(len(els))
+        c /= c.sum()
+        starts.append(
+            ff.pack_polish_params(
+                rng.uniform(8000, 12000), 10 ** rng.uniform(16, 18), jnp.asarray(c)
+            )
+        )
+    starts = jnp.stack(starts)
+
+    res = ff.polish_candidates(
+        starts, jnp.asarray(meas), snap, instr, wl, element_symbols=els, max_steps=4
+    )
+    assert res.params.shape == (m, len(els) + 2)
+    assert res.concentrations.shape == (m, len(els))
+    assert res.correlation.shape == (m,)
+    assert np.all(np.isfinite(np.asarray(res.params)))
+    # Simplex preserved for every polished candidate.
+    sums = np.asarray(jnp.sum(res.concentrations, axis=1))
+    np.testing.assert_allclose(sums, 1.0, rtol=0.0, atol=1e-10)
+
+
+def test_polish_determinism(setup):
+    """Identical inputs => identical polish (no RNG inside the polish; §3 item 4)."""
+    snap, wl, instr = setup
+    els = tuple(snap.element_symbols)
+    meas = jnp.asarray(_reference_spectrum(snap, wl, instr, {"Fe": 0.7, "Cu": 0.3, "Ca": 0.0}))
+    x0 = ff.pack_polish_params(8500.0, 2e17, jnp.asarray([0.5, 0.4, 0.1] + [1e-6] * (len(els) - 3)))
+
+    a = ff.gauss_newton_polish(x0, meas, snap, instr, wl, element_symbols=els, max_steps=5)
+    b = ff.gauss_newton_polish(x0, meas, snap, instr, wl, element_symbols=els, max_steps=5)
+    np.testing.assert_array_equal(np.asarray(a.params), np.asarray(b.params))
+    assert float(a.correlation) == float(b.correlation)
+
+
+def test_polish_improves_identify_best_correlation(setup):
+    """Wiring contract: enabling the polish in ``forward_fit_identify`` raises the
+    population's best correlation (the polish only ever helps) without changing the
+    correct present/absent calls on a clean two-element spectrum."""
+    snap, wl, instr = setup
+    meas = _reference_spectrum(snap, wl, instr, {"Fe": 0.7, "Cu": 0.3, "Ca": 0.0})
+
+    common = dict(key=jax.random.PRNGKey(13), n_configs=256, presence_threshold=0.02)
+    no_polish = ff.forward_fit_identify(meas, wl, snap, instr, polish_steps=0, **common)
+    polished = ff.forward_fit_identify(
+        meas, wl, snap, instr, polish_steps=5, top_m_polish=8, **common
+    )
+
+    assert float(polished.best_correlation) >= float(no_polish.best_correlation) - 1e-9
+    # The polish should push the best fit very close to a perfect shape match.
+    assert float(polished.best_correlation) > 0.99
+    # Correct calls preserved (Fe, Cu present; Ca absent).
+    present = np.asarray(polished.element_present)
+    called = {el for ei, el in enumerate(snap.element_symbols) if present[ei] > 0.5}
+    assert "Fe" in called and "Cu" in called
+    assert "Ca" not in called

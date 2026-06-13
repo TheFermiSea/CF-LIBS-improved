@@ -18,6 +18,13 @@ Three back-end stages live here:
   :func:`_saha_correct_kernel` / :func:`_common_slope_kernel` instead of any
   on-device ``lstsq``. Contract: slope/intercepts rtol 1e-10 vs
   ``np.linalg.lstsq`` on identical rows.
+* **Robust fitters** (§3) — sigma-clip, Huber IRLS and RANSAC as fixed-K /
+  fixed-trial masked kernels. Sigma-clip + Huber are ``lax.scan`` reweighters
+  whose CPU early breaks are idempotent fixed points (so the fixed-K scan reaches
+  the same answer). RANSAC pre-draws all trial index pairs from a counter-based
+  ``jax.random`` stream and argmaxes inliers (first-max = lowest trial index);
+  its RNG cannot match ``np.random.default_rng(42)`` bit-for-bit, so its contract
+  is fixed-seed self-regression + statistical parity.
 * **Closure** (§4) — standard / matrix / oxide masked linear algebra lifted one
   batch axis from the existing lax closures, plus ILR-as-standard (the documented
   identity round-trip) and the keystone-degeneracy gate. No ``pure_callback``.
@@ -37,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
+import jax.random as jrandom
 
 from cflibs.inversion.physics.boltzmann_jax import batched_boltzmann_fit
 from cflibs.inversion.solve.iterative import _common_slope_kernel, _saha_correct_kernel
@@ -70,6 +78,30 @@ OUTLIER_SIGMA = 2.5
 
 # Log-ratio clip floor for ILR parity (physics/closure.py:34).
 LOGRATIO_CLIP_FLOOR = 1e-10
+
+# RANSAC default trial count (boltzmann.py:66, ``ransac_max_trials=100``).
+RANSAC_MAX_TRIALS = 100
+
+# RANSAC minimal sample size (boltzmann.py:64, ``ransac_min_samples=2``).
+RANSAC_MIN_SAMPLES = 2
+
+# MAD-to-sigma scale (boltzmann.py:665, ``mad * 1.4826``); 1/Phi^{-1}(0.75).
+MAD_SCALE = 1.4826
+
+# Default RANSAC seed (boltzmann.py:672, ``np.random.default_rng(42)``). The
+# counter-based ``jax.random`` stream CANNOT reproduce NumPy's PCG64 bit-for-bit,
+# so RANSAC parity is fixed-seed self-regression + statistical parity by design
+# (spec §3, §7).
+RANSAC_SEED = 42
+
+# Number of fixed Huber IRLS iterations (boltzmann.py:768, ``range(max_iterations)``
+# with the default ``max_iterations=10``). The 1e-8 convergence break
+# (boltzmann.py:796) is fixed-point idempotent, so the fixed-K scan reaches the
+# identical result.
+HUBER_ITERS = 10
+
+# Huber tuning constant (boltzmann.py:67, ``huber_epsilon=1.2``).
+HUBER_EPSILON = 1.2
 
 
 # ---------------------------------------------------------------------------
@@ -550,6 +582,294 @@ def sigma_clip_fit(
     }
 
 
+def _weighted_line_fit(
+    x: jnp.ndarray,
+    y: jnp.ndarray,
+    w: jnp.ndarray,
+    mask: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Inverse-variance WLS slope/intercept for a single ``(N,)`` Boltzmann plot.
+
+    The reference robust paths refit with ``np.polyfit(x, y, 1, w=sqrt(weights))``
+    (boltzmann.py:661, 707/_weighted_fit, 765, 791, 805) which minimises
+    ``sum(weights · r²)`` — algebraically the closed-form 5-sum WLS the
+    :func:`batched_boltzmann_fit` kernel computes with ``w = weights`` directly.
+    We pack the single plot as a batch-of-one so this is the *same* kernel the
+    sigma-clip path delegates to (boltzmann.py:484-494). Returns ``(slope,
+    intercept)`` scalars; a degenerate ``det≈0`` yields ``0.0`` (mirroring the
+    kernel's guarded fallback, which the reference reaches via the
+    ``LinAlgError`` branch).
+    """
+    fit = batched_boltzmann_fit(x[None, :], y[None, :], w[None, :], mask[None, :])
+    return fit.slope[0], fit.intercept[0]
+
+
+def ransac_fit(
+    x: jnp.ndarray,
+    y: jnp.ndarray,
+    y_err: jnp.ndarray,
+    mask: jnp.ndarray,
+    *,
+    n_trials: int = RANSAC_MAX_TRIALS,
+    outlier_sigma: float = OUTLIER_SIGMA,
+    residual_threshold: jnp.ndarray | None = None,
+    seed: int = RANSAC_SEED,
+) -> dict[str, jnp.ndarray]:
+    """Vectorized fixed-shape RANSAC line fit (``_fit_ransac``, boltzmann.py:630-732).
+
+    Mirrors the reference algorithm with one *deliberate* deviation: the trial
+    samples come from a counter-based :mod:`jax.random` stream instead of
+    ``np.random.default_rng(42)``, so the drawn index pairs CANNOT match NumPy's
+    PCG64 bit-for-bit. The contract (spec §3) is therefore **fixed-seed
+    self-regression + statistical parity**, not bit-equality.
+
+    Everything else is faithful:
+
+    * **Threshold** (boltzmann.py:656-667). When ``residual_threshold`` is
+      ``None`` it is derived exactly as the reference: an initial inverse-variance
+      WLS line, MAD of its absolute residuals, ``outlier_sigma · MAD · 1.4826``,
+      floored at ``eps · max(|y|, 1)``.
+    * **Trials** (boltzmann.py:674-696). ``n_trials`` index pairs are pre-drawn
+      *without replacement* over the valid lines and evaluated in parallel
+      (``jax.vmap``); each fits the exact 2-point line, skips degenerate samples
+      (``x₀ == x₁`` ⇒ inlier count 0, matching the ``continue`` at :681-687),
+      and counts inliers ``|r| ≤ threshold``.
+    * **Best-trial selection** (boltzmann.py:694-696). The sequential update
+      keeps a trial only when it is *strictly greater* than the running best, so
+      the FIRST trial achieving the maximum wins. ``jnp.argmax`` returns the
+      first occurrence of the max ⇒ identical tiebreak (lowest trial index).
+    * **Refit** (boltzmann.py:702-714). The final line is the inverse-variance
+      WLS over the winning inlier set.
+
+    Inputs are ``(N,)`` for one Boltzmann plot (``vmap`` for ``(B, N)``).
+
+    Returns
+    -------
+    dict
+        ``slope`` / ``intercept`` (scalars), ``inlier_mask`` ``(N,)`` bool over
+        the original line indices, ``n_inliers`` (scalar), ``threshold``
+        (scalar), ``R_squared`` (scalar), ``valid`` (scalar bool: enough valid
+        lines AND the winning trial reached ≥ 2 inliers, mirroring the
+        ``best_n_inliers < 2`` / ``n_valid < min_samples`` empty-result guards).
+    """
+    x = jnp.asarray(x, dtype=jnp.float64)
+    y = jnp.asarray(y, dtype=jnp.float64)
+    y_err = jnp.asarray(y_err, dtype=jnp.float64)
+    mask_b = jnp.asarray(mask, dtype=bool)
+    n = x.shape[-1]
+
+    mask_f = mask_b.astype(jnp.float64)
+    n_valid = jnp.sum(mask_f)
+    weights = _inverse_variance_weights(y_err, mask_b)
+
+    # --- threshold (boltzmann.py:656-667) ------------------------------------
+    if residual_threshold is None:
+        m0, c0 = _weighted_line_fit(x, y, weights, mask_b)
+        resid0 = jnp.abs(y - (m0 * x + c0))
+        mad = masked_median(resid0, mask_b)
+        thr = outlier_sigma * mad * MAD_SCALE
+        # Floor: eps · max(|y|, 1) over valid entries (boltzmann.py:666-667).
+        y_abs = jnp.where(mask_b, jnp.abs(y), 0.0)
+        y_scale = jnp.maximum(jnp.max(y_abs), 1.0)
+        thr = jnp.maximum(thr, jnp.finfo(jnp.float64).eps * y_scale)
+    else:
+        thr = jnp.asarray(residual_threshold, dtype=jnp.float64)
+
+    # --- vectorized trials (boltzmann.py:674-696) ----------------------------
+    # Counter-based keys: one independent subkey per trial. ``choice`` draws
+    # ``RANSAC_MIN_SAMPLES`` distinct indices from the VALID lines only; we feed
+    # it the valid probabilities so masked slots are never sampled.
+    key = jrandom.PRNGKey(seed)
+    trial_keys = jrandom.split(key, n_trials)  # (n_trials, 2)
+    # Sampling probability: uniform over valid lines (0 for padded).
+    n_valid_safe = jnp.maximum(n_valid, 1.0)
+    p = mask_f / n_valid_safe  # (N,)
+
+    def _one_trial(tkey: jnp.ndarray) -> jnp.ndarray:
+        # Two distinct indices drawn from the valid set (replace=False).
+        idx = jrandom.choice(tkey, n, shape=(RANSAC_MIN_SAMPLES,), replace=False, p=p)  # (2,)
+        x0 = x[idx[0]]
+        x1 = x[idx[1]]
+        y0 = y[idx[0]]
+        y1 = y[idx[1]]
+        dx = x1 - x0
+        degenerate = jnp.abs(dx) <= 0.0  # x₀ == x₁ ⇒ unique(x)<2 (boltzmann.py:681)
+        dx_safe = jnp.where(degenerate, 1.0, dx)
+        m = (y1 - y0) / dx_safe
+        c = y0 - m * x0
+        resid = jnp.abs(y - (m * x + c))
+        inliers = (resid <= thr) & mask_b
+        n_in = jnp.sum(inliers.astype(jnp.float64))
+        # Degenerate sample contributes nothing (reference ``continue``).
+        return jnp.where(degenerate, 0.0, n_in)
+
+    trial_counts = jax.vmap(_one_trial)(trial_keys)  # (n_trials,)
+
+    # First trial achieving the maximum wins (strictly-greater sequential update
+    # ⇒ ``argmax`` first-occurrence semantics, boltzmann.py:694-696).
+    best_trial = jnp.argmax(trial_counts)
+    best_n = trial_counts[best_trial]
+
+    # Recompute the winning trial's inlier mask (cheap; one extra fit).
+    best_idx = jrandom.choice(
+        trial_keys[best_trial], n, shape=(RANSAC_MIN_SAMPLES,), replace=False, p=p
+    )
+    bx0, bx1 = x[best_idx[0]], x[best_idx[1]]
+    by0, by1 = y[best_idx[0]], y[best_idx[1]]
+    bdx = bx1 - bx0
+    bdx_safe = jnp.where(jnp.abs(bdx) <= 0.0, 1.0, bdx)
+    bm = (by1 - by0) / bdx_safe
+    bc = by0 - bm * bx0
+    best_resid = jnp.abs(y - (bm * x + bc))
+    best_inliers = (best_resid <= thr) & mask_b
+
+    # --- refit on inliers (boltzmann.py:702-714) -----------------------------
+    inlier_w = _inverse_variance_weights(y_err, best_inliers)
+    slope, intercept = _weighted_line_fit(x, y, inlier_w, best_inliers)
+
+    # R² over inliers with inverse-variance weights (boltzmann.py:712-714).
+    y_pred = slope * x + intercept
+    r_squared = _weighted_r_squared(y, y_pred, inlier_w, best_inliers)
+
+    valid = (n_valid >= float(RANSAC_MIN_SAMPLES)) & (best_n >= 2.0)
+    return {
+        "slope": slope,
+        "intercept": intercept,
+        "inlier_mask": best_inliers,
+        "n_inliers": best_n,
+        "threshold": thr,
+        "R_squared": r_squared,
+        "valid": valid,
+    }
+
+
+def huber_fit(
+    x: jnp.ndarray,
+    y: jnp.ndarray,
+    y_err: jnp.ndarray,
+    mask: jnp.ndarray,
+    *,
+    n_iters: int = HUBER_ITERS,
+    huber_epsilon: float = HUBER_EPSILON,
+) -> dict[str, jnp.ndarray]:
+    """Fixed-K Huber IRLS line fit (``_fit_huber``, boltzmann.py:734-842).
+
+    Iteratively reweighted least squares with Huber weights, as a fixed-K
+    ``lax.scan`` (spec §3). Faithful to the reference:
+
+    * **Initial fit** (boltzmann.py:765). Inverse-variance WLS with the base
+      weights.
+    * **IRLS step** (boltzmann.py:771-800). ``scale = MAD(|r|) · 1.4826`` (the
+      sort-based :func:`masked_median`); ``u = r / scale``; Huber weights
+      ``where(|u| ≤ ε, 1, ε/|u|)``; ``combined = base · huber``; refit.
+    * **Convergence break** (boltzmann.py:775, 796). ``scale < 1e-10`` (perfect
+      fit) and ``|Δslope| < 1e-8·|slope| + 1e-12`` are both *idempotent fixed
+      points*: once hit, the slope/weights stop changing, so the remaining
+      fixed-K iterations leave the result unchanged ⇒ identical to the CPU
+      early break.
+    * **Inliers** (boltzmann.py:813-820). ``u ≤ 3ε`` from the final-residual MAD
+      scale (``scale ≤ 0`` ⇒ all valid points are inliers).
+
+    Inputs are ``(N,)`` for one plot (``vmap`` for ``(B, N)``).
+
+    Returns
+    -------
+    dict
+        ``slope`` / ``intercept`` (scalars), ``inlier_mask`` ``(N,)`` bool,
+        ``R_squared`` (scalar), ``valid`` (scalar bool: ≥ 2 valid lines).
+    """
+    x = jnp.asarray(x, dtype=jnp.float64)
+    y = jnp.asarray(y, dtype=jnp.float64)
+    y_err = jnp.asarray(y_err, dtype=jnp.float64)
+    mask_b = jnp.asarray(mask, dtype=bool)
+
+    base_w = _inverse_variance_weights(y_err, mask_b)
+    n_valid = jnp.sum(mask_b.astype(jnp.float64))
+
+    # Initial inverse-variance WLS (boltzmann.py:765).
+    m0, c0 = _weighted_line_fit(x, y, base_w, mask_b)
+
+    def _body(carry, _):
+        slope, intercept, _converged = carry
+        resid = y - (slope * x + intercept)
+        scale = masked_median(jnp.abs(resid), mask_b) * MAD_SCALE
+        # scale < 1e-10 -> perfect fit; hold the current estimate (boltzmann.py:775).
+        perfect = scale < 1e-10
+        scale_safe = jnp.where(perfect, 1.0, scale)
+        u = resid / scale_safe
+        abs_u = jnp.abs(u)
+        huber_w = jnp.where(abs_u <= huber_epsilon, 1.0, huber_epsilon / jnp.maximum(abs_u, 1e-300))
+        combined = base_w * huber_w
+        new_slope, new_intercept = _weighted_line_fit(x, y, combined, mask_b)
+        # Convergence: |Δslope| < 1e-8·|slope| + 1e-12 (boltzmann.py:796).
+        delta = jnp.abs(new_slope - slope)
+        tol = 1e-8 * jnp.abs(slope) + 1e-12
+        step_converged = delta < tol
+        done = _converged | perfect | step_converged
+        # Once converged (or perfect), freeze the estimate (idempotent fixed point).
+        out_slope = jnp.where(done, slope, new_slope)
+        out_intercept = jnp.where(done, intercept, new_intercept)
+        return (out_slope, out_intercept, done), None
+
+    (slope, intercept, _), _ = jax.lax.scan(
+        _body, (m0, c0, jnp.asarray(False)), None, length=n_iters
+    )
+
+    # Final inlier classification (boltzmann.py:813-820).
+    resid = y - (slope * x + intercept)
+    scale = masked_median(jnp.abs(resid), mask_b) * MAD_SCALE
+    scale_pos = scale > 0.0
+    scale_safe = jnp.where(scale_pos, scale, 1.0)
+    u = jnp.abs(resid / scale_safe)
+    inliers = jnp.where(scale_pos, u <= 3.0 * huber_epsilon, jnp.ones_like(mask_b))
+    inlier_mask = inliers & mask_b
+
+    # R² over all valid points with the BASE weights (boltzmann.py:822-824).
+    y_pred = slope * x + intercept
+    r_squared = _weighted_r_squared(y, y_pred, base_w, mask_b)
+
+    return {
+        "slope": slope,
+        "intercept": intercept,
+        "inlier_mask": inlier_mask,
+        "R_squared": r_squared,
+        "valid": n_valid >= 2.0,
+    }
+
+
+def _inverse_variance_weights(y_err: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
+    """Masked port of ``_compute_weights`` (boltzmann.py:933-955).
+
+    ``1/sigma²`` over valid entries; ``sigma ≤ 0`` (or padded) ⇒ 0 weight. The
+    reference returns all-ones when *every* error is zero (the ``np.all(y_err==0)``
+    branch); we replicate that over the valid set so the inner WLS matches.
+    """
+    y_err = jnp.asarray(y_err, dtype=jnp.float64)
+    mask_b = jnp.asarray(mask, dtype=bool)
+    pos = mask_b & (y_err > 0.0)
+    safe_err = jnp.where(pos, y_err, jnp.inf)
+    w = 1.0 / safe_err**2  # 0 where not positive
+    # All-zero-error valid set -> unit weights (boltzmann.py:952-953).
+    all_zero = (~jnp.any(pos)) & jnp.any(mask_b)
+    w = jnp.where(all_zero, mask_b.astype(jnp.float64), w)
+    return w
+
+
+def _weighted_r_squared(
+    y: jnp.ndarray, y_pred: jnp.ndarray, w: jnp.ndarray, mask: jnp.ndarray
+) -> jnp.ndarray:
+    """Masked weighted R² (``_compute_r_squared``, boltzmann.py:957-961)."""
+    y = jnp.asarray(y, dtype=jnp.float64)
+    y_pred = jnp.asarray(y_pred, dtype=jnp.float64)
+    w = jnp.asarray(w, dtype=jnp.float64) * jnp.asarray(mask, dtype=jnp.float64)
+    sw = jnp.sum(w)
+    sw_safe = jnp.where(sw > 0.0, sw, 1.0)
+    y_bar = jnp.sum(w * y) / sw_safe
+    ss_res = jnp.sum(w * (y - y_pred) ** 2)
+    ss_tot = jnp.sum(w * (y - y_bar) ** 2)
+    return jnp.where(ss_tot > 0.0, 1.0 - ss_res / jnp.where(ss_tot > 0.0, ss_tot, 1.0), 0.0)
+
+
 # ---------------------------------------------------------------------------
 # §4 Closure (standard / matrix / oxide / ILR) + keystone gate
 # ---------------------------------------------------------------------------
@@ -702,5 +1022,6 @@ def boltzmann_fit(
     raise NotImplementedError(
         "boltzmann_fit host wiring lands at J7 integration; the J4 parity surface "
         "is the kernels (select_lines, sb_graph_fit, common_slope_fit, "
-        "sigma_clip_fit, closure_*, keystone_degenerate, masked_median)."
+        "sigma_clip_fit, ransac_fit, huber_fit, closure_*, keystone_degenerate, "
+        "masked_median)."
     )

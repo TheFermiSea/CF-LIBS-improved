@@ -577,6 +577,194 @@ def test_sigma_clip_vs_reference():
 
 
 # ---------------------------------------------------------------------------
+# §3 Huber IRLS fixed-K scan vs the real CPU fitter (deterministic → A/B)
+# ---------------------------------------------------------------------------
+
+
+def _huber_fixture(seed=5, n=14, n_outliers=2):
+    """Clean line + a few gross outliers; constant errors (Huber/RANSAC inputs)."""
+    rng = np.random.default_rng(seed)
+    x = np.sort(rng.uniform(1.0, 6.0, size=n))
+    y = 8.0 - 1.5 * x + rng.normal(0, 0.02, size=n)
+    out_idx = rng.choice(n, size=n_outliers, replace=False)
+    y[out_idx] += rng.choice([-1.0, 1.0], size=n_outliers) * rng.uniform(2.0, 4.0, size=n_outliers)
+    y_err = np.full(n, 0.05)
+    return x, y, y_err
+
+
+def test_huber_vs_reference():
+    """Fixed-K Huber slope/intercept rtol 1e-8 vs the CPU _fit_huber (A/B)."""
+    x, y, y_err = _huber_fixture(seed=5)
+    n = len(x)
+    fitter = BoltzmannPlotFitter(huber_epsilon=1.2, max_iterations=10)
+    ref = fitter._fit_huber(x, y, y_err, np.ones(n, dtype=bool))
+
+    out = jax.jit(fitmod.huber_fit)(
+        jnp.asarray(x),
+        jnp.asarray(y),
+        jnp.asarray(y_err),
+        jnp.asarray(np.ones(n, dtype=bool)),
+    )
+    assert float(out["slope"]) == pytest.approx(ref.slope, rel=1e-8, abs=1e-8)
+    assert float(out["intercept"]) == pytest.approx(ref.intercept, rel=1e-8, abs=1e-8)
+
+
+@pytest.mark.parametrize("seed", [1, 7, 13, 21, 42])
+def test_huber_vs_reference_randomized(seed):
+    """Huber A/B across several seeds (no residual on the convergence boundary)."""
+    x, y, y_err = _huber_fixture(seed=seed, n=16, n_outliers=3)
+    n = len(x)
+    fitter = BoltzmannPlotFitter(huber_epsilon=1.2, max_iterations=10)
+    ref = fitter._fit_huber(x, y, y_err, np.ones(n, dtype=bool))
+    out = fitmod.huber_fit(
+        jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(np.ones(n, dtype=bool))
+    )
+    assert float(out["slope"]) == pytest.approx(ref.slope, rel=1e-8, abs=1e-8)
+    assert float(out["intercept"]) == pytest.approx(ref.intercept, rel=1e-8, abs=1e-8)
+
+
+def test_huber_inlier_mask_vs_reference():
+    """Huber final inlier mask (u <= 3*eps) matches the reference final_mask."""
+    x, y, y_err = _huber_fixture(seed=9, n=18, n_outliers=4)
+    n = len(x)
+    fitter = BoltzmannPlotFitter(huber_epsilon=1.2, max_iterations=10)
+    ref = fitter._fit_huber(x, y, y_err, np.ones(n, dtype=bool))
+    out = fitmod.huber_fit(
+        jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(np.ones(n, dtype=bool))
+    )
+    ref_mask = ref.inlier_mask
+    np.testing.assert_array_equal(np.asarray(out["inlier_mask"]), ref_mask)
+
+
+def test_huber_padding_invariance():
+    """Huber result is invariant to extra all-masked padded slots."""
+    x, y, y_err = _huber_fixture(seed=3, n=12, n_outliers=2)
+    n = len(x)
+
+    def run(pad):
+        m = n + pad
+        xp = np.zeros(m)
+        xp[:n] = x
+        yp = np.zeros(m)
+        yp[:n] = y
+        ep = np.ones(m)
+        ep[:n] = y_err
+        mk = np.zeros(m, dtype=bool)
+        mk[:n] = True
+        return fitmod.huber_fit(jnp.asarray(xp), jnp.asarray(yp), jnp.asarray(ep), jnp.asarray(mk))
+
+    a = run(0)
+    b = run(8)
+    assert float(a["slope"]) == pytest.approx(float(b["slope"]), rel=1e-12, abs=1e-12)
+    assert float(a["intercept"]) == pytest.approx(float(b["intercept"]), rel=1e-12, abs=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# §3 RANSAC — fixed-seed self-regression + statistical parity (RNG ≠ NumPy)
+# ---------------------------------------------------------------------------
+
+
+def test_ransac_threshold_matches_reference():
+    """The deterministic MAD-based threshold derivation matches the reference.
+
+    The trial RNG cannot match NumPy, but the threshold (boltzmann.py:656-667)
+    is a pure function of the data — the kernel must reproduce it exactly so the
+    inlier predicate is on the SAME scale as the reference.
+    """
+    x, y, y_err = _huber_fixture(seed=11, n=16, n_outliers=3)
+    n = len(x)
+    fitter = BoltzmannPlotFitter(outlier_sigma=2.5, ransac_max_trials=100)
+
+    # Reproduce the reference threshold derivation (boltzmann.py:659-667).
+    weights = fitter._compute_weights(y_err)
+    m_init, c_init = np.polyfit(x, y, 1, w=np.sqrt(weights))
+    residuals_init = np.abs(y - (m_init * x + c_init))
+    mad = np.median(residuals_init)
+    ref_thr = fitter.outlier_sigma * mad * 1.4826
+    y_scale = max(float(np.max(np.abs(y))), 1.0)
+    ref_thr = max(ref_thr, np.finfo(float).eps * y_scale)
+
+    out = fitmod.ransac_fit(
+        jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(np.ones(n, dtype=bool))
+    )
+    assert float(out["threshold"]) == pytest.approx(ref_thr, rel=1e-12, abs=1e-15)
+
+
+def test_ransac_fixed_seed_self_regression():
+    """Same seed → bit-identical result (the documented RANSAC contract, §3)."""
+    x, y, y_err = _huber_fixture(seed=17, n=20, n_outliers=4)
+    n = len(x)
+    mask = np.ones(n, dtype=bool)
+    a = fitmod.ransac_fit(jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(mask))
+    b = fitmod.ransac_fit(jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(mask))
+    assert float(a["slope"]) == float(b["slope"])
+    assert float(a["intercept"]) == float(b["intercept"])
+    np.testing.assert_array_equal(np.asarray(a["inlier_mask"]), np.asarray(b["inlier_mask"]))
+    assert float(a["n_inliers"]) == float(b["n_inliers"])
+
+
+def test_ransac_statistical_parity_with_reference():
+    """Statistical parity: on clean-line+sparse-outlier data the kernel recovers
+    the true slope and its inlier count is >= the reference's (both robust).
+
+    The drawn samples differ from NumPy's PCG64 by construction, but with 100
+    trials over a 2-point sample on data dominated by inliers, BOTH estimators
+    must (a) find a consensus set covering the clean points and (b) refit to the
+    true slope. We assert slope agreement to a loose physical tolerance and an
+    inlier-count that is no worse than the reference.
+    """
+    true_slope = -1.5
+    for seed in (2, 5, 23, 31, 44):
+        x, y, y_err = _huber_fixture(seed=seed, n=24, n_outliers=4)
+        n = len(x)
+        fitter = BoltzmannPlotFitter(outlier_sigma=2.5, ransac_max_trials=100)
+        ref = fitter._fit_ransac(x, y, y_err, np.ones(n, dtype=bool))
+
+        out = fitmod.ransac_fit(
+            jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(np.ones(n, dtype=bool))
+        )
+        assert bool(out["valid"])
+        # Both robust fits recover the underlying slope to a physical tolerance.
+        assert float(out["slope"]) == pytest.approx(true_slope, abs=0.15)
+        assert ref.slope == pytest.approx(true_slope, abs=0.15)
+        # The kernel's consensus set is at least as large as the reference's.
+        ref_n_inliers = int(np.sum(ref.inlier_mask)) if ref.inlier_mask is not None else 0
+        assert float(out["n_inliers"]) >= ref_n_inliers - 1
+
+
+def test_ransac_recovers_inliers_drops_outliers():
+    """The winning consensus set contains the clean points and excludes the
+    deliberately injected gross outliers (statistical-parity sanity)."""
+    rng = np.random.default_rng(101)
+    n = 30
+    x = np.sort(rng.uniform(1.0, 6.0, size=n))
+    y = 9.0 - 1.2 * x + rng.normal(0, 0.01, size=n)
+    out_idx = np.array([5, 12, 22])
+    y[out_idx] += np.array([5.0, -4.5, 6.0])
+    y_err = np.full(n, 0.03)
+    out = fitmod.ransac_fit(
+        jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(np.ones(n, dtype=bool))
+    )
+    inlier = np.asarray(out["inlier_mask"])
+    # No gross outlier survives as an inlier.
+    assert not inlier[out_idx].any()
+    # The vast majority of clean points are kept.
+    clean = np.ones(n, dtype=bool)
+    clean[out_idx] = False
+    assert inlier[clean].sum() >= clean.sum() - 1
+
+
+def test_ransac_underdetermined_flag():
+    """< ransac_min_samples valid lines → validity flag False (empty-result guard)."""
+    x = np.array([1.0, 0.0, 0.0])
+    y = np.array([2.0, 0.0, 0.0])
+    y_err = np.array([0.1, 1.0, 1.0])
+    mask = np.array([True, False, False])  # only one valid line
+    out = fitmod.ransac_fit(jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(mask))
+    assert not bool(out["valid"])
+
+
+# ---------------------------------------------------------------------------
 # §4 Closure (standard / matrix / oxide / ILR) + keystone gate
 # ---------------------------------------------------------------------------
 
@@ -753,6 +941,76 @@ def test_vmap_batch16_closure():
     )
     assert out.shape == (B, E)
     np.testing.assert_allclose(np.asarray(out).sum(axis=1), np.ones(B), rtol=1e-12)
+
+
+def test_vmap_batch16_huber():
+    """vmap over B=16 Huber problems is jit/vmap-clean and finite."""
+    rng = np.random.default_rng(456)
+    B, N = 16, 14
+    x = np.sort(rng.uniform(1.0, 6.0, size=(B, N)), axis=1)
+    y = 8.0 - 1.5 * x + rng.normal(0, 0.02, size=(B, N))
+    y_err = np.full((B, N), 0.05)
+    mask = np.ones((B, N), dtype=bool)
+    batched = jax.jit(jax.vmap(fitmod.huber_fit))
+    out = batched(jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(mask))
+    assert out["slope"].shape == (B,)
+    assert np.all(np.isfinite(np.asarray(out["slope"])))
+    assert np.all(np.isfinite(np.asarray(out["intercept"])))
+
+
+def test_vmap_batch16_ransac():
+    """vmap over B=16 RANSAC problems is jit/vmap-clean and finite."""
+    rng = np.random.default_rng(789)
+    B, N = 16, 20
+    x = np.sort(rng.uniform(1.0, 6.0, size=(B, N)), axis=1)
+    y = 9.0 - 1.2 * x + rng.normal(0, 0.02, size=(B, N))
+    y_err = np.full((B, N), 0.05)
+    mask = np.ones((B, N), dtype=bool)
+    batched = jax.jit(jax.vmap(fitmod.ransac_fit))
+    out = batched(jnp.asarray(x), jnp.asarray(y), jnp.asarray(y_err), jnp.asarray(mask))
+    assert out["slope"].shape == (B,)
+    assert np.all(np.isfinite(np.asarray(out["slope"])))
+    assert np.all(np.isfinite(np.asarray(out["threshold"])))
+
+
+def test_grad_finite_huber():
+    """grad of the Huber slope w.r.t. y is finite (J7 differentiated region)."""
+    rng = np.random.default_rng(57)
+    n = 14
+    x = jnp.asarray(np.sort(rng.uniform(1.0, 6.0, size=n)))
+    y_err = jnp.asarray(np.full(n, 0.05))
+    mask = jnp.asarray(np.ones(n, dtype=bool))
+
+    def loss(y):
+        out = fitmod.huber_fit(x, y, y_err, mask)
+        return out["slope"] ** 2
+
+    y0 = jnp.asarray(8.0 - 1.5 * np.asarray(x) + rng.normal(0, 0.02, size=n))
+    g = jax.grad(loss)(y0)
+    assert np.all(np.isfinite(np.asarray(g)))
+
+
+def test_grad_finite_ransac():
+    """grad of the RANSAC refit slope w.r.t. y is finite (differentiated region).
+
+    The discrete trial selection is non-differentiable (argmax / inlier counts),
+    but the FINAL refit slope is a smooth WLS over the chosen mask, so its grad
+    w.r.t. y is well-defined and finite (the mask is treated as a stop-gradient
+    constant, which is the correct behaviour inside J7's differentiated region).
+    """
+    rng = np.random.default_rng(67)
+    n = 18
+    x = jnp.asarray(np.sort(rng.uniform(1.0, 6.0, size=n)))
+    y_err = jnp.asarray(np.full(n, 0.05))
+    mask = jnp.asarray(np.ones(n, dtype=bool))
+
+    def loss(y):
+        out = fitmod.ransac_fit(x, y, y_err, mask)
+        return out["slope"] ** 2
+
+    y0 = jnp.asarray(9.0 - 1.2 * np.asarray(x) + rng.normal(0, 0.02, size=n))
+    g = jax.grad(loss)(y0)
+    assert np.all(np.isfinite(np.asarray(g)))
 
 
 def test_grad_finite_sb_graph():

@@ -132,6 +132,11 @@ class CalibrationKernelResult:
         Quality-gate reason code (see ``REASON_*``).
     success : bool scalar
         Whether any monotonic model fit was found.
+    robust_mask : array, shape (C,)
+        Boolean robust (deduped) inlier mask of the best model over the
+        ``C = P_max * K_pair`` candidate slots. Exposed so the segmented driver
+        can recover the inlier-anchor wavelengths (``x[robust_mask]``) for the
+        ye6t coverage gate without a second pass.
     """
 
     corrected_wavelength: Any
@@ -144,6 +149,7 @@ class CalibrationKernelResult:
     quality_passed: Any
     reason_code: Any
     success: Any
+    robust_mask: Any = None
 
 
 def _ckr_flatten(r: CalibrationKernelResult):
@@ -158,6 +164,7 @@ def _ckr_flatten(r: CalibrationKernelResult):
         r.quality_passed,
         r.reason_code,
         r.success,
+        r.robust_mask,
     )
     return children, None
 
@@ -873,7 +880,829 @@ def calibrate_axis_kernel(
         quality_passed=quality_passed,
         reason_code=reason,
         success=any_valid,
+        robust_mask=best_robust,
     )
+
+
+# ==========================================================================
+# Segmented driver (parity of ``calibrate_wavelength_axis_segmented``, J2 §3).
+# ==========================================================================
+#
+# Fixed-shape port of the reference segmented orchestration. The reference flow
+# (``:1397``) is:
+#
+#   detect_ccd_seams (:829)  -> always-computed global fit (:1518)
+#     -> global ye6t coverage gate (:1537, re-entrant shift refit :1554)
+#     -> per-segment Python loop (:1212/:1080):
+#          sparse-segment model restriction (:1121)
+#          per-segment fit + trust gate (:976) + coverage gate (:1015) +
+#          global-disagreement gate (:1163)
+#          fallback 1 = global offset (:1192)
+#     -> neighbour fallback (:1287)  [only when global fit unavailable]
+#     -> seam-monotonicity restore cascade (:1302)
+#     -> revert-to-global gates (cumulative shift > 0.5 :1632; residual
+#        non-monotonicity :1641).
+#
+# This kernel replaces every host construct with fixed-shape JAX:
+#   * seams: rolling median of diff(wl) via sliding-window ``jnp.sort``
+#     (window 2*W+1), ``segment_id = cumsum(seam_mask)`` clipped to SEG_max;
+#   * per-segment calibration: ``lax.map`` of the global kernel over SEG_max
+#     padded segment slots (one peak/wl mask per slot);
+#   * sparse-segment restriction + coverage degrade-to-shift = a **model
+#     lattice** (the segment is calibrated twice — full model set and shift
+#     only — and the gate *selects* the precomputed result, no recursion);
+#   * trust / coverage / disagreement gates -> branchless masks;
+#   * neighbour fallback -> masked argmin |i-j| + segment-masked median offset;
+#   * seam-monotonicity restore -> ``lax.scan`` over SEG_max carrying a
+#     cumulative shift (exact port of :1302);
+#   * revert gates -> branchless select of segmented vs global axis.
+
+#: Max segments in the jit graph (ADR-0004 §4; observed <=11 on csa_planetary).
+SEG_MAX_DEFAULT = 16
+#: Seam-detector rolling-median half-window (reference default ``window=51``).
+SEAM_WINDOW_DEFAULT = 51
+#: Dense-anchor-hull fraction (reference ``_COVERAGE_DENSE_HULL_ALPHA``).
+COVERAGE_DENSE_HULL_ALPHA = 0.8
+
+#: Per-segment status codes (host maps to the reference status strings).
+SEG_STATUS_GLOBAL = 0
+SEG_STATUS_FIT = 1
+SEG_STATUS_NEIGHBOR = 2
+SEG_STATUS_STRINGS: dict[int, str] = {
+    SEG_STATUS_GLOBAL: "global",
+    SEG_STATUS_FIT: "fit",
+    SEG_STATUS_NEIGHBOR: "neighbor",
+}
+
+#: Segmented revert reason codes (host maps to reference ``segmented_reverted``).
+SEG_REVERT_NONE = 0
+SEG_REVERT_LARGE_SEAM_SHIFT = 1
+SEG_REVERT_RESIDUAL_NON_MONOTONIC = 2
+
+
+@dataclass
+class SegmentedKernelResult:
+    """Device-side result of the segmented wavelength calibrator (pytree).
+
+    Mirrors the reference :func:`calibrate_wavelength_axis_segmented` outputs the
+    host wrapper needs to reconstitute a ``WavelengthCalibrationResult`` with
+    ``model="segmented"`` (or the inherited global model on the seam-free /
+    reverted paths).
+
+    Attributes
+    ----------
+    corrected_wavelength : array, shape (W_max,)
+        Piecewise-corrected axis (or the global axis on the seam-free / reverted
+        paths), identity-padded beyond ``wl_mask``.
+    n_segments : int scalar
+        Number of live segments (``cumsum(seam_mask)`` max + 1, clipped to
+        SEG_max).
+    seam_count : int scalar
+        Number of detected seams.
+    segment_status : array, shape (SEG_max,)
+        Per-segment status code (``SEG_STATUS_*``); padding slots = -1.
+    segment_model_id : array, shape (SEG_max,)
+        Per-segment selected model class (after the coverage gate); -1 padding.
+    total_inliers : int scalar
+        Sum of accepted-fit segment inlier counts.
+    quality_passed : bool scalar
+        Aggregate gate verdict (any segment fit -> True; else inherits global).
+    reverted_code : int scalar
+        Revert reason (``SEG_REVERT_*``); 0 when the segmented axis was kept.
+    global_result : CalibrationKernelResult
+        The (coverage-gated) global single-axis fit — the seam-free answer and
+        the per-segment fallback source.
+    """
+
+    corrected_wavelength: Any
+    n_segments: Any
+    seam_count: Any
+    segment_status: Any
+    segment_model_id: Any
+    total_inliers: Any
+    quality_passed: Any
+    reverted_code: Any
+    global_result: Any
+
+
+def _skr_flatten(r: SegmentedKernelResult):
+    children = (
+        r.corrected_wavelength,
+        r.n_segments,
+        r.seam_count,
+        r.segment_status,
+        r.segment_model_id,
+        r.total_inliers,
+        r.quality_passed,
+        r.reverted_code,
+        r.global_result,
+    )
+    return children, None
+
+
+def _skr_unflatten(_aux: Any, children: tuple) -> SegmentedKernelResult:
+    return SegmentedKernelResult(*children)
+
+
+jax.tree_util.register_pytree_node(SegmentedKernelResult, _skr_flatten, _skr_unflatten)
+
+
+# --------------------------------------------------------------------------
+# CCD seam detection (parity of detect_ccd_seams :829, rolling-median-of-diffs).
+# --------------------------------------------------------------------------
+
+
+def detect_ccd_seams_kernel(
+    wavelength: jnp.ndarray,
+    wl_mask: jnp.ndarray,
+    *,
+    ratio_threshold: float = 3.0,
+    window: int = SEAM_WINDOW_DEFAULT,
+    min_local_window: int = 5,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Fixed-shape seam mask + segment ids (parity of :func:`detect_ccd_seams`).
+
+    Reference (``:874-888``): ``dl = diff(wl)``; per gap ``i`` a *local* rolling
+    median over ``dl[i-w : i+w+1]`` with ``w = max(window, min_local_window)``;
+    a gap is a seam when ``dl[i] / max(local_med, 1e-12) > ratio_threshold``.
+
+    The Python ``np.median`` rolling loop (``:881-884``) becomes a single
+    sliding-window ``jnp.sort`` over a ``(2w+1)``-wide gathered window per gap
+    (J2 spec §3). Padding gaps (either endpoint masked) are excluded from both
+    the median windows and the seam test, exactly as the reference operates on
+    the live axis only.
+
+    Returns ``(seam_mask, segment_id)`` over the gap axis / sample axis:
+
+    * ``seam_mask`` shape ``(W_max - 1,)`` — True at gap ``i`` between live
+      samples ``i`` and ``i+1``;
+    * ``segment_id`` shape ``(W_max,)`` — ``cumsum(seam_mask)`` over live
+      samples, so sample 0 is segment 0 and each seam opens the next segment;
+      padding samples carry the last live segment id.
+    """
+    dl = jnp.diff(wavelength)  # (W_max-1,)
+    gap_valid = wl_mask[1:] & wl_mask[:-1]  # both endpoints live
+    n_gaps = dl.shape[0]
+    w = int(max(int(window), int(min_local_window)))
+
+    # Sliding window of [-w, ..., +w] gathered gaps, masked to live gaps only.
+    offs = jnp.arange(-w, w + 1)  # (2w+1,)
+    gap_idx = jnp.arange(n_gaps)
+    win_idx = gap_idx[:, None] + offs[None, :]  # (n_gaps, 2w+1)
+    in_range = (win_idx >= 0) & (win_idx < n_gaps)
+    win_idx_c = jnp.clip(win_idx, 0, n_gaps - 1)
+    win_vals = dl[win_idx_c]
+    win_live = in_range & gap_valid[win_idx_c]
+    # Masked median over each window: live values first (ascending), padding
+    # pushed to +inf, then pick the median index of the live count.
+    big = jnp.where(win_live, win_vals, jnp.inf)
+    srt = jnp.sort(big, axis=1)  # (n_gaps, 2w+1)
+    cnt = jnp.sum(win_live, axis=1)  # (n_gaps,)
+    half = cnt // 2
+    last = srt.shape[1] - 1
+    lo = jnp.take_along_axis(srt, jnp.clip(half - 1, 0, last)[:, None], axis=1)[:, 0]
+    hi = jnp.take_along_axis(srt, jnp.clip(half, 0, last)[:, None], axis=1)[:, 0]
+    even = (cnt % 2) == 0
+    local_med = jnp.where(even, 0.5 * (lo + hi), hi)
+    local_med = jnp.where(cnt > 0, local_med, jnp.inf)
+
+    local_med = jnp.maximum(local_med, 1e-12)
+    ratio = dl / local_med
+    seam_mask = (ratio > float(ratio_threshold)) & gap_valid
+
+    # The reference returns no seams on too-short axes (:871). Guard it here so
+    # short live axes degrade to a single segment.
+    n_live = jnp.sum(wl_mask)
+    too_short = n_live < max(3, 2 * int(min_local_window))
+    seam_mask = jnp.where(too_short, False, seam_mask)
+
+    # segment_id over samples: sample 0 -> 0; a seam at gap i opens segment for
+    # sample i+1 onward. cumsum of seam_mask aligned to the *right* sample.
+    seg_step = jnp.concatenate([jnp.zeros(1, dtype=jnp.int32), seam_mask.astype(jnp.int32)])
+    segment_id = jnp.cumsum(seg_step)
+    # Padding samples inherit the last live id (they never enter any segment).
+    return seam_mask, segment_id.astype(jnp.int32)
+
+
+# --------------------------------------------------------------------------
+# Dense-anchor-hull coverage gate (parity of :916-1012, JAX/fixed-shape).
+# --------------------------------------------------------------------------
+
+
+def _dense_anchor_hull(anchor_wl: jnp.ndarray, anchor_mask: jnp.ndarray, alpha: float):
+    """Shortest interval holding ``ceil(alpha*n)`` sorted live anchors.
+
+    Parity of :func:`_dense_anchor_hull` (``:916``): the highest-density anchor
+    interval, robust against stray circularly-matched anchors that stretch a
+    plain min/max hull (the ye6t hazard). Fixed-shape: anchors are padded; live
+    anchors are sorted to the front (padding -> +inf), and we scan every
+    possible window of width ``k`` over the C slots. ``k`` is a traced int used
+    only in gather indices (never a shape), so this is jittable as-is (J2 §3).
+    """
+    c = anchor_wl.shape[0]
+    n = jnp.sum(anchor_mask)
+    srt = jnp.sort(jnp.where(anchor_mask, anchor_wl, jnp.inf))  # live first, asc
+    k = jnp.maximum(jnp.ceil(alpha * n.astype(jnp.float64)).astype(jnp.int32), 1)
+    k = jnp.minimum(k, jnp.maximum(n, 1))
+
+    # widths[i] = srt[i + k - 1] - srt[i] for i in [0, n - k]; +inf elsewhere.
+    idx = jnp.arange(c)
+    right = jnp.clip(idx + k - 1, 0, c - 1)
+    width = srt[right] - srt
+    valid_start = (idx + k - 1) < n  # window fully inside the live anchors
+    width = jnp.where(valid_start, width, jnp.inf)
+    i_star = jnp.argmin(width)
+    hull_lo = srt[i_star]
+    hull_hi = srt[jnp.clip(i_star + k - 1, 0, c - 1)]
+    has = n > 0
+    hull_lo = jnp.where(has, hull_lo, jnp.nan)
+    hull_hi = jnp.where(has, hull_hi, jnp.nan)
+    return hull_lo, hull_hi
+
+
+def _eval_model_traced(xv: jnp.ndarray, coef: jnp.ndarray, model_id: jnp.ndarray) -> jnp.ndarray:
+    """Evaluate the calibration model with a *traced* model id (``lax.switch``).
+
+    The coefficient convention is model-specific (affine ``(a, b, 0)`` is NOT
+    the quadratic ``(c2, c1, c0)`` order), so the coverage gate — which sees a
+    traced ``model_id`` — must dispatch the right :func:`_eval_model` branch.
+    """
+    return lax.switch(
+        jnp.clip(model_id, 0, 2),
+        [
+            lambda: _eval_model(xv, coef, MODEL_SHIFT),
+            lambda: _eval_model(xv, coef, MODEL_AFFINE),
+            lambda: _eval_model(xv, coef, MODEL_QUADRATIC),
+        ],
+    )
+
+
+def _slope_correction(coef: jnp.ndarray, xv: jnp.ndarray, model_id: jnp.ndarray) -> jnp.ndarray:
+    """Correction ``corr(x) = model(x) - x`` for a slope model (affine/quad)."""
+    return _eval_model_traced(xv, coef, model_id) - xv
+
+
+def _coverage_extrapolation_nm(
+    seg_lo: jnp.ndarray,
+    seg_hi: jnp.ndarray,
+    coef: jnp.ndarray,
+    model_id: jnp.ndarray,
+    is_slope: jnp.ndarray,
+    hull_lo: jnp.ndarray,
+    hull_hi: jnp.ndarray,
+) -> jnp.ndarray:
+    """Worst-case correction drift from the anchor hull to a segment edge.
+
+    Parity of :func:`_coverage_extrapolation_nm` (``:938``): a slope model's
+    correction keeps changing past its anchors, so we return
+    ``max(|corr(edge) - corr(nearest clamped hull edge)|)`` over both ends.
+    A ``shift`` model (constant correction) returns 0; a non-finite hull
+    (no anchors) returns +inf.
+    """
+    finite = jnp.isfinite(hull_lo) & jnp.isfinite(hull_hi)
+
+    drift = jnp.array(0.0, dtype=seg_lo.dtype)
+    for edge, hull in (
+        (seg_lo, jnp.minimum(jnp.maximum(hull_lo, seg_lo), seg_hi)),
+        (seg_hi, jnp.minimum(jnp.maximum(hull_hi, seg_lo), seg_hi)),
+    ):
+        drift = jnp.maximum(
+            drift,
+            jnp.abs(
+                _slope_correction(coef, edge, model_id) - _slope_correction(coef, hull, model_id)
+            ),
+        )
+    drift = jnp.where(finite, drift, jnp.inf)
+    # A pure shift model has constant correction => 0 drift (reference :955).
+    return jnp.where(is_slope, drift, 0.0)
+
+
+def _segment_anchor_coverage(
+    anchor_wl: jnp.ndarray,
+    robust_mask: jnp.ndarray,
+    coef: jnp.ndarray,
+    model_id: jnp.ndarray,
+    is_slope: jnp.ndarray,
+    seg_lo: jnp.ndarray,
+    seg_hi: jnp.ndarray,
+    local_px: jnp.ndarray,
+    alpha: float,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """``(span_fraction, extrapolation_nm, extrapolation_px)`` (parity :990)."""
+    hull_lo, hull_hi = _dense_anchor_hull(anchor_wl, robust_mask, alpha)
+    seg_span = jnp.maximum(seg_hi - seg_lo, 1e-9)
+    finite = jnp.isfinite(hull_lo) & jnp.isfinite(hull_hi)
+    span_fraction = jnp.where(finite, (hull_hi - hull_lo) / seg_span, 0.0)
+    extrap_nm = _coverage_extrapolation_nm(
+        seg_lo, seg_hi, coef, model_id, is_slope, hull_lo, hull_hi
+    )
+    extrap_px = extrap_nm / jnp.maximum(local_px, 1e-9)
+    return span_fraction, extrap_nm, extrap_px
+
+
+# --------------------------------------------------------------------------
+# Per-segment calibration (model lattice: full model set + shift-only).
+# --------------------------------------------------------------------------
+
+
+def _segment_masks(
+    segment_id: jnp.ndarray,
+    wl_mask: jnp.ndarray,
+    peak_wl: jnp.ndarray,
+    peak_mask: jnp.ndarray,
+    wavelength: jnp.ndarray,
+    s: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Per-segment wl-mask, peak-mask, edges, n_pts, local pixel for slot ``s``.
+
+    A wl sample belongs to segment ``s`` iff it is live AND ``segment_id == s``.
+    A peak belongs to segment ``s`` iff it is live and its wavelength falls in
+    the segment's ``[lo, hi]`` span (matching the reference ``wavelength[a:b]``
+    slice that carries the peaks detected inside that channel).
+    """
+    seg_wl_mask = wl_mask & (segment_id == s)
+    n_pts = jnp.sum(seg_wl_mask)
+    seg_lo = jnp.min(jnp.where(seg_wl_mask, wavelength, jnp.inf))
+    seg_hi = jnp.max(jnp.where(seg_wl_mask, wavelength, -jnp.inf))
+    seg_lo = jnp.where(n_pts > 0, seg_lo, 0.0)
+    seg_hi = jnp.where(n_pts > 0, seg_hi, 0.0)
+    # Local pixel = median live gap of this segment.
+    gaps = jnp.diff(wavelength)
+    gap_in = seg_wl_mask[1:] & seg_wl_mask[:-1]
+    local_px = _masked_median(jnp.abs(gaps), gap_in)
+    local_px = jnp.where(jnp.isfinite(local_px), local_px, 0.0)
+    # A peak belongs to the segment iff live and inside [lo, hi].
+    seg_peak_mask = peak_mask & (peak_wl >= seg_lo) & (peak_wl <= seg_hi) & (n_pts > 0)
+    return seg_wl_mask, seg_peak_mask, seg_lo, seg_hi, local_px, n_pts
+
+
+def calibrate_segmented_kernel(
+    peak_wl: jnp.ndarray,
+    peak_amp: jnp.ndarray,
+    peak_mask: jnp.ndarray,
+    line_wl: jnp.ndarray,
+    line_strength: jnp.ndarray,
+    line_mask: jnp.ndarray,
+    wavelength: jnp.ndarray,
+    wl_mask: jnp.ndarray,
+    *,
+    inlier_tolerance_nm: float = 0.08,
+    max_pair_window_nm: float = 2.0,
+    seam_ratio_threshold: float = 3.0,
+    seam_window: int = SEAM_WINDOW_DEFAULT,
+    min_segment_points: int = 16,
+    segment_min_inliers: float = 10.0,
+    segment_max_rmse_nm: float = 0.06,
+    segment_max_global_disagreement_nm: float = 0.5,
+    sparse_segment_points: int = 400,
+    affine_coverage_gate: bool = True,
+    coverage_min_anchor_span_fraction: float = 0.6,
+    coverage_max_extrapolation_px: float = 1.0,
+    candidate_models: tuple[int, ...] = (MODEL_SHIFT, MODEL_AFFINE),
+    sparse_segment_models: tuple[int, ...] = (MODEL_SHIFT,),
+    k_pair: int = K_PAIR_DEFAULT,
+    h_affine: int = H_AFFINE_DEFAULT,
+    h_block: int = H_BLOCK_DEFAULT,
+    seg_max: int = SEG_MAX_DEFAULT,
+    seed: int = 42,
+) -> SegmentedKernelResult:
+    """Fixed-shape segmented calibrator (parity of ``calibrate_wavelength_axis_segmented``).
+
+    All array inputs are padded; ``*_mask`` arrays mark valid entries.
+    ``line_wl`` MUST be sorted ascending. Static (graph-shaping) arguments:
+    ``candidate_models`` / ``sparse_segment_models`` / ``k_pair`` / ``h_affine``
+    / ``h_block`` / ``seg_max`` / ``seam_window``.
+
+    The flow mirrors the reference §3 driver: seams -> always-computed global fit
+    (with the global ye6t coverage gate as a model-lattice select) -> per-segment
+    vmap of the global kernel (sparse restriction + coverage gate + trust gate +
+    global-disagreement gate) -> global-offset fallback -> seam-monotonicity
+    restore -> revert-to-global gates.
+    """
+    alpha = COVERAGE_DENSE_HULL_ALPHA
+
+    # ------------------------------------------------------------------ seams
+    seam_mask, segment_id = detect_ccd_seams_kernel(
+        wavelength,
+        wl_mask,
+        ratio_threshold=seam_ratio_threshold,
+        window=seam_window,
+    )
+    seam_count = jnp.sum(seam_mask)
+    # Clip segment ids to seg_max-1 so an over-segmented axis never indexes out
+    # of the padded segment axis (reference clips SEG_max=16; observed <=11).
+    segment_id = jnp.minimum(segment_id, seg_max - 1)
+    n_segments = jnp.minimum(jnp.max(jnp.where(wl_mask, segment_id, 0)) + 1, seg_max)
+
+    # ----------------------------------------------------------- global fit
+    # Always-computed global single-axis fit. Apply the global ye6t coverage
+    # gate as a model lattice: compute the full-model fit AND a shift-only fit,
+    # then SELECT shift when the slope model's anchors do not cover the axis —
+    # same answer as the reference re-entrant shift refit (:1554), no recursion.
+    global_full = calibrate_axis_kernel(
+        peak_wl,
+        peak_amp,
+        peak_mask,
+        line_wl,
+        line_strength,
+        line_mask,
+        wavelength,
+        wl_mask,
+        inlier_tolerance_nm=inlier_tolerance_nm,
+        max_pair_window_nm=max_pair_window_nm,
+        apply_quality_gate=True,
+        candidate_models=candidate_models,
+        k_pair=k_pair,
+        h_affine=h_affine,
+        h_block=h_block,
+        seed=seed,
+    )
+    global_shift = calibrate_axis_kernel(
+        peak_wl,
+        peak_amp,
+        peak_mask,
+        line_wl,
+        line_strength,
+        line_mask,
+        wavelength,
+        wl_mask,
+        inlier_tolerance_nm=inlier_tolerance_nm,
+        max_pair_window_nm=max_pair_window_nm,
+        apply_quality_gate=True,
+        candidate_models=(MODEL_SHIFT,),
+        k_pair=k_pair,
+        h_affine=h_affine,
+        h_block=h_block,
+        seed=seed,
+    )
+
+    g_x, _gy, g_pid, _gl, _gw, g_cmask = build_banded_pairs(
+        peak_wl,
+        peak_amp,
+        peak_mask,
+        line_wl,
+        line_strength,
+        line_mask,
+        max_pair_window_nm,
+        k_pair,
+    )
+    g_pid = g_pid.astype(jnp.int32)
+    g_anchor_wl = g_x  # x = peak_wl[peak_id] broadcast
+    full_lo = jnp.min(jnp.where(wl_mask, wavelength, jnp.inf))
+    full_hi = jnp.max(jnp.where(wl_mask, wavelength, -jnp.inf))
+    g_gaps = jnp.diff(wavelength)
+    g_gap_in = wl_mask[1:] & wl_mask[:-1]
+    g_local_px = _masked_median(jnp.abs(g_gaps), g_gap_in)
+    g_local_px = jnp.where(jnp.isfinite(g_local_px), g_local_px, 0.0)
+
+    # Coverage fails iff the global fit is a slope model AND under-covers.
+    g_is_slope = global_full.model_id != MODEL_SHIFT
+    g_span_frac, _g_extrap_nm, g_extrap_px = _segment_anchor_coverage(
+        g_anchor_wl,
+        global_full.robust_mask & g_cmask,
+        global_full.coefficients,
+        global_full.model_id,
+        g_is_slope,
+        full_lo,
+        full_hi,
+        g_local_px,
+        alpha,
+    )
+    g_cov_fail = (
+        affine_coverage_gate
+        & global_full.success
+        & g_is_slope
+        & (
+            (g_span_frac < coverage_min_anchor_span_fraction)
+            | (g_extrap_px > coverage_max_extrapolation_px)
+        )
+    )
+    global_result = _select_kernel_result(g_cov_fail, global_shift, global_full)
+
+    # global offset over the axis (per-sample correction the fallback uses).
+    global_corrected = jnp.where(
+        global_result.success, global_result.corrected_wavelength, wavelength
+    )
+    global_offset = global_corrected - wavelength
+
+    # --------------------------------------------------- per-segment lattice
+    seg_ids = jnp.arange(seg_max)
+
+    def run_one_segment(s):
+        seg_wl_mask, seg_peak_mask, seg_lo, seg_hi, local_px, n_pts = _segment_masks(
+            segment_id, wl_mask, peak_wl, peak_mask, wavelength, s
+        )
+        # Per-segment seed mirrors the reference ``random_seed + index`` (:1132).
+        seg_seed = seed + s
+        # Full-model fit (well-populated segment).
+        full = calibrate_axis_kernel(
+            peak_wl,
+            peak_amp,
+            seg_peak_mask,
+            line_wl,
+            line_strength,
+            line_mask,
+            wavelength,
+            seg_wl_mask,
+            inlier_tolerance_nm=inlier_tolerance_nm,
+            max_pair_window_nm=max_pair_window_nm,
+            apply_quality_gate=False,
+            candidate_models=candidate_models,
+            k_pair=k_pair,
+            h_affine=h_affine,
+            h_block=h_block,
+            seed=seg_seed,
+        )
+        # Shift-only fit (sparse segment AND coverage degrade target).
+        shift = calibrate_axis_kernel(
+            peak_wl,
+            peak_amp,
+            seg_peak_mask,
+            line_wl,
+            line_strength,
+            line_mask,
+            wavelength,
+            seg_wl_mask,
+            inlier_tolerance_nm=inlier_tolerance_nm,
+            max_pair_window_nm=max_pair_window_nm,
+            apply_quality_gate=False,
+            candidate_models=sparse_segment_models,
+            k_pair=k_pair,
+            h_affine=h_affine,
+            h_block=h_block,
+            seed=seg_seed,
+        )
+        return _resolve_one_segment(
+            s,
+            full,
+            shift,
+            seg_wl_mask,
+            seg_peak_mask,
+            seg_lo,
+            seg_hi,
+            local_px,
+            n_pts,
+            peak_wl,
+            peak_amp,
+            line_wl,
+            line_strength,
+            line_mask,
+            wavelength,
+            global_offset,
+            max_pair_window_nm,
+            k_pair,
+            min_segment_points,
+            sparse_segment_points,
+            segment_min_inliers,
+            segment_max_rmse_nm,
+            segment_max_global_disagreement_nm,
+            affine_coverage_gate,
+            coverage_min_anchor_span_fraction,
+            coverage_max_extrapolation_px,
+            alpha,
+        )
+
+    # ``lax.map`` keeps only one segment's residual matrix live at a time.
+    seg_corr, seg_status, seg_model, seg_inliers = jax.lax.map(run_one_segment, seg_ids)
+
+    # ------------------------------------------------- stitch corrected axis
+    # Each sample takes ITS segment's corrected value: gather row ``segment_id``
+    # column ``i`` from ``seg_corr`` (shape (seg_max, W_max)). Where a segment
+    # fell back to global, the per-segment correction already IS
+    # ``wavelength + global_offset`` (see _resolve_one_segment), so this is exact.
+    samp_idx = jnp.arange(seg_corr.shape[1])
+    samp_corr = seg_corr[segment_id, samp_idx]  # (W_max,)
+    corrected = jnp.where(wl_mask, samp_corr, wavelength)
+
+    # --------------------------------------- seam-monotonicity restore (:1302)
+    corrected, cumulative_shift, _n_clamped = _restore_seam_monotonicity(
+        corrected, segment_id, wl_mask, seg_max
+    )
+
+    # ------------------------------------------------------- revert-to-global
+    # Residual non-monotonicity on the live axis (should be impossible, :1641).
+    d = jnp.diff(corrected)
+    pair_live = wl_mask[1:] & wl_mask[:-1]
+    residual_non_mono = jnp.any(jnp.where(pair_live, d <= 0, False))
+    revert_large = (seam_count > 0) & (cumulative_shift > 0.5)
+    revert_resid = (seam_count > 0) & residual_non_mono & (~revert_large)
+    reverted_code = jnp.where(
+        revert_large,
+        SEG_REVERT_LARGE_SEAM_SHIFT,
+        jnp.where(revert_resid, SEG_REVERT_RESIDUAL_NON_MONOTONIC, SEG_REVERT_NONE),
+    )
+    revert = revert_large | revert_resid
+
+    # Seam-free axis: degrade to the global fit (:1572). Reverted axis: global.
+    use_global_axis = (seam_count == 0) | revert
+    final_corrected = jnp.where(use_global_axis, global_corrected, corrected)
+
+    # ------------------------------------------------------------- aggregate
+    seg_live = seg_ids < n_segments
+    n_fit = jnp.sum((seg_status == SEG_STATUS_FIT) & seg_live)
+    total_inliers = jnp.sum(jnp.where(seg_live, seg_inliers, 0))
+    # Quality: any segment fit -> passed; else inherit the global verdict (:1360).
+    seg_quality = jnp.where(n_fit > 0, True, global_result.quality_passed)
+    quality_passed = jnp.where(use_global_axis, global_result.quality_passed, seg_quality)
+
+    seg_status_out = jnp.where(seg_live, seg_status, -1)
+    seg_model_out = jnp.where(seg_live & (seg_status == SEG_STATUS_FIT), seg_model, -1)
+
+    return SegmentedKernelResult(
+        corrected_wavelength=final_corrected,
+        n_segments=n_segments,
+        seam_count=seam_count,
+        segment_status=seg_status_out,
+        segment_model_id=seg_model_out,
+        total_inliers=total_inliers,
+        quality_passed=quality_passed,
+        reverted_code=jnp.where(use_global_axis & (seam_count > 0), reverted_code, SEG_REVERT_NONE),
+        global_result=global_result,
+    )
+
+
+def _select_kernel_result(
+    pick_b: jnp.ndarray, a: CalibrationKernelResult, b: CalibrationKernelResult
+) -> CalibrationKernelResult:
+    """Branchless select between two :class:`CalibrationKernelResult` pytrees.
+
+    ``pick_b`` True -> take ``a`` (the degrade target); False -> take ``b``.
+    Implemented as a leaf-wise ``jnp.where`` so it stays jit/vmap clean (a model
+    lattice select, not a Python branch).
+    """
+
+    def sel(la, lb):
+        return jnp.where(pick_b, la, lb)
+
+    return jax.tree_util.tree_map(sel, a, b)
+
+
+def _resolve_one_segment(
+    s,
+    full: CalibrationKernelResult,
+    shift: CalibrationKernelResult,
+    seg_wl_mask,
+    seg_peak_mask,
+    seg_lo,
+    seg_hi,
+    local_px,
+    n_pts,
+    peak_wl,
+    peak_amp,
+    line_wl,
+    line_strength,
+    line_mask,
+    wavelength,
+    global_offset,
+    max_pair_window_nm,
+    k_pair,
+    min_segment_points,
+    sparse_segment_points,
+    segment_min_inliers,
+    segment_max_rmse_nm,
+    segment_max_global_disagreement_nm,
+    affine_coverage_gate,
+    coverage_min_anchor_span_fraction,
+    coverage_max_extrapolation_px,
+    alpha,
+):
+    """Apply the per-segment gate lattice (parity of :func:`_fit_one_segment`).
+
+    Returns ``(seg_corrected_axis, status_code, model_id, accepted_inliers)``.
+    The flow: sparse restriction -> trust gate -> coverage gate (model-lattice
+    select to shift) -> re-check trust -> global-disagreement gate -> accept or
+    fall back to the global offset over this segment.
+    """
+    # Sparse-segment restriction (:1121): few points -> shift-only model set.
+    is_sparse = n_pts < sparse_segment_points
+    base = _select_kernel_result(is_sparse, shift, full)
+
+    # Trust gate (:976): success & model != none & inliers & rmse.
+    def trusted_of(res):
+        return (
+            res.success
+            & (res.n_inliers >= segment_min_inliers)
+            & (res.rmse_nm <= segment_max_rmse_nm)
+        )
+
+    trusted0 = trusted_of(base)
+
+    # Coverage gate (:1015): only for trusted slope models. Degrade to shift.
+    # Re-derive the candidate geometry for the segment so the robust mask aligns
+    # with the candidate slots (x = peak_wl[peak_id] broadcast = the anchors).
+    x_s, _y_s, _pid_s, _lid_s, _w_s, cmask_s = build_banded_pairs(
+        peak_wl,
+        peak_amp,
+        seg_peak_mask,
+        line_wl,
+        line_strength,
+        line_mask,
+        max_pair_window_nm,
+        k_pair,
+    )
+    base_is_slope = base.model_id != MODEL_SHIFT
+    span_frac, _extrap_nm, extrap_px = _segment_anchor_coverage(
+        x_s,
+        base.robust_mask & cmask_s,
+        base.coefficients,
+        base.model_id,
+        base_is_slope,
+        seg_lo,
+        seg_hi,
+        local_px,
+        alpha,
+    )
+    cov_fail = (
+        affine_coverage_gate
+        & trusted0
+        & base_is_slope
+        & (
+            (span_frac < coverage_min_anchor_span_fraction)
+            | (extrap_px > coverage_max_extrapolation_px)
+        )
+    )
+    seg_res = _select_kernel_result(cov_fail, shift, base)
+    trusted = trusted_of(seg_res)
+
+    # Global-disagreement gate (:1163): a trusted segment fit whose median
+    # correction departs from the global correction by more than the bound is a
+    # catalog alias -> demote to the global fallback.
+    seg_offset_med = _masked_median(seg_res.corrected_wavelength - wavelength, seg_wl_mask)
+    global_offset_med = _masked_median(global_offset, seg_wl_mask)
+    disagreement = jnp.abs(seg_offset_med - global_offset_med)
+    disagree_fail = trusted & (disagreement > segment_max_global_disagreement_nm)
+    trusted = trusted & (~disagree_fail)
+
+    # Reference only fits at all when n_pts >= min_segment_points (:1120).
+    eligible = n_pts >= min_segment_points
+    accept_fit = trusted & eligible
+
+    # Accepted -> the segment's own corrected axis (over its samples); else the
+    # global single-axis correction over this segment (fallback 1, :1192).
+    fit_offset = seg_res.corrected_wavelength - wavelength
+    seg_offset = jnp.where(accept_fit, fit_offset, global_offset)
+    seg_corrected = wavelength + seg_offset
+
+    status = jnp.where(accept_fit, SEG_STATUS_FIT, SEG_STATUS_GLOBAL)
+    model_id = jnp.where(accept_fit, seg_res.model_id, -1)
+    accepted_inliers = jnp.where(accept_fit, seg_res.n_inliers, 0)
+    return seg_corrected, status, model_id.astype(jnp.int32), accepted_inliers.astype(jnp.int32)
+
+
+def _restore_seam_monotonicity(
+    corrected: jnp.ndarray,
+    segment_id: jnp.ndarray,
+    wl_mask: jnp.ndarray,
+    seg_max: int,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Shift downstream segments up to remove seam overlaps (parity :1302).
+
+    The reference walks seam boundaries ``k=1..n_seg-1``; at each, if the last
+    corrected sample of segment ``k-1`` is >= the first of segment ``k`` it adds
+    ``deficit + 1e-6`` to all of segment ``k`` onward, cascading the shift. We
+    port it as a ``lax.scan`` over the ``seg_max`` segments carrying the running
+    cumulative shift; per-segment additive shifts are then scattered to samples.
+
+    Returns ``(corrected, cumulative_shift, n_clamped)``.
+    """
+    # Per-segment first/last live corrected sample BEFORE any restore shift.
+    seg_ids = jnp.arange(seg_max)
+
+    def seg_edges(s):
+        in_s = wl_mask & (segment_id == s)
+        first = jnp.min(jnp.where(in_s, corrected, jnp.inf))
+        last = jnp.max(jnp.where(in_s, corrected, -jnp.inf))
+        live = jnp.any(in_s)
+        return first, last, live
+
+    firsts, lasts, lives = jax.vmap(seg_edges)(seg_ids)
+
+    def step(carry, s):
+        cum_shift, prev_last, max_clamp, n_clamped = carry
+        live = lives[s]
+        first = firsts[s] + cum_shift  # this segment after the running shift
+        # Deficit vs the previous live segment's (already-shifted) last sample.
+        deficit = prev_last - first
+        need = live & (s > 0) & (deficit >= 0)
+        add = jnp.where(need, deficit + 1e-6, 0.0)
+        cum_shift = cum_shift + add
+        seg_shift = jnp.where(live, cum_shift, 0.0)
+        new_last = jnp.where(live, lasts[s] + cum_shift, prev_last)
+        max_clamp = jnp.maximum(max_clamp, add)
+        n_clamped = n_clamped + need.astype(jnp.int32)
+        return (cum_shift, new_last, max_clamp, n_clamped), seg_shift
+
+    init = (
+        jnp.array(0.0, dtype=corrected.dtype),
+        -jnp.inf,
+        jnp.array(0.0, corrected.dtype),
+        jnp.array(0, jnp.int32),
+    )
+    (cum_total, _pl, _mc, n_clamped), seg_shifts = lax.scan(step, init, seg_ids)
+    # Scatter the per-segment additive shift back to its samples.
+    samp_shift = jnp.where(wl_mask, seg_shifts[segment_id], 0.0)
+    corrected = corrected + samp_shift
+    return corrected, cum_total, n_clamped
 
 
 # Placeholder kept so importers see the public name before the body lands.
