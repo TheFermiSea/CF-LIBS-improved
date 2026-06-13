@@ -85,6 +85,27 @@ ANALYSIS_PRESETS = {
 
 DEFAULT_ANALYSIS_PRESET = "geological"
 
+#: Sampling-resolution cap factors for the shared detection entry
+#: (bead CF-LIBS-improved-qitd). The default matching tolerance (0.1 nm) and
+#: integration width (0.2 nm) are absolute constants that silently assume a
+#: moderate-resolution spectrometer (~0.05-0.1 nm/pixel). On a high-resolution
+#: instrument that samples much more finely (e.g. the Silva 2022 tropical-soil
+#: echelle data at ~0.011 nm/pixel) a 0.1 nm tolerance spans ~9 sampling steps,
+#: so the +/-tolerance match window covers a large fraction of the densely-peaked
+#: axis and comb matching degenerates to random coincidence: every dense-catalog
+#: confounder accrues matches, no real element can clear the
+#: ``matched / total_peaks`` precision gate, the comb falls back to nearest and
+#: the shift-coherence veto removes the spurious survivors -- yielding
+#: "No usable spectral lines detected for inversion" on every spectrum. The cap
+#: ties the tolerance/width to the instrument's actual sampling step. It is
+#: applied with ``min`` (tighten-only): a coarsely-sampled instrument's
+#: ``factor * wl_step`` exceeds the legacy constant, so the cap is inert and its
+#: behaviour is byte-identical; only a finely-sampled instrument is brought down
+#: to its sampling-resolution scale. The 2:4 px ratio preserves the legacy
+#: 0.1:0.2 nm tolerance:width ratio.
+SAMPLING_TOLERANCE_PX = 2.0
+SAMPLING_WIDTH_PX = 4.0
+
 
 @dataclass
 class AnalysisPipelineConfig:
@@ -589,6 +610,26 @@ def detect_and_select_lines(
                 reason,
             )
         calibration_s = time.perf_counter() - _cal_t0
+
+    # Sampling-resolution cap (bead CF-LIBS-improved-qitd): tighten the matching
+    # tolerance / integration width toward the instrument's actual sampling step
+    # so a high-resolution, finely-sampled spectrometer is not matched with a
+    # tolerance many sampling steps wide (which degenerates to random coincidence
+    # on the densely-peaked axis and crashes detection with "No usable spectral
+    # lines"). Tighten-only via ``min``: coarsely-sampled instruments sit below
+    # the cap and are unchanged. See SAMPLING_TOLERANCE_PX / SAMPLING_WIDTH_PX.
+    wl_arr = np.asarray(wavelength, dtype=float)
+    if wl_arr.size >= 2:
+        diffs = np.diff(wl_arr)
+        diffs = diffs[np.isfinite(diffs)]
+        wl_step = float(np.median(diffs)) if diffs.size else 0.0
+        if wl_step > 0:
+            if wavelength_tolerance_nm is not None:
+                wavelength_tolerance_nm = min(
+                    wavelength_tolerance_nm, SAMPLING_TOLERANCE_PX * wl_step
+                )
+            if peak_width_nm is not None:
+                peak_width_nm = min(peak_width_nm, SAMPLING_WIDTH_PX * wl_step)
 
     detect_kwargs = dict(
         wavelength=wavelength,
