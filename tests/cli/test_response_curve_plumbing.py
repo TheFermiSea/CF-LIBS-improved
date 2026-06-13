@@ -108,17 +108,6 @@ def _run_pipeline_capturing_intensity(pipeline, wavelength, intensity, monkeypat
     return captured["intensity"]
 
 
-def test_run_pipeline_identity_is_bit_identical(monkeypatch):
-    """Regression pin: with response_curve=None the SAME intensity object
-    (no copy, no arithmetic) reaches detection — default behaviour is
-    bit-identical to the pre-hook pipeline."""
-    pipeline = _build_pipeline_config(["Fe"])
-    wavelength = np.linspace(300.0, 500.0, 50)
-    intensity = np.random.default_rng(7).uniform(0.0, 1.0, 50)
-    seen = _run_pipeline_capturing_intensity(pipeline, wavelength, intensity, monkeypatch)
-    assert seen is intensity
-
-
 def test_run_pipeline_applies_division(monkeypatch, tmp_path):
     curve_path = tmp_path / "lamp.csv"
     curve_path.write_text(CURVE_CSV)

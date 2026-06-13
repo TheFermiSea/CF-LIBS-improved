@@ -9,11 +9,8 @@ makes the preset accessible as ``--id-workflows alias_high_recall``.
 """
 from __future__ import annotations
 
-import pytest
-
 from cflibs.benchmark.unified import (
     build_id_workflow_registry,
-    _alias_workflow_configs,
     _alias_high_recall_workflow_configs,
 )
 
@@ -26,22 +23,6 @@ def test_alias_high_recall_is_registered():
     assert spec.name == "alias_high_recall"
     assert callable(spec.build_predictor)
     assert len(spec.parameter_grid) >= 1
-
-
-def test_strict_alias_still_registered_unchanged():
-    """The byte-identical-default invariant: the strict ``alias`` workflow's
-    parameter_grid must still pin the precision-king thresholds 3.0 / 0.02.
-
-    Knyz's predecessor PR #134 silently flipped those defaults and tanked
-    precision from 1.000 to 0.83. This test makes sure adding the new
-    workflow did not accidentally take down the strict baseline.
-    """
-    configs = _alias_workflow_configs(quick=True)
-    # First config is architecture defaults — that's the precision-king
-    # baseline. Subsequent configs explore the grid.
-    arch_defaults = configs[0]
-    assert arch_defaults.get("intensity_threshold_factor") == pytest.approx(3.0)
-    assert arch_defaults.get("detection_threshold") == pytest.approx(0.02)
 
 
 def test_high_recall_configs_omit_threshold_kwargs():

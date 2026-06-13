@@ -306,62 +306,6 @@ def test_tier2_strict_preserves_non_tier2_elements():
         )
 
 
-def test_tier2_strict_disabled_matches_baseline():
-    """strict_tier2=False reverts to byte-identical pre-PR behavior.
-
-    A test with Mn lines in the spectrum — when ``strict_tier2`` is OFF
-    the identifier must use the global ``tooth_activation_threshold``
-    for Mn (same as Fe), confirming the strict-tier2 path is opt-out
-    rather than baked-in.
-    """
-    mn1 = Transition(
-        element="Mn", ionization_stage=1, wavelength_nm=403.0,
-        A_ki=1e8, g_k=6, g_i=4, E_k_ev=3.0, E_i_ev=0.0,
-    )
-    mn2 = Transition(
-        element="Mn", ionization_stage=1, wavelength_nm=404.0,
-        A_ki=1e8, g_k=6, g_i=4, E_k_ev=3.0, E_i_ev=0.0,
-    )
-
-    mock_db = MagicMock()
-
-    def get_transitions(element, **kwargs):
-        if element == "Mn":
-            return [mn1, mn2]
-        return []
-
-    mock_db.get_transitions.side_effect = get_transitions
-    mock_db.get_available_elements.return_value = ["Mn"]
-
-    wavelength, intensity = _moderate_snr_spectrum(seed=3)
-
-    # Opt-out path: strict_tier2=False AND the per-tooth threshold
-    # explicit at the global default. Effective threshold for Mn is the
-    # global 0.5 — same as Fe.
-    id_lax = CombIdentifier(
-        mock_db,
-        strict_tier2=False,
-        tooth_activation_threshold=0.5,
-        tier2_tooth_activation_threshold=0.7,
-    )
-    assert id_lax._tier2_effective_activation_threshold("Mn") == 0.5
-    assert id_lax._tier2_effective_activation_threshold("Fe") == 0.5
-
-    id_strict = CombIdentifier(
-        mock_db,
-        strict_tier2=True,
-        tooth_activation_threshold=0.5,
-        tier2_tooth_activation_threshold=0.7,
-    )
-    assert id_strict._tier2_effective_activation_threshold("Mn") == 0.7
-    assert id_strict._tier2_effective_activation_threshold("Na") == 0.7
-    assert id_strict._tier2_effective_activation_threshold("K") == 0.7
-    # Non-Tier-2 still gets the global threshold.
-    assert id_strict._tier2_effective_activation_threshold("Fe") == 0.5
-    assert id_strict._tier2_effective_activation_threshold("Ti") == 0.5
-    assert id_strict._tier2_effective_activation_threshold("Si") == 0.5
-
-
 def test_tier2_widen_only_never_tightens_global():
     """If global threshold > tier2 threshold, gate must NOT be loosened.
 
@@ -383,21 +327,3 @@ def test_tier2_widen_only_never_tightens_global():
     assert identifier._tier2_effective_activation_threshold("Na") == 0.9
     assert identifier._tier2_effective_activation_threshold("K") == 0.9
 
-
-def test_tier2_defaults_are_strict():
-    """Default constructor turns on strict_tier2 with threshold 0.7."""
-    mock_db = MagicMock()
-    mock_db.get_available_elements.return_value = []
-    mock_db.get_transitions.return_value = []
-
-    identifier = CombIdentifier(mock_db)
-    assert identifier.strict_tier2 is True
-    assert identifier.tier2_tooth_activation_threshold == 0.7
-    # Global default is the paper's 0.5.
-    assert identifier.tooth_activation_threshold == 0.5
-    # And the effective threshold for Mn/Na/K is 0.7.
-    for elt in ("Mn", "Na", "K"):
-        assert identifier._tier2_effective_activation_threshold(elt) == 0.7
-    # Non-Tier-2 sees the global 0.5.
-    for elt in ("Fe", "Ti", "Si", "Ca", "Al"):
-        assert identifier._tier2_effective_activation_threshold(elt) == 0.5

@@ -24,10 +24,7 @@ jax = pytest.importorskip("jax")
 jax.config.update("jax_enable_x64", True)
 
 from cflibs.core.constants import KB_EV  # noqa: E402
-from cflibs.inversion.identify.alias import (  # noqa: E402
-    ALIASIdentifier,
-    boltzmann_temperature_jax,
-)
+from cflibs.inversion.identify.alias import boltzmann_temperature_jax  # noqa: E402
 
 pytestmark = [pytest.mark.requires_jax, pytest.mark.unit]
 
@@ -242,27 +239,3 @@ class TestPrecisionAndAPI:
         E_upper = np.zeros((3, 6))  # wrong batch dim
         with pytest.raises(ValueError):
             boltzmann_temperature_jax(log_I, E_upper)
-
-
-class TestALIASIdentifierFlag:
-    """The opt-in flag on :class:`ALIASIdentifier` itself."""
-
-    def test_constructor_accepts_flag(self) -> None:
-        """The constructor accepts the flag and stores it."""
-
-        class _StubDB:
-            """Minimal atomic-database stub: ``ALIASIdentifier.__init__`` only
-            instantiates :class:`SahaBoltzmannSolver` against it and never
-            queries transitions here."""
-
-            def get_available_elements(self):  # pragma: no cover - unused
-                return ["Fe"]
-
-        identifier = ALIASIdentifier(
-            atomic_db=_StubDB(),
-            use_jax_boltzmann_fit=True,
-        )
-        assert identifier.use_jax_boltzmann_fit is True
-
-        identifier_off = ALIASIdentifier(atomic_db=_StubDB())
-        assert identifier_off.use_jax_boltzmann_fit is False

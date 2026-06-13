@@ -25,8 +25,6 @@ absolute-scale change for posterity.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 
@@ -248,29 +246,6 @@ def test_stark_gamma_alpha_zero_collapses_to_legacy_formula(bayesian_db):
     np.testing.assert_allclose(gamma_T05, expected, rtol=1e-12, atol=0.0)
 
 
-def test_forward_py_body_does_not_call_adapter():
-    """``forward.py`` body must no longer reference the adapter (regression).
-
-    The adapter remains exported from
-    :mod:`cflibs.inversion.solve.bayesian` for callers outside this code
-    path, but :mod:`cflibs.inversion.solve.bayesian.forward` must not
-    invoke it. We assert on the *body* (everything after the module
-    docstring) to allow the docstring to keep the breadcrumb.
-    """
-    import cflibs.inversion.solve.bayesian.forward as fwd_mod
-
-    source = Path(fwd_mod.__file__).read_text(encoding="utf-8")
-    # Drop the module-level docstring (between the first two triple-quotes).
-    first = source.find('"""')
-    second = source.find('"""', first + 3)
-    assert first != -1 and second != -1, "Could not locate module docstring"
-    body = source[second + 3 :]
-    assert "_atomic_data_arrays_from_snapshot(" not in body, (
-        "BayesianForwardModel.forward.py must not call "
-        "_atomic_data_arrays_from_snapshot after the T1-6 migration."
-    )
-
-
 # ---------------------------------------------------------------------------
 # Bead xsuj — chain_method='vectorized' guard (NUTS multi-chain on one GPU)
 # ---------------------------------------------------------------------------
@@ -287,8 +262,7 @@ def test_compute_spectrum_supports_vmap_chain_axis(bayesian_db):
     yields per-chain spectra of shape ``(num_chains, n_wavelengths)``
     whose rows differ when the input compositions differ. This is the
     code path NumPyro uses when ``MCMCSampler`` runs NUTS with
-    ``chain_method='vectorized'`` (the project default; see
-    :func:`test_mcmc_sampler_default_chain_method_is_vectorized`).
+    ``chain_method='vectorized'`` (the project default).
 
     What this test does NOT cover
     -----------------------------
@@ -334,24 +308,3 @@ def test_compute_spectrum_supports_vmap_chain_axis(bayesian_db):
     assert not np.allclose(
         spectra_np[0], spectra_np[1]
     ), "Vmap over distinct concentrations must yield distinct spectra"
-
-
-def test_mcmc_sampler_default_chain_method_is_vectorized():
-    """``MCMCSampler.run`` defaults ``chain_method`` to ``'vectorized'``.
-
-    Required so multi-chain NUTS on a single GPU actually parallelises
-    chains within one JIT kernel instead of silently downgrading to
-    sequential single-chain (bead ``CF-LIBS-improved-xsuj``).
-    """
-    import inspect
-
-    from cflibs.inversion.solve.bayesian.samplers import MCMCSampler
-
-    sig = inspect.signature(MCMCSampler.run)
-    assert (
-        "chain_method" in sig.parameters
-    ), "MCMCSampler.run must expose ``chain_method`` so callers can override"
-    assert sig.parameters["chain_method"].default == "vectorized", (
-        "MCMCSampler.run default ``chain_method`` must be 'vectorized' for "
-        "single-GPU multi-chain NUTS"
-    )

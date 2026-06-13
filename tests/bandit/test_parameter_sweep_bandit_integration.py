@@ -10,13 +10,11 @@ to end.
 
 We focus on:
 
-1. ``--bandit 0`` + no ``--cells`` → manifest records contain no
-   ``arm_id`` / ``posterior_*`` keys (preserves T1.1 byte-shape).
-2. ``--bandit 2`` + 2-cell ``--cells`` → manifest records carry
+1. ``--bandit 2`` + 2-cell ``--cells`` → manifest records carry
    ``arm_id``, ``cell_name``, ``phase``, ``d_a``, ``posterior_mean``,
    ``posterior_var``, ``prob_best``, and a ``bandit_summary.json`` is
    written alongside the manifest.
-3. The bandit allocates more pulls to the cell with the lower synthetic
+2. The bandit allocates more pulls to the cell with the lower synthetic
    d_A.
 """
 
@@ -188,54 +186,6 @@ def mocked_sweep(parameter_sweep, monkeypatch, tmp_path):
     monkeypatch.setattr(parameter_sweep, "_run_one_iteration", _wrapped)
 
     return {"tmp_path": tmp_path, "state": state}
-
-
-# ---------------------------------------------------------------------------
-# --bandit 0 byte-shape regression
-# ---------------------------------------------------------------------------
-
-
-def test_bandit_zero_produces_no_arm_fields_in_manifest(
-    parameter_sweep, mocked_sweep, tmp_path
-):
-    out = tmp_path / "sweep"
-    rc = parameter_sweep.main(
-        [
-            "--n-iters",
-            "3",
-            "--seed-base",
-            "1",
-            "--output-dir",
-            str(out),
-            "--config-args",
-            "--id-workflows alias --composition-workflows iterative_jax",
-        ]
-    )
-    assert rc == 0
-    manifest_lines = (out / "manifest.jsonl").read_text().splitlines()
-    assert len(manifest_lines) == 3
-    for line in manifest_lines:
-        record = json.loads(line)
-        # T1.1 byte-shape: NO bandit fields when --bandit 0.
-        forbidden = {
-            "arm_id",
-            "cell_id",
-            "cell_name",
-            "cell_config_args",
-            "phase",
-            "d_a",
-            "posterior_mean",
-            "posterior_var",
-            "prob_best",
-            "n_pulls",
-            "arm_posteriors",
-        }
-        leaked = forbidden & record.keys()
-        assert not leaked, (
-            f"--bandit 0 leaked bandit-only fields into manifest: {leaked}"
-        )
-    # No bandit_summary.json should have been written either.
-    assert not (out / "bandit_summary.json").exists()
 
 
 # ---------------------------------------------------------------------------

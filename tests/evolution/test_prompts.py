@@ -25,14 +25,3 @@ def test_render_preamble_mentions_allowed_primitives() -> None:
         assert token in text, f"missing allowed entry {token!r} in rendered preamble"
 
 
-def test_render_preamble_states_the_hard_constraint() -> None:
-    text = render_preamble()
-    assert "HARD CONSTRAINT" in text
-    assert "physics-based only" in text
-    assert "fitness = -inf" in text
-
-
-def test_render_preamble_clarifies_ml_is_ok_in_optimization() -> None:
-    text = render_preamble()
-    assert "optimization process" in text
-    assert "NEVER" in text

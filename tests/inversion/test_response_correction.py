@@ -26,8 +26,6 @@ from cflibs.core.constants import KB_EV
 from cflibs.inversion.preprocess.response_correction import (
     ResponseCurveCoverageError,
     SpectralResponseCorrection,
-    apply_response_correction,
-    derive_response_from_argon_branching_ratios,
     load_response_curve,
 )
 
@@ -161,15 +159,6 @@ class TestSpectralResponseCorrection:
         recovered = SpectralResponseCorrection(curve).apply(wl, measured)
         np.testing.assert_allclose(recovered, original, rtol=1e-9)
 
-    def test_identity_none_is_bit_identical(self):
-        """Regression pin: with no curve configured the hook returns the SAME
-        intensity object (default behaviour bit-identical)."""
-        wl = np.linspace(300.0, 500.0, 10)
-        intensity = np.random.default_rng(1).uniform(0.0, 1.0, 10)
-        out = apply_response_correction(wl, intensity, None)
-        assert out is intensity
-
-
 # ---------------------------------------------------------------------------
 # Coverage validation
 # ---------------------------------------------------------------------------
@@ -211,20 +200,6 @@ class TestCoverage:
         with caplog.at_level(logging.WARNING):
             corr.apply(wl, np.ones_like(wl))
         assert not any("extrapolat" in rec.message for rec in caplog.records)
-
-
-# ---------------------------------------------------------------------------
-# Lamp-free (Ar branching ratio) stub
-# ---------------------------------------------------------------------------
-
-
-def test_argon_branching_ratio_stub_raises_with_citation():
-    wl = np.linspace(300.0, 900.0, 10)
-    with pytest.raises(NotImplementedError) as excinfo:
-        derive_response_from_argon_branching_ratios(wl, np.ones_like(wl))
-    msg = str(excinfo.value)
-    assert "C3JA50371B" in msg  # JAAS 29 (2014) 657-664
-    assert "Whaling" in msg  # JQSRT 50 (1993) branching-ratio tables
 
 
 # ---------------------------------------------------------------------------

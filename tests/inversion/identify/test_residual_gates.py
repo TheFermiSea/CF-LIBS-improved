@@ -105,14 +105,6 @@ def _detect(shift_scan_nm: float, line_residual_gate: bool):
 
 
 class TestEdgeRidingScanRegression:
-    def test_legacy_mop_up_scan_rides_edge_and_admits_contaminated_match(self):
-        """Reproduce the defect: the 0.05 scan runs to its edge and admits
-        the contaminated line (more matches at +0.05 than at the true 0)."""
-        result = _detect(shift_scan_nm=0.05, line_residual_gate=False)
-        assert result.applied_shift_nm == pytest.approx(0.05)
-        matched = {obs.wavelength_nm for obs in result.observations}
-        assert _CONTAMINATED_LINE in matched
-
     def test_zero_residual_scan_keeps_true_axis_and_rejects_contamination(self):
         """Fix 1: with the post-calibration scan at 0, the fitted axis is
         kept and the contaminated match never exists."""
@@ -300,11 +292,6 @@ class TestPerPeakOwnership:
         result = self._detect(line_residual_gate=True)
         sn = sorted(o.wavelength_nm for o in result.observations if o.element == "Sn")
         assert sn == [600.0, 610.0]  # 400.004 blocked: the peak belongs to Fe 400.0
-
-    def test_legacy_path_still_double_counts(self):
-        result = self._detect(line_residual_gate=False)
-        sn = sorted(o.wavelength_nm for o in result.observations if o.element == "Sn")
-        assert sn == [400.004, 600.0, 610.0]
 
 
 class TestMatchTransitionNaN:

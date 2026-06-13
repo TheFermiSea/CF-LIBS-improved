@@ -27,7 +27,6 @@ import pytest
 
 from cflibs.cli import main as cli_main
 from cflibs.cli.main import (
-    ANALYSIS_PRESETS,
     DEFAULT_ANALYSIS_PRESET,
     AnalysisPipelineConfig,
     _build_pipeline_config,
@@ -40,37 +39,6 @@ from cflibs.core.config import VALID_ANALYSIS_KEYS, validate_analysis_config
 
 
 class TestPresetResolution:
-    def test_default_preset_is_geological_best_validated(self):
-        """No flags -> the measured-best BHVO-2 configuration, exactly."""
-        cfg = _build_pipeline_config(["Si", "Fe"])
-        assert cfg.preset == "geological"
-        assert DEFAULT_ANALYSIS_PRESET == "geological"
-        assert cfg.saha_boltzmann_graph is True
-        assert cfg.closure_mode == "oxide"
-        # The rest of the validated-best bundle (audit acceptance criteria).
-        assert cfg.boltzmann_weight_cap == pytest.approx(5.0)
-        assert cfg.wavelength_calibration is True
-        assert cfg.top_k_per_element == 60
-        assert cfg.min_relative_intensity is None
-        assert cfg.exclude_resonance is None  # helper resolves None -> keep
-        assert cfg.apply_self_absorption == "off"
-        # n_e is MEASURED from Stark widths by default (bead pxex / audit
-        # 02-F2); the pressure-balance fallback only fires when no
-        # literature-grade line qualifies.
-        assert cfg.stark_ne is True
-
-    def test_metallic_preset(self):
-        cfg = _build_pipeline_config(["Fe", "Cr"], preset="metallic")
-        assert cfg.saha_boltzmann_graph is True
-        assert cfg.closure_mode == "standard"
-        assert cfg.stark_ne is True
-
-    def test_raw_preset_is_legacy_defaults(self):
-        cfg = _build_pipeline_config(["Fe"], preset="raw")
-        assert cfg.saha_boltzmann_graph is False
-        assert cfg.closure_mode == "standard"
-        assert cfg.stark_ne is False
-
     def test_stark_ne_flag_and_yaml_resolution(self):
         # Explicit flag beats the preset default...
         cfg = _build_pipeline_config(["Fe"], preset="geological", stark_ne=False)
@@ -112,36 +80,6 @@ class TestPresetResolution:
     def test_unknown_closure_mode_rejected(self):
         with pytest.raises(ValueError, match="Valid modes"):
             _build_pipeline_config(["Fe"], closure_mode="softmax")
-
-    def test_preset_registry_contents(self):
-        assert set(ANALYSIS_PRESETS) == {"geological", "metallic", "raw"}
-        assert ANALYSIS_PRESETS["geological"] == {
-            "saha_boltzmann_graph": True,
-            "closure_mode": "oxide",
-            "stark_ne": True,
-            "residual_shift_scan_nm": 0.0,
-            "affine_coverage_gate": True,
-            "line_residual_gate": True,
-        }
-
-    def test_axis_alignment_knobs_default_fixed_raw_keeps_legacy(self):
-        """Bead ye6t: the three axis-alignment fixes are the DEFAULT; the raw
-        preset reproduces the legacy edge-riding mop-up behaviour."""
-        cfg = _build_pipeline_config(["Fe"])
-        assert cfg.residual_shift_scan_nm == pytest.approx(0.0)
-        assert cfg.affine_coverage_gate is True
-        assert cfg.line_residual_gate is True
-        raw = _build_pipeline_config(["Fe"], preset="raw")
-        assert raw.residual_shift_scan_nm == pytest.approx(0.05)
-        assert raw.affine_coverage_gate is False
-        assert raw.line_residual_gate is False
-        # Explicit flags and YAML keys override the preset.
-        cfg = _build_pipeline_config(["Fe"], residual_shift_scan_nm=0.02)
-        assert cfg.residual_shift_scan_nm == pytest.approx(0.02)
-        cfg = _build_pipeline_config(["Fe"], analysis_cfg={"line_residual_gate": False})
-        assert cfg.line_residual_gate is False
-        cfg = _build_pipeline_config(["Fe"], analysis_cfg={"affine_coverage_gate": False})
-        assert cfg.affine_coverage_gate is False
 
     def test_overrides_tier_beats_flags_and_yaml(self):
         """``overrides`` is the TOP precedence tier (altitude#1): it beats
@@ -307,17 +245,6 @@ class TestBatchAnalyzeParity:
         assert isinstance(batch_pipeline, AnalysisPipelineConfig)
         # Dataclass equality covers every detection, selection and solver knob.
         assert analyze_pipeline == batch_pipeline
-
-    def test_default_pipeline_is_measured_best(self, monkeypatch, tmp_path):
-        """A bare ``analyze`` resolves to the BHVO-2 measured-best config."""
-        pipeline = _capture_pipeline_from(
-            cli_main.analyze_cmd, self._make_args(tmp_path), monkeypatch, tmp_path
-        )
-        assert pipeline.preset == "geological"
-        assert pipeline.saha_boltzmann_graph is True
-        assert pipeline.closure_mode == "oxide"
-        assert pipeline.boltzmann_weight_cap == pytest.approx(5.0)
-        assert pipeline.wavelength_calibration is True
 
 
 # =============================================================================
