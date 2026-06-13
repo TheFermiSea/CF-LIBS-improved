@@ -4,10 +4,14 @@ Two grep/AST-based guards (mirroring ``tests/test_jax_import_hygiene.py`` and
 the host/kernel split documented at ``cflibs/radiation/kernels.py:72-78``):
 
 1. **No SQLite in kernels.** No module under ``cflibs/jitpipe/`` *except* the
-   carve-out trio (``host.py`` / ``snapshot.py`` / ``parity.py``) may import
-   ``sqlite3``, ``cflibs.atomic.database``, ``cflibs.io``, or
+   carve-out set (``host.py`` / ``snapshot.py`` / ``parity.py`` / ``pipeline.py``)
+   may import ``sqlite3``, ``cflibs.atomic.database``, ``cflibs.io``, or
    ``cflibs.jitpipe.host``. This keeps the jit-traced stage kernels free of any
-   live DB connection.
+   live DB connection. ``pipeline.py`` is the J8 end-to-end COMPOSITION
+   orchestrator (``run_one``/``run_batch``): it is impure by construction (it
+   drives the host front-end gather + DB-backed candidate-set assembly *around*
+   the traced ``scan_solve`` kernel, ADR-0004 §5.1), not a kernel — the traced
+   region (``cflibs.jitpipe.solve``) stays in the DB-free set.
 2. **Parallel implementation (ADR-0004 D1).** Nothing *outside*
    ``cflibs/jitpipe/`` may import ``cflibs.jitpipe`` — jitpipe is a parallel
    re-implementation that the reference pipeline never depends on.
@@ -25,7 +29,9 @@ _CFLIBS_ROOT = _REPO_ROOT / "cflibs"
 _JITPIPE_ROOT = _CFLIBS_ROOT / "jitpipe"
 
 #: Only these jitpipe modules may touch impure SQLite-backed inputs.
-_CARVE_OUT = frozenset({"host.py", "snapshot.py", "parity.py"})
+#: ``pipeline.py`` is the J8 composition orchestrator (impure end-to-end driver
+#: around the traced solve kernel); the traced kernels themselves stay DB-free.
+_CARVE_OUT = frozenset({"host.py", "snapshot.py", "parity.py", "pipeline.py"})
 
 #: Banned import targets for non-carve-out jitpipe modules.
 _BANNED_MODULES = frozenset(

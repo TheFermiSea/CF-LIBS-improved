@@ -728,3 +728,394 @@ def load_npz_cache(path: str | os.PathLike) -> dict[str, np.ndarray]:
     """Load a snapshot ``.npz`` cache into a plain dict of arrays."""
     with np.load(path, allow_pickle=True) as data:
         return {k: data[k] for k in data.files}
+
+
+# ---------------------------------------------------------------------------
+# J8 host glue — per-spectrum gather/scatter (ADR-0004 §5.1; J8 plan §2).
+#
+# These impure helpers bridge between the reference front-end (response
+# correction, detect/identify/calibrate producing a ``LineObservation`` list)
+# and the device-pure solve kernels (``cflibs.jitpipe.solve``). They live here
+# (the host carve-out) because they touch reference SQLite-backed objects and
+# scipy; the jit-traced ``run_one`` core never sees a DB connection.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ObservationBlock:
+    """Padded ``(E, N_max)`` Boltzmann block + element order (J8 plan §2.C).
+
+    The host gather seam between the front-end ``LineObservation`` list and the
+    fixed-shape solve kernels (``LaxKernelInputs``). Mirrors the reference
+    ``_build_padded_arrays_from_obs`` output layout exactly so the kernel sees
+    byte-identical data to ``_run_lax_while_loop``.
+
+    Attributes
+    ----------
+    elements : list[str]
+        Element symbols, length ``E``, in observation-insertion order.
+    x, y, w : ndarray, shape (E, N_max)
+        Upper-level energies (eV), Boltzmann ``y`` ordinates and
+        inverse-variance weights. Zero in padding.
+    stage : ndarray, shape (E, N_max), int32
+        Ionisation stage per line (1 neutral / 2 ionic); 1 in padding.
+    mask : ndarray of bool, shape (E, N_max)
+        ``True`` where a real observation sits.
+    n_observations : int
+        Total number of valid observations (``mask.sum()``); 0 signals the
+        failure-policy path (J8 plan §4).
+    """
+
+    elements: list[str]
+    x: np.ndarray | None
+    y: np.ndarray | None
+    w: np.ndarray | None
+    stage: np.ndarray | None
+    mask: np.ndarray | None
+    n_observations: int
+
+
+def build_observation_block(observations, *, weight_cap: float = 0.0) -> ObservationBlock:
+    """Gather a front-end ``LineObservation`` list into a padded ``(E, N_max)`` block.
+
+    Reuses the REAL reference ``_build_padded_arrays_from_obs`` (the parity
+    oracle for the line-block layout) so the gather is byte-identical to the
+    reference solve path. Groups observations by element preserving insertion
+    order (``defaultdict(list)`` semantics).
+
+    Parameters
+    ----------
+    observations : list[LineObservation]
+        Selected line observations from the front-end (detect/identify/select).
+    weight_cap : float, optional
+        Per-element Boltzmann weight dynamic-range cap (``boltzmann_weight_cap``);
+        0 disables (default).
+
+    Returns
+    -------
+    ObservationBlock
+        Padded arrays + element order. ``n_observations == 0`` (and ``x is
+        None``) when there are no usable observations — the failure-policy path.
+    """
+    from collections import defaultdict
+
+    from cflibs.inversion.solve.iterative import _build_padded_arrays_from_obs
+
+    obs_by_element: dict[str, list] = defaultdict(list)
+    for obs in observations:
+        obs_by_element[obs.element].append(obs)
+
+    elements, x, y, w, stage, mask = _build_padded_arrays_from_obs(
+        dict(obs_by_element), weight_cap=weight_cap
+    )
+    if x is None or mask is None:
+        return ObservationBlock(
+            elements=list(elements),
+            x=None,
+            y=None,
+            w=None,
+            stage=None,
+            mask=None,
+            n_observations=0,
+        )
+    n_obs = int(np.asarray(mask).sum())
+    return ObservationBlock(
+        elements=list(elements), x=x, y=y, w=w, stage=stage, mask=mask, n_observations=n_obs
+    )
+
+
+def lax_inputs_from_observation_block(snapshot, block: ObservationBlock):
+    """Assemble device ``LaxKernelInputs`` from a snapshot + observation block.
+
+    Bridges the per-bucket candidate-set assembly seam (J8 plan §2.E): gathers
+    the per-element atomic block via
+    :meth:`cflibs.jitpipe.snapshot.PipelineSnapshot.to_lax_snapshot` (no DB at
+    solve time — the snapshot is the baked superset) and feeds it plus the
+    padded obs block to :meth:`LaxKernelInputs.from_snapshot`.
+
+    Parameters
+    ----------
+    snapshot : PipelineSnapshot
+        The host-built atomic snapshot.
+    block : ObservationBlock
+        Padded observation block from :func:`build_observation_block`.
+
+    Returns
+    -------
+    LaxKernelInputs
+        Device-ready padded inputs for the solve kernels.
+    """
+    from cflibs.jitpipe.solve import LaxKernelInputs
+
+    lax_snap = snapshot.to_lax_snapshot(block.elements)
+    return LaxKernelInputs.from_snapshot(
+        lax_snap, block.x, block.y, block.w, block.stage, block.mask
+    )
+
+
+def oxide_factors_for_elements(snapshot, elements: list[str]) -> np.ndarray:
+    """Per-element oxide stoichiometry vector (O atoms per cation) for ``oxide`` closure.
+
+    Mirrors the reference ``default_oxide_stoichiometry`` mapping: the host
+    closure path weights each element's relative concentration by its
+    stage-I oxide stoichiometry. Falls back to 1.0 for elements absent from the
+    snapshot species axis (treated as elemental/metal), matching
+    ``apply_oxide_mode`` semantics.
+
+    Parameters
+    ----------
+    snapshot : PipelineSnapshot
+        Atomic snapshot carrying ``oxide_stoichiometry`` + ``species``.
+    elements : list[str]
+        Element order (length ``E``) the factors must align to.
+
+    Returns
+    -------
+    ndarray, shape (E,)
+        Oxide stoichiometry per element.
+    """
+    from cflibs.inversion.physics.closure import default_oxide_stoichiometry
+
+    stoich = default_oxide_stoichiometry(list(elements))
+    return np.asarray([float(stoich.get(el, 1.0)) for el in elements], dtype=np.float64)
+
+
+def cflibs_result_from_loopstate(
+    final_state,
+    elements: list[str],
+    *,
+    iterations: int | None = None,
+    converged: bool | None = None,
+):
+    """Reconstitute a reference :class:`CFLIBSResult` from a solve ``LoopState`` (J8 plan §2.F).
+
+    Maps the E-indexed device arrays back to element-keyed dicts via
+    ``elements``, reusing the reference ``CFLIBSResult`` type
+    (``iterative.py:81``) so downstream consumers and the parity adapters see
+    the identical dataclass.
+
+    Parameters
+    ----------
+    final_state : LoopState
+        Final (frozen) solve state from :func:`cflibs.jitpipe.solve.scan_solve`.
+    elements : list[str]
+        Element order (length ``E``) of the solve.
+    iterations, converged : optional
+        Overrides; default reads from the loop state.
+
+    Returns
+    -------
+    CFLIBSResult
+    """
+    from cflibs.inversion.solve.iterative import CFLIBSResult
+
+    conc_arr = np.asarray(final_state.concentrations)
+    concentrations = {el: float(conc_arr[i]) for i, el in enumerate(elements)}
+    T_K = float(final_state.T_K)
+    n_e = float(final_state.n_e_cm3)
+    r2 = float(final_state.r_squared)
+    degenerate = bool(final_state.boltzmann_degenerate)
+    iters = int(final_state.i) if iterations is None else int(iterations)
+    conv = bool(final_state.converged) if converged is None else bool(converged)
+    if degenerate:
+        conv = False
+    return CFLIBSResult(
+        temperature_K=T_K,
+        temperature_uncertainty_K=0.0,
+        electron_density_cm3=n_e,
+        concentrations=concentrations,
+        concentration_uncertainties={},
+        iterations=iters,
+        converged=conv,
+        temperature_corona_K=None,
+        quality_metrics={
+            "boltzmann_r_squared": r2,
+            "boltzmann_degenerate": float(degenerate),
+        },
+        electron_density_uncertainty_cm3=0.0,
+        boltzmann_covariance=None,
+    )
+
+
+def all_fn_result(elements: list[str]):
+    """The all-FN :class:`CFLIBSResult` the reference produces at zero observations.
+
+    Failure-policy parity (J8 plan §4, AC4): the reference raises
+    ``ValueError`` at zero observations (``pipeline.py:872``) which the
+    scoreboard scores as all false-negative. The jit pipeline must emit the
+    SAME all-FN record — NaN-free concentrations (all 0.0), ``converged=False``
+    — rather than crash or return NaN. Element keys are preserved (all-zero)
+    so the scoreboard's presence rule scores them as missed (FN), not crashed.
+
+    Parameters
+    ----------
+    elements : list[str]
+        The requested element set; concentrations are 0.0 for each.
+
+    Returns
+    -------
+    CFLIBSResult
+    """
+    from cflibs.inversion.solve.iterative import CFLIBSResult
+
+    return CFLIBSResult(
+        temperature_K=0.0,
+        temperature_uncertainty_K=0.0,
+        electron_density_cm3=0.0,
+        concentrations={el: 0.0 for el in elements},
+        concentration_uncertainties={},
+        iterations=0,
+        converged=False,
+        temperature_corona_K=None,
+        quality_metrics={"failed": 1.0, "reason": 0.0},
+        electron_density_uncertainty_cm3=0.0,
+        boltzmann_covariance=None,
+    )
+
+
+@dataclass(frozen=True)
+class FrontEndResult:
+    """Host front-end output: selected observations + Stark n_e + diagnostics.
+
+    Bundles the reference front-end stages the J8 ``run_one`` composes ahead of
+    the jit solve kernels (response -> calibrate -> detect -> identify ->
+    select, then the Stark n_e diagnostic). The detect/identify/calibrate jit
+    kernels are individually parity-tested (J2/J3/J4); this host wrapper drives
+    the reference detection path so the observation set fed to the jit solve
+    spine is byte-faithful to ``run_pipeline`` (the parity oracle). The
+    ``n_observations == 0`` case is the failure-policy trigger (J8 plan §4).
+
+    Attributes
+    ----------
+    observations : list[LineObservation]
+        Selected line observations (front-end output).
+    elements : list[str]
+        Requested element set (the run identity).
+    ne_stark_cm3 : float or None
+        Stark-measured electron density (cm^-3); pins the solve when present.
+    diagnostics : dict
+        The reference detection/selection diagnostics dict.
+    n_observations : int
+        Number of selected observations; 0 -> failure path.
+    """
+
+    observations: list
+    elements: list[str]
+    ne_stark_cm3: float | None
+    diagnostics: dict
+    n_observations: int
+
+
+def run_front_end(wavelength, intensity, atomic_db, pipeline) -> FrontEndResult:
+    """Host front-end: response -> detect/identify/calibrate/select -> Stark n_e.
+
+    Reproduces the front-end half of ``run_pipeline`` (``pipeline.py:806-916``)
+    on the host so the jit solve spine downstream consumes byte-identical
+    observations. Response correction is applied, then the shared
+    ``detect_and_select_lines`` path, then the Stark n_e diagnostic — exactly
+    mirroring the reference stage order. Never raises on zero observations: it
+    returns ``n_observations == 0`` for the caller to interpret (J8 plan §4),
+    where the reference would raise ``ValueError``.
+
+    Parameters
+    ----------
+    wavelength, intensity : ndarray
+        Spectrum axes (nm, intensity).
+    atomic_db : AtomicDatabase
+        Reference atomic database (host front-end consumes SQLite directly).
+    pipeline : AnalysisPipelineConfig
+        Resolved pipeline config carrying every front-end knob.
+
+    Returns
+    -------
+    FrontEndResult
+    """
+    from cflibs.inversion.pipeline import detect_and_select_lines
+
+    wl = np.asarray(wavelength, dtype=float)
+    inten = np.asarray(intensity, dtype=float)
+    if pipeline.response_curve:
+        inten = inten * response_multiplier(wl, pipeline.response_curve)
+
+    observations, diagnostics = detect_and_select_lines(
+        wl,
+        inten,
+        atomic_db,
+        pipeline.elements,
+        min_relative_intensity=pipeline.min_relative_intensity,
+        top_k_per_element=pipeline.top_k_per_element,
+        resolving_power=pipeline.resolving_power,
+        wavelength_tolerance_nm=pipeline.wavelength_tolerance_nm,
+        min_peak_height=pipeline.min_peak_height,
+        peak_width_nm=pipeline.peak_width_nm,
+        apply_self_absorption=pipeline.apply_self_absorption,
+        exclude_resonance=pipeline.exclude_resonance,
+        min_snr=pipeline.min_snr,
+        min_energy_spread_ev=pipeline.min_energy_spread_ev,
+        min_lines_per_element=pipeline.min_lines_per_element,
+        isolation_wavelength_nm=pipeline.isolation_wavelength_nm,
+        max_lines_per_element=pipeline.max_lines_per_element,
+        wavelength_calibration=pipeline.wavelength_calibration,
+        shift_coherence_veto=pipeline.shift_coherence_veto,
+        residual_shift_scan_nm=pipeline.residual_shift_scan_nm,
+        global_shift_scan_nm=pipeline.global_shift_scan_nm,
+        affine_coverage_gate=pipeline.affine_coverage_gate,
+        line_residual_gate=pipeline.line_residual_gate,
+        detection_overrides=pipeline.detection_overrides,
+        return_diagnostics=True,
+    )
+
+    ne_stark: float | None = None
+    if pipeline.stark_ne and observations:
+        from cflibs.inversion.physics.stark_ne import measure_stark_ne
+
+        try:
+            stark_result = measure_stark_ne(
+                wl, inten, observations, atomic_db, resolving_power=pipeline.resolving_power
+            )
+        except Exception:  # pragma: no cover - defensive
+            stark_result = None
+        if stark_result is not None and stark_result.usable:
+            ne_stark = float(stark_result.ne_median_cm3)
+
+    return FrontEndResult(
+        observations=list(observations),
+        elements=list(pipeline.elements),
+        ne_stark_cm3=ne_stark,
+        diagnostics=dict(diagnostics),
+        n_observations=len(observations),
+    )
+
+
+def response_multiplier(wavelength: np.ndarray, response_curve_path: str | None) -> np.ndarray:
+    """Per-channel spectral-response multiplier array (J8 plan §2.A).
+
+    The reference ``run_pipeline`` divides the measured intensity by the
+    relative detection efficiency ``E(lambda)`` (``pipeline.py:816``). The only
+    thing that crosses to device is the per-channel multiplier; this host helper
+    computes it. Identity (all-ones) when no curve is configured — ChemCam CCS
+    spectra arrive response-corrected upstream and must not be corrected twice.
+
+    Parameters
+    ----------
+    wavelength : ndarray
+        Wavelength axis, nm.
+    response_curve_path : str or None
+        Path to a response curve file, or None for identity.
+
+    Returns
+    -------
+    ndarray
+        Per-channel multiplier; ``intensity_corrected = intensity * mult`` is
+        equivalent to the reference ``correction.apply`` (which divides by
+        ``E(lambda)``).
+    """
+    wl = np.asarray(wavelength, dtype=float)
+    if not response_curve_path:
+        return np.ones_like(wl)
+    from cflibs.inversion.preprocess.response_correction import SpectralResponseCorrection
+
+    correction = SpectralResponseCorrection.from_file(response_curve_path)
+    ones = np.ones_like(wl)
+    corrected = correction.apply(wl, ones)
+    return np.asarray(corrected, dtype=float)

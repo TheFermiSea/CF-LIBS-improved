@@ -679,24 +679,40 @@ def joint_wls_solve(
 
 
 def iterative_solve(
-    line_intensities: Any,
-    line_index: Any,
-    temperature_eV: Any,
-    electron_density: Any,
+    observations: Any,
     snapshot: "PipelineSnapshot",
     params: "PipelineParams",
     static: "StaticConfig",
+    *,
+    ne_stark_cm3: float | None = None,
 ) -> Any:
-    """Run the iterative CF-LIBS plasma-parameter solve (J7 integration seam).
+    """Run the iterative CF-LIBS plasma-parameter solve (J8 integration seam).
 
-    This is the J0-skeleton signature. The fixed-shape kernels are
-    :func:`scan_solve` (initializer) and :func:`joint_wls_solve` (production
-    estimator); the host wrapper that gathers the per-bucket candidate set and
-    reconstitutes :class:`~cflibs.inversion.solve.iterative.CFLIBSResult` lands
-    with J8 integration. Until then this delegates to :func:`scan_solve` so the
-    seam is exercised end to end.
+    Thin host wrapper that delegates to the J8 composition
+    :func:`cflibs.jitpipe.pipeline.solve_stage`: gathers the per-bucket
+    candidate set from a ``LineObservation`` list, runs the device-pure
+    :func:`scan_solve` kernel, and reconstitutes a
+    :class:`~cflibs.inversion.solve.iterative.CFLIBSResult`. The fixed-shape
+    kernels remain :func:`scan_solve` (initializer) and :func:`joint_wls_solve`
+    (production estimator); call them directly for the device-only surface.
+
+    Parameters
+    ----------
+    observations : list[LineObservation]
+        Selected front-end observations.
+    snapshot, params, static
+        Atomic snapshot, traced knobs, static config.
+    ne_stark_cm3 : float or None
+        Stark-measured electron density pinning the warm-start n_e.
+
+    Returns
+    -------
+    CFLIBSResult
     """
-    raise NotImplementedError(
-        "jitpipe.solve.iterative_solve host wrapper lands at J8 integration; "
-        "use scan_solve / joint_wls_solve directly (see module docstring)"
-    )
+    # Delegate to the J8 composition orchestrator (the impure carve-out): it
+    # owns the host gather + ``CFLIBSResult`` reconstitution. solve.py stays a
+    # DB-free kernel module (import-hygiene AC5) — the host import lives in
+    # ``pipeline.py``, not here.
+    from cflibs.jitpipe.pipeline import observations_to_result
+
+    return observations_to_result(observations, snapshot, params, static, ne_stark_cm3=ne_stark_cm3)
