@@ -430,3 +430,85 @@ class TestGlobalCoverageGate:
         assert cal.model == "affine"
         assert cal.details["coverage_gate"] == "passed"
         assert ("shift",) not in calls
+
+
+# ---------------------------------------------------------------------------
+# Bead 0fuh: catalog-alias plausibility gate + all-fallback quality inheritance
+# (CSA planetary stitched 11-channel axis, docs/audit/2026-06-10-goalfirst/
+# csa-recall-diagnosis.md)
+# ---------------------------------------------------------------------------
+
+
+class TestSegmentGlobalDisagreementGate:
+    """A per-segment RANSAC fit over a short channel can lock onto a
+    self-coherent but wrong registration 1-2 nm away (excellent inlier RMSE,
+    wrong lines — measured on CSA planetary spectra). Such a fit must be
+    demoted to the global fallback instead of being trusted (where it either
+    tears the stitched axis apart at the seams, forcing a wholesale revert of
+    every good segment fit, or silently corrupts its channel by >1 nm)."""
+
+    LEFT = np.arange(200.0, 300.0, 0.05)
+    RIGHT = np.arange(305.0, 400.0, 0.05)  # 5 nm gap -> one real seam
+
+    def _run(self, monkeypatch, seg_shifts, global_shift=-0.1, global_quality=True):
+        axis = np.concatenate([self.LEFT, self.RIGHT])
+
+        def _fake_calibrate(**kwargs):
+            wl = kwargs["wavelength"]
+            if wl.size == axis.size:  # the global single-axis fit
+                res = _result("shift", (global_shift,), wl, [250.0, 350.0], n_inliers=40)
+                res.quality_passed = global_quality
+                res.quality_reason = "passed" if global_quality else "insufficient_inliers"
+                return res
+            shift = seg_shifts[0] if wl[0] < 300.0 else seg_shifts[1]
+            anchors = [float(wl[10]), float(wl[-10])]
+            return _result("shift", (shift,), wl, anchors, n_inliers=30, rmse=0.02)
+
+        monkeypatch.setattr(wcal_mod, "calibrate_wavelength_axis", _fake_calibrate)
+        return (
+            wcal_mod.calibrate_wavelength_axis_segmented(
+                wavelength=axis,
+                intensity=np.ones_like(axis),
+                atomic_db=None,
+                elements=["Fe"],
+            ),
+            axis,
+        )
+
+    def test_aliased_segment_demoted_to_global(self, monkeypatch):
+        # Segment 0 "trusted" fit sits 1.4 nm from the global correction
+        # (catalog alias); segment 1 carries a real 0.2 nm channel offset.
+        cal, axis = self._run(monkeypatch, seg_shifts=(-1.5, -0.3))
+        segs = cal.details["segment_diagnostics"]
+        assert segs[0]["status"] == "global"
+        assert segs[0]["global_disagreement_nm"] == pytest.approx(1.4, abs=1e-9)
+        assert segs[1]["status"] == "fit"
+        assert "segmented_reverted" not in cal.details
+        # Demoted channel takes the global correction; the real channel
+        # offset is preserved.
+        np.testing.assert_allclose(cal.corrected_wavelength[: self.LEFT.size], self.LEFT - 0.1)
+        np.testing.assert_allclose(cal.corrected_wavelength[self.LEFT.size :], self.RIGHT - 0.3)
+        assert cal.quality_passed is True
+
+    def test_plausible_channel_offsets_are_kept(self, monkeypatch):
+        cal, _ = self._run(monkeypatch, seg_shifts=(-0.05, -0.3))
+        segs = cal.details["segment_diagnostics"]
+        assert [s["status"] for s in segs] == ["fit", "fit"]
+        assert all(s["global_disagreement_nm"] <= 0.5 for s in segs)
+
+    def test_all_fallback_inherits_global_quality_passed(self, monkeypatch):
+        # Both segment fits are aliases -> every segment falls back to the
+        # (quality-passed) global fit. The stitched result IS the global fit
+        # and must inherit its quality verdict, not be declared failed
+        # (which made the pipeline discard the axis and re-detect raw).
+        cal, axis = self._run(monkeypatch, seg_shifts=(-1.5, 1.2), global_quality=True)
+        assert cal.details["n_segments_fit"] == 0
+        assert cal.quality_passed is True
+        assert cal.quality_reason == "segmented_all_fallback_global_passed"
+        np.testing.assert_allclose(cal.corrected_wavelength, axis - 0.1)
+
+    def test_all_fallback_inherits_global_quality_failed(self, monkeypatch):
+        cal, _ = self._run(monkeypatch, seg_shifts=(-1.5, 1.2), global_quality=False)
+        assert cal.details["n_segments_fit"] == 0
+        assert cal.quality_passed is False
+        assert cal.quality_reason == "segmented_all_fallback_global_insufficient_inliers"

@@ -1096,6 +1096,7 @@ def _fit_one_segment(
     max_pair_window_nm: float,
     segment_min_inliers: int,
     segment_max_rmse_nm: float,
+    segment_max_global_disagreement_nm: float,
     affine_coverage_gate: bool,
     coverage_min_anchor_span_fraction: float,
     coverage_max_extrapolation_px: float,
@@ -1114,6 +1115,7 @@ def _fit_one_segment(
     accepted_rmse: Optional[float] = None
     coverage_status = "not_applicable"
     coverage_extrap_nm = 0.0
+    global_disagreement_nm = 0.0
 
     if n_pts >= min_segment_points:
         models = sparse_segment_max_models if n_pts < sparse_segment_points else candidate_models
@@ -1148,6 +1150,34 @@ def _fit_one_segment(
             trusted = _segment_fit_trusted(seg_cal, segment_min_inliers, segment_max_rmse_nm)
             if coverage_status == "degraded_to_shift" and not trusted:
                 coverage_status = "degraded_shift_untrusted"
+        # Global-disagreement plausibility gate: a per-segment RANSAC fit over
+        # a short channel against a dense line catalog can lock onto a
+        # self-coherent but wrong registration ~1-2 nm away (excellent inlier
+        # RMSE, wrong lines — measured on CSA planetary spectra: a 13-inlier
+        # rmse-0.025 segment fit at -1.58 nm vs real channel offsets of
+        # -0.03..-0.38 nm). The global fit is anchored across ALL channels, so
+        # a trusted segment correction that departs from the global correction
+        # by more than ``segment_max_global_disagreement_nm`` is a catalog
+        # alias, not a real channel registration error; demote it to the
+        # global fallback ("no segment worse than the global model").
+        if trusted:
+            seg_offset_med = float(np.median(seg_cal.corrected_wavelength - seg_wl))
+            global_offset_med = float(np.median(global_offset[a:b]))
+            global_disagreement_nm = abs(seg_offset_med - global_offset_med)
+            if global_disagreement_nm > segment_max_global_disagreement_nm:
+                trusted = False
+                logger.info(
+                    "Segment %d (%.1f-%.1f nm): fit offset %+.3f nm disagrees with "
+                    "the global correction %+.3f nm by %.3f nm (max %.3f nm); "
+                    "likely catalog alias -- demoted to global fallback.",
+                    index,
+                    float(seg_wl.min()),
+                    float(seg_wl.max()),
+                    seg_offset_med,
+                    global_offset_med,
+                    global_disagreement_nm,
+                    segment_max_global_disagreement_nm,
+                )
         seg_model = seg_cal.model
         seg_n_in = int(seg_cal.n_inliers)
         seg_rmse = float(seg_cal.rmse_nm)
@@ -1172,6 +1202,7 @@ def _fit_one_segment(
         "status": status,
         "coverage_gate": coverage_status,
         "coverage_extrapolation_nm": float(coverage_extrap_nm),
+        "global_disagreement_nm": float(global_disagreement_nm),
     }
     return _SegmentOutcome(
         status=status, diag=diag, n_inliers=accepted_inliers, rmse_nm=accepted_rmse
@@ -1195,6 +1226,7 @@ def _run_segments(
     max_pair_window_nm: float,
     segment_min_inliers: int,
     segment_max_rmse_nm: float,
+    segment_max_global_disagreement_nm: float,
     affine_coverage_gate: bool,
     coverage_min_anchor_span_fraction: float,
     coverage_max_extrapolation_px: float,
@@ -1227,6 +1259,7 @@ def _run_segments(
             max_pair_window_nm=max_pair_window_nm,
             segment_min_inliers=segment_min_inliers,
             segment_max_rmse_nm=segment_max_rmse_nm,
+            segment_max_global_disagreement_nm=segment_max_global_disagreement_nm,
             affine_coverage_gate=affine_coverage_gate,
             coverage_min_anchor_span_fraction=coverage_min_anchor_span_fraction,
             coverage_max_extrapolation_px=coverage_max_extrapolation_px,
@@ -1317,6 +1350,19 @@ def _build_segmented_result(
     n_fit = sum(1 for s in seg_status if s == "fit")
     n_seg = len(bounds) - 1
     agg_rmse = float(np.mean(rmse_accum)) if rmse_accum else global_result.rmse_nm
+
+    # When EVERY segment fell back to the global correction, the stitched axis
+    # IS the global fit -- so the result must inherit the global fit's quality
+    # verdict, exactly as the seam-free path does. Declaring it failed (the
+    # old behaviour) made callers discard a quality-passed global correction
+    # and re-detect on the raw axis whenever the per-segment fits were all
+    # demoted (e.g. by the catalog-alias disagreement gate).
+    if n_fit > 0:
+        quality_passed = True
+        quality_reason = "segmented_passed"
+    else:
+        quality_passed = bool(global_result.quality_passed)
+        quality_reason = f"segmented_all_fallback_global_{global_result.quality_reason}"
     details = {
         "segments": n_seg,
         "seam_count": int(seams.size),
@@ -1342,8 +1388,8 @@ def _build_segmented_result(
         n_peaks=int(global_result.n_peaks),
         n_candidates=int(global_result.n_candidates),
         matched_peak_fraction=float(global_result.matched_peak_fraction),
-        quality_passed=(n_fit > 0),
-        quality_reason="segmented_passed" if n_fit > 0 else "segmented_all_fallback",
+        quality_passed=quality_passed,
+        quality_reason=quality_reason,
         details=details,
     )
 
@@ -1359,6 +1405,7 @@ def calibrate_wavelength_axis_segmented(
     min_segment_points: int = 16,
     segment_min_inliers: int = 10,
     segment_max_rmse_nm: float = 0.06,
+    segment_max_global_disagreement_nm: float = 0.5,
     inlier_tolerance_nm: float = 0.08,
     max_pair_window_nm: float = 2.0,
     candidate_models: Sequence[CalibrationModel] = ("shift", "affine"),
@@ -1405,6 +1452,18 @@ def calibrate_wavelength_axis_segmented(
         Minimum robust inlier pairs for a segment fit to be trusted.
     segment_max_rmse_nm : float
         Maximum inlier RMSE for a segment fit to be trusted.
+    segment_max_global_disagreement_nm : float
+        Maximum allowed difference between a trusted segment fit's median
+        correction and the global fit's median correction over the same
+        samples (default 0.5 nm). A short channel fit against a dense line
+        catalog can lock onto a self-coherent but *wrong* registration 1-2 nm
+        away (excellent inlier RMSE on the wrong lines); real channel
+        registration errors on stitched instruments are a few local pixels.
+        Segments beyond this bound are demoted to the global fallback offset
+        instead of being trusted (and instead of later tearing the stitched
+        axis apart at the seams, which previously forced a wholesale revert
+        of *all* segment fits). When the global fit failed, the bound acts as
+        a maximum absolute segment correction.
     inlier_tolerance_nm, max_pair_window_nm
         Robust-fit tolerances passed through to the per-segment calibrator.
     candidate_models : sequence
@@ -1541,6 +1600,7 @@ def calibrate_wavelength_axis_segmented(
         max_pair_window_nm=max_pair_window_nm,
         segment_min_inliers=segment_min_inliers,
         segment_max_rmse_nm=segment_max_rmse_nm,
+        segment_max_global_disagreement_nm=segment_max_global_disagreement_nm,
         affine_coverage_gate=affine_coverage_gate,
         coverage_min_anchor_span_fraction=coverage_min_anchor_span_fraction,
         coverage_max_extrapolation_px=coverage_max_extrapolation_px,
