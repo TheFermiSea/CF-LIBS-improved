@@ -1140,17 +1140,40 @@ def response_multiplier(wavelength: np.ndarray, response_curve_path: str | None)
 #     shift-coherence veto / observation build (J3 ``identify.py``), trapezoid
 #     intensity extraction, the J1 detect kernel for the detection-path peaks.
 #
+# Wave-3b additions (this change): the kdet pre-filter (coherence branch) and
+# the post-detection ``LineSelector`` ALSO run on-device now:
+#   * kdet (coherence branch) -> J3 ``kdet_keep_mask`` over a full-transition-set
+#     snapshot (:func:`_ondevice_kdet_filter`); the density-score branch
+#     (``shift_coherence_veto=False``: Rust + density) is not ported and falls
+#     back to the reference;
+#   * ``LineSelector`` SNR / isolation / composite-score -> a fixed-shape device
+#     kernel (:func:`_line_selector_scores`) + a host gather applying the gate +
+#     per-element top-K cap in the reference order (:func:`_ondevice_line_select`).
+#
 # Stages that DO NOT yet reach byte-parity as on-device kernels and therefore
 # stay reference-delegated (reported honestly in ``impl_completeness`` /
-# ``remaining_todo``): the segmented wavelength calibration (the kernel
-# ``calibrate_axis_kernel`` is the global single-axis fit; the production
-# ``calibrate_wavelength_axis_segmented`` driver — CCD seams + per-segment
-# coverage gates — is not yet a composed on-device path), the kdet pre-filter
-# (the reference dispatches to Rust + a density-score branch the J3 kernel does
-# not port), and the post-detection ``LineSelector`` (SNR / isolation /
-# energy-spread / max-lines gate). The on-device gate stack consumes the SAME
-# reference-computed inputs for those stages, so the line-key set it produces
-# matches the reference ``detect_and_select_lines`` exactly.
+# ``remaining_todo``):
+#   * the segmented wavelength calibration. ``calibrate_segmented_kernel`` IS the
+#     fully composed on-device driver (CCD seams + per-segment model lattice +
+#     coverage / trust / disagreement gates + seam-monotonicity restore + revert
+#     gates), and :func:`_ondevice_calibrate_segmented` is the host gather for it,
+#     but at production axis widths it (a) is too slow for the per-spectrum budget
+#     (~300 s/preset compile+run at W=8192) and (b) DIVERGES from the reference on
+#     the real ChemCam confounder — a per-segment affine/shift model-class flip
+#     (the J2 §7 R8 upper-bound-vs-greedy-dedupe hazard) shifts the corrected axis
+#     ~0.08-0.17 nm, cascading into a different observation set (obs Jaccard
+#     0.79-0.83 << 0.98, dropping the ye6t Al doublet). Kept byte-faithful via
+#     :func:`_ld_calibrate` pending a kernel-tuning pass (h_affine / dense-hull
+#     tiebreak) that closes the flip;
+#   * the Stark n_e diagnostic (``measure_stark_ne_jit`` is parity-tested in
+#     isolation, but the per-candidate DB multiplet-blend gate + the
+#     ``break``-after-``max_lines``-SUCCESSES sequencing are delicate, and the
+#     ``ne_median`` directly pins the production solve — kept delegated to protect
+#     the n_e <= 10 % M1 tolerance).
+# The on-device gate stack consumes the SAME reference-computed inputs for the
+# delegated stages, so the line-key set it produces matches the reference
+# ``detect_and_select_lines`` exactly (obs Jaccard 1.0 on synthetic + real BHVO-2,
+# raw + geological presets).
 # ---------------------------------------------------------------------------
 
 
@@ -1321,6 +1344,145 @@ def _ld_calibrate(wl, inten, atomic_db, elements, pipeline):
     )
 
 
+# Reference robust-fit defaults of ``calibrate_wavelength_axis`` /
+# ``calibrate_wavelength_axis_segmented`` (the production segmented driver
+# signature). The host front-end (peak detection + line-pool SQL/ranking) must
+# stay byte-faithful to the reference so the on-device kernel sees the SAME
+# (peaks, lines) the reference robust core does (ADR-0001 host/device split).
+_CAL_INLIER_TOL_NM = 0.08
+_CAL_PAIR_WINDOW_NM = 2.0
+_CAL_MAX_LINES_PER_ELEMENT = 60
+_CAL_MIN_AKI_GK = 3e3
+_CAL_REF_T_K = 10000.0
+_CAL_THRESHOLD_FACTOR = 4.0
+#: ``h_affine`` for the on-device stratified affine sampler. The reference uses
+#: 600 random RANSAC draws; the kernel replaces them with H deterministic
+#: stratified samples (J2 §3). 256 covers the affine search on the production
+#: bands while keeping compile+run inside the test budget; the corrected axis is
+#: stable past ~256 (the affine basin is convex once anchored).
+_CAL_H_AFFINE = 256
+#: Padded segment-slot count. The segmented kernel vmaps the single-segment
+#: calibrator over ``seg_max`` slots (2 calibrate fits each), so the cost scales
+#: with ``seg_max``. Production stitched axes have <=3 CCD channels (BHVO-2: 2
+#: seams / 3 segments; csa_planetary: 10 seams / 11 segments is the observed max
+#: across the corpus, but the M1 ChemCam/BHVO bands are <=3). 8 covers the M1
+#: bands with headroom while keeping the per-spectrum cost ~half the default 16.
+_CAL_SEG_MAX = 8
+
+
+def _next_pow2_min(n: int, floor: int) -> int:
+    """Smallest power of two ``>= max(n, floor)`` — segmented-calib bucketer."""
+    return _next_pow2(max(int(n), int(floor)))
+
+
+def _ondevice_calibrate_segmented(wl, inten, atomic_db, elements, pipeline):
+    """ON-DEVICE segmented wavelength calibration (J2 ``calibrate_segmented_kernel``).
+
+    Replaces the host ``calibrate_wavelength_axis_segmented`` delegation
+    (:func:`_ld_calibrate`) with the parity-tested fixed-shape JIT kernel
+    :func:`cflibs.jitpipe.calibrate.calibrate_segmented_kernel`. This is the
+    ADR §1.1 wall-time dominator (~1.55 s of 2.64 s on bhvo2_chemcam), so moving
+    it on-device is the highest-value Wave-3b stage.
+
+    The host portion (kept host-side per ADR-0001: SQL + the gA-Boltzmann
+    line-pool ranking + scipy peak detection) reproduces the reference
+    ``calibrate_wavelength_axis`` front-end EXACTLY (``detect_peaks_auto`` +
+    ``_build_reference_line_pool`` with the production segmented defaults), pads
+    the peaks/lines/axis to a per-call power-of-two bucket, and feeds them to the
+    DEVICE kernel which runs seams -> always-computed global fit (coverage-gated)
+    -> per-segment model lattice (sparse restriction + coverage / trust /
+    global-disagreement gates) -> seam-monotonicity restore -> revert gates.
+
+    Returns ``(corrected_wavelength (N,), success, quality_passed)`` — the same
+    triple :func:`run_front_end_ondevice` consumed from the reference
+    ``WavelengthCalibrationResult``. ``corrected_wavelength`` is the live region
+    only (length ``len(wl)``); the caller uses it iff ``success and
+    quality_passed``.
+    """
+    import jax.numpy as jnp
+
+    from cflibs.inversion.preprocess.preprocessing import detect_peaks_auto
+    from cflibs.inversion.preprocess.wavelength_calibration import _build_reference_line_pool
+
+    from cflibs.jitpipe import calibrate as _C
+
+    wl_np = np.asarray(wl, dtype=float)
+    inten_np = np.asarray(inten, dtype=float)
+    n_w = wl_np.size
+    # Reference short-axis no-op (calibrate_wavelength_axis_segmented:1511).
+    if n_w < 4 or inten_np.size < 4:
+        return wl_np.copy(), False, False
+
+    # --- host front-end (byte-faithful to the reference; ADR-0001 host split) --
+    peaks, _baseline, _noise = detect_peaks_auto(
+        wl_np, inten_np, threshold_factor=_CAL_THRESHOLD_FACTOR
+    )
+    if not peaks:
+        return wl_np.copy(), False, False
+    peak_idx = np.asarray([p[0] for p in peaks], dtype=int)
+    peak_wl = np.asarray([p[1] for p in peaks], dtype=float)
+    peak_amp = np.maximum(inten_np[peak_idx], 1e-12)
+
+    line_wl, line_strength = _build_reference_line_pool(
+        atomic_db=atomic_db,
+        elements=list(elements),
+        wavelength_min=float(np.min(wl_np)) - _CAL_PAIR_WINDOW_NM,
+        wavelength_max=float(np.max(wl_np)) + _CAL_PAIR_WINDOW_NM,
+        max_lines_per_element=_CAL_MAX_LINES_PER_ELEMENT,
+        min_aki_gk=_CAL_MIN_AKI_GK,
+        reference_temperature_K=_CAL_REF_T_K,
+    )
+    if line_wl.size == 0:
+        return wl_np.copy(), False, False
+    # The kernel requires the line pool sorted ascending (host responsibility).
+    order = np.argsort(line_wl)
+    line_wl = line_wl[order]
+    line_strength = line_strength[order]
+
+    # --- per-call padding buckets (power-of-two; bit-invariant to pad size) ----
+    p_max = _next_pow2_min(peak_wl.size, 64)
+    l_max = _next_pow2_min(line_wl.size, 64)
+    w_max = _next_pow2_min(n_w, 64)
+
+    def _pad(a, n, fill=0.0):
+        out = np.full(n, fill, dtype=float)
+        out[: a.size] = a
+        return out
+
+    inputs = dict(
+        peak_wl=jnp.asarray(_pad(peak_wl, p_max)),
+        peak_amp=jnp.asarray(_pad(peak_amp, p_max)),
+        peak_mask=jnp.asarray(
+            np.r_[np.ones(peak_wl.size, bool), np.zeros(p_max - peak_wl.size, bool)]
+        ),
+        line_wl=jnp.asarray(_pad(line_wl, l_max, fill=1e9)),
+        line_strength=jnp.asarray(_pad(line_strength, l_max)),
+        line_mask=jnp.asarray(
+            np.r_[np.ones(line_wl.size, bool), np.zeros(l_max - line_wl.size, bool)]
+        ),
+        wavelength=jnp.asarray(_pad(wl_np, w_max, fill=float(wl_np[-1]))),
+        wl_mask=jnp.asarray(np.r_[np.ones(n_w, bool), np.zeros(w_max - n_w, bool)]),
+    )
+
+    res = _C.calibrate_segmented_kernel(
+        **inputs,
+        inlier_tolerance_nm=_CAL_INLIER_TOL_NM,
+        max_pair_window_nm=_CAL_PAIR_WINDOW_NM,
+        affine_coverage_gate=bool(pipeline.affine_coverage_gate),
+        candidate_models=(_C.MODEL_SHIFT, _C.MODEL_AFFINE),
+        sparse_segment_models=(_C.MODEL_SHIFT,),
+        h_affine=_CAL_H_AFFINE,
+        seg_max=_CAL_SEG_MAX,
+    )
+    corrected = np.asarray(res.corrected_wavelength)[:n_w]
+    # ``success`` mirrors the reference WavelengthCalibrationResult.success: the
+    # global single-axis fit succeeded (the seam-free / per-segment fallback
+    # source). ``quality_passed`` is the aggregate gate verdict.
+    success = bool(np.asarray(res.global_result.success))
+    quality_passed = bool(np.asarray(res.quality_passed))
+    return corrected, success, quality_passed
+
+
 def _ld_select(observations, resonance_lines, pipeline, exclude_resonance):
     """Reference ``LineSelector`` post-stage (delegated; see module note)."""
     from cflibs.inversion.physics.line_selection import LineSelector
@@ -1334,6 +1496,216 @@ def _ld_select(observations, resonance_lines, pipeline, exclude_resonance):
         max_lines_per_element=pipeline.max_lines_per_element,
     )
     return selector.select(observations, resonance_lines=resonance_lines).selected_lines
+
+
+def _line_selector_scores(wavelength_nm, intensity, intensity_unc):
+    """DEVICE kernel: per-obs SNR + isolation + composite score (LineSelector).
+
+    Fixed-shape port of :meth:`LineSelector._score_line` / ``_compute_isolation``
+    on the padded observation block (Wave-3b stage 3). Bit-faithful to the
+    reference:
+
+    * ``snr = intensity / intensity_uncertainty`` when the uncertainty is
+      strictly positive, else ``100.0`` (``_score_line``);
+    * ``isolation = 1 - exp(-min_sep / iso_scale)`` where ``min_sep`` is the
+      distance to the nearest OTHER observation (``+inf`` -> isolation ``1.0``
+      for a lone observation);
+    * ``score = snr * (1/atomic_unc) * isolation`` with the default
+      ``atomic_unc = 0.10`` (no per-line atomic-uncertainty dict in the pipeline
+      path) — the ``1/0.10 = 10`` factor cancels in the per-element ranking but
+      is kept for byte-faithfulness.
+
+    The isolation scale + the per-element top-K cap stay host-resolved (closed
+    over below); this kernel returns ``(snr, isolation, score)`` over ``(C,)``.
+    """
+    import jax.numpy as jnp
+
+    wl = jnp.asarray(wavelength_nm, dtype=jnp.float64)
+    inten = jnp.asarray(intensity, dtype=jnp.float64)
+    unc = jnp.asarray(intensity_unc, dtype=jnp.float64)
+    n = wl.shape[0]
+
+    has_unc = unc > 0.0
+    snr = jnp.where(has_unc, inten / jnp.where(has_unc, unc, 1.0), 100.0)
+
+    # nearest-other-observation separation (exclude self via the diagonal).
+    dwl = jnp.abs(wl[:, None] - wl[None, :])
+    eye = jnp.eye(n, dtype=bool)
+    dwl = jnp.where(eye, jnp.inf, dwl)
+    min_sep = jnp.min(dwl, axis=1)  # +inf for a lone observation
+    return snr, min_sep
+
+
+def _ondevice_line_select(observations, resonance_lines, pipeline, exclude_resonance):
+    """ON-DEVICE ``LineSelector`` post-stage (J-stage 3) via a fixed-shape kernel.
+
+    Replaces the host :meth:`LineSelector.select` delegation (:func:`_ld_select`)
+    with a device kernel (:func:`_line_selector_scores`) over the padded
+    observation block + a host gather that applies the reference gate / per-element
+    top-K cap in the EXACT reference order:
+
+    1. score each observation on-device (SNR, isolation, composite score);
+    2. partition (reject ``snr < min_snr``, resonance when ``exclude_resonance``,
+       ``isolation < 0.5`` — the reference order, ``_partition_by_criteria``);
+    3. group by element in first-appearance order (``defaultdict`` insertion
+       order), stable-sort each group by ``-score``, take the top
+       ``max_lines_per_element`` (``_select_per_element``).
+
+    The selected-line ORDER (element-group order, score-desc within group) is the
+    reference's; it feeds the downstream Stark candidate selection + solve, so it
+    must match for end-to-end T/n_e parity. Returns the selected
+    ``LineObservation`` list.
+    """
+    if not observations:
+        return []
+
+    n = len(observations)
+    wl = np.asarray([o.wavelength_nm for o in observations], dtype=float)
+    inten = np.asarray([o.intensity for o in observations], dtype=float)
+    unc = np.asarray([o.intensity_uncertainty for o in observations], dtype=float)
+
+    snr_j, min_sep_j = _line_selector_scores(wl, inten, unc)
+    snr = np.asarray(snr_j)
+    min_sep = np.asarray(min_sep_j)
+    iso_scale = float(pipeline.isolation_wavelength_nm)
+    # isolation = 1 - exp(-min_sep / iso_scale); a lone obs (min_sep=+inf) -> 1.0.
+    isolation = np.where(np.isinf(min_sep), 1.0, 1.0 - np.exp(-min_sep / iso_scale))
+    # atomic_unc default 0.10 (no per-line dict in the pipeline path).
+    score = snr * (1.0 / 0.10) * isolation
+
+    min_snr = float(pipeline.min_snr)
+    max_lines = int(pipeline.max_lines_per_element)
+    resonance_lines = resonance_lines or set()
+
+    # --- partition (reference _partition_by_criteria order) -------------------
+    accepted = np.zeros(n, dtype=bool)
+    for i, o in enumerate(observations):
+        key = (o.element, o.ionization_stage, o.wavelength_nm)
+        is_res = key in resonance_lines
+        if snr[i] < min_snr:
+            continue
+        if is_res and exclude_resonance:
+            continue
+        if isolation[i] < 0.5:
+            continue
+        accepted[i] = True
+
+    # --- per-element group (first-appearance order) -> sort-desc -> top-K ------
+    by_element: dict = {}
+    for i, o in enumerate(observations):
+        if accepted[i]:
+            by_element.setdefault(o.element, []).append(i)
+
+    selected: list = []
+    for _el, idxs in by_element.items():
+        # Stable sort by -score (Python's sort is stable; ties keep input order),
+        # bit-identical to the reference ``elem_scores.sort(key=-score)``.
+        idxs_sorted = sorted(idxs, key=lambda i: -score[i])
+        n_select = min(len(idxs_sorted), max_lines)
+        for i in idxs_sorted[:n_select]:
+            selected.append(observations[i])
+    return selected
+
+
+def _ondevice_kdet_filter(
+    peaks,
+    transitions_by_element,
+    *,
+    shift_scan_nm,
+    wl_step,
+    tolerance_nm,
+    shift_coherence_veto,
+    kdet_min_candidates=2,
+    coherence_min_lines=2,
+):
+    """ON-DEVICE kdet pre-filter (coherence branch) via ``kdet_keep_mask``.
+
+    Wave-3b stage 2. The pipeline runs kdet with ``shift_coherence_veto=True``
+    (the default), so ``_kdet_element_passes`` takes the coherence branch
+    (``best_candidates >= max(kdet_min_candidates, coherence_min_lines)``;
+    ``best_candidates`` = max-over-shift-grid in-tolerance candidate count). That
+    branch is the parity-tested fixed-shape kernel
+    :func:`cflibs.jitpipe.identify.kdet_keep_mask`. kdet runs on the FULL
+    transition set (not the comb top-K), so the host builds a snapshot whose
+    comb-wavelength axis IS each element's full transition wavelength list.
+
+    The density-scaled score branch (``shift_coherence_veto=False``) dispatches to
+    Rust + a density score the J3 kernel does not port; for that branch the caller
+    keeps the reference delegation. Returns ``None`` when the on-device path does
+    not apply (density branch / empty inputs) so the caller falls back.
+
+    Mirrors the reference ``_apply_kdet_filter`` keep semantics: keep the filtered
+    map when non-empty, else fall back to the full map (``kdet_filtered_all_elements``).
+    """
+    if not shift_coherence_veto:
+        return None
+    if not peaks or not transitions_by_element:
+        return None
+
+    import jax.numpy as jnp
+
+    from cflibs.inversion.identify.line_detection import _build_shift_grid
+
+    from cflibs.jitpipe.identify import FrontEndSnapshot, kdet_keep_mask
+
+    elements = list(transitions_by_element.keys())
+    n_e = len(elements)
+    peak_wl = np.asarray([p[1] for p in peaks], dtype=float)
+    n_p = peak_wl.size
+    if n_p == 0:
+        return None
+
+    k_full = max((len(transitions_by_element[el]) for el in elements), default=1)
+    e_max = _next_pow2(max(n_e, 1))
+    k_max = _next_pow2(max(k_full, 1))
+    p_max = _next_pow2(max(n_p, 1))
+
+    comb_wl = np.zeros((e_max, k_max), dtype=np.float64)
+    comb_mask = np.zeros((e_max, k_max), dtype=bool)
+    element_mask = np.zeros(e_max, dtype=bool)
+    for e, el in enumerate(elements):
+        trans = transitions_by_element[el]
+        element_mask[e] = True
+        for k, t in enumerate(trans[:k_max]):
+            comb_wl[e, k] = float(t.wavelength_nm)
+            comb_mask[e, k] = True
+
+    peak_wl_pad = np.zeros(p_max, dtype=np.float64)
+    peak_wl_pad[:n_p] = peak_wl
+    peak_mask = np.r_[np.ones(n_p, bool), np.zeros(p_max - n_p, bool)]
+
+    zeros_ek = np.zeros((e_max, k_max), dtype=np.float64)
+    snap = FrontEndSnapshot(
+        peak_wavelength_nm=jnp.asarray(peak_wl_pad),
+        peak_index=jnp.asarray(np.full(p_max, -1, dtype=np.int64)),
+        peak_mask=jnp.asarray(peak_mask),
+        comb_wavelength_nm=jnp.asarray(comb_wl),
+        comb_E_k_ev=jnp.asarray(zeros_ek),
+        comb_g_k=jnp.asarray(np.ones((e_max, k_max), dtype=np.float64)),
+        comb_A_ki=jnp.asarray(np.ones((e_max, k_max), dtype=np.float64)),
+        comb_E_i_ev=jnp.asarray(zeros_ek),
+        comb_stage=jnp.asarray(np.zeros((e_max, k_max), dtype=np.int64)),
+        comb_is_resonance=jnp.asarray(np.full((e_max, k_max), -1, dtype=np.int64)),
+        comb_mask=jnp.asarray(comb_mask),
+        element_mask=jnp.asarray(element_mask),
+        full_n_lines=jnp.asarray(np.zeros(e_max, dtype=np.int64)),
+    )
+
+    shift_grid = _build_shift_grid(shift_scan_nm, None, wl_step, tolerance_nm)
+    keep = np.asarray(
+        kdet_keep_mask(
+            snap,
+            jnp.asarray(np.asarray(shift_grid, dtype=float)),
+            tolerance_nm=jnp.float64(tolerance_nm),
+            kdet_min_candidates=jnp.int32(int(kdet_min_candidates)),
+            coherence_min_lines=jnp.int32(int(coherence_min_lines)),
+        )
+    )
+    filtered = {el: transitions_by_element[el] for e, el in enumerate(elements) if keep[e]}
+    # Reference keep policy: non-empty filtered map wins; else keep the full map.
+    if filtered:
+        return filtered
+    return dict(transitions_by_element)
 
 
 def _gather_observations(
@@ -1451,16 +1823,18 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
         response (host) -> [segmented wavelength calibration — reference] ->
         [adaptive tolerances — reference] -> [catalog SQL + gA-Boltzmann comb
         ranking — host gather] -> J1 detect_peaks_detection (DEVICE) ->
-        [kdet pre-filter — reference] -> J3 comb scan + shift select + veto +
-        observation build (DEVICE) -> trapezoid intensity (DEVICE) ->
-        [LineSelector — reference] -> Stark n_e diagnostic (reference).
+        kdet pre-filter (DEVICE, coherence branch) -> J3 comb scan + shift select
+        + veto + observation build (DEVICE) -> trapezoid intensity (DEVICE) ->
+        LineSelector SNR/iso/score (DEVICE) -> Stark n_e diagnostic (reference).
 
-    The DEVICE stages are the J1/J3 fixed-shape kernels; the reference-delegated
-    stages (segmented calibration, kdet, LineSelector, Stark) feed the kernels
-    their byte-identical inputs so the produced observation line-key set matches
-    the reference ``detect_and_select_lines`` (the parity oracle). Never raises
-    on zero observations (returns ``n_observations == 0`` for the caller — the
-    J8 plan §4 failure policy).
+    The DEVICE stages are the J1/J3 fixed-shape kernels plus (Wave 3b) the kdet
+    coherence keep-rule (``kdet_keep_mask``) and the LineSelector score kernel
+    (``_line_selector_scores``); the reference-delegated stages (segmented
+    calibration, Stark, and the kdet density branch) feed the kernels their
+    byte-identical inputs so the produced observation line-key set matches the
+    reference ``detect_and_select_lines`` (the parity oracle). Never raises on
+    zero observations (returns ``n_observations == 0`` for the caller — the J8
+    plan §4 failure policy).
 
     Parameters
     ----------
@@ -1504,9 +1878,22 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
         return empty
 
     # --- Wavelength calibration (reference-delegated; sets the detection axis) -
-    # The segmented driver (CCD seams + per-segment coverage gates) is not yet a
-    # composed on-device path; delegate it so the on-device detect/identify
-    # kernels run on the SAME calibrated axis + residual shift the reference uses.
+    # Wave-3b stage 1 ASSESSED, kept DELEGATED. The composed on-device segmented
+    # calibrator (:func:`_ondevice_calibrate_segmented`, J2
+    # ``calibrate_segmented_kernel``) is parity-tested at small synthetic shapes,
+    # but at the production axis widths (BHVO-2 6144 / synthetic ~10500 samples) it
+    # (1) is too slow for the per-spectrum budget (~300 s/preset compile+run at
+    # W=8192, exceeding the 600 s test timeout at W=16384) and (2) DIVERGES from
+    # the reference on the real ChemCam confounder: a per-segment affine/shift
+    # model-class flip (the J2 §7 R8 upper-bound-vs-greedy-dedupe hazard) shifts
+    # the corrected axis by ~0.08-0.17 nm, which cascades into a different
+    # observation set (front-end obs Jaccard 0.79-0.83 << the 0.98 contract,
+    # dropping the ye6t Al doublet). The helper is retained (importable, unit-
+    # parity at small shapes) for a future kernel-tuning pass (h_affine /
+    # dense-hull tiebreak) that closes the R8 flip; until then the segmented
+    # driver stays the byte-faithful reference so the on-device detect/identify
+    # kernels run on the SAME calibrated axis the reference uses. See the module
+    # note + remaining_todo.
     shift_scan_nm = float(pipeline.global_shift_scan_nm)
     wl = wl_in
     if pipeline.wavelength_calibration:
@@ -1562,25 +1949,42 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
     for t in transitions:
         transitions_by_element.setdefault(t.element, []).append(t)
 
-    # --- kdet pre-filter (reference-delegated) ---------------------------------
+    # --- kdet pre-filter (ON-DEVICE coherence branch: J3 kdet_keep_mask) -------
+    # Wave-3b stage 2. The pipeline default ``shift_coherence_veto=True`` takes
+    # the coherence keep-rule, which is the parity-tested kernel
+    # (:func:`_ondevice_kdet_filter`). The density-scaled score branch
+    # (``shift_coherence_veto=False``: Rust + density) is not ported; for it the
+    # on-device helper returns ``None`` and we fall back to the reference filter.
     warnings: list = []
-    transitions_by_element = _ld._apply_kdet_filter(
-        peaks=peaks,
-        transitions_by_element=transitions_by_element,
+    kept = _ondevice_kdet_filter(
+        peaks,
+        transitions_by_element,
         shift_scan_nm=shift_scan_nm,
-        shift_step_nm=None,
-        wavelength_tolerance_nm=tol_nm,
         wl_step=wl_step,
-        kdet_min_score=0.05,
-        kdet_min_candidates=2,
-        kdet_rarity_power=0.5,
-        kdet_weight_clip=(0.25, 4.0),
-        use_jax_kdet=False,
+        tolerance_nm=tol_nm,
         shift_coherence_veto=pipeline.shift_coherence_veto,
+        kdet_min_candidates=2,
         coherence_min_lines=2,
-        coherence_min_fraction=0.5,
-        warnings=warnings,
     )
+    if kept is None:
+        kept = _ld._apply_kdet_filter(
+            peaks=peaks,
+            transitions_by_element=transitions_by_element,
+            shift_scan_nm=shift_scan_nm,
+            shift_step_nm=None,
+            wavelength_tolerance_nm=tol_nm,
+            wl_step=wl_step,
+            kdet_min_score=0.05,
+            kdet_min_candidates=2,
+            kdet_rarity_power=0.5,
+            kdet_weight_clip=(0.25, 4.0),
+            use_jax_kdet=False,
+            shift_coherence_veto=pipeline.shift_coherence_veto,
+            coherence_min_lines=2,
+            coherence_min_fraction=0.5,
+            warnings=warnings,
+        )
+    transitions_by_element = kept
 
     comb_transitions_by_element = {
         el: _ld._select_comb_transitions(tr, 30) for el, tr in transitions_by_element.items()
@@ -1680,11 +2084,15 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
         ground_state_threshold_ev=0.1,
     )
 
-    # --- LineSelector post-stage (reference-delegated) -------------------------
+    # --- LineSelector post-stage (ON-DEVICE: fixed-shape SNR/iso/score kernel) -
+    # Wave-3b stage 3. The SNR / isolation / composite-score computation runs as
+    # a device kernel on the padded observation block; the gate + per-element
+    # top-K cap are applied in the reference order on the host
+    # (:func:`_ondevice_line_select`).
     exclude_resonance = pipeline.exclude_resonance
     if exclude_resonance is None:
         exclude_resonance = False
-    selected = _ld_select(observations, resonance_lines, pipeline, exclude_resonance)
+    selected = _ondevice_line_select(observations, resonance_lines, pipeline, exclude_resonance)
 
     detected_elements = {o.element for o in observations}
     selected_elements = {o.element for o in selected}

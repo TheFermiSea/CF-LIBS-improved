@@ -476,19 +476,24 @@ def test_solve_stage_bucket_invariance(db, snapshot):
 
 
 # ---------------------------------------------------------------------------
-# 6. ON-DEVICE FRONT-END parity (Wave 3, the J9/M2 prerequisite; ADR R8).
+# 6. ON-DEVICE FRONT-END parity (Wave 3 / 3b, the J9/M2 prerequisite; ADR R8).
 #
 # ``run_one(ondevice_front_end=True)`` runs the detect + identify gate stack as
 # the parity-tested JIT kernels (J1 detect, J3 comb scan / shift select / veto /
 # observation build, trapezoid intensity) instead of byte-for-byte delegating to
-# the reference ``detect_and_select_lines``. The catalog SQL + gA-Boltzmann comb
-# ranking, the segmented wavelength calibration, the kdet pre-filter and the
-# post-detection ``LineSelector`` stay host-side (the host gathers MAY be
-# dynamic-shaped pre-jit; calibration / kdet / selector are not yet composed
-# on-device — see ``cflibs/jitpipe/host.py`` module note). The CONTRACT is that
-# the on-device gate stack reproduces the reference front-end observation set
-# (accepted elements + line-keys, floor Jaccard >= 0.98) AND that ``run_one``
-# stays within the M1 end-to-end tolerances.
+# the reference ``detect_and_select_lines``. Wave 3b additionally moves the
+# **kdet pre-filter** (coherence branch, J3 ``kdet_keep_mask``) and the
+# post-detection **LineSelector** (SNR / isolation / score on a fixed-shape
+# kernel) on-device. The catalog SQL + gA-Boltzmann comb ranking stay host-side;
+# the segmented wavelength calibration and the Stark n_e diagnostic stay
+# reference-delegated (segmented calibration is composed on-device as
+# ``calibrate_segmented_kernel`` but is too slow + diverges on the real ChemCam
+# confounder at production widths — the J2 §7 R8 hazard — so the byte-faithful
+# reference is kept; Stark stays delegated to protect the n_e pin; see
+# ``cflibs/jitpipe/host.py`` module note). The CONTRACT is that the on-device
+# gate stack reproduces the reference front-end observation set (accepted
+# elements + line-keys, floor Jaccard >= 0.98) AND that ``run_one`` stays within
+# the M1 end-to-end tolerances.
 # ---------------------------------------------------------------------------
 
 
@@ -723,3 +728,165 @@ def test_ondevice_failure_policy_parity(db, snapshot):
     assert all(v == 0.0 for v in got.concentrations.values())
     assert np.isfinite(got.temperature_K)
     assert np.isfinite(got.electron_density_cm3)
+
+
+# ---------------------------------------------------------------------------
+# 7. Wave-3b stage parity: the two stages newly moved on-device, asserted in
+# isolation against their REFERENCE counterparts (fast — no segmented kernel).
+#
+#  * kdet pre-filter (coherence branch) -> ``_ondevice_kdet_filter`` (J3
+#    ``kdet_keep_mask``) vs the reference ``_apply_kdet_filter``;
+#  * LineSelector (SNR / isolation / score / top-K) -> ``_ondevice_line_select``
+#    (fixed-shape ``_line_selector_scores`` kernel) vs ``LineSelector.select``.
+#
+# These pin the newly-on-device stages directly; the end-to-end Jaccard + M1
+# tolerances above remain the integration contract.
+# ---------------------------------------------------------------------------
+
+
+def test_ondevice_kdet_filter_matches_reference(db):
+    """ON-DEVICE kdet coherence filter == reference ``_apply_kdet_filter`` (BHVO-2).
+
+    The coherence branch (``shift_coherence_veto=True``, the pipeline default)
+    runs the J3 ``kdet_keep_mask`` kernel on a full-transition-set snapshot. On
+    the real ChemCam BHVO-2 spectrum it must keep the SAME element set the
+    reference Rust/NumPy filter keeps, with identical per-element transition
+    counts.
+    """
+    import copy
+
+    from cflibs.inversion.identify import line_detection as _ld
+    from cflibs.inversion.preprocess.preprocessing import detect_peaks_auto
+
+    from cflibs.jitpipe.host import _ondevice_kdet_filter
+
+    if not _REAL_SPECTRUM.exists():  # pragma: no cover - env-dependent
+        pytest.skip("real ChemCam BHVO-2 fixture not present")
+    wl, inten = _load_real_spectrum()
+    elements = ["Si", "Ti", "Al", "Fe", "Mn", "Mg", "Ca", "Na", "K"]
+
+    peaks, _b, _n = detect_peaks_auto(wl, inten, threshold_factor=4.0)
+    trans = _ld._load_transitions(
+        db,
+        elements,
+        wavelength_min=float(wl.min()),
+        wavelength_max=float(wl.max()),
+        min_relative_intensity=0.001,
+        top_k_per_element=None,
+    )
+    tbe: dict = {}
+    for t in trans:
+        tbe.setdefault(t.element, []).append(t)
+
+    tol = 0.1
+    wl_step = float(np.median(np.diff(wl)))
+    ref = _ld._apply_kdet_filter(
+        peaks=peaks,
+        transitions_by_element=copy.deepcopy(tbe),
+        shift_scan_nm=0.5,
+        shift_step_nm=None,
+        wavelength_tolerance_nm=tol,
+        wl_step=wl_step,
+        kdet_min_score=0.05,
+        kdet_min_candidates=2,
+        kdet_rarity_power=0.5,
+        kdet_weight_clip=(0.25, 4.0),
+        use_jax_kdet=False,
+        shift_coherence_veto=True,
+        coherence_min_lines=2,
+        coherence_min_fraction=0.5,
+        warnings=[],
+    )
+    dev = _ondevice_kdet_filter(
+        peaks,
+        tbe,
+        shift_scan_nm=0.5,
+        wl_step=wl_step,
+        tolerance_nm=tol,
+        shift_coherence_veto=True,
+    )
+    assert set(dev.keys()) == set(ref.keys()), (sorted(dev), sorted(ref))
+    for el in ref:
+        assert len(dev[el]) == len(ref[el]), (el, len(dev[el]), len(ref[el]))
+
+
+def test_ondevice_kdet_density_branch_falls_back():
+    """Density-score branch (``shift_coherence_veto=False``) is NOT ported -> None.
+
+    That branch dispatches to Rust + a density score the J3 kernel does not
+    port; the on-device helper must return ``None`` so the caller falls back to
+    the reference filter (no silent divergence).
+    """
+    from cflibs.jitpipe.host import _ondevice_kdet_filter
+
+    peaks = [(10, 400.0), (20, 410.0)]
+    tbe = {"Fe": []}
+    assert (
+        _ondevice_kdet_filter(
+            peaks,
+            tbe,
+            shift_scan_nm=0.5,
+            wl_step=0.05,
+            tolerance_nm=0.1,
+            shift_coherence_veto=False,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("exclude_resonance", [False, True])
+def test_ondevice_line_select_matches_reference(exclude_resonance):
+    """ON-DEVICE ``_ondevice_line_select`` == reference ``LineSelector.select``.
+
+    Bit-faithful selected-line set AND order (the order feeds Stark/solve) on a
+    synthetic multi-element observation list, with and without resonance
+    exclusion. The score kernel runs on-device; the gate + per-element top-K cap
+    are applied in the reference order on the host.
+    """
+    from cflibs.inversion.common import LineObservation
+    from cflibs.inversion.physics.line_selection import LineSelector
+
+    from cflibs.jitpipe.host import _ondevice_line_select
+
+    rng = np.random.default_rng(7)
+    observations = []
+    resonance_lines = set()
+    for el in ("Fe", "Ca", "Ti"):
+        for k in range(8):
+            wl = 400.0 + rng.uniform(0.0, 40.0)
+            obs = LineObservation(
+                wavelength_nm=wl,
+                intensity=rng.uniform(50.0, 500.0),
+                intensity_uncertainty=rng.uniform(1.0, 20.0),
+                element=el,
+                ionization_stage=1,
+                E_k_ev=rng.uniform(2.0, 6.0),
+                g_k=3.0,
+                A_ki=1e7,
+                aki_uncertainty=0.1,
+            )
+            observations.append(obs)
+            if k == 0:
+                resonance_lines.add((el, 1, wl))
+
+    class _Cfg:
+        min_snr = 10.0
+        min_energy_spread_ev = 2.0
+        min_lines_per_element = 2
+        isolation_wavelength_nm = 0.1
+        max_lines_per_element = 4
+
+    selector = LineSelector(
+        min_snr=_Cfg.min_snr,
+        min_energy_spread_ev=_Cfg.min_energy_spread_ev,
+        min_lines_per_element=_Cfg.min_lines_per_element,
+        exclude_resonance=exclude_resonance,
+        isolation_wavelength_nm=_Cfg.isolation_wavelength_nm,
+        max_lines_per_element=_Cfg.max_lines_per_element,
+    )
+    ref = selector.select(observations, resonance_lines=resonance_lines).selected_lines
+    dev = _ondevice_line_select(observations, resonance_lines, _Cfg, exclude_resonance)
+
+    ref_keys = [(o.element, round(o.wavelength_nm, 6)) for o in ref]
+    dev_keys = [(o.element, round(o.wavelength_nm, 6)) for o in dev]
+    assert dev_keys == ref_keys, (dev_keys, ref_keys)
