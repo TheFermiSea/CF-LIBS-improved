@@ -43,4 +43,16 @@ jobs:
 
     - name: Test with Pytest
       run: |
-        pytest tests/ -m "not requires_db and not requires_bayesian and not requires_rust and not slow"
+        pytest tests/ --ignore=tests/jitpipe -m "not requires_db and not requires_bayesian and not requires_rust and not slow"
+
+    - name: Test jitpipe parity suite (isolated)
+      # The jitpipe/ parity tests compare JAX stages against the reference
+      # physics and must run in a FRESH process: accumulated process-global
+      # state from the upstream suite (JAX compilation cache, atomic/partition
+      # memoization, fp64 flag) can perturb a reference fit and silently change
+      # a setup precondition (test_parity_j6 measure_stark_ne n_lines 3 -> 1).
+      # The suite passes deterministically in isolation; a dedicated invocation
+      # guarantees that. (tests/jitpipe/conftest.py adds in-suite hermetic resets
+      # so a combined local `pytest tests/` run stays green too.)
+      run: |
+        pytest tests/jitpipe -m "not requires_db and not requires_bayesian and not requires_rust and not slow"
