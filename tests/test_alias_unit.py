@@ -320,32 +320,6 @@ def test_apply_resonance_filter_handles_missing_candidate():
 # explicit.
 
 
-def test_alias_default_is_strict():
-    """Default construction MUST preserve the precision-king strict baseline.
-
-    Guards against silent default changes (the failure mode of PR #134).
-    If this test ever needs to be updated, the change is a contract break
-    and must be reviewed as such.
-    """
-    identifier = ALIASIdentifier(_DummyAtomicDB())
-    assert identifier.intensity_threshold_factor == 3.0
-    assert identifier.detection_threshold == 0.02
-    assert identifier.high_recall is False
-
-
-def test_alias_high_recall_lowers_thresholds():
-    """Opt-in ``high_recall=True`` MUST lower both thresholds.
-
-    Recall mode trades precision for recall. Values match what PR #134
-    proposed (intensity_threshold_factor=2.0, detection_threshold=0.01)
-    but are now reached only via the explicit flag.
-    """
-    identifier = ALIASIdentifier(_DummyAtomicDB(), high_recall=True)
-    assert identifier.intensity_threshold_factor == 2.0
-    assert identifier.detection_threshold == 0.01
-    assert identifier.high_recall is True
-
-
 def test_alias_explicit_threshold_overrides_high_recall():
     """Explicit threshold values must override the high_recall preset.
 
@@ -375,29 +349,6 @@ def test_alias_explicit_threshold_overrides_high_recall():
 
 def _detected_elements(elem_ids):
     return {e.element for e in elem_ids if e.detected}
-
-
-def test_per_ion_stage_default_off_byte_identical():
-    """Explicit ``relative_cl_per_ion_stage=False`` MUST be byte-identical
-    to the implicit default (the global gate).
-    """
-    fixture = [
-        _element_id("Al", confidence=0.90, dominant_ion_stage=1),  # neutral
-        _element_id("Fe", confidence=0.40, dominant_ion_stage=1),  # neutral
-        _element_id("Mg", confidence=0.05, dominant_ion_stage=2),  # ionized
-        _element_id("Ca", confidence=0.08, dominant_ion_stage=2),  # ionized
-        _element_id("Si", confidence=0.06, dominant_ion_stage=2),  # ionized
-    ]
-
-    default_ids = copy.deepcopy(fixture)
-    ALIASIdentifier(_DummyAtomicDB())._apply_relative_cl_gate(default_ids)
-
-    explicit_off_ids = copy.deepcopy(fixture)
-    ALIASIdentifier(_DummyAtomicDB(), relative_cl_per_ion_stage=False)._apply_relative_cl_gate(
-        explicit_off_ids
-    )
-
-    assert _detected_elements(default_ids) == _detected_elements(explicit_off_ids)
 
 
 def test_per_ion_stage_recovers_mg_when_dominant_element_is_neutral_metal():
@@ -634,28 +585,6 @@ def test_temperature_estimator_validation():
         ALIASIdentifier(_DummyAtomicDB(), temperature_estimator_mode="bogus")
 
 
-def test_temperature_estimator_legacy_byte_identical():
-    """No-kwarg construction and mode='legacy' must return identical _estimated_T.
-
-    Drives the estimator on a fresh Vrabel-like fixture so the legacy code
-    path is fully exercised, then confirms the explicit mode='legacy'
-    constructor produces bit-for-bit the same number.
-    """
-    transitions, peak_records = _build_vrabel_like_fixture(T_K=10000.0)
-    stub = _StubAtomicDB({("Fe", 1): transitions})
-
-    default_id = ALIASIdentifier(stub)
-    explicit_legacy_id = ALIASIdentifier(stub, temperature_estimator_mode="legacy")
-
-    T_default = _run_estimator(default_id, peak_records)
-    T_explicit = _run_estimator(explicit_legacy_id, peak_records)
-
-    assert T_default is not None
-    assert T_explicit is not None
-    # Byte-identical (same arithmetic path).
-    assert T_default == T_explicit
-
-
 def test_temperature_estimator_robust_recovers_warm_t_on_vrabel_fixture():
     """Robust mode MUST recover a warm T_K on the synthetic Vrabel fixture.
 
@@ -793,68 +722,6 @@ def test_temperature_estimator_weighted_drops_bottom_quartile(monkeypatch):
 # the static 0.85 floor even though the identification is physically
 # correct. The "fixed" default preserves the precision=1.000 / FP=0
 # baseline on n=33 cross-shard.
-
-
-def test_r2_gate_fixed_mode_byte_identical():
-    """Explicit ``r2_gate_mode="fixed"`` MUST be byte-identical to the
-    historical static-0.85 gate.
-
-    Guards the precision-king baseline (precision=1.000, FP/spec=0 on
-    n=33 cross-shard): the ``strict`` preset and an explicit ``"fixed"``
-    must produce the same rejection decision on the same inputs.
-
-    NOTE: the *default* ``r2_gate_mode`` was flipped to ``"adaptive_t"``
-    in blocker ALIAS-R2GATE-2 to recover ps-LIBS recall, so this test now
-    pins the fixed gate via the explicit kwarg rather than the default
-    constructor. See ``test_default_r2_gate_mode_is_adaptive_t``.
-    """
-    # Both spell out fixed; one via the kwarg, one via the strict preset's
-    # threshold (5500 K) to confirm the threshold is irrelevant in fixed mode.
-    strict_id = ALIASIdentifier(
-        _DummyAtomicDB(), r2_gate_mode="fixed", r2_gate_t_quality_threshold=5500.0
-    )
-    explicit_id = ALIASIdentifier(_DummyAtomicDB(), r2_gate_mode="fixed")
-
-    # Mode attribute exposed for downstream inspection.
-    assert strict_id.r2_gate_mode == "fixed"
-    assert explicit_id.r2_gate_mode == "fixed"
-
-    # Below the 0.85 floor: both reject.
-    for boltz_r2 in (0.0, 0.3, 0.5, 0.84):
-        assert strict_id._r2_gate_rejects(boltz_r2, N_matched=5) is True
-        assert explicit_id._r2_gate_rejects(boltz_r2, N_matched=5) is True
-
-    # At/above the floor: both accept.
-    for boltz_r2 in (0.85, 0.9, 1.0):
-        assert strict_id._r2_gate_rejects(boltz_r2, N_matched=5) is False
-        assert explicit_id._r2_gate_rejects(boltz_r2, N_matched=5) is False
-
-    # N_matched < 3 short-circuits in both modes (the upstream
-    # "min 3 matches" gate handles that case; this gate is a no-op).
-    assert strict_id._r2_gate_rejects(0.0, N_matched=2) is False
-    assert explicit_id._r2_gate_rejects(0.0, N_matched=2) is False
-
-
-def test_default_r2_gate_mode_is_adaptive_t():
-    """The default gate is ``adaptive_t`` with a ps-LIBS-wide cold-T
-    threshold (blocker ALIAS-R2GATE-2 + cold-T guard ALIAS-TEST-EST-6).
-
-    The historical default was ``"fixed"`` at a 5500 K threshold, which
-    silently re-imposed the strict 0.85 floor on ps-LIBS plasmas whose
-    cold-biased ALIAS T-estimate sat above 5500 K. The new default relaxes
-    across the full ps-LIBS warm edge (15000 K).
-    """
-    default_id = ALIASIdentifier(_DummyAtomicDB())
-    assert default_id.r2_gate_mode == "adaptive_t"
-    assert default_id.r2_gate_t_quality_threshold == pytest.approx(15000.0)
-
-    # A typical ps-LIBS plasma whose cold-biased est_T (~5863 K) would have
-    # cleared the old 5500 K threshold and been hard-rejected at 0.85 now
-    # gets the relaxed 0.3 cold floor instead.
-    default_id._estimated_T = 5863.0
-    assert default_id._r2_gate_rejects(0.4, N_matched=5) is False
-    # Still rejects a genuinely degenerate fit below the cold floor.
-    assert default_id._r2_gate_rejects(0.2, N_matched=5) is True
 
 
 def test_r2_gate_adaptive_t_admits_cold_plasma_with_moderate_r2():

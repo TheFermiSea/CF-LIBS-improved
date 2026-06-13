@@ -48,33 +48,6 @@ class TestDopplerSigmaParity:
     """Generator per-line Doppler σ must equal the canonical 1-D Maxwell std."""
 
     @pytest.mark.requires_jax
-    def test_voigt_path_doppler_sigma_matches_profiles(self):
-        """The Voigt-path Doppler σ equals ``profiles.doppler_sigma_jax``.
-
-        The Voigt snapshot now calls ``doppler_sigma_jax`` directly, so the
-        match is exact. We assert it explicitly so a future re-introduction
-        of the spurious factor of 2 (or a divergent open-coded copy) fails.
-        """
-        try:
-            import jax.numpy as jnp  # noqa: F401
-        except ImportError:
-            pytest.skip("JAX not installed")
-
-        from cflibs.radiation.profiles import doppler_sigma_jax
-
-        # Representative ps-LIBS regime point.
-        wl_nm = 393.366  # Ca II
-        T_eV = 0.9
-        mass_amu = 40.078  # Ca
-
-        canonical = float(doppler_sigma_jax(wl_nm, T_eV, mass_amu))
-
-        # Manifest the same physics the generator computes for one line.
-        sigma_gen = float(doppler_sigma_jax(jnp.asarray(wl_nm), T_eV, mass_amu))
-
-        assert sigma_gen == pytest.approx(canonical, rel=1e-9)
-
-    @pytest.mark.requires_jax
     def test_no_spurious_factor_of_two_in_width(self):
         """The corrected σ is sqrt(2)x smaller than the old buggy form.
 

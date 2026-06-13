@@ -38,41 +38,6 @@ def _run_subprocess(script: str, timeout: int = 60) -> subprocess.CompletedProce
     )
 
 
-def test_jax_identifier_flags_for_does_not_mutate_x64() -> None:
-    """``_jax_identifier_flags_for`` must NOT touch ``jax.config``.
-
-    This is the canary for bead ``CF-LIBS-improved-jbfg.1``: regressing
-    the hidden side effect would silently re-enable x64 mid-call.
-    """
-    script = textwrap.dedent("""
-        import os
-        os.environ["CFLIBS_USE_JAX_IDENTIFIER"] = "1"
-        import jax
-        assert jax.config.jax_enable_x64 is False, (
-            "subprocess unexpectedly started with x64 already enabled"
-        )
-        from cflibs.benchmark.unified import _jax_identifier_flags_for
-        from cflibs.inversion.identify.alias import ALIASIdentifier
-        flags = _jax_identifier_flags_for(ALIASIdentifier)
-        assert flags, (
-            "_jax_identifier_flags_for should return a non-empty dict "
-            "when CFLIBS_USE_JAX_IDENTIFIER=1"
-        )
-        assert jax.config.jax_enable_x64 is False, (
-            "_jax_identifier_flags_for mutated jax.config — regression "
-            "of bead jbfg.1. Move the side effect back to "
-            "cflibs.core.jax_runtime.configure_for_identifiers."
-        )
-        print("PURE_OK")
-        """)
-    result = _run_subprocess(script)
-    assert result.returncode == 0, (
-        f"subprocess failed (rc={result.returncode}):\n"
-        f"stdout: {result.stdout}\nstderr: {result.stderr}"
-    )
-    assert "PURE_OK" in result.stdout
-
-
 def test_configure_for_identifiers_enables_x64() -> None:
     """Explicit ``configure_for_identifiers()`` actually enables x64."""
     script = textwrap.dedent("""

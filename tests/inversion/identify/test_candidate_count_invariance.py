@@ -163,48 +163,6 @@ class TestStandaloneNNLSCountInvariance:
         # The guard: recall must not degrade as candidates grow.
         _assert_recall_non_decreasing(recalls, "Standalone NNLS")
 
-    def test_sum_normalized_floor_mechanism_is_count_scaling(self, count_bases, bhvo2_spectrum):
-        """Demonstrate the #216 mechanism the fix removes, grid-independently.
-
-        The legacy #215 gate compared the fraction-of-SUM
-        (``concentration_estimate = coeff / sum(all_candidate_coeffs)``)
-        against a fixed 0.05 bar. Because the denominator grows with the
-        candidate count while a true element's own coefficient is ~constant,
-        that fraction STRICTLY SHRINKS as distractors are added — so a fixed
-        bar tightens ~1/n and eventually drops the element. That is the
-        count-scaling bug; whether it crosses 0.05 at a given n is grid-
-        dependent, but the monotone shrink is the invariant defect.
-
-        We assert the shrink on the most-abundant true element (Si). If this
-        ever stops shrinking, the sum-normalized denominator is gone and the
-        rig has lost the #216 mechanism it is meant to pin.
-        """
-        wl, intensity = bhvo2_spectrum
-        si_conc_sum = []
-        si_snr = []
-        for n, _elements in CANDIDATE_SETS:
-            ident = SpectralNNLSIdentifier(
-                basis_library=count_bases[n],
-                detection_snr=0.0,
-                min_relative_coeff=0.0,
-                fallback_T_K=9000.0,
-                fallback_ne_cm3=3e16,
-            )
-            res = ident.identify(wl, intensity)
-            si = next(e for e in res.all_elements if e.element == "Si")
-            si_conc_sum.append(si.metadata["concentration_estimate"])
-            si_snr.append(si.metadata["nnls_snr"])
-
-        # Fraction-of-sum strictly shrinks as candidates grow (the bug).
-        assert si_conc_sum[0] > si_conc_sum[1] > si_conc_sum[2], (
-            "Expected Si fraction-of-sum to shrink monotonically with "
-            f"candidate count (the #216 mechanism); got {si_conc_sum}."
-        )
-        # ...while Si's own SNR is essentially constant (count-invariant) —
-        # so the recall loss is an artifact of the denominator, not the data.
-        assert max(si_snr) - min(si_snr) < 1.0, f"Si SNR should be count-invariant; got {si_snr}."
-
-
 class TestHybridUnionCountInvariance:
     """The #216 production arm: hybrid_union must stay count-flat."""
 

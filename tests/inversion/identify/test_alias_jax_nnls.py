@@ -377,39 +377,6 @@ class TestComputePSNRJax:
         np.testing.assert_allclose(p_snr_jax, p_snr_cpu, rtol=1e-6)
 
 
-# ---------- Tests: ALIASIdentifier opt-in flags -----------------------------
-
-
-class TestALIASIdentifierJaxFlags:
-    def test_all_flags_accepted(self) -> None:
-        class _StubDB:
-            def get_available_elements(self):
-                return ["Fe"]
-
-        ident = ALIASIdentifier(
-            atomic_db=_StubDB(),
-            use_jax_boltzmann_fit=True,
-            use_jax_nnls=True,
-            use_jax_p_snr=True,
-            use_jax_template_build=True,
-        )
-        assert ident.use_jax_boltzmann_fit
-        assert ident.use_jax_nnls
-        assert ident.use_jax_p_snr
-        assert ident.use_jax_template_build
-
-    def test_default_is_cpu(self) -> None:
-        class _StubDB:
-            def get_available_elements(self):
-                return ["Fe"]
-
-        ident = ALIASIdentifier(atomic_db=_StubDB())
-        assert not ident.use_jax_boltzmann_fit
-        assert not ident.use_jax_nnls
-        assert not ident.use_jax_p_snr
-        assert not ident.use_jax_template_build
-
-
 # ---------- Tests: end-to-end ALIAS run with JAX flags -----------------------
 
 

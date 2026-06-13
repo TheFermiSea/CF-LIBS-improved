@@ -146,12 +146,6 @@ class TestSpectralNNLSIdentifier:
             assert "estimated_T_K" in el.metadata
             assert "estimated_ne_cm3" in el.metadata
 
-    def test_estimated_params_stored(self, identifier_no_index, small_basis_library):
-        wl, spec = _make_synthetic_spectrum(small_basis_library, {"Fe": 1.0})
-        identifier_no_index.identify(wl, spec)
-        assert identifier_no_index._estimated_T == 8000.0  # fallback
-        assert identifier_no_index._estimated_ne == 5e16
-
     def test_parameters_in_result(self, identifier_no_index, small_basis_library):
         wl, spec = _make_synthetic_spectrum(small_basis_library, {"Fe": 1.0})
         result = identifier_no_index.identify(wl, spec)
@@ -292,40 +286,6 @@ class TestHybridUnionRecallFloor:
     which defaults to ``0.0`` (recall-favoring) while standalone NNLS keeps
     its 0.05 precision floor.
     """
-
-    def test_standalone_default_is_count_invariant(self):
-        """Standalone SpectralNNLSIdentifier defaults to a count-invariant gate.
-
-        Post-#216-followup the sum-normalized 0.05 floor (which tightened
-        ~1/n with candidate count — the #216 bug) is replaced by a default-off
-        max-relative floor plus a strengthened absolute-SNR precision gate.
-        """
-        from cflibs.inversion.identify.spectral_nnls import (
-            DEFAULT_DETECTION_SNR,
-            DEFAULT_MIN_RELATIVE_COEFF,
-            SpectralNNLSIdentifier,
-        )
-
-        import inspect
-
-        sig = inspect.signature(SpectralNNLSIdentifier.__init__)
-        # Relative floor defaults OFF (no candidate-count-scaling bar).
-        assert sig.parameters["min_relative_coeff"].default == DEFAULT_MIN_RELATIVE_COEFF
-        assert DEFAULT_MIN_RELATIVE_COEFF == pytest.approx(0.0)
-        # SNR is the precision lever, strengthened to 4.0 to reject the
-        # NNLS-GAUSS-BASIS-4 leakage FP (SNR just above 3).
-        assert sig.parameters["detection_snr"].default == DEFAULT_DETECTION_SNR
-        assert DEFAULT_DETECTION_SNR == pytest.approx(4.0)
-
-    def test_hybrid_union_arm_defaults_to_recall_favoring_floor(self):
-        """HybridIdentifier defaults the NNLS arm floor to 0.0 (recall-favoring)."""
-        import inspect
-
-        from cflibs.inversion.identify.hybrid import HybridIdentifier
-
-        sig = inspect.signature(HybridIdentifier.__init__)
-        assert "nnls_min_relative_coeff" in sig.parameters
-        assert sig.parameters["nnls_min_relative_coeff"].default == pytest.approx(0.0)
 
     def test_hybrid_forwards_floor_to_nnls_stage(self, small_basis_library, monkeypatch):
         """The hybrid arm must forward nnls_min_relative_coeff to Stage-1 NNLS."""

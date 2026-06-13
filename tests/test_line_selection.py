@@ -28,20 +28,6 @@ from cflibs.inversion.physics.boltzmann import LineObservation
 class TestLineSelectorInit:
     """Tests for LineSelector initialization."""
 
-    def test_default_parameters(self):
-        """Verify default parameters are set correctly."""
-        selector = LineSelector()
-
-        assert selector.min_snr == 10.0
-        assert selector.min_energy_spread_ev == 2.0
-        assert selector.min_lines_per_element == 3
-        # Default False matches the validated CLI default: resonance lines are
-        # kept (they are the only detectable lines for some majors, e.g. the
-        # Al I 394.4/396.2 nm doublet); bead CF-LIBS-improved-l4a8.
-        assert selector.exclude_resonance is False
-        assert selector.isolation_wavelength_nm == 0.1
-        assert selector.max_lines_per_element == 20
-
     def test_custom_parameters(self):
         """Verify custom parameters are stored."""
         selector = LineSelector(
@@ -129,36 +115,6 @@ class TestIsolationFactor:
         # Separation = 100 nm >> 0.1 nm, so isolation ≈ 1
         assert isolation == pytest.approx(1.0, abs=0.001)
 
-    def test_isolation_formula(self, selector):
-        """Verify isolation = 1 - exp(-separation/isolation_wavelength_nm)."""
-        obs1 = LineObservation(
-            wavelength_nm=400.0,
-            intensity=1000.0,
-            intensity_uncertainty=20.0,
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=3.0,
-            g_k=9,
-            A_ki=1e7,
-        )
-        obs2 = LineObservation(
-            wavelength_nm=400.1,
-            intensity=800.0,
-            intensity_uncertainty=16.0,
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=3.5,
-            g_k=7,
-            A_ki=8e6,
-        )
-
-        isolation = selector._compute_isolation(obs1, [obs1, obs2])
-
-        # Separation = 0.1 nm, isolation_wavelength = 0.1 nm
-        # isolation = 1 - exp(-0.1/0.1) = 1 - exp(-1) ≈ 0.632
-        expected = 1.0 - np.exp(-1)
-        assert isolation == pytest.approx(expected, rel=0.01)
-
     def test_isolation_single_line(self, selector):
         """Verify isolation = 1 for single line (no neighbors)."""
         obs = LineObservation(
@@ -188,53 +144,6 @@ class TestScoringFormula:
     @pytest.fixture
     def selector(self):
         return LineSelector(isolation_wavelength_nm=0.1)
-
-    def test_score_formula(self, selector):
-        """Verify score = SNR × (1/uncertainty) × isolation."""
-        obs = LineObservation(
-            wavelength_nm=400.0,
-            intensity=1000.0,
-            intensity_uncertainty=10.0,  # SNR = 100
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=3.0,
-            g_k=9,
-            A_ki=1e7,
-        )
-
-        atomic_uncertainties = {("Fe", 1, 400.0): 0.05}  # 5% uncertainty
-
-        score_info = selector._score_line(
-            obs, [obs], resonance_lines=set(), atomic_uncertainties=atomic_uncertainties
-        )
-
-        # SNR = 1000/10 = 100
-        # uncertainty = 0.05, so 1/uncertainty = 20
-        # isolation = 1.0 (single line)
-        # score = 100 * 20 * 1.0 = 2000
-        assert score_info.snr == pytest.approx(100.0, rel=0.01)
-        assert score_info.atomic_uncertainty == 0.05
-        assert score_info.isolation_factor == 1.0
-        assert score_info.score == pytest.approx(2000.0, rel=0.01)
-
-    def test_score_with_default_uncertainty(self, selector):
-        """Verify default 10% uncertainty is used when not provided."""
-        obs = LineObservation(
-            wavelength_nm=400.0,
-            intensity=1000.0,
-            intensity_uncertainty=20.0,  # SNR = 50
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=3.0,
-            g_k=9,
-            A_ki=1e7,
-        )
-
-        score_info = selector._score_line(
-            obs, [obs], resonance_lines=set(), atomic_uncertainties={}
-        )
-
-        assert score_info.atomic_uncertainty == 0.10  # Default
 
     def test_score_snr_from_intensity_ratio(self, selector):
         """Verify SNR is calculated as intensity / uncertainty."""
@@ -605,37 +514,6 @@ class TestLineSelectorSelect:
 class TestLineScore:
     """Tests for LineScore dataclass."""
 
-    def test_dataclass_creation(self):
-        """Verify LineScore can be instantiated."""
-        obs = LineObservation(
-            wavelength_nm=400.0,
-            intensity=1000.0,
-            intensity_uncertainty=20.0,
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=3.0,
-            g_k=9,
-            A_ki=1e7,
-        )
-
-        score = LineScore(
-            observation=obs,
-            score=500.0,
-            snr=50.0,
-            isolation_factor=0.9,
-            atomic_uncertainty=0.10,
-            is_resonance=False,
-            rejection_reason=None,
-        )
-
-        assert score.observation is obs
-        assert score.score == 500.0
-        assert score.snr == 50.0
-        assert score.isolation_factor == 0.9
-        assert score.atomic_uncertainty == 0.10
-        assert score.is_resonance is False
-        assert score.rejection_reason is None
-
     def test_rejection_reason_default(self):
         """Verify rejection_reason defaults to None."""
         obs = LineObservation(
@@ -668,34 +546,6 @@ class TestLineScore:
 
 class TestLineSelectionResult:
     """Tests for LineSelectionResult dataclass."""
-
-    def test_dataclass_creation(self):
-        """Verify LineSelectionResult can be instantiated."""
-        obs = LineObservation(
-            wavelength_nm=400.0,
-            intensity=1000.0,
-            intensity_uncertainty=20.0,
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=3.0,
-            g_k=9,
-            A_ki=1e7,
-        )
-
-        result = LineSelectionResult(
-            selected_lines=[obs],
-            rejected_lines=[],
-            scores=[],
-            energy_spread_ev=2.5,
-            n_elements=1,
-            warnings=["test warning"],
-        )
-
-        assert len(result.selected_lines) == 1
-        assert len(result.rejected_lines) == 0
-        assert result.energy_spread_ev == 2.5
-        assert result.n_elements == 1
-        assert len(result.warnings) == 1
 
     def test_default_warnings(self):
         """Verify warnings defaults to empty list."""

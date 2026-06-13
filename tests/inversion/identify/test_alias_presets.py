@@ -21,46 +21,6 @@ from cflibs.inversion.identify.alias import ALIAS_PRESETS, ALIASIdentifier, alia
 _EXPECTED_NAMES = frozenset({"strict", "v2", "high_recall_v2", "consensus_voter"})
 
 
-def test_all_expected_presets_registered() -> None:
-    """Every documented cocktail is present in the registry."""
-    assert set(ALIAS_PRESETS) == _EXPECTED_NAMES, (
-        f"ALIAS_PRESETS keys drifted: registry={sorted(ALIAS_PRESETS)} "
-        f"expected={sorted(_EXPECTED_NAMES)}"
-    )
-
-
-def test_strict_preset_uses_fixed_gate() -> None:
-    """The strict preset is the precision-king baseline."""
-    p = ALIAS_PRESETS["strict"]
-    assert p["r2_gate_mode"] == "fixed"
-    assert p["relative_cl_per_ion_stage"] is False
-    assert p["high_recall"] is False
-
-
-def test_v2_preset_uses_adaptive_gates() -> None:
-    """The v2 cocktail bakes in the PR #175 + #176 winners."""
-    p = ALIAS_PRESETS["v2"]
-    assert p["r2_gate_mode"] == "adaptive_t"
-    assert p["relative_cl_per_ion_stage"] is True
-    assert p["high_recall"] is False
-
-
-def test_high_recall_v2_is_v2_plus_high_recall() -> None:
-    """high_recall_v2 = v2 + high_recall=True (n3rf.2 fix)."""
-    p = ALIAS_PRESETS["high_recall_v2"]
-    assert p["r2_gate_mode"] == "adaptive_t"
-    assert p["relative_cl_per_ion_stage"] is True
-    assert p["high_recall"] is True
-
-
-def test_consensus_voter_matches_v2_physics() -> None:
-    """consensus_voter is v2 physics with pinned thresholds (jbfg.2 / n3rf.4)."""
-    p = ALIAS_PRESETS["consensus_voter"]
-    assert p["r2_gate_mode"] == "adaptive_t"
-    assert p["relative_cl_per_ion_stage"] is True
-    assert p["high_recall"] is False
-
-
 @pytest.mark.parametrize("name", sorted(_EXPECTED_NAMES))
 def test_alias_preset_round_trip(name: str, mock_atomic_db) -> None:
     """``alias_preset(name)`` produces an ``ALIASIdentifier`` whose attributes

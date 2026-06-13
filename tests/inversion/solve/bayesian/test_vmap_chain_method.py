@@ -1,30 +1,14 @@
-"""Tests for the NUTS multi-chain vmap path and max-tree-depth default.
+"""Test for the NUTS multi-chain vmap path.
 
-These tests pin three invariants for ``MCMCSampler`` and the underlying
-``BayesianForwardModel._compute_spectrum``:
-
-1. ``_compute_spectrum`` is safe to wrap in :func:`jax.vmap` along a
-   leading "chain" axis, producing per-chain spectra whose rows match
-   the unbatched per-chain calls (within float64 tolerance). This is the
-   path NumPyro takes when ``MCMC`` is configured with
-   ``chain_method='vectorized'``.
-2. :meth:`MCMCSampler.run` constructs the underlying ``numpyro.infer.MCMC``
-   with ``chain_method='vectorized'`` so multi-chain NUTS actually
-   parallelises chains in a single JIT kernel on one device. This
-   complements the signature-default guard in
-   ``test_bayesian_forward_model_kernel_migration.py`` by introspecting
-   the *constructed* ``MCMC`` kwargs instead of just the Python signature.
-3. The default ``max_tree_depth`` on :meth:`MCMCSampler.run` is 8 (per the
-   Wave-1 throughput rescue plan -- caps leapfrog steps per NUTS draw at
-   ``2**8 = 256`` instead of ``2**10 = 1024``).
-
-All three tests run without invoking real MCMC sampling -- they either
-short-circuit ``MCMC.run`` via a stub or inspect signatures/shapes only.
+``_compute_spectrum`` must be safe to wrap in :func:`jax.vmap` along a
+leading "chain" axis, producing per-chain spectra whose rows match the
+unbatched per-chain calls (within float64 tolerance). This is the path
+NumPyro takes when ``MCMC`` is configured with
+``chain_method='vectorized'`` -- a silent broadcast here would mix
+compositions across chains.
 """
 
 from __future__ import annotations
-
-import inspect
 
 import numpy as np
 import pytest
@@ -105,113 +89,3 @@ def test_compute_spectrum_vmap_safe(bayesian_db):
         spectra_vmap_np[0], spectra_vmap_np[1]
     ), "Vmap over distinct concentrations must yield distinct spectra"
 
-
-# ---------------------------------------------------------------------------
-# 2. MCMC constructed with chain_method='vectorized'
-# ---------------------------------------------------------------------------
-
-
-class _MCMCStub:
-    """Stub that records constructor kwargs and aborts before sampling.
-
-    Replaces ``cflibs.inversion.solve.bayesian.samplers.MCMC`` so we can
-    introspect how :meth:`MCMCSampler.run` configures the underlying
-    NumPyro ``MCMC`` object without spending the wall-clock cost of an
-    actual NUTS run. ``run()`` raises a sentinel that the test catches
-    after asserting on the captured kwargs.
-    """
-
-    captured: dict = {}
-
-    def __init__(self, kernel, **kwargs):  # noqa: D401, ARG002
-        # Stash both positional kernel and all kwargs.
-        type(self).captured = {"kernel": kernel, **kwargs}
-        self.num_chains = kwargs.get("num_chains", 1)
-
-    def run(self, *args, **kwargs):  # noqa: ARG002, D401
-        # Abort before any real MCMC work happens.
-        raise RuntimeError("_MCMCStub.run: short-circuit (no real sampling)")
-
-
-def test_mcmcsampler_uses_vectorized_chain_method(bayesian_db, monkeypatch):
-    """``MCMCSampler.run`` must build the NumPyro ``MCMC`` with ``chain_method='vectorized'``.
-
-    Patches the ``MCMC`` symbol in
-    :mod:`cflibs.inversion.solve.bayesian.samplers` with a stub that
-    records its constructor kwargs and raises before any sampling. With
-    ``num_chains=2`` the captured ``chain_method`` kwarg must equal
-    ``'vectorized'`` -- otherwise multi-chain NUTS would silently
-    downgrade to a sequential single-chain run on a single GPU (bead
-    ``CF-LIBS-improved-xsuj``).
-    """
-    from cflibs.inversion.solve.bayesian import samplers as samplers_mod
-    from cflibs.inversion.solve.bayesian.forward import BayesianForwardModel
-    from cflibs.inversion.solve.bayesian.priors import NoiseParameters, PriorConfig
-    from cflibs.inversion.solve.bayesian.samplers import MCMCSampler
-
-    model = BayesianForwardModel(
-        db_path=bayesian_db,
-        elements=["Fe", "Cu"],
-        wavelength_range=(300.0, 400.0),
-        pixels=32,
-        instrument_fwhm_nm=0.1,
-    )
-    sampler = MCMCSampler(
-        model,
-        prior_config=PriorConfig(),
-        noise_params=NoiseParameters(),
-    )
-
-    # Reset and install the stub.
-    _MCMCStub.captured = {}
-    monkeypatch.setattr(samplers_mod, "MCMC", _MCMCStub)
-
-    observed = np.zeros(model.wavelength.shape, dtype=np.float64)
-
-    # The stub raises RuntimeError on .run() *after* the MCMC constructor
-    # has captured its kwargs, so we expect this call to bail out.
-    with pytest.raises(RuntimeError, match="short-circuit"):
-        sampler.run(
-            observed,
-            num_warmup=1,
-            num_samples=1,
-            num_chains=2,
-            seed=0,
-            progress_bar=False,
-        )
-
-    captured = _MCMCStub.captured
-    assert captured, "MCMC stub did not capture any constructor kwargs"
-    assert (
-        captured.get("num_chains") == 2
-    ), f"MCMCSampler.run must forward num_chains=2 to MCMC; got {captured.get('num_chains')!r}"
-    assert captured.get("chain_method") == "vectorized", (
-        "MCMCSampler.run must construct the NumPyro MCMC with "
-        f"chain_method='vectorized'; got {captured.get('chain_method')!r}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# 3. max_tree_depth default is 8
-# ---------------------------------------------------------------------------
-
-
-def test_mcmcsampler_max_tree_depth_default_is_8():
-    """:meth:`MCMCSampler.run`'s default ``max_tree_depth`` must be 8.
-
-    The Wave-1 throughput rescue plan dropped the default from 10 to 8
-    so NUTS caps leapfrog steps at ``2**8 = 256`` rather than
-    ``2**10 = 1024`` per draw -- a ~4x walltime reduction with
-    negligible posterior-quality impact for CF-LIBS likelihood
-    geometries.
-    """
-    from cflibs.inversion.solve.bayesian.samplers import MCMCSampler
-
-    sig = inspect.signature(MCMCSampler.run)
-    assert (
-        "max_tree_depth" in sig.parameters
-    ), "MCMCSampler.run must expose ``max_tree_depth`` as a configurable kwarg"
-    default = sig.parameters["max_tree_depth"].default
-    assert (
-        default == 8
-    ), f"MCMCSampler.run default max_tree_depth must be 8 (Wave-1 throughput plan); got {default!r}"

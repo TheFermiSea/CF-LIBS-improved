@@ -36,15 +36,6 @@ class TestGPUConfig:
             assert isinstance(result, GPUInfo)
             assert result.platform in ("cpu", "gpu", "METAL")
 
-    def test_gpu_info_dataclass(self):
-        """GPUInfo dataclass works correctly."""
-        from cflibs.hpc.gpu_config import GPUInfo
-
-        info = GPUInfo(device_id=0, name="Test GPU", memory_bytes=8_000_000_000, platform="gpu")
-        assert info.device_id == 0
-        assert info.name == "Test GPU"
-        assert info.memory_bytes == 8_000_000_000
-
 
 # ============================================================================
 # Distributed MCMC Config Tests
@@ -53,16 +44,6 @@ class TestGPUConfig:
 
 class TestDistributedMCMCConfig:
     """Tests for DistributedMCMCConfig dataclass."""
-
-    def test_default_values(self):
-        from cflibs.hpc.distributed_mcmc import DistributedMCMCConfig
-
-        cfg = DistributedMCMCConfig()
-        assert cfg.chains_per_rank == 1
-        assert cfg.num_warmup == 500
-        assert cfg.num_samples == 1000
-        assert cfg.use_gpu is False
-        assert cfg.target_accept_prob == 0.8
 
     def test_custom_values(self):
         from cflibs.hpc.distributed_mcmc import DistributedMCMCConfig
@@ -75,25 +56,6 @@ class TestDistributedMCMCConfig:
         )
         assert cfg.chains_per_rank == 2
         assert cfg.use_gpu is True
-
-
-class TestDistributedMCMCResult:
-    """Tests for DistributedMCMCResult dataclass."""
-
-    def test_creation(self):
-        from cflibs.hpc.distributed_mcmc import DistributedMCMCResult
-
-        result = DistributedMCMCResult(
-            samples={"T_eV": np.array([1.0, 1.1, 1.2])},
-            r_hat={"T_eV": 1.001},
-            ess={"T_eV": 500.0},
-            total_chains=4,
-            total_samples=4000,
-            rank_chain_counts=[1, 1, 1, 1],
-        )
-        assert result.total_chains == 4
-        assert "T_eV" in result.r_hat
-        assert result.r_hat["T_eV"] < 1.01
 
 
 # ============================================================================

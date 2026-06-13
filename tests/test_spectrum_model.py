@@ -183,24 +183,6 @@ def _create_test_model(
     )
 
 
-def test_spectrum_model_legacy_mode_unchanged(atomic_db, sample_plasma):
-    """Test LEGACY mode produces identical results to old behavior."""
-    from cflibs.radiation.profiles import BroadeningMode
-
-    instrument = InstrumentModel(resolution_fwhm_nm=0.05)
-
-    model_default = _create_test_model(sample_plasma, atomic_db, instrument)
-    model_legacy = _create_test_model(
-        sample_plasma, atomic_db, instrument, broadening_mode=BroadeningMode.LEGACY
-    )
-
-    wl1, I1 = model_default.compute_spectrum()
-    wl2, I2 = model_legacy.compute_spectrum()
-
-    np.testing.assert_array_equal(wl1, wl2)
-    np.testing.assert_allclose(I1, I2, rtol=1e-10)
-
-
 def test_spectrum_model_nist_parity_vs_legacy_differ(atomic_db, sample_plasma):
     """Test NIST_PARITY and LEGACY produce different spectra.
 

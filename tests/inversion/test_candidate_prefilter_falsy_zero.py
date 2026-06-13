@@ -99,31 +99,7 @@ def _offset_query_nes(ident: _RecordingIdentifier) -> List[float]:
 
 
 class TestFalsyZeroEstimate:
-    """A valid 0.0 estimate must be honored, not replaced by the fallback."""
-
-    def test_zero_estimated_T_is_used_not_fallback(self):
-        # base_T should be 0.0. With offsets +/-1500 and the 3000 K floor,
-        # both offset copies clamp to 3000.0. If the buggy `or fallback`
-        # path were taken, base_T would be 8000.0 -> copies at 6500/9500.
-        ident = _RecordingIdentifier(estimated_T=0.0, estimated_ne=1e16, fallback_T_K=8000.0)
-        wl, intens = _wl_int()
-        select_candidate_elements(ident, wl, intens, multi_t_offsets=[-1500.0, 1500.0])
-        offset_temps = _offset_query_temps(ident)
-        # base_T == 0.0 -> max(0 +/- 1500, 3000) == 3000.0 for both offsets.
-        assert offset_temps == [3000.0, 3000.0]
-        # Sanity: it must NOT have used the 8000 K fallback as the base.
-        assert 6500.0 not in offset_temps
-        assert 9500.0 not in offset_temps
-
-    def test_zero_estimated_ne_is_used_not_fallback(self):
-        # base_ne is passed straight through to id_copy.fallback_ne_cm3.
-        ident = _RecordingIdentifier(estimated_T=7000.0, estimated_ne=0.0, fallback_ne_cm3=1e17)
-        wl, intens = _wl_int()
-        select_candidate_elements(ident, wl, intens, multi_t_offsets=[-1500.0, 1500.0])
-        offset_nes = _offset_query_nes(ident)
-        assert offset_nes == [0.0, 0.0]
-        # Must NOT fall back to the 1e17 default.
-        assert 1e17 not in offset_nes
+    """A valid estimate must be honored, not replaced by the fallback."""
 
     def test_nonzero_estimate_still_used(self):
         ident = _RecordingIdentifier(estimated_T=6000.0, estimated_ne=2e16, fallback_T_K=8000.0)

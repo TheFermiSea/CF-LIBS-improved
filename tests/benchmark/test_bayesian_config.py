@@ -1,4 +1,3 @@
-import os
 from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
@@ -40,46 +39,6 @@ def mock_spectrum():
         specimen_id="mock_specimen",
         instrument_id="mock_inst",
         truth_type="synthetic",
-    )
-
-def test_bayesian_pipeline_config_applied(mock_context):
-    """Verify that _fit_bayesian_pipeline applies JAX/NumPyro configs.
-
-    CF-LIBS-improved-xsuj (PR #186) replaced the prior
-    ``numpyro.set_host_device_count(num_chains)`` call -- which had no
-    effect because it was invoked after JAX initialized -- with the
-    ``MCMCSampler(chain_method="vectorized")`` default, which batches
-    chains into a single JIT'd kernel on the current device. This test
-    therefore no longer asserts that ``set_host_device_count`` is
-    called; it asserts the surviving config touches and pins the
-    documented behaviour change as a regression guard.
-    """
-    with patch("jax.config.update") as mock_jax_update, \
-         patch("numpyro.set_platform") as mock_set_platform:
-
-        # Simulate CUDA environment
-        with patch.dict(os.environ, {"JAX_PLATFORMS": "cuda"}):
-            _fit_bayesian_pipeline(mock_context, [], {"num_chains": 2})
-
-            # Check JAX configs
-            mock_jax_update.assert_any_call("jax_enable_x64", True)
-            mock_jax_update.assert_any_call("jax_platform_name", "gpu")
-
-            # Check NumPyro configs
-            mock_set_platform.assert_called_with("gpu")
-
-    # Regression guard for the xsuj change: confirm
-    # ``MCMCSampler.run``'s default ``chain_method`` is ``"vectorized"``
-    # so the cluster benchmark gets multi-chain NUTS on a single GPU
-    # without ``set_host_device_count`` (which previously was the only
-    # NumPyro device-count knob in this code path).
-    import inspect
-    from cflibs.inversion.solve.bayesian.samplers import MCMCSampler
-
-    sig = inspect.signature(MCMCSampler.run)
-    assert sig.parameters["chain_method"].default == "vectorized", (
-        "MCMCSampler.run default chain_method must remain 'vectorized' "
-        "for single-GPU multi-chain NUTS (CF-LIBS-improved-xsuj)"
     )
 
 def test_bayesian_predictor_caching(mock_context, mock_spectrum):

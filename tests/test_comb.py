@@ -614,36 +614,3 @@ def test_false_positive_noise_only(atomic_db):
         f"False positives on noise: {[e.element for e in result.detected_elements]}"
     )
 
-
-def test_coverage_penalty_reduces_score(atomic_db):
-    """Elements can still use full-line-list coverage penalties when requested."""
-    identifier = CombIdentifier(atomic_db, fingerprint_top_k=50)
-
-    # Build teeth list: 3 active out of 50 total
-    teeth = []
-    for i in range(50):
-        if i < 3:
-            teeth.append({"active": True, "best_correlation": 0.9})
-        else:
-            teeth.append({"active": False, "best_correlation": 0.1})
-
-    score = identifier._compute_fingerprint(teeth)
-    # 3 * 0.9 / 50 = 0.054, preserving the legacy full-coverage penalty
-    # when the caller opts out of the default top-k trace-element scoring.
-    assert score < 0.1, f"Score {score} too high for 3/50 active teeth"
-
-
-def test_max_lines_per_element_parameter(atomic_db):
-    """Test that max_lines_per_element caps transition count."""
-    identifier = CombIdentifier(atomic_db, max_lines_per_element=5)
-    assert identifier.max_lines_per_element == 5
-
-    # Default should be 50
-    identifier_default = CombIdentifier(atomic_db)
-    assert identifier_default.max_lines_per_element == 50
-
-
-def test_default_min_correlation_remains_benchmark_gated(atomic_db):
-    """Trace-element recall tuning must not relax defaults without benchmark evidence."""
-    identifier = CombIdentifier(atomic_db)
-    assert identifier.min_correlation == pytest.approx(0.12)

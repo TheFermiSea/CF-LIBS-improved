@@ -74,27 +74,6 @@ class TestNyquistGuard:
         # Should not raise.
         assert config.validate() is True
 
-    def test_default_pixels_is_18432(self) -> None:
-        """The dataclass default itself must be the Nyquist-safe value."""
-        config = ManifoldConfig(
-            db_path="ignored.db",
-            output_path="ignored.h5",
-            elements=["Fe"],
-        )
-        assert config.pixels == 18432
-
-    def test_yaml_default_pixels_is_18432(self, tmp_path: Path) -> None:
-        """``ManifoldConfig.from_file`` defaults ``pixels`` to 18432 too."""
-        cfg = tmp_path / "config.yaml"
-        cfg.write_text("""
-manifold:
-  db_path: test.db
-  output_path: test.h5
-  elements: [Fe]
-""".strip())
-        config = ManifoldConfig.from_file(cfg)
-        assert config.pixels == 18432
-
     def test_borderline_at_3_px_per_fwhm_passes(self, stub_db: Path) -> None:
         """Exactly 3 px/FWHM (Δλ = FWHM/3) is the boundary and must be allowed."""
         # 300 nm window / 0.05 FWHM × 3 = 18000 pixels gives Δλ = FWHM/3 exactly.

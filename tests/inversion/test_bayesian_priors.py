@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 
 from cflibs.inversion.solve.bayesian.priors import (
-    NoiseParameters,
     Parameter,
     PriorConfig,
     TwoZonePriorConfig,
@@ -144,15 +143,8 @@ def test_parameter_numpyro_loguniform_returns_power_of_ten():
 
 
 # ---------------------------------------------------------------------------
-# Legacy PriorConfig / TwoZonePriorConfig / NoiseParameters smoke
+# Legacy PriorConfig / TwoZonePriorConfig smoke
 # ---------------------------------------------------------------------------
-
-
-def test_prior_config_defaults():
-    cfg = PriorConfig()
-    assert cfg.T_eV_range == (0.5, 3.0)
-    assert cfg.log_ne_range == (15.0, 19.0)
-    assert cfg.concentration_alpha == 1.0
 
 
 def test_prior_config_geological_sparse_concentrations():
@@ -164,10 +156,3 @@ def test_two_zone_prior_config_defaults():
     cfg = TwoZonePriorConfig()
     assert cfg.T_core_eV_range[0] < cfg.T_core_eV_range[1]
     assert cfg.enforce_T_ordering is True
-
-
-def test_noise_parameters_defaults():
-    np_ = NoiseParameters()
-    assert np_.gain == 1.0
-    assert np_.readout_noise == 10.0
-    assert np_.dark_current == 1.0

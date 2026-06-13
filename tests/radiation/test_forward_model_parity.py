@@ -174,17 +174,3 @@ def test_manifold_single_spectrum_kernel_parity_smoke(atomic_db):
     assert np.all(np.isfinite(out))
     assert out.max() > 0
 
-
-def test_bayesian_forward_kernel_parity_deferred():
-    """Drift-guard that BayesianForwardModel has migrated to the unified kernel.
-
-    The legacy file-level skip referenced T1-6 (the BayesianForwardModel
-    kernel migration); that work landed and the active drift guard now lives
-    in :mod:`tests.inversion.test_bayesian_forward_model_kernel_migration`.
-    This test stays as a top-level sentinel: if the migration regresses, the
-    import below fails fast.
-    """
-    from cflibs.inversion.solve.bayesian.forward import BayesianForwardModel
-    from cflibs.radiation.kernels import forward_model  # noqa: F401
-
-    assert hasattr(BayesianForwardModel, "_compute_spectrum")

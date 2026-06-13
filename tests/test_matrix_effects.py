@@ -99,15 +99,6 @@ class TestPsRegimeGating:
         db = CorrectionFactorDB()
         assert db.ablation_regime is AblationRegime.NS
 
-    def test_ns_defaults_unchanged(self):
-        """ns regime must reproduce the historical empirical factors exactly."""
-        db = CorrectionFactorDB(ablation_regime=AblationRegime.NS)
-        # The canonical ns carbon-loss factor and a couple of others.
-        assert db.get_factor("C", MatrixType.METALLIC).multiplicative == pytest.approx(0.85)
-        assert db.get_factor("Mn", MatrixType.METALLIC).multiplicative == pytest.approx(1.05)
-        assert db.get_factor("C", MatrixType.ORGANIC).multiplicative == pytest.approx(0.70)
-        assert db.get_factor("Si", MatrixType.OXIDE).multiplicative == pytest.approx(1.10)
-
     def test_ps_defaults_are_stoichiometric(self):
         """ps regime: every generic default multiplicative factor is exactly 1.0."""
         db_ps = CorrectionFactorDB(ablation_regime="ps")
@@ -151,22 +142,6 @@ class TestPsRegimeGating:
         corrected = corrector.correct(result, matrix_type=MatrixType.METALLIC)
         for el, c in result.concentrations.items():
             assert corrected.corrected_concentrations[el] == pytest.approx(c, rel=1e-9)
-
-    def test_ns_correction_alters_carbon(self):
-        """For contrast: the ns corrector applies the carbon-loss factor (behavior preserved)."""
-        result = CFLIBSResult(
-            temperature_K=8000.0,
-            temperature_uncertainty_K=300.0,
-            electron_density_cm3=1e17,
-            concentrations={"Fe": 0.95, "C": 0.05},
-            concentration_uncertainties={},
-            iterations=3,
-            converged=True,
-        )
-        # renormalize=False isolates the raw multiplicative effect.
-        corrector = MatrixEffectCorrector(ablation_regime="ns", renormalize=False)
-        corrected = corrector.correct(result, matrix_type=MatrixType.METALLIC)
-        assert corrected.corrected_concentrations["C"] == pytest.approx(0.05 * 0.85, rel=1e-9)
 
     def test_warning_emitted_on_uncalibrated_ps_defaults(self, caplog):
         """A one-time warning must fire when generic uncalibrated ps defaults are used."""

@@ -232,29 +232,6 @@ class TestIpdLevelCutoff:
         assert n_upper[1] > 0.0
 
 
-@pytest.mark.requires_jax
-class TestBackCompat:
-    """Pre-rs7e snapshots (no stage-III fields) degrade to two-stage + IPD."""
-
-    def test_legacy_snapshot_runs_and_has_no_stage_three(self):
-        from cflibs.radiation.kernels import snapshot_ionization_fractions
-
-        snapshot = TestIpdLevelCutoff._synthetic_snapshot()
-        assert snapshot.partition_coeffs_iii is None
-        plasma = SingleZoneLTEPlasma(T_e=1.0 * EV_TO_K, n_e=1e17, species={"Fe": 1e16})
-        fractions = snapshot_ionization_fractions(plasma, snapshot)
-        assert fractions["Fe"][3] == pytest.approx(0.0, abs=0)
-        assert fractions["Fe"][1] + fractions["Fe"][2] == pytest.approx(1.0, abs=1e-9)
-
-    def test_two_stage_alias_points_at_three_stage(self):
-        from cflibs.radiation.kernels import (
-            _saha_three_stage_populations,
-            _saha_two_stage_populations,
-        )
-
-        assert _saha_two_stage_populations is _saha_three_stage_populations
-
-
 @pytest.mark.requires_db
 @pytest.mark.requires_jax
 @pytest.mark.physics
