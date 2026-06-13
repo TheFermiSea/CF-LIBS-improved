@@ -93,7 +93,12 @@ def test_configure_jax_stamps_cache_dir_on_linux(monkeypatch):
     importlib.reload(platform_config)
     platform_config.configure_jax(enable_x64=True, prefer_gpu=False)
 
-    assert os.environ.get("JAX_COMPILATION_CACHE_DIR") == "/cluster/shared/jax-cache"
+    # The default is now the PER-USER path (J0 / ADR-0004 §5.5). The old
+    # NFS-shared `/cluster/shared/jax-cache` default developed uid skew and
+    # hung jobs 1909/1914/1915 — see docs/jax-compile-cache.md.
+    assert os.environ.get("JAX_COMPILATION_CACHE_DIR") == os.path.expanduser(
+        "~/.cache/cflibs/jax"
+    )
     assert os.environ.get("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS") == "0.5"
 
 

@@ -559,3 +559,62 @@ T1-3 sits in wave 1 (not wave 2 as the original ranking suggested) because Strea
 **Wave-0 prerequisite beads** (from cross-audit 2026-05-12) block all six T1 beads — see `ADR-0001-RUNBOOK.md` §10 for the list (baseline capture, CI workflow fix, JAX 0.4.30 + psutil pin, `.venv` symlink policy, bd memory refresh).
 
 **Tier-2 cleanup from cross-audit:** T2-3 and T2-6 retired (folded into T1-1 and T1-6); T2-4 retired (duplicate). T2-2 scope narrowed to schema evolution. T2-1, T2-5, T2-7, T2-8 remain unfiled and deferrable. Tier-3 polish items fold into routine cleanup beads. Tier-4 (`lax.custom_root` implicit-diff) deserves a research bead with a literature-review precursor.
+
+---
+
+## 12. Survey refresh addendum (2026-06-13)
+
+> Added by J0 (CF-LIBS-improved-2go5) per [ADR-0004 §9](./ADR-0004-jittable-inversion-pipeline.md#9-prior-art). ADR-0004's Analysis 4 re-ran this survey read-only on 2026-06-10 and delivered the refresh as text; it is recorded here so ADR-0001 stays the canonical pattern-survey home. Nothing below changes the original §8 candidate rankings — it updates the *prior-art status* the rankings were built on, and corrects one tooling assumption (jaxopt).
+
+### 12.1 Tier-1 completion status
+
+The six Tier-1 beads filed in §11 have **all landed** (T1-1…T1-6 done). The codebase consequences cited throughout ADR-0004 §1.4 are now assets, not proposals:
+
+- **T1-1 (host/kernel split):** the static/traced split is documented at `cflibs/radiation/kernels.py:28-38`; the import-hygiene discipline at `kernels.py:72-78` is load-bearing and is the pattern `cflibs/jitpipe/` mirrors (ADR-0004 D3).
+- **T1-2 (forward-model unification):** one pure-JAX `forward_model` at `kernels.py:763`; `jitpipe/forward.py` will be a thin wrapper over it — no physics duplication (ADR-0004 §4 row 11).
+- **T1-3 (`lax.while_loop` iterative solve):** `iterative.py:721-863` with parity/vmap/grad-smoke tests (`tests/inversion/test_iterative_lax.py`). **Caveat surfaced by ADR-0004 §1.1:** this lax path never runs in production — the geological preset forces the Python loop, and the lax body jits the *legacy* algorithm the 2026-06-09 audit demoted. T1-3 is correct and tested but is an initializer/anchor, not the production estimator.
+- **T1-4 (LDM broadening):** `cflibs/radiation/ldm.py` done, **default OFF pending real-data validation** — this validation gap is ADR-0004 risk R4, and LDM is the batching enabler (ADR-0004 §5.2).
+- **T1-5 (chunked `lax.scan` + checkpoint + OLA):** `kernels.py:1205,1411,927`.
+- **T1-6 (retrieval-driver decomposition):** `cflibs/inversion/solve/bayesian/` split landed.
+
+### 12.2 Refreshed primary sources (read 2026-06-10)
+
+| Source | Update vs §10 | Bearing on CF-LIBS |
+|---|---|---|
+| **ExoJAX2** (Kawahara et al. **2025, ApJ 985:263** — peer-reviewed upgrade of [arXiv:2410.06900](https://arxiv.org/abs/2410.06900)) | Citation upgrade: the preprint cited in §5.2 / §10.2 is now a published ApJ paper. Reverse-mode-AD opacity, gradient optimizers + HMC retrievals on real JWST data. | Nothing new to *port* — PreMODIT chunked scan/checkpoint/OLA is already at `kernels.py:1205,1411,927` (T1-5). We take the **workflow** (pure-JAX forward *outside* the NumPyro graph, C-P14). |
+| **jaxrts v0.7.0** ([github.com/JaXRTS/jaxrts](https://github.com/JaXRTS/jaxrts), 2026-04-16) | Still forward-only `PlasmaState.probe()`; **no fitting / inversion / batching API** documented. Its `lax.while_loop` fixed-point pattern (C-P3) is already `iterative.py:721-863`. | Confirms the §5.3 "notable miss": **batched + differentiable GPU inversion remains open territory.** CF-LIBS's `_solve_lax` + vmap/grad tests is *ahead* of both surveyed JAX codes on the inversion side. |
+| **RADIS GPU** (radis.readthedocs.io /lbl/gpu.html) | Vulkan compute; DB uploaded once at init; `recalc_gpu()` ships only (T, p, x) changes; <200 ms interactive fitting on >100M lines. Equilibrium-only, **no gradients, no batching API.** | Validates the resident-database / parameter-only-update economics CF-LIBS already has via its snapshot discipline (`iterative.py:381-436`, `jax_runtime.py:430` — the two types J0 unifies). |
+
+### 12.3 New robust-fitting prior art (for the calibration / outlier stages)
+
+ADR-0004's front-end needs robust hypothesis fitting (wavelength-calibration RANSAC, Boltzmann/Stark outlier weighting). Two physics-legal, **NN-free** lines of work are relevant:
+
+| Source | What it offers | Applicability (physics-only screen) |
+|---|---|---|
+| **MAGSAC / MAGSAC++** ([arXiv:1803.07469](https://arxiv.org/abs/1803.07469); [arXiv:1912.05909](https://arxiv.org/abs/1912.05909), CVPR 2020) | sigma-marginalized soft inlier likelihood + IRLS; **no learned components, no hard threshold** | **Adoptable.** Used as the *optional differentiable* calibration variant (ADR-0004 §3 C2) and as soft-consensus Boltzmann outlier weights — **not** for the parity build (it changes inlier semantics and would have to be revalidated against the scoreboard rather than the reference). Confirms physics-legal differentiable robust fitting exists. |
+| **DSAC / ∇-RANSAC** ([arXiv:1611.05705](https://arxiv.org/abs/1611.05705); [arXiv:2212.13185](https://arxiv.org/abs/2212.13185), ICCV 2023) | differentiable RANSAC via probabilistic hypothesis selection | **Structure only.** The end-to-end versions wrap *learned* components (banned, CLAUDE.md physics-only). We borrow the hypothesis-marginalization *structure*, never the learned scorer. |
+| **scipy `find_peaks` × JAX** (searched; **no off-the-shelf precedent**) | experimental array-API support; `distance` + `prominence` produce variable-length, non-local output | The repo's prior rejection of porting `find_peaks` (`docs/jax-port/line-detection-consultation.md`) was **B=1-premised** (ADR-0004 §1.3). For batched/differentiable work we port **exact** scipy semantics in fixed shapes (ADR-0004 §3 C1, §4 row 2) — not the vision-NMS approximation Analysis 4 first proposed. |
+
+### 12.4 The strongest direct precedent for forward-fitting identification
+
+| Source | Result | Target it sets |
+|---|---|---|
+| **MC-CF-LIBS GPU forward fitting** (Gornushkin & Völker 2022, [PMC9573556](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9573556/); Demidov et al. 2016) | 5×10⁵ configs/iteration × 50 iterations = **2.5×10⁷ forward evals/spectrum**, weighted-correlation cost, ~1 % relative error on 8 elements, **~5 min on a 2013 K40 (MATLAB)** | The population-forward-fit shape, element-weighted full-spectrum cost, and the **~1 %-on-majors accuracy target** for ADR-0004 J10. A V100S (~6× K40 fp64) + XLA + gradient refinement (which MC-CF lacks) should beat 5 min by 1–2 orders of magnitude. This is the strongest direct precedent for ADR-0004 motivation 2 (forward-eval scale for identification). |
+
+### 12.5 Tooling correction to T1-4 / Tier-4 (`lax.custom_root`)
+
+§5.3 and the Tier-4 candidate (T4-1) mention **`jaxopt.FixedPointIteration` / `jaxopt.implicit_diff`** as a route to implicit gradients through the converged `(T*, n_e*)`. **That route is now closed:**
+
+- **jaxopt is unmaintained** ([github.com/google/jaxopt](https://github.com/google/jaxopt)); its pieces moved into optax.
+- Its maintained successors **optimistix / lineax are `equinox`-dependent** — and `equinox` is on the physics-only ban list (CLAUDE.md, ruff TID251).
+
+**Corrected guidance:** use **core-JAX `jax.lax.custom_root` / hand-written `custom_vjp`** for implicit differentiation; host-side `scipy` L-BFGS-B driving JAX gradients is fine for research phases. This is the path ADR-0004 §6.1 / J11 takes for the initializer loop. Tier-4's "genuinely novel" claim stands — neither jaxrts nor ExoJAX uses `custom_root` through a fixed point — only the *tooling* changes.
+
+### 12.6 The empirical driver and the structural conclusion
+
+ADR-0004 makes the survey's implicit premise explicit with a measurement ADR-0001 did not have:
+
+- **The 3 %-GPU finding.** During identifier sweeps on vasp-01/02/03, GPU utilization was **0–24 %, mean ~3 %** — Amdahl-bound on the non-JAX per-spectrum fraction, with **7,394 jit-cache entries** accumulated because variable per-spectrum shapes force recompiles (`docs/adr/ADR-0001-empirical-analysis-2026-05-13.md:35-36`). **Incremental kernel ports cannot fix an Amdahl + shape-instability problem** — this is what motivates a fixed-shape *whole-pipeline* rewrite rather than more `*_jax` siblings.
+- **Fixed-shapes-end-to-end is the conclusion.** The host/kernel split (§7.1) and the `lax.while_loop`/`custom_root` opportunities (§7.4) of this survey, applied to the *entire* inversion pipeline under the fixed-shape discipline (padded arrays + validity masks, all raggedness inside the jit graph), is ADR-0004's `cflibs/jitpipe/`. ADR-0004 is the implementation ADR §9.1 anticipated would "take a single Tier-1 candidate to a build-or-defer decision" — here, the candidates compound into one end-to-end build.
+
+**Net effect on ADR-0001:** the §8 candidate catalogue is unchanged; §12 records that Tier-1 is complete, two cited preprints/versions are updated, the robust-fitting and forward-fitting prior art is added, and the jaxopt assumption is corrected to core-JAX `custom_root`.

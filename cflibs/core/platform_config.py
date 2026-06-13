@@ -83,15 +83,25 @@ def configure_jax(
     #
     # On Linux multi-node clusters (vasp-01/02/03), the default cache
     # location is in-process only; cross-process/cross-host cold compiles
-    # dominate parameter-sweep wall time. Pointing the persistent cache
-    # at an NFS-shared path lets all nodes share compiled kernels.
+    # dominate parameter-sweep wall time. A persistent on-disk cache lets
+    # a process (and successive jobs) reuse compiled kernels.
+    #
+    # Default to a PER-USER path. The previous default — the NFS-shared
+    # `/cluster/shared/jax-cache` — developed uid skew across compute
+    # nodes and hung jobs 1909/1914/1915 (see docs/jax-compile-cache.md
+    # and .serena/memories/physics_invariants_and_gotchas.md). The
+    # standing rule is the user-private cache; cross-host sharing of a
+    # world-writable cache is not worth the ownership-collision risk.
+    # Use ~/.cache/cflibs/jax (XDG-style, expanduser'd) so it is unique
+    # per uid and survives across jobs on the same node.
     #
     # `setdefault` semantics: respects an existing env value (e.g. for
-    # unit tests that point at a tmp_path) and only stamps the cluster
-    # default on Linux to avoid creating /cluster/... noise on Darwin
-    # dev shells where the path doesn't exist.
+    # unit tests that point at a tmp_path, or a job script that exports
+    # an explicit path) and only stamps the default on Linux to avoid
+    # creating cache noise on Darwin dev shells.
     if system == "Linux":
-        os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", "/cluster/shared/jax-cache")
+        default_cache_dir = os.path.expanduser("~/.cache/cflibs/jax")
+        os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", default_cache_dir)
         os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0.5")
 
     try:
