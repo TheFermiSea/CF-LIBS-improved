@@ -20,14 +20,28 @@ stark/solve) are device-pure and each parity-tested in isolation. J8 owns the
   calibrate jit kernels (J2/J3/J4) are individually parity-tested; threading
   them into a byte-faithful reproduction of the full ``detect_line_observations``
   gate stack is tracked separately (see ``remaining_todo``).
-* The **solve spine** (the parity-critical CF-LIBS Saha-Boltzmann math) runs
-  through the device-pure :func:`cflibs.jitpipe.solve.scan_solve` kernel, which
-  mirrors the reference ``_run_lax_while_loop`` fixed point bit-for-bit (J7
-  parity). The host gathers the padded ``(E, N_max)`` block
-  (:func:`host.build_observation_block`), assembles ``LaxKernelInputs`` from the
-  baked snapshot (no DB at solve time), runs ``scan_solve``, and reconstitutes a
-  :class:`~cflibs.inversion.solve.iterative.CFLIBSResult`
-  (:func:`host.cflibs_result_from_loopstate`).
+* The **solve spine** (the parity-critical CF-LIBS Saha-Boltzmann math) has two
+  routes keyed by the resolved preset (the M1 production-config parity gap
+  D-J8-1, J8 plan §5):
+
+  - the **shared-math** ``raw`` preset (``saha_boltzmann_graph=False`` +
+    ``stark_ne=False``) runs the device-pure
+    :func:`cflibs.jitpipe.solve.scan_solve` kernel, which mirrors the reference
+    ``_run_lax_while_loop`` fixed point bit-for-bit (J7 parity), reconstituted
+    by :func:`host.cflibs_result_from_loopstate`;
+  - the **production geological/metallic** preset
+    (``saha_boltzmann_graph=True`` + ``stark_ne=True``) runs
+    :func:`cflibs.jitpipe.solve.production_solve` — the ``scan_solve``
+    initializer SEEDS the :func:`cflibs.jitpipe.solve.joint_wls_solve`
+    production estimator (``sb_graph=True``, ``n_e`` pinned to the Stark
+    measurement), mirroring the reference ``_solve_python`` SB-graph +
+    Stark-pinned-``n_e`` path the shared-math scan cannot reproduce
+    (ADR-0004 §6.1; J7 §4 row 10).
+
+  Both routes gather the padded ``(E, N_max)`` block
+  (:func:`host.build_observation_block`), assemble ``LaxKernelInputs`` from the
+  baked snapshot (no DB at solve time), and reconstitute a
+  :class:`~cflibs.inversion.solve.iterative.CFLIBSResult`.
 
 Failure policy (J8 plan §4, AC4): at zero valid observations the reference
 raises ``ValueError`` (``pipeline.py:872``); ``run_one`` instead returns the
@@ -92,11 +106,26 @@ def solve_stage(
     static: "StaticConfig",
     *,
     ne_stark_cm3: float | None = None,
+    production: bool = False,
+    ne_scatter_cm3: float = 0.0,
 ):
     """Run the jit solve spine on a padded observation block + reconstitute.
 
-    Composes the host gather (``LaxKernelInputs``) -> device ``scan_solve``
-    (mirrors the reference fixed point) -> host ``CFLIBSResult`` reconstitution.
+    Two solve routes (the M1 production-config parity gap D-J8-1, J8 plan §5):
+
+    * **shared-math path** (``production=False``, the ``raw`` preset:
+      ``saha_boltzmann_graph=False`` + ``stark_ne=False`` + ``standard``
+      closure): the device-pure :func:`scan_solve` kernel, which mirrors the
+      reference ``_solve_lax``/``_run_lax_while_loop`` fixed point bit-for-bit.
+    * **production geological/metallic path** (``production=True``, the
+      ``geological``/``metallic`` presets: ``saha_boltzmann_graph=True`` +
+      ``stark_ne=True``): the validated :func:`production_solve` dispatch —
+      the :func:`scan_solve` initializer SEEDS the :func:`joint_wls_solve`
+      production estimator (``sb_graph=True``, ``n_e`` pinned to the Stark
+      measurement), mirroring the reference ``_solve_python`` SB-graph +
+      Stark-pinned-``n_e`` path the shared-math scan cannot reproduce
+      (ADR-0004 §6.1; J7 §4 row 10).
+
     Honours the ``StaticConfig`` static knobs (``closure_mode``, ``max_iters``)
     and the ``PipelineParams`` traced knobs (the §3.1 name-drift map).
 
@@ -109,7 +138,13 @@ def solve_stage(
         Atomic snapshot, traced knobs, static config.
     ne_stark_cm3 : float or None
         Stark-measured electron density pinning the warm-start ``n_e`` (J6).
-        ``None`` -> the reference default 1e17 cm^-3.
+        ``None`` -> the reference default 1e17 cm^-3 (scan) or the joint solve's
+        pressure-balance fallback (production).
+    production : bool
+        Route through :func:`production_solve` (joint WLS seeded by the scan)
+        when True; the shared-math :func:`scan_solve` when False.
+    ne_scatter_cm3 : float
+        Stark multi-line MAD scatter (production path covariance only).
 
     Returns
     -------
@@ -117,7 +152,7 @@ def solve_stage(
     """
     import jax.numpy as jnp
 
-    from cflibs.jitpipe.solve import scan_solve
+    from cflibs.jitpipe.solve import production_solve, scan_solve
 
     if block.n_observations == 0 or block.x is None:
         return _host.all_fn_result(list(block.elements))
@@ -131,8 +166,27 @@ def solve_stage(
             _host.oxide_factors_for_elements(snapshot, block.elements), dtype=jnp.float64
         )
 
-    init_ne = 1.0e17 if ne_stark_cm3 is None else float(ne_stark_cm3)
+    solve_kw = _solve_params(params)
 
+    if production:
+        joint = production_solve(
+            inp,
+            ne_stark_cm3=ne_stark_cm3,
+            ne_scatter_cm3=float(ne_scatter_cm3),
+            init_T_K=10000.0,
+            init_ne_cm3=1.0e17,
+            seed_iters=int(static.max_iters),
+            n_gn_steps=int(static.max_iters),
+            closure_mode=closure_mode,
+            oxide_factors=oxide_factors,
+            t_tol_k=solve_kw["t_tol_k"],
+            ne_tol_frac=solve_kw["ne_tol_frac"],
+            pressure_pa=solve_kw["pressure_pa"],
+            min_r2=solve_kw["min_r2"],
+        )
+        return _cflibs_result_from_joint(joint, list(block.elements))
+
+    init_ne = 1.0e17 if ne_stark_cm3 is None else float(ne_stark_cm3)
     final_state = scan_solve(
         inp,
         init_T_K=10000.0,
@@ -140,9 +194,61 @@ def solve_stage(
         max_iters=int(static.max_iters),
         closure_mode=closure_mode,
         oxide_factors=oxide_factors,
-        **_solve_params(params),
+        **solve_kw,
     )
     return _host.cflibs_result_from_loopstate(final_state, list(block.elements))
+
+
+def _cflibs_result_from_joint(joint, elements: list):
+    """Reconstitute a reference ``CFLIBSResult`` from a :class:`JointWLSResult`.
+
+    Mirrors :func:`cflibs.jitpipe.host.cflibs_result_from_loopstate` for the
+    production joint-WLS path (D-J8-1): maps the E-indexed simplex back to an
+    element-keyed dict, reports the Stark provenance + the joint convergence
+    flag (reported hard, ADR-0004 §6.4). Kept in the impure composition module
+    so ``solve.py`` stays a DB-free kernel module (AC5).
+    """
+    import numpy as np
+
+    from cflibs.inversion.solve.iterative import CFLIBSResult
+
+    conc_arr = np.asarray(joint.concentrations)
+    concentrations = {el: float(conc_arr[i]) for i, el in enumerate(elements)}
+    return CFLIBSResult(
+        temperature_K=float(joint.T_K),
+        temperature_uncertainty_K=0.0,
+        electron_density_cm3=float(joint.n_e_cm3),
+        concentrations=concentrations,
+        concentration_uncertainties={},
+        iterations=int(joint.n_iter),
+        converged=bool(joint.converged),
+        temperature_corona_K=None,
+        quality_metrics={
+            "physical": float(bool(joint.physical)),
+            "ne_from_stark": float(bool(joint.ne_from_stark)),
+            "ne_scatter_cm3": float(joint.ne_scatter_cm3),
+        },
+        electron_density_uncertainty_cm3=0.0,
+        boltzmann_covariance=None,
+    )
+
+
+def _is_production(pipeline) -> bool:
+    """Is the resolved config the production geological/metallic preset?
+
+    The divergence D-J8-1 routing key: the reference ``saha_boltzmann_graph``
+    and/or ``stark_ne`` flags select the SB-graph + Stark-pinned ``_solve_python``
+    path (``ANALYSIS_PRESETS['geological'/'metallic']``). When either is set the
+    jit composition routes the solve through :func:`production_solve`
+    (joint WLS seeded by the scan); the ``raw`` preset
+    (``saha_boltzmann_graph=False`` + ``stark_ne=False``) stays on the
+    shared-math :func:`scan_solve`. ``None`` (no config) -> shared-math.
+    """
+    if pipeline is None:
+        return False
+    return bool(getattr(pipeline, "saha_boltzmann_graph", False)) or bool(
+        getattr(pipeline, "stark_ne", False)
+    )
 
 
 def observations_to_result(
@@ -152,6 +258,7 @@ def observations_to_result(
     static: "StaticConfig",
     *,
     ne_stark_cm3: float | None = None,
+    production: bool = False,
 ):
     """Solve a ``LineObservation`` list -> :class:`CFLIBSResult` (host gather + kernel).
 
@@ -159,11 +266,15 @@ def observations_to_result(
     the padded ``(E, N_max)`` block (:func:`host.build_observation_block`) and
     runs the jit solve spine via :func:`solve_stage`. Kept here in the impure
     composition module so the kernel module ``solve.py`` stays DB-free (AC5).
+
+    ``production`` selects the geological/metallic joint-WLS dispatch (D-J8-1).
     """
     block = _host.build_observation_block(
         observations, weight_cap=float(params.boltzmann_weight_cap)
     )
-    return solve_stage(block, snapshot, params, static, ne_stark_cm3=ne_stark_cm3)
+    return solve_stage(
+        block, snapshot, params, static, ne_stark_cm3=ne_stark_cm3, production=production
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +346,18 @@ def run_one(
     block = build_observation_block(
         front.observations, weight_cap=float(params.boltzmann_weight_cap)
     )
-    return solve_stage(block, snapshot, params, static, ne_stark_cm3=front.ne_stark_cm3)
+    # D-J8-1: route the production geological/metallic preset (SB-graph +
+    # Stark-pinned n_e) through the joint-WLS dispatch; keep scan_solve for the
+    # shared-math (raw) preset. The route is the resolved config's
+    # ``saha_boltzmann_graph``/``stark_ne`` flags (the reference routing key).
+    return solve_stage(
+        block,
+        snapshot,
+        params,
+        static,
+        ne_stark_cm3=front.ne_stark_cm3,
+        production=_is_production(pipeline),
+    )
 
 
 def _pipeline_config_from(
@@ -252,10 +374,12 @@ def _pipeline_config_from(
 
     elements = sorted({el for el, _sp in snapshot.species})
     apply_sa = "observable" if static.apply_self_absorption else "off"
-    # Map the static closure_mode to a saha_boltzmann_graph choice: the jit
-    # solve spine mirrors the lax fixed point (SB-graph off), so the front-end
-    # config disables the SB-graph + Stark forcing to keep the reference on the
-    # same math path for parity (see module docstring).
+    # Build the geological preset faithfully: ``saha_boltzmann_graph=True`` +
+    # ``stark_ne=True`` are inherited from the preset (NOT overridden here), so
+    # ``run_one`` routes the solve through the production joint-WLS dispatch
+    # (:func:`production_solve`) that mirrors the reference ``_solve_python``
+    # SB-graph + Stark-pinned path (D-J8-1; the shared-math ``raw`` preset stays
+    # on ``scan_solve``). ``closure_mode`` follows the static config.
     overrides = {
         "wavelength_tolerance_nm": float(params.wavelength_tolerance_nm),
         "min_peak_height": float(params.min_peak_height),

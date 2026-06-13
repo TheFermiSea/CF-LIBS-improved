@@ -12,19 +12,21 @@ Feeds IDENTICAL inputs to :func:`cflibs.jitpipe.run_one` and the REAL reference
 
 Parity-config note
 ------------------
-The production geological preset routes the reference solve through the
-SB-graph Python path (``saha_boltzmann_graph=True`` + ``stark_ne=True`` force
-``_solve_python``). The J8 jit solve spine (``scan_solve``) mirrors the
-``_solve_lax`` fixed point, which is itself parity-tested against
-``_solve_python`` for the *standard*-closure, SB-graph-OFF path
-(``test_iterative_lax.py``). So these end-to-end parity tests pin the reference
-to that shared math path (``saha_boltzmann_graph=False``, ``stark_ne=False``,
-``standard`` closure) where the composition comparison is exact. With
-``CFLIBS_USE_LAX_WHILE_LOOP=1`` the reference uses the bit-exact lax oracle.
+Two solve routes are covered (the M1 production-config parity gap D-J8-1):
 
-The full production-config solve (SB-graph + oxide + Stark-pinned n_e) is a
-J8.5+ deliverable (``joint_wls_solve`` is the production estimator); the M1 gate
-here is exact COMPOSITION parity on the shared solve math.
+* the **shared-math** ``raw`` preset (``saha_boltzmann_graph=False`` +
+  ``stark_ne=False`` + ``standard`` closure, via ``_PARITY_OVERRIDES``): the jit
+  ``scan_solve`` mirrors the reference ``_solve_lax`` fixed point bit-for-bit
+  (with ``CFLIBS_USE_LAX_WHILE_LOOP=1`` the reference uses the bit-exact lax
+  oracle); and
+* the **production geological/metallic** preset
+  (``saha_boltzmann_graph=True`` + ``stark_ne=True``): the reference routes
+  ``_solve_python``'s unit-weight SB-graph with ``n_e`` pinned to the Stark
+  measurement, which the jit composition now mirrors via
+  :func:`cflibs.jitpipe.solve.production_solve` (the ``scan_solve`` initializer
+  SEEDS :func:`joint_wls_solve`, ``sb_graph=True``). These cases
+  (``test_run_one_matches_reference_production_*``) close D-J8-1 — the M1 gate
+  is COMPOSITION parity under the SAME geological preset on both sides.
 
 Data
 ----
@@ -222,6 +224,134 @@ def test_run_one_matches_reference_real_chemcam(db, snapshot):
         pipeline_config=cfg,
     )
     _assert_m1_parity(ref, got, elements=elements)
+
+
+# ---------------------------------------------------------------------------
+# 2b. PRODUCTION geological/metallic preset parity (divergence D-J8-1).
+#
+# The production preset (``saha_boltzmann_graph=True`` + ``stark_ne=True``)
+# routes the reference solve through ``_solve_python``'s unit-weight
+# Saha-Boltzmann graph with ``n_e`` pinned to the Stark measurement — the path
+# the shared-math ``scan_solve`` does NOT mirror. ``run_one`` now routes this
+# preset through :func:`cflibs.jitpipe.solve.production_solve` (the scan
+# initializer SEEDS :func:`joint_wls_solve`, ``sb_graph=True``). These cases
+# prove ``run_one`` bit-matches the reference UNDER THE GEOLOGICAL PRESET
+# (ADR-0004 §6.1; J7 §4 row 10). No ``_PARITY_OVERRIDES``: the preset's own
+# SB-graph + Stark flags drive both sides.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("preset", "closure_mode"),
+    [("geological", "oxide"), ("metallic", "standard")],
+)
+def test_run_one_matches_reference_production_synthetic(db, snapshot, preset, closure_mode):
+    """run_one == run_pipeline under the PRODUCTION preset on a synthetic spectrum.
+
+    Both sides resolve the same ``geological``/``metallic`` preset
+    (``saha_boltzmann_graph=True`` + ``stark_ne=True``); the reference routes
+    ``_solve_python`` (SB-graph + Stark-pinned n_e), the jit composition routes
+    :func:`production_solve` (scan-seeded joint WLS). M1 tolerances.
+    """
+    from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
+    from cflibs.jitpipe import PipelineParams, run_one
+
+    wl, inten, elements = _synthetic_spectrum(db)
+    # Build the preset faithfully — no SB-graph/Stark overrides (D-J8-1 path).
+    cfg = build_pipeline_config(elements, preset=preset)
+    assert cfg.saha_boltzmann_graph is True
+    assert cfg.stark_ne is True
+
+    ref, diag = run_pipeline(wl, inten, db, cfg)
+    assert diag["n_observations"] > 0
+
+    got = run_one(
+        inten,
+        wl,
+        snapshot,
+        PipelineParams(),
+        _static_for(snapshot, closure_mode=closure_mode),
+        atomic_db=db,
+        pipeline_config=cfg,
+    )
+    _assert_m1_parity(ref, got, elements=elements)
+
+
+@pytest.mark.skipif(
+    not _REAL_SPECTRUM.exists(), reason="real ChemCam BHVO-2 fixture not present in worktree"
+)
+def test_run_one_matches_reference_production_real_chemcam(db, snapshot):
+    """run_one == run_pipeline under the GEOLOGICAL preset on REAL ChemCam BHVO-2.
+
+    The M1 headline acceptance case: the production geological preset
+    (``saha_boltzmann_graph=True`` + ``closure_mode='oxide'`` + ``stark_ne=True``)
+    on the real ChemCam BHVO-2 spectrum, asserting element calls >= 95 %, T
+    within 2 %, n_e within 10 %, per-element concentration rtol 5 % / atol 0.01.
+    """
+    from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
+    from cflibs.jitpipe import PipelineParams, run_one
+
+    wl, inten = _load_real_spectrum()
+    elements = ["Si", "Ti", "Al", "Fe", "Mn", "Mg", "Ca", "Na", "K"]
+    cfg = build_pipeline_config(elements, preset="geological")
+    assert cfg.saha_boltzmann_graph is True
+    assert cfg.closure_mode == "oxide"
+
+    ref, diag = run_pipeline(wl, inten, db, cfg)
+    assert diag["n_observations"] > 0
+    assert ref.converged
+
+    got = run_one(
+        inten,
+        wl,
+        snapshot,
+        PipelineParams(),
+        _static_for(snapshot, closure_mode="oxide"),
+        atomic_db=db,
+        pipeline_config=cfg,
+    )
+    assert got.converged
+    # Element-call agreement >= 95 % (here all present elements must match).
+    ref_calls = {k for k, v in ref.concentrations.items() if v > 0.0}
+    got_calls = {k for k, v in got.concentrations.items() if v > 0.0}
+    assert len(ref_calls) > 0
+    n_agree = len(ref_calls & got_calls) + len({e for e in elements} - ref_calls - got_calls)
+    assert n_agree / len(elements) >= 0.95, f"calls: jit={got_calls} ref={ref_calls}"
+    _assert_m1_parity(ref, got, elements=elements)
+
+
+def test_failure_policy_parity_production(db, snapshot):
+    """Geological-preset failure policy: flat spectrum -> same all-FN record.
+
+    Failure-policy parity (AC4) must hold on the production route too: the
+    reference raises ``ValueError`` at zero observations; the jit pipeline
+    returns the all-FN ``CFLIBSResult`` (``converged=False``, all-zero conc).
+    """
+    from cflibs.inversion.pipeline import build_pipeline_config, run_pipeline
+    from cflibs.jitpipe import PipelineParams, run_one
+
+    wl = np.arange(240.0, 450.0, 0.02)
+    flat = np.ones_like(wl)
+    elements = ["Fe", "Ca", "Ti"]
+    cfg = build_pipeline_config(elements, preset="geological")
+
+    with pytest.raises(ValueError, match="No usable spectral lines"):
+        run_pipeline(wl, flat, db, cfg)
+
+    got = run_one(
+        flat,
+        wl,
+        snapshot,
+        PipelineParams(),
+        _static_for(snapshot, closure_mode="oxide"),
+        atomic_db=db,
+        pipeline_config=cfg,
+    )
+    assert got.converged is False
+    assert set(got.concentrations) == set(elements)
+    assert all(v == 0.0 for v in got.concentrations.values())
+    assert np.isfinite(got.temperature_K)
+    assert np.isfinite(got.electron_density_cm3)
 
 
 # ---------------------------------------------------------------------------

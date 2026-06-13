@@ -65,6 +65,7 @@ if TYPE_CHECKING:  # pragma: no cover
 __all__ = [
     "scan_solve",
     "joint_wls_solve",
+    "production_solve",
     "LaxKernelInputs",
     "JointWLSResult",
     "helmert_basis",
@@ -853,6 +854,118 @@ def joint_wls_solve(
         ne_from_stark=ne_from_stark,
         ne_scatter_cm3=ne_scatter,
         converged=converged,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Production geological/metallic dispatch — scan_solve seed -> joint_wls_solve.
+# ---------------------------------------------------------------------------
+
+
+def production_solve(
+    inp: LaxKernelInputs,
+    *,
+    ne_stark_cm3: float | None = None,
+    ne_scatter_cm3: float = 0.0,
+    init_T_K: float = 10000.0,
+    init_ne_cm3: float = 1.0e17,
+    seed_iters: int = 20,
+    n_gn_steps: int = 20,
+    closure_mode: str = "oxide",
+    oxide_factors: Any = None,
+    matrix_idx: int = 0,
+    matrix_fraction: float = 0.9,
+    t_tol_k: float = 100.0,
+    ne_tol_frac: float = 0.1,
+    pressure_pa: float = 101325.0,
+    min_r2: float = 0.3,
+) -> JointWLSResult:
+    """Production geological/metallic solve: scan-initialised joint WLS (D-J8-1).
+
+    Closes the M1 production-config parity gap (ADR-0004 §6.1; J8 plan §5). The
+    reference geological/metallic preset (``ANALYSIS_PRESETS`` with
+    ``saha_boltzmann_graph=True`` + ``stark_ne=True``) routes the reference solve
+    through ``_solve_python``'s **unit-weight Saha-Boltzmann graph** fit with
+    ``n_e`` **pinned to the Stark measurement** — a path the shared-math
+    :func:`scan_solve` (common-slope, pressure-balance ``n_e``) does NOT mirror.
+    This dispatch reproduces it with the validated :func:`joint_wls_solve`
+    production estimator (``sb_graph=True``, ``ne_stark_cm3`` pinned), **seeded by
+    the** :func:`scan_solve` **initializer** (J8 plan §7 step 5: "seeded by the
+    scan_solve initializer").
+
+    The seed runs the fixed-K scan to obtain a warm-start temperature; the joint
+    WLS GN/LM sweep then re-derives ``T`` and the simplex from the SB-graph
+    objective. GN step 0 with unit weights is algebraically the reference
+    ``_fit_saha_boltzmann_graph`` global lstsq (the exact parity anchor,
+    ``test_sb_graph_gn_step0_anchor_exact``); the converged sweep matches the
+    reference ``_solve_python`` within the J7 §4 row-10 contract
+    (``test_production_converged_vs_reference_solve_python``).
+
+    Parameters
+    ----------
+    inp : LaxKernelInputs
+        Padded device inputs (the per-bucket candidate set).
+    ne_stark_cm3 : float or None
+        J6 Stark-measured electron density. When supplied, ``n_e`` is pinned to
+        it (``ne_from_stark=True``); when None, the joint solve's isobaric
+        pressure-balance fallback drives ``n_e`` (matching the reference
+        ``_update_ne_python`` fallback when no usable Stark line qualifies).
+    ne_scatter_cm3 : float
+        Stark multi-line MAD scatter; inflates the joint covariance (does not
+        move ``T``/``C``/``n_e``).
+    init_T_K, init_ne_cm3 : float
+        Scan-seed warm-start temperature (K) and electron density (cm^-3).
+    seed_iters : int
+        Fixed-K trip count for the :func:`scan_solve` seed.
+    n_gn_steps : int
+        Joint WLS Gauss-Newton step count (the fixed-point depth).
+    closure_mode, oxide_factors, matrix_idx, matrix_fraction
+        Closure mapping (``oxide`` for geological, ``standard`` for metallic).
+    t_tol_k, ne_tol_frac, pressure_pa, min_r2
+        Scan-seed convergence/physics knobs (the §3.1 name-drift map).
+
+    Returns
+    -------
+    JointWLSResult
+        The production solve result. Reconstituted to a ``CFLIBSResult`` by the
+        host (:func:`cflibs.jitpipe.pipeline.solve_stage`).
+    """
+    seed = scan_solve(
+        inp,
+        init_T_K=init_T_K,
+        init_ne_cm3=init_ne_cm3 if ne_stark_cm3 is None else float(ne_stark_cm3),
+        max_iters=int(seed_iters),
+        closure_mode=closure_mode,
+        oxide_factors=oxide_factors,
+        matrix_idx=matrix_idx,
+        matrix_fraction=matrix_fraction,
+        t_tol_k=t_tol_k,
+        ne_tol_frac=ne_tol_frac,
+        pressure_pa=pressure_pa,
+        min_r2=min_r2,
+    )
+    # Warm-start the joint WLS at the scan's temperature when the scan produced a
+    # physical (positive, non-degenerate) estimate; otherwise fall back to the
+    # static ``init_T_K`` (the scan's degenerate hold can leave ``T == init_T_K``
+    # already, so this is a clean warm start either way).
+    seed_T = jnp.where(
+        (seed.T_K > 0.0) & jnp.isfinite(seed.T_K) & (~seed.boltzmann_degenerate),
+        seed.T_K,
+        jnp.asarray(init_T_K, dtype=jnp.float64),
+    )
+    return joint_wls_solve(
+        inp,
+        init_T_K=float(seed_T),
+        ne_stark_cm3=ne_stark_cm3,
+        ne_scatter_cm3=ne_scatter_cm3,
+        n_gn_steps=int(n_gn_steps),
+        refine_saha=True,
+        sb_graph=True,
+        closure_mode=closure_mode,
+        oxide_factors=oxide_factors,
+        matrix_idx=matrix_idx,
+        matrix_fraction=matrix_fraction,
+        pressure_pa=pressure_pa,
     )
 
 

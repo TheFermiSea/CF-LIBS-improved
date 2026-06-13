@@ -40,6 +40,8 @@ from cflibs.jitpipe.autodiff import (  # noqa: E402
     fixed_point_custom_vjp,
     hard_f1,
     hard_presence,
+    joint_potential_rss,
+    joint_wls_potential,
     knob_gradient,
     knob_objective,
     soft_f1,
@@ -380,3 +382,281 @@ def test_soft_f1_padding_invariance():
         soft_f1(jnp.asarray(predP), jnp.asarray(truthP), tau=1e-2, mask=jnp.asarray(maskP))
     )
     assert f_small == f_big
+
+
+# --------------------------------------------------------------------------
+# 8. HMC / NUTS over the jit model (§1.3 / ADR-0004 §6.2).
+#
+# The potential is J7's joint-WLS residual (solve.py), parameterised by
+# (T, n_e, α). These tests feed the SAME synthetic spectrum to BOTH the REAL
+# reference oracle (joint_wls_solve — the Gauss-Newton estimator) and the new
+# HMC potential / NUTS sampler, exactly as the J7 parity tests do.
+# --------------------------------------------------------------------------
+
+from unittest.mock import MagicMock  # noqa: E402
+
+from cflibs.atomic.database import AtomicDatabase  # noqa: E402
+from cflibs.atomic.structures import PartitionFunction  # noqa: E402
+from cflibs.core.constants import EV_TO_K, SAHA_CONST_CM3  # noqa: E402
+from cflibs.inversion.solve import iterative as iterative_mod  # noqa: E402
+from cflibs.inversion.solve.iterative import (  # noqa: E402
+    IterativeCFLIBSSolver,
+    LineObservation,
+)
+from cflibs.jitpipe.solve import LaxKernelInputs, joint_wls_solve  # noqa: E402
+
+# True planted plasma parameters (shared by the synthetic-spectrum builder).
+_PLANT_T_K = 8000.0
+_PLANT_NE = 1.0e16
+_PLANT_IP = 7.0
+_PLANT_INTERCEPTS = {"Fe": 10.0, "Ni": 9.5, "Cr": 9.0}
+
+
+def _mock_constant_db() -> MagicMock:
+    """Mock AtomicDatabase: constant partition poly (U=25 both stages), poly path.
+
+    ``get_energy_levels -> None`` forces the deterministic polynomial partition
+    path (same fixture as ``test_parity_j7.py``).
+    """
+    db = MagicMock(spec=AtomicDatabase)
+    db.get_ionization_potential.return_value = _PLANT_IP
+    db.get_energy_levels.return_value = None
+    coeffs = [3.2188, 0, 0, 0, 0]  # ln U = 3.2188 -> U = 25
+
+    def _pf(el, sp):
+        return PartitionFunction(
+            element=el,
+            ionization_stage=sp,
+            coefficients=coeffs,
+            t_min=1000,
+            t_max=20000,
+            source="test",
+        )
+
+    db.get_partition_coefficients.side_effect = _pf
+    return db
+
+
+def _synthetic_obs(seed: int = 20260512) -> list:
+    """Synthetic neutral+ionic LIBS lines from the planted (T, n_e, composition).
+
+    Identical generator to ``test_parity_j7._make_multi_element_obs`` (the J7
+    oracle fixture): a Boltzmann ladder per element plus two Saha-shifted ionic
+    lines, ~0.5% multiplicative noise.
+    """
+    T_eV = _PLANT_T_K / EV_TO_K
+    saha_offset = float(np.log((SAHA_CONST_CM3 / _PLANT_NE) * (T_eV**1.5)))
+    rng = np.random.default_rng(seed)
+    obs: list = []
+    for el, intercept in _PLANT_INTERCEPTS.items():
+        for E_k in [1.0, 2.5, 4.0, 5.5]:
+            y = intercept - E_k / T_eV
+            intensity = float(np.exp(y) * (1.0 + rng.normal(0.0, 0.005)))
+            obs.append(
+                LineObservation(
+                    wavelength_nm=500.0,
+                    intensity=intensity / 500.0,
+                    intensity_uncertainty=max(intensity * 0.005 / 500.0, 1e-8),
+                    element=el,
+                    ionization_stage=1,
+                    E_k_ev=E_k,
+                    g_k=1,
+                    A_ki=1.0,
+                )
+            )
+        for E_k in [3.0, 4.0]:
+            y = intercept + saha_offset - (_PLANT_IP + E_k) / T_eV
+            intensity = float(np.exp(y) * (1.0 + rng.normal(0.0, 0.005)))
+            obs.append(
+                LineObservation(
+                    wavelength_nm=500.0,
+                    intensity=intensity / 500.0,
+                    intensity_uncertainty=max(intensity * 0.005 / 500.0, 1e-8),
+                    element=el,
+                    ionization_stage=2,
+                    E_k_ev=E_k,
+                    g_k=1,
+                    A_ki=1.0,
+                )
+            )
+    return obs
+
+
+def _build_kernel_inputs(solver, obs):
+    """Build (elements_ord, LaxKernelInputs) from a solver + obs list (J7 pattern)."""
+    obs_by = {el: [o for o in obs if o.element == el] for el in {o.element for o in obs}}
+    elements_ord, x, y, w, stage, mask = iterative_mod._build_padded_arrays_from_obs(
+        obs_by, weight_cap=solver.boltzmann_weight_cap
+    )
+    snapshot = iterative_mod._AtomicSnapshot.from_solver(solver, elements_ord)
+    if elements_ord != list(obs_by.keys()):
+        snapshot = snapshot.reorder(elements_ord)
+    inp = LaxKernelInputs.from_snapshot(snapshot, x, y, w, stage, mask)
+    return elements_ord, inp
+
+
+def _gn_oracle(inp):
+    """The REAL J7 Gauss-Newton estimator on identical inputs (the parity oracle)."""
+    return joint_wls_solve(
+        inp,
+        init_T_K=_PLANT_T_K,
+        ne_stark_cm3=_PLANT_NE,
+        n_gn_steps=5,
+        sb_graph=True,
+    )
+
+
+def test_potential_matches_joint_wls_residual_and_is_stationary():
+    """The HMC potential IS the joint-WLS residual: composition equals the GN
+    solver's exactly, and the GN fixed point is a stationary point of the potential.
+
+    Feeds IDENTICAL inputs to the REAL ``joint_wls_solve`` oracle and to the
+    potential; the simplex read-off (``ilr_inverse``) is bit-identical and
+    ``∇_α rss = 0`` / ``∇_{lnT} rss ≈ 0`` at the GN optimum (the two estimators
+    share one objective, ADR-0004 §6.1).
+    """
+    obs = _synthetic_obs()
+    solver = IterativeCFLIBSSolver(_mock_constant_db(), max_iterations=20)
+    _, inp = _build_kernel_inputs(solver, obs)
+    E = inp.x.shape[0]
+
+    res = _gn_oracle(inp)
+    alpha_opt = res.theta[1:E]
+    ln_T_opt = jnp.log(res.T_K)
+    log_ne_opt = jnp.log10(res.n_e_cm3)
+
+    out = joint_wls_potential(ln_T_opt, log_ne_opt, alpha_opt, inp, sb_graph=True)
+
+    # Same simplex map => bit-identical composition vs the GN solver.
+    assert np.allclose(np.asarray(out.concentrations), np.asarray(res.concentrations), atol=1e-10)
+    # rss is small at the well-fit synthetic optimum (clean data).
+    assert float(out.rss) < 1e-2
+
+    # The GN optimum is stationary in α (∇_α rss == 0) and near-stationary in lnT.
+    g_alpha = jax.grad(lambda a: joint_potential_rss(ln_T_opt, log_ne_opt, a, inp))(alpha_opt)
+    assert np.allclose(np.asarray(g_alpha), 0.0, atol=1e-6)
+    g_lnT = jax.grad(lambda lt: joint_potential_rss(lt, log_ne_opt, alpha_opt, inp))(ln_T_opt)
+    # T is pinned by the slope; the GN residual at the optimum is tiny so the
+    # potential's lnT-slope is small relative to its off-optimum scale (~1e6).
+    assert abs(float(g_lnT)) < 1e3
+
+
+def test_joint_potential_gradients_fd_verified():
+    """FD agreement on the joint potential's full (lnT, log_ne, α) gradient (AC).
+
+    Evaluated OFF the optimum (where the gradient is large and well-conditioned),
+    central differences match reverse-mode autodiff to fp64 precision.
+    """
+    obs = _synthetic_obs()
+    solver = IterativeCFLIBSSolver(_mock_constant_db(), max_iterations=20)
+    _, inp = _build_kernel_inputs(solver, obs)
+    E = inp.x.shape[0]
+
+    res = _gn_oracle(inp)
+    # Perturb away from the GN optimum so every partial is non-trivial.
+    ln_T = float(jnp.log(res.T_K)) + 0.05
+    log_ne = float(jnp.log10(res.n_e_cm3)) + 0.1
+    alpha = res.theta[1:E] + 0.2
+
+    def f(lt, lne, a):
+        return joint_potential_rss(lt, lne, a, inp)
+
+    g_lt, g_lne, g_a = jax.grad(f, argnums=(0, 1, 2))(ln_T, log_ne, alpha)
+
+    eps = 1e-6
+    fd_lt = (float(f(ln_T + eps, log_ne, alpha)) - float(f(ln_T - eps, log_ne, alpha))) / (2 * eps)
+    fd_lne = (float(f(ln_T, log_ne + eps, alpha)) - float(f(ln_T, log_ne - eps, alpha))) / (2 * eps)
+    assert np.isclose(float(g_lt), fd_lt, rtol=1e-4, atol=1e-3)
+    assert np.isclose(float(g_lne), fd_lne, rtol=1e-4, atol=1e-3)
+    for i in range(E - 1):
+        ap = alpha.at[i].add(eps)
+        am = alpha.at[i].add(-eps)
+        fd_ai = (float(f(ln_T, log_ne, ap)) - float(f(ln_T, log_ne, am))) / (2 * eps)
+        assert np.isclose(float(g_a[i]), fd_ai, rtol=1e-4, atol=1e-3), (i, float(g_a[i]), fd_ai)
+
+
+def test_potential_padding_invariance():
+    """The potential is bit-identical when the kernel block is padded wider.
+
+    Reruns at the next pad size (extra masked elements/lines) and asserts the
+    rss + composition on the valid region are unchanged — the fixed-shape /
+    mask-not-ragged contract (ADR-0004 §5.1).
+    """
+    obs = _synthetic_obs()
+    solver = IterativeCFLIBSSolver(_mock_constant_db(), max_iterations=20)
+    _, inp = _build_kernel_inputs(solver, obs)
+    E = inp.x.shape[0]
+    res = _gn_oracle(inp)
+    alpha = res.theta[1:E]
+    ln_T = jnp.log(res.T_K)
+    log_ne = jnp.log10(res.n_e_cm3)
+
+    out_small = joint_wls_potential(ln_T, log_ne, alpha, inp, sb_graph=True)
+
+    # Append a padded (masked) line column to every element: shape (E, Nmax+1).
+    pad_col = lambda arr, fill: jnp.concatenate(  # noqa: E731
+        [arr, jnp.full((E, 1), fill, dtype=arr.dtype)], axis=1
+    )
+    inp_pad = inp._replace(
+        x=pad_col(inp.x, 0.0),
+        y=pad_col(inp.y, 0.0),
+        w=pad_col(inp.w, 0.0),
+        stage=pad_col(inp.stage, 1),
+        mask=jnp.concatenate([inp.mask, jnp.zeros((E, 1), dtype=bool)], axis=1),
+    )
+    out_pad = joint_wls_potential(ln_T, log_ne, alpha, inp_pad, sb_graph=True)
+
+    assert float(out_small.rss) == float(out_pad.rss)
+    assert np.array_equal(np.asarray(out_small.concentrations), np.asarray(out_pad.concentrations))
+
+
+def test_nuts_recovers_planted_parameters_within_credible_intervals():
+    """NUTS over the joint-WLS potential recovers the planted (T, n_e, composition).
+
+    A small chain on the synthetic spectrum produces FINITE, NON-DIVERGENT
+    samples; the posterior credible intervals cover the planted T_K and n_e and
+    the posterior-mean composition matches the GN oracle. Reuses the NumPyro
+    NUTS host driver (``run_joint_nuts``). Small chain (200+200) for the
+    watchdog; still recovers truth on clean synthetic data.
+    """
+    pytest.importorskip("numpyro")
+    obs = _synthetic_obs()
+    solver = IterativeCFLIBSSolver(_mock_constant_db(), max_iterations=20)
+    elements_ord, inp = _build_kernel_inputs(solver, obs)
+    E = inp.x.shape[0]
+    res = _gn_oracle(inp)
+
+    out = ad.run_joint_nuts(
+        inp,
+        n_elements=E,
+        candidate_elements=elements_ord,
+        num_warmup=200,
+        num_samples=200,
+        num_chains=1,
+        seed=0,
+        T_eV_range=(0.4, 1.2),
+        log_ne_range=(15.0, 17.0),
+        sigma=0.05,
+        sb_graph=True,
+    )
+
+    samples = out["samples"]
+    T_K = np.asarray(samples["T_K"])
+    log_ne = np.asarray(samples["log_ne"])
+    conc = np.asarray(samples["concentrations"])
+
+    # Finite, non-divergent kernel (the minimum acceptance bar).
+    assert out["num_divergences"] == 0
+    assert np.all(np.isfinite(T_K))
+    assert np.all(np.isfinite(log_ne))
+    assert np.all(np.isfinite(conc))
+    # Provenance: the candidate-prefilter element set is recorded.
+    assert out["metadata"]["candidate_elements"] == elements_ord
+
+    # Posterior credible intervals cover the planted (T, n_e).
+    assert np.percentile(T_K, 2.5) <= _PLANT_T_K <= np.percentile(T_K, 97.5)
+    lo_ne, hi_ne = np.percentile(log_ne, 2.5), np.percentile(log_ne, 97.5)
+    assert lo_ne <= np.log10(_PLANT_NE) <= hi_ne
+
+    # Posterior-mean composition agrees with the GN oracle (same objective).
+    assert np.allclose(conc.mean(axis=0), np.asarray(res.concentrations), atol=2e-2)
