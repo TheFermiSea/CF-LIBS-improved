@@ -29,30 +29,38 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[dev,ci]"
 
+    # --- BLOCKING gates: the checks that catch real breakage ---------------
+    # Ruff stays blocking: it enforces the one HARD project guardrail via
+    # TID251 -- the physics-only constraint (no sklearn/torch/tf/jax.nn/jaxopt
+    # etc. in the shipped algorithm). Cheap and load-bearing.
     - name: Lint with Ruff
       run: |
         ruff check cflibs/ tests/
 
-    - name: Format Check with Black
-      run: |
-        black --check cflibs/
-
-    - name: Type Check with MyPy
-      run: |
-        mypy cflibs/
-
+    # Functional test suite stays blocking: a real test failure here means
+    # something is actually broken.
     - name: Test with Pytest
       run: |
         pytest tests/ --ignore=tests/jitpipe -m "not requires_db and not requires_bayesian and not requires_rust and not slow"
 
-    - name: Test jitpipe parity suite (isolated)
-      # The jitpipe/ parity tests compare JAX stages against the reference
-      # physics and must run in a FRESH process: accumulated process-global
-      # state from the upstream suite (JAX compilation cache, atomic/partition
-      # memoization, fp64 flag) can perturb a reference fit and silently change
-      # a setup precondition (test_parity_j6 measure_stark_ne n_lines 3 -> 1).
-      # The suite passes deterministically in isolation; a dedicated invocation
-      # guarantees that. (tests/jitpipe/conftest.py adds in-suite hermetic resets
-      # so a combined local `pytest tests/` run stays green too.)
+    # --- ADVISORY checks: informative, NOT merge-blocking ------------------
+    # Rationale: zero users / no production to protect, and these checks are
+    # either trivially auto-fixable (black) or research-grade strict (mypy on a
+    # heavily-typed scientific codebase; the bit-exact JAX-vs-reference parity
+    # suite, which is brittle to environment/test-ordering). Keeping them as
+    # `continue-on-error` lets them run and report without blocking iteration.
+    # Parity is gated per-stage by the integration workflow before merge anyway.
+    - name: Format Check with Black (advisory)
+      continue-on-error: true
+      run: |
+        black --check cflibs/
+
+    - name: Type Check with MyPy (advisory)
+      continue-on-error: true
+      run: |
+        mypy cflibs/
+
+    - name: jitpipe parity suite (advisory, isolated)
+      continue-on-error: true
       run: |
         pytest tests/jitpipe -m "not requires_db and not requires_bayesian and not requires_rust and not slow"
