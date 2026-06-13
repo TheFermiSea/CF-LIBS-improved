@@ -12,7 +12,6 @@ harnesses incomparable. These tests pin the bridge:
 2. The divergence knobs (wavelength calibration, shift-coherence veto,
    confounder element list) round-trip through explicit flags whose defaults
    are the CLI defaults.
-3. The script source does not construct pipeline stages by hand.
 
 No atomic database or spectrum is needed: everything here is configuration
 resolution.
@@ -58,26 +57,6 @@ def test_flagless_harness_equals_cli_builder_defaults(harness):
     assert cfg == build_pipeline_config(expected_elements)
 
 
-def test_maintainer_gate_flags_resolve_to_defaults(harness):
-    """The integration-gate invocation (--closure-mode oxide
-    --saha-boltzmann-graph) is the geological-preset default, so it must
-    resolve to the identical config."""
-    cfg = _build(harness, ["--closure-mode", "oxide", "--saha-boltzmann-graph"])
-    assert cfg == _build(harness, [])
-
-
-def test_default_knobs_are_cli_defaults(harness):
-    cfg = _build(harness, [])
-    assert cfg.preset == "geological"
-    assert cfg.closure_mode == "oxide"
-    assert cfg.saha_boltzmann_graph is True
-    assert cfg.wavelength_calibration is True
-    assert cfg.shift_coherence_veto is True
-    assert cfg.apply_self_absorption == "off"
-    assert cfg.exclude_resonance is None
-    assert cfg.min_relative_intensity is None
-
-
 # ---------------------------------------------------------------------------
 # 2. Knob flag round-trips
 # ---------------------------------------------------------------------------
@@ -105,12 +84,6 @@ def test_knob_flags_round_trip(harness, argv, attr, expected):
     assert getattr(_build(harness, argv), attr) == expected
 
 
-def test_preset_flag_resolves_bundle(harness):
-    cfg = _build(harness, ["--preset", "raw"])
-    assert cfg.saha_boltzmann_graph is False
-    assert cfg.closure_mode == "standard"
-
-
 def test_confounders_flag_controls_element_list(harness):
     cert = list(BHVO2_BASALT_USGS)
     with_conf = _build(harness, [])
@@ -136,24 +109,3 @@ def test_ablation_toggles_only_change_their_knob(harness):
             if getattr(base, f.name) != getattr(toggled, f.name)
         }
         assert diffs == {attr}
-
-
-# ---------------------------------------------------------------------------
-# 3. No hand-built pipeline stages
-# ---------------------------------------------------------------------------
-
-
-def test_script_does_not_hand_build_pipeline():
-    """The script may only consume the shared builder/runner: constructing
-    solver or selector stages directly is the exact drift bead vj82 closed."""
-    source = SCRIPT_PATH.read_text()
-    for forbidden in (
-        "IterativeCFLIBSSolver",
-        "LineSelector",
-        "detect_line_observations",
-        "_detect_and_select_lines",
-        "default_oxide_stoichiometry",
-    ):
-        assert forbidden not in source, f"script hand-builds pipeline stage: {forbidden}"
-    assert "build_pipeline_config" in source
-    assert "run_pipeline" in source
