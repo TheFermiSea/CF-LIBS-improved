@@ -456,6 +456,32 @@ def _unique_count_upper_bound(
     return jnp.minimum(jnp.sum(up), jnp.sum(ul))
 
 
+def _exact_dedupe_count(
+    residual: jnp.ndarray,
+    peak_id: jnp.ndarray,
+    line_id: jnp.ndarray,
+    inlier_mask: jnp.ndarray,
+    p_max: int,
+    l_max: int,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Exact greedy one-to-one dedupe ``(n_inliers, masked_median_residual)``.
+
+    The reference ranks each RANSAC hypothesis by its **greedy-deduped** inlier
+    count (``_dedupe_one_to_one`` -> ``(n_in, median)``, ref :285-290), NOT the
+    parallel upper bound. The upper bound ``min(#unique peaks, #unique lines)``
+    can overcount a hypothesis whose peak↔line assignment is many-to-one, which
+    lets a marginal affine win the per-model search and then edge out shift on
+    the post-refine BIC — the J2 §7 R8 model-class flip. Scoring with the exact
+    dedupe restores the reference ranking; it is one ``lax.scan`` per hypothesis
+    (same cost as the winner dedupe), used only for the slope models on the
+    segmented path (the shift model is 1-point exhaustive and never flips).
+    """
+    sel = _dedupe_mask(residual, peak_id, line_id, inlier_mask, p_max, l_max)
+    n_in = jnp.sum(sel)
+    med = _masked_median(residual, sel)
+    return n_in, med
+
+
 def _score_hypothesis(
     coef: jnp.ndarray,
     x: jnp.ndarray,
@@ -467,10 +493,19 @@ def _score_hypothesis(
     inlier_tol: float,
     p_max: int,
     l_max: int,
+    exact_dedupe: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Score one hypothesis: ``(upper_bound, -masked_median_residual)``."""
+    """Score one hypothesis: ``(count, -masked_median_residual)``.
+
+    ``count`` is the parallel upper bound ``min(#unique peaks, #unique lines)``
+    by default (J2 §3 fast path), or the exact greedy-dedupe inlier count when
+    ``exact_dedupe`` is set (J2 §7 R8 model-flip fix — matches the reference
+    RANSAC score ``(n_in, median)`` exactly).
+    """
     resid = jnp.abs(_eval_model(x, coef, model_id) - y)
     inl = (resid <= inlier_tol) & cand_mask
+    if exact_dedupe:
+        return _exact_dedupe_count(resid, peak_id, line_id, inl, p_max, l_max)
     ub = _unique_count_upper_bound(inl, peak_id, line_id, p_max, l_max)
     # Masked median of inlier residuals (tie-break term in the score).
     med = _masked_median(resid, inl)
@@ -510,6 +545,7 @@ def _winner_seed_mask(
     h_affine: int,
     h_block: int,
     key: jnp.ndarray,
+    exact_dedupe: bool = False,
 ) -> jnp.ndarray:
     """Find the best hypothesis and return its (pre-refine) inlier seed mask.
 
@@ -517,13 +553,18 @@ def _winner_seed_mask(
       ``coef=(y-x,0,0)``, scored exhaustively (J2 spec §3).
     * affine/quadratic: ``h_affine`` stratified counter-PRNG hypotheses; each
       draws ``min_pts`` distinct peak strata and closed-form fits them.
-    Scoring is the upper-bound ``(unique-inlier-count, -masked-median)``;
+    Scoring is the upper-bound ``(unique-inlier-count, -masked-median)`` by
+    default, or the exact greedy-dedupe ``(n_in, -median)`` when ``exact_dedupe``
+    is set (J2 §7 R8: matches the reference RANSAC ranking on the slope models so
+    the per-model winner — and therefore the model class — never flips);
     H-chunked via ``lax.map`` over blocks of ``h_block``.
     """
     c = x.shape[0]
 
     if model_id == MODEL_SHIFT:
-        # Exhaustive: hypothesis i has shift b_i = y_i - x_i.
+        # Exhaustive: hypothesis i has shift b_i = y_i - x_i. The shift score is
+        # always the cheap upper bound: a 1-point shift hypothesis has one (x,y)
+        # so the dedupe is a no-op and the upper bound equals the exact count.
         shifts = y - x  # (C,)
 
         def score_one(b):
@@ -554,7 +595,17 @@ def _winner_seed_mask(
             sub_mask = jnp.zeros(c, dtype=bool).at[s].set(True) & valid
             coef = _fit_weighted(x, y, w, sub_mask, model_id)
             ub, med = _score_hypothesis(
-                coef, x, y, peak_id, line_id, cand_mask, model_id, inlier_tol, p_max, l_max
+                coef,
+                x,
+                y,
+                peak_id,
+                line_id,
+                cand_mask,
+                model_id,
+                inlier_tol,
+                p_max,
+                l_max,
+                exact_dedupe=exact_dedupe,
             )
             return jnp.where(valid, ub, -1), med, coef
 
@@ -741,13 +792,21 @@ def calibrate_axis_kernel(
     k_pair: int = K_PAIR_DEFAULT,
     h_affine: int = H_AFFINE_DEFAULT,
     h_block: int = H_BLOCK_DEFAULT,
+    exact_dedupe_score: bool = True,
     seed: int = 42,
 ) -> CalibrationKernelResult:
     """Fixed-shape global wavelength calibrator (parity of ``calibrate_wavelength_axis``).
 
     All array inputs are padded; ``*_mask`` arrays mark valid entries.
     ``line_wl`` MUST be sorted ascending. ``candidate_models`` / ``k_pair`` /
-    ``h_affine`` / ``h_block`` are Python-static (they shape the graph).
+    ``h_affine`` / ``h_block`` / ``exact_dedupe_score`` are Python-static (they
+    shape the graph).
+
+    ``exact_dedupe_score`` (default True) ranks slope-model hypotheses by the
+    exact greedy one-to-one dedupe count — the reference RANSAC score — so the
+    per-model winner (and hence the BIC-selected model class) matches the
+    reference on the ye6t Al-doublet confounder (J2 §7 R8). Set False for the
+    cheaper parallel upper-bound score where the model-flip hazard is absent.
     """
     p_max = peak_wl.shape[0]
     l_max = line_wl.shape[0]
@@ -787,6 +846,7 @@ def calibrate_axis_kernel(
             h_affine,
             h_block,
             mk,
+            exact_dedupe=exact_dedupe_score,
         )
         coef, bic, rmse, n_in, frac, robust = _refine_and_bic(
             x,
