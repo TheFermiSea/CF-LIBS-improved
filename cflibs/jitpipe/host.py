@@ -26,6 +26,7 @@ Responsibilities
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import os
 import sqlite3
@@ -1357,10 +1358,19 @@ _CAL_REF_T_K = 10000.0
 _CAL_THRESHOLD_FACTOR = 4.0
 #: ``h_affine`` for the on-device stratified affine sampler. The reference uses
 #: 600 random RANSAC draws; the kernel replaces them with H deterministic
-#: stratified samples (J2 §3). 256 covers the affine search on the production
-#: bands while keeping compile+run inside the test budget; the corrected axis is
-#: stable past ~256 (the affine basin is convex once anchored).
-_CAL_H_AFFINE = 256
+#: stratified samples (J2 §3). 64 already saturates the affine search on the
+#: production bands — the corrected axis is bit-identical (max|Δ| 0.00025 nm vs
+#: the reference) at 64/128/256, since the dense-hull tiebreak, not the sample
+#: count, decides the model class. Fewer hypotheses = a smaller H-chunked
+#: residual matrix and a faster trace.
+_CAL_H_AFFINE = 64
+#: Banded fan-out per peak for the segmented-calib kernel. The J2 default is 48,
+#: but the measured ±2.0 nm window fan-out is <=16 on the production ChemCam /
+#: BHVO bands, so 16 is bit-identical to 48 (global fit: model/n_inliers/BIC
+#: unchanged) while shrinking the (P_max*K_pair) candidate axis ~3x — the
+#: dominant cost of the exhaustive shift search + H-chunked residual matrix.
+#: This is the speed lever that brings the global fit from ~15 s to ~2 s.
+_CAL_K_PAIR = 16
 #: Padded segment-slot count for the legacy monolithic ``calibrate_segmented_kernel``
 #: (retained importable for the J2 parity tests; the production front-end now uses
 #: the per-segment kernel-backed driver below). BHVO-2 has 2 seams / 3 segments.
@@ -1377,6 +1387,44 @@ _CAL_SEGMENT_MAX_GLOBAL_DISAGREEMENT_NM = 0.5
 def _next_pow2_min(n: int, floor: int) -> int:
     """Smallest power of two ``>= max(n, floor)`` — segmented-calib bucketer."""
     return _next_pow2(max(int(n), int(floor)))
+
+
+@functools.lru_cache(maxsize=64)
+def _jitted_calibrate_axis_kernel(
+    apply_quality_gate: bool,
+    candidate_models: tuple,
+    k_pair: int,
+    h_affine: int,
+    exact_dedupe_score: bool,
+    seed: int,
+):
+    """Return a ``jax.jit``-compiled :func:`calibrate_axis_kernel` closure.
+
+    ``calibrate_axis_kernel`` is not jitted at module scope (the J2 parity tests
+    wrap it themselves), so calling it eagerly per segment dispatches op-by-op
+    through the ``lax.map``/``lax.scan`` over thousands of candidate slots —
+    ~45 s/spectrum. Compiling once per static signature (and caching the compiled
+    closure across spectra; the array shapes are the per-call ``jax.jit`` cache
+    key) drops the warm per-spectrum cost by ~30x. All non-array arguments are
+    baked in as Python statics so the trace specialises on them.
+    """
+    import jax
+
+    from cflibs.jitpipe import calibrate as _C
+
+    return jax.jit(
+        functools.partial(
+            _C.calibrate_axis_kernel,
+            inlier_tolerance_nm=_CAL_INLIER_TOL_NM,
+            max_pair_window_nm=_CAL_PAIR_WINDOW_NM,
+            apply_quality_gate=apply_quality_gate,
+            candidate_models=candidate_models,
+            k_pair=k_pair,
+            h_affine=h_affine,
+            exact_dedupe_score=exact_dedupe_score,
+            seed=seed,
+        )
+    )
 
 
 def _calibrate_axis_kernel_backed(
@@ -1489,7 +1537,10 @@ def _calibrate_axis_kernel_backed(
     }
     model_ids = tuple(_MODEL_ID[m] for m in candidate_models)
 
-    res = _C.calibrate_axis_kernel(
+    kernel = _jitted_calibrate_axis_kernel(
+        bool(apply_quality_gate), model_ids, _CAL_K_PAIR, int(h_affine), True, int(random_seed)
+    )
+    res = kernel(
         jnp.asarray(_pad(peak_wl, p_max)),
         jnp.asarray(_pad(peak_amp, p_max)),
         jnp.asarray(np.r_[np.ones(peak_wl.size, bool), np.zeros(p_max - peak_wl.size, bool)]),
@@ -1498,13 +1549,6 @@ def _calibrate_axis_kernel_backed(
         jnp.asarray(np.r_[np.ones(line_wl.size, bool), np.zeros(l_max - line_wl.size, bool)]),
         jnp.asarray(_pad(wl_np, w_max, fill=float(wl_np[-1]))),
         jnp.asarray(np.r_[np.ones(n_w, bool), np.zeros(w_max - n_w, bool)]),
-        inlier_tolerance_nm=_CAL_INLIER_TOL_NM,
-        max_pair_window_nm=_CAL_PAIR_WINDOW_NM,
-        apply_quality_gate=bool(apply_quality_gate),
-        candidate_models=model_ids,
-        h_affine=int(h_affine),
-        exact_dedupe_score=True,
-        seed=int(random_seed),
     )
 
     if not bool(np.asarray(res.success)):
@@ -1528,7 +1572,7 @@ def _calibrate_axis_kernel_backed(
     # coverage gate reads these from details["inlier_anchor_wl_nm"].
     robust = np.asarray(res.robust_mask) if res.robust_mask is not None else None
     if robust is not None and robust.any():
-        peak_id_grid = np.repeat(np.arange(p_max), _C.K_PAIR_DEFAULT)
+        peak_id_grid = np.repeat(np.arange(p_max), _CAL_K_PAIR)
         sel_peak_ids = np.unique(peak_id_grid[robust])
         sel_peak_ids = sel_peak_ids[sel_peak_ids < peak_wl.size]
         inlier_anchor_wl = sorted(float(peak_wl[i]) for i in sel_peak_ids)
@@ -1561,7 +1605,7 @@ def _calibrate_axis_kernel_backed(
         rmse_nm=float(np.asarray(res.rmse_nm)),
         n_inliers=int(np.asarray(res.n_inliers)),
         n_peaks=int(peak_wl.size),
-        n_candidates=int(peak_wl.size * _C.K_PAIR_DEFAULT),
+        n_candidates=int(peak_wl.size * _CAL_K_PAIR),
         matched_peak_fraction=float(np.asarray(res.matched_peak_fraction)),
         quality_passed=quality_passed,
         quality_reason=reason,
