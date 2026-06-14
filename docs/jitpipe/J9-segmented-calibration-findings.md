@@ -71,9 +71,14 @@ search. The reference's seg[2] `shift` is partly luck.
 
 ## Speed
 
-The segmented kernel compiles in ~293 s at production width (W bucket 8192,
-SEG_MAX=8, 2 models, H=256). Compile amortizes under `jit(vmap(...))` across a
-batch, but the per-call graph is heavy. See `scripts/diag_segmented_calib_flip.py`.
+The segmented kernel takes ~293 s for the first call at production width
+(W bucket 8192, SEG_MAX=8, 2 models, H=256). A second call on identical shapes
+did **not** return a cheap cached run — it was still executing past ~290 s of
+additional CPU when killed — so the cost is ~290 s **per call**, not a one-time
+compile. The reference host calibration, by contrast, is **2.84 s/spectrum**
+(measured, same spectrum). Even setting the parity flip aside, the on-device
+kernel is ~100× slower per spectrum than the host path it would replace. See
+`scripts/diag_segmented_calib_flip.py`.
 
 ## Decision
 

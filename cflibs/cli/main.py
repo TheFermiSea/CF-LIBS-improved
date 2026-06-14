@@ -1032,6 +1032,7 @@ def scoreboard_cmd(args):
         max_spectra=args.max_spectra,
         seed=args.seed,
         include_holdout=args.include_holdout,
+        pipeline_impl=args.pipeline,
     )
     json_path, md_path = write_artifacts(board, args.output_dir)
     print(md_path.read_text())
@@ -1304,6 +1305,16 @@ def main():
             "Also run holdout-tier datasets (the campaign adoption gate, e.g. "
             "bhvo2_chemcam, emslibs2019). Off by default so casual boards cannot "
             "leak the gate; vault-tier datasets never run."
+        ),
+    )
+    scoreboard_parser.add_argument(
+        "--pipeline",
+        choices=["reference", "jit"],
+        default="reference",
+        help=(
+            "Inversion pipeline implementation: 'reference' (run_pipeline, the "
+            "parity oracle) or 'jit' (cflibs.jitpipe.run_one, the JAX port). "
+            "J12/M3 superiority runs compare the two (default: reference)."
         ),
     )
     scoreboard_parser.set_defaults(func=scoreboard_cmd)

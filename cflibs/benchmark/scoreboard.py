@@ -76,6 +76,64 @@ from cflibs.benchmark.synthetic_eval import compute_binary_metrics
 
 logger = get_logger("benchmark.scoreboard")
 
+#: Supported inversion-pipeline implementations (J12 / M3 gate).
+#:   * ``reference`` — :func:`cflibs.inversion.pipeline.run_pipeline` (parity oracle).
+#:   * ``jit``       — :func:`cflibs.jitpipe.run_one` (the JAX port; on-device
+#:     detect/identify/solve, host-delegated calibration + Stark — the
+#:     M1-validated path; see docs/jitpipe/J9-segmented-calibration-findings.md).
+PIPELINE_IMPLS = ("reference", "jit")
+
+#: Cache of jitpipe atomic snapshots keyed by DB path (built once per board).
+_JIT_SNAPSHOT_CACHE: dict[str, Any] = {}
+
+
+def _jit_snapshot(db_path: str) -> Any:
+    """Build (and cache) the jitpipe atomic snapshot for ``db_path``."""
+    snap = _JIT_SNAPSHOT_CACHE.get(db_path)
+    if snap is None:
+        from cflibs.jitpipe import build_snapshot
+
+        snap = build_snapshot(db_path)
+        _JIT_SNAPSHOT_CACHE[db_path] = snap
+    return snap
+
+
+def _run_pipeline_jit(
+    wavelength: np.ndarray, intensity: np.ndarray, atomic_db: Any, pipeline: Any
+) -> tuple[Any, dict[str, Any]]:
+    """Run the jittable pipeline, returning ``run_pipeline``'s ``(result, diag)`` shape.
+
+    Keeps the scorer pipeline-agnostic: builds the ``StaticConfig`` from the
+    resolved ``pipeline`` (closure mode + max iters) against a cached full-DB
+    snapshot, then calls :func:`cflibs.jitpipe.run_one` with the on-device
+    front-end (host-delegated segmented calibration + Stark — the M1-validated
+    routing, J9 finding).
+    """
+    from cflibs.jitpipe import PipelineParams, StaticConfig, run_one
+
+    db_path = str(getattr(atomic_db, "db_path", "") or "")
+    snap = _jit_snapshot(db_path)
+    static = StaticConfig(
+        bucket_id=0,
+        n_species=snap.n_species,
+        level_pad=snap.level_pad[1],
+        closure_mode=pipeline.closure_mode,
+        max_iters=int(pipeline.max_iterations),
+    )
+    result = run_one(
+        np.asarray(intensity, dtype=float),
+        np.asarray(wavelength, dtype=float),
+        snap,
+        PipelineParams(),
+        static,
+        atomic_db=atomic_db,
+        pipeline_config=pipeline,
+        ondevice_front_end=True,
+    )
+    diagnostics = {"n_observations": 0, "stage_timings": {}, "pipeline_impl": "jit"}
+    return result, diagnostics
+
+
 #: Fixed false-positive probe set (see scripts/measure_bhvo2_presence.py).
 CONFOUNDER_ELEMENTS = ("Ag", "Sn", "W", "Bi", "Th")
 
@@ -189,6 +247,7 @@ def _score_spectrum(
     *,
     preset: Optional[str] = None,
     config_overrides: Optional[Mapping[str, Any]] = None,
+    pipeline_impl: str = "reference",
 ) -> dict[str, Any]:
     """Run the production pipeline on one spectrum and score it against truth."""
     candidates = sorted(set(truth.elements_present) | set(CONFOUNDER_ELEMENTS))
@@ -208,7 +267,10 @@ def _score_spectrum(
             resolving_power=truth.resolving_power,
             overrides=config_overrides,
         )
-        result, diagnostics = run_pipeline(wavelength, intensity, atomic_db, pipeline)
+        if pipeline_impl == "jit":
+            result, diagnostics = _run_pipeline_jit(wavelength, intensity, atomic_db, pipeline)
+        else:
+            result, diagnostics = run_pipeline(wavelength, intensity, atomic_db, pipeline)
     except Exception as exc:  # noqa: BLE001 — the board must never crash
         record = failure_record(
             spectrum_id,
@@ -336,6 +398,7 @@ def run_scoreboard(
     preset: Optional[str] = None,
     config_overrides: Optional[Mapping[str, Any]] = None,
     include_holdout: bool = False,
+    pipeline_impl: str = "reference",
 ) -> dict[str, Any]:
     """Run the goal-metric scoreboard over the registered datasets.
 
@@ -367,12 +430,16 @@ def run_scoreboard(
     """
     import cflibs
 
+    if pipeline_impl not in PIPELINE_IMPLS:
+        raise ValueError(f"Unknown pipeline_impl {pipeline_impl!r}; choose from {PIPELINE_IMPLS}.")
+
     if not registered_names():  # bare interpreter: load the default board
         ensure_default_datasets()
 
     board: dict[str, Any] = {
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "cflibs_path": str(Path(cflibs.__file__).resolve().parent),
+        "pipeline_impl": pipeline_impl,
         "preset": preset or DEFAULT_PRESET_LABEL,
         "seed": seed,
         "max_spectra": max_spectra,
@@ -417,7 +484,14 @@ def run_scoreboard(
         notes = entry.notes or (items[0][3].notes if items else "")
         records = [
             _score_spectrum(
-                atomic_db, sid, wl, inten, truth, preset=preset, config_overrides=config_overrides
+                atomic_db,
+                sid,
+                wl,
+                inten,
+                truth,
+                preset=preset,
+                config_overrides=config_overrides,
+                pipeline_impl=pipeline_impl,
             )
             for sid, wl, inten, truth in items
         ]
@@ -460,6 +534,7 @@ def render_markdown(board: Mapping[str, Any]) -> str:
     lines.append("")
     lines.append(f"Generated: {board['generated_utc']}  ")
     lines.append(f"cflibs: `{board['cflibs_path']}`  ")
+    lines.append(f"Pipeline: {board.get('pipeline_impl', 'reference')}  ")
     lines.append(f"Preset: {board['preset']}  ")
     lines.append(
         f"Sampling: seed={board['seed']}, max_spectra="
