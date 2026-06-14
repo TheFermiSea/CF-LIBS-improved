@@ -96,11 +96,6 @@ _ATTRIBUTE_EXPORT_GROUPS = {
         "ObservableSAResult",
         "ObservableSelfAbsorptionCorrector",
     ],
-    "cflibs.inversion.physics.cdsb": [
-        "CDSBLineObservation",
-        "create_cdsb_observation",
-        "from_transition",
-    ],
     "cflibs.inversion.physics.uncertainty": [
         "MonteCarloUQ",
         "MonteCarloResult",
@@ -281,9 +276,6 @@ __all__ = [
     "ObservableLineCorrection",
     "ObservableSAResult",
     "ObservableSelfAbsorptionCorrector",
-    "CDSBLineObservation",
-    "create_cdsb_observation",
-    "from_transition",
     "MonteCarloUQ",
     "MonteCarloResult",
     "PerturbationType",
