@@ -282,6 +282,23 @@ def _score_spectrum(
         logger.warning("scoreboard: %s failed: %s", spectrum_id, record["error"])
         return record
 
+    # Failure-policy parity (M3 criterion 3): the jit pipeline returns an all-FN
+    # result (rather than raising) at zero usable lines — quality_metrics carries
+    # ``failed=1.0`` (host.all_fn_result). Score it as a failure identically to
+    # the reference crash so failure counts AND composition-RMSE aggregation are
+    # directly comparable across pipelines (otherwise the all-FN record counts as
+    # an "ok" rmse=100 row, inflating the jit median RMSE — a scoring artifact,
+    # not a real regression).
+    if float((result.quality_metrics or {}).get("failed", 0.0)) >= 1.0:
+        record = failure_record(
+            spectrum_id,
+            truth,
+            candidates,
+            "all-FN (zero usable lines; jit failure-policy parity)",
+            time.perf_counter() - t0,
+        )
+        return record
+
     record["wall_s"] = time.perf_counter() - t0
     predicted = dict(result.concentrations)
     record.update(presence_confusion(predicted, truth.elements_present, candidates))
