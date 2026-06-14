@@ -731,6 +731,118 @@ def test_ondevice_failure_policy_parity(db, snapshot):
 
 
 # ---------------------------------------------------------------------------
+# 6b. ON-DEVICE segmented WAVELENGTH CALIBRATION (J9 / J2 §7 R8).
+#
+# The segmented calibration now runs on-device in ``run_front_end_ondevice``
+# (the kernel-backed driver ``_ondevice_calibrate_segmented``: the reference
+# segmented-driver structure with every robust RANSAC core routed through the J2
+# ``calibrate_axis_kernel``). These pin:
+#   (1) the corrected axis matches the reference ``calibrate_wavelength_axis_segmented``
+#       within the J2 contract (sub-pixel; max|Δλ| <= 0.04 nm) on the real BHVO-2
+#       confounder, raw + geological presets;
+#   (2) the J2 §7 R8 model-flip is closed — the ye6t BHVO-2 877 nm Al doublet is
+#       NOT dropped (the per-segment shift/affine decision matches the reference,
+#       so the corrected red end keeps the Al 877.3896 nm line, obs Jaccard 1.0).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _REAL_SPECTRUM.exists(), reason="real ChemCam BHVO-2 fixture not present in worktree"
+)
+@pytest.mark.parametrize("preset", ["raw", "geological"])
+def test_ondevice_calibration_axis_matches_reference_real_chemcam(db, preset):
+    """ON-DEVICE segmented calibration corrected axis == reference (real BHVO-2).
+
+    Feeds the SAME (wavelength, intensity) to the reference
+    ``calibrate_wavelength_axis_segmented`` and the kernel-backed on-device driver
+    ``_ondevice_calibrate_segmented`` and asserts the J2 §4 corrected-axis
+    contract: ``max|λ_dev − λ_ref| <= inlier_tolerance_nm/2 = 0.04 nm`` (sub-pixel)
+    over the whole axis. The real ChemCam BHVO-2 confounder is the J2 §7 R8 hazard
+    (a 53 %-anchored seg-2 affine that the kernel's stronger search finds but the
+    dense-hull tiebreak degrades to shift, matching the reference).
+    """
+    from cflibs.inversion.pipeline import build_pipeline_config
+    from cflibs.inversion.preprocess.wavelength_calibration import (
+        calibrate_wavelength_axis_segmented,
+    )
+
+    from cflibs.jitpipe.host import _ondevice_calibrate_segmented
+
+    wl, inten = _load_real_spectrum()
+    elements = ["Si", "Ti", "Al", "Fe", "Mn", "Mg", "Ca", "Na", "K"]
+    cfg = build_pipeline_config(
+        elements, preset=preset, overrides=_PARITY_OVERRIDES if preset == "raw" else None
+    )
+
+    ref = calibrate_wavelength_axis_segmented(
+        wavelength=wl,
+        intensity=inten,
+        atomic_db=db,
+        elements=elements,
+        affine_coverage_gate=cfg.affine_coverage_gate,
+    )
+    dev_corr, dev_success, dev_quality = _ondevice_calibrate_segmented(wl, inten, db, elements, cfg)
+
+    assert ref.success and dev_success
+    assert ref.quality_passed == dev_quality
+    ref_corr = np.asarray(ref.corrected_wavelength, dtype=float)
+    max_dev = float(np.max(np.abs(dev_corr - ref_corr)))
+    assert (
+        max_dev <= 0.04
+    ), f"corrected-axis divergence {max_dev:.5f} nm > 0.04 nm (preset={preset})"
+
+
+@pytest.mark.skipif(
+    not _REAL_SPECTRUM.exists(), reason="real ChemCam BHVO-2 fixture not present in worktree"
+)
+@pytest.mark.parametrize("preset", ["raw", "geological"])
+def test_ondevice_calibration_ye6t_al_doublet_not_dropped(db, snapshot, preset):
+    """J2 §7 R8 confounder: the ON-DEVICE-calibrated front-end keeps the Al doublet.
+
+    The named regression: with the OLD monolithic ``calibrate_segmented_kernel``
+    the BHVO-2 seg-2 affine/shift model-class flip shifted the corrected axis
+    ~0.1 nm at the red end, moving the Al I 877.3896 nm doublet member to the
+    wrong wavelength (877.2866) and dropping the reference line key (obs Jaccard
+    fell to ~0.96 on raw). With the kernel-backed driver + the unconditional
+    dense-hull tiebreak the corrected axis matches the reference, so:
+
+      * the reference Al observation set == the on-device set, AND
+      * the Al 877.3896 nm line is present on the on-device side.
+    """
+    from cflibs.inversion.pipeline import build_pipeline_config
+
+    from cflibs.jitpipe.host import run_front_end_ondevice
+
+    wl, inten = _load_real_spectrum()
+    elements = ["Si", "Ti", "Al", "Fe", "Mn", "Mg", "Ca", "Na", "K"]
+    cfg = build_pipeline_config(
+        elements, preset=preset, overrides=_PARITY_OVERRIDES if preset == "raw" else None
+    )
+
+    ref_obs = _ref_front_end_obs(db, wl, inten, cfg)
+    dev = run_front_end_ondevice(wl, inten, db, cfg, snapshot)
+
+    ref_keys = _obs_line_keys(ref_obs)
+    dev_keys = _obs_line_keys(dev.observations)
+    # Whole-set Jaccard contract (the ye6t case is the binding floor).
+    assert _jaccard(ref_keys, dev_keys) >= 0.98, (
+        f"obs Jaccard < 0.98 (preset={preset}): "
+        f"only_ref={sorted(ref_keys - dev_keys)[:8]} only_dev={sorted(dev_keys - ref_keys)[:8]}"
+    )
+    # The Al-doublet member specifically must not be dropped (the R8 signature).
+    ref_al = {k for k in ref_keys if k[0] == "Al"}
+    dev_al = {k for k in dev_keys if k[0] == "Al"}
+    assert (
+        ref_al == dev_al
+    ), f"Al observation set differs (preset={preset}): ref={ref_al} dev={dev_al}"
+    al_877 = ("Al", 1, 877.3896)
+    if al_877 in ref_al:
+        assert (
+            al_877 in dev_al
+        ), "ye6t Al 877.3896 nm doublet member dropped by on-device calibration"
+
+
+# ---------------------------------------------------------------------------
 # 7. Wave-3b stage parity: the two stages newly moved on-device, asserted in
 # isolation against their REFERENCE counterparts (fast — no segmented kernel).
 #

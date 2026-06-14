@@ -1151,28 +1151,33 @@ def response_multiplier(wavelength: np.ndarray, response_curve_path: str | None)
 #     kernel (:func:`_line_selector_scores`) + a host gather applying the gate +
 #     per-element top-K cap in the reference order (:func:`_ondevice_line_select`).
 #
+# Wave-3c / J9 addition (this change): the segmented WAVELENGTH CALIBRATION now
+# runs ON-DEVICE in :func:`run_front_end_ondevice` via the kernel-backed driver
+# :func:`_ondevice_calibrate_segmented` (the reference segmented-driver structure
+# — CCD seams, always-computed global fit, per-segment trust/coverage/disagreement
+# gates, global-offset + neighbour fallbacks, seam-monotonicity restore, revert
+# gates — with every robust RANSAC core routed through the J2
+# :func:`cflibs.jitpipe.calibrate.calibrate_axis_kernel`). Each segment re-detects
+# its OWN peaks + line pool (the reference ``_fit_one_segment`` behaviour); feeding
+# the kernel a per-segment candidate set (not the global peaks masked to a window)
+# plus an UNCONDITIONAL dense-hull coverage tiebreak on the winning slope model
+# closes the J2 §7 R8 model-class flip on the real ChemCam BHVO-2 confounder
+# (obs Jaccard 1.0 on raw + geological; the ye6t 877 nm Al doublet is preserved).
+# It is ~8x faster than the old monolithic ``calibrate_segmented_kernel`` (BHVO-2:
+# warm ~4 s vs reference ~1.4 s) via jit-compiling+caching the per-segment kernel
+# and k_pair 48->16. The byte-faithful reference (:func:`_ld_calibrate`) is kept
+# as the parity-test cross-check.
+#
 # Stages that DO NOT yet reach byte-parity as on-device kernels and therefore
 # stay reference-delegated (reported honestly in ``impl_completeness`` /
 # ``remaining_todo``):
-#   * the segmented wavelength calibration. ``calibrate_segmented_kernel`` IS the
-#     fully composed on-device driver (CCD seams + per-segment model lattice +
-#     coverage / trust / disagreement gates + seam-monotonicity restore + revert
-#     gates), and :func:`_ondevice_calibrate_segmented` is the host gather for it,
-#     but at production axis widths it (a) is too slow for the per-spectrum budget
-#     (~300 s/preset compile+run at W=8192) and (b) DIVERGES from the reference on
-#     the real ChemCam confounder — a per-segment affine/shift model-class flip
-#     (the J2 §7 R8 upper-bound-vs-greedy-dedupe hazard) shifts the corrected axis
-#     ~0.08-0.17 nm, cascading into a different observation set (obs Jaccard
-#     0.79-0.83 << 0.98, dropping the ye6t Al doublet). Kept byte-faithful via
-#     :func:`_ld_calibrate` pending a kernel-tuning pass (h_affine / dense-hull
-#     tiebreak) that closes the flip;
 #   * the Stark n_e diagnostic (``measure_stark_ne_jit`` is parity-tested in
 #     isolation, but the per-candidate DB multiplet-blend gate + the
 #     ``break``-after-``max_lines``-SUCCESSES sequencing are delicate, and the
 #     ``ne_median`` directly pins the production solve — kept delegated to protect
 #     the n_e <= 10 % M1 tolerance).
 # The on-device gate stack consumes the SAME reference-computed inputs for the
-# delegated stages, so the line-key set it produces matches the reference
+# remaining delegated stage, so the line-key set it produces matches the reference
 # ``detect_and_select_lines`` exactly (obs Jaccard 1.0 on synthetic + real BHVO-2,
 # raw + geological presets).
 # ---------------------------------------------------------------------------
