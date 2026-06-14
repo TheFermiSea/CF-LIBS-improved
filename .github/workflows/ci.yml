@@ -2,9 +2,9 @@ name: CF-LIBS CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "dev", "feat/adr-0001-pattern-survey-impl" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "dev", "feat/adr-0001-pattern-survey-impl" ]
+    branches: [ "main" ]
 
 jobs:
   build-test-lint:
