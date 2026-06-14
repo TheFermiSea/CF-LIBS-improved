@@ -68,7 +68,7 @@ The builder bakes the following parameters into every library
 | `density_range` | (1e15, 5e17) cm^-3 | Log-spaced; covers 2.5 decades. |
 | `density_steps` | 10 | Sufficient for log-bilinear interp in (T, log10(ne)). |
 | `ionization_stages` | (1, 2) | Neutrals + singly-ionised; double-ionised is rare in LIBS. |
-| FWHM grid | [0.05, 0.10, 0.17, 0.25, 0.50, 0.71, 1.00, 1.67] nm | Mirrors `RP_TO_FWHM` in `scripts/hpc/run_benchmark_sweep.py`. |
+| FWHM grid | [0.05, 0.10, 0.17, 0.25, 0.50, 0.71, 1.00, 1.67] nm | Mirrors `RP_TO_FWHM` in `scripts/archive/hpc-campaign/run_benchmark_sweep.py`. |
 
 The 30 x 10 = 300-point (T, n_e) grid matches
 `scripts/benchmark_element_id.py`'s default and is the minimum required

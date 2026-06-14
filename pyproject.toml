@@ -207,9 +207,9 @@ extend-select = ["TID"]
 # are NOT shipped (research/exploration tooling), legacy entry points, or
 # E402 imports that legitimately follow a sys.path bootstrap.
 [tool.ruff.lint.per-file-ignores]
-# ML classifier training is research tooling, not the shipped algorithm —
-# explicitly uses sklearn for comparison baselines.
-"scripts/hpc/train_ml_classifier.py" = ["TID251"]
+# ML classifier training is archived research tooling, not the shipped
+# algorithm — explicitly uses sklearn for comparison baselines.
+"scripts/archive/hpc-campaign/train_ml_classifier.py" = ["TID251"]
 # These scripts insert into sys.path before importing — E402 is by design.
 "scripts/benchmark_manifold_inference.py" = ["E402"]
 "scripts/validate_real_data_gpu_vs_cpu.py" = ["E402"]

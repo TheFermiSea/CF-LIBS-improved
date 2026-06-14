@@ -4,7 +4,7 @@
 This is the *canonical* single-source-of-truth builder. It produces files
 named ``basis_fwhm_<X.X>nm.h5`` matching the loader pattern in
 :class:`cflibs.benchmark.unified.UnifiedBenchmarkContext` (and the related
-sweep scripts under ``scripts/hpc/``).
+sweep scripts under ``scripts/archive/hpc-campaign/``).
 
 Output layout (canonical NFS path - mounted on every vasp node)::
 
@@ -29,7 +29,7 @@ Default knobs match the canonical Aalto-grade configuration:
 * density_range     (1e15, 5e17) cm^-3, 10 log-spaced steps
 * ionization_stages (1, 2)
 * FWHM grid         [0.05, 0.10, 0.17, 0.25, 0.50, 0.71, 1.00, 1.67] nm
-                    (mirrors ``RP_TO_FWHM`` in ``scripts/hpc/run_benchmark_sweep.py``)
+                    (mirrors ``RP_TO_FWHM`` in ``scripts/archive/hpc-campaign/run_benchmark_sweep.py``)
 
 The 30 x 10 = 300-point (T, n_e) grid is the same one
 ``scripts/benchmark_element_id.py`` uses by default. It is plenty for
@@ -101,7 +101,7 @@ def basis_filename(fwhm_nm: float) -> str:
 
     ``%g`` formatting drops trailing zeros (0.10 -> 0.1, 1.00 -> 1.0) which
     is also what the back-compat fallback in
-    ``scripts/hpc/run_benchmark_sweep._find_basis_path`` searches for.
+    ``scripts/archive/hpc-campaign/run_benchmark_sweep._find_basis_path`` searches for.
     """
     return f"basis_fwhm_{fwhm_nm:g}nm.h5"
 
