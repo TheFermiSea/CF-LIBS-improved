@@ -213,6 +213,8 @@ extend-select = ["TID"]
 # These scripts insert into sys.path before importing — E402 is by design.
 "scripts/benchmark_manifold_inference.py" = ["E402"]
 "scripts/validate_real_data_gpu_vs_cpu.py" = ["E402"]
+# JAX x64 must be enabled before any cflibs import (then a sys.path bootstrap).
+"scripts/jitpipe_gpu_bench.py" = ["E402"]
 # Campaign 1 optimization tooling (never shipped; optuna allowed here, NOT in
 # cflibs/): sibling imports follow a sys.path bootstrap.
 "scripts/campaign1/*.py" = ["E402"]
