@@ -304,17 +304,18 @@ def run_one(
 
     Front-end routing (the Wave-3 J9/M2 prerequisite)
     -------------------------------------------------
-    * ``ondevice_front_end=True`` (default): the detect + identify gate stack
-      runs the parity-tested JIT kernels
-      (:func:`cflibs.jitpipe.host.run_front_end_ondevice` -> J1 detect, J3 comb
-      scan / shift select / veto / observation build, trapezoid intensity). The
-      catalog SQL + gA-Boltzmann comb ranking, the segmented wavelength
-      calibration, the kdet pre-filter and the post-detection ``LineSelector``
-      stay host-side (the host gathers MAY be dynamic-shaped pre-jit; the
-      calibration / kdet / selector are not yet composed on-device — see the
-      ``host.py`` module note). The on-device gate stack reproduces the
-      reference ``detect_and_select_lines`` observation set bit-for-bit
-      (Jaccard 1.0 on synthetic + real ChemCam BHVO-2).
+    * ``ondevice_front_end=True`` (default): the segmented wavelength
+      calibration, detect + identify gate stack, kdet pre-filter and
+      post-detection ``LineSelector`` all run the parity-tested JIT kernels
+      (:func:`cflibs.jitpipe.host.run_front_end_ondevice` -> kernel-backed
+      segmented calibrator, J1 detect, J3 comb scan / shift select / veto /
+      observation build, trapezoid intensity). The catalog SQL + gA-Boltzmann
+      comb ranking + scipy peak detection stay host-side (ADR-0001; dynamic-shaped
+      pre-jit). The ONLY remaining reference-delegated stage is the Stark n_e
+      diagnostic (see the ``host.py`` module note). The on-device front-end
+      reproduces the reference ``detect_and_select_lines`` observation set
+      bit-for-bit (Jaccard 1.0 on synthetic + real ChemCam BHVO-2, raw +
+      geological) and the reference segmented axis to max|Δλ| ~0.0003 nm.
     * ``ondevice_front_end=False``: the legacy byte-faithful reference
       delegation (:func:`cflibs.jitpipe.host.run_front_end`), kept for the
       reference-delegated parity case.
