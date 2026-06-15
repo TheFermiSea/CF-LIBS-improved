@@ -7,13 +7,20 @@ without killing recall. Citations carry verification caveats (see end); principl
 multiply-confirmed, but verify exact author/venue/numbers before formal (paper) citation.
 
 ## Literature corroborates the in-flight levers
-- **BIC-margin presence gate** (lever b, testing now): **Wilson et al. 2024** (PMC11326208 /
-  bioRxiv 2024.08.01.606216) — BIC-gated peak inclusion raised PPV **63%→96%** with only 91→89%
-  sensitivity on 5,000 synthetic spectra. Right category of fix. **Webb et al. 2021** (MNRAS
-  501:2268) argue BIC underperforms a line-strength-weighted **SpIC** → an upgrade path.
-- **Diagnostic per-wavelength weights** (lever a, merged): **Amato et al. 2010** (Spectrochim.
-  Acta B 65:664) — text-retrieval (TF-IDF) inspired element-frequency weighting; **Aydin et al.
-  2008** Boltzmann-residual down-weighting.
+- **BIC-margin presence gate** (lever b, testing now): **Wilson, da Silva Castanheira, Lévesque
+  Kinder & Baillet 2024**, *A Bayesian Model-Selection Approach for Determining the Number of
+  Spectral Peaks in Neural Power Spectra*, **bioRxiv DOI 10.1101/2024.08.01.606216** (PMC11326208 /
+  PMID 39149403; preprint — no journal version confirmed) — BIC-gated peak inclusion raised PPV
+  **63%→96%** (sensitivity 91→89%) on ~5,000 synthetic spectra (verified verbatim). Right *category*
+  of fix, but the domain is **neural power spectra (specparam/FOOOF), not LIBS** — a structural
+  analogy, not a quantitative prediction for forward_fit. **Webb et al. 2021** (MNRAS 501:2268)
+  argue BIC underperforms a line-strength-weighted **SpIC** → an upgrade path.
+- **Diagnostic per-wavelength weights** (lever a, merged): **Amato, Cristoforetti, Legnaioli,
+  Lorenzetti, Palleschi, Sorrentino & Tognoni 2010**, *Progress towards an unassisted element
+  identification from LIBS with automatic ranking techniques inspired by text retrieval*,
+  **Spectrochim. Acta B 65(8):664–670, DOI 10.1016/j.sab.2010.04.019** (verified) — defines
+  "selectivity = log(1/element-frequency)" × "peak relevance" = the TF-IDF/IEF crowding weight (the
+  exact source for lever #1 below); **Aydin et al. 2008** Boltzmann-residual down-weighting.
 - **Multi-line coherence** (lever d): **Hahn & Omenetto 2012** (Appl. Spectrosc. 66:347) —
   "identification should never be done on a single line"; **Labutin & Zaytsev 2013** (Anal.
   Chem. 85:1693) fit all lines of a species globally; **El Haddad et al. 2014** good-practices.
@@ -62,9 +69,12 @@ multiply-confirmed, but verify exact author/venue/numbers before formal (paper) 
 Every change benchmark-gated on the GPU vs Comb (project rule; a prior identifier change regressed F1 −0.041).
 
 ## Citation verification caveats (honest)
-- **Wilson 2024** numbers confirmed from PMC full text, but the domain is *neural power spectra*, not
-  optical emission — the BIC-gated-peak analogy is structural, the 63→96% PPV is not a direct LIBS prediction.
-- **El Haddad 2014**, **Gajarska 2024**, **Amato 2010** author-ordering: papers/venues confirmed via search,
+- **Wilson 2024** DOI VERIFIED 10.1101/2024.08.01.606216 (bioRxiv preprint, first author Luc E. Wilson;
+  the earlier "PLOS Comp Biol" guess was WRONG — no journal version found). Domain is *neural power
+  spectra*, not optical emission — the BIC-gated-peak analogy is structural, the 63→96% PPV is not a direct
+  LIBS prediction. **Amato 2010** DOI VERIFIED 10.1016/j.sab.2010.04.019 (first author G. Amato; the
+  "Andrade" variant was a false lead).
+- **El Haddad 2014**, **Gajarska 2024** author-ordering: papers/venues confirmed via search,
   but exact phrases / per-tooth thresholds / first-author ordering not confirmed from full text — verify
   before formal citation. The underlying principles are standard and multiply-confirmed.
 - All precision-gain figures are by-analogy estimates; actual gains depend on the corpus line density / SNR.
