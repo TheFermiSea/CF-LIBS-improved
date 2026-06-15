@@ -168,6 +168,18 @@ class ForwardFitIdentifier:
         Fixed Levenberg-Marquardt polish iterations (``0`` disables polishing).
     seed : int
         RNG seed for the (counter-based, deterministic) candidate population.
+    use_diagnostic_weights : bool
+        When ``True`` (default), compute a per-wavelength **diagnostic weight**
+        from the snapshot's host arrays and pass it as ``element_weights`` into
+        :func:`forward_fit_identify`. The weight up-weights wavelength bins
+        dominated by a single element (clean, diagnostic) and down-weights
+        crowded/blended/continuum bins, sharpening the include-minus-exclude
+        correlation gap. When ``False`` the call is bit-identical to the prior
+        default-``None`` path (frozen-core parity is untouched).
+    weight_gamma : float
+        Exponent on the per-bin element *distinctness* (dominant-element fraction)
+        in the diagnostic weight. Larger values penalize blended bins harder.
+        Ignored when ``use_diagnostic_weights`` is ``False``.
     """
 
     def __init__(
@@ -184,6 +196,8 @@ class ForwardFitIdentifier:
         presence_threshold: float = 0.05,
         polish_steps: int = 0,
         seed: int = 0,
+        use_diagnostic_weights: bool = True,
+        weight_gamma: float = 2.0,
     ) -> None:
         if snapshot is None and db_path is None:
             raise ValueError("ForwardFitIdentifier requires either `snapshot` or `db_path`.")
@@ -199,6 +213,10 @@ class ForwardFitIdentifier:
         self.presence_threshold = float(presence_threshold)
         self.polish_steps = int(polish_steps)
         self.seed = int(seed)
+        self.use_diagnostic_weights = bool(use_diagnostic_weights)
+        self.weight_gamma = float(weight_gamma)
+        # Memo for the diagnostic weights, keyed on (id(snapshot), hash(wl bytes)).
+        self._diag_weight_cache: dict[tuple[int, int], np.ndarray] = {}
 
     # ------------------------------------------------------------------ helpers
     def _build_instrument(self) -> "InstrumentModel":
@@ -239,6 +257,140 @@ class ForwardFitIdentifier:
         self._snapshot = PipelineSnapshot.from_atomic_snapshot(asnap)
         return self._snapshot
 
+    def _diagnostic_wavelength_weights(
+        self,
+        wl: np.ndarray,
+        snapshot: "PipelineSnapshot",
+        instrument: "InstrumentModel",
+    ) -> np.ndarray:
+        """Per-wavelength diagnostic weight emphasizing clean single-element bins.
+
+        Pure NumPy from the snapshot's host line arrays — never touches the jit
+        core. For each in-band line we splat a Boltzmann peak strength (at a
+        reference temperature) onto the wavelength grid as a Gaussian at the
+        line's instrument width, accumulated *per element*. A bin dominated by one
+        element (high ``distinct``) is up-weighted; a crowded/blended/continuum bin
+        (many elements contributing comparably, low ``distinct``) is down-weighted.
+
+        The weight is **memoized** on ``self`` keyed by ``(id(snapshot), hash(wl
+        bytes))`` so repeated ``identify`` calls on the same snapshot/grid reuse it.
+
+        Parameters
+        ----------
+        wl : ndarray, shape (N_wl,)
+            Wavelength grid, nm.
+        snapshot : PipelineSnapshot
+            Unified atomic snapshot (host arrays).
+        instrument : InstrumentModel
+            Instrument model (drives the per-line Gaussian width).
+
+        Returns
+        -------
+        weights : ndarray of float64, shape (N_wl,)
+            Per-bin weights, normalized so ``mean(weights) == 1``. Higher means a
+            cleaner, more diagnostic (single-element) bin.
+
+        Notes
+        -----
+        - ``sigma_nm = fwhm / 2.3548`` with ``fwhm = lambda / R`` in resolving-power
+          mode, else the fixed ``resolution_fwhm_nm`` (per line, at its own
+          wavelength).
+        - ``Tref_eV = 1.0`` for the Boltzmann peak strength
+          ``s = g_k * A_ki * exp(-E_k / Tref_eV)``.
+        - Normalization choice: **mean(weights) == 1** (keeps the overall
+          correlation-weight scale comparable to the uniform default).
+        """
+        wl = np.asarray(wl, dtype=np.float64)
+        n_wl = int(wl.shape[0])
+        cache_key = (id(snapshot), hash(wl.tobytes()))
+        cached = self._diag_weight_cache.get(cache_key)
+        if cached is not None and cached.shape[0] == n_wl:
+            return cached
+
+        eps = 1e-30
+        ones = np.ones(n_wl, dtype=np.float64)
+        if n_wl == 0:
+            return ones
+
+        wl_min = float(np.min(wl))
+        wl_max = float(np.max(wl))
+
+        line_wl = np.asarray(snapshot.line_wavelength_nm, dtype=np.float64)
+        line_A = np.asarray(snapshot.line_A_ki, dtype=np.float64)
+        line_g = np.asarray(snapshot.line_g_k, dtype=np.float64)
+        line_E = np.asarray(snapshot.line_E_k_ev, dtype=np.float64)
+        line_el = np.asarray(snapshot.line_element_index, dtype=np.int64)
+        n_elements = len(snapshot.element_symbols)
+
+        # In-band, real-element, finite-strength lines only.
+        in_band = (line_wl >= wl_min) & (line_wl <= wl_max)
+        valid_el = (line_el >= 0) & (line_el < n_elements)
+        finite = np.isfinite(line_wl) & np.isfinite(line_A) & np.isfinite(line_g)
+        mask = in_band & valid_el & finite
+        if not np.any(mask) or n_elements == 0:
+            self._diag_weight_cache[cache_key] = ones
+            return ones
+
+        lw = line_wl[mask]
+        la = line_A[mask]
+        lg = line_g[mask]
+        le = np.where(np.isfinite(line_E[mask]), line_E[mask], 0.0)
+        lel = line_el[mask]
+
+        # Boltzmann peak strength at a reference temperature.
+        tref_ev = 1.0
+        strength = lg * la * np.exp(-le / tref_ev)
+        strength = np.where(np.isfinite(strength) & (strength > 0.0), strength, 0.0)
+
+        # Per-line instrument sigma (nm), at each line's own wavelength.
+        if instrument.resolving_power is not None and instrument.resolving_power > 0:
+            fwhm = lw / float(instrument.resolving_power)
+        else:
+            fwhm = np.full_like(lw, float(instrument.resolution_fwhm_nm))
+        sigma = fwhm / 2.3548
+        sigma = np.where(np.isfinite(sigma) & (sigma > 0.0), sigma, eps)
+
+        dwl = float(wl_max - wl_min) / max(n_wl - 1, 1)
+        sigma = np.maximum(sigma, dwl)  # at least one bin wide
+
+        # Splat each line's strength as a Gaussian onto a per-element profile.
+        profiles = np.zeros((n_elements, n_wl), dtype=np.float64)
+        for j in range(lw.shape[0]):
+            s = strength[j]
+            if s <= 0.0:
+                continue
+            sig = sigma[j]
+            lo = np.searchsorted(wl, lw[j] - 3.0 * sig, side="left")
+            hi = np.searchsorted(wl, lw[j] + 3.0 * sig, side="right")
+            if hi <= lo:
+                continue
+            sl = wl[lo:hi]
+            g = np.exp(-0.5 * ((sl - lw[j]) / sig) ** 2)
+            np.add.at(profiles[lel[j]], np.arange(lo, hi), s * g)
+
+        total = profiles.sum(axis=0)
+        dom = profiles.max(axis=0)
+        distinct = dom / np.maximum(total, eps)
+
+        total_max = float(np.max(total))
+        if total_max <= 0.0:
+            self._diag_weight_cache[cache_key] = ones
+            return ones
+
+        base = 0.05 * total_max
+        w = (base + total) * (distinct**self.weight_gamma)
+        w = np.where(np.isfinite(w) & (w > 0.0), w, eps)
+
+        mean_w = float(np.mean(w))
+        if mean_w > 0.0:
+            w = w / mean_w
+        else:
+            w = ones
+
+        w = np.asarray(w, dtype=np.float64)
+        self._diag_weight_cache[cache_key] = w
+        return w
+
     # ------------------------------------------------------------------ protocol
     def identify(
         self,
@@ -271,6 +423,13 @@ class ForwardFitIdentifier:
         instrument = self._build_instrument()
         element_symbols = tuple(snapshot.element_symbols)
 
+        # Diagnostic per-wavelength weights (host-only). Default-None keeps the
+        # frozen-core call bit-identical to the prior path; when enabled they are
+        # passed straight through to ``correlation_cost`` (coarse + polish).
+        element_weights = None
+        if self.use_diagnostic_weights:
+            element_weights = self._diagnostic_wavelength_weights(wl, snapshot, instrument)
+
         result = forward_fit_identify(
             meas,
             wl,
@@ -279,6 +438,7 @@ class ForwardFitIdentifier:
             key=jax.random.PRNGKey(self.seed),
             n_configs=self.n_configs,
             presence_threshold=self.presence_threshold,
+            element_weights=element_weights,
             polish_steps=self.polish_steps,
         )
 
@@ -334,6 +494,8 @@ class ForwardFitIdentifier:
                 "n_configs": self.n_configs,
                 "presence_threshold": self.presence_threshold,
                 "polish_steps": self.polish_steps,
+                "use_diagnostic_weights": self.use_diagnostic_weights,
+                "weight_gamma": self.weight_gamma,
                 "best_correlation": float(np.asarray(result.best_correlation)),
                 "best_config_index": int(np.asarray(result.best_config_index)),
                 "n_valid_configs": int(np.asarray(result.n_valid_configs)),
