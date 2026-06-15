@@ -43,6 +43,32 @@ Nothing in `cflibs/benchmark/` imports it yet.
 6. **(S) Campaign-3 evaluator entry point** (AC5) + (S) spec/test name reconciliation
    (`test_parity_j10.py` vs spec's `test_forward_fitting.py`).
 
+## First GPU AC1 measurement (2026-06-15)
+
+Wiring fixed (commit 7b82a25: `_run_forward_fit` passed a raw `AtomicSnapshot`; now
+converts to `PipelineSnapshot`). Ran `benchmark_synthetic_identifiers --with-forward-fit`
+on the V100S (clean `cflibs-gpu2` env), corpus `ak3.1.3`, 40 spectra, `n_configs=1024`,
+`presence_threshold=0.05`, uniform `element_weights`, no tuning:
+
+| identifier | precision | recall | F1 |
+|---|---|---|---|
+| Comb | 0.459 | 0.425 | **0.442** |
+| forward_fit | 0.444 | **0.250** | 0.320 |
+| Correlation | 0.246 | 0.350 | 0.289 |
+| ALIAS | 0.383 | 0.225 | 0.283 |
+
+**Untuned forward_fit does NOT clear AC1** (F1 0.320 vs Comb 0.442; AC1 wants ref+0.03).
+Decisive pattern: **recall is the LOWEST of all four (0.250)** with fine precision (0.444)
+— the opposite of the intended recall advantage → the presence gate is **over-conservative**
+(too-high `presence_threshold` / too-strict leave-one-out correlation-gap), starving recall.
+This is a *tuning* problem (lower the threshold, calibrate `element_weights`), which is the
+research-variance core (task 4). **Caveats:** 40-spectra subset; corpus validity is the
+open `zfy2` question (regenerate on the fixed forward model before trusting absolute F1);
+the relative ranking on the same corpus is the reliable signal. **Go/no-go (ADR §8.3):**
+J10 needs the cost-function tuning effort (lead hypothesis: relax the presence gate) to
+clear AC1, else it descopes to the throughput / Campaign-3-evaluator role. CPU cannot run
+this (OOM at `n_configs=1024`) — the GPU is required.
+
 ## Acceptance (AC1 binding)
 
 micro-F1 ≥ **+0.03** vs the reference identifier on the **optimization split**, precision loss ≤ **0.02**
