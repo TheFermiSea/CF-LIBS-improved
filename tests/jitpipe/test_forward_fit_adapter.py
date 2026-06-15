@@ -299,3 +299,35 @@ def _legacy_diag_only_weight(wl, snap, instr, *, weight_gamma):
     w = np.where(np.isfinite(w) & (w > 0.0), w, eps)
     mean_w = float(np.mean(w))
     return w / mean_w if mean_w > 0.0 else ones
+
+
+def test_bic_gate_detected_set_is_subset(setup):
+    """``require_bic=True`` with a large ``bic_margin`` yields a detected set that
+    is a SUBSET of the ``require_bic=False`` detected set — the BIC presence gate
+    only removes false positives, never adds detections (precision lever)."""
+    snap, wl, instr, meas = setup
+
+    common = dict(
+        snapshot=snap,
+        instrument=instr,
+        n_configs=256,
+        presence_threshold=0.02,
+        seed=7,
+    )
+    no_gate = ForwardFitIdentifier(CANDIDATES, require_bic=False, **common)
+    gated = ForwardFitIdentifier(CANDIDATES, require_bic=True, bic_margin=1e9, **common)
+
+    res_no_gate = no_gate.identify(wl, meas)
+    res_gated = gated.identify(wl, meas)
+
+    det_no_gate = {e.element for e in res_no_gate.detected_elements}
+    det_gated = {e.element for e in res_gated.detected_elements}
+
+    # SUBSET: the gated detections were all already detected without the gate.
+    assert det_gated <= det_no_gate, f"gate added a detection: {det_gated - det_no_gate}"
+    # The huge margin removes everything (no element earns +1e9 BIC improvement).
+    assert det_gated == set()
+    # The knobs round-trip into result.parameters.
+    assert res_gated.parameters["require_bic"] is True
+    assert res_gated.parameters["bic_margin"] == 1e9
+    assert res_no_gate.parameters["require_bic"] is False
