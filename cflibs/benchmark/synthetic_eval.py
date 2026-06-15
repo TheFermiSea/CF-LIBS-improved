@@ -366,10 +366,15 @@ def build_identifier_runners(
             # CFLIBS_FF_PRESENCE_THRESHOLD = presence gate; CFLIBS_FF_N_CONFIGS = population;
             # CFLIBS_FF_DIAG_WEIGHTS ('1' on/'0' off) = rank-1 diagnostic per-wavelength
             # weights (host-only; frozen core untouched); CFLIBS_FF_WEIGHT_GAMMA = distinctness exponent.
+            # CFLIBS_FF_IEF ('1' on/'0' off) = inverse-element-frequency (TF-IDF) crowding penalty
+            # multiplied into the diagnostic weight; CFLIBS_FF_IEF_FLOOR = own-peak fraction a bin
+            # must reach to count an element as emitting there (Amato et al. 2010).
             ff_threshold = float(os.environ.get("CFLIBS_FF_PRESENCE_THRESHOLD", "0.02"))
             ff_n_configs = int(os.environ.get("CFLIBS_FF_N_CONFIGS", "1024"))
             ff_diag_weights = os.environ.get("CFLIBS_FF_DIAG_WEIGHTS", "1") != "0"
             ff_weight_gamma = float(os.environ.get("CFLIBS_FF_WEIGHT_GAMMA", "2.0"))
+            ff_use_ief = os.environ.get("CFLIBS_FF_IEF", "1") != "0"
+            ff_ief_floor = float(os.environ.get("CFLIBS_FF_IEF_FLOOR", "0.25"))
             identifier = ForwardFitIdentifier(
                 elements,
                 snapshot=PipelineSnapshot.from_atomic_snapshot(asnap),
@@ -378,6 +383,8 @@ def build_identifier_runners(
                 presence_threshold=ff_threshold,
                 use_diagnostic_weights=ff_diag_weights,
                 weight_gamma=ff_weight_gamma,
+                use_ief=ff_use_ief,
+                ief_floor_frac=ff_ief_floor,
             )
             return identifier.identify(wavelength, intensity)
 
