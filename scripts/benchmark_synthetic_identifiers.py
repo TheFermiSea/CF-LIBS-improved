@@ -70,6 +70,14 @@ def main() -> None:
         help="Also run the hybrid_union identifier (requires a basis library).",
     )
     parser.add_argument(
+        "--with-forward-fit",
+        action="store_true",
+        help=(
+            "Also run the J10 population forward-fitting identifier "
+            "(requires JAX; CPU is fine but slower)."
+        ),
+    )
+    parser.add_argument(
         "--basis-library-path",
         type=str,
         default=None,
@@ -142,6 +150,7 @@ def main() -> None:
         include_nnls=include_nnls,
         basis_library_path=basis_library_path,
         basis_instrument_fwhm_nm=args.basis_fwhm_nm,
+        with_forward_fit=bool(args.with_forward_fit),
     )
 
     summary = result["summary"]

@@ -1145,6 +1145,25 @@ def _nnls_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     return configs
 
 
+def _forward_fit_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
+    """Configs for the J10 ``forward_fit`` workflow.
+
+    The population size and presence threshold are the two binding knobs (J10
+    spec §3 item 1 / §2). ``quick`` keeps a single small-population, no-polish
+    cell so the suite stays fast; the full grid sweeps a couple of population
+    sizes and presence thresholds. Gradient polish is left off by default
+    (``polish_steps=0``) — it is the slow, optional refinement lever and is
+    benchmark-gated separately (project memory: gate identifier-scoring changes).
+    """
+    if quick:
+        return [{"n_configs": 256, "presence_threshold": 0.05, "polish_steps": 0}]
+    return [
+        {"n_configs": n, "presence_threshold": pt, "polish_steps": 0}
+        for n in (512, 1024)
+        for pt in (0.02, 0.05)
+    ]
+
+
 def _hybrid_workflow_configs(require_both: bool, quick: bool) -> List[Dict[str, Any]]:
     nnls_snrs = [1.0, 1.5] if quick else [1.0, 1.5, 2.0]
     alias_thresholds = [0.03, 0.05] if quick else [0.03, 0.05, 0.10]
@@ -1890,6 +1909,39 @@ def _build_nnls_predictor(
     return predictor
 
 
+def _build_forward_fit_predictor(
+    context: UnifiedBenchmarkContext,
+    candidate_elements: List[str],
+    config: Dict[str, Any],
+) -> Callable[[BenchmarkSpectrum], ElementIdentificationResult]:
+    """Build the J10 forward-fitting identifier predictor.
+
+    Routes the scoreboard through
+    :class:`cflibs.jitpipe.forward_id_identifier.ForwardFitIdentifier`, the host
+    adapter over the population forward-fitter. Requires JAX (the scoring core is
+    jit/vmap); ``_jax_identifier_flags_for`` is not consulted because the adapter
+    is unconditionally JAX-based.
+    """
+
+    def predictor(spectrum: BenchmarkSpectrum) -> ElementIdentificationResult:
+        from cflibs.jitpipe.forward_id_identifier import ForwardFitIdentifier
+
+        identifier = ForwardFitIdentifier(
+            candidate_elements,
+            db_path=str(context.db_path),
+            resolving_power=_estimate_rp_for_spectrum(spectrum),
+            n_configs=int(config["n_configs"]),
+            presence_threshold=float(config["presence_threshold"]),
+            polish_steps=int(config.get("polish_steps", 0)),
+            seed=int(config.get("seed", 0)),
+        )
+        result = identifier.identify(spectrum.wavelength_nm, spectrum.intensity)
+        result.parameters["candidate_elements"] = list(candidate_elements)
+        return result
+
+    return predictor
+
+
 def _build_hybrid_predictor(
     context: UnifiedBenchmarkContext,
     candidate_elements: List[str],
@@ -2119,6 +2171,12 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
         ),
         "spectral_nnls": IDWorkflowSpec(
             "spectral_nnls", _nnls_workflow_configs(quick), _build_nnls_predictor, _config_name
+        ),
+        "forward_fit": IDWorkflowSpec(
+            "forward_fit",
+            _forward_fit_workflow_configs(quick),
+            _build_forward_fit_predictor,
+            _config_name,
         ),
         "hybrid_intersect": IDWorkflowSpec(
             "hybrid_intersect",

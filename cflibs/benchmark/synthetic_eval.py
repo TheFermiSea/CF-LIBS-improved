@@ -54,9 +54,12 @@ ALGO_COMB = "Comb"
 ALGO_CORRELATION = "Correlation"
 ALGO_SPECTRAL_NNLS = "spectral_nnls"
 ALGO_HYBRID_UNION = "hybrid_union"
+ALGO_FORWARD_FIT = "forward_fit"
 
 _BASE_ALGORITHMS: Tuple[str, ...] = (ALGO_ALIAS, ALGO_COMB, ALGO_CORRELATION)
 _BASIS_ALGORITHMS: Tuple[str, ...] = (ALGO_SPECTRAL_NNLS, ALGO_HYBRID_UNION)
+# J10 population forward-fitter (JAX-only); opt-in via ``with_forward_fit``.
+_FORWARD_FIT_ALGORITHMS: Tuple[str, ...] = (ALGO_FORWARD_FIT,)
 
 
 def derive_truth_elements(
@@ -251,12 +254,16 @@ def build_identifier_runners(
     elements: List[str],
     resolving_power: float,
     basis_library: Optional["BasisLibrary"] = None,
+    with_forward_fit: bool = False,
 ) -> List[Tuple[str, IdentifierRunner]]:
     """Build the ordered list of (name, runner) identifier factories.
 
     The peak-matching trio (ALIAS/Comb/Correlation) is always present. When
     ``basis_library`` is provided, ``spectral_nnls`` and ``hybrid_union`` are
-    appended; otherwise they are omitted entirely (graceful skip).
+    appended; otherwise they are omitted entirely (graceful skip). When
+    ``with_forward_fit`` is True, the J10 population forward-fitter
+    (:class:`cflibs.jitpipe.forward_id_identifier.ForwardFitIdentifier`) is
+    appended — JAX-only, so it is opt-in and runs after the catalog identifiers.
     """
 
     def _run_alias() -> ElementIdentificationResult:
@@ -338,6 +345,26 @@ def build_identifier_runners(
         runners.append((ALGO_SPECTRAL_NNLS, _run_nnls))
         runners.append((ALGO_HYBRID_UNION, _run_hybrid_union))
 
+    if with_forward_fit:
+
+        def _run_forward_fit() -> ElementIdentificationResult:
+            from cflibs.jitpipe.forward_id_identifier import ForwardFitIdentifier
+
+            identifier = ForwardFitIdentifier(
+                elements,
+                snapshot=db.snapshot(
+                    elements=elements,
+                    wavelength_range=(float(np.min(wavelength)), float(np.max(wavelength))),
+                    include_levels=True,
+                ),
+                resolving_power=resolving_power,
+                n_configs=1024,
+                presence_threshold=0.05,
+            )
+            return identifier.identify(wavelength, intensity)
+
+        runners.append((ALGO_FORWARD_FIT, _run_forward_fit))
+
     return runners
 
 
@@ -348,6 +375,7 @@ def _identifier_suite(
     elements: List[str],
     resolving_power: float,
     basis_library: Optional["BasisLibrary"] = None,
+    with_forward_fit: bool = False,
 ) -> Dict[str, Optional[ElementIdentificationResult]]:
     results: Dict[str, Optional[ElementIdentificationResult]] = {}
     runners = build_identifier_runners(
@@ -357,6 +385,7 @@ def _identifier_suite(
         elements=elements,
         resolving_power=resolving_power,
         basis_library=basis_library,
+        with_forward_fit=with_forward_fit,
     )
     for name, runner in runners:
         try:
@@ -546,6 +575,7 @@ def _evaluate_spectrum_rows(
     calibration: CalibrationOptions,
     basis_library: Optional["BasisLibrary"],
     manifest_by_sample: Optional[Dict[str, Dict[str, Any]]],
+    with_forward_fit: bool = False,
 ) -> List[Dict[str, Any]]:
     """Run all identifiers on one spectrum and build its per-algorithm rows."""
     true_elements = derive_truth_elements(
@@ -564,6 +594,7 @@ def _evaluate_spectrum_rows(
         elements=candidate_elements,
         resolving_power=resolving_power,
         basis_library=basis_library,
+        with_forward_fit=with_forward_fit,
     )
 
     manifest_meta = (manifest_by_sample or {}).get(spec.spectrum_id, {})
@@ -611,6 +642,7 @@ def evaluate_dataset(
     max_spectra: Optional[int] = None,
     calibration: Optional[CalibrationOptions] = None,
     basis_library: Optional["BasisLibrary"] = None,
+    with_forward_fit: bool = False,
 ) -> Dict[str, Any]:
     """
     Evaluate all identifiers on synthetic benchmark dataset.
@@ -652,6 +684,8 @@ def evaluate_dataset(
     algorithms: List[str] = list(_BASE_ALGORITHMS)
     if basis_library is not None:
         algorithms.extend(_BASIS_ALGORITHMS)
+    if with_forward_fit:
+        algorithms.extend(_FORWARD_FIT_ALGORITHMS)
 
     for idx, spec in enumerate(spectra, start=1):
         rows.extend(
@@ -664,6 +698,7 @@ def evaluate_dataset(
                 calibration=calibration,
                 basis_library=basis_library,
                 manifest_by_sample=manifest_by_sample,
+                with_forward_fit=with_forward_fit,
             )
         )
 
@@ -859,6 +894,7 @@ def run_synthetic_benchmark(
     basis_library: Optional["BasisLibrary"] = None,
     basis_library_path: Optional[str] = None,
     basis_instrument_fwhm_nm: float = 0.3,
+    with_forward_fit: bool = False,
 ) -> Dict[str, Any]:
     """Load data, run identifier benchmark, and write artifacts.
 
@@ -881,6 +917,11 @@ def run_synthetic_benchmark(
         ``basis_library`` is None.
     basis_instrument_fwhm_nm : float
         Instrument FWHM (nm) for the built basis library.
+    with_forward_fit : bool
+        Opt-in switch for the J10 population forward-fitter
+        (:class:`cflibs.jitpipe.forward_id_identifier.ForwardFitIdentifier`).
+        Requires JAX; when JAX is unavailable the runner raises and that
+        spectrum's ``forward_fit`` row is recorded as failed (graceful skip).
     """
     dataset = load_benchmark(dataset_path)
     elements = candidate_elements if candidate_elements else list(dataset.elements)
@@ -915,6 +956,7 @@ def run_synthetic_benchmark(
         max_spectra=max_spectra,
         calibration=calibration,
         basis_library=active_basis,
+        with_forward_fit=with_forward_fit,
     )
 
     out_dir = Path(output_dir).resolve()
@@ -935,6 +977,7 @@ def run_synthetic_benchmark(
         "presence_threshold": float(presence_threshold),
         "max_spectra": int(max_spectra) if max_spectra is not None else None,
         "include_nnls": bool(include_nnls),
+        "with_forward_fit": bool(with_forward_fit),
         "basis_library_active": active_basis is not None,
         "calibration": (
             calibration.__dict__ if calibration is not None else CalibrationOptions().__dict__
