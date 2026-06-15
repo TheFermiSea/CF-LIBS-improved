@@ -756,8 +756,8 @@ def test_bic_gate_present_set_is_subset(setup):
     present_no_gate = np.asarray(no_gate.element_present) > 0.5
     present_gated = np.asarray(gated.element_present) > 0.5
     # SUBSET: every gated call was already a no-gate call (gate only removes).
-    assert np.all(present_gated <= present_no_gate), (
-        f"gate added a call: no_gate={present_no_gate} gated={present_gated}"
-    )
+    assert np.all(
+        present_gated <= present_no_gate
+    ), f"gate added a call: no_gate={present_no_gate} gated={present_gated}"
     # The huge margin removes everything (no element earns +1e9 BIC improvement).
     assert not np.any(present_gated)
