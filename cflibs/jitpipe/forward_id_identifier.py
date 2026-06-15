@@ -180,6 +180,17 @@ class ForwardFitIdentifier:
         Exponent on the per-bin element *distinctness* (dominant-element fraction)
         in the diagnostic weight. Larger values penalize blended bins harder.
         Ignored when ``use_diagnostic_weights`` is ``False``.
+    require_bic : bool
+        When ``True``, gate presence on a BIC-improvement margin in addition to
+        the include-minus-exclude correlation gap (see
+        :func:`cflibs.jitpipe.forward_id.forward_fit_presence_scores`). The BIC
+        gate only *removes* calls (an AND with the correlation decision), raising
+        precision without dropping recall. Default ``False`` is bit-identical to
+        the prior correlation-only path.
+    bic_margin : float
+        Minimum BIC improvement (best excluding BIC minus best including BIC)
+        required when ``require_bic`` is set. Ignored when ``require_bic`` is
+        ``False``.
     """
 
     def __init__(
@@ -198,6 +209,8 @@ class ForwardFitIdentifier:
         seed: int = 0,
         use_diagnostic_weights: bool = True,
         weight_gamma: float = 2.0,
+        require_bic: bool = False,
+        bic_margin: float = 0.0,
     ) -> None:
         if snapshot is None and db_path is None:
             raise ValueError("ForwardFitIdentifier requires either `snapshot` or `db_path`.")
@@ -215,6 +228,8 @@ class ForwardFitIdentifier:
         self.seed = int(seed)
         self.use_diagnostic_weights = bool(use_diagnostic_weights)
         self.weight_gamma = float(weight_gamma)
+        self.require_bic = bool(require_bic)
+        self.bic_margin = float(bic_margin)
         # Memo for the diagnostic weights, keyed on (id(snapshot), hash(wl bytes)).
         self._diag_weight_cache: dict[tuple[int, int], np.ndarray] = {}
 
@@ -440,6 +455,8 @@ class ForwardFitIdentifier:
             presence_threshold=self.presence_threshold,
             element_weights=element_weights,
             polish_steps=self.polish_steps,
+            require_bic=self.require_bic,
+            bic_margin=self.bic_margin,
         )
 
         present = np.asarray(result.element_present, dtype=float)
@@ -496,6 +513,8 @@ class ForwardFitIdentifier:
                 "polish_steps": self.polish_steps,
                 "use_diagnostic_weights": self.use_diagnostic_weights,
                 "weight_gamma": self.weight_gamma,
+                "require_bic": self.require_bic,
+                "bic_margin": self.bic_margin,
                 "best_correlation": float(np.asarray(result.best_correlation)),
                 "best_config_index": int(np.asarray(result.best_config_index)),
                 "n_valid_configs": int(np.asarray(result.n_valid_configs)),

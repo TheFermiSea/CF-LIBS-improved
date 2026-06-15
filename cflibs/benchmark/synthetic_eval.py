@@ -366,10 +366,15 @@ def build_identifier_runners(
             # CFLIBS_FF_PRESENCE_THRESHOLD = presence gate; CFLIBS_FF_N_CONFIGS = population;
             # CFLIBS_FF_DIAG_WEIGHTS ('1' on/'0' off) = rank-1 diagnostic per-wavelength
             # weights (host-only; frozen core untouched); CFLIBS_FF_WEIGHT_GAMMA = distinctness exponent.
+            # CFLIBS_FF_REQUIRE_BIC ('1' on/'0' off, default off) = BIC-margin presence
+            # gate (AND on top of the correlation gap; only removes calls => raises
+            # precision); CFLIBS_FF_BIC_MARGIN = required BIC improvement (default 0.0).
             ff_threshold = float(os.environ.get("CFLIBS_FF_PRESENCE_THRESHOLD", "0.02"))
             ff_n_configs = int(os.environ.get("CFLIBS_FF_N_CONFIGS", "1024"))
             ff_diag_weights = os.environ.get("CFLIBS_FF_DIAG_WEIGHTS", "1") != "0"
             ff_weight_gamma = float(os.environ.get("CFLIBS_FF_WEIGHT_GAMMA", "2.0"))
+            ff_require_bic = os.environ.get("CFLIBS_FF_REQUIRE_BIC", "0") == "1"
+            ff_bic_margin = float(os.environ.get("CFLIBS_FF_BIC_MARGIN", "0.0"))
             identifier = ForwardFitIdentifier(
                 elements,
                 snapshot=PipelineSnapshot.from_atomic_snapshot(asnap),
@@ -378,6 +383,8 @@ def build_identifier_runners(
                 presence_threshold=ff_threshold,
                 use_diagnostic_weights=ff_diag_weights,
                 weight_gamma=ff_weight_gamma,
+                require_bic=ff_require_bic,
+                bic_margin=ff_bic_margin,
             )
             return identifier.identify(wavelength, intensity)
 
