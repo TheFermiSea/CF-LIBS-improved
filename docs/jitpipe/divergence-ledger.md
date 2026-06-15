@@ -84,3 +84,63 @@ equivalent (asserted in `test_failure_policy_parity`).**
 (`scan_solve`) is already `vmap`-clean (J7 `test_vmap_batched_scan`); lifting the
 whole solve spine under `jit(vmap(...))` once the front-end is on-device is J9.
 **Parity status: per-spectrum identical to `run_one`; batched vmap is J9.**
+
+---
+
+## J9 / J12 (on-device front-end + scoreboard) adjudications
+
+### D-J9-1 · front-end · detect/identify/kdet/LineSelector/segmented-calibration moved on-device · *re-host, parity exact*
+
+Supersedes the "remaining_todo" of D-J8-2. `run_one(ondevice_front_end=True)` (the
+default) now runs the J1 detect, J3 comb scan / shift-select / veto / observation
+build, the kdet coherence pre-filter, the post-detection `LineSelector`, **and** the
+segmented wavelength calibration as parity-tested JIT kernels
+(`run_front_end_ondevice`). The catalog SQL + gA-Boltzmann comb ranking + scipy peak
+detection stay host-side (ADR-0001; dynamic-shaped pre-trace). **Adjudication:** the
+on-device gate stack reproduces the reference `detect_and_select_lines` observation
+set bit-for-bit (obs Jaccard 1.0 on synthetic + real BHVO-2, raw + geological), and
+the segmented axis matches the reference to max|Δλ| 0.00025 nm on multi-segment
+broadband. **Parity status: exact (re-host, not a numerical divergence).**
+
+### D-J9-2 · front-end · single-segment calibration delegated to the reference core (aa9e) · *parity-restored*
+
+The on-device segmented calibrator's robust core is a **deterministic stratified
+RANSAC**, vs the reference's **600-draw random RANSAC**. On seam-free **single-segment**
+spectra (narrow-band synthetic + the real aalto minerals) the two resolve a sparse /
+multimodal anchor set to different registrations (model-class flip on sparse synthetic;
+~1.9 nm shift-mode flip on muscoviteE35), shifting the corrected axis and flipping
+marginal lines / the solve outcome (board run2: synthetic ΔF1 −0.291, aalto fail 1 vs 0).
+**Adjudication (bead aa9e, commit a2f6009):** keyed on the *structural* signal
+(`detect_ccd_seams(...).size == 0`), single-segment spectra delegate to the reference
+`_ld_calibrate`, restoring byte parity (board run3: aalto/synthetic ΔF1 = 0, failures
+= reference); the multi-segment path is untouched (D-J9-1). **Known residual:** on
+muscoviteE35 parity is restored by inheriting the reference's physically-dubious
+~1.9 nm shift mode — a pre-existing reference multimodal-RANSAC issue, filed as a
+separate bug (an ambiguity guard for *both* pipelines), not a jit divergence.
+**Parity status: exact for single-segment (= reference); regression test
+`test_ondevice_calib_single_segment_parity.py`.**
+
+### D-J9-3 · front-end · Stark n_e diagnostic still reference-delegated · *delegated (6apc)*
+
+`run_front_end_ondevice` still calls the reference `measure_stark_ne` for the n_e
+diagnostic (`host.py:2512`); `measure_stark_ne_jit` is parity-tested in isolation
+(`test_parity_j6`) but the candidate-selection host gather + the break-after-
+max_lines-*successes* sequencing are not yet composed on-device, and n_e pins the
+production solve to the ≤10 % M1 tolerance. **Adjudication:** delegated → the n_e fed
+to the solve IS the reference's, so composition parity through n_e is exact; the
+on-device port is bead **6apc** (the last delegated front-end stage). **Parity status:
+exact (delegated); on-device port is remaining_todo.**
+
+### D-J12-1 · scoreboard · jit pipeline vs reference on the goal board · *parity-scoped, capped*
+
+`cflibs scoreboard --pipeline jit` runs `run_one(ondevice_front_end=True)` per spectrum
+vs `--pipeline reference` (`run_pipeline`). On the capped board (aalto +
+synthetic_fixedforward, max-spectra 8, post-aa9e run3) the jit pipeline reproduces the
+reference **micro-F1 exactly (ΔF1 = 0)** and the **failure count exactly**. **Known
+residual:** synthetic_fixedforward solve RMSE 48.7 vs 44.4 wt % over the 5 solved
+spectra — a small on-device-solve delta within the M1 concentration tolerance, on a
+synthetic corpus whose truth is itself suspect (bead 5yo1); not observed on real data.
+**Adjudication:** scoped-board parity holds; the full all-spectra + holdout board is
+the M3 measurement (bead stdl), gated on D-J9-3 (6apc) for an end-to-end "fully
+on-device" claim. **Parity status: exact on the capped board; full-board M3 run
+pending.**
