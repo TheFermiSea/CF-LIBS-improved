@@ -61,13 +61,32 @@ on the V100S (clean `cflibs-gpu2` env), corpus `ak3.1.3`, 40 spectra, `n_configs
 Decisive pattern: **recall is the LOWEST of all four (0.250)** with fine precision (0.444)
 — the opposite of the intended recall advantage → the presence gate is **over-conservative**
 (too-high `presence_threshold` / too-strict leave-one-out correlation-gap), starving recall.
-This is a *tuning* problem (lower the threshold, calibrate `element_weights`), which is the
-research-variance core (task 4). **Caveats:** 40-spectra subset; corpus validity is the
-open `zfy2` question (regenerate on the fixed forward model before trusting absolute F1);
-the relative ranking on the same corpus is the reliable signal. **Go/no-go (ADR §8.3):**
-J10 needs the cost-function tuning effort (lead hypothesis: relax the presence gate) to
-clear AC1, else it descopes to the throughput / Campaign-3-evaluator role. CPU cannot run
-this (OOM at `n_configs=1024`) — the GPU is required.
+This is a *tuning* problem, the research-variance core (task 4). CPU cannot run this
+(OOM at `n_configs=1024`) — the GPU is required.
+
+### Threshold sweep — recall ceiling (presence gate confirmed; thesis validated)
+
+Re-ran with `CFLIBS_FF_PRESENCE_THRESHOLD=0.0` (gate fully open; the knob added to
+`_run_forward_fit`), same 40 spectra:
+
+| `presence_threshold` | forward_fit P | forward_fit R | forward_fit F1 |
+|---|---|---|---|
+| 0.05 | 0.444 | 0.250 | 0.320 |
+| **0.0** | 0.273 | **0.512** | 0.357 |
+
+Opening the gate **more than doubled recall (0.250 → 0.512)** — higher than *every*
+baseline (Comb R=0.425), confirming the recall-starved diagnosis AND **validating the
+recall-play thesis**: the recall headroom is real. But precision collapses to 0.273 at
+full recall, so forward_fit's current **precision-recall frontier** (best F1 ≈ 0.357)
+still sits below Comb's operating point (0.442). **Conclusion:** the threshold only trades
+P↔R along a mediocre frontier; clearing AC1 requires **lifting the frontier itself** —
+i.e. improving precision *at* high recall via cost-function tuning (`element_weights`
+calibration, the continuum-removed correlation cost, the BIC penalty), not a threshold
+tweak. **Go/no-go (ADR §8.3): INVEST.** The recall ceiling validates the thesis; J10 is
+worth the cost-function tuning effort (a research-variance multi-experiment effort, each
+benchmark-gated) rather than a descope. **Caveats:** 40-spectra subset; corpus validity
+is the open `zfy2` question (regenerate on the fixed forward model before trusting absolute
+numbers); the same-corpus relative ranking is the reliable signal.
 
 ## Acceptance (AC1 binding)
 

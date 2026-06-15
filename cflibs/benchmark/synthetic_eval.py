@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence,
 import csv
 import json
 import logging
+import os
 
 import numpy as np
 
@@ -358,12 +359,17 @@ def build_identifier_runners(
                 wavelength_range=(float(np.min(wavelength)), float(np.max(wavelength))),
                 include_levels=True,
             )
+            # Tuning knobs (J10 AC1 is a cost-function/threshold problem — task 4):
+            # CFLIBS_FF_PRESENCE_THRESHOLD lowers the presence gate to recover recall;
+            # CFLIBS_FF_N_CONFIGS scales the population. Defaults match the AC1 run.
+            ff_threshold = float(os.environ.get("CFLIBS_FF_PRESENCE_THRESHOLD", "0.05"))
+            ff_n_configs = int(os.environ.get("CFLIBS_FF_N_CONFIGS", "1024"))
             identifier = ForwardFitIdentifier(
                 elements,
                 snapshot=PipelineSnapshot.from_atomic_snapshot(asnap),
                 resolving_power=resolving_power,
-                n_configs=1024,
-                presence_threshold=0.05,
+                n_configs=ff_n_configs,
+                presence_threshold=ff_threshold,
             )
             return identifier.identify(wavelength, intensity)
 
