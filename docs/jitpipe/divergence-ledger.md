@@ -120,16 +120,29 @@ separate bug (an ambiguity guard for *both* pipelines), not a jit divergence.
 **Parity status: exact for single-segment (= reference); regression test
 `test_ondevice_calib_single_segment_parity.py`.**
 
-### D-J9-3 · front-end · Stark n_e diagnostic still reference-delegated · *delegated (6apc)*
+### D-J9-3 · front-end · Stark n_e diagnostic reference-delegated · *delegated (6apc blocked on kernel-hardening)*
 
-`run_front_end_ondevice` still calls the reference `measure_stark_ne` for the n_e
-diagnostic (`host.py:2512`); `measure_stark_ne_jit` is parity-tested in isolation
-(`test_parity_j6`) but the candidate-selection host gather + the break-after-
-max_lines-*successes* sequencing are not yet composed on-device, and n_e pins the
-production solve to the ≤10 % M1 tolerance. **Adjudication:** delegated → the n_e fed
-to the solve IS the reference's, so composition parity through n_e is exact; the
-on-device port is bead **6apc** (the last delegated front-end stage). **Parity status:
-exact (delegated); on-device port is remaining_todo.**
+`run_front_end_ondevice` calls the reference `measure_stark_ne` for the n_e
+diagnostic (`host.py:2512`); n_e pins the production solve to the ≤10 % M1 tolerance
+with **no downstream slack**. **6apc attempt (2026-06-15, parked on branch
+`6apc-stark-build`):** the host candidate-selection orchestrator (`_ondevice_stark_ne`,
+mirroring the reference two-pass control flow incl. the DB 0.1 nm nearest-match,
+the multiplet-blend gate, and the break-after-max_lines-*successes* cap-before-trim)
+was fully built and the break-after-successes regression test passes. But the
+already-"parity-tested" device LM Voigt kernel (`measure_stark_ne_jit` /
+`fit_lorentz_fwhm_lm`) **cannot fit real ChemCam windows** — it returns `None` (no
+usable line) on BHVO-2 loc1, geological *and* raw. Three kernel-internal root causes:
+(1) the 5×5 normal-equations solve goes NaN at ChemCam intensity scale (~1e12);
+(2) `extract_windows` centers the window but `_init_params` assumes left-packing, so on
+the coarse real axis (~0.049 nm/sample) the init baseline is NaN — synthetic parity
+held only because its dense axis fills the whole window; (3) the strict 20-iter
+`converged` gate rejects otherwise-good real-data fits. The kernel was only ever
+exercised on synthetic dense-axis data. **Adjudication:** Stark stays **delegated** —
+the n_e fed to the solve IS the reference's, so composition parity through n_e is exact.
+6apc is **blocked on hardening the LM Voigt kernel for real-data** (per-window intensity
+normalization + left-packed windows + a scipy-equivalent acceptance gate), tracked as a
+new bead; the host orchestrator is ready on `6apc-stark-build` for when the kernel lands.
+**Parity status: exact (delegated); on-device port blocked on kernel-hardening.**
 
 ### D-J12-1 · scoreboard · jit pipeline vs reference on the goal board · *parity-scoped, capped*
 
