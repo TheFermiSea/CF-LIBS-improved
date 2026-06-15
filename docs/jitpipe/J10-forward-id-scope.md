@@ -88,6 +88,32 @@ benchmark-gated) rather than a descope. **Caveats:** 40-spectra subset; corpus v
 is the open `zfy2` question (regenerate on the fixed forward model before trusting absolute
 numbers); the same-corpus relative ranking is the reliable signal.
 
+## Round 2 — diagnostic per-wavelength weights → AC1 PASS (2026-06-15)
+
+Implemented Rank-1 host-only diagnostic per-wavelength weights (`ForwardFitIdentifier._diagnostic_wavelength_weights`,
+passed via the existing-but-unused `element_weights` kwarg; frozen jit core untouched, `test_parity_j10` green).
+Weight `w = (base + total) * distinctness**gamma` where distinctness = dominant-element / total Boltzmann
+strength per wavelength bin — down-weights crowded/blended bins, up-weights isolated single-element bins.
+GPU sweep (V100S, ak3.1.3, 40 spectra, n_configs=1024) vs Comb (F1=0.442):
+
+| config (diag weights ON) | P | R | F1 | vs Comb |
+|---|---|---|---|---|
+| γ=1.0, thr=0.01 | 0.424 | 0.525 | 0.469 | +0.027 |
+| γ=2.0, thr=0.01 | 0.429 | 0.525 | 0.472 | +0.030 |
+| γ=3.0, thr=0.01 | 0.444 | 0.500 | 0.471 | +0.029 |
+| γ=4.0, thr=0.01 | 0.411 | 0.463 | 0.435 | −0.007 |
+| **γ=2.0, thr=0.02** | **0.514** | **0.463** | **0.487** | **+0.045** |
+| (diag OFF baseline) | 0.384 | 0.475 | 0.4246 | −0.017 |
+
+**AC1 PASS** at **γ=2.0, thr=0.02, n_configs=1024, diagnostic weights ON**: forward_fit F1=0.487 beats
+Comb 0.442 by **+0.045** (AC1 needs +0.03), and precision 0.514 > Comb 0.459 — a precision *gain*, so the
+≤0.02-loss clause passes with margin. forward_fit beats the best baseline on **all three** metrics (P, R, F1).
+The diagnostic weights lifted the precision-recall *frontier* (precision rose 0.384→0.514 while recall stayed
+high), exactly the intended mechanism — the recall-play thesis is validated and AC1 is cleared on this corpus.
+These defaults are now the `_run_forward_fit` env defaults. Branch: `j10/diag-weights` (commits 80dc97/040b76).
+**Confirmation pending:** a 120-spectrum run at the winning config (de-risks the 40-spectrum margin) + the
+`zfy2` corpus-validity question; the same-corpus relative-vs-Comb dominance is the reliable signal.
+
 ## Acceptance (AC1 binding)
 
 micro-F1 ≥ **+0.03** vs the reference identifier on the **optimization split**, precision loss ≤ **0.02**

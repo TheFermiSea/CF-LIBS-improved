@@ -359,13 +359,14 @@ def build_identifier_runners(
                 wavelength_range=(float(np.min(wavelength)), float(np.max(wavelength))),
                 include_levels=True,
             )
-            # Tuning knobs (J10 AC1 is a cost-function/threshold problem — task 4):
-            # CFLIBS_FF_PRESENCE_THRESHOLD lowers the presence gate to recover recall;
-            # CFLIBS_FF_N_CONFIGS scales the population. Defaults match the AC1 run.
-            # CFLIBS_FF_DIAG_WEIGHTS toggles the J10 rank-1 diagnostic per-wavelength
-            # weights ('1' on / '0' off); CFLIBS_FF_WEIGHT_GAMMA sets the distinctness
-            # exponent. Diagnostic weights default on (host-only; frozen core untouched).
-            ff_threshold = float(os.environ.get("CFLIBS_FF_PRESENCE_THRESHOLD", "0.05"))
+            # Tuning knobs. Defaults = the AC1-PASSING config (diagnostic weights ON,
+            # gamma=2.0, presence_threshold=0.02, n_configs=1024): on the ak3.1.3 corpus
+            # forward_fit P=0.514 R=0.463 F1=0.487, beating the best baseline Comb
+            # (F1=0.442) on all three metrics — see docs/jitpipe/J10-forward-id-scope.md.
+            # CFLIBS_FF_PRESENCE_THRESHOLD = presence gate; CFLIBS_FF_N_CONFIGS = population;
+            # CFLIBS_FF_DIAG_WEIGHTS ('1' on/'0' off) = rank-1 diagnostic per-wavelength
+            # weights (host-only; frozen core untouched); CFLIBS_FF_WEIGHT_GAMMA = distinctness exponent.
+            ff_threshold = float(os.environ.get("CFLIBS_FF_PRESENCE_THRESHOLD", "0.02"))
             ff_n_configs = int(os.environ.get("CFLIBS_FF_N_CONFIGS", "1024"))
             ff_diag_weights = os.environ.get("CFLIBS_FF_DIAG_WEIGHTS", "1") != "0"
             ff_weight_gamma = float(os.environ.get("CFLIBS_FF_WEIGHT_GAMMA", "2.0"))
