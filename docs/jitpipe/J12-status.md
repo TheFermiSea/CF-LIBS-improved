@@ -34,22 +34,29 @@ both datasets, `output/j12/run1`). This isolates the detect/identify/solve port
 as bit-faithful.
 
 **With the full on-device front-end** (J9 on-device calibration; `output/j12/run2`),
-the jit matches the reference on real-data-like spectra but **diverges on sparse
-synthetic spectra**: on `synthetic_fixedforward` pure-element spectra, 7/8 agree
-on presence but 1/8 (`pure_Fe_0002`) flips solve→fail — the on-device segmented
-calibration shifts the sparse axis just enough to tip its one marginal line below
-the usable threshold; another (`pure_Fe_0007`) solves on both but T differs 5.4%.
+the jit initially diverged on **single-segment (seam-free) spectra** — sparse
+synthetic *and* the real `aalto` minerals — because the on-device deterministic
+stratified RANSAC resolves a sparse/multimodal anchor set to a different
+registration than the reference random-600 RANSAC. Board run2: synthetic
+ΔF1 = −0.291 (fail 7 vs 3), aalto fail 1 vs 0.
 
-**Characterization:** the J9 on-device calibration is parity-faithful on real
-broadband ChemCam data (BHVO-2: obs Jaccard 1.0, axis 0.00025 nm) but is **not
-bit-faithful to the reference RANSAC in the sparse/marginal regime** (few
-peak-line anchors → the deterministic-vs-random RANSAC difference tips marginal
-lines). On real geological/planetary spectra this regime is rare; on
-single-element synthetic spectra it is the norm. **This is a J12 gap, not a
-blocker** — the reference path is untouched and M3 promotion is explicitly not
-claimed. Tracked as a gap bead; the M3 gate must clear it (or `run_one` falls
-back to host-delegated calibration for sparse axes). See
-`scripts/diag_jit_scoreboard_parity.py`.
+**Closed (bead aa9e, commit a2f6009).** The fix keys on the *structural* signal
+(`detect_ccd_seams(...).size == 0`) and delegates single-segment spectra to the
+reference `_ld_calibrate`; the multi-segment broadband path (BHVO-2: 3-segment,
+on-device, parity 0.00025 nm) is untouched. Board run3 (with the fix):
+
+| dataset | ΔF1 | jit fail vs ref |
+|---|---|---|
+| aalto | **+0.000** | 0 = 0 |
+| synthetic_fixedforward | **+0.000** | 3 = 3 |
+
+BHVO-2 non-regression control passes (still on-device, max|Δλ| 0.00025 nm); regression
+test `tests/jitpipe/test_ondevice_calib_single_segment_parity.py`. Honest caveat: on
+`muscoviteE35` parity is restored by inheriting the reference's dubious ~1.9 nm shift
+mode — a pre-existing reference multimodal-RANSAC issue, filed as a follow-up bug (an
+ambiguity guard for both pipelines). Residual (separate, bead `5yo1`): synthetic solve
+RMSE 48.7 vs 44.4 on the 5 solved spectra — a small on-device-solve delta within M1
+tolerance on a questionable-truth synthetic corpus.
 
 ## What M3 still requires (NOT done this session — process + compute gates)
 
