@@ -362,14 +362,21 @@ def build_identifier_runners(
             # Tuning knobs (J10 AC1 is a cost-function/threshold problem — task 4):
             # CFLIBS_FF_PRESENCE_THRESHOLD lowers the presence gate to recover recall;
             # CFLIBS_FF_N_CONFIGS scales the population. Defaults match the AC1 run.
+            # CFLIBS_FF_DIAG_WEIGHTS toggles the J10 rank-1 diagnostic per-wavelength
+            # weights ('1' on / '0' off); CFLIBS_FF_WEIGHT_GAMMA sets the distinctness
+            # exponent. Diagnostic weights default on (host-only; frozen core untouched).
             ff_threshold = float(os.environ.get("CFLIBS_FF_PRESENCE_THRESHOLD", "0.05"))
             ff_n_configs = int(os.environ.get("CFLIBS_FF_N_CONFIGS", "1024"))
+            ff_diag_weights = os.environ.get("CFLIBS_FF_DIAG_WEIGHTS", "1") != "0"
+            ff_weight_gamma = float(os.environ.get("CFLIBS_FF_WEIGHT_GAMMA", "2.0"))
             identifier = ForwardFitIdentifier(
                 elements,
                 snapshot=PipelineSnapshot.from_atomic_snapshot(asnap),
                 resolving_power=resolving_power,
                 n_configs=ff_n_configs,
                 presence_threshold=ff_threshold,
+                use_diagnostic_weights=ff_diag_weights,
+                weight_gamma=ff_weight_gamma,
             )
             return identifier.identify(wavelength, intensity)
 
