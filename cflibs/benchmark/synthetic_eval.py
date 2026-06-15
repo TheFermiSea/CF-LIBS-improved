@@ -349,14 +349,18 @@ def build_identifier_runners(
 
         def _run_forward_fit() -> ElementIdentificationResult:
             from cflibs.jitpipe.forward_id_identifier import ForwardFitIdentifier
+            from cflibs.jitpipe.snapshot import PipelineSnapshot
 
+            # db.snapshot() returns the raw AtomicSnapshot (no element_symbols); the
+            # adapter needs the unified PipelineSnapshot — convert before passing.
+            asnap = db.snapshot(
+                elements=elements,
+                wavelength_range=(float(np.min(wavelength)), float(np.max(wavelength))),
+                include_levels=True,
+            )
             identifier = ForwardFitIdentifier(
                 elements,
-                snapshot=db.snapshot(
-                    elements=elements,
-                    wavelength_range=(float(np.min(wavelength)), float(np.max(wavelength))),
-                    include_levels=True,
-                ),
+                snapshot=PipelineSnapshot.from_atomic_snapshot(asnap),
                 resolving_power=resolving_power,
                 n_configs=1024,
                 presence_threshold=0.05,

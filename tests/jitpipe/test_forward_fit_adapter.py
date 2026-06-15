@@ -121,3 +121,30 @@ def test_forward_fit_adapter_returns_well_formed_result(setup):
     assert result.parameters["candidate_elements"] == CANDIDATES
     assert np.isfinite(result.parameters["best_correlation"])
     assert result.parameters["n_valid_configs"] == 256
+
+
+def test_forward_fit_adapter_accepts_raw_atomic_snapshot(setup):
+    """Regression: a raw ``AtomicSnapshot`` (no ``element_symbols``) must work.
+
+    ``db.snapshot(...)`` returns the raw ``AtomicSnapshot``; the benchmark
+    ``_run_forward_fit`` runner passed it straight through, hitting
+    ``AttributeError: 'AtomicSnapshot' object has no attribute 'element_symbols'``
+    (the adapter's own ``identify`` round-trip test used the *converted*
+    ``PipelineSnapshot`` and missed this). The adapter now lifts a raw snapshot to
+    a ``PipelineSnapshot`` defensively; this pins that path.
+    """
+    _snap, wl, instr, meas = setup
+
+    db = AtomicDatabase(DB_PATH)
+    raw = db.snapshot(elements=CANDIDATES, wavelength_range=WL_RANGE, include_levels=True)
+    assert not hasattr(raw, "element_symbols"), "fixture must be the raw AtomicSnapshot"
+
+    identifier = ForwardFitIdentifier(
+        CANDIDATES, snapshot=raw, instrument=instr, n_configs=64, presence_threshold=0.02, seed=7
+    )
+    result = identifier.identify(wl, meas)
+
+    assert isinstance(result, ElementIdentificationResult)
+    assert result.algorithm == "forward_fit"
+    assert {e.element for e in result.all_elements} == set(CANDIDATES)
+    assert {e.element for e in result.detected_elements} <= set(CANDIDATES)

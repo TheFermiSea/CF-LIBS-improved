@@ -214,11 +214,16 @@ class ForwardFitIdentifier:
         return inst
 
     def _build_snapshot(self, wavelength_nm: np.ndarray) -> "PipelineSnapshot":
+        from cflibs.jitpipe.snapshot import PipelineSnapshot
+
         if self._snapshot is not None:
+            # Defensive: accept a raw AtomicSnapshot (no element_symbols) and lift it
+            # to the unified PipelineSnapshot the forward-fitter requires.
+            if not hasattr(self._snapshot, "element_symbols"):
+                self._snapshot = PipelineSnapshot.from_atomic_snapshot(self._snapshot)
             return self._snapshot
 
         from cflibs.atomic.database import AtomicDatabase
-        from cflibs.jitpipe.snapshot import PipelineSnapshot
 
         wl_range = self.wavelength_range
         if wl_range is None:
