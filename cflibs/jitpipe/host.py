@@ -1707,8 +1707,21 @@ def _ondevice_calibrate_segmented(wl, inten, atomic_db, elements, pipeline):
             )
 
     if seams.size == 0:
-        corrected = np.asarray(global_result.corrected_wavelength, dtype=float)[:n_w]
-        return corrected, bool(global_result.success), bool(global_result.quality_passed)
+        # aa9e: the single-segment (seam-free) regime is exactly where the on-device
+        # global single-axis fit diverges from the reference. The kernel's
+        # deterministic stratified RANSAC and the reference's 600-draw random RANSAC
+        # resolve a sparse/multimodal anchor set to different registrations (model-
+        # class flip on sparse synthetic; ~1.9 nm shift-mode flip on narrow-band real
+        # minerals), shifting the corrected axis enough to flip marginal lines and the
+        # solve/fail outcome — 102/289 synthetic axes + the aalto muscoviteE35/
+        # adulariaE11 board failures (all seam-free). The discriminating signal is
+        # structural (seam count), not anchor count (the regimes' anchor counts
+        # overlap). Delegate the whole single-axis fit to the reference robust core
+        # for parity. The multi-segment broadband path below (BHVO-2: 3-segment,
+        # parity at 0.00025 nm) is untouched and keeps the on-device speed win.
+        ref = _ld_calibrate(wl_np, inten_np, atomic_db, elements, pipeline)
+        corrected = np.asarray(ref.corrected_wavelength, dtype=float)[:n_w]
+        return corrected, bool(ref.success), bool(ref.quality_passed)
 
     # --- per-segment fits (re-detect peaks per slice; reference flow) ----------
     bounds = [0] + [int(s) + 1 for s in seams] + [int(n_w)]
