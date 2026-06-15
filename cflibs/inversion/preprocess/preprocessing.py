@@ -5,9 +5,11 @@ All identification algorithms should use ``detect_peaks`` (or the convenience
 wrapper ``detect_peaks_auto``) rather than implementing custom peak detection.
 
 Pipeline:
-    1. Baseline estimation via median filter, SNIP, or ALS
-    2. Sigma-clipped MAD noise estimation
-    3. Peak detection with baseline subtraction, height/prominence thresholds
+    1. Baseline estimation via median filter, SNIP, ALS, or percentile filter
+    2. Noise estimation: detector-floor (lower-tail quantile spread, robust to
+       line-dense spectra) or legacy sigma-clipped MAD
+    3. Peak detection with baseline subtraction, optional residual-floor
+       re-centering, and height/prominence thresholds
     4. Optional cosmic ray rejection (minimum FWHM filter)
     5. Optional second-derivative confirmation
 """
@@ -360,6 +362,67 @@ def estimate_noise(intensity: np.ndarray, baseline: np.ndarray) -> float:
     return noise
 
 
+def estimate_detector_noise(intensity: np.ndarray, baseline: np.ndarray) -> float:
+    """Peak-fraction-robust detector-noise estimate from the residual lower tail.
+
+    The sigma-clipped MAD used by :func:`estimate_noise` cannot reach the true
+    detector floor on line-dense LIBS spectra: when more than ~40 % of pixels
+    carry line flux the sigma-clip stalls on the line forest and over-estimates
+    noise by three orders of magnitude.  This estimator instead reads the
+    *lower* tail of the baseline-subtracted residual, where peaks never live
+    (emission only inflates the upper tail), and converts a one-sided
+    lower-tail quantile spread into a Gaussian sigma.
+
+    Two candidate spreads are computed and the smaller (cleaner) one is kept:
+
+    * ``(q50 - q10) / 1.2816`` -- robust to up to ~50 % peak occupancy
+      (the 10th and 50th percentiles are both continuum at <=50 % peaks).
+    * ``(q25 - q5)  / 1.0836`` -- robust to up to ~75 % peak occupancy
+      (only the lowest quartile is guaranteed continuum at <=75 % peaks).
+
+    Line wings inflate only the *upper* quantiles, so the tighter low-tail
+    spread is the cleaner detector-noise estimate.  On a pure-Gaussian residual
+    the estimate recovers the true sigma within a few percent, keeping it
+    backward-compatible with the tolerances of the existing noise tests.
+
+    Parameters
+    ----------
+    intensity : np.ndarray
+        Intensity array (raw, not baseline-subtracted).
+    baseline : np.ndarray
+        Baseline estimate.
+
+    Returns
+    -------
+    float
+        Detector-noise level (sigma), always strictly positive.
+    """
+    r = np.sort(np.asarray(intensity, dtype=float) - np.asarray(baseline, dtype=float))
+    n = r.size
+    if n < 8:
+        s = float(np.std(r))
+        return s if s > 0 else 1e-12
+
+    def _q(pct: float) -> float:
+        # Nearest-rank lower quantile on the pre-sorted residual.
+        return float(r[int(np.clip(pct / 100.0 * (n - 1), 0, n - 1))])
+
+    # 50->10 maps to 1.2816 sigma; 25->5 maps to 1.0836 sigma (standard-normal
+    # quantile differences).  Keep only positive spreads.
+    cands = [
+        s
+        for s in (
+            (_q(50) - _q(10)) / 1.2816,
+            (_q(25) - _q(5)) / 1.0836,
+        )
+        if s > 0
+    ]
+    if not cands:
+        s = float(np.std(r[: max(8, n // 5)]))
+        return s if s > 0 else 1e-12
+    return float(min(cands))
+
+
 def _select_auto_baseline_method(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -533,6 +596,7 @@ def detect_peaks(
     min_fwhm_pixels: float = 1.5,
     use_second_derivative: bool = False,
     min_intensity_floor: float = 0.0,
+    recenter_to_floor: bool = False,
 ) -> List[Tuple[int, float]]:
     """Unified peak detection above baseline.
 
@@ -574,6 +638,14 @@ def detect_peaks(
         this acts as a sensitivity override: peaks above this floor
         will be detected even if they fall below the noise-derived
         threshold (noise * threshold_factor).
+    recenter_to_floor : bool
+        If True, subtract the robust residual floor (median of the lower
+        half of the baseline-subtracted residual) before thresholding
+        (default False = exact current behavior).  SNIP over-subtracts on
+        sparse/flat spectra, lifting the residual mean ~2.6 sigma above
+        zero so a ``noise * threshold_factor`` height above zero crosses on
+        pure noise; re-centering on the residual floor cancels that bias and
+        lets SNIP be used safely on both line-dense and sparse spectra.
 
     Returns
     -------
@@ -581,6 +653,10 @@ def detect_peaks(
         List of (index, wavelength_nm) tuples for detected peaks
     """
     corrected = intensity - baseline
+    if recenter_to_floor:
+        low = corrected[corrected <= np.percentile(corrected, 50)]
+        floor_level = float(np.median(low)) if low.size else 0.0
+        corrected = corrected - floor_level
     threshold = noise * threshold_factor
     if min_intensity_floor > 0:
         # Override threshold if min_intensity_floor is lower, allowing
@@ -626,8 +702,10 @@ def detect_peaks_auto(
     baseline_window_nm: float = 10.0,
     min_fwhm_pixels: float = 1.5,
     use_second_derivative: bool = False,
-    baseline_method: BaselineMethod = BaselineMethod.MEDIAN,
+    baseline_method: BaselineMethod = BaselineMethod.SNIP,
     min_intensity_floor: float = 0.0,
+    noise_method: str = "detector_floor",
+    recenter_to_floor: bool = True,
 ) -> Tuple[List[Tuple[int, float]], np.ndarray, float]:
     """Convenience wrapper: estimate baseline/noise, then detect peaks.
 
@@ -656,7 +734,10 @@ def detect_peaks_auto(
     use_second_derivative : bool
         Apply second-derivative confirmation (default False)
     baseline_method : BaselineMethod
-        Baseline estimation method (default ``BaselineMethod.MEDIAN``).
+        Baseline estimation method (default ``BaselineMethod.SNIP``, the LIBS
+        standard, paired below with the detector-floor noise estimator and
+        floor re-centering).
+        ``MEDIAN`` uses a median filter (the legacy default);
         ``SNIP`` uses Statistics-sensitive Non-linear Iterative Peak-clipping;
         ``ALS`` uses Asymmetric Least Squares smoothing;
         ``PERCENTILE`` uses a rolling percentile filter;
@@ -664,6 +745,15 @@ def detect_peaks_auto(
         (high-SNR) or ALS (low-SNR) -- opt-in, never selected implicitly.
     min_intensity_floor : float
         Absolute minimum intensity threshold (default 0.0).
+    noise_method : str
+        Noise estimator to use: ``'detector_floor'`` (default) reads the low
+        residual-quantile spread via :func:`estimate_detector_noise` and is
+        robust to high peak occupancy; ``'residual_mad'`` uses the legacy
+        sigma-clipped MAD :func:`estimate_noise`.
+    recenter_to_floor : bool
+        If True (default), subtract the robust residual floor before
+        thresholding (see :func:`detect_peaks`).  Cancels SNIP's
+        over-subtraction on sparse/flat spectra.
 
     Returns
     -------
@@ -696,7 +786,13 @@ def detect_peaks_auto(
         baseline = estimate_baseline(wavelength, intensity, window_nm=baseline_window_nm)
     else:
         raise ValueError(f"Unknown baseline_method: {baseline_method!r}")
-    noise = estimate_noise(intensity, baseline)
+
+    if noise_method == "detector_floor":
+        noise = estimate_detector_noise(intensity, baseline)
+    elif noise_method == "residual_mad":
+        noise = estimate_noise(intensity, baseline)
+    else:
+        raise ValueError(f"Unknown noise_method: {noise_method!r}")
 
     peaks = detect_peaks(
         wavelength,
@@ -710,6 +806,7 @@ def detect_peaks_auto(
         min_fwhm_pixels=min_fwhm_pixels,
         use_second_derivative=use_second_derivative,
         min_intensity_floor=min_intensity_floor,
+        recenter_to_floor=recenter_to_floor,
     )
 
     # L1 detection-coverage logging.  Additive only -- identifier
