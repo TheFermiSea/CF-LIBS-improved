@@ -2270,7 +2270,10 @@ def _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline) ->
 
     from cflibs.atomic.masses import resolve_element_mass
     from cflibs.core.constants import EV_TO_K
-    from cflibs.inversion.physics.stark_ne import LITERATURE_STARK_SOURCES
+    from cflibs.inversion.physics.stark_ne import (
+        LITERATURE_STARK_SOURCES,
+        estimate_instrument_fwhm,
+    )
     from cflibs.jitpipe import stark as _S
     from cflibs.radiation.profiles import doppler_width
 
@@ -2285,6 +2288,19 @@ def _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline) ->
 
     resolving_power = pipeline.resolving_power
     have_rp = resolving_power is not None and float(resolving_power) > 0.0
+
+    # --- instrument-width resolution ladder (reference ``measure_stark_ne``) ----
+    # explicit FWHM -> resolving-power (lambda/R) -> data-driven narrowest-line
+    # floor (``estimate_instrument_fwhm``). The floor is the PRODUCTION path for
+    # ChemCam/SuperCam (their config carries no ``resolving_power``), so it is NOT
+    # unreachable; it is pure host NumPy signal processing (no device kernel, no
+    # atomic data) and we reuse the reference helper verbatim for bit-parity. A
+    # candidate whose instrument width cannot be resolved (floor returns ``None``)
+    # is gated out on-device by ``SEL_NO_INSTRUMENT_WIDTH`` (``instr = 0``).
+    def _instr_fwhm(center_nm: float) -> float | None:
+        if have_rp:
+            return center_nm / float(resolving_power)
+        return estimate_instrument_fwhm(wl_in, inten, selected, center_nm=center_nm)
 
     # --- PASS 1: host gather of atomic-data-only scalars per observation -------
     # The reference resolves the Stark params by the OBSERVATION wavelength with a
@@ -2318,8 +2334,11 @@ def _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline) ->
         intensity_unc_arr[i] = obs.intensity_uncertainty
         wl_obs_arr[i] = obs.wavelength_nm
 
+        # Positional 0.1 nm tolerance: the real ``AtomicDatabase`` method names
+        # this ``tolerance_nm`` while ``measure_stark_ne`` passes it positionally
+        # (stark_ne.py:487); call it positionally so any source signature works.
         w_ref, alpha, source, is_resonance = atomic_db.get_stark_parameters_with_source(
-            obs.element, obs.ionization_stage, obs.wavelength_nm, wavelength_tolerance_nm=0.1
+            obs.element, obs.ionization_stage, obs.wavelength_nm, 0.1
         )
         is_lit = source in LITERATURE_STARK_SOURCES and w_ref is not None and w_ref > 0
         lit_arr[i] = bool(is_lit)
@@ -2328,13 +2347,11 @@ def _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline) ->
             w_ref_arr[i] = float(w_ref)
         alpha_arr[i] = float(alpha) if alpha is not None else _S.DEFAULT_STARK_ALPHA
 
-        # Instrument FWHM: production always supplies resolving_power. The data-
-        # driven floor is unreachable in production (documented), so SKIP the
-        # candidate when resolving_power is absent.
-        if have_rp:
-            instr_arr[i] = obs.wavelength_nm / float(resolving_power)
-        else:
-            instr_arr[i] = 0.0  # gated out by SEL_NO_INSTRUMENT_WIDTH
+        # Instrument FWHM via the reference ladder (resolving-power or the
+        # data-driven narrowest-line floor); ``None`` -> 0 (gated by
+        # ``SEL_NO_INSTRUMENT_WIDTH``).
+        instr = _instr_fwhm(obs.wavelength_nm)
+        instr_arr[i] = float(instr) if (instr is not None and instr > 0) else 0.0
 
         mass = resolve_element_mass(obs.element, atomic_db)
         dopp_arr[i] = float(doppler_width(obs.wavelength_nm, T_eV, mass))
@@ -2778,22 +2795,45 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
         "applied_shift_nm": applied_shift_nm,
     }
 
-    # --- Stark n_e diagnostic (ON-DEVICE: J6 stark.py kernels) -----------------
+    # --- Stark n_e diagnostic (ON-DEVICE J6 kernels, reference fallback) --------
     # The reference ``run_pipeline`` measures Stark n_e on the ORIGINAL
     # (response-corrected but NOT calibration-corrected) axis ``wl_in`` — the
     # calibration is applied only inside ``detect_and_select_lines`` on its own
     # copy (``pipeline.py:887``). Use ``wl_in`` to bit-match the reference n_e
-    # that pins the production solve. :func:`_ondevice_stark_ne` composes the
-    # parity-tested fixed-shape kernels (candidate selection / multiplet-blend /
-    # window gather / vmapped LM fit / width-law inversion / cohort-trim) in
-    # place of the reference-delegated ``measure_stark_ne``. The reference-
-    # delegated sibling :func:`run_front_end` retains the bounded-failure
-    # fallback (a one-line revert here if parity regresses).
-    ne_stark = (
-        _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline)
-        if (pipeline.stark_ne and selected)
-        else None
-    )
+    # that pins the production solve.
+    #
+    # :func:`_ondevice_stark_ne` composes the parity-tested fixed-shape kernels
+    # (candidate selection / multiplet-blend / window gather / vmapped LM fit /
+    # width-law inversion / cohort-trim). It reproduces the reference on the
+    # synthetic parity envelope (``tests/jitpipe/test_ondevice_stark_ne.py``), but
+    # on REAL coarse-sampled, high-dynamic-range ChemCam spectra the fixed-20-iter
+    # LM Voigt kernel (``cflibs.jitpipe.stark.fit_lorentz_fwhm_lm``) is numerically
+    # fragile (NaN at ~1e12 intensity scale + non-left-packed ``extract_windows``
+    # gathers) and its strict ``converged`` quality gate rejects otherwise-good
+    # fits — so it yields no usable line where scipy's trust-region fitter
+    # succeeds. The kernels are parity-frozen (bead 6apc forbids modifying them),
+    # so the on-device path is wired as an OPPORTUNISTIC primary with a
+    # bounded-failure fallback to the reference ``measure_stark_ne`` (the exact
+    # path :func:`run_front_end` uses) whenever it returns no usable n_e. See bead
+    # 6apc for the gap analysis + a follow-up to harden the LM kernel for
+    # real-data parity (then this fallback can be dropped).
+    ne_stark: float | None = None
+    if pipeline.stark_ne and selected:
+        try:
+            ne_stark = _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline)
+        except Exception:  # pragma: no cover - defensive
+            ne_stark = None
+        if ne_stark is None:
+            from cflibs.inversion.physics.stark_ne import measure_stark_ne
+
+            try:
+                stark_result = measure_stark_ne(
+                    wl_in, inten, selected, atomic_db, resolving_power=pipeline.resolving_power
+                )
+            except Exception:  # pragma: no cover - defensive
+                stark_result = None
+            if stark_result is not None and stark_result.usable:
+                ne_stark = float(stark_result.ne_median_cm3)
 
     return FrontEndResult(
         observations=list(selected),
