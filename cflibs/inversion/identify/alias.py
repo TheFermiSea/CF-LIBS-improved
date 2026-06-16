@@ -3500,15 +3500,13 @@ class ALIASIdentifier:
         if not transitions:
             return []
 
-        # Cap to strongest lines by estimated emissivity to avoid line-count disparity
-        if len(transitions) > self.max_lines_per_element:
-            kT = KB_EV * self.reference_temperature
-            transitions = sorted(
-                transitions,
-                key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT),
-                reverse=True,
-            )
-            transitions = transitions[: self.max_lines_per_element]
+        # Paper-faithful (Noel et al. 2025, sec 3.6): the per-element emissivity
+        # THRESHOLD (step 5, applied AFTER peak fusion) is the line-reduction
+        # mechanism. The previous max_lines_per_element pre-cap fired BEFORE
+        # fusion/threshold and starved line-rich elements (Fe: only ~23 of 2189
+        # A*g-filtered lines ever reached the threshold step), collapsing
+        # N_expected and k_rate. Removed so fusion + threshold run on the full
+        # catalog as the paper intends.
         return transitions
 
     def _precompute_grid_stage_densities(
@@ -4088,24 +4086,18 @@ class ALIASIdentifier:
         the "silent SA_DAMPING = 0.3" complaint from
         CF-LIBS-improved-self-abs-audit.
         """
-        sa_aware = self.self_absorption_aware
-        sa_damping = self.self_absorption_damping
-        sa_e_i_cutoff = self.self_absorption_e_i_cutoff_ev
         theoretical_intensities: list = []
         experimental_intensities: list = []
         unique_peak_set: set = set()
 
         for i in range(len(fused_lines)):
             if matched_above[i]:
-                eps_th = emissivities[i]
-                trans = fused_lines[i]["transition"]
-                if sa_aware and getattr(trans, "E_i_ev", 1.0) < sa_e_i_cutoff:
-                    eps_th *= sa_damping
-                    self._sa_n_damped_lines += 1
-                    el = getattr(trans, "element", None)
-                    if el is not None:
-                        self._sa_damped_elements.add(el)
-                theoretical_intensities.append(eps_th)
+                # Paper eq 3 (Noel et al. 2025): bare cosine on the UNDAMPED
+                # theoretical emissivities. The self-absorption damping
+                # (eps *= 0.3 for resonance lines E_i < cutoff) is NOT in the
+                # paper and crushed k_sim for resonance-rich elements like Fe
+                # (paper-faithful cosine 0.64 -> repo 0.37 at RP700).
+                theoretical_intensities.append(emissivities[i])
                 pidx = matched_peak_idx[i]
                 experimental_intensities.append(intensity[peaks[pidx][0]])
                 unique_peak_set.add(pidx)
@@ -4154,12 +4146,11 @@ class ALIASIdentifier:
             # blend (N_X=1 means k_sim is not used) and the N_penalty.
             k_sim = 0.0
 
-        # Uniqueness penalty: many-to-one mapping lowers k_sim
-        n_unique_peaks = len(unique_peak_set)
-        if n_matched_above > 0:
-            uniqueness_factor = n_unique_peaks / n_matched_above
-            k_sim *= uniqueness_factor
-
+        # Paper eq 3 is a bare cosine — NO uniqueness penalty. The previous
+        # uniqueness_factor (= n_unique_peaks / n_matched_above) is not in the
+        # paper and deflated the dominant element when several theoretical lines
+        # map to one peak at low RP (many-to-one is already handled by k_rate
+        # and by one-to-one peak->line enforcement in matching).
         return k_sim
 
     def _compute_P_ab(self, element: str) -> float:
