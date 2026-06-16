@@ -433,7 +433,7 @@ def build_identifier_runners(
             elements=elements,
             resolving_power=resolving_power,
             intensity_threshold_factor=3.0,
-            detection_threshold=0.01,
+            detection_threshold=0.5,  # paper C_th (Noel 2025 sec 3.8): k_det presence threshold
             chance_window_scale=0.3,
         )
         return identifier.identify(wavelength, intensity)

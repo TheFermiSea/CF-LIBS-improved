@@ -1,7 +1,9 @@
 """
 ALIAS (Automated Line Identification Algorithm for Spectroscopy) implementation.
 
-Based on Noel et al. (2025) arXiv:2501.01057. The ALIAS algorithm identifies elements
+Based on Noël et al. (2025), "Automated line identification for atomic spectroscopy
+(ALIAS): Application to LIBS imaging data processing," Spectrochim. Acta B 231:107255,
+DOI 10.1016/j.sab.2025.107255 (HAL hal-05560478). The ALIAS algorithm identifies elements
 in LIBS spectra through a 7-step process: peak detection, theoretical emissivity
 calculation, line fusion, matching, threshold determination, scoring, and decision.
 """
@@ -1162,9 +1164,11 @@ class ALIASIdentifier:
         """
         self.high_recall = bool(high_recall)
         _STRICT_INTENSITY_FACTOR = 3.0
-        _STRICT_DETECTION_THRESHOLD = 0.02
+        # detection_threshold is now the paper's C_th (Noel 2025 sec 3.8): the
+        # k_det presence threshold (paper default 0.5), NOT a CL floor.
+        _STRICT_DETECTION_THRESHOLD = 0.5
         _RECALL_INTENSITY_FACTOR = 2.0
-        _RECALL_DETECTION_THRESHOLD = 0.01
+        _RECALL_DETECTION_THRESHOLD = 0.4
         if intensity_threshold_factor is None:
             self.intensity_threshold_factor = (
                 _RECALL_INTENSITY_FACTOR if self.high_recall else _STRICT_INTENSITY_FACTOR
@@ -1511,10 +1515,11 @@ class ALIASIdentifier:
             )
             all_element_ids.append(element_id)
 
-        # Apply relative threshold: element CL must be >= max_CL * relative_cl_threshold
-        # This prevents spurious detections when one element dominates.
-        # Set self.relative_cl_threshold = 0 to disable.
-        self._apply_relative_cl_gate(all_element_ids)
+        # NOTE: the winner-relative CL gate (reject elements with CL < max_CL *
+        # relative_cl_threshold) is NOT in Noel et al. 2025 — it coupled every
+        # element's fate to the single highest-CL element. Detection is the
+        # per-element k_det > C_th rule (sec 3.8); this gate is disabled.
+        # self._apply_relative_cl_gate(all_element_ids)
 
         # Split into detected/rejected
         detected_elements = [e for e in all_element_ids if e.detected]
@@ -1994,24 +1999,17 @@ class ALIASIdentifier:
             k_sim,
         )
 
-        # Adaptive detection threshold: elements with few expected
-        # lines have higher false-match rates at low RP and need a
-        # proportionally higher CL to be considered detected.
+        # Paper-faithful decision (Noel et al. 2025, sec 3.8, eq 6): element X
+        # is present iff its detection coefficient k_det exceeds the user
+        # threshold C_th (paper default 0.5, held in self.detection_threshold).
+        # CL is the paper's OPTIONAL confidence level ("not essential for the
+        # proper ALIAS functioning") and is NOT the decision variable. The
+        # previous CL>=adaptive_dt decision, the hard N_matched>=3 gate (the
+        # paper explicitly supports One-Line and Sparse-Line elements), and the
+        # Boltzmann-R^2 gate are all homegrown and were removed.
+        detected = k_det > self.detection_threshold
         adaptive_dt = self.detection_threshold
-        if N_expected > 0 and N_expected < 10:
-            adaptive_dt *= min(3.0, math.sqrt(10.0 / N_expected))
-        detected = CL >= adaptive_dt
-
-        # Physics-grounded hard gates (Task wzus):
-        # (a) Require at least three matched lines, rejecting single-line
-        #     and doublet-only identifications.
-        # (b) Require Boltzmann R^2 >= boltzmann_r2_min only when at least
-        #     three matched lines make a regression meaningful.
-        min_required_matches = 3
-        if N_matched < min_required_matches:
-            detected = False
-        if self._r2_gate_rejects(boltz_r2, N_matched):
-            detected = False
+        min_required_matches = 1
 
         # L4 -- per-element fingerprint pass.  alias's effective
         # "fingerprint" is the post-gate CL compared to
@@ -4776,19 +4774,15 @@ class ALIASIdentifier:
         # into k_det so that elements with many weak undetected lines are
         # not excessively penalized.  P_cov weights by emissivity, so missing
         # a weak line (emissivity 1% of total) only reduces P_cov by 1%.
+        # Paper-faithful k_det (Noel et al. 2025, eq 6): N_X = number of
+        # DETECTED (matched) lines; k_det = k_rate * ((1/N_X)*k_shift +
+        # ((N_X-1)/N_X)*k_sim). The homegrown sqrt(.*P_cov) blend and the
+        # N_penalty factor are NOT in the paper and were removed.
         if N_matched > 0:
             N_X = N_matched
-            k_det_raw = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
-            # Blend: use geometric mean of raw k_det and P_cov to soften
-            # the penalty for many unmatched weak lines
-            k_det = math.sqrt(k_det_raw * max(P_cov, 0.01))
+            k_det = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
         else:
             k_det = 0.0
-
-        # Fix 4: N_expected penalty — elements with few expected lines
-        # get scaled down to prevent 2/3 matches from scoring high.
-        N_penalty = min(1.0, math.sqrt(N_expected / 5.0)) if N_expected > 0 else 0.0
-        k_det *= N_penalty
 
         P_SNR = self._dispatch_p_snr(intensity, peaks)
 
