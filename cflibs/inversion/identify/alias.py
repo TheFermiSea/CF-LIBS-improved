@@ -30,11 +30,7 @@ from cflibs.inversion.identify._coverage import (
     merge_coverage_into_parameters,
 )
 from cflibs.inversion.physics.boltzmann import BoltzmannPlotFitter, LineObservation
-from cflibs.inversion.preprocess.preprocessing import (
-    estimate_baseline,
-    estimate_baseline_snip,
-    estimate_detector_noise,
-)
+from cflibs.inversion.preprocess.preprocessing import estimate_baseline, estimate_noise
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 
 logger = get_logger("inversion.identify.alias")
@@ -2263,23 +2259,16 @@ class ALIASIdentifier:
         List[Tuple[int, float]]
             List of (peak_index, peak_wavelength) tuples
         """
-        # Estimate baseline (SNIP) and noise (detector-floor) via the shared
-        # fixed estimators.  The legacy median-baseline + sigma-clipped-MAD
-        # path over-estimated noise ~1000x on line-dense spectra (the line
-        # forest defeats sigma-clipping), collapsing recall to ~6-8 peaks.
-        baseline = estimate_baseline_snip(wavelength, intensity)
-        noise_estimate = estimate_detector_noise(intensity, baseline)
+        # Estimate baseline and noise using sigma-clipped MAD
+        baseline = estimate_baseline(wavelength, intensity)
+        noise_estimate = estimate_noise(intensity, baseline)
 
         # Threshold in intensity domain (with floor for flat spectra / zero MAD)
         threshold = max(noise_estimate * self.intensity_threshold_factor, np.finfo(float).eps)
         prominence = max(threshold / 3, np.finfo(float).eps)
 
-        # Find peaks in baseline-corrected intensity, re-centered on the
-        # robust residual floor to cancel SNIP's over-subtraction on
-        # sparse/flat spectra (without an absolute intensity cap).
+        # Find peaks in baseline-corrected intensity
         corrected = intensity - baseline
-        low = corrected[corrected <= np.percentile(corrected, 50)]
-        corrected = corrected - (float(np.median(low)) if low.size else 0.0)
         peak_indices, _ = find_peaks(corrected, height=threshold, prominence=prominence)
 
         # Paper (Noël et al. 2025): enhance peak detection using negative 2nd derivative
