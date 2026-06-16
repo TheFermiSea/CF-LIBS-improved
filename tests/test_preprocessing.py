@@ -7,7 +7,6 @@ from cflibs.inversion.preprocess.preprocessing import (
     estimate_baseline_snip,
     estimate_baseline_als,
     estimate_noise,
-    estimate_detector_noise,
     detect_peaks,
     detect_peaks_auto,
     robust_normalize,
@@ -316,18 +315,14 @@ class TestBaselineMethodDispatch:
         assert BaselineMethod.SNIP.value == "snip"
         assert BaselineMethod.ALS.value == "als"
 
-    def test_snip_is_default(self):
-        # The canonical ID entry point defaults to SNIP baseline (the LIBS
-        # standard), paired with the detector-floor noise estimator and
-        # residual-floor re-centering.  The default baseline must therefore
-        # match an explicit SNIP request, not the legacy MEDIAN.
+    def test_median_default(self):
         wavelength = np.linspace(200, 400, 500)
         intensity = np.full_like(wavelength, 100.0)
-        _, bl_default, _ = detect_peaks_auto(wavelength, intensity)
-        _, bl_snip, _ = detect_peaks_auto(
-            wavelength, intensity, baseline_method=BaselineMethod.SNIP
+        peaks_default, bl_default, _ = detect_peaks_auto(wavelength, intensity)
+        peaks_median, bl_median, _ = detect_peaks_auto(
+            wavelength, intensity, baseline_method=BaselineMethod.MEDIAN
         )
-        np.testing.assert_array_equal(bl_default, bl_snip)
+        np.testing.assert_array_equal(bl_default, bl_median)
 
     def test_snip_dispatch(self):
         wavelength = np.linspace(200, 400, 1000)
@@ -362,147 +357,4 @@ class TestBaselineMethodDispatch:
         wavelength = np.linspace(200, 400, 500)
         intensity = np.full_like(wavelength, 100.0)
         with pytest.raises(ValueError, match="Unknown baseline_method"):
-            detect_peaks_auto(
-                wavelength,
-                intensity,
-                baseline_method="invalid",
-                noise_method="residual_mad",
-            )
-
-    def test_unknown_noise_method_raises(self):
-        wavelength = np.linspace(200, 400, 500)
-        intensity = np.full_like(wavelength, 100.0)
-        with pytest.raises(ValueError, match="Unknown noise_method"):
-            detect_peaks_auto(wavelength, intensity, noise_method="bogus")
-
-
-# ---------------------------------------------------------------------------
-# Detector-floor noise estimator (peak-fraction robust)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-class TestDetectorNoise:
-    def test_recovers_gaussian_sigma(self):
-        # On a pure-Gaussian residual (constant baseline) the detector-floor
-        # estimator must recover the true sigma within +-3, matching the
-        # tolerances of the legacy estimate_noise tests (backward-compatible).
-        for sigma in (10.0, 15.0):
-            rng = np.random.default_rng(int(sigma))
-            baseline = np.zeros(4000)
-            intensity = baseline + rng.normal(0, sigma, 4000)
-            est = estimate_detector_noise(intensity, baseline)
-            assert abs(est - sigma) < 3.0, f"sigma={sigma}: got {est:.3f}"
-
-    def test_robust_to_dense_peaks(self):
-        # 50% of pixels carry line flux (the regime that defeats the
-        # sigma-clipped MAD estimator).  The detector-floor estimate must
-        # track the true continuum sigma, NOT the line-forest envelope.
-        rng = np.random.default_rng(7)
-        n = 6000
-        true_sigma = 12.0
-        baseline = np.full(n, 100.0)
-        continuum = rng.normal(0.0, true_sigma, n)
-        line_flux = np.zeros(n)
-        # Half the pixels get a large positive line contribution.
-        dense_idx = rng.choice(n, size=n // 2, replace=False)
-        line_flux[dense_idx] = rng.uniform(5_000, 50_000, dense_idx.size)
-        intensity = baseline + continuum + line_flux
-
-        est = estimate_detector_noise(intensity, baseline)
-        # Within 3x of the true continuum sigma (not the ~10^4 line envelope).
-        assert est < 3.0 * true_sigma, f"estimate tracked the line forest: {est:.1f}"
-        assert est > 0.0
-
-    def test_robust_to_estimated_snip_baseline_on_dense(self):
-        # The real-world failure: the BASELINE (not the noise estimator) tracks
-        # the line-forest envelope.  With a median-filter baseline on a dense
-        # spectrum the residual-MAD over-estimates; with a SNIP baseline the
-        # detector-floor estimator recovers a sane noise level.  This pins the
-        # coupled (SNIP baseline + detector-floor noise) fix.
-        rng = np.random.default_rng(11)
-        n = 6000
-        wavelength = np.linspace(224.0, 265.0, n)
-        true_sigma = 12.0
-        intensity = 100.0 + rng.normal(0.0, true_sigma, n)
-        dense_idx = rng.choice(n, size=n // 2, replace=False)
-        intensity[dense_idx] += rng.uniform(5_000, 50_000, dense_idx.size)
-
-        snip_baseline = estimate_baseline_snip(wavelength, intensity)
-        median_baseline = estimate_baseline(wavelength, intensity)
-        floor_on_snip = estimate_detector_noise(intensity, snip_baseline)
-        mad_on_median = estimate_noise(intensity, median_baseline)
-        # SNIP-baseline + detector-floor is far tighter than the legacy
-        # median-baseline + sigma-clipped-MAD path on the dense spectrum.
-        assert floor_on_snip < mad_on_median
-
-
-# ---------------------------------------------------------------------------
-# Residual-floor re-centering (SNIP over-subtraction guard)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-class TestFloorRecenter:
-    def test_flat_noise_no_explosion(self):
-        # Pure N(500, 50) over 2000 px.  Naive SNIP without floor re-centering
-        # explodes to ~396 false peaks; the SNIP + detector-floor + recenter
-        # default must stay well-behaved (< 15).
-        rng = np.random.default_rng(0)
-        wavelength = np.linspace(200, 400, 2000)
-        intensity = rng.normal(500.0, 50.0, 2000)
-        peaks, _, _ = detect_peaks_auto(
-            wavelength,
-            intensity,
-            baseline_method=BaselineMethod.SNIP,
-            noise_method="detector_floor",
-            recenter_to_floor=True,
-        )
-        assert len(peaks) < 15, f"flat noise exploded to {len(peaks)} peaks"
-
-    def test_clean_sparse_finds_real_peaks(self):
-        # 5 Gaussian peaks + N(0, 30).  Should recover the real peaks without
-        # exploding on the clean continuum.
-        rng = np.random.default_rng(1)
-        wavelength = np.linspace(200, 400, 2000)
-        intensity = rng.normal(0.0, 30.0, 2000)
-        for center in (240, 270, 300, 330, 360):
-            intensity += 800.0 * np.exp(-0.5 * ((wavelength - center) / 0.3) ** 2)
-        peaks, _, _ = detect_peaks_auto(
-            wavelength,
-            intensity,
-            baseline_method=BaselineMethod.SNIP,
-            noise_method="detector_floor",
-            recenter_to_floor=True,
-        )
-        assert 4 <= len(peaks) <= 12, f"clean sparse found {len(peaks)} peaks"
-
-
-def test_dense_spectrum_peak_count_regression():
-    # Regression guard for the ID-F1 root-cause fix: on the line-dense
-    # synthetic corpus (pure_Fe_0000, 224-265 nm Fe forest) the legacy
-    # MEDIAN + sigma-clipped-MAD path detected only ~7 peaks because noise
-    # was over-estimated ~1000x.  The SNIP + detector-floor + recenter path
-    # must recover the O(50-400) real-peak population.
-    import json
-    import os
-
-    corpus_path = "data/synthetic_corpus/corpus.json"
-    if not os.path.exists(corpus_path):
-        pytest.skip("synthetic corpus not available")
-    with open(corpus_path) as fh:
-        corpus = json.load(fh)
-    sp = next(s for s in corpus["spectra"] if s["spectrum_id"] == "pure_Fe_0000")
-    wavelength = np.asarray(sp["wavelength_nm"], dtype=float)
-    intensity = np.asarray(sp["intensity"], dtype=float)
-    rp = float(sp["rp_estimate"])
-
-    peaks, _, _ = detect_peaks_auto(
-        wavelength,
-        intensity,
-        resolving_power=rp,
-        baseline_method=BaselineMethod.SNIP,
-        noise_method="detector_floor",
-        recenter_to_floor=True,
-    )
-    assert 30 < len(peaks) < 400, f"dense-spectrum peak count out of range: {len(peaks)}"
+            detect_peaks_auto(wavelength, intensity, baseline_method="invalid")
