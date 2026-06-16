@@ -846,6 +846,7 @@ class ALIASIdentifier:
         intensity_threshold_factor: Optional[float] = None,
         detection_threshold: Optional[float] = None,
         chance_window_scale: float = 0.4,
+        peak_mode: str = "second_derivative",
         elements: Optional[List[str]] = None,
         max_lines_per_element: int = 20,
         reference_temperature: float = 10000.0,
@@ -1094,6 +1095,9 @@ class ALIASIdentifier:
         self.n_e_steps = n_e_steps
         self._init_threshold_defaults(high_recall, intensity_threshold_factor, detection_threshold)
         self.chance_window_scale = chance_window_scale
+        if peak_mode not in ("intensity", "second_derivative"):
+            raise ValueError("peak_mode must be 'intensity' or 'second_derivative'")
+        self.peak_mode = peak_mode
         self.elements = elements
         self.max_lines_per_element = max_lines_per_element
         self.reference_temperature = reference_temperature
@@ -2263,19 +2267,20 @@ class ALIASIdentifier:
 
         # Threshold in intensity domain (with floor for flat spectra / zero MAD)
         threshold = max(noise_estimate * self.intensity_threshold_factor, np.finfo(float).eps)
-        prominence = max(threshold / 3, np.finfo(float).eps)
 
-        # Find peaks in baseline-corrected intensity
+        # Negative 2nd derivative (true peaks = positive curvature), negatives zeroed.
         corrected = intensity - baseline
-        peak_indices, _ = find_peaks(corrected, height=threshold, prominence=prominence)
-
-        # Paper (Noël et al. 2025): enhance peak detection using negative 2nd derivative
-        # Compute -d²I/dλ², zero negatives — true peaks have positive curvature here
         d2 = -np.gradient(np.gradient(corrected, wavelength), wavelength)
         d2[d2 < 0] = 0.0
 
-        # Filter: keep peaks where d2 > 0 in a ±2-point neighborhood around peak center
-        # This handles discretization effects where d2 peak may be slightly offset
+        if self.peak_mode == "second_derivative":
+            return self._detect_peaks_second_derivative(wavelength, corrected, d2, threshold)
+
+        # Legacy "intensity" mode (opt-in): find_peaks on baseline-corrected
+        # intensity, gated by positive curvature (d2 > 0) in a +/-2-pt window.
+        # The paper-faithful "second_derivative" mode is the default (above).
+        prominence = max(threshold / 3, np.finfo(float).eps)
+        peak_indices, _ = find_peaks(corrected, height=threshold, prominence=prominence)
         confirmed = []
         for idx in peak_indices:
             lo = max(0, idx - 2)
@@ -2283,11 +2288,34 @@ class ALIASIdentifier:
             if np.max(d2[lo:hi]) > 0:
                 confirmed.append(idx)
         peak_indices = np.array(confirmed, dtype=int) if confirmed else np.array([], dtype=int)
+        return [(int(idx), float(wavelength[idx])) for idx in peak_indices]
 
-        # Return as list of (index, wavelength) tuples
-        peaks = [(int(idx), float(wavelength[idx])) for idx in peak_indices]
-
-        return peaks
+    def _detect_peaks_second_derivative(
+        self,
+        wavelength: np.ndarray,
+        corrected: np.ndarray,
+        d2: np.ndarray,
+        intensity_threshold: float,
+    ) -> List[Tuple[int, float]]:
+        """Paper sec 3.1 / Fig 2: find_peaks (prominence mode) ON the negative
+        2nd-derivative spectrum, then map each curvature peak to the nearest
+        intensity local maximum (+/-2 samples) and retain the intensity
+        amplitude floor (factor*noise) to reject curvature-only spikes. Surfaces
+        weak lines near the continuum and resolves overlaps."""
+        positive = d2[d2 > 0]
+        if positive.size == 0:
+            return []
+        mad = float(np.median(np.abs(positive - np.median(positive))) * 1.4826)
+        d2_prominence = max(mad * self.intensity_threshold_factor, np.finfo(float).eps)
+        d2_peaks, _ = find_peaks(d2, prominence=d2_prominence)
+        out: list = []
+        for idx in d2_peaks:
+            lo = max(0, idx - 2)
+            hi = min(len(corrected), idx + 3)
+            local = lo + int(np.argmax(corrected[lo:hi]))
+            if corrected[local] >= intensity_threshold:
+                out.append(local)
+        return [(int(idx), float(wavelength[idx])) for idx in sorted(set(out))]
 
     def _auto_calibrate_wavelength(
         self,
