@@ -332,8 +332,10 @@ def test_alias_explicit_threshold_overrides_high_recall():
     )
     # Explicit value wins for the pinned knob.
     assert identifier.intensity_threshold_factor == 4.2
-    # The other knob still follows the recall preset.
-    assert identifier.detection_threshold == 0.01
+    # The other knob still follows the recall preset. detection_threshold is now
+    # the paper's C_th k_det presence threshold (Noel 2025 sec 3.8): strict=0.5,
+    # recall=0.4 (was a legacy CL floor of 0.02/0.01 before the paper-faithful fix).
+    assert identifier.detection_threshold == 0.4
 
 
 # ---------------------------------------------------------------------------

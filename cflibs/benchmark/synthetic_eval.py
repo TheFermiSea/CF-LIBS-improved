@@ -67,8 +67,26 @@ _FORWARD_FIT_ALGORITHMS: Tuple[str, ...] = (ALGO_FORWARD_FIT,)
 def derive_truth_elements(
     composition: Dict[str, float], presence_threshold: float = 1e-4
 ) -> Set[str]:
-    """Return set of elements considered present in ground truth."""
+    """Return set of elements considered present in ground truth (>= floor)."""
     return {el for el, frac in composition.items() if float(frac) >= float(presence_threshold)}
+
+
+def derive_ignore_elements(
+    composition: Dict[str, float], presence_threshold: float = 1e-4
+) -> Set[str]:
+    """Return in-recipe elements BELOW the detection floor — the "don't-care" band.
+
+    Detection-floor semantics (3-way scoring): an element is *present* if its
+    concentration is >= ``presence_threshold``, *absent* if it is not in the
+    recipe at all (fraction == 0), and *don't-care* if it is in the recipe but
+    below the floor (0 < frac < presence_threshold). Don't-care elements are
+    removed from the scoring panel so that detecting a real-but-sub-detection-
+    limit trace is neither rewarded (TP) nor penalised (FP), and missing it is
+    not an FN. At the legacy default (1e-4) this band is empty, so behaviour is
+    unchanged unless a meaningful floor is set.
+    """
+    floor = float(presence_threshold)
+    return {el for el, frac in composition.items() if 0.0 < float(frac) < floor}
 
 
 def compute_binary_metrics(tp: int, fp: int, fn: int, tn: int) -> Dict[str, float]:
@@ -777,6 +795,14 @@ def _evaluate_spectrum_rows(
     true_elements = derive_truth_elements(
         spec.true_composition, presence_threshold=presence_threshold
     )
+    # 3-way detection-floor scoring: in-recipe elements below the floor are
+    # "don't-care" — dropped from the SCORING panel (identifiers still search
+    # the full candidate panel, since a real instrument cannot know a priori
+    # which constituents are sub-detection-limit).
+    ignore_elements = derive_ignore_elements(
+        spec.true_composition, presence_threshold=presence_threshold
+    )
+    scoring_panel = [e for e in candidate_elements if e not in ignore_elements]
     wl = np.asarray(spec.wavelength_nm, dtype=float)
     intensity = np.asarray(spec.intensity, dtype=float)
 
@@ -808,7 +834,7 @@ def _evaluate_spectrum_rows(
                     spec,
                     algo_name,
                     true_elements,
-                    candidate_elements,
+                    scoring_panel,
                     resolving_power,
                     manifest_meta,
                     perturb,
@@ -823,7 +849,7 @@ def _evaluate_spectrum_rows(
                 algo_name,
                 result,
                 true_elements,
-                candidate_elements,
+                scoring_panel,
                 resolving_power,
                 manifest_meta,
                 perturb,
@@ -961,9 +987,7 @@ def evaluate_dataset(
     }
 
 
-def recount_rows(
-    rows: List[Dict[str, Any]], panel_elements: Sequence[str]
-) -> List[Dict[str, Any]]:
+def recount_rows(rows: List[Dict[str, Any]], panel_elements: Sequence[str]) -> List[Dict[str, Any]]:
     """Re-derive TP/FP/FN/TN against a restricted candidate panel.
 
     The stored ``true_elements`` / ``predicted_elements`` lists are recomputed
@@ -1308,9 +1332,7 @@ def run_synthetic_benchmark(
 
     # The headline aggregate honors --panel without silently redefining it: both
     # the full-panel and ever-present aggregates are always emitted below.
-    headline_aggregate = (
-        aggregate_ever_present if str(panel) == "ever_present" else aggregate
-    )
+    headline_aggregate = aggregate_ever_present if str(panel) == "ever_present" else aggregate
 
     # summary json
     summary = {

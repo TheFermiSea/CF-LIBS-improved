@@ -303,8 +303,11 @@ def test_k_sim_matched_only(atomic_db):
     assert P_cov_b < 0.5, f"P_cov should penalize many unmatched lines: {P_cov_b}"
 
 
-def test_uniqueness_penalty(atomic_db):
-    """Many theoretical lines mapping to one peak should be penalised."""
+def test_no_uniqueness_penalty(atomic_db):
+    """Paper eq 3 (Noel et al. 2025) is a BARE cosine — many theoretical lines
+    mapping to one peak must NOT be penalised in k_sim (coverage is handled by
+    k_rate and one-to-one peak->line enforcement). The previous homegrown
+    uniqueness_factor deflated the dominant element and was removed."""
     from cflibs.atomic.structures import Transition
 
     identifier = ALIASIdentifier(atomic_db, resolving_power=500.0)
@@ -339,9 +342,9 @@ def test_uniqueness_penalty(atomic_db):
         emissivity_threshold=-np.inf,
     )
 
-    # uniqueness_factor = 1 unique peak / 4 matches = 0.25
-    # So k_sim should be at most 0.25 (cosine sim capped then scaled)
-    assert k_sim <= 0.30, f"Uniqueness penalty should reduce k_sim when many-to-one: got {k_sim}"
+    # Bare cosine of [1000,1000,1000,1000] vs [800,800,800,800] = 1.0, with NO
+    # uniqueness deflation (paper eq 3). The many-to-one mapping is not penalised here.
+    assert k_sim >= 0.99, f"Bare cosine must not be deflated by many-to-one mapping: got {k_sim}"
 
 
 def test_P_maj_soft_coverage(atomic_db):
@@ -1170,12 +1173,11 @@ def test_CL_paper_formula(atomic_db):
         P_cov=P_cov,
     )
 
-    # Manually compute expected CL using modified formula:
-    # k_det = sqrt(k_det_raw * max(P_cov, 0.01)) * N_penalty
+    # Paper eq 6 (Noel et al. 2025): k_det = k_rate * ((1/N_X)*k_shift +
+    # ((N_X-1)/N_X)*k_sim), N_X = matched count. The homegrown
+    # sqrt(k_det_raw * P_cov) blend and the N_penalty factor were removed.
     N_X = max(N_matched, 1)
-    k_det_raw = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
-    N_penalty = min(1.0, math.sqrt(N_expected / 5.0))
-    expected_k_det = math.sqrt(k_det_raw * max(P_cov, 0.01)) * N_penalty
+    expected_k_det = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
 
     # P_SNR from the spectrum
     peak_intensities_local = [intensity[p[0]] for p in peaks]
