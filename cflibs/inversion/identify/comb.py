@@ -567,9 +567,15 @@ class CombIdentifier:
         # Update interfered status in element identifications
         self._apply_interference_status(element_identifications, element_teeth)
 
-        # Step 5: Apply relative threshold to reject elements that don't stand out
-        self._apply_relative_threshold(element_identifications)
-
+        # NOTE: the homegrown relative-threshold gate (reject any element whose
+        # score < relative_threshold_scale * median(scores)) has been REMOVED.
+        # It is not in Gajarska et al. 2024 — that method is semi-supervised
+        # (the analyst inspects fingerprints; there is no automated element
+        # decision). Because it scaled the median of correlations bounded by
+        # 1.0, on a high-correlation spectrum the threshold reached/exceeded the
+        # max achievable score and rejected even the top (true) element — the
+        # proximate cause of "Comb detects nothing on pure-Fe". The per-element
+        # absolute floor in is_element_detected() is the automated decision.
         return element_identifications
 
     def _correlate_element_teeth(
@@ -1361,13 +1367,13 @@ class CombIdentifier:
         active_teeth = [t for t in teeth if t["active"]]
         if not active_teeth:
             return 0.0
-        # Sum the best active correlations only, and divide by the same capped
-        # count so dense line lists improve recall without allowing scores > 1.
-        active_correlations = sorted(
-            (float(t["best_correlation"]) for t in active_teeth),
-            reverse=True,
-        )
-        denominator = min(len(teeth), self.fingerprint_top_k)
-        top_correlations = active_correlations[:denominator]
-        fingerprint = sum(top_correlations) / denominator
+        # Paper-faithful fingerprint (Gajarska et al. 2024, J. Anal. At. Spectrom.
+        # 39, 3151, sec 2.2.3): "The total correlation of a fingerprint is
+        # calculated by evaluating the mean across all its active lines." So the
+        # denominator is the number of ACTIVE lines, NOT min(total candidate
+        # teeth, k). The previous capped denominator divided by total candidate
+        # teeth, systematically depressing the score of line-rich elements (an
+        # element with 3 active teeth at 0.9 scored 0.27 instead of 0.9).
+        active_correlations = [float(t["best_correlation"]) for t in active_teeth]
+        fingerprint = sum(active_correlations) / len(active_correlations)
         return float(np.clip(fingerprint, 0.0, 1.0))
