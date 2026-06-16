@@ -117,3 +117,6 @@ data/synthetic_corpus/
 # Cargo build artifacts (the swarm orchestrator was committing target-swarm/.fingerprint/* into main).
 target/
 target-swarm/
+
+# Copyrighted paper PDFs (fetch via asta-documents / DOI, do not commit)
+docs/refs_*.pdf
