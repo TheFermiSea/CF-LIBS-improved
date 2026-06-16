@@ -101,6 +101,155 @@ def default_recipes(candidate_elements: Iterable[str]) -> List[CorpusRecipe]:
     return out
 
 
+def diagnostic_recipes(candidate_elements: Iterable[str]) -> List[CorpusRecipe]:
+    """
+    Return the balanced diagnostic recipe set (w3 / ak3.2.x design).
+
+    This set fixes the ak3.1.3 hygiene confound where 7 of 11 candidate
+    elements (Al, Co, Cu, Mg, Si, Ti, V) never appeared in any recipe. It
+    provides 11 pure single-element controls, one Fe/Ni binary baseline, and
+    11 realistic panel-restricted alloy matrices so every panel element is
+    present in >=4 recipes. Recipes are filtered to ``candidate_elements`` and
+    renormalized; recipes that lose all elements after filtering are dropped.
+
+    Parameters
+    ----------
+    candidate_elements : Iterable[str]
+        Candidate element symbols to keep in recipes.
+
+    Returns
+    -------
+    List[CorpusRecipe]
+        Filtered and renormalized diagnostic recipes.
+    """
+    candidates = set(candidate_elements)
+    pure_elements = ["Fe", "Ni", "Al", "Cu", "Ti", "Cr", "Mg", "Si", "Mn", "V", "Co"]
+    base: List[CorpusRecipe] = [
+        CorpusRecipe(f"pure_{el}", {el: 1.0}, matrix_type=MatrixType.METAL_PURE)
+        for el in pure_elements
+    ]
+    base.append(CorpusRecipe("binary_Fe_Ni", {"Fe": 0.7, "Ni": 0.3}))
+    base.extend(
+        [
+            CorpusRecipe(
+                "al_alloy_6061",
+                {
+                    "Al": 0.965,
+                    "Mg": 0.01,
+                    "Si": 0.006,
+                    "Cu": 0.003,
+                    "Cr": 0.002,
+                    "Mn": 0.0015,
+                    "Fe": 0.007,
+                    "Ti": 0.0015,
+                },
+            ),
+            CorpusRecipe(
+                "al_alloy_7075",
+                {
+                    "Al": 0.901,
+                    "Mg": 0.025,
+                    "Cu": 0.016,
+                    "Cr": 0.0023,
+                    "Mn": 0.003,
+                    "Fe": 0.005,
+                    "Si": 0.004,
+                    "Ti": 0.002,
+                    "Ni": 0.041,
+                },
+            ),
+            CorpusRecipe("ti_alloy_6al4v", {"Ti": 0.897, "Al": 0.063, "V": 0.04}),
+            CorpusRecipe(
+                "ti_alloy_grade5",
+                {
+                    "Ti": 0.888,
+                    "Al": 0.06,
+                    "V": 0.04,
+                    "Fe": 0.003,
+                    "Cr": 0.002,
+                    "Si": 0.002,
+                    "Mn": 0.003,
+                    "Ni": 0.002,
+                },
+            ),
+            CorpusRecipe(
+                "cu_alloy_cupronickel",
+                {"Cu": 0.865, "Ni": 0.105, "Mn": 0.01, "Fe": 0.02},
+            ),
+            CorpusRecipe(
+                "ni_superalloy",
+                {
+                    "Ni": 0.58,
+                    "Cr": 0.19,
+                    "Co": 0.13,
+                    "Fe": 0.05,
+                    "Ti": 0.025,
+                    "Al": 0.015,
+                    "Mn": 0.01,
+                },
+            ),
+            CorpusRecipe(
+                "steel_316",
+                {
+                    "Fe": 0.685,
+                    "Cr": 0.17,
+                    "Ni": 0.11,
+                    "Mn": 0.02,
+                    "Si": 0.01,
+                    "Cu": 0.003,
+                    "Co": 0.002,
+                },
+            ),
+            CorpusRecipe(
+                "steel_tool",
+                {
+                    "Fe": 0.85,
+                    "Cr": 0.05,
+                    "V": 0.02,
+                    "Mn": 0.015,
+                    "Si": 0.012,
+                    "Ni": 0.02,
+                    "Cu": 0.013,
+                    "Co": 0.02,
+                },
+            ),
+            CorpusRecipe(
+                "cu_alloy_complex",
+                {"Cu": 0.88, "Si": 0.03, "Mn": 0.025, "Al": 0.03, "Fe": 0.02, "Ni": 0.015},
+            ),
+            CorpusRecipe(
+                "mg_alloy",
+                {"Mg": 0.92, "Al": 0.06, "Mn": 0.01, "Si": 0.005, "Cu": 0.003, "Fe": 0.002},
+            ),
+            CorpusRecipe(
+                "co_alloy_stellite",
+                {
+                    "Co": 0.58,
+                    "Cr": 0.28,
+                    "Ni": 0.06,
+                    "Fe": 0.03,
+                    "Si": 0.02,
+                    "Mn": 0.01,
+                    "V": 0.02,
+                },
+            ),
+        ]
+    )
+
+    out: List[CorpusRecipe] = []
+    for recipe in base:
+        filtered = {k: v for k, v in recipe.mass_fractions.items() if k in candidates}
+        total = sum(filtered.values())
+        if total <= 0:
+            continue
+        normalized = {k: v / total for k, v in filtered.items()}
+        matrix_type = MatrixType.METAL_PURE if len(normalized) == 1 else recipe.matrix_type
+        out.append(
+            CorpusRecipe(name=recipe.name, mass_fractions=normalized, matrix_type=matrix_type)
+        )
+    return out
+
+
 def default_axes() -> PerturbationAxes:
     """
     Return default perturbation ranges used for CF-LIBS-ak3.1.3.
@@ -284,6 +433,8 @@ def build_synthetic_id_corpus(
     log_ne_range: List[float],
     recipes: Optional[List[CorpusRecipe]] = None,
     axes: Optional[PerturbationAxes] = None,
+    version: str = "ak3.1.3",
+    max_spectra: int = 0,
 ) -> Dict[str, Any]:
     """
     Build deterministic synthetic corpus and persist benchmark + manifests.
@@ -314,6 +465,13 @@ def build_synthetic_id_corpus(
         Optional custom recipe set.
     axes : PerturbationAxes, optional
         Optional custom perturbation axes.
+    version : str, optional
+        Version string stamped on the BenchmarkDataset and emitted in the
+        summary. Defaults to the legacy ``"ak3.1.3"`` baseline.
+    max_spectra : int, optional
+        If > 0, cap the number of generated spectra to the first ``max_spectra``
+        recipe/perturbation combinations. Intended for smoke tests only; 0
+        (default) builds the full corpus.
 
     Returns
     -------
@@ -344,13 +502,18 @@ def build_synthetic_id_corpus(
     manifest_rows: List[Dict[str, Any]] = []
 
     perturbations = list(full_factorial_perturbations(axes))
+    cap = int(max_spectra) if max_spectra and max_spectra > 0 else 0
     for recipe in recipes:
+        if cap and len(spectra) >= cap:
+            break
         number_fractions = mass_to_number_fractions(recipe.mass_fractions)
         concentration_vector = np.array(
             [number_fractions.get(el, 0.0) for el in candidate_elements], dtype=float
         )
 
         for scenario_idx, perturb in enumerate(perturbations):
+            if cap and len(spectra) >= cap:
+                break
             sample_id = f"{recipe.name}_{scenario_idx:04d}"
             T_eV = float(
                 rng.uniform(float(temperature_range_eV[0]), float(temperature_range_eV[1]))
@@ -429,7 +592,7 @@ def build_synthetic_id_corpus(
 
     dataset = BenchmarkDataset(
         name=dataset_name,
-        version="ak3.1.3",
+        version=version,
         spectra=spectra,
         elements=sorted(set(candidate_elements)),
         description=(
@@ -463,8 +626,10 @@ def build_synthetic_id_corpus(
 
     summary = {
         "dataset_name": dataset_name,
+        "version": version,
         "seed": int(seed),
         "n_recipes": len(recipes),
+        "recipe_names": [r.name for r in recipes],
         "n_perturbation_combinations": len(perturbations),
         "n_spectra": len(spectra),
         "wavelength_range_nm": [float(wavelength_true[0]), float(wavelength_true[-1])],

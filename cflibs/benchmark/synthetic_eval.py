@@ -31,6 +31,7 @@ import csv
 import json
 import logging
 import os
+import re
 
 import numpy as np
 
@@ -66,8 +67,26 @@ _FORWARD_FIT_ALGORITHMS: Tuple[str, ...] = (ALGO_FORWARD_FIT,)
 def derive_truth_elements(
     composition: Dict[str, float], presence_threshold: float = 1e-4
 ) -> Set[str]:
-    """Return set of elements considered present in ground truth."""
+    """Return set of elements considered present in ground truth (>= floor)."""
     return {el for el, frac in composition.items() if float(frac) >= float(presence_threshold)}
+
+
+def derive_ignore_elements(
+    composition: Dict[str, float], presence_threshold: float = 1e-4
+) -> Set[str]:
+    """Return in-recipe elements BELOW the detection floor — the "don't-care" band.
+
+    Detection-floor semantics (3-way scoring): an element is *present* if its
+    concentration is >= ``presence_threshold``, *absent* if it is not in the
+    recipe at all (fraction == 0), and *don't-care* if it is in the recipe but
+    below the floor (0 < frac < presence_threshold). Don't-care elements are
+    removed from the scoring panel so that detecting a real-but-sub-detection-
+    limit trace is neither rewarded (TP) nor penalised (FP), and missing it is
+    not an FN. At the legacy default (1e-4) this band is empty, so behaviour is
+    unchanged unless a meaningful floor is set.
+    """
+    floor = float(presence_threshold)
+    return {el for el, frac in composition.items() if 0.0 < float(frac) < floor}
 
 
 def compute_binary_metrics(tp: int, fp: int, fn: int, tn: int) -> Dict[str, float]:
@@ -109,6 +128,165 @@ def confusion_counts(
         else:
             tn += 1
     return {"tp": tp, "fp": fp, "fn": fn, "tn": tn}
+
+
+_RECIPE_PROVENANCE_RE = re.compile(r"recipe=([^;]+)")
+_SAMPLE_SUFFIX_RE = re.compile(r"_\d+$")
+
+
+def _derive_recipe(
+    spec: BenchmarkSpectrum,
+    manifest_by_sample: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> str:
+    """Resolve the synthetic recipe label for a spectrum.
+
+    Resolution ladder (first non-empty wins):
+
+    1. ``manifest_by_sample[spectrum_id]["recipe"]`` — when a manifest ships.
+    2. ``recipe=<name>`` parsed out of ``spec.metadata.provenance`` — the
+       manifest-less corpus (``data/synthetic_corpus/corpus.json``) stores the
+       recipe only here, e.g. ``"...; recipe=binary_Fe_Ni; scenario=3"``.
+    3. The ``spectrum_id`` prefix with any trailing ``_<digits>`` stripped,
+       e.g. ``"binary_Fe_Ni_0007" -> "binary_Fe_Ni"``.
+
+    Returns an empty string only if all three fail (no id at all).
+    """
+    if manifest_by_sample:
+        entry = manifest_by_sample.get(spec.spectrum_id)
+        if entry:
+            recipe = entry.get("recipe")
+            if recipe:
+                return str(recipe)
+
+    provenance = ""
+    metadata = getattr(spec, "metadata", None)
+    if metadata is not None:
+        provenance = str(getattr(metadata, "provenance", "") or "")
+    match = _RECIPE_PROVENANCE_RE.search(provenance)
+    if match:
+        return match.group(1).strip()
+
+    sample_id = str(spec.spectrum_id or "")
+    return _SAMPLE_SUFFIX_RE.sub("", sample_id)
+
+
+def _adjust_alloc(
+    alloc: List[int],
+    raw: Sequence[float],
+    target: int,
+    sizes: Sequence[int],
+) -> None:
+    """Trim/grow ``alloc`` in place so it sums to exactly ``target``.
+
+    Uses the largest-remainder method: when the floor allocation overshoots
+    (because each non-empty stratum is forced to >=1) drops are taken from the
+    strata with the smallest fractional remainders first (never below 1 while
+    other strata still have surplus); when it undershoots, extra picks go to
+    the largest fractional remainders. Allocation per stratum is also clamped
+    to its available pool size.
+    """
+    n = len(alloc)
+    if n == 0:
+        return
+    # remainder used as the tie-break key for grow/shrink.
+    remainders = [float(r) - float(int(np.floor(r))) for r in raw]
+    current = sum(alloc)
+
+    # Grow: hand extra picks to the largest fractional remainder, respecting pool size.
+    grow_order = sorted(range(n), key=lambda i: remainders[i], reverse=True)
+    while current < target:
+        progressed = False
+        for i in grow_order:
+            if current >= target:
+                break
+            if alloc[i] < int(sizes[i]):
+                alloc[i] += 1
+                current += 1
+                progressed = True
+        if not progressed:
+            break  # every stratum saturated; cannot reach target
+
+    # Shrink: remove from smallest fractional remainder first, never below 1.
+    shrink_order = sorted(range(n), key=lambda i: remainders[i])
+    while current > target:
+        progressed = False
+        for i in shrink_order:
+            if current <= target:
+                break
+            if alloc[i] > 1:
+                alloc[i] -= 1
+                current -= 1
+                progressed = True
+        if not progressed:
+            # All strata at the >=1 floor but still over target: drop floors as
+            # a last resort (only happens when n_strata > target).
+            for i in shrink_order:
+                if current <= target:
+                    break
+                if alloc[i] > 0:
+                    alloc[i] -= 1
+                    current -= 1
+            break
+
+
+def _select_spectra(
+    spectra: Sequence[BenchmarkSpectrum],
+    max_spectra: Optional[int],
+    sampling: str,
+    seed: int,
+    manifest_by_sample: Optional[Dict[str, Dict[str, Any]]],
+) -> List[BenchmarkSpectrum]:
+    """Select up to ``max_spectra`` spectra under the requested sampling mode.
+
+    Modes:
+
+    * ``"sorted"`` — legacy: alpha-sorted by ``spectrum_id`` then truncated.
+      Preserved for exact reproduction of historical runs (biased: with the
+      4-recipe corpus any cap <=72 yields 100% of the alphabetically-first
+      recipe).
+    * ``"shuffle"`` — seeded uniform random draw (then re-sorted for stable
+      output ordering).
+    * ``"stratified"`` (default) — proportional, largest-remainder allocation
+      over ``(recipe, label_cardinality)`` strata with >=1 per non-empty
+      stratum, so every recipe/cardinality combination is represented.
+
+    The full sorted list is always the determinism floor; the returned list is
+    sorted by ``spectrum_id`` so downstream output ordering is reproducible.
+    """
+    ordered = sorted(spectra, key=lambda s: s.spectrum_id)
+    if max_spectra is None or int(max_spectra) >= len(ordered):
+        return ordered
+    n = int(max_spectra)
+    if n <= 0:
+        return []
+    if sampling == "sorted":
+        return ordered[:n]
+
+    rng = np.random.default_rng(seed)
+    if sampling == "shuffle":
+        idx = rng.permutation(len(ordered))[:n]
+        return [ordered[i] for i in sorted(idx)]
+
+    if sampling == "stratified":
+        strata: Dict[Tuple[str, int], List[BenchmarkSpectrum]] = {}
+        for s in ordered:
+            key = (_derive_recipe(s, manifest_by_sample), int(s.label_cardinality or 0))
+            strata.setdefault(key, []).append(s)
+        keys = sorted(strata)
+        sizes = [len(strata[k]) for k in keys]
+        total = sum(sizes)
+        raw = [n * sz / total for sz in sizes]
+        alloc = [max(1, int(np.floor(r))) for r in raw]
+        _adjust_alloc(alloc, raw, n, sizes)
+        picked: List[BenchmarkSpectrum] = []
+        for k, a in zip(keys, alloc):
+            pool = strata[k]
+            take = min(int(a), len(pool))
+            sel = rng.permutation(len(pool))[:take]
+            picked.extend(pool[i] for i in sel)
+        return sorted(picked, key=lambda s: s.spectrum_id)
+
+    raise ValueError(f"unknown sampling mode {sampling!r}")
 
 
 def resolving_power_from_spectrum(spec: BenchmarkSpectrum, fallback: float = 900.0) -> float:
@@ -273,7 +451,7 @@ def build_identifier_runners(
             elements=elements,
             resolving_power=resolving_power,
             intensity_threshold_factor=3.0,
-            detection_threshold=0.01,
+            detection_threshold=0.5,  # paper C_th (Noel 2025 sec 3.8): k_det presence threshold
             chance_window_scale=0.3,
         )
         return identifier.identify(wavelength, intensity)
@@ -366,10 +544,20 @@ def build_identifier_runners(
             # CFLIBS_FF_PRESENCE_THRESHOLD = presence gate; CFLIBS_FF_N_CONFIGS = population;
             # CFLIBS_FF_DIAG_WEIGHTS ('1' on/'0' off) = rank-1 diagnostic per-wavelength
             # weights (host-only; frozen core untouched); CFLIBS_FF_WEIGHT_GAMMA = distinctness exponent.
+            # CFLIBS_FF_IEF ('1' on/'0' off) = inverse-element-frequency (TF-IDF) crowding penalty
+            # multiplied into the diagnostic weight; CFLIBS_FF_IEF_FLOOR = own-peak fraction a bin
+            # must reach to count an element as emitting there (Amato et al. 2010).
+            # CFLIBS_FF_REQUIRE_BIC ('1' on/'0' off, default off) = BIC-margin presence
+            # gate (AND on top of the correlation gap; only removes calls => raises
+            # precision); CFLIBS_FF_BIC_MARGIN = required BIC improvement (default 0.0).
             ff_threshold = float(os.environ.get("CFLIBS_FF_PRESENCE_THRESHOLD", "0.02"))
             ff_n_configs = int(os.environ.get("CFLIBS_FF_N_CONFIGS", "1024"))
             ff_diag_weights = os.environ.get("CFLIBS_FF_DIAG_WEIGHTS", "1") != "0"
             ff_weight_gamma = float(os.environ.get("CFLIBS_FF_WEIGHT_GAMMA", "2.0"))
+            ff_use_ief = os.environ.get("CFLIBS_FF_IEF", "1") != "0"
+            ff_ief_floor = float(os.environ.get("CFLIBS_FF_IEF_FLOOR", "0.25"))
+            ff_require_bic = os.environ.get("CFLIBS_FF_REQUIRE_BIC", "0") == "1"
+            ff_bic_margin = float(os.environ.get("CFLIBS_FF_BIC_MARGIN", "0.0"))
             identifier = ForwardFitIdentifier(
                 elements,
                 snapshot=PipelineSnapshot.from_atomic_snapshot(asnap),
@@ -378,6 +566,10 @@ def build_identifier_runners(
                 presence_threshold=ff_threshold,
                 use_diagnostic_weights=ff_diag_weights,
                 weight_gamma=ff_weight_gamma,
+                use_ief=ff_use_ief,
+                ief_floor_frac=ff_ief_floor,
+                require_bic=ff_require_bic,
+                bic_margin=ff_bic_margin,
             )
             return identifier.identify(wavelength, intensity)
 
@@ -492,6 +684,7 @@ def _build_failed_row(
     manifest_meta: Dict[str, Any],
     perturb: Dict[str, Any],
     cal_meta: Dict[str, Any],
+    recipe: str,
 ) -> Dict[str, Any]:
     """Build the row dict emitted when an identifier failed for a spectrum."""
     return {
@@ -512,7 +705,8 @@ def _build_failed_row(
         "total_lines_true_elements": 0,
         "matched_lines_absent_elements": 0,
         "resolving_power": resolving_power,
-        "recipe": manifest_meta.get("recipe", ""),
+        "recipe": recipe,
+        "label_cardinality": int(spec.label_cardinality or 0),
         "snr_db": perturb.get("snr_db"),
         "continuum_level": perturb.get("continuum_level"),
         "shift_nm": perturb.get("shift_nm"),
@@ -553,6 +747,7 @@ def _build_success_row(
     manifest_meta: Dict[str, Any],
     perturb: Dict[str, Any],
     cal_meta: Dict[str, Any],
+    recipe: str,
 ) -> Dict[str, Any]:
     """Build the row dict emitted when an identifier succeeded for a spectrum."""
     predicted_elements = {e.element for e in result.detected_elements}
@@ -575,7 +770,8 @@ def _build_success_row(
         "total_lines_true_elements": int(total_true),
         "matched_lines_absent_elements": int(matched_absent),
         "resolving_power": float(resolving_power),
-        "recipe": manifest_meta.get("recipe", ""),
+        "recipe": recipe,
+        "label_cardinality": int(spec.label_cardinality or 0),
         "snr_db": perturb.get("snr_db"),
         "continuum_level": perturb.get("continuum_level"),
         "shift_nm": perturb.get("shift_nm"),
@@ -599,6 +795,14 @@ def _evaluate_spectrum_rows(
     true_elements = derive_truth_elements(
         spec.true_composition, presence_threshold=presence_threshold
     )
+    # 3-way detection-floor scoring: in-recipe elements below the floor are
+    # "don't-care" — dropped from the SCORING panel (identifiers still search
+    # the full candidate panel, since a real instrument cannot know a priori
+    # which constituents are sub-detection-limit).
+    ignore_elements = derive_ignore_elements(
+        spec.true_composition, presence_threshold=presence_threshold
+    )
+    scoring_panel = [e for e in candidate_elements if e not in ignore_elements]
     wl = np.asarray(spec.wavelength_nm, dtype=float)
     intensity = np.asarray(spec.intensity, dtype=float)
 
@@ -617,6 +821,9 @@ def _evaluate_spectrum_rows(
 
     manifest_meta = (manifest_by_sample or {}).get(spec.spectrum_id, {})
     perturb = manifest_meta.get("perturbation", {})
+    # Prefer an explicit manifest recipe; fall back to provenance / sample_id so
+    # per-recipe + stratified reporting works on the manifest-less corpus.
+    recipe = manifest_meta.get("recipe") or _derive_recipe(spec, manifest_by_sample)
 
     spectrum_rows: List[Dict[str, Any]] = []
     for algo_name in algorithms:
@@ -627,11 +834,12 @@ def _evaluate_spectrum_rows(
                     spec,
                     algo_name,
                     true_elements,
-                    candidate_elements,
+                    scoring_panel,
                     resolving_power,
                     manifest_meta,
                     perturb,
                     cal_meta,
+                    recipe,
                 )
             )
             continue
@@ -641,11 +849,12 @@ def _evaluate_spectrum_rows(
                 algo_name,
                 result,
                 true_elements,
-                candidate_elements,
+                scoring_panel,
                 resolving_power,
                 manifest_meta,
                 perturb,
                 cal_meta,
+                recipe,
             )
         )
     return spectrum_rows
@@ -661,6 +870,8 @@ def evaluate_dataset(
     calibration: Optional[CalibrationOptions] = None,
     basis_library: Optional["BasisLibrary"] = None,
     with_forward_fit: bool = False,
+    sampling: str = "stratified",
+    seed: int = 0,
 ) -> Dict[str, Any]:
     """
     Evaluate all identifiers on synthetic benchmark dataset.
@@ -685,18 +896,31 @@ def evaluate_dataset(
         When provided, the basis-dependent identifiers ``spectral_nnls`` and
         ``hybrid_union`` are added to the suite. When ``None`` (default) only
         the peak-matching trio runs.
+    sampling : str
+        Spectrum-selection mode when ``max_spectra`` caps the set: one of
+        ``"stratified"`` (default; proportional over ``(recipe, cardinality)``
+        strata, >=1 per non-empty stratum), ``"shuffle"`` (seeded uniform), or
+        ``"sorted"`` (legacy alpha-sort + truncate, kept for reproducibility).
+    seed : int
+        Seed for the ``stratified`` / ``shuffle`` draws (reproducible).
 
     Returns
     -------
     Dict[str, Any]
-        Dictionary with per-spectrum rows and aggregate summaries.
+        Dictionary with per-spectrum rows, aggregate summaries, the realized
+        sampling provenance, and the ever-present companion / confounder
+        diagnostics.
     """
     if calibration is None:
         calibration = CalibrationOptions()
 
-    spectra = sorted(dataset.spectra, key=lambda s: s.spectrum_id)
-    if max_spectra is not None:
-        spectra = spectra[: int(max_spectra)]
+    spectra = _select_spectra(
+        dataset.spectra,
+        max_spectra=max_spectra,
+        sampling=sampling,
+        seed=seed,
+        manifest_by_sample=manifest_by_sample,
+    )
 
     rows: List[Dict[str, Any]] = []
     algorithms: List[str] = list(_BASE_ALGORITHMS)
@@ -723,15 +947,107 @@ def evaluate_dataset(
         if idx % 20 == 0 or idx == len(spectra):
             print(f"[synthetic-benchmark] processed {idx}/{len(spectra)} spectra")
 
+    # Elements that actually occur in the (sampled) truth — the realistic panel.
+    ever_present = sorted(
+        {
+            el
+            for spec in spectra
+            for el, frac in spec.true_composition.items()
+            if float(frac) >= float(presence_threshold)
+        }
+    )
+
     aggregate = summarize_aggregate(rows, candidate_elements)
+    aggregate_ever_present = summarize_aggregate(recount_rows(rows, ever_present), ever_present)
     per_element = summarize_per_element(rows, candidate_elements)
     group_metrics = summarize_by_group(rows, candidate_elements)
+    confounders = summarize_confounders(rows, candidate_elements)
+
+    sampled_recipe_counts: Dict[str, int] = {}
+    sampled_cardinality_counts: Dict[str, int] = {}
+    for spec in spectra:
+        recipe = _derive_recipe(spec, manifest_by_sample)
+        sampled_recipe_counts[recipe] = sampled_recipe_counts.get(recipe, 0) + 1
+        card = str(int(spec.label_cardinality or 0))
+        sampled_cardinality_counts[card] = sampled_cardinality_counts.get(card, 0) + 1
+
     return {
         "rows": rows,
         "aggregate_metrics": aggregate,
+        "aggregate_metrics_ever_present": aggregate_ever_present,
         "per_element_metrics": per_element,
         "group_metrics": group_metrics,
+        "confounder_summary": confounders,
+        "candidate_elements": list(candidate_elements),
+        "ever_present_elements": ever_present,
+        "sampling": sampling,
+        "seed": int(seed),
+        "sampled_recipe_counts": sampled_recipe_counts,
+        "sampled_cardinality_counts": sampled_cardinality_counts,
     }
+
+
+def recount_rows(rows: List[Dict[str, Any]], panel_elements: Sequence[str]) -> List[Dict[str, Any]]:
+    """Re-derive TP/FP/FN/TN against a restricted candidate panel.
+
+    The stored ``true_elements`` / ``predicted_elements`` lists are recomputed
+    against ``panel_elements`` only, so absent (never-truth) candidates stop
+    inflating TN/FP. Used for the ``ever_present`` companion aggregate. Failed
+    rows are passed through unchanged (their counts are already zero), and all
+    non-confusion fields are preserved.
+    """
+    panel = list(panel_elements)
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        new_row = dict(row)
+        if not row.get("failed"):
+            truth = set(row.get("true_elements", []))
+            pred = set(row.get("predicted_elements", []))
+            counts = confusion_counts(truth, pred, panel)
+            new_row.update(counts)
+        out.append(new_row)
+    return out
+
+
+def summarize_confounders(
+    rows: List[Dict[str, Any]],
+    candidate_elements: Sequence[str],
+) -> Dict[str, Dict[str, Any]]:
+    """Rank the FP/FN magnets and flag never-truth candidates per algorithm.
+
+    For each algorithm, sums per-element FP and FN across its (non-failed)
+    rows, returning the nonzero entries sorted descending. ``never_truth``
+    lists candidate elements that never appear in any truth set across the
+    sample — the one-glance hygiene tripwire for absent-but-scored elements
+    (e.g. the 7/11 candidates that never occur in any recipe).
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    algorithms = sorted({row["algorithm"] for row in rows})
+    # never-truth is algorithm-independent (truth is the same across algos), but
+    # report it per-algorithm for a self-contained block per algorithm.
+    truth_seen: Set[str] = set()
+    for row in rows:
+        truth_seen.update(row.get("true_elements", []))
+    never_truth = sorted(el for el in candidate_elements if el not in truth_seen)
+
+    for algorithm in algorithms:
+        subset = [row for row in rows if row["algorithm"] == algorithm and not row["failed"]]
+        fp_by_el: Dict[str, int] = {}
+        fn_by_el: Dict[str, int] = {}
+        for element in candidate_elements:
+            _, fp, fn, _ = _per_element_confusion(subset, element)
+            if fp:
+                fp_by_el[element] = int(fp)
+            if fn:
+                fn_by_el[element] = int(fn)
+        top_fp = sorted(fp_by_el.items(), key=lambda kv: (-kv[1], kv[0]))
+        top_fn = sorted(fn_by_el.items(), key=lambda kv: (-kv[1], kv[0]))
+        out[algorithm] = {
+            "top_fp": [[el, c] for el, c in top_fp],
+            "top_fn": [[el, c] for el, c in top_fn],
+            "never_truth": never_truth,
+        }
+    return out
 
 
 def summarize_aggregate(
@@ -836,8 +1152,15 @@ def summarize_by_group(
     rows: List[Dict[str, Any]],
     candidate_elements: List[str],
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Aggregate metrics by recipe and perturbation axis values."""
-    group_fields = ["recipe", "snr_db", "continuum_level", "shift_nm", "warp_quadratic_nm"]
+    """Aggregate metrics by recipe, label cardinality, and perturbation axis values."""
+    group_fields = [
+        "recipe",
+        "label_cardinality",
+        "snr_db",
+        "continuum_level",
+        "shift_nm",
+        "warp_quadratic_nm",
+    ]
     output: Dict[str, List[Dict[str, Any]]] = {}
     algorithms = sorted({row["algorithm"] for row in rows})
 
@@ -913,6 +1236,9 @@ def run_synthetic_benchmark(
     basis_library_path: Optional[str] = None,
     basis_instrument_fwhm_nm: float = 0.3,
     with_forward_fit: bool = False,
+    sampling: str = "stratified",
+    seed: int = 0,
+    panel: str = "full",
 ) -> Dict[str, Any]:
     """Load data, run identifier benchmark, and write artifacts.
 
@@ -940,6 +1266,18 @@ def run_synthetic_benchmark(
         (:class:`cflibs.jitpipe.forward_id_identifier.ForwardFitIdentifier`).
         Requires JAX; when JAX is unavailable the runner raises and that
         spectrum's ``forward_fit`` row is recorded as failed (graceful skip).
+    sampling : str
+        Spectrum-selection mode when ``max_spectra`` is set: ``"stratified"``
+        (default), ``"shuffle"``, or ``"sorted"`` (legacy). See
+        :func:`evaluate_dataset`.
+    seed : int
+        Seed for the stratified/shuffle draw (reproducible).
+    panel : str
+        Which aggregate is the headline in ``summary.json``'s
+        ``aggregate_metrics``: ``"full"`` (default; all candidate elements) or
+        ``"ever_present"`` (only elements that occur in the sampled truth). The
+        full-panel and ever-present aggregates are *both* always emitted; this
+        only chooses which one is the headline, never silently redefining it.
     """
     dataset = load_benchmark(dataset_path)
     elements = candidate_elements if candidate_elements else list(dataset.elements)
@@ -975,6 +1313,8 @@ def run_synthetic_benchmark(
         calibration=calibration,
         basis_library=active_basis,
         with_forward_fit=with_forward_fit,
+        sampling=sampling,
+        seed=seed,
     )
 
     out_dir = Path(output_dir).resolve()
@@ -982,8 +1322,17 @@ def run_synthetic_benchmark(
 
     rows = evaluated["rows"]
     aggregate = evaluated["aggregate_metrics"]
+    aggregate_ever_present = evaluated["aggregate_metrics_ever_present"]
     per_element = evaluated["per_element_metrics"]
     group_metrics = evaluated["group_metrics"]
+    confounder_summary = evaluated["confounder_summary"]
+    ever_present_elements = evaluated["ever_present_elements"]
+    sampled_recipe_counts = evaluated["sampled_recipe_counts"]
+    sampled_cardinality_counts = evaluated["sampled_cardinality_counts"]
+
+    # The headline aggregate honors --panel without silently redefining it: both
+    # the full-panel and ever-present aggregates are always emitted below.
+    headline_aggregate = aggregate_ever_present if str(panel) == "ever_present" else aggregate
 
     # summary json
     summary = {
@@ -992,15 +1341,24 @@ def run_synthetic_benchmark(
         "n_rows": len(rows),
         "n_spectra": len({row["sample_id"] for row in rows}),
         "candidate_elements": elements,
+        "ever_present_elements": ever_present_elements,
         "presence_threshold": float(presence_threshold),
         "max_spectra": int(max_spectra) if max_spectra is not None else None,
+        "sampling": sampling,
+        "seed": int(seed),
+        "panel": str(panel),
+        "sampled_recipe_counts": sampled_recipe_counts,
+        "sampled_cardinality_counts": sampled_cardinality_counts,
         "include_nnls": bool(include_nnls),
         "with_forward_fit": bool(with_forward_fit),
         "basis_library_active": active_basis is not None,
         "calibration": (
             calibration.__dict__ if calibration is not None else CalibrationOptions().__dict__
         ),
-        "aggregate_metrics": aggregate,
+        "aggregate_metrics": headline_aggregate,
+        "aggregate_metrics_full": aggregate,
+        "aggregate_metrics_ever_present": aggregate_ever_present,
+        "confounder_summary": confounder_summary,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     (out_dir / "group_metrics.json").write_text(json.dumps(group_metrics, indent=2))
@@ -1010,6 +1368,7 @@ def run_synthetic_benchmark(
             f.write(json.dumps(row) + "\n")
 
     _write_csv(out_dir / "aggregate_metrics.csv", aggregate)
+    _write_csv(out_dir / "aggregate_metrics_ever_present.csv", aggregate_ever_present)
     _write_csv(out_dir / "per_element_metrics.csv", per_element)
     for field, metrics in group_metrics.items():
         _write_csv(out_dir / f"group_metrics_{field}.csv", metrics)

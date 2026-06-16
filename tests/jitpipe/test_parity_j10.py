@@ -667,3 +667,97 @@ def test_polish_improves_identify_best_correlation(setup):
     called = {el for ei, el in enumerate(snap.element_symbols) if present[ei] > 0.5}
     assert "Fe" in called and "Cu" in called
     assert "Ca" not in called
+
+
+# ---------------------------------------------------------------------------
+# J10 BIC-margin presence gate (opt-in, additive, default-off bit-identical).
+# ---------------------------------------------------------------------------
+
+
+def test_bic_gate_default_off_is_bit_identical(setup):
+    """``require_bic=False`` (default) reproduces the pure correlation-gap call
+    bit-for-bit — the frozen-core parity guard for the new gate."""
+    snap, wl, instr = setup
+    meas = _reference_spectrum(snap, wl, instr, {"Fe": 0.7, "Cu": 0.3, "Ca": 0.0})
+
+    pop = ff.build_candidate_population(jax.random.PRNGKey(21), snap.element_symbols, n_configs=256)
+    pl = ff.stack_plasma_states(
+        pop["temperatures_k"],
+        pop["electron_densities"],
+        pop["concentrations"],
+        snap.element_symbols,
+    )
+    spectra = ff.evaluate_population(pl, snap, instr, wl)
+    corr = ff.correlation_cost(spectra, meas)
+    bic = ff.bic_cost(spectra, meas, n_params=pop["n_params"])
+    el_valid = jnp.ones((len(snap.element_symbols),), dtype=spectra.dtype)
+
+    base = ff.forward_fit_presence_scores(
+        corr, bic, pop["membership"], pop["config_valid"], el_valid, presence_threshold=0.02
+    )
+    default = ff.forward_fit_presence_scores(
+        corr,
+        bic,
+        pop["membership"],
+        pop["config_valid"],
+        el_valid,
+        presence_threshold=0.02,
+        require_bic=False,
+        bic_margin=0.0,
+    )
+    np.testing.assert_array_equal(
+        np.asarray(base.element_present), np.asarray(default.element_present)
+    )
+    np.testing.assert_array_equal(
+        np.asarray(base.presence_score), np.asarray(default.presence_score)
+    )
+    np.testing.assert_array_equal(np.asarray(base.best_bic), np.asarray(default.best_bic))
+
+
+def test_bic_gate_present_set_is_subset(setup):
+    """``require_bic=True`` with a large ``bic_margin`` yields a present set that is
+    a SUBSET of the ``require_bic=False`` present set — the gate only ever removes
+    calls (an AND on top of the correlation decision), never adds."""
+    snap, wl, instr = setup
+    meas = _reference_spectrum(snap, wl, instr, {"Fe": 0.7, "Cu": 0.3, "Ca": 0.0})
+
+    pop = ff.build_candidate_population(jax.random.PRNGKey(22), snap.element_symbols, n_configs=256)
+    pl = ff.stack_plasma_states(
+        pop["temperatures_k"],
+        pop["electron_densities"],
+        pop["concentrations"],
+        snap.element_symbols,
+    )
+    spectra = ff.evaluate_population(pl, snap, instr, wl)
+    corr = ff.correlation_cost(spectra, meas)
+    bic = ff.bic_cost(spectra, meas, n_params=pop["n_params"])
+    el_valid = jnp.ones((len(snap.element_symbols),), dtype=spectra.dtype)
+
+    no_gate = ff.forward_fit_presence_scores(
+        corr,
+        bic,
+        pop["membership"],
+        pop["config_valid"],
+        el_valid,
+        presence_threshold=0.02,
+        require_bic=False,
+    )
+    gated = ff.forward_fit_presence_scores(
+        corr,
+        bic,
+        pop["membership"],
+        pop["config_valid"],
+        el_valid,
+        presence_threshold=0.02,
+        require_bic=True,
+        bic_margin=1e9,  # impossibly large => the BIC gate must trim aggressively
+    )
+
+    present_no_gate = np.asarray(no_gate.element_present) > 0.5
+    present_gated = np.asarray(gated.element_present) > 0.5
+    # SUBSET: every gated call was already a no-gate call (gate only removes).
+    assert np.all(
+        present_gated <= present_no_gate
+    ), f"gate added a call: no_gate={present_no_gate} gated={present_gated}"
+    # The huge margin removes everything (no element earns +1e9 BIC improvement).
+    assert not np.any(present_gated)

@@ -111,7 +111,12 @@ data/csa_planetary_libs/
 data/gibbons2024_nitrogen_libs/
 data/silva2022_tropical_soils/
 data/vrabel2020_soil_benchmark/
+# Synthetic ID corpora (large multi-MB JSON/HDF5; regenerable via build_synthetic_id_corpus)
+data/synthetic_corpus/
 
 # Cargo build artifacts (the swarm orchestrator was committing target-swarm/.fingerprint/* into main).
 target/
 target-swarm/
+
+# Copyrighted paper PDFs (fetch via asta-documents / DOI, do not commit)
+docs/refs_*.pdf

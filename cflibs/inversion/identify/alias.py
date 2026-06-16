@@ -1,7 +1,9 @@
 """
 ALIAS (Automated Line Identification Algorithm for Spectroscopy) implementation.
 
-Based on Noel et al. (2025) arXiv:2501.01057. The ALIAS algorithm identifies elements
+Based on Noël et al. (2025), "Automated line identification for atomic spectroscopy
+(ALIAS): Application to LIBS imaging data processing," Spectrochim. Acta B 231:107255,
+DOI 10.1016/j.sab.2025.107255 (HAL hal-05560478). The ALIAS algorithm identifies elements
 in LIBS spectra through a 7-step process: peak detection, theoretical emissivity
 calculation, line fusion, matching, threshold determination, scoring, and decision.
 """
@@ -844,6 +846,7 @@ class ALIASIdentifier:
         intensity_threshold_factor: Optional[float] = None,
         detection_threshold: Optional[float] = None,
         chance_window_scale: float = 0.4,
+        peak_mode: str = "second_derivative",
         elements: Optional[List[str]] = None,
         max_lines_per_element: int = 20,
         reference_temperature: float = 10000.0,
@@ -1092,6 +1095,9 @@ class ALIASIdentifier:
         self.n_e_steps = n_e_steps
         self._init_threshold_defaults(high_recall, intensity_threshold_factor, detection_threshold)
         self.chance_window_scale = chance_window_scale
+        if peak_mode not in ("intensity", "second_derivative"):
+            raise ValueError("peak_mode must be 'intensity' or 'second_derivative'")
+        self.peak_mode = peak_mode
         self.elements = elements
         self.max_lines_per_element = max_lines_per_element
         self.reference_temperature = reference_temperature
@@ -1162,9 +1168,11 @@ class ALIASIdentifier:
         """
         self.high_recall = bool(high_recall)
         _STRICT_INTENSITY_FACTOR = 3.0
-        _STRICT_DETECTION_THRESHOLD = 0.02
+        # detection_threshold is now the paper's C_th (Noel 2025 sec 3.8): the
+        # k_det presence threshold (paper default 0.5), NOT a CL floor.
+        _STRICT_DETECTION_THRESHOLD = 0.5
         _RECALL_INTENSITY_FACTOR = 2.0
-        _RECALL_DETECTION_THRESHOLD = 0.01
+        _RECALL_DETECTION_THRESHOLD = 0.4
         if intensity_threshold_factor is None:
             self.intensity_threshold_factor = (
                 _RECALL_INTENSITY_FACTOR if self.high_recall else _STRICT_INTENSITY_FACTOR
@@ -1511,10 +1519,11 @@ class ALIASIdentifier:
             )
             all_element_ids.append(element_id)
 
-        # Apply relative threshold: element CL must be >= max_CL * relative_cl_threshold
-        # This prevents spurious detections when one element dominates.
-        # Set self.relative_cl_threshold = 0 to disable.
-        self._apply_relative_cl_gate(all_element_ids)
+        # NOTE: the winner-relative CL gate (reject elements with CL < max_CL *
+        # relative_cl_threshold) is NOT in Noel et al. 2025 — it coupled every
+        # element's fate to the single highest-CL element. Detection is the
+        # per-element k_det > C_th rule (sec 3.8); this gate is disabled.
+        # self._apply_relative_cl_gate(all_element_ids)
 
         # Split into detected/rejected
         detected_elements = [e for e in all_element_ids if e.detected]
@@ -1994,24 +2003,17 @@ class ALIASIdentifier:
             k_sim,
         )
 
-        # Adaptive detection threshold: elements with few expected
-        # lines have higher false-match rates at low RP and need a
-        # proportionally higher CL to be considered detected.
+        # Paper-faithful decision (Noel et al. 2025, sec 3.8, eq 6): element X
+        # is present iff its detection coefficient k_det exceeds the user
+        # threshold C_th (paper default 0.5, held in self.detection_threshold).
+        # CL is the paper's OPTIONAL confidence level ("not essential for the
+        # proper ALIAS functioning") and is NOT the decision variable. The
+        # previous CL>=adaptive_dt decision, the hard N_matched>=3 gate (the
+        # paper explicitly supports One-Line and Sparse-Line elements), and the
+        # Boltzmann-R^2 gate are all homegrown and were removed.
+        detected = k_det > self.detection_threshold
         adaptive_dt = self.detection_threshold
-        if N_expected > 0 and N_expected < 10:
-            adaptive_dt *= min(3.0, math.sqrt(10.0 / N_expected))
-        detected = CL >= adaptive_dt
-
-        # Physics-grounded hard gates (Task wzus):
-        # (a) Require at least three matched lines, rejecting single-line
-        #     and doublet-only identifications.
-        # (b) Require Boltzmann R^2 >= boltzmann_r2_min only when at least
-        #     three matched lines make a regression meaningful.
-        min_required_matches = 3
-        if N_matched < min_required_matches:
-            detected = False
-        if self._r2_gate_rejects(boltz_r2, N_matched):
-            detected = False
+        min_required_matches = 1
 
         # L4 -- per-element fingerprint pass.  alias's effective
         # "fingerprint" is the post-gate CL compared to
@@ -2265,19 +2267,20 @@ class ALIASIdentifier:
 
         # Threshold in intensity domain (with floor for flat spectra / zero MAD)
         threshold = max(noise_estimate * self.intensity_threshold_factor, np.finfo(float).eps)
-        prominence = max(threshold / 3, np.finfo(float).eps)
 
-        # Find peaks in baseline-corrected intensity
+        # Negative 2nd derivative (true peaks = positive curvature), negatives zeroed.
         corrected = intensity - baseline
-        peak_indices, _ = find_peaks(corrected, height=threshold, prominence=prominence)
-
-        # Paper (Noël et al. 2025): enhance peak detection using negative 2nd derivative
-        # Compute -d²I/dλ², zero negatives — true peaks have positive curvature here
         d2 = -np.gradient(np.gradient(corrected, wavelength), wavelength)
         d2[d2 < 0] = 0.0
 
-        # Filter: keep peaks where d2 > 0 in a ±2-point neighborhood around peak center
-        # This handles discretization effects where d2 peak may be slightly offset
+        if self.peak_mode == "second_derivative":
+            return self._detect_peaks_second_derivative(wavelength, corrected, d2, threshold)
+
+        # Legacy "intensity" mode (opt-in): find_peaks on baseline-corrected
+        # intensity, gated by positive curvature (d2 > 0) in a +/-2-pt window.
+        # The paper-faithful "second_derivative" mode is the default (above).
+        prominence = max(threshold / 3, np.finfo(float).eps)
+        peak_indices, _ = find_peaks(corrected, height=threshold, prominence=prominence)
         confirmed = []
         for idx in peak_indices:
             lo = max(0, idx - 2)
@@ -2285,11 +2288,34 @@ class ALIASIdentifier:
             if np.max(d2[lo:hi]) > 0:
                 confirmed.append(idx)
         peak_indices = np.array(confirmed, dtype=int) if confirmed else np.array([], dtype=int)
+        return [(int(idx), float(wavelength[idx])) for idx in peak_indices]
 
-        # Return as list of (index, wavelength) tuples
-        peaks = [(int(idx), float(wavelength[idx])) for idx in peak_indices]
-
-        return peaks
+    def _detect_peaks_second_derivative(
+        self,
+        wavelength: np.ndarray,
+        corrected: np.ndarray,
+        d2: np.ndarray,
+        intensity_threshold: float,
+    ) -> List[Tuple[int, float]]:
+        """Paper sec 3.1 / Fig 2: find_peaks (prominence mode) ON the negative
+        2nd-derivative spectrum, then map each curvature peak to the nearest
+        intensity local maximum (+/-2 samples) and retain the intensity
+        amplitude floor (factor*noise) to reject curvature-only spikes. Surfaces
+        weak lines near the continuum and resolves overlaps."""
+        positive = d2[d2 > 0]
+        if positive.size == 0:
+            return []
+        mad = float(np.median(np.abs(positive - np.median(positive))) * 1.4826)
+        d2_prominence = max(mad * self.intensity_threshold_factor, np.finfo(float).eps)
+        d2_peaks, _ = find_peaks(d2, prominence=d2_prominence)
+        out: list = []
+        for idx in d2_peaks:
+            lo = max(0, idx - 2)
+            hi = min(len(corrected), idx + 3)
+            local = lo + int(np.argmax(corrected[lo:hi]))
+            if corrected[local] >= intensity_threshold:
+                out.append(local)
+        return [(int(idx), float(wavelength[idx])) for idx in sorted(set(out))]
 
     def _auto_calibrate_wavelength(
         self,
@@ -3502,15 +3528,13 @@ class ALIASIdentifier:
         if not transitions:
             return []
 
-        # Cap to strongest lines by estimated emissivity to avoid line-count disparity
-        if len(transitions) > self.max_lines_per_element:
-            kT = KB_EV * self.reference_temperature
-            transitions = sorted(
-                transitions,
-                key=lambda t: t.A_ki * t.g_k * math.exp(-t.E_k_ev / kT),
-                reverse=True,
-            )
-            transitions = transitions[: self.max_lines_per_element]
+        # Paper-faithful (Noel et al. 2025, sec 3.6): the per-element emissivity
+        # THRESHOLD (step 5, applied AFTER peak fusion) is the line-reduction
+        # mechanism. The previous max_lines_per_element pre-cap fired BEFORE
+        # fusion/threshold and starved line-rich elements (Fe: only ~23 of 2189
+        # A*g-filtered lines ever reached the threshold step), collapsing
+        # N_expected and k_rate. Removed so fusion + threshold run on the full
+        # catalog as the paper intends.
         return transitions
 
     def _precompute_grid_stage_densities(
@@ -4076,38 +4100,25 @@ class ALIASIdentifier:
         intensity: np.ndarray,
         peaks: List[Tuple[int, float]],
     ) -> Tuple[list, list, set]:
-        """Build SA-damped theoretical and experimental intensity vectors for k_sim.
+        """Build the (UNDAMPED) theoretical and experimental intensity vectors
+        over the matched lines, for the bare-cosine k_sim (Noel et al. 2025 eq 3).
 
-        Self-absorption correction (gated by self.self_absorption_aware,
-        default True): resonance lines below
-        ``self.self_absorption_e_i_cutoff_ev`` are systematically weaker
-        than optically-thin predictions in high-concentration matrices
-        (Si in soil at 60% SiO2 is the canonical example). Damping the
-        theoretical emissivity by ``self.self_absorption_damping`` avoids
-        penalizing the cosine angle. Counters are reset by ``identify``
-        and reported via a structured log line at the end of each call,
-        so the operator can see which elements got damped — addresses
-        the "silent SA_DAMPING = 0.3" complaint from
-        CF-LIBS-improved-self-abs-audit.
+        No resonance-line emissivity damping is applied: the previous
+        correction was a non-paper deflator that crushed k_sim for
+        resonance-rich elements (e.g. Fe) and was removed (see body comment).
         """
-        sa_aware = self.self_absorption_aware
-        sa_damping = self.self_absorption_damping
-        sa_e_i_cutoff = self.self_absorption_e_i_cutoff_ev
         theoretical_intensities: list = []
         experimental_intensities: list = []
         unique_peak_set: set = set()
 
         for i in range(len(fused_lines)):
             if matched_above[i]:
-                eps_th = emissivities[i]
-                trans = fused_lines[i]["transition"]
-                if sa_aware and getattr(trans, "E_i_ev", 1.0) < sa_e_i_cutoff:
-                    eps_th *= sa_damping
-                    self._sa_n_damped_lines += 1
-                    el = getattr(trans, "element", None)
-                    if el is not None:
-                        self._sa_damped_elements.add(el)
-                theoretical_intensities.append(eps_th)
+                # Paper eq 3 (Noel et al. 2025): bare cosine on the UNDAMPED
+                # theoretical emissivities. The self-absorption damping
+                # (eps *= 0.3 for resonance lines E_i < cutoff) is NOT in the
+                # paper and crushed k_sim for resonance-rich elements like Fe
+                # (paper-faithful cosine 0.64 -> repo 0.37 at RP700).
+                theoretical_intensities.append(emissivities[i])
                 pidx = matched_peak_idx[i]
                 experimental_intensities.append(intensity[peaks[pidx][0]])
                 unique_peak_set.add(pidx)
@@ -4156,12 +4167,11 @@ class ALIASIdentifier:
             # blend (N_X=1 means k_sim is not used) and the N_penalty.
             k_sim = 0.0
 
-        # Uniqueness penalty: many-to-one mapping lowers k_sim
-        n_unique_peaks = len(unique_peak_set)
-        if n_matched_above > 0:
-            uniqueness_factor = n_unique_peaks / n_matched_above
-            k_sim *= uniqueness_factor
-
+        # Paper eq 3 is a bare cosine — NO uniqueness penalty. The previous
+        # uniqueness_factor (= n_unique_peaks / n_matched_above) is not in the
+        # paper and deflated the dominant element when several theoretical lines
+        # map to one peak at low RP (many-to-one is already handled by k_rate
+        # and by one-to-one peak->line enforcement in matching).
         return k_sim
 
     def _compute_P_ab(self, element: str) -> float:
@@ -4776,19 +4786,15 @@ class ALIASIdentifier:
         # into k_det so that elements with many weak undetected lines are
         # not excessively penalized.  P_cov weights by emissivity, so missing
         # a weak line (emissivity 1% of total) only reduces P_cov by 1%.
+        # Paper-faithful k_det (Noel et al. 2025, eq 6): N_X = number of
+        # DETECTED (matched) lines; k_det = k_rate * ((1/N_X)*k_shift +
+        # ((N_X-1)/N_X)*k_sim). The homegrown sqrt(.*P_cov) blend and the
+        # N_penalty factor are NOT in the paper and were removed.
         if N_matched > 0:
             N_X = N_matched
-            k_det_raw = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
-            # Blend: use geometric mean of raw k_det and P_cov to soften
-            # the penalty for many unmatched weak lines
-            k_det = math.sqrt(k_det_raw * max(P_cov, 0.01))
+            k_det = k_rate * ((1.0 / N_X) * k_shift + ((N_X - 1.0) / N_X) * k_sim)
         else:
             k_det = 0.0
-
-        # Fix 4: N_expected penalty — elements with few expected lines
-        # get scaled down to prevent 2/3 matches from scoring high.
-        N_penalty = min(1.0, math.sqrt(N_expected / 5.0)) if N_expected > 0 else 0.0
-        k_det *= N_penalty
 
         P_SNR = self._dispatch_p_snr(intensity, peaks)
 

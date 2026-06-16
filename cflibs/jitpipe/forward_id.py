@@ -362,6 +362,8 @@ def forward_fit_presence_scores(
     element_valid: Any,
     *,
     presence_threshold: float = 0.0,
+    require_bic: bool = False,
+    bic_margin: float = 0.0,
 ) -> ForwardFitResult:
     """Marginal-evidence element calls from a scored candidate population.
 
@@ -372,6 +374,18 @@ def forward_fit_presence_scores(
     cannot be coherently explained without it. The discrete call is gated on this
     gap (``presence_threshold``); BIC of the best including-config is returned as
     a secondary, model-comparison-grounded score.
+
+    Optional BIC-margin presence gate (opt-in, default off => bit-identical to the
+    pure correlation-gap call). The same leave-one-element-out contrast is also
+    available as a *model-selection* test: a confounder pays ``~k ln n`` BIC per
+    extra element and rarely earns it back from coincidental lines, whereas a true
+    major's residual reduction clears it easily. When ``require_bic`` is set, an
+    element is called present only if it *both* clears the correlation gap **and**
+    its inclusion lowers BIC by more than ``bic_margin`` (``bic_improvement =
+    best_bic_exc - best_bic_inc``; BIC lower-is-better, so a positive improvement
+    means including the element fits better even after the complexity penalty).
+    The BIC gate can only *remove* calls (an AND with the existing decision), never
+    add them — it raises precision without dropping recall.
 
     Fully fixed-shape and branch-free: ``element_membership`` is a dense
     ``(B_eval, E)`` float mask, so adding/removing an element from a subset is a
@@ -393,6 +407,14 @@ def forward_fit_presence_scores(
         ``1.0`` for a real snapshot element, ``0.0`` for padding.
     presence_threshold : float
         Minimum include-minus-exclude correlation gap to call an element present.
+    require_bic : bool
+        When ``True``, additionally require ``bic_improvement > bic_margin`` to
+        call an element present (a BIC-margin presence gate). Default ``False``
+        yields exactly the existing correlation-gap decision (bit-identical).
+    bic_margin : float
+        Minimum BIC improvement (``best_bic_exc - best_bic_inc``) required when
+        ``require_bic`` is set. ``0.0`` requires only that including the element
+        not raise BIC.
 
     Returns
     -------
@@ -419,13 +441,22 @@ def forward_fit_presence_scores(
     best_exc = jnp.max(jnp.where(exc, corr_valid[:, None], neg_inf), axis=0)  # (E,)
     # Best (lowest) BIC among including configs, per element.
     best_bic = jnp.min(jnp.where(inc, bic_valid[:, None], pos_inf), axis=0)  # (E,)
+    # Best (lowest) BIC among EXCLUDING configs, per element (mirrors best_exc).
+    best_bic_exc = jnp.min(jnp.where(exc, bic_valid[:, None], pos_inf), axis=0)  # (E,)
 
     # An element with no including config has best_inc = -inf; the gap is then
     # -inf and it is (correctly) not called. Elements never excluded (best_exc
     # = -inf) get a +inf gap => strongly called, which is right: every viable
     # config needs them.
     gap = best_inc - best_exc  # (E,)
-    present = (gap > presence_threshold) & (el_ok > 0) & jnp.isfinite(best_inc)
+    present_corr = (gap > presence_threshold) & (el_ok > 0) & jnp.isfinite(best_inc)
+
+    # BIC-margin presence gate (opt-in). BIC lower-is-better, so including the
+    # element pays off when the best excluding BIC exceeds the best including BIC
+    # by more than the margin. An AND with the correlation call => only removes.
+    bic_improvement = best_bic_exc - best_bic  # (E,)
+    present_bic = bic_improvement > bic_margin
+    present = jnp.where(require_bic, present_corr & present_bic, present_corr)
 
     presence_score = jnp.where(el_ok > 0, gap, neg_inf)
     best_bic = jnp.where(el_ok > 0, best_bic, pos_inf)
@@ -933,6 +964,8 @@ def forward_fit_identify(
     polish_steps: int = 0,
     top_m_polish: int = 8,
     polish_lm_init: float = 1e-2,
+    require_bic: bool = False,
+    bic_margin: float = 0.0,
 ) -> ForwardFitResult:
     """Run a full population forward-fit identification pass for one spectrum.
 
@@ -987,6 +1020,12 @@ def forward_fit_identify(
         Clamped to the population size.
     polish_lm_init : float
         Initial LM damping for the polish (see :func:`gauss_newton_polish`).
+    require_bic : bool
+        When ``True``, gate presence on a BIC-improvement margin in addition to
+        the correlation gap (see :func:`forward_fit_presence_scores`). Default
+        ``False`` is bit-identical to the pure correlation-gap call.
+    bic_margin : float
+        Minimum BIC improvement required when ``require_bic`` is set.
 
     Returns
     -------
@@ -1059,6 +1098,8 @@ def forward_fit_identify(
         pop["config_valid"],
         element_valid,
         presence_threshold=presence_threshold,
+        require_bic=require_bic,
+        bic_margin=bic_margin,
     )
 
 

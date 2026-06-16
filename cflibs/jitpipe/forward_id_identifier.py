@@ -180,6 +180,33 @@ class ForwardFitIdentifier:
         Exponent on the per-bin element *distinctness* (dominant-element fraction)
         in the diagnostic weight. Larger values penalize blended bins harder.
         Ignored when ``use_diagnostic_weights`` is ``False``.
+    use_ief : bool
+        When ``True`` (default), multiply the diagnostic weight by an **inverse
+        element frequency** (IEF / TF-IDF) factor that penalizes wavelength bins
+        emitted by *many* candidate elements (the dominant false-positive
+        mechanism — confounders borrowing signal from crowded bins, e.g.
+        380-450 nm Fe/Ti/Cr/Ca). A bin emitted by one element keeps ~full weight;
+        a bin shared by many gets ``ief -> 0`` (Amato et al. 2010, Spectrochim.
+        Acta B 65:664). No-op when ``use_diagnostic_weights`` is ``False`` (the
+        factor is computed inside that weight) or when there is a single
+        candidate element. Pure NumPy, computed once (memoized).
+    ief_floor_frac : float
+        Fraction of an element's *own* peak strength a bin must reach for that
+        element to count as "emitting" there — i.e. a real line core, not a faint
+        Gaussian tail. The per-element emit mask is ``profile > ief_floor_frac *
+        own_peak``. Ignored when ``use_ief`` (or ``use_diagnostic_weights``) is
+        ``False``.
+    require_bic : bool
+        When ``True``, gate presence on a BIC-improvement margin in addition to
+        the include-minus-exclude correlation gap (see
+        :func:`cflibs.jitpipe.forward_id.forward_fit_presence_scores`). The BIC
+        gate only *removes* calls (an AND with the correlation decision), raising
+        precision without dropping recall. Default ``False`` is bit-identical to
+        the prior correlation-only path.
+    bic_margin : float
+        Minimum BIC improvement (best excluding BIC minus best including BIC)
+        required when ``require_bic`` is set. Ignored when ``require_bic`` is
+        ``False``.
     """
 
     def __init__(
@@ -198,6 +225,10 @@ class ForwardFitIdentifier:
         seed: int = 0,
         use_diagnostic_weights: bool = True,
         weight_gamma: float = 2.0,
+        use_ief: bool = True,
+        ief_floor_frac: float = 0.25,
+        require_bic: bool = False,
+        bic_margin: float = 0.0,
     ) -> None:
         if snapshot is None and db_path is None:
             raise ValueError("ForwardFitIdentifier requires either `snapshot` or `db_path`.")
@@ -215,8 +246,13 @@ class ForwardFitIdentifier:
         self.seed = int(seed)
         self.use_diagnostic_weights = bool(use_diagnostic_weights)
         self.weight_gamma = float(weight_gamma)
-        # Memo for the diagnostic weights, keyed on (id(snapshot), hash(wl bytes)).
-        self._diag_weight_cache: dict[tuple[int, int], np.ndarray] = {}
+        self.use_ief = bool(use_ief)
+        self.ief_floor_frac = float(ief_floor_frac)
+        self.require_bic = bool(require_bic)
+        self.bic_margin = float(bic_margin)
+        # Memo for the diagnostic weights, keyed on
+        # (id(snapshot), hash(wl bytes), use_ief, ief_floor_frac).
+        self._diag_weight_cache: dict[tuple[int, int, bool, float], np.ndarray] = {}
 
     # ------------------------------------------------------------------ helpers
     def _build_instrument(self) -> "InstrumentModel":
@@ -272,8 +308,17 @@ class ForwardFitIdentifier:
         element (high ``distinct``) is up-weighted; a crowded/blended/continuum bin
         (many elements contributing comparably, low ``distinct``) is down-weighted.
 
+        When ``self.use_ief`` is set, the weight is additionally multiplied by an
+        **inverse element frequency** (IEF / TF-IDF) factor ``ief_i = log((E + 1)
+        / max(f_i, 1))`` where ``f_i`` counts how many candidate elements *emit* a
+        real line core (own profile above ``self.ief_floor_frac`` of that
+        element's own peak) at bin ``i``. Bins emitted by a single element keep
+        ~full weight; bins shared by many → ``ief -> 0`` (Amato et al. 2010). A
+        single-element snapshot leaves ``ief`` all-ones (no-op).
+
         The weight is **memoized** on ``self`` keyed by ``(id(snapshot), hash(wl
-        bytes))`` so repeated ``identify`` calls on the same snapshot/grid reuse it.
+        bytes), use_ief, ief_floor_frac)`` so repeated ``identify`` calls on the
+        same snapshot/grid/config reuse it.
 
         Parameters
         ----------
@@ -302,7 +347,12 @@ class ForwardFitIdentifier:
         """
         wl = np.asarray(wl, dtype=np.float64)
         n_wl = int(wl.shape[0])
-        cache_key = (id(snapshot), hash(wl.tobytes()))
+        cache_key = (
+            id(snapshot),
+            hash(wl.tobytes()),
+            bool(self.use_ief),
+            float(self.ief_floor_frac),
+        )
         cached = self._diag_weight_cache.get(cache_key)
         if cached is not None and cached.shape[0] == n_wl:
             return cached
@@ -379,6 +429,22 @@ class ForwardFitIdentifier:
 
         base = 0.05 * total_max
         w = (base + total) * (distinct**self.weight_gamma)
+
+        # Inverse element frequency (IEF / TF-IDF) crowding penalty. A bin "shared"
+        # by many candidate elements (a crowded blend, e.g. 380-450 nm Fe/Ti/Cr/Ca)
+        # is the dominant false-positive mechanism — confounders borrow signal from
+        # it. Down-weight such bins by log((E + 1) / f_i), where f_i counts the
+        # elements that emit a real *line core* there (own profile above a fraction
+        # of that element's own peak, not a faint tail). Bins emitted by one element
+        # keep ~full weight (ief = log(E + 1)); bins shared by all → ief ≈ 0.
+        if self.use_ief and n_elements > 1:
+            peak_e = profiles.max(axis=1, keepdims=True)  # (n_elements, 1)
+            emits = profiles > (self.ief_floor_frac * peak_e)  # (n_elements, N_wl)
+            f_i = emits.sum(axis=0)  # (N_wl,) candidate elements emitting at bin i
+            ief_i = np.log((n_elements + 1.0) / np.clip(f_i, 1, None))
+            ief_i = np.where(np.isfinite(ief_i) & (ief_i > 0.0), ief_i, 0.0)
+            w = w * ief_i
+
         w = np.where(np.isfinite(w) & (w > 0.0), w, eps)
 
         mean_w = float(np.mean(w))
@@ -440,6 +506,8 @@ class ForwardFitIdentifier:
             presence_threshold=self.presence_threshold,
             element_weights=element_weights,
             polish_steps=self.polish_steps,
+            require_bic=self.require_bic,
+            bic_margin=self.bic_margin,
         )
 
         present = np.asarray(result.element_present, dtype=float)
@@ -496,6 +564,10 @@ class ForwardFitIdentifier:
                 "polish_steps": self.polish_steps,
                 "use_diagnostic_weights": self.use_diagnostic_weights,
                 "weight_gamma": self.weight_gamma,
+                "use_ief": self.use_ief,
+                "ief_floor_frac": self.ief_floor_frac,
+                "require_bic": self.require_bic,
+                "bic_margin": self.bic_margin,
                 "best_correlation": float(np.asarray(result.best_correlation)),
                 "best_config_index": int(np.asarray(result.best_config_index)),
                 "n_valid_configs": int(np.asarray(result.n_valid_configs)),
