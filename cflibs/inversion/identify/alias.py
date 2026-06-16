@@ -4100,19 +4100,12 @@ class ALIASIdentifier:
         intensity: np.ndarray,
         peaks: List[Tuple[int, float]],
     ) -> Tuple[list, list, set]:
-        """Build SA-damped theoretical and experimental intensity vectors for k_sim.
+        """Build the (UNDAMPED) theoretical and experimental intensity vectors
+        over the matched lines, for the bare-cosine k_sim (Noel et al. 2025 eq 3).
 
-        Self-absorption correction (gated by self.self_absorption_aware,
-        default True): resonance lines below
-        ``self.self_absorption_e_i_cutoff_ev`` are systematically weaker
-        than optically-thin predictions in high-concentration matrices
-        (Si in soil at 60% SiO2 is the canonical example). Damping the
-        theoretical emissivity by ``self.self_absorption_damping`` avoids
-        penalizing the cosine angle. Counters are reset by ``identify``
-        and reported via a structured log line at the end of each call,
-        so the operator can see which elements got damped — addresses
-        the "silent SA_DAMPING = 0.3" complaint from
-        CF-LIBS-improved-self-abs-audit.
+        No resonance-line emissivity damping is applied: the previous
+        correction was a non-paper deflator that crushed k_sim for
+        resonance-rich elements (e.g. Fe) and was removed (see body comment).
         """
         theoretical_intensities: list = []
         experimental_intensities: list = []
