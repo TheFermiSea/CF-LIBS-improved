@@ -352,3 +352,15 @@ One epic bead with children; one spec per bead under [`specs/`](./specs/). Effor
 **Negative / accepted costs:** two pipelines coexist for the program's duration (mitigated by D3/D6/R1); ~85–130 pd of effort with ±50 % uncertainty; a permanent parity-suite maintenance obligation; fp64-on-GPU compute cost (accepted, §5.3); the reference pipeline is frozen except bug fixes for the duration, which slows non-campaign reference work.
 
 **Failure mode is bounded:** if M3 fails, the jit pipeline stays a parallel evaluator (J10's campaign value and J9's throughput stand on their own), gap beads are filed, and the reference remains the default — the program never holds the scoreboard hostage. The riskiest 30 % (promotion, deprecation) is deliberately last and gated on a scoreboard the program does not get to redefine.
+
+---
+
+## 11. Amendments
+
+### 2026-06-16 — D4 carve-out for the J10 forward-fit host adapter; D1 scoreboard-dispatch allowlist
+
+Two import-hygiene clarifications applied during the post-ALIAS cleanup (`tests/jitpipe/test_import_hygiene.py`), both confirming the original intent rather than relaxing it:
+
+1. **`forward_id_identifier.py` joins the no-SQLite-in-kernels carve-out (D4).** The J10 forward-fitting identifier landed a *host adapter* module (`cflibs/jitpipe/forward_id_identifier.py`) whose own docstring calls it the "thin **host-only** bridge". It builds the `PipelineSnapshot` once from SQLite **host-side** (`from cflibs.atomic.database import AtomicDatabase`, never inside a traced kernel) and maps the jit `ForwardFitResult` onto the duck-typed `IdentifierProtocol` the scoreboard consumes. Per D4 it is exactly analogous to `host.py`: the host/kernel boundary keeps SQLite out of the *traced* region. The jit core it wraps (`forward_id.py`) is correctly **not** carved out and stays DB-free. Carve-out set is now `{host.py, snapshot.py, parity.py, pipeline.py, forward_id_identifier.py}`.
+
+2. **Scoreboard/benchmark dispatch may lazily import jitpipe (D1).** D1 states the two pipelines "meet at exactly two points: the scoreboard CLI dispatch (`--pipeline {reference,jit}`, §5.4) and the parity tests." The benchmark layer implements that dispatch (`scoreboard.py` `_run_pipeline_jit`/`_jit_snapshot`; `synthetic_eval.py`/`unified.py` forward-fit runners). All jitpipe imports there are **lazy** (inside the dispatch function, behind the `jit`/forward-fit branch), so importing the benchmark package never imports jitpipe — the one-way dependency D1 protects (jitpipe never depending on the reference) is intact. The hygiene test's "nothing outside jitpipe imports jitpipe" rule now allowlists `cflibs/benchmark/{scoreboard,synthetic_eval,unified}.py` as the sanctioned §5.4 meeting point.

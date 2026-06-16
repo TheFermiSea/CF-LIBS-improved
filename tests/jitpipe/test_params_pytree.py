@@ -106,8 +106,14 @@ def test_leaf_change_does_not_recompile():
             + params.t_tolerance_k
         )
 
-    jax.clear_caches()
+    # NOTE: ``_cache_size()`` is PER-jitted-function; ``kernel`` is freshly
+    # defined in this test so it starts at 0 with no global clear. We must NOT
+    # call ``jax.clear_caches()`` here — it is a process-global wipe that evicts
+    # every other test's compiled graphs, forcing heavy cold recompiles (e.g.
+    # the segmented calibrate kernels in test_parity_j2) that trip the agent
+    # stream-idle watchdog under full-suite load (CLAUDE.md sub-agent rules).
     p0 = PipelineParams()
+    assert kernel._cache_size() == 0  # freshly defined: no global clear needed
     kernel(p0)
     assert kernel._cache_size() == 1
 
@@ -160,9 +166,12 @@ def test_static_config_keys_jit_cache():
         scale = 2.0 if static.broadening_mode == "gaussian" else 3.0
         return params.min_snr * scale + static.bucket_id
 
-    jax.clear_caches()
+    # ``kernel`` is freshly defined -> per-function cache starts at 0; no global
+    # ``jax.clear_caches()`` (it would evict other tests' compiled graphs — see
+    # test_leaf_change_does_not_recompile).
     p = PipelineParams()
     s1 = StaticConfig(bucket_id=256, n_species=30, level_pad=676, broadening_mode="gaussian")
+    assert kernel._cache_size() == 0
     kernel(p, s1)
     assert kernel._cache_size() == 1
 

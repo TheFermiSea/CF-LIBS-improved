@@ -48,13 +48,25 @@ import numpy as np
 import pytest
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
-# Pin the reference to the bit-exact lax fixed point that scan_solve mirrors.
-os.environ.setdefault("CFLIBS_USE_LAX_WHILE_LOOP", "1")
 
 jax = pytest.importorskip("jax")
 jax.config.update("jax_enable_x64", True)
 
 pytestmark = [pytest.mark.requires_jax, pytest.mark.requires_db, pytest.mark.integration]
+
+
+@pytest.fixture(autouse=True)
+def _enable_lax_while_loop(monkeypatch):
+    """Pin the reference to the bit-exact lax fixed point these parity tests
+    mirror. Set via ``monkeypatch`` (auto-restored per test) instead of a
+    module-level ``os.environ.setdefault``, which leaked
+    ``CFLIBS_USE_LAX_WHILE_LOOP=1`` into the whole pytest session AT COLLECTION
+    TIME and silently switched every later solver test to the JAX lax path —
+    the root cause of the cumulative, full-suite-only failures in the Stark
+    pressure-balance-fallback caplog tests and the multistage pipeline_e2e
+    recovery.
+    """
+    monkeypatch.setenv("CFLIBS_USE_LAX_WHILE_LOOP", "1")
 
 DB_PATH = "ASD_da/libs_production.db"
 _REPO_ROOT = Path(__file__).resolve().parents[2]

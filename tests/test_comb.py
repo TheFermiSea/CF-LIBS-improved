@@ -180,10 +180,10 @@ def test_analyze_interferences(atomic_db):
 
 
 def test_fingerprint_computation(atomic_db):
-    """Test fingerprint as sum(active correlations) / n_total_teeth."""
+    """Test fingerprint as mean over active teeth."""
     identifier = CombIdentifier(atomic_db)
 
-    # Test with active teeth: score = sum(active) / total
+    # Test with active teeth: score = mean over active teeth
     teeth = [
         {"best_correlation": 0.8, "active": True},
         {"best_correlation": 0.6, "active": True},
@@ -192,7 +192,7 @@ def test_fingerprint_computation(atomic_db):
     ]
 
     fingerprint = identifier._compute_fingerprint(teeth)
-    expected = (0.8 + 0.6 + 0.7) / 4  # Divide by total teeth (4), not active (3)
+    expected = (0.8 + 0.6 + 0.7) / 3  # mean over ACTIVE teeth (Gajarska 2024 §2.2.3)
     assert abs(fingerprint - expected) < 1e-6
 
     # Test with no active teeth
@@ -457,7 +457,7 @@ def test_fingerprint_with_mixed_correlations(atomic_db):
     ]
 
     fingerprint = identifier._compute_fingerprint(teeth)
-    expected = (0.9 + 0.7 + 0.5) / 5  # Divide by total teeth (5)
+    expected = (0.9 + 0.7 + 0.5) / 3  # mean over ACTIVE teeth = 0.7
     np.testing.assert_allclose(fingerprint, expected)
 
 
@@ -610,7 +610,6 @@ def test_false_positive_noise_only(atomic_db):
 
     result = identifier.identify(wavelength, intensity)
     # No element should be detected in pure noise
-    assert len(result.detected_elements) == 0, (
-        f"False positives on noise: {[e.element for e in result.detected_elements]}"
-    )
-
+    assert (
+        len(result.detected_elements) == 0
+    ), f"False positives on noise: {[e.element for e in result.detected_elements]}"

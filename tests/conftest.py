@@ -110,6 +110,55 @@ def pytest_collection_modifyitems(config, items):
                 break
 
 
+@pytest.fixture(autouse=True)
+def _isolate_global_state():
+    """Per-test isolation of process-global state that leaks across tests.
+
+    Long-standing CUMULATIVE test pollution (failures that surface only deep in
+    the full suite, never in isolation — e.g. caplog-empty Stark fallback-warning
+    tests and the multistage pipeline_e2e recovering wrong concentrations) had
+    two root leaks:
+
+    1. Global logging config — ``cflibs.core.logging_config.setup_logging`` calls
+       ``logging.basicConfig(force=True)``, which CLEARS the root handlers that
+       pytest's ``caplog`` relies on; once any test triggers it, later
+       caplog-based tests capture nothing.
+    2. The module-level atomic caches (``partition_function`` / ``transitions`` /
+       ``ionization`` in ``cflibs.core.cache``) are keyed by species, NOT by DB
+       path, so a prior test's database values leak into a later test's
+       Saha-Boltzmann solve and silently shift recovered T/concentrations.
+
+    Snapshot+restore the root logging config and clear the atomic caches around
+    each test. Both are safe: the caches are transparent and re-populate on miss.
+    """
+    import logging as _logging
+
+    root = _logging.getLogger()
+    saved_handlers = root.handlers[:]
+    saved_level = root.level
+    saved_disable = _logging.root.manager.disable
+
+    try:
+        from cflibs.core.cache import clear_all_caches
+
+        clear_all_caches()
+    except Exception:
+        pass
+
+    try:
+        yield
+    finally:
+        root.handlers[:] = saved_handlers
+        root.setLevel(saved_level)
+        _logging.disable(saved_disable)
+        try:
+            from cflibs.core.cache import clear_all_caches
+
+            clear_all_caches()
+        except Exception:
+            pass
+
+
 @pytest.fixture(scope="session")
 def production_db():
     """Session-scoped production database fixture.

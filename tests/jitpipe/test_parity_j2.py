@@ -38,6 +38,16 @@ import jax.numpy as jnp  # noqa: E402
 import cflibs.jitpipe.calibrate as C  # noqa: E402
 from cflibs.inversion.preprocess import wavelength_calibration as W  # noqa: E402
 
+# These are JAX-only (importorskip above) and dominated by XLA compile of the
+# segmented calibrator: even excluding the three ``@pytest.mark.slow`` tests the
+# file is ~12 min, with a single 158 s ``test_parity_model_class_aggregate``.
+# Mark the whole module ``requires_jax`` (matching test_params_pytree.py) so the
+# swarm/sub-agent fast gate (``-m "... and not requires_jax"``, .swarm/profile.toml)
+# excludes them; the parent full-suite run and the requires_jax CI lane still run
+# them. This is the structural fix for the J2 "Timeout" failures (the 600 s
+# stream-idle watchdog), complementing the per-test ``slow`` marks on the worst 3.
+pytestmark = pytest.mark.requires_jax
+
 # Reference robust-fit defaults (calibrate_wavelength_axis signature).
 INLIER_TOL = 0.08
 PAIR_WINDOW = 2.0
@@ -315,6 +325,15 @@ def test_jit_matches_eager():
     assert int(eager.model_id) == int(jitted.model_id)
 
 
+# XLA-compile-heavy (vmap/grad over the segmented lax.scan calibrator): each
+# runs 217-345s standalone (measured 2026-06-16), and the three together emit no
+# stream output for ~15 min, which trips the Claude-agent stream-idle watchdog
+# (~600s) when they run inside a sub-agent's tool calls. Marked ``slow`` so the
+# fast/sub-agent gate (``-m "not slow"``, .swarm/profile.toml + CLAUDE.md)
+# skips them; the parent's full-suite run (a tracked background task, not
+# watchdog-bound) and CI still execute them. The numeric parity assertions are
+# unchanged — this is a scheduling marker, not a weakening.
+@pytest.mark.slow
 def test_vmap_batch_16():
     wl, intensity, line_wl, line_strength = _synthetic_case(2, "shift")
     inputs, n_w = _kernel_inputs_from_reference(
@@ -809,6 +828,7 @@ def test_segmented_ye6t_coverage_gate_degrades_to_shift():
     assert bool(np.all(np.diff(jit_axis) > 0))
 
 
+@pytest.mark.slow  # ~305s, see test_vmap_batch_16 (watchdog rationale)
 def test_segmented_jit_vmap_grad_smoke():
     """Engineering guards for the segmented kernel: jit==eager, vmap(B), grad finite.
 
@@ -858,6 +878,7 @@ def test_segmented_jit_vmap_grad_smoke():
     assert np.all(np.isfinite(np.array(g)))
 
 
+@pytest.mark.slow  # ~217s, see test_vmap_batch_16 (watchdog rationale)
 def test_segmented_padding_invariance():
     """Rerun at the next pad size => bit-identical stitched axis on valid region.
 
