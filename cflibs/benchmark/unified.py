@@ -818,26 +818,31 @@ def _alias_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     # constructor-signature drift.
     if arch_defaults.get("intensity_threshold_factor") is None:
         arch_defaults["intensity_threshold_factor"] = 3.0
+    # detection_threshold is the paper C_th (Noel 2025 sec 3.8): the decision is
+    # k_det > C_th, default 0.5 strict / 0.4 recall. The legacy CL-floor values
+    # (0.02/0.03/0.05) belonged to the old CL-deflated decision metric and are
+    # effectively "accept everything" on the k_det scale, so the sweep grid is
+    # re-centered on the paper C_th neighborhood (0.4 recall .. 0.6 strict).
     if arch_defaults.get("detection_threshold") is None:
-        arch_defaults["detection_threshold"] = 0.02
+        arch_defaults["detection_threshold"] = 0.5
     if quick:
         return [
             arch_defaults,
             {
-                "detection_threshold": 0.03,
+                "detection_threshold": 0.4,
                 "intensity_threshold_factor": 3.0,
                 "chance_window_scale": 0.3,
                 "max_lines_per_element": 30,
             },
             {
-                "detection_threshold": 0.05,
+                "detection_threshold": 0.6,
                 "intensity_threshold_factor": 3.0,
                 "chance_window_scale": 0.4,
                 "max_lines_per_element": 30,
             },
         ]
     configs: List[Dict[str, Any]] = [arch_defaults]
-    for dt in [0.02, 0.03, 0.05]:
+    for dt in [0.4, 0.5, 0.6]:
         for itf in [3.0, 3.5]:
             for cws in [0.3, 0.4]:
                 configs.append(
@@ -857,8 +862,9 @@ def _alias_high_recall_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
     Mirrors ``_alias_workflow_configs`` but deliberately leaves
     ``intensity_threshold_factor`` and ``detection_threshold`` UNSET so
     PR #159's ``ALIASIdentifier(high_recall=True)`` preset resolves them
-    to its built-in recall values (2.0 / 0.01 — 33% / 50% looser than
-    the strict 3.0 / 0.02 defaults). Per CF-LIBS-improved-knyz this is
+    to its built-in recall values (intensity_threshold_factor=2.0,
+    detection_threshold=0.4 — looser than the strict 3.0 / 0.5 paper-C_th
+    defaults). Per CF-LIBS-improved-knyz this is
     the wiring that surfaces more candidates on aa1100_substrate, where
     the strict default rejects 9 of 12 records at the identification
     stage and they fall out of composition entirely.
@@ -908,7 +914,8 @@ def _alias_v2_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
 
     Like ``_alias_high_recall_workflow_configs``, this omits
     threshold kwargs so the constructor's strict defaults
-    (intensity_threshold_factor=3.0, detection_threshold=0.02) apply.
+    (intensity_threshold_factor=3.0, detection_threshold=0.5 — the paper
+    C_th, Noel 2025 sec 3.8) apply.
     The two fix flags (r2_gate_mode='adaptive_t' + relative_cl_per_ion_stage)
     are baked into the predictor, NOT the config dict, so they cannot
     be tuned out by parameter-sweep callers.
@@ -984,7 +991,10 @@ _ALIAS_SWEEP_CELLS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
 # workflow.
 _ALIAS_SWEEP_BASE_KWARGS: Dict[str, Any] = {
     "intensity_threshold_factor": 3.0,
-    "detection_threshold": 0.02,
+    # Paper C_th strict default (Noel 2025 sec 3.8); the decision is
+    # k_det > C_th. The old 0.02 was a CL-floor on the deflated metric and
+    # is "accept everything" on the k_det scale.
+    "detection_threshold": 0.5,
     "chance_window_scale": 0.4,
     "max_lines_per_element": 30,
     # Pin the strict R2 gate as the sweep baseline. The ALIASIdentifier
@@ -1166,7 +1176,10 @@ def _forward_fit_workflow_configs(quick: bool) -> List[Dict[str, Any]]:
 
 def _hybrid_workflow_configs(require_both: bool, quick: bool) -> List[Dict[str, Any]]:
     nnls_snrs = [1.0, 1.5] if quick else [1.0, 1.5, 2.0]
-    alias_thresholds = [0.03, 0.05] if quick else [0.03, 0.05, 0.10]
+    # ALIAS confirmation C_th sweep on the paper k_det scale (k_det > C_th,
+    # Noel 2025 sec 3.8): 0.4 recall .. 0.6 strict, default 0.5. Migrated off
+    # the legacy CL-floor 0.03/0.05/0.10 which is "accept everything" here.
+    alias_thresholds = [0.4, 0.5] if quick else [0.4, 0.5, 0.6]
     return [
         {
             "nnls_detection_snr": nnls_snr,
@@ -2222,9 +2235,11 @@ def build_id_workflow_registry(quick: bool = False) -> Dict[str, IDWorkflowSpec]
         "voigt_alias": IDWorkflowSpec(
             "voigt_alias",
             (
-                [{"detection_threshold": 0.03}]
+                # Paper C_th sweep (k_det > C_th): default 0.5 strict,
+                # 0.6 stricter. Migrated off the legacy CL-floor 0.03/0.05.
+                [{"detection_threshold": 0.5}]
                 if quick
-                else [{"detection_threshold": 0.03}, {"detection_threshold": 0.05}]
+                else [{"detection_threshold": 0.5}, {"detection_threshold": 0.6}]
             ),
             _build_voigt_alias_predictor,
             _config_name,

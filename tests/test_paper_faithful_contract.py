@@ -16,8 +16,16 @@ import inspect
 
 import pytest
 
-from cflibs.inversion.identify.alias import ALIASIdentifier
+from cflibs.inversion.identify.alias import ALIAS_PRESETS, ALIASIdentifier
 from cflibs.inversion.identify.comb import CombIdentifier
+from cflibs.inversion.identify.hybrid import HybridIdentifier
+
+# The paper's confidence threshold C_th (Noël §3.8 eq 6) lives on the k_det
+# scale (default 0.5 strict / 0.4 recall). The legacy CL-deflated decision used
+# floor values like 0.01–0.10; on the k_det scale those are "accept everything",
+# silently neutering every "strict" path. Any detection_threshold below this
+# bound is a re-introduced legacy CL floor.
+_MIN_CTH = 0.3
 
 
 def _code_only(src: str) -> str:
@@ -72,6 +80,41 @@ def test_alias_ksim_has_no_deflators():
     assert (
         "sa_damping" not in vec_src and "self_absorption_damping" not in vec_src
     ), "k_sim self-absorption damping must stay removed (paper eq 3 is a bare cosine)"
+
+
+# --------------------------------------------------------------------------
+# ALIAS — detection_threshold is the paper C_th, NOT a legacy CL floor
+# --------------------------------------------------------------------------
+def test_alias_init_default_threshold_is_paper_cth(atomic_db):
+    """The strict/recall __init__ defaults must sit on the k_det C_th scale.
+    Reverting either to a legacy CL floor (<0.3) makes ALIAS accept everything."""
+    assert ALIASIdentifier(atomic_db).detection_threshold >= _MIN_CTH
+    assert ALIASIdentifier(atomic_db, high_recall=True).detection_threshold >= _MIN_CTH
+
+
+@pytest.mark.parametrize("name", sorted(ALIAS_PRESETS))
+def test_alias_presets_threshold_on_cth_scale(name):
+    """No ALIAS_PRESETS cocktail may pin a legacy CL-floor detection_threshold.
+    'strict' once pinned 0.02 — "accept everything" on the k_det scale, turning
+    the precision-king preset into the most permissive path (Codex P2)."""
+    dt = ALIAS_PRESETS[name].get("detection_threshold")
+    if dt is not None:
+        assert dt >= _MIN_CTH, (
+            f"ALIAS_PRESETS[{name!r}].detection_threshold={dt} is a legacy CL "
+            f"floor; the decision is k_det > C_th (paper eq 6), expected >= {_MIN_CTH}"
+        )
+
+
+def test_hybrid_alias_confirmation_threshold_on_cth_scale():
+    """HybridIdentifier's ALIAS confirmation stage must default to a paper C_th,
+    not a legacy CL floor — 0.05 once neutered the Stage-2 confirmation (Codex P2)."""
+    default = (
+        inspect.signature(HybridIdentifier.__init__).parameters["alias_detection_threshold"].default
+    )
+    assert default >= _MIN_CTH, (
+        f"HybridIdentifier.alias_detection_threshold default={default} is a legacy "
+        f"CL floor; ALIAS detects when k_det > C_th, expected >= {_MIN_CTH}"
+    )
 
 
 # --------------------------------------------------------------------------

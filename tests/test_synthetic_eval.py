@@ -22,6 +22,7 @@ from cflibs.benchmark.synthetic_eval import (
     summarize_aggregate,
     summarize_by_group,
     summarize_confounders,
+    summarize_per_element,
 )
 
 pytestmark = pytest.mark.unit
@@ -364,6 +365,40 @@ def test_summarize_confounders_flags_never_truth():
     assert "Co" in alias["never_truth"]
     assert "Cu" in alias["never_truth"]
     assert "Fe" not in alias["never_truth"]
+
+
+def test_per_element_summaries_honor_dont_care_band():
+    """A predicted sub-floor "don't-care" trace must not count as FP in the
+    per-element / confounder re-aggregation — matching the scoring-panel
+    semantics already baked into each row's stored confusion counts (Codex P2).
+
+    Row predicts {Fe, Mg}; Mg is in this spectrum's don't-care band (real but
+    sub-detection-floor), so detecting it is neither rewarded nor penalised.
+    """
+    candidates = ["Fe", "Ni", "Mg"]
+    rows = [
+        {
+            "algorithm": "ALIAS",
+            "failed": False,
+            "true_elements": ["Fe"],
+            "predicted_elements": ["Fe", "Mg"],
+            "ignore_elements": ["Mg"],  # sub-floor trace -> don't-care
+            # Stored counts already exclude Mg (computed over the scoring panel).
+            "tp": 1,
+            "fp": 0,
+            "fn": 0,
+            "tn": 1,
+        }
+    ]
+    per_el = {r["element"]: r for r in summarize_per_element(rows, candidates)}
+    # Mg must not be scored as a false positive despite being predicted.
+    assert per_el["Mg"]["fp"] == 0
+    assert per_el["Mg"]["tp"] == 0
+    assert per_el["Mg"]["tn"] == 0  # skipped entirely, not counted as TN either
+    assert per_el["Fe"]["tp"] == 1
+
+    confound = summarize_confounders(rows, candidate_elements=candidates)["ALIAS"]
+    assert "Mg" not in dict(confound["top_fp"]), "don't-care trace leaked into top_fp"
 
 
 def test_ever_present_panel_companion():

@@ -82,7 +82,11 @@ class HybridIdentifier:
         hybrid_union recall regression. Standalone ``SpectralNNLSIdentifier``
         is unaffected and keeps its precision floor.
     alias_detection_threshold : float
-        ALIAS detection threshold for Stage 2 confirmation (default 0.05).
+        ALIAS confidence threshold ``C_th`` for Stage 2 confirmation: the
+        wrapped ALIAS detects an element when ``k_det > C_th`` (Noel 2025
+        sec 3.8). Default ``0.5`` (the paper strict C_th). The old ``0.05``
+        was a CL-floor on the deflated metric and is "accept everything" on
+        the k_det scale, which neutered this confirmation stage.
     alias_intensity_factor : float
         ALIAS intensity threshold factor (default 3.0).
     alias_chance_window_scale : float
@@ -107,7 +111,7 @@ class HybridIdentifier:
         nnls_detection_snr: float = 1.5,
         nnls_continuum_degree: int = 3,
         nnls_min_relative_coeff: float = 0.0,
-        alias_detection_threshold: float = 0.05,
+        alias_detection_threshold: float = 0.5,
         alias_intensity_factor: float = 3.0,
         alias_chance_window_scale: float = 0.4,
         alias_max_lines: int = 30,
