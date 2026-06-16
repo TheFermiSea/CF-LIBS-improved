@@ -236,9 +236,12 @@ class CombIdentifier:
     max_width_factor : float, optional
         Maximum width as fraction of resolution element (default: 1.0)
     relative_threshold_scale : float, optional
-        Scale factor applied to median non-zero score for adaptive rejection
-        (default: 1.5). Lower values increase recall; higher values reduce
-        false positives.
+        Accepted and recorded in :meth:`identify`'s ``parameters`` for
+        provenance/API compatibility (benchmark sweeps and config presets set
+        it), but **no longer applied**: the homegrown median-relative rejection
+        gate it scaled was removed (Gajarska et al. 2024 has no such gate; it
+        could demand a score above the max achievable 1.0 and reject even the
+        top true element). Pinned removed by tests/test_paper_faithful_contract.py.
     elements : List[str], optional
         List of elements to search for (default: None means all in database)
     resolving_power : float, optional
@@ -246,9 +249,6 @@ class CombIdentifier:
         center wavelength / resolving_power instead of fixed 0.1 nm (default: None).
     min_aki_gk : float, optional
         Minimum observable line strength A_ki * g_k (default: 1e4).
-    fingerprint_top_k : int, optional
-        Maximum number of active teeth contributing to the fingerprint
-        numerator and denominator (default: 10).
 
     Attributes
     ----------
@@ -294,13 +294,10 @@ class CombIdentifier:
         max_lines_per_element: int = 50,
         reference_temperature: float = 10000.0,
         min_aki_gk: float = 5e3,
-        fingerprint_top_k: int = 10,
         use_jax_correlate: bool = False,
         strict_tier2: bool = True,
         tier2_tooth_activation_threshold: float = 0.7,
     ):
-        if fingerprint_top_k <= 0:
-            raise ValueError("fingerprint_top_k must be positive")
         self.use_jax_correlate = bool(use_jax_correlate)
         if self.use_jax_correlate and not _HAS_JAX:  # pragma: no cover
             raise ImportError(
@@ -331,7 +328,6 @@ class CombIdentifier:
         self.max_lines_per_element = max_lines_per_element
         self.reference_temperature = reference_temperature
         self.min_aki_gk = min_aki_gk
-        self.fingerprint_top_k = fingerprint_top_k
         # Tier-2 FP-reduction knobs — scoped to Mn/Na/K only. The activation
         # threshold below is applied via ``max(global, tier2)`` so the gate
         # can never be looser than the global ``tooth_activation_threshold``
@@ -458,7 +454,6 @@ class CombIdentifier:
             "min_width_pts": float(self.min_width_pts),
             "max_width_factor": self.max_width_factor,
             "relative_threshold_scale": self.relative_threshold_scale,
-            "fingerprint_top_k": float(self.fingerprint_top_k),
             "strict_tier2": bool(self.strict_tier2),
             "tier2_tooth_activation_threshold": float(self.tier2_tooth_activation_threshold),
         }
@@ -727,37 +722,6 @@ class CombIdentifier:
                 ):
                     line.is_interfered = True
                     line.interfering_elements = tooth["interfering_elements"]
-
-    def _apply_relative_threshold(
-        self, element_identifications: List[ElementIdentification]
-    ) -> None:
-        """Reject detected elements whose score does not stand out above the
-        median-score noise floor (Step 5).  Mutates the list in place.
-
-        Uses median of ALL non-zero scores as noise baseline; requires 3+
-        elements to form a meaningful noise floor (2 elements can't
-        distinguish signal from noise).
-        """
-        non_zero_scores = [e.score for e in element_identifications if e.score > 0]
-        if len(non_zero_scores) >= 3:
-            median_score = np.median(non_zero_scores)
-            relative_threshold = min(1.0, self.relative_threshold_scale * median_score)
-        else:
-            relative_threshold = 0.0
-
-        for i, element_id in enumerate(element_identifications):
-            if element_id.detected and element_id.score < relative_threshold:
-                element_identifications[i] = ElementIdentification(
-                    element=element_id.element,
-                    detected=False,
-                    score=element_id.score,
-                    confidence=element_id.confidence,
-                    n_matched_lines=element_id.n_matched_lines,
-                    n_total_lines=element_id.n_total_lines,
-                    matched_lines=element_id.matched_lines,
-                    unmatched_lines=element_id.unmatched_lines,
-                    metadata=element_id.metadata,
-                )
 
     def _detect_and_count_peaks(
         self,
@@ -1346,11 +1310,13 @@ class CombIdentifier:
 
     def _compute_fingerprint(self, teeth: List[dict]) -> float:
         """
-        Compute fingerprint as coverage-penalized mean correlation.
+        Compute the fingerprint as the mean correlation over ACTIVE teeth.
 
-        Score = sum(active correlations) / denominator.
-        The denominator is capped to avoid over-penalizing elements with many
-        potential lines (like trace elements in a dense database).
+        Score = sum(active correlations) / (number of active teeth), per
+        Gajarska et al. 2024 §2.2.3 ("the mean across all its active lines").
+        The earlier capped denominator (``min(total teeth, k)``) systematically
+        depressed line-rich elements and has been removed (with the now-unused
+        ``fingerprint_top_k`` knob). Pinned by test_paper_faithful_contract.py.
 
         Parameters
         ----------

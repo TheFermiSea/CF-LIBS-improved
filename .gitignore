@@ -120,3 +120,7 @@ target-swarm/
 
 # Copyrighted paper PDFs (fetch via asta-documents / DOI, do not commit)
 docs/refs_*.pdf
+
+# Large local raw datasets (regenerable/external; never commit)
+data/supercam_calib/
+data/qu2025_marscode_eqm/

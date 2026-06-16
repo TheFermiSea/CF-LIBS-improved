@@ -1,5 +1,14 @@
 # Why identification F1 is stuck below 0.5 — root-cause investigation
 
+> **Partially superseded (2026-06-16):** this investigation concluded the low F1 was "not the
+> identification algorithms" and "not a stale corpus." The next-day ALIAS-faithful audit
+> (`docs/audit/2026-06-16-alias-faithful-fix.md`) reversed **both** of those: the identifiers
+> *were* deviating from their source papers (Comb median gate, ALIAS CL-decision/k_sim deflators)
+> **and** the corpus *was* violating the papers' assumptions (the 224–265 nm Fe-forest window /
+> injected shift / out-of-range T,RP). The "structural — information-starved window" finding (TL;DR
+> item 1) was correct and is the through-line; read this doc with the 2026-06-16 conclusion as the
+> current state.
+
 **Date:** 2026-06-15 · **Trigger:** "F1<0.5 is still terrible, something must be wrong."
 **Method:** 12-agent adversarial workflow (`libs-id-rootcause`, run `wf_bca77300-cb0`): 6 parallel
 finders → ranking synthesis → 6 adversarial verifiers that ran live counterfactuals. Plus an

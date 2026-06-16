@@ -79,6 +79,8 @@ Rules for any task that spawns sub-agents:
   3. In the **parent session** (not the sub-agent), run the full suite via `Bash(run_in_background=True)` after the sub-agent's PR is up. Tracked background tasks complete-notify the parent independently of any agent's stream.
 - **Commit after each logical step** in sub-agent prompts, *before* the test step — so if a watchdog kill happens, the work isn't lost. The Wave-1 and Wave-2 architecture-review work recovered partial diffs from killed agents precisely because commits had landed on the branch first.
 - Symptoms that point to this issue: `Agent stalled: no progress for 600s (stream watchdog did not recover)` or `API Error: Stream idle timeout - partial response received`. Root cause is the long quiet tool result, not the agent's logic.
+- **Known watchdog offenders (mark `slow`, don't run in sub-agent fast gates):** the three vmap/grad/segmented parity tests in `tests/jitpipe/test_parity_j2.py` are 217–345 s of *silent* XLA compile each (~867 s back-to-back). They are `@pytest.mark.slow` so `-m "not slow"` (the swarm/sub-agent gate) skips them; the parent's backgrounded full-suite run executes them without watchdog risk. If you see `test_parity_j2` "Timeout" in a full-suite log, it is this, not a logic bug.
+- **JAX test-pollution rule:** never call `jax.clear_caches()` in a test — it is a process-global wipe (evicts every other test's compiled graphs). `fn._cache_size()` is per-jitted-function and a freshly-defined `@jax.jit` starts at 0, so cache-size assertions need no global clear. (Fixed in `test_params_pytree.py`.)
 
 JAX is forced to CPU in `conftest.py` with `jax_enable_x64=True`.
 

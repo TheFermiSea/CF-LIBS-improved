@@ -2,6 +2,15 @@
 
 **Bead:** CF-LIBS-improved-o3be · **Spec:** docs/adr/specs/J10*.md · **ADR:** ADR-0004 §8.3
 
+> **Corpus caveat (added 2026-06-16):** the "AC1 PASS" results below were measured on the
+> `ak3.1.3` corpus. The 2026-06-16 ALIAS-faithful audit
+> (`docs/audit/2026-06-16-alias-faithful-fix.md`) subsequently found `ak3.1.3` (the 224–265 nm
+> Fe-forest window) **violates four of the ALIAS papers' stated assumptions** (injected ±1 nm
+> shift, T up to ~20900 K, RP 700–1000, no Fe-separable lines) and re-validated the identifiers on
+> a paper-aligned corpus (`w5_paper_v2`, 240–850 nm). The AC1 figures here are therefore valid only
+> as a *same-corpus relative* ranking vs Comb on `ak3.1.3`; the absolute "AC1 cleared" claim must be
+> re-measured on a paper-aligned corpus before it binds. Track via the `zfy2` corpus-validity bead.
+
 ## Headline
 
 `cflibs/jitpipe/forward_id.py` is **already ~1143 lines with NO stubs** — the core algorithm
