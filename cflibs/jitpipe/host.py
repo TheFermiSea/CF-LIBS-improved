@@ -2207,6 +2207,313 @@ def _gather_observations(
     return observations, resonance_lines
 
 
+def _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline) -> float | None:
+    """ON-DEVICE Stark n_e diagnostic — composes the J6 ``stark.py`` kernels.
+
+    The device-side replacement for the reference-delegated ``measure_stark_ne``
+    call in :func:`run_front_end_ondevice`. It reproduces the reference two-pass
+    control flow (``cflibs.inversion.physics.stark_ne.measure_stark_ne``,
+    :483-606) by gathering the atomic-data-only scalars on the host (the
+    ``get_stark_parameters_with_source`` 0.1 nm nearest-match, the Doppler width,
+    the instrument FWHM) and routing every measurement step through the
+    parity-tested fixed-shape kernels in :mod:`cflibs.jitpipe.stark`:
+
+    * :func:`stark.select_stark_candidates` for the SNR / isolation / source-
+      class gate ladder + score-descending rank (``top_k = candidate count`` so
+      the kernel's built-in ``max_lines`` cap is disabled — the cap is applied
+      *after* the multiplet/fit gates, as the reference breaks only after
+      ``max_lines`` *successes*);
+    * :func:`stark.multiplet_blend_mask` for the same-species multiplet-blend
+      veto (against the snapshot line table, never a DB query in the loop);
+    * :func:`stark.recenter_idx` + :func:`stark.extract_windows` for the raw
+      window gather (on ``wl_in`` — the response-corrected, NOT calibrated axis,
+      matching :func:`run_front_end_ondevice`'s reference-parity convention);
+    * :func:`stark.measure_stark_ne_jit` for the vmapped LM Voigt fit, width-law
+      inversion, QC gates, cohort trim, and median combine.
+
+    The load-bearing detail is the **break-after-``max_lines``-successes**
+    semantics (``stark_ne.py:541``): the reference fits candidates in score-
+    descending order and stops only after collecting ``max_lines`` lines that
+    pass *every* gate (multiplet / fit / poor-fit / unresolved / implausible
+    each ``continue`` without counting). We reproduce this by fitting ALL
+    gate-and-multiplet-survivors, then taking the first ``MAX_LINES`` survivors
+    (in score-descending order) whose QC code is ``QC_OK`` as the success set,
+    and re-running the cohort-trim + median combine over exactly that set.
+
+    Parameters
+    ----------
+    wl_in : ndarray
+        Response-corrected (NOT calibration-corrected) wavelength axis, nm. This
+        is the reference Stark axis (``pipeline.py:887``).
+    inten : ndarray
+        Response-corrected intensity on ``wl_in``.
+    selected : list[LineObservation]
+        The selected observation set (the solver's input list).
+    atomic_db : AtomicDatabase
+        Reference DB (host-side ``get_stark_parameters_with_source`` +
+        ``resolve_element_mass`` lookups only — never queried in a device loop).
+    snapshot : PipelineSnapshot
+        Host-built atomic snapshot (per-line wavelength / species / g_k / A_ki /
+        E_k for the multiplet-blend mask).
+    pipeline : AnalysisPipelineConfig
+        Resolved front-end config (``resolving_power`` is the instrument-width
+        source).
+
+    Returns
+    -------
+    float or None
+        The robust median electron density, cm^-3, or ``None`` when no line is
+        usable (reference ``StarkNeDiagnostics.usable``: ``n_lines > 0`` and the
+        median is finite).
+    """
+    import jax.numpy as jnp
+
+    from cflibs.atomic.masses import resolve_element_mass
+    from cflibs.core.constants import EV_TO_K
+    from cflibs.inversion.physics.stark_ne import (
+        LITERATURE_STARK_SOURCES,
+        estimate_instrument_fwhm,
+    )
+    from cflibs.jitpipe import stark as _S
+    from cflibs.radiation.profiles import doppler_width
+
+    wl_in = np.asarray(wl_in, dtype=float)
+    inten = np.asarray(inten, dtype=float)
+    if wl_in.size < 5 or not selected:
+        return None
+
+    # Reference T floor + window/Stark temperature (``stark_ne.py:402,466``).
+    T_K = 10000.0
+    T_eV = max(T_K, 1000.0) / EV_TO_K
+
+    resolving_power = pipeline.resolving_power
+    have_rp = resolving_power is not None and float(resolving_power) > 0.0
+
+    # --- instrument-width resolution ladder (reference ``measure_stark_ne``) ----
+    # explicit FWHM -> resolving-power (lambda/R) -> data-driven narrowest-line
+    # floor (``estimate_instrument_fwhm``). The floor is the PRODUCTION path for
+    # ChemCam/SuperCam (their config carries no ``resolving_power``), so it is NOT
+    # unreachable; it is pure host NumPy signal processing (no device kernel, no
+    # atomic data) and we reuse the reference helper verbatim for bit-parity. A
+    # candidate whose instrument width cannot be resolved (floor returns ``None``)
+    # is gated out on-device by ``SEL_NO_INSTRUMENT_WIDTH`` (``instr = 0``).
+    def _instr_fwhm(center_nm: float) -> float | None:
+        if have_rp:
+            return center_nm / float(resolving_power)
+        return estimate_instrument_fwhm(wl_in, inten, selected, center_nm=center_nm)
+
+    # --- PASS 1: host gather of atomic-data-only scalars per observation -------
+    # The reference resolves the Stark params by the OBSERVATION wavelength with a
+    # 0.1 nm nearest-match (SQL ORDER BY ABS(delta) LIMIT 1), NOT by the catalog
+    # wavelength keyed in the snapshot; the two diverge when the obs wl is offset.
+    # Keep the scalar Stark params from THIS DB call for bit-identical scalars.
+    n = len(selected)
+    intensity_arr = np.empty(n, dtype=float)
+    intensity_unc_arr = np.empty(n, dtype=float)
+    wl_obs_arr = np.empty(n, dtype=float)
+    instr_arr = np.zeros(n, dtype=float)
+    dopp_arr = np.zeros(n, dtype=float)
+    w_ref_arr = np.zeros(n, dtype=float)
+    alpha_arr = np.full(n, _S.DEFAULT_STARK_ALPHA, dtype=float)
+    lit_arr = np.zeros(n, dtype=bool)
+    res_arr = np.zeros(n, dtype=bool)
+    is_pref_arr = np.zeros(n, dtype=bool)
+    cand_line_index = np.zeros(n, dtype=np.int64)
+    have_index = np.zeros(n, dtype=bool)
+
+    # Canonical-diagnostic preference (x2.0 score bonus) — computed on the
+    # OBSERVATION wavelength + (element, stage), bit-identical to the reference
+    # ``stark_ne._preference_factor``. is_preferred drives candidate RANK, which
+    # in turn drives the top_k cap and the break-after-successes success set, so
+    # dropping it (the old jnp.zeros wiring) diverged the on-device candidate set
+    # from the reference exactly for Ca II / Mg II / H-alpha diagnostics.
+    from cflibs.inversion.physics.stark_ne import _preference_factor
+
+    line_wl = np.asarray(snapshot.line_wavelength_nm, dtype=float)
+    line_sp = np.asarray(snapshot.line_species_index, dtype=np.int64)
+    species = list(snapshot.species)  # ((element, sp_num), ...)
+    # Pre-resolve obs (element, stage) -> snapshot species index for the
+    # same-species window restriction (cand_line_index argmin within species).
+    species_of: dict = {}
+    for si, (el, sp) in enumerate(species):
+        species_of[(el, int(sp))] = si
+
+    for i, obs in enumerate(selected):
+        intensity_arr[i] = obs.intensity
+        intensity_unc_arr[i] = obs.intensity_uncertainty
+        wl_obs_arr[i] = obs.wavelength_nm
+
+        # Positional 0.1 nm tolerance: the real ``AtomicDatabase`` method names
+        # this ``tolerance_nm`` while ``measure_stark_ne`` passes it positionally
+        # (stark_ne.py:487); call it positionally so any source signature works.
+        w_ref, alpha, source, is_resonance = atomic_db.get_stark_parameters_with_source(
+            obs.element, obs.ionization_stage, obs.wavelength_nm, 0.1
+        )
+        is_lit = source in LITERATURE_STARK_SOURCES and w_ref is not None and w_ref > 0
+        lit_arr[i] = bool(is_lit)
+        res_arr[i] = bool(is_resonance)
+        if w_ref is not None and w_ref > 0:
+            w_ref_arr[i] = float(w_ref)
+        alpha_arr[i] = float(alpha) if alpha is not None else _S.DEFAULT_STARK_ALPHA
+
+        # Instrument FWHM via the reference ladder (resolving-power or the
+        # data-driven narrowest-line floor); ``None`` -> 0 (gated by
+        # ``SEL_NO_INSTRUMENT_WIDTH``).
+        instr = _instr_fwhm(obs.wavelength_nm)
+        instr_arr[i] = float(instr) if (instr is not None and instr > 0) else 0.0
+
+        mass = resolve_element_mass(obs.element, atomic_db)
+        dopp_arr[i] = float(doppler_width(obs.wavelength_nm, T_eV, mass))
+
+        # Reference-identical preference: matches the canonical-diagnostic table
+        # on the observation wavelength (NOT the snapshot catalog wavelength),
+        # within 0.3 nm and same (element, stage).
+        is_pref_arr[i] = (
+            _preference_factor(obs.element, obs.ionization_stage, obs.wavelength_nm) > 1.0
+        )
+
+        # Resolve obs -> snapshot line index for multiplet/preference: argmin
+        # |line_wl - obs.wl| restricted to the SAME species AND |delta| < 0.1 nm.
+        si = species_of.get((obs.element, int(obs.ionization_stage)))
+        if si is not None and line_wl.size:
+            same = line_sp == si
+            if np.any(same):
+                idx_pool = np.nonzero(same)[0]
+                deltas = np.abs(line_wl[idx_pool] - obs.wavelength_nm)
+                j = int(np.argmin(deltas))
+                if deltas[j] < 0.1:
+                    cand_line_index[i] = int(idx_pool[j])
+                    have_index[i] = True
+        if not have_index[i]:
+            # No snapshot line within 0.1 nm of the same species -> the
+            # multiplet/preference lookup cannot anchor; treat as not
+            # literature-grade so the candidate is never fit (reference port
+            # plan step 4). Park the index at 0 (its mask gates it out).
+            lit_arr[i] = False
+
+    candidate_mask = np.ones(n, dtype=bool)
+
+    # --- candidate selection + ranking (top_k = C disables the pre-fit cap) ----
+    sel = _S.select_stark_candidates(
+        jnp.asarray(intensity_arr),
+        jnp.asarray(intensity_unc_arr),
+        jnp.asarray(wl_obs_arr),
+        jnp.asarray(instr_arr),
+        jnp.asarray(dopp_arr),
+        jnp.asarray(lit_arr, dtype=bool),
+        jnp.asarray(is_pref_arr, dtype=bool),  # x2.0 rank bonus for canonical diagnostics
+        jnp.asarray(res_arr, dtype=bool),
+        jnp.asarray(candidate_mask, dtype=bool),
+        min_snr=5.0,
+        isolation_factor=1.5,
+        top_k=n,  # C, NOT 5 — disable the kernel's built-in max_lines cap.
+    )
+    gate_ok = np.asarray(sel.selected, dtype=bool)
+    score = np.asarray(sel.score, dtype=float)
+    iso = np.asarray(sel.isolation_nm, dtype=float)
+    gauss = np.asarray(sel.gaussian_fwhm_nm, dtype=float)
+
+    if not gate_ok.any():
+        return None
+
+    # --- multiplet-blend gate AFTER selection, BEFORE fit ---------------------
+    # half = min(max(4*gauss, 0.3), max(iso/2, 2*gauss)) (stark_ne.py:545).
+    half = np.minimum(np.maximum(4.0 * gauss, 0.3), np.maximum(iso / 2.0, 2.0 * gauss))
+    blend = np.asarray(
+        _S.multiplet_blend_mask(
+            jnp.asarray(cand_line_index),
+            jnp.asarray(half),
+            snapshot,
+            T_eV,
+            strength_fraction=0.25,
+        ),
+        dtype=bool,
+    )
+    # A candidate with no resolvable snapshot anchor cannot be evaluated for a
+    # blend; it was already forced not-literature-grade above (gate_ok False).
+    gate2_ok = gate_ok & ~blend
+
+    if not gate2_ok.any():
+        return None
+
+    # --- window gather (recenter + extract) on wl_in --------------------------
+    # W=96 raw samples, wider than ADR-0004 row 8's nominal W=64: real spectra
+    # are locally coarser-sampled than the synthetic design case, so 96 avoids
+    # truncating the Voigt wings (a conservative, accuracy-preserving deviation).
+    W = 96
+    search_nm = np.maximum(0.5 * gauss, 0.15)
+    center_idx = np.empty(n, dtype=np.int64)
+    wl_j = jnp.asarray(wl_in)
+    inten_j = jnp.asarray(inten)
+    for i in range(n):
+        center_idx[i] = int(
+            _S.recenter_idx(wl_j, inten_j, float(wl_obs_arr[i]), float(search_nm[i]))
+        )
+    wl_win, inten_win, mask = _S.extract_windows(
+        wl_j, inten_j, jnp.asarray(center_idx), jnp.asarray(half), W
+    )
+    center0 = wl_j[jnp.asarray(center_idx)]
+
+    # --- fit ALL gate2_ok candidates (no pre-cap) -----------------------------
+    res = _S.measure_stark_ne_jit(
+        wl_win,
+        inten_win,
+        mask,
+        center0,
+        jnp.asarray(gauss),
+        jnp.asarray(w_ref_arr),
+        jnp.asarray(alpha_arr),
+        jnp.asarray(gate2_ok, dtype=bool),
+        T_K,
+        max_fit_rel_rmse=0.25,
+    )
+
+    # --- BREAK-AFTER-MAX_LINES-SUCCESSES: cap the success set to the first 5 ---
+    # QC_OK candidates in score-descending order, THEN cohort-trim + combine over
+    # exactly those (cap precedes trim; ``measure_stark_ne_jit`` re-run with the
+    # capped candidate_mask reproduces the reference success set + median).
+    quality = np.asarray(res.quality)
+    qc_ok = quality == _S.QC_OK  # post-trim valid set over all gate2_ok candidates
+    # The kernel already cohort-trimmed; recover the raw QC_OK (pre-trim accepted)
+    # success set so the cap matches the reference (cap precedes trim).
+    cohort_trimmed = quality == _S.QC_COHORT_OUTLIER
+    raw_ok = qc_ok | cohort_trimmed  # accepted by the per-line gate ladder
+
+    order = np.argsort(-score, kind="stable")  # score-descending, stable tiebreak
+    success_mask = np.zeros(n, dtype=bool)
+    taken = 0
+    for idx in order:
+        if not gate2_ok[idx]:
+            continue
+        if raw_ok[idx]:
+            success_mask[idx] = True
+            taken += 1
+            if taken >= _S.MAX_LINES:
+                break
+
+    if not success_mask.any():
+        return None
+
+    # Re-run the cohort-trim + median over EXACTLY the capped success set.
+    res2 = _S.measure_stark_ne_jit(
+        wl_win,
+        inten_win,
+        mask,
+        center0,
+        jnp.asarray(gauss),
+        jnp.asarray(w_ref_arr),
+        jnp.asarray(alpha_arr),
+        jnp.asarray(success_mask, dtype=bool),
+        T_K,
+        max_fit_rel_rmse=0.25,
+    )
+    n_lines = int(res2.n_lines)
+    ne_median = float(res2.ne_median)
+    if n_lines >= 1 and np.isfinite(ne_median):
+        return ne_median
+    return None
+
+
 def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot) -> FrontEndResult:
     """ON-DEVICE front-end: J1 detect + J3 identify gate-stack run as JIT kernels.
 
@@ -2220,12 +2527,14 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
         ranking — host gather] -> J1 detect_peaks_detection (DEVICE) ->
         kdet pre-filter (DEVICE, coherence branch) -> J3 comb scan + shift select
         + veto + observation build (DEVICE) -> trapezoid intensity (DEVICE) ->
-        LineSelector SNR/iso/score (DEVICE) -> Stark n_e diagnostic (reference).
+        LineSelector SNR/iso/score (DEVICE) -> Stark n_e diagnostic (DEVICE).
 
     The DEVICE stages are the J1/J3 fixed-shape kernels plus (Wave 3b) the kdet
-    coherence keep-rule (``kdet_keep_mask``) and the LineSelector score kernel
-    (``_line_selector_scores``); the reference-delegated stages (segmented
-    calibration, Stark, and the kdet density branch) feed the kernels their
+    coherence keep-rule (``kdet_keep_mask``), the LineSelector score kernel
+    (``_line_selector_scores``), and (this change) the J6 Stark n_e diagnostic
+    (:func:`_ondevice_stark_ne`, composing the ``cflibs.jitpipe.stark`` kernels);
+    the reference-delegated stages (segmented calibration and the kdet density
+    branch) feed the kernels their
     byte-identical inputs so the produced observation line-key set matches the
     reference ``detect_and_select_lines`` (the parity oracle). Never raises on
     zero observations (returns ``n_observations == 0`` for the caller — the J8
@@ -2240,9 +2549,10 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
     pipeline : AnalysisPipelineConfig
         Resolved front-end config (every front-end knob).
     snapshot : PipelineSnapshot
-        Host-built atomic snapshot (unused by the detect/identify kernels — they
-        read the host-gathered comb/peak arrays — but threaded for symmetry with
-        the reference-delegated solve seam).
+        Host-built atomic snapshot. The detect/identify kernels read the
+        host-gathered comb/peak arrays, not the snapshot; the ON-DEVICE Stark
+        stage (:func:`_ondevice_stark_ne`) consumes the snapshot per-line tables
+        for its multiplet-blend mask.
 
     Returns
     -------
@@ -2254,7 +2564,9 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
 
     from cflibs.jitpipe import identify as _J
 
-    del snapshot  # detect/identify kernels read host-gathered arrays, not the snapshot.
+    # NOTE: the detect/identify kernels read host-gathered arrays, not the
+    # snapshot, but the ON-DEVICE Stark stage (:func:`_ondevice_stark_ne`)
+    # consumes the snapshot per-line tables for the multiplet-blend mask.
 
     wl_in = np.asarray(wavelength, dtype=float)
     inten = np.asarray(intensity, dtype=float)
@@ -2502,24 +2814,55 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
         "applied_shift_nm": applied_shift_nm,
     }
 
-    # --- Stark n_e diagnostic (reference-delegated) ----------------------------
+    # --- Stark n_e diagnostic (ON-DEVICE J6 kernels, reference fallback) --------
     # The reference ``run_pipeline`` measures Stark n_e on the ORIGINAL
     # (response-corrected but NOT calibration-corrected) axis ``wl_in`` — the
     # calibration is applied only inside ``detect_and_select_lines`` on its own
     # copy (``pipeline.py:887``). Use ``wl_in`` to bit-match the reference n_e
     # that pins the production solve.
+    #
+    # :func:`_ondevice_stark_ne` composes the parity-tested fixed-shape kernels
+    # (candidate selection / multiplet-blend / window gather / vmapped LM fit /
+    # width-law inversion / cohort-trim). It reproduces the reference on the
+    # synthetic parity envelope (``tests/jitpipe/test_ondevice_stark_ne.py``), but
+    # on REAL coarse-sampled, high-dynamic-range ChemCam spectra the fixed-20-iter
+    # LM Voigt kernel (``cflibs.jitpipe.stark.fit_lorentz_fwhm_lm``) is numerically
+    # fragile (NaN at ~1e12 intensity scale + non-left-packed ``extract_windows``
+    # gathers) and its strict ``converged`` quality gate rejects otherwise-good
+    # fits — so it yields no usable line where scipy's trust-region fitter
+    # succeeds. The kernels are parity-frozen (bead 6apc forbids modifying them),
+    # so the on-device path is wired as an OPPORTUNISTIC primary with a
+    # bounded-failure fallback to the reference ``measure_stark_ne`` (the exact
+    # path :func:`run_front_end` uses) whenever it returns no usable n_e. See bead
+    # 6apc for the gap analysis + a follow-up to harden the LM kernel for
+    # real-data parity (then this fallback can be dropped).
     ne_stark: float | None = None
     if pipeline.stark_ne and selected:
-        from cflibs.inversion.physics.stark_ne import measure_stark_ne
-
         try:
-            stark_result = measure_stark_ne(
-                wl_in, inten, selected, atomic_db, resolving_power=pipeline.resolving_power
-            )
+            ne_stark = _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline)
         except Exception:  # pragma: no cover - defensive
-            stark_result = None
-        if stark_result is not None and stark_result.usable:
-            ne_stark = float(stark_result.ne_median_cm3)
+            # Log (don't silently swallow) so a genuine kernel regression -- a
+            # shape/dtype bug, not the expected numerical non-convergence that
+            # returns None -- is observable in logs rather than masquerading as
+            # a normal reference fallback.
+            from cflibs.core.logging_config import get_logger
+
+            get_logger("jitpipe.host").debug(
+                "on-device Stark n_e raised; falling back to reference measure_stark_ne",
+                exc_info=True,
+            )
+            ne_stark = None
+        if ne_stark is None:
+            from cflibs.inversion.physics.stark_ne import measure_stark_ne
+
+            try:
+                stark_result = measure_stark_ne(
+                    wl_in, inten, selected, atomic_db, resolving_power=pipeline.resolving_power
+                )
+            except Exception:  # pragma: no cover - defensive
+                stark_result = None
+            if stark_result is not None and stark_result.usable:
+                ne_stark = float(stark_result.ne_median_cm3)
 
     return FrontEndResult(
         observations=list(selected),
