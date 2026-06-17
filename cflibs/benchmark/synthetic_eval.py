@@ -1015,6 +1015,13 @@ def recount_rows(rows: List[Dict[str, Any]], panel_elements: Sequence[str]) -> L
     inflating TN/FP. Used for the ``ever_present`` companion aggregate. Failed
     rows are passed through unchanged (their counts are already zero), and all
     non-confusion fields are preserved.
+
+    Each row's per-spectrum "don't-care" band (sub-detection-floor traces) is
+    removed from the panel for that row, even though the same element may be
+    above-floor — and thus a legitimate panel member — for a *different*
+    spectrum. Without this, predicting a real-but-sub-floor trace would be
+    re-counted as an FP here, contradicting the stored row counts and the
+    per-element metrics that already exclude it.
     """
     panel = list(panel_elements)
     out: List[Dict[str, Any]] = []
@@ -1023,7 +1030,9 @@ def recount_rows(rows: List[Dict[str, Any]], panel_elements: Sequence[str]) -> L
         if not row.get("failed"):
             truth = set(row.get("true_elements", []))
             pred = set(row.get("predicted_elements", []))
-            counts = confusion_counts(truth, pred, panel)
+            ignore = set(row.get("ignore_elements", ()))
+            row_panel = [el for el in panel if el not in ignore] if ignore else panel
+            counts = confusion_counts(truth, pred, row_panel)
             new_row.update(counts)
         out.append(new_row)
     return out

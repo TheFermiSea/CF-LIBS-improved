@@ -401,6 +401,52 @@ def test_per_element_summaries_honor_dont_care_band():
     assert "Mg" not in dict(confound["top_fp"]), "don't-care trace leaked into top_fp"
 
 
+def test_recount_rows_honors_per_row_dont_care():
+    """recount_rows must drop each row's don't-care band even when that element
+    is above-floor (a legit panel member) for a *different* spectrum (Codex P2).
+
+    Mg is sub-floor in spectrum A (predicted there) but above-floor truth in B,
+    so Mg is in the ever_present panel. Recounting A against that panel must not
+    re-introduce Mg as an FP.
+    """
+    ever_present = ["Fe", "Mg"]
+    _peak_fields = {
+        "peak_match_rate": 1.0,
+        "n_peaks": 5,
+        "n_matched_peaks": 5,
+        "matched_lines_true_elements": 5,
+        "total_lines_true_elements": 5,
+        "matched_lines_absent_elements": 0,
+    }
+    rows = [
+        {  # spectrum A: Mg is a don't-care trace that ALIAS predicted
+            "algorithm": "ALIAS",
+            "failed": False,
+            "true_elements": ["Fe"],
+            "predicted_elements": ["Fe", "Mg"],
+            "ignore_elements": ["Mg"],
+            **_peak_fields,
+        },
+        {  # spectrum B: Mg is above-floor truth and correctly detected
+            "algorithm": "ALIAS",
+            "failed": False,
+            "true_elements": ["Fe", "Mg"],
+            "predicted_elements": ["Fe", "Mg"],
+            "ignore_elements": [],
+            **_peak_fields,
+        },
+    ]
+    recounted = recount_rows(rows, ever_present)
+    # Spectrum A: Fe = TP, Mg skipped (don't-care) -> no FP.
+    assert recounted[0]["fp"] == 0
+    assert recounted[0]["tp"] == 1
+    # Spectrum B: Fe + Mg both TP.
+    assert recounted[1]["tp"] == 2
+    assert recounted[1]["fp"] == 0
+    agg = summarize_aggregate(recounted, ever_present)[0]
+    assert agg["fp"] == 0  # the don't-care trace never inflates the companion FP
+
+
 def test_ever_present_panel_companion():
     """Restricting to ever_present={Fe,Ni} never lowers F1 vs the full panel."""
     full_panel = ["Fe", "Ni", "Co", "Cu", "Mg"]  # Co/Cu/Mg never in truth
