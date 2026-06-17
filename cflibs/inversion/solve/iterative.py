@@ -20,7 +20,6 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.radiation.stark import estimate_ne_from_stark
 from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.physics.closure import ClosureEquation
-from cflibs.inversion.physics.closure_strategy import ClosureStrategy
 from cflibs.inversion.physics.self_absorption_observable import (
     ObservableSAResult,
     ObservableSelfAbsorptionCorrector,
@@ -886,7 +885,6 @@ class IterativeCFLIBSSolver:
         apply_ipd: bool = False,
         aki_uncertainty_weighting: bool = True,
         two_region: bool = False,
-        closure: Optional[ClosureStrategy] = None,
         apply_self_absorption: "bool | str" = False,
         min_boltzmann_r2: float = 0.3,
         boltzmann_weight_cap: float = 5.0,
@@ -1036,18 +1034,6 @@ class IterativeCFLIBSSolver:
         # Stark n_e diagnostic stats from the most recent _update_ne_python
         # call (line count + MAD scatter), surfaced in quality_metrics.
         self._last_stark_stats: Dict[str, float] = {"n_lines": 0, "scatter_cm3": 0.0}
-        # Closure strategy — defaults to ILR per architecture-review
-        # Candidate 3 (ILR has well-conditioned gradients down to the
-        # trace-element regime).  The per-call ``closure_mode`` argument
-        # of :meth:`solve` continues to override this and remains the
-        # primary closure-selection API for the iterative solver, so the
-        # legacy default (``closure_mode='standard'``) is preserved
-        # bit-for-bit when callers do not pass ``closure_mode``.
-        if closure is None:
-            from cflibs.inversion.physics.closure_strategy import ILRClosure
-
-            closure = ILRClosure()
-        self.closure: ClosureStrategy = closure
         # Composition-degeneracy ("keystone collapse") gate, bead
         # CF-LIBS-improved-tpkm / -cxxq. A composition where ONE element soaks
         # more than ``degeneracy_dominance_threshold`` of the closure mass out
