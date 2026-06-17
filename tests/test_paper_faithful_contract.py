@@ -20,6 +20,8 @@ from cflibs.inversion.identify.alias import ALIAS_PRESETS, ALIASIdentifier
 from cflibs.inversion.identify.comb import CombIdentifier
 from cflibs.inversion.identify.hybrid import HybridIdentifier
 
+pytestmark = pytest.mark.unit
+
 # The paper's confidence threshold C_th (Noël §3.8 eq 6) lives on the k_det
 # scale (default 0.5 strict / 0.4 recall). The legacy CL-deflated decision used
 # floor values like 0.01–0.10; on the k_det scale those are "accept everything",
