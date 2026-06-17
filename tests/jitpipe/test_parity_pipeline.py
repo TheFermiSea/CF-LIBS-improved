@@ -1014,3 +1014,133 @@ def test_ondevice_line_select_matches_reference(exclude_resonance):
     ref_keys = [(o.element, round(o.wavelength_nm, 6)) for o in ref]
     dev_keys = [(o.element, round(o.wavelength_nm, 6)) for o in dev]
     assert dev_keys == ref_keys, (dev_keys, ref_keys)
+
+
+# ---------------------------------------------------------------------------
+# 6apc — ON-DEVICE Stark n_e diagnostic (run_front_end_ondevice) parity + gates.
+#
+# These exercise the on-device Stark orchestrator
+# (:func:`cflibs.jitpipe.host._ondevice_stark_ne`) wired into
+# ``run_front_end_ondevice``. The orchestrator is an OPPORTUNISTIC primary with a
+# bounded-failure fallback to the reference ``measure_stark_ne``: on synthetic
+# data inside the LM Voigt kernel's parity envelope it produces the n_e directly,
+# but on REAL coarse-sampled ChemCam windows the parity-frozen LM kernel cannot
+# converge (it yields no usable line), so the reference fallback supplies n_e.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _REAL_SPECTRUM.exists(), reason="real ChemCam BHVO-2 fixture not present in worktree"
+)
+@pytest.mark.parametrize("preset", ["geological", "raw"])
+def test_ondevice_stark_ne_real_chemcam_matches_reference(db, snapshot, preset):
+    """run_front_end_ondevice Stark n_e == reference Stark on the SAME obs set (G3).
+
+    The on-device front-end selects a (slightly) different observation set than
+    the reference front-end, so an apples-to-apples Stark-PORT comparison must
+    hold the input observations fixed. Here we drive the reference
+    ``measure_stark_ne`` on the on-device-selected observations and assert
+    ``run_front_end_ondevice`` reports the same ``ne_stark_cm3`` (rtol 1e-6).
+
+    On real ChemCam BHVO-2 the on-device LM kernel cannot fit the coarse-sampled
+    windows, so ``_ondevice_stark_ne`` returns ``None`` and the bounded-failure
+    fallback supplies the reference value — which is exactly what this asserts:
+    the wiring never returns a WRONG n_e (it falls back cleanly to the reference).
+    """
+    from cflibs.inversion.physics.stark_ne import measure_stark_ne
+    from cflibs.inversion.pipeline import build_pipeline_config
+    from cflibs.jitpipe.host import run_front_end_ondevice
+
+    wl, inten = _load_real_spectrum()
+    elements = ["Si", "Ti", "Al", "Fe", "Mn", "Mg", "Ca", "Na", "K"]
+    # ``raw`` disables Stark by default; force it on so the path is exercised.
+    cfg = build_pipeline_config(elements, preset=preset, overrides={"stark_ne": True})
+
+    dev = run_front_end_ondevice(wl, inten, db, cfg, snapshot)
+    assert dev.ne_stark_cm3 is not None, "on-device front-end produced no Stark n_e"
+
+    # Reference Stark on the SAME (on-device-selected) observations.
+    sr = measure_stark_ne(wl, inten, dev.observations, db, resolving_power=cfg.resolving_power)
+    assert sr.usable
+    np.testing.assert_allclose(dev.ne_stark_cm3, sr.ne_median_cm3, rtol=1e-6)
+
+
+def test_ondevice_stark_ne_synthetic_no_reference_call(db, snapshot):
+    """On synthetic data the on-device Stark path runs WITHOUT the reference (G4).
+
+    Within the LM Voigt kernel's parity envelope (a clean synthetic spectrum) the
+    on-device ``_ondevice_stark_ne`` produces n_e directly. Monkeypatching the
+    reference ``measure_stark_ne`` to raise proves the value comes from the
+    on-device kernels, not the fallback — the delegation is genuinely severed
+    here. (On real ChemCam the kernel cannot fit, so the fallback IS needed;
+    that limitation is documented in ``_ondevice_stark_ne`` and bead 6apc.)
+    """
+    import cflibs.inversion.physics.stark_ne as _ref_stark
+    from cflibs.inversion.common.data_structures import LineObservation
+    from cflibs.jitpipe.host import _ondevice_stark_ne
+    from cflibs.radiation.profiles import voigt_profile
+
+    _FWHM = 2.0 * float(np.sqrt(2.0 * np.log(2.0)))
+    # 3 well-isolated literature-grade diagnostics on a dense axis (kernel envelope).
+    centers = [390.0, 400.0, 410.0]
+    gammas = [0.07, 0.09, 0.05]
+    instr_fwhm = 0.08
+    rp = centers[0] / instr_fwhm
+    sigma_g = instr_fwhm / _FWHM
+    wl = np.linspace(380.0, 420.0, 8001)
+    inten = np.full_like(wl, 0.5)
+    for c, g in zip(centers, gammas):
+        inten = inten + np.asarray(voigt_profile(wl, c, sigma_g, g, amplitude=3.0))
+
+    from types import SimpleNamespace
+
+    class _StubDB:
+        def get_stark_parameters_with_source(self, element, stage, wl_nm, tol=0.1):
+            for c in centers:
+                if abs(wl_nm - c) <= tol:
+                    return (0.05, 0.5, "stark_b", False)
+            return (None, None, None, None)
+
+        def get_transitions(self, element, ionization_stage=None, **kw):
+            return []
+
+        def get_atomic_mass(self, element):
+            return 1.0e6  # kill Doppler -> pinned Gaussian == instrument
+
+    stub = _StubDB()
+    snap = SimpleNamespace(
+        line_wavelength_nm=np.asarray(centers, float),
+        line_species_index=np.zeros(len(centers), np.int64),
+        line_g_k=np.full(len(centers), 5.0),
+        line_A_ki=np.full(len(centers), 1e7),
+        line_E_k_ev=np.full(len(centers), 4.0),
+        species=(("Fe", 1),),
+    )
+    obs = [
+        LineObservation(
+            wavelength_nm=c,
+            intensity=100.0,
+            intensity_uncertainty=2.0,
+            element="Fe",
+            ionization_stage=1,
+            E_k_ev=4.0,
+            g_k=5,
+            A_ki=1e7,
+        )
+        for c in centers
+    ]
+    pipeline = SimpleNamespace(resolving_power=rp, stark_ne=True)
+
+    def _boom(*a, **k):
+        raise AssertionError("reference measure_stark_ne must NOT be called on synthetic data")
+
+    orig = _ref_stark.measure_stark_ne
+    _ref_stark.measure_stark_ne = _boom
+    try:
+        got = _ondevice_stark_ne(wl, inten, obs, stub, snap, pipeline)
+    finally:
+        _ref_stark.measure_stark_ne = orig
+
+    assert got is not None and np.isfinite(got)
+    # Sanity: the recovered n_e is in the LIBS plausibility band.
+    assert 1e14 <= got <= 1e20
