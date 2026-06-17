@@ -31,8 +31,14 @@ class AtomicDataSource(Protocol):
     base class. Note the real variation seam, ``partition_function_for``, is a
     convenience method on ``AtomicDatabase`` and intentionally NOT part of this
     protocol (call sites hasattr-guard it).
+
+    The methods stay ``@abstractmethod`` so the best of both holds: a duck-typed
+    class satisfies it structurally without inheritance, while a class that
+    *explicitly* subclasses it still fails fast at instantiation if it forgets a
+    method (Protocol uses ABCMeta).
     """
 
+    @abstractmethod
     def get_transitions(
         self,
         element: str,
@@ -44,14 +50,17 @@ class AtomicDataSource(Protocol):
         """Get transitions for an element."""
         ...
 
+    @abstractmethod
     def get_energy_levels(self, element: str, ionization_stage: int) -> List[EnergyLevel]:
         """Get energy levels for a species."""
         ...
 
+    @abstractmethod
     def get_ionization_potential(self, element: str, ionization_stage: int) -> Optional[float]:
         """Get ionization potential for a species in eV."""
         ...
 
+    @abstractmethod
     def get_available_elements(self) -> List[str]:
         """Get list of available element symbols."""
         ...
