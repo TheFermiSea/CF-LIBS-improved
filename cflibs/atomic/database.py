@@ -17,14 +17,13 @@ if TYPE_CHECKING:
 
 from cflibs.atomic.structures import Transition, EnergyLevel, SpeciesPhysics, PartitionFunction
 from cflibs.core.logging_config import get_logger
-from cflibs.core.abc import AtomicDataSource
 from cflibs.core.cache import cached_transitions, cached_ionization
 from cflibs.core.pool import get_pool
 
 logger = get_logger("atomic.database")
 
 
-class AtomicDatabase(AtomicDataSource):
+class AtomicDatabase:
     """
     Interface to atomic data stored in SQLite database.
 

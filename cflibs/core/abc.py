@@ -1,9 +1,10 @@
 """
 Abstract base classes and protocols for extensibility.
 
-ABCs are used for core interfaces (AtomicDataSource, SolverStrategy) that must
-be inherited. Protocols are used for structural typing of classes that may
-implement the interface without explicit inheritance.
+ABCs are used for core interfaces (SolverStrategy) that must be inherited.
+Protocols are used for structural typing of classes that may implement the
+interface without explicit inheritance (AtomicDataSource, PlasmaModel,
+InstrumentModelProtocol).
 """
 
 from abc import ABC, abstractmethod
@@ -16,15 +17,22 @@ if TYPE_CHECKING:
     from cflibs.plasma.state import SingleZoneLTEPlasma
 
 
-class AtomicDataSource(ABC):
+@runtime_checkable
+class AtomicDataSource(Protocol):
     """
-    Abstract interface for atomic data sources.
+    Structural interface for atomic data sources.
 
-    This allows plugging in different data sources (SQLite, NIST API, HDF5, etc.)
-    without changing the rest of the codebase.
+    Any class with these methods (SQLite, NIST API, HDF5, ...) satisfies it
+    without explicit inheritance — which is how it is actually used: production
+    code duck-types the concrete ``AtomicDatabase`` and tests pass minimal fakes.
+    It was an ABC, but with a single concrete adapter and no polymorphic
+    dispatch the inheritance earned nothing; a ``Protocol`` keeps the structural
+    contract (and ``isinstance`` via ``runtime_checkable``) without forcing the
+    base class. Note the real variation seam, ``partition_function_for``, is a
+    convenience method on ``AtomicDatabase`` and intentionally NOT part of this
+    protocol (call sites hasattr-guard it).
     """
 
-    @abstractmethod
     def get_transitions(
         self,
         element: str,
@@ -34,22 +42,19 @@ class AtomicDataSource(ABC):
         min_relative_intensity: Optional[float] = None,
     ) -> List[Transition]:
         """Get transitions for an element."""
-        pass
+        ...
 
-    @abstractmethod
     def get_energy_levels(self, element: str, ionization_stage: int) -> List[EnergyLevel]:
         """Get energy levels for a species."""
-        pass
+        ...
 
-    @abstractmethod
     def get_ionization_potential(self, element: str, ionization_stage: int) -> Optional[float]:
         """Get ionization potential for a species in eV."""
-        pass
+        ...
 
-    @abstractmethod
     def get_available_elements(self) -> List[str]:
         """Get list of available element symbols."""
-        pass
+        ...
 
 
 class SolverStrategy(ABC):
