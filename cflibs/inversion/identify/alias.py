@@ -641,17 +641,18 @@ class ALIASIdentifier:
         precision-king baseline). Passing an explicit float overrides
         ``high_recall`` for this knob.
     detection_threshold : float, optional
-        Minimum confidence level for element detection. If ``None`` (the
-        default), resolved from ``high_recall``: ``0.01`` when
-        ``high_recall=True`` and ``0.02`` otherwise (strict mode, the
-        precision-king baseline). Passing an explicit float overrides
-        ``high_recall`` for this knob.
+        The paper's confidence threshold ``C_th`` (Noel 2025 sec 3.8): an
+        element is detected when ``k_det > C_th``. If ``None`` (the
+        default), resolved from ``high_recall``: ``0.4`` when
+        ``high_recall=True`` and ``0.5`` otherwise (strict mode, the paper
+        default and precision-king baseline). Passing an explicit float
+        overrides ``high_recall`` for this knob.
     high_recall : bool, optional
         Opt-in preset that loosens the two peak/identification thresholds
         for higher recall at the cost of precision. When ``True`` (and the
         caller has not pinned the corresponding knob explicitly) it lowers
         ``intensity_threshold_factor`` from ``3.0`` to ``2.0`` and
-        ``detection_threshold`` from ``0.02`` to ``0.01``. The default
+        ``detection_threshold`` (the paper C_th) from ``0.5`` to ``0.4``. The default
         (``False``) preserves the strict precision-king behavior captured
         in the F1 leaderboard baseline at
         ``.swarm/identifier-f1-baseline.json`` (precision=1.000, FP/spec=0
@@ -787,17 +788,18 @@ class ALIASIdentifier:
             that preserves the precision-king baseline). Pass an explicit float
             to override ``high_recall`` for this knob.
         detection_threshold : Optional[float], optional
-            Minimum normalized line strength considered during identification.
+            The paper's confidence threshold ``C_th`` (Noel 2025 sec 3.8):
+            an element is detected when ``k_det > C_th``.
             If ``None`` (default), the value is resolved from ``high_recall``:
-            ``0.01`` when ``high_recall=True``, ``0.02`` otherwise (strict
-            default that preserves the precision-king baseline). Pass an
+            ``0.4`` when ``high_recall=True``, ``0.5`` otherwise (the paper
+            default / strict precision-king baseline). Pass an
             explicit float to override ``high_recall`` for this knob.
         high_recall : bool, optional
             Opt-in preset that loosens the two peak/identification thresholds
             for higher recall at the cost of precision. When ``True``, the
             unspecified threshold knobs become
-            ``intensity_threshold_factor=2.0`` and ``detection_threshold=0.01``
-            (compare to the strict ``3.0`` / ``0.02`` defaults). The default
+            ``intensity_threshold_factor=2.0`` and ``detection_threshold=0.4``
+            (compare to the strict ``3.0`` / ``0.5`` defaults). The default
             (``False``) preserves the strict precision-king behavior measured
             on the n=33 cross-shard F1 leaderboard (precision=1.000,
             FP/spec=0). This is the opt-in replacement for the closed PR #134
@@ -4744,7 +4746,14 @@ ALIAS_PRESETS: Dict[str, Dict[str, Any]] = {
         "relative_cl_per_ion_stage": False,
         "high_recall": False,
         "intensity_threshold_factor": 3.0,
-        "detection_threshold": 0.02,
+        # detection_threshold is now the paper's C_th (Noel 2025 sec 3.8):
+        # the decision is k_det > C_th, NOT the legacy CL-floor (0.02) that
+        # this preset used to pin.  On the k_det scale 0.02 was effectively
+        # "accept everything", which silently turned the precision-king
+        # "strict" preset into the most PERMISSIVE path.  Pin the strict C_th
+        # (0.5) so it matches the __init__ strict default and lives up to its
+        # name.
+        "detection_threshold": 0.5,
         "chance_window_scale": 0.4,
         "max_lines_per_element": 30,
         "boltzmann_r2_min": 0.85,
@@ -4752,7 +4761,8 @@ ALIAS_PRESETS: Dict[str, Dict[str, Any]] = {
     # Phase D v2 cocktail — the ftp1+dj6y sweep winner.  ``adaptive_t``
     # R^2 gate (PR #175) + per-ion-stage relative-CL gate (PR #176).
     # Threshold knobs intentionally absent so ``__init__``'s strict
-    # defaults (3.0 / 0.02) apply unless the caller overrides them.
+    # defaults apply (intensity_threshold_factor=3.0, detection_threshold=0.5
+    # — the paper C_th, Noel 2025 sec 3.8) unless the caller overrides them.
     "v2": {
         "r2_gate_mode": "adaptive_t",
         "relative_cl_per_ion_stage": True,

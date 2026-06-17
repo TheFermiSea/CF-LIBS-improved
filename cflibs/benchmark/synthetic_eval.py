@@ -516,7 +516,10 @@ def build_identifier_runners(
                 elements=elements,
                 resolving_power=resolving_power,
                 nnls_detection_snr=1.5,
-                alias_detection_threshold=0.05,
+                # Paper strict C_th (k_det > C_th); old 0.05 CL-floor was
+                # "accept everything" on the k_det scale, flooding the union
+                # branch with ALIAS false positives.
+                alias_detection_threshold=0.5,
                 require_both=False,
             )
             return identifier.identify(wavelength, intensity)
@@ -685,6 +688,7 @@ def _build_failed_row(
     perturb: Dict[str, Any],
     cal_meta: Dict[str, Any],
     recipe: str,
+    ignore_elements: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     """Build the row dict emitted when an identifier failed for a spectrum."""
     return {
@@ -693,6 +697,10 @@ def _build_failed_row(
         "failed": True,
         "true_elements": sorted(true_elements),
         "predicted_elements": [],
+        # Per-spectrum "don't-care" band (sub-detection-floor traces); carried
+        # on the row so per-element/confounder re-aggregation can exclude them
+        # the same way the stored confusion counts already do.
+        "ignore_elements": sorted(ignore_elements or set()),
         "tp": 0,
         "fp": 0,
         "fn": len(true_elements),
@@ -748,6 +756,7 @@ def _build_success_row(
     perturb: Dict[str, Any],
     cal_meta: Dict[str, Any],
     recipe: str,
+    ignore_elements: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     """Build the row dict emitted when an identifier succeeded for a spectrum."""
     predicted_elements = {e.element for e in result.detected_elements}
@@ -761,6 +770,10 @@ def _build_success_row(
         "failed": False,
         "true_elements": sorted(true_elements),
         "predicted_elements": sorted(predicted_elements),
+        # Per-spectrum "don't-care" band (sub-detection-floor traces); carried
+        # on the row so per-element/confounder re-aggregation can exclude them
+        # the same way the stored confusion counts already do.
+        "ignore_elements": sorted(ignore_elements or set()),
         **counts,
         "n_peaks": int(result.n_peaks),
         "n_matched_peaks": int(result.n_matched_peaks),
@@ -840,6 +853,7 @@ def _evaluate_spectrum_rows(
                     perturb,
                     cal_meta,
                     recipe,
+                    ignore_elements=ignore_elements,
                 )
             )
             continue
@@ -855,6 +869,7 @@ def _evaluate_spectrum_rows(
                 perturb,
                 cal_meta,
                 recipe,
+                ignore_elements=ignore_elements,
             )
         )
     return spectrum_rows
@@ -948,12 +963,17 @@ def evaluate_dataset(
             print(f"[synthetic-benchmark] processed {idx}/{len(spectra)} spectra")
 
     # Elements that actually occur in the (sampled) truth — the realistic panel.
+    # Intersected with ``candidate_elements``: an above-floor truth element that
+    # was never offered as a candidate could never be predicted, so counting it
+    # as a perpetual FN in the ever-present aggregate would penalise the
+    # identifier for a panel it was never given.
+    candidate_set = set(candidate_elements)
     ever_present = sorted(
         {
             el
             for spec in spectra
             for el, frac in spec.true_composition.items()
-            if float(frac) >= float(presence_threshold)
+            if float(frac) >= float(presence_threshold) and el in candidate_set
         }
     )
 
@@ -995,6 +1015,13 @@ def recount_rows(rows: List[Dict[str, Any]], panel_elements: Sequence[str]) -> L
     inflating TN/FP. Used for the ``ever_present`` companion aggregate. Failed
     rows are passed through unchanged (their counts are already zero), and all
     non-confusion fields are preserved.
+
+    Each row's per-spectrum "don't-care" band (sub-detection-floor traces) is
+    removed from the panel for that row, even though the same element may be
+    above-floor — and thus a legitimate panel member — for a *different*
+    spectrum. Without this, predicting a real-but-sub-floor trace would be
+    re-counted as an FP here, contradicting the stored row counts and the
+    per-element metrics that already exclude it.
     """
     panel = list(panel_elements)
     out: List[Dict[str, Any]] = []
@@ -1003,7 +1030,9 @@ def recount_rows(rows: List[Dict[str, Any]], panel_elements: Sequence[str]) -> L
         if not row.get("failed"):
             truth = set(row.get("true_elements", []))
             pred = set(row.get("predicted_elements", []))
-            counts = confusion_counts(truth, pred, panel)
+            ignore = set(row.get("ignore_elements", ()))
+            row_panel = [el for el in panel if el not in ignore] if ignore else panel
+            counts = confusion_counts(truth, pred, row_panel)
             new_row.update(counts)
         out.append(new_row)
     return out
@@ -1106,9 +1135,17 @@ def summarize_aggregate(
 
 
 def _per_element_confusion(subset: List[Dict[str, Any]], element: str) -> Tuple[int, int, int, int]:
-    """Tally TP/FP/FN/TN for one element across a per-algorithm row subset."""
+    """Tally TP/FP/FN/TN for one element across a per-algorithm row subset.
+
+    Rows whose per-spectrum "don't-care" band (sub-detection-floor traces)
+    contains ``element`` are skipped, so detecting/missing a real-but-sub-floor
+    trace is neither rewarded nor penalised — matching the scoring-panel
+    semantics already baked into each row's stored confusion counts.
+    """
     tp = fp = fn = tn = 0
     for row in subset:
+        if element in set(row.get("ignore_elements", ())):
+            continue
         truth = element in set(row["true_elements"])
         pred = element in set(row["predicted_elements"])
         if truth and pred:

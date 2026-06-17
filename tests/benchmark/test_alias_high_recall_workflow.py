@@ -2,11 +2,13 @@
 
 CF-LIBS-improved-knyz: the aa1100_substrate spectra fall out of
 identification under the strict alias workflow because the default
-``intensity_threshold_factor=3.0`` / ``detection_threshold=0.02``
-reject all candidates. PR #159 added ``ALIASIdentifier(high_recall=True)``
+``intensity_threshold_factor=3.0`` / ``detection_threshold=0.5``
+(the paper C_th, Noel 2025 sec 3.8) reject all candidates. PR #159
+added ``ALIASIdentifier(high_recall=True)``
 as the opt-in recall preset. This test pins the benchmark wiring that
 makes the preset accessible as ``--id-workflows alias_high_recall``.
 """
+
 from __future__ import annotations
 
 from cflibs.benchmark.unified import (
