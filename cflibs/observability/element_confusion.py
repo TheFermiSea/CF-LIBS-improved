@@ -28,6 +28,8 @@ from typing import Iterable, Sequence
 
 import pandas as pd
 
+from cflibs.benchmark.scoring import FN, FP, TP, classify_element
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,11 +131,23 @@ def _prepare_frame(df: pd.DataFrame) -> pd.DataFrame:
         _parse_list_cell
     )
     df["_true"] = df.get("true_elements", pd.Series([None] * len(df))).map(_parse_list_cell)
+    # Per-spectrum don't-care band (sub-detection-floor traces). Absent from
+    # today's id_records.csv -> parses to empty, leaving confusion unchanged;
+    # honored automatically once the campaign emits the column.
+    df["_ignore"] = df.get("ignore_elements", pd.Series([None] * len(df))).map(_parse_list_cell)
     return df
 
 
 def _count_cell(group: pd.DataFrame) -> tuple[dict[str, int], dict[str, int], dict[str, int], int]:
-    """Accumulate per-element tp/fp/fn and overpredicted-spectrum count for one cell."""
+    """Accumulate per-element tp/fp/fn and overpredicted-spectrum count for one cell.
+
+    Confusion goes through the shared :func:`classify_element` rule so this
+    aggregator cannot drift from the benchmark on the don't-care band: a
+    predicted sub-detection-floor trace (an element in the per-spectrum
+    ``_ignore`` band) is neither an FP here nor an over-prediction. Today's
+    id_records.csv carries no don't-care column, so ``_ignore`` is empty and the
+    counts are identical to the prior set-based form.
+    """
     tp: dict[str, int] = {}
     fp: dict[str, int] = {}
     fn: dict[str, int] = {}
@@ -141,14 +155,17 @@ def _count_cell(group: pd.DataFrame) -> tuple[dict[str, int], dict[str, int], di
     for _, row in group.iterrows():
         pred = set(row["_predicted"])
         true = set(row["_true"])
-        if pred - true:
+        ignore = set(row.get("_ignore", ()) or ())
+        if pred - true - ignore:
             n_overpred_spectra += 1
-        for el in pred & true:
-            tp[el] = tp.get(el, 0) + 1
-        for el in pred - true:
-            fp[el] = fp.get(el, 0) + 1
-        for el in true - pred:
-            fn[el] = fn.get(el, 0) + 1
+        for el in pred | true:
+            label = classify_element(el, true, pred, ignore)
+            if label == TP:
+                tp[el] = tp.get(el, 0) + 1
+            elif label == FP:
+                fp[el] = fp.get(el, 0) + 1
+            elif label == FN:
+                fn[el] = fn.get(el, 0) + 1
     return tp, fp, fn, n_overpred_spectra
 
 

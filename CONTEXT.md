@@ -55,3 +55,26 @@ single place rather than smeared across nine call sites.
   gate must be **count-invariant**: its effective bar must not tighten as the
   candidate-element count grows (see the 2026-06-03 candidate-count-fragility
   audit; the `coeff / Σ-over-candidates` form is the anti-pattern).
+
+## Scoring (the confusion seam)
+
+- **Confusion rule** — the single mapping from `(truth, predicted, don't-care
+  band)` to a per-element label `tp | fp | fn | tn` (or *skip*). It lives in one
+  place, `cflibs/benchmark/scoring.py` (`classify_element`), so the
+  synthetic-corpus benchmark and the observability per-element aggregator cannot
+  drift on the semantics. Callers differ in **scope** (panel-based with a TN
+  cell vs set-based over the elements that appear), never in **rule**.
+- **Don't-care band** — the per-spectrum set of real-but-sub-detection-floor
+  trace elements (`0 < fraction < presence_threshold`). Detecting or missing a
+  don't-care element is neither rewarded (TP) nor penalised (FP), and never an
+  FN — the confusion rule returns *skip* for it. Empty at the legacy
+  `presence_threshold` (1e-4); non-empty only when a meaningful floor is set.
+- **Scoring panel** — the candidate-element set a row's confusion is computed
+  over. The full panel and the **ever-present** panel (truth ∩ candidates) are
+  both always reported; restricting to ever-present never penalises the
+  identifier for a candidate that never occurs in truth.
+- **Scoring row** (`ScoringRow`) — the typed confusion core of one
+  spectrum × algorithm benchmark record (its three element sets), built from the
+  wire-format row dict via `ScoringRow.from_row`. The dict stays the persisted
+  form (`per_spectrum.jsonl` / Parquet); the type carries the rule on the
+  in-memory compute path.

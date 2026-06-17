@@ -38,6 +38,7 @@ import numpy as np
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.benchmark.dataset import BenchmarkDataset, BenchmarkSpectrum
 from cflibs.benchmark.loaders import load_benchmark
+from cflibs.benchmark.scoring import ScoringRow, confusion_counts, per_element_tally
 from cflibs.inversion.identify.alias import STRICT_DETECTION_THRESHOLD, ALIASIdentifier
 from cflibs.inversion.identify.comb import CombIdentifier
 from cflibs.inversion.identify.correlation import CorrelationIdentifier
@@ -107,27 +108,6 @@ def compute_binary_metrics(tp: int, fp: int, fn: int, tn: int) -> Dict[str, floa
         "accuracy": float(accuracy),
         "f1": float(f1),
     }
-
-
-def confusion_counts(
-    true_elements: Set[str],
-    predicted_elements: Set[str],
-    candidate_elements: Sequence[str],
-) -> Dict[str, int]:
-    """Return TP/FP/FN/TN counts for one sample."""
-    tp = fp = fn = tn = 0
-    for element in candidate_elements:
-        truth = element in true_elements
-        pred = element in predicted_elements
-        if truth and pred:
-            tp += 1
-        elif (not truth) and pred:
-            fp += 1
-        elif truth and (not pred):
-            fn += 1
-        else:
-            tn += 1
-    return {"tp": tp, "fp": fp, "fn": fn, "tn": tn}
 
 
 _RECIPE_PROVENANCE_RE = re.compile(r"recipe=([^;]+)")
@@ -1028,12 +1008,10 @@ def recount_rows(rows: List[Dict[str, Any]], panel_elements: Sequence[str]) -> L
     for row in rows:
         new_row = dict(row)
         if not row.get("failed"):
-            truth = set(row.get("true_elements", []))
-            pred = set(row.get("predicted_elements", []))
-            ignore = set(row.get("ignore_elements", ()))
-            row_panel = [el for el in panel if el not in ignore] if ignore else panel
-            counts = confusion_counts(truth, pred, row_panel)
-            new_row.update(counts)
+            # ScoringRow.confusion skips each row's don't-care band, so an
+            # element that is a legitimate panel member (above-floor in another
+            # spectrum) is still not re-counted as an FP for this spectrum.
+            new_row.update(ScoringRow.from_row(row).confusion(panel))
         out.append(new_row)
     return out
 
@@ -1063,7 +1041,7 @@ def summarize_confounders(
         subset = [row for row in rows if row["algorithm"] == algorithm and not row["failed"]]
         fp_by_el: Dict[str, int] = {}
         fn_by_el: Dict[str, int] = {}
-        confusion = _confusion_by_element(subset, candidate_elements)
+        confusion = per_element_tally(subset, candidate_elements)
         for element in candidate_elements:
             _, fp, fn, _ = confusion[element]
             if fp:
@@ -1135,40 +1113,6 @@ def summarize_aggregate(
     return out
 
 
-def _confusion_by_element(
-    subset: List[Dict[str, Any]], candidate_elements: Sequence[str]
-) -> Dict[str, Tuple[int, int, int, int]]:
-    """Tally ``{element: (tp, fp, fn, tn)}`` for every candidate in one pass.
-
-    Each row's truth/prediction sets are built once (not once per element), so
-    the cost is O(rows) set builds rather than O(rows x elements). Rows whose
-    per-spectrum "don't-care" band (sub-detection-floor traces) contains an
-    element are skipped for that element, so detecting/missing a real-but-sub-
-    floor trace is neither rewarded nor penalised — matching the scoring-panel
-    semantics already baked into each row's stored confusion counts.
-    """
-    counts: Dict[str, List[int]] = {el: [0, 0, 0, 0] for el in candidate_elements}
-    for row in subset:
-        ignore = set(row.get("ignore_elements", ()))
-        truth = set(row["true_elements"])
-        pred = set(row["predicted_elements"])
-        for element in candidate_elements:
-            if element in ignore:
-                continue
-            c = counts[element]
-            t = element in truth
-            p = element in pred
-            if t and p:
-                c[0] += 1
-            elif p:
-                c[1] += 1
-            elif t:
-                c[2] += 1
-            else:
-                c[3] += 1
-    return {el: (c[0], c[1], c[2], c[3]) for el, c in counts.items()}
-
-
 def summarize_per_element(
     rows: List[Dict[str, Any]],
     candidate_elements: List[str],
@@ -1178,7 +1122,7 @@ def summarize_per_element(
     algorithms = sorted({row["algorithm"] for row in rows})
     for algorithm in algorithms:
         subset = [row for row in rows if row["algorithm"] == algorithm and not row["failed"]]
-        confusion = _confusion_by_element(subset, candidate_elements)
+        confusion = per_element_tally(subset, candidate_elements)
         for element in candidate_elements:
             tp, fp, fn, tn = confusion[element]
             metrics = compute_binary_metrics(tp, fp, fn, tn)
