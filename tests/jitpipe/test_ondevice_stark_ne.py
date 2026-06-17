@@ -226,6 +226,14 @@ def test_break_after_successes_blended_top_rank_parity():
     # recentred index) is NOT byte-identical to the reference's boolean-mask slice
     # (``wl in [center-window, center+window]``). 1 % is far inside the 10 %
     # production n_e ceiling; G3 measures the real-data margin end-to-end.
+    #
+    # DIVERGENCE LEDGER: ADR-0004 row 8 specs the Stark contract at median rtol
+    # 1e-3 when both fitters converge. This deliberately relaxes to 1e-2 because
+    # the on-device path is NOT a bit-clone of the reference: fixed-iteration LM
+    # Voigt (vs scipy trust-region) + W=96 raw-sample windows (vs boolean-mask
+    # slice) make 1e-3 unachievable without cloning the reference fitter, which
+    # bead 6apc explicitly forbids. The 10x relaxation is bounded and documented
+    # here so the test and the ADR contract do not silently disagree.
     assert abs(got - ref.ne_median_cm3) <= 1e-2 * ref.ne_median_cm3, (got, ref.ne_median_cm3)
 
 

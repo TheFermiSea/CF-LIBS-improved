@@ -2317,8 +2317,17 @@ def _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline) ->
     alpha_arr = np.full(n, _S.DEFAULT_STARK_ALPHA, dtype=float)
     lit_arr = np.zeros(n, dtype=bool)
     res_arr = np.zeros(n, dtype=bool)
+    is_pref_arr = np.zeros(n, dtype=bool)
     cand_line_index = np.zeros(n, dtype=np.int64)
     have_index = np.zeros(n, dtype=bool)
+
+    # Canonical-diagnostic preference (x2.0 score bonus) — computed on the
+    # OBSERVATION wavelength + (element, stage), bit-identical to the reference
+    # ``stark_ne._preference_factor``. is_preferred drives candidate RANK, which
+    # in turn drives the top_k cap and the break-after-successes success set, so
+    # dropping it (the old jnp.zeros wiring) diverged the on-device candidate set
+    # from the reference exactly for Ca II / Mg II / H-alpha diagnostics.
+    from cflibs.inversion.physics.stark_ne import _preference_factor
 
     line_wl = np.asarray(snapshot.line_wavelength_nm, dtype=float)
     line_sp = np.asarray(snapshot.line_species_index, dtype=np.int64)
@@ -2356,6 +2365,13 @@ def _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline) ->
         mass = resolve_element_mass(obs.element, atomic_db)
         dopp_arr[i] = float(doppler_width(obs.wavelength_nm, T_eV, mass))
 
+        # Reference-identical preference: matches the canonical-diagnostic table
+        # on the observation wavelength (NOT the snapshot catalog wavelength),
+        # within 0.3 nm and same (element, stage).
+        is_pref_arr[i] = (
+            _preference_factor(obs.element, obs.ionization_stage, obs.wavelength_nm) > 1.0
+        )
+
         # Resolve obs -> snapshot line index for multiplet/preference: argmin
         # |line_wl - obs.wl| restricted to the SAME species AND |delta| < 0.1 nm.
         si = species_of.get((obs.element, int(obs.ionization_stage)))
@@ -2385,7 +2401,7 @@ def _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline) ->
         jnp.asarray(instr_arr),
         jnp.asarray(dopp_arr),
         jnp.asarray(lit_arr, dtype=bool),
-        jnp.zeros(n, dtype=bool),  # is_preferred: only affects rank, not selection
+        jnp.asarray(is_pref_arr, dtype=bool),  # x2.0 rank bonus for canonical diagnostics
         jnp.asarray(res_arr, dtype=bool),
         jnp.asarray(candidate_mask, dtype=bool),
         min_snr=5.0,
@@ -2421,6 +2437,9 @@ def _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline) ->
         return None
 
     # --- window gather (recenter + extract) on wl_in --------------------------
+    # W=96 raw samples, wider than ADR-0004 row 8's nominal W=64: real spectra
+    # are locally coarser-sampled than the synthetic design case, so 96 avoids
+    # truncating the Voigt wings (a conservative, accuracy-preserving deviation).
     W = 96
     search_nm = np.maximum(0.5 * gauss, 0.15)
     center_idx = np.empty(n, dtype=np.int64)
@@ -2822,6 +2841,16 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
         try:
             ne_stark = _ondevice_stark_ne(wl_in, inten, selected, atomic_db, snapshot, pipeline)
         except Exception:  # pragma: no cover - defensive
+            # Log (don't silently swallow) so a genuine kernel regression -- a
+            # shape/dtype bug, not the expected numerical non-convergence that
+            # returns None -- is observable in logs rather than masquerading as
+            # a normal reference fallback.
+            from cflibs.core.logging_config import get_logger
+
+            get_logger("jitpipe.host").debug(
+                "on-device Stark n_e raised; falling back to reference measure_stark_ne",
+                exc_info=True,
+            )
             ne_stark = None
         if ne_stark is None:
             from cflibs.inversion.physics.stark_ne import measure_stark_ne

@@ -68,6 +68,7 @@ def _enable_lax_while_loop(monkeypatch):
     """
     monkeypatch.setenv("CFLIBS_USE_LAX_WHILE_LOOP", "1")
 
+
 DB_PATH = "ASD_da/libs_production.db"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _REAL_SPECTRUM = _REPO_ROOT / "data" / "bhvo2_usgs" / "chemcam_bhvo2_loc1_spectrum.csv"
@@ -1033,23 +1034,27 @@ def test_ondevice_line_select_matches_reference(exclude_resonance):
     not _REAL_SPECTRUM.exists(), reason="real ChemCam BHVO-2 fixture not present in worktree"
 )
 @pytest.mark.parametrize("preset", ["geological", "raw"])
-def test_ondevice_stark_ne_real_chemcam_matches_reference(db, snapshot, preset):
-    """run_front_end_ondevice Stark n_e == reference Stark on the SAME obs set (G3).
+def test_ondevice_stark_ne_real_chemcam_falls_back_to_reference(db, snapshot, preset):
+    """On real ChemCam, on-device Stark returns None and the fallback supplies the
+    reference n_e cleanly (G3 — a FALLBACK-WIRING test, NOT on-device parity).
 
-    The on-device front-end selects a (slightly) different observation set than
-    the reference front-end, so an apples-to-apples Stark-PORT comparison must
-    hold the input observations fixed. Here we drive the reference
-    ``measure_stark_ne`` on the on-device-selected observations and assert
-    ``run_front_end_ondevice`` reports the same ``ne_stark_cm3`` (rtol 1e-6).
+    The on-device LM Voigt kernel does not converge on the coarse-sampled real
+    ChemCam windows, so ``_ondevice_stark_ne`` returns ``None`` here and the
+    bounded-failure fallback delegates to the reference ``measure_stark_ne``. This
+    pins BOTH facts explicitly:
 
-    On real ChemCam BHVO-2 the on-device LM kernel cannot fit the coarse-sampled
-    windows, so ``_ondevice_stark_ne`` returns ``None`` and the bounded-failure
-    fallback supplies the reference value — which is exactly what this asserts:
-    the wiring never returns a WRONG n_e (it falls back cleanly to the reference).
+    1. the direct on-device call returns ``None`` on this fixture — so the
+       production real-data Stark n_e is STILL reference-derived (ADR-0004
+       promotion accounting must not count Stark as on-device on real data yet;
+       see bead 6apc to harden the LM kernel), and
+    2. the wiring reports exactly the reference value, never a wrong one.
+
+    True on-device-vs-reference Stark parity is exercised on synthetic data by
+    ``test_ondevice_stark_ne_synthetic_no_reference_call`` (G4).
     """
     from cflibs.inversion.physics.stark_ne import measure_stark_ne
     from cflibs.inversion.pipeline import build_pipeline_config
-    from cflibs.jitpipe.host import run_front_end_ondevice
+    from cflibs.jitpipe.host import _ondevice_stark_ne, run_front_end_ondevice
 
     wl, inten = _load_real_spectrum()
     elements = ["Si", "Ti", "Al", "Fe", "Mn", "Mg", "Ca", "Na", "K"]
@@ -1059,7 +1064,17 @@ def test_ondevice_stark_ne_real_chemcam_matches_reference(db, snapshot, preset):
     dev = run_front_end_ondevice(wl, inten, db, cfg, snapshot)
     assert dev.ne_stark_cm3 is not None, "on-device front-end produced no Stark n_e"
 
-    # Reference Stark on the SAME (on-device-selected) observations.
+    # (1) Prove the value came from the reference fallback, not the on-device
+    # kernel: the direct on-device call returns None on this real fixture. If a
+    # future kernel-hardening makes it converge, this fails closed and forces
+    # promoting the assertion below to a real-data on-device parity check.
+    direct = _ondevice_stark_ne(wl, inten, dev.observations, db, snapshot, cfg)
+    assert direct is None, (
+        "on-device Stark unexpectedly converged on real ChemCam; promote this to a "
+        "real-data parity assertion and update ADR-0004 promotion accounting (bead 6apc)"
+    )
+
+    # (2) Reference Stark on the SAME (on-device-selected) observations == reported.
     sr = measure_stark_ne(wl, inten, dev.observations, db, resolving_power=cfg.resolving_power)
     assert sr.usable
     np.testing.assert_allclose(dev.ne_stark_cm3, sr.ne_median_cm3, rtol=1e-6)
@@ -1144,3 +1159,87 @@ def test_ondevice_stark_ne_synthetic_no_reference_call(db, snapshot):
     assert got is not None and np.isfinite(got)
     # Sanity: the recovered n_e is in the LIBS plausibility band.
     assert 1e14 <= got <= 1e20
+
+
+def test_ondevice_stark_preference_matches_reference(monkeypatch):
+    """The orchestrator must hand ``select_stark_candidates`` an ``is_preferred``
+    array bit-identical to the reference ``_preference_factor`` (OBSERVATION-
+    wavelength basis).
+
+    Regression guard for the old ``jnp.zeros`` wiring: dropping the x2.0 canonical-
+    diagnostic bonus diverged candidate RANK -> the top_k cap and break-after-
+    successes success set -> the median n_e, precisely for the Ca II / Mg II /
+    H-alpha lines the bonus exists to protect. Captured at the selection call, so
+    it needs no LM convergence.
+    """
+    from types import SimpleNamespace
+
+    import cflibs.jitpipe.stark as _stark
+    from cflibs.inversion.common.data_structures import LineObservation
+    from cflibs.inversion.physics.stark_ne import _preference_factor
+    from cflibs.jitpipe.host import _ondevice_stark_ne
+    from cflibs.radiation.profiles import voigt_profile
+
+    captured: dict = {}
+    orig_select = _stark.select_stark_candidates
+
+    def _spy(*args, **kwargs):
+        captured["is_preferred"] = np.asarray(args[6], dtype=bool)  # 7th positional arg
+        return orig_select(*args, **kwargs)
+
+    monkeypatch.setattr(_stark, "select_stark_candidates", _spy)
+
+    # Ca II 393.37 (canonical diagnostic -> preferred) vs Fe I 400.0 (not).
+    centers = [393.37, 400.0]
+    species_tab = [("Ca", 2), ("Fe", 1)]
+    _FWHM = 2.0 * float(np.sqrt(2.0 * np.log(2.0)))
+    wl = np.linspace(388.0, 405.0, 4001)
+    inten = np.full_like(wl, 0.5)
+    for c in centers:
+        inten = inten + np.asarray(voigt_profile(wl, c, 0.08 / _FWHM, 0.07, amplitude=3.0))
+
+    class _StubDB:
+        def get_stark_parameters_with_source(self, element, stage, wl_nm, tol=0.1):
+            for c in centers:
+                if abs(wl_nm - c) <= tol:
+                    return (0.05, 0.5, "stark_b", False)
+            return (None, None, None, None)
+
+        def get_transitions(self, element, ionization_stage=None, **kw):
+            return []
+
+        def get_atomic_mass(self, element):
+            return 1.0e6  # kill Doppler so it doesn't perturb the gate
+
+    snap = SimpleNamespace(
+        line_wavelength_nm=np.asarray(centers, float),
+        line_species_index=np.asarray([0, 1], np.int64),
+        line_g_k=np.full(2, 5.0),
+        line_A_ki=np.full(2, 1e7),
+        line_E_k_ev=np.full(2, 4.0),
+        species=tuple(species_tab),
+    )
+    obs = [
+        LineObservation(
+            wavelength_nm=c,
+            intensity=100.0,
+            intensity_uncertainty=2.0,
+            element=el,
+            ionization_stage=sp,
+            E_k_ev=4.0,
+            g_k=5,
+            A_ki=1e7,
+        )
+        for c, (el, sp) in zip(centers, species_tab)
+    ]
+    pipeline = SimpleNamespace(resolving_power=centers[0] / 0.08, stark_ne=True)
+
+    _ondevice_stark_ne(wl, inten, obs, _StubDB(), snap, pipeline)
+
+    assert "is_preferred" in captured, "select_stark_candidates was never reached"
+    expected = np.array(
+        [_preference_factor(o.element, o.ionization_stage, o.wavelength_nm) > 1.0 for o in obs]
+    )
+    np.testing.assert_array_equal(captured["is_preferred"], expected)
+    # The whole point: Ca II is preferred, Fe I is not. A jnp.zeros regression fails here.
+    assert captured["is_preferred"][0] and not captured["is_preferred"][1]
