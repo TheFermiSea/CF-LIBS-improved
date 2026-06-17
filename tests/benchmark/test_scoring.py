@@ -5,6 +5,7 @@ the synthetic-corpus benchmark and the observability per-element aggregator, so
 the rule's behavior is pinned here once rather than re-derived per consumer.
 """
 
+import numpy as np
 import pytest
 
 from cflibs.benchmark.scoring import (
@@ -125,3 +126,26 @@ def test_scoring_row_is_frozen():
     sr = ScoringRow(frozenset({"Fe"}), frozenset(), frozenset())
     with pytest.raises(Exception):
         sr.true_elements = frozenset({"Ni"})  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Wire-format robustness — Parquet list columns arrive as numpy arrays
+# ---------------------------------------------------------------------------
+def test_from_row_handles_numpy_array_cells():
+    """A Parquet list<string> column round-tripped through pandas comes back as
+    a numpy.ndarray; the row->rule boundary must not truth-test it."""
+    row = {
+        "true_elements": np.array(["Fe", "Ni"]),
+        "predicted_elements": np.array(["Fe", "Co"]),
+        "ignore_elements": np.array([]),  # empty array, falsy-ambiguous
+    }
+    sr = ScoringRow.from_row(row)
+    assert sr.true_elements == frozenset({"Fe", "Ni"})
+    assert sr.confusion(["Fe", "Ni", "Co"]) == {"tp": 1, "fp": 1, "fn": 1, "tn": 0}
+
+
+def test_per_element_tally_handles_numpy_array_cells():
+    rows = [{"true_elements": np.array(["Fe"]), "predicted_elements": np.array(["Fe", "Co"])}]
+    tally = per_element_tally(rows, ["Fe", "Co"])
+    assert tally["Fe"] == (1, 0, 0, 0)
+    assert tally["Co"] == (0, 1, 0, 0)

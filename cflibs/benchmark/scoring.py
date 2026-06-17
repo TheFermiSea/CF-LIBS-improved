@@ -33,6 +33,21 @@ FN = "fn"
 TN = "tn"
 
 
+def _row_elements(value: Any) -> FrozenSet[str]:
+    """Coerce a benchmark-row cell to a frozenset of element strings.
+
+    The row->rule boundary (``ScoringRow.from_row`` / :func:`per_element_tally`)
+    must tolerate every wire form a row arrives in. In particular a Parquet
+    ``list<string>`` column round-tripped through pandas comes back as a
+    ``numpy.ndarray``, so the obvious ``value or ()`` idiom is wrong — it
+    truth-tests the array and raises ``ValueError`` for non-empty cells. Guard
+    ``None`` explicitly and let ``frozenset`` consume the array/list directly.
+    """
+    if value is None:
+        return frozenset()
+    return frozenset(str(x) for x in value)
+
+
 def classify_element(
     element: str,
     truth: Set[str] | FrozenSet[str],
@@ -102,9 +117,9 @@ def per_element_tally(
     """
     counts: Dict[str, List[int]] = {el: [0, 0, 0, 0] for el in candidate_elements}
     for row in rows:
-        truth = set(row.get("true_elements", ()) or ())
-        predicted = set(row.get("predicted_elements", ()) or ())
-        ignore = set(row.get("ignore_elements", ()) or ())
+        truth = _row_elements(row.get("true_elements"))
+        predicted = _row_elements(row.get("predicted_elements"))
+        ignore = _row_elements(row.get("ignore_elements"))
         for element in candidate_elements:
             label = classify_element(element, truth, predicted, ignore)
             if label is None:
@@ -136,11 +151,12 @@ class ScoringRow:
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> "ScoringRow":
-        """Build from a benchmark row dict (tolerant of missing keys / None)."""
+        """Build from a benchmark row dict (tolerant of missing keys, None,
+        and array-like cells from Parquet-backed rows)."""
         return cls(
-            frozenset(row.get("true_elements", ()) or ()),
-            frozenset(row.get("predicted_elements", ()) or ()),
-            frozenset(row.get("ignore_elements", ()) or ()),
+            _row_elements(row.get("true_elements")),
+            _row_elements(row.get("predicted_elements")),
+            _row_elements(row.get("ignore_elements")),
         )
 
     def confusion(self, candidate_elements: Sequence[str]) -> Dict[str, int]:
