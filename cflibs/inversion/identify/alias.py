@@ -38,6 +38,15 @@ from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 logger = get_logger("inversion.identify.alias")
 _alias_logger = _get_alias_logger("inversion.identify.alias")
 
+# Canonical ALIAS confidence threshold C_th (Noel 2025 sec 3.8): an element is
+# detected when ``k_det > C_th``. These are the single source of truth for the
+# constructor defaults; downstream consumers that want "the strict ALIAS
+# default" (e.g. HybridIdentifier's confirmation stage) should import these
+# rather than re-typing the literal. NOT a CL floor — sub-0.1 values are
+# "accept everything" on the k_det scale.
+STRICT_DETECTION_THRESHOLD = 0.5
+RECALL_DETECTION_THRESHOLD = 0.4
+
 # JAX is an optional fast path for the per-spectrum Boltzmann temperature fit
 # used by ``ALIASIdentifier._estimate_plasma_temperature``. The default path
 # remains ``scipy.stats.linregress`` so behavior is unchanged unless
@@ -1060,11 +1069,10 @@ class ALIASIdentifier:
         """
         self.high_recall = bool(high_recall)
         _STRICT_INTENSITY_FACTOR = 3.0
-        # detection_threshold is now the paper's C_th (Noel 2025 sec 3.8): the
-        # k_det presence threshold (paper default 0.5), NOT a CL floor.
-        _STRICT_DETECTION_THRESHOLD = 0.5
         _RECALL_INTENSITY_FACTOR = 2.0
-        _RECALL_DETECTION_THRESHOLD = 0.4
+        # detection_threshold is the paper's C_th (Noel 2025 sec 3.8): the k_det
+        # presence threshold, NOT a CL floor. Defaults live at module level
+        # (STRICT/RECALL_DETECTION_THRESHOLD) so consumers can import them.
         if intensity_threshold_factor is None:
             self.intensity_threshold_factor = (
                 _RECALL_INTENSITY_FACTOR if self.high_recall else _STRICT_INTENSITY_FACTOR
@@ -1073,7 +1081,7 @@ class ALIASIdentifier:
             self.intensity_threshold_factor = intensity_threshold_factor
         if detection_threshold is None:
             self.detection_threshold = (
-                _RECALL_DETECTION_THRESHOLD if self.high_recall else _STRICT_DETECTION_THRESHOLD
+                RECALL_DETECTION_THRESHOLD if self.high_recall else STRICT_DETECTION_THRESHOLD
             )
         else:
             self.detection_threshold = detection_threshold
