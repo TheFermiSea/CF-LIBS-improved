@@ -178,6 +178,14 @@ class AnalysisPipelineConfig:
     #: Stark-broadening n_e diagnostic (bead pxex): measure n_e from observed
     #: literature-grade line widths; falls back (with warning) when none qualify.
     stark_ne: bool = True
+    #: Errors-in-variables (orthogonal distance regression) Boltzmann / Saha-
+    #: Boltzmann slope fit (Boggs & Rodgers 1990): accounts for E_k-axis
+    #: uncertainty, removing the OLS regression-dilution bias on T. Default off
+    #: mirrors the standard weighted-OLS fit (Track B B1; benchmark-gated).
+    use_odr: bool = False
+    #: Scalar 1-sigma E_k uncertainty (eV) for the ODR fit when per-line E_k
+    #: uncertainties are unavailable; 0.0 degenerates ODR to weighted OLS.
+    odr_x_uncertainty: float = 0.0
     #: Extra keyword overrides passed verbatim to ``detect_line_observations``
     #: (Campaign 1 knob plumbing, docs/audit/2026-06-10-goalfirst/
     #: optimization-program-design.md §3.1-B). Plain data only — keys must be
@@ -348,6 +356,8 @@ def build_pipeline_config(
         matrix_element=knob("matrix_element", None),
         oxide_elements=knob("oxide_elements", None),
         stark_ne=bool(knob("stark_ne", stark_ne, preset_knobs["stark_ne"])),
+        use_odr=bool(knob("use_odr", None, False)),
+        odr_x_uncertainty=float(knob("odr_x_uncertainty", None, 0.0)),
         detection_overrides=dict(ov.get("detection_overrides", None) or {}),
     )
     _log_pipeline_config(pipeline)
@@ -932,6 +942,8 @@ def run_pipeline(
         min_boltzmann_r2=pipeline.min_boltzmann_r2,
         boltzmann_weight_cap=pipeline.boltzmann_weight_cap,
         saha_boltzmann_graph=pipeline.saha_boltzmann_graph,
+        use_odr=pipeline.use_odr,
+        odr_x_uncertainty=pipeline.odr_x_uncertainty,
     )
 
     closure_kwargs = _finalize_closure_kwargs(pipeline, observations)

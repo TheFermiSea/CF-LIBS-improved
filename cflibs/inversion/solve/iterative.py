@@ -893,6 +893,8 @@ class IterativeCFLIBSSolver:
         use_lax_while_loop: Optional[bool] = None,
         degeneracy_dominance_threshold: float = 0.8,
         degeneracy_min_elements: int = 4,
+        use_odr: bool = False,
+        odr_x_uncertainty: float = 0.0,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
         # c5-solver-flags). These two flags choose between the CPU reference
@@ -1049,6 +1051,8 @@ class IterativeCFLIBSSolver:
         self.boltzmann_fitter = BoltzmannPlotFitter(
             outlier_sigma=2.5,
             use_jax=self.use_jax_boltzmann,
+            use_odr=use_odr,
+            odr_x_uncertainty=odr_x_uncertainty,
         )
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
