@@ -5,9 +5,12 @@ Manifold loading and querying utilities.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from cflibs.manifold.vector_index import SpectralEmbedder, VectorIndex
 
 try:
     import h5py
@@ -80,11 +83,11 @@ class _DatasetView:
         return array
 
     @property
-    def shape(self):
+    def shape(self) -> Tuple[int, ...]:
         return self._dataset.shape
 
     @property
-    def chunks(self):
+    def chunks(self) -> Optional[Tuple[int, ...]]:
         return getattr(self._dataset, "chunks", None)
 
 
@@ -480,7 +483,7 @@ class ManifoldLoader:
         """Get wavelength grid."""
         return self.wavelength.copy()
 
-    def close(self):
+    def close(self) -> None:
         """Close manifold file."""
         if self.file is not None:
             self.file.close()
@@ -493,7 +496,9 @@ class ManifoldLoader:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def build_vector_index(self, n_components: int = 30, index_config=None):
+    def build_vector_index(
+        self, n_components: int = 30, index_config: Any = None
+    ) -> "Tuple[SpectralEmbedder, VectorIndex]":
         """
         Build vector index for fast similarity search.
 

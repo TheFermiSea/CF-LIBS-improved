@@ -311,8 +311,11 @@ def run_one(
       segmented calibrator, J1 detect, J3 comb scan / shift select / veto /
       observation build, trapezoid intensity). The catalog SQL + gA-Boltzmann
       comb ranking + scipy peak detection stay host-side (ADR-0001; dynamic-shaped
-      pre-jit). The ONLY remaining reference-delegated stage is the Stark n_e
-      diagnostic (see the ``host.py`` module note). The on-device front-end
+      pre-jit). The segmented wavelength calibration and Stark n_e diagnostic are
+      now on-device too (``_ondevice_calibrate_segmented`` / ``_ondevice_stark_ne``);
+      the only residual reference-delegated surface is the kdet density-score branch
+      (dispatched to Rust in the reference, dead-by-default under the shift-coherence
+      veto — see the ``host.py`` module note). The on-device front-end
       reproduces the reference ``detect_and_select_lines`` observation set
       bit-for-bit (Jaccard 1.0 on synthetic + real ChemCam BHVO-2, raw +
       geological) and the reference segmented axis to max|Δλ| ~0.0003 nm.

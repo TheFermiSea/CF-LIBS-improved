@@ -19,6 +19,17 @@ keeps the chunk-metadata construction on the host so the device-side
 
 T1-4 added :func:`cflibs.radiation.ldm.broaden_lines_ldm` as a host-side
 driver; T1-5 follows the same naming convention here.
+
+.. note::
+   Status: parity-tested but not wired into any shipped pipeline. No
+   production module imports this module, and the chunked/overlap-and-add
+   forward path (``kernels.forward_model_chunked`` with ``nstitch>1``,
+   ``auto_nstitch``, ``build_chunk_metadata``, ``ChunkPlan``) has no
+   production caller — ``SpectrumModel``, ``manifold/batch_forward``, and the
+   Bayesian forward model all use the single-shot ``forward_model``. The only
+   consumers of the chunked subsystem are ``tests/radiation/test_chunked_scan.py``
+   and ``tests/radiation/test_memory_bench.py``. The kernels are kept as a
+   tested-but-unwired capability for large-grid memory-budgeted scans.
 """
 
 from __future__ import annotations

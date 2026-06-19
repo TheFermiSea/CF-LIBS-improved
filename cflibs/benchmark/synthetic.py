@@ -189,7 +189,6 @@ class SyntheticBenchmarkGenerator:
         self.n_wavelength_points = n_wavelength_points
         self.base_conditions = base_conditions or self._default_conditions()
 
-        # Create wavelength grid
         self._wavelength_grid = np.linspace(
             wavelength_range[0], wavelength_range[1], n_wavelength_points
         )
@@ -285,7 +284,6 @@ class SyntheticBenchmarkGenerator:
             )
             spectra.append(spectrum)
 
-        # Create dataset
         dataset = BenchmarkDataset(
             name=name,
             version=version,
@@ -304,7 +302,6 @@ class SyntheticBenchmarkGenerator:
             contributors=["CF-LIBS Library"],
         )
 
-        # Create default split
         if create_default_split:
             dataset.create_random_split(
                 name="default",
@@ -390,7 +387,6 @@ class SyntheticBenchmarkGenerator:
         else:
             intensity = self._generate_simplified(composition, temperature_K, rng)
 
-        # Add noise
         intensity = self._add_noise(
             intensity,
             condition_variation.noise_level,
@@ -398,7 +394,6 @@ class SyntheticBenchmarkGenerator:
             rng,
         )
 
-        # Create metadata
         metadata = SampleMetadata(
             sample_id=spectrum_id,
             sample_type=SampleType.SIMULATED,
@@ -522,11 +517,10 @@ class SyntheticBenchmarkGenerator:
         """Generate simplified synthetic spectrum without atomic database."""
         from cflibs.core.constants import KB_EV
 
-        # Initialize with low background
         spectrum = np.ones(len(self._wavelength_grid)) * 10.0
 
-        # Add emission lines for each element
-        # Using approximate wavelength positions and relative intensities
+        # Approximate wavelength positions and relative intensities per element
+        # (no atomic database; simplified emission-line model).
         element_lines = {
             "Fe": [
                 (274.9, 5.5, 1.0),  # (wavelength_nm, E_k_eV, rel_intensity)
@@ -612,7 +606,6 @@ class SyntheticBenchmarkGenerator:
                 # Line intensity
                 intensity = conc * rel_int * boltz * 1e4
 
-                # Add Gaussian line profile
                 profile = self._gaussian_profile(self._wavelength_grid, wl_center, gaussian_width)
                 spectrum += intensity * profile
 
@@ -635,7 +628,6 @@ class SyntheticBenchmarkGenerator:
         rng: np.random.Generator,
     ) -> np.ndarray:
         """Add realistic noise to spectrum."""
-        # Add background
         max_intensity = spectrum.max()
         spectrum = spectrum + background_level * max_intensity
 
@@ -646,7 +638,6 @@ class SyntheticBenchmarkGenerator:
         # Multiplicative noise (laser fluctuation)
         mult_noise = spectrum * noise_level * rng.standard_normal(len(spectrum))
 
-        # Add noise
         noisy_spectrum = spectrum + shot_noise + mult_noise
 
         # Ensure positive

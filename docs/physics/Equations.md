@@ -499,6 +499,6 @@ The numbered references below are cited inline by `[n]`.
   equation assumes about your plasma and when it fails.
 - [Inversion Algorithm](Inversion_Algorithm.md) — line-by-line walkthrough
   of the iterative CF-LIBS algorithm including pseudocode.
-- [Codebase Architecture](../reference/Codebase_Architecture.md) — where
+- [Codebase Architecture](../CF-LIBS_Codebase_Technical_Documentation.md) — where
   each equation lives in the source tree.
-- [API Reference](../reference/API_Reference.md) — call signatures.
+- [API Reference](../API_Reference.md) — call signatures.

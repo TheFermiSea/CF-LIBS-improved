@@ -14,6 +14,10 @@ import pandas as pd
 
 if TYPE_CHECKING:
     from cflibs.core.jax_runtime import AtomicSnapshot
+    from cflibs.plasma.partition import (
+        PartitionFunctionProvider,
+        PartitionFunctionSpec,
+    )
 
 from cflibs.atomic.structures import Transition, EnergyLevel, SpeciesPhysics, PartitionFunction
 from cflibs.core.logging_config import get_logger
@@ -418,8 +422,7 @@ class AtomicDatabase:
         min_relative_intensity: float | None,
     ) -> tuple[str, list[object]]:
         """Build the SQL query and bound parameters for :meth:`get_transitions`."""
-        # Check if new columns exist in the actual query execution (though schema check should have fixed it)
-        # We select all relevant columns.
+        # Select all relevant columns.
         query = """
             SELECT
                 element, sp_num, wavelength_nm, aki, ek_ev, ei_ev,
@@ -630,7 +633,9 @@ class AtomicDatabase:
             source=res[7],
         )
 
-    def partition_spec_for(self, element: str, ionization_stage: int):
+    def partition_spec_for(
+        self, element: str, ionization_stage: int
+    ) -> "PartitionFunctionSpec | None":
         """Return the single :class:`PartitionFunctionSpec` for a species.
 
         THE one source of partition-function coefficients + bounds + ``g0`` for
@@ -656,7 +661,9 @@ class AtomicDatabase:
 
         return derive_partition_spec(self, element, ionization_stage)
 
-    def partition_function_for(self, element: str, ionization_stage: int):
+    def partition_function_for(
+        self, element: str, ionization_stage: int
+    ) -> "PartitionFunctionProvider | None":
         """Return an encapsulated :class:`PartitionFunctionProvider` for a species.
 
         Vending the provider — instead of the raw :class:`PartitionFunction`
@@ -1323,7 +1330,7 @@ class AtomicDatabase:
             )
         return (None, None, None)
 
-    def close(self):
+    def close(self) -> None:
         """Close database connection."""
         if self._use_pool:
             # Note: Pool is shared, so we don't close it here

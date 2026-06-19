@@ -2,10 +2,7 @@
 Input/output utilities.
 
 This module provides:
-- Standardized file formats for spectra
-- Plasma configuration I/O
-- Atomic data snapshot I/O
-- YAML/JSON config loading
+- Standardized file formats for spectra (load/save)
 - Export tools for analysis results (CSV, HDF5, JSON)
 """
 
@@ -18,7 +15,6 @@ from cflibs.io.exporters import (
     ExportMetadata,
     create_exporter,
     export_to_csv,
-    export_to_hdf5,
     export_to_json,
 )
 
@@ -34,6 +30,5 @@ __all__ = [
     "ExportMetadata",
     "create_exporter",
     "export_to_csv",
-    "export_to_hdf5",
     "export_to_json",
 ]

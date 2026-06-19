@@ -346,12 +346,6 @@ def sample_energy_level():
 
 
 @pytest.fixture
-def sample_wavelength_grid():
-    """Create a sample wavelength grid for testing."""
-    return np.linspace(200.0, 800.0, 1000)
-
-
-@pytest.fixture
 def sample_config_dict():
     """Create a sample configuration dictionary."""
     return {
@@ -391,21 +385,11 @@ def temp_config_file(sample_config_dict):
     Path(config_path).unlink()
 
 
-@pytest.fixture
-def mock_echellogram_image():
-    """Create a mock 2D echellogram image for testing."""
-    image = np.random.normal(100, 10, (1024, 2048)).astype(np.float32)
-    # Add some bright spectral lines
-    image[595:605, 995:1005] += 5000
-    image[715:725, 995:1005] += 5000
-    return image
-
-
 # ==============================================================================
 # Phase 2c Fixtures - Quality, Self-Absorption, Line Selection
 # ==============================================================================
 
-from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannFitResult  # noqa: E402
+from cflibs.inversion.physics.boltzmann import LineObservation  # noqa: E402
 
 
 @pytest.fixture
@@ -490,58 +474,6 @@ def synthetic_line_observations():
             )
 
         return observations
-
-    return _create
-
-
-@pytest.fixture
-def mock_boltzmann_fit_result():
-    """
-    Factory fixture for creating mock BoltzmannFitResult objects.
-
-    Returns a function that creates results with specified quality parameters.
-    """
-
-    def _create(
-        temperature_K: float = 10000.0,
-        r_squared: float = 0.95,
-        n_points: int = 10,
-        slope_uncertainty_frac: float = 0.05,
-    ) -> BoltzmannFitResult:
-        """
-        Create a mock BoltzmannFitResult.
-
-        Parameters
-        ----------
-        temperature_K : float
-            Fitted temperature
-        r_squared : float
-            R² value (0-1)
-        n_points : int
-            Number of data points
-        slope_uncertainty_frac : float
-            Fractional uncertainty in slope
-
-        Returns
-        -------
-        BoltzmannFitResult
-        """
-        KB_EV = 8.617333262e-5
-        slope = -1.0 / (KB_EV * temperature_K)
-        slope_uncertainty = abs(slope) * slope_uncertainty_frac
-        temp_uncertainty = temperature_K * slope_uncertainty_frac
-
-        return BoltzmannFitResult(
-            temperature_K=temperature_K,
-            temperature_uncertainty_K=temp_uncertainty,
-            intercept=-10.0,
-            intercept_uncertainty=0.5,
-            r_squared=r_squared,
-            n_points=n_points,
-            rejected_points=[],
-            slope=slope,
-            slope_uncertainty=slope_uncertainty,
-        )
 
     return _create
 
@@ -686,182 +618,6 @@ def line_selector_test_data():
         return observations
 
     return _create
-
-
-@pytest.fixture
-def quality_input_set(synthetic_line_observations, mock_boltzmann_fit_result):
-    """
-    Factory fixture for complete QualityAssessor input sets.
-
-    Returns a function that creates observations and related parameters
-    for different quality levels.
-    """
-
-    def _create(quality_level: str = "excellent") -> dict:
-        """
-        Create a complete input set for QualityAssessor.
-
-        Parameters
-        ----------
-        quality_level : str
-            One of "excellent", "good", "acceptable", "poor"
-
-        Returns
-        -------
-        dict with all inputs needed for QualityAssessor.assess()
-        """
-        # Map quality levels to R² and other parameters
-        params = {
-            "excellent": {"r_squared": 0.98, "temperature_K": 10000.0},
-            "good": {"r_squared": 0.92, "temperature_K": 10000.0},
-            "acceptable": {"r_squared": 0.85, "temperature_K": 10000.0},
-            "poor": {"r_squared": 0.65, "temperature_K": 10000.0},
-        }
-
-        p = params.get(quality_level, params["good"])
-        T = p["temperature_K"]
-
-        observations = synthetic_line_observations(
-            n_lines=10,
-            element="Fe",
-            temperature_K=T,
-            snr=100.0 if quality_level == "excellent" else 30.0,
-        )
-
-        # Add a second element for inter-element consistency tests
-        observations.extend(
-            synthetic_line_observations(
-                n_lines=5,
-                element="Cu",
-                temperature_K=T * (1.0 if quality_level == "excellent" else 1.1),
-                snr=100.0 if quality_level == "excellent" else 30.0,
-                seed=123,
-            )
-        )
-
-        # Concentrations that sum to ~1.0
-        concentrations = {"Fe": 0.7, "Cu": 0.3}
-        if quality_level == "poor":
-            concentrations = {"Fe": 0.6, "Cu": 0.2}  # Sum to 0.8, not 1.0
-
-        return {
-            "observations": observations,
-            "temperature_K": T,
-            "electron_density_cm3": 1e17,
-            "concentrations": concentrations,
-            "ionization_potentials": {"Fe": 7.87, "Cu": 7.73},
-            "partition_funcs_I": {"Fe": 25.0, "Cu": 2.0},
-            "partition_funcs_II": {"Fe": 15.0, "Cu": 1.0},
-            "expected_quality": quality_level,
-        }
-
-    return _create
-
-
-@pytest.fixture
-def sample_atomic_transitions():
-    """
-    Fixture providing realistic atomic transition data.
-
-    Returns a list of LineObservation objects for common LIBS elements.
-    """
-    transitions = [
-        # Fe I lines
-        LineObservation(
-            wavelength_nm=371.99,
-            intensity=1000.0,
-            intensity_uncertainty=20.0,
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=3.33,
-            g_k=11,
-            A_ki=1.0e7,
-        ),
-        LineObservation(
-            wavelength_nm=373.49,
-            intensity=500.0,
-            intensity_uncertainty=15.0,
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=3.32,
-            g_k=9,
-            A_ki=5.0e6,
-        ),
-        LineObservation(
-            wavelength_nm=374.95,
-            intensity=200.0,
-            intensity_uncertainty=10.0,
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=3.31,
-            g_k=7,
-            A_ki=2.0e6,
-        ),
-        LineObservation(
-            wavelength_nm=438.35,
-            intensity=800.0,
-            intensity_uncertainty=18.0,
-            element="Fe",
-            ionization_stage=1,
-            E_k_ev=4.47,
-            g_k=9,
-            A_ki=5.0e6,
-        ),
-        # Fe II line
-        LineObservation(
-            wavelength_nm=238.20,
-            intensity=600.0,
-            intensity_uncertainty=25.0,
-            element="Fe",
-            ionization_stage=2,
-            E_k_ev=5.22,
-            g_k=10,
-            A_ki=3.0e8,
-        ),
-        # Cu I lines
-        LineObservation(
-            wavelength_nm=324.75,
-            intensity=2000.0,
-            intensity_uncertainty=40.0,
-            element="Cu",
-            ionization_stage=1,
-            E_k_ev=3.82,
-            g_k=4,
-            A_ki=1.4e8,
-        ),
-        LineObservation(
-            wavelength_nm=327.40,
-            intensity=1000.0,
-            intensity_uncertainty=30.0,
-            element="Cu",
-            ionization_stage=1,
-            E_k_ev=3.79,
-            g_k=2,
-            A_ki=1.4e8,
-        ),
-        # Al I lines
-        LineObservation(
-            wavelength_nm=394.40,
-            intensity=1500.0,
-            intensity_uncertainty=35.0,
-            element="Al",
-            ionization_stage=1,
-            E_k_ev=3.14,
-            g_k=2,
-            A_ki=5.0e7,
-        ),
-        LineObservation(
-            wavelength_nm=396.15,
-            intensity=750.0,
-            intensity_uncertainty=25.0,
-            element="Al",
-            ionization_stage=1,
-            E_k_ev=3.14,
-            g_k=4,
-            A_ki=1.0e8,
-        ),
-    ]
-    return transitions
 
 
 @pytest.fixture

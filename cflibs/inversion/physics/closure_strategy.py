@@ -7,10 +7,14 @@ that wraps the three different mechanisms previously scattered across
 :mod:`coarse_to_fine`) and ``closure.py`` (NumPy, used by the iterative
 solver).
 
-After this refactor solvers depend on a ``ClosureStrategy`` instance, not on
-an import path.  This implements architecture-review *Candidate 3* and
-generalizes ADR-0001 T1-3 (pre-resolving closure mode into a closed-over
-``closure_fn``) to all three solvers.
+This implements architecture-review *Candidate 3*, generalizing ADR-0001 T1-3
+(pre-resolving closure mode into a closed-over ``closure_fn``).  In practice
+the ``ClosureStrategy`` abstraction was adopted only by the two JAX solvers
+(:mod:`joint_optimizer` and :mod:`coarse_to_fine`, via :class:`SoftmaxClosure`);
+the iterative solver still dispatches closure modes by string through
+:class:`~cflibs.inversion.physics.closure.ClosureEquation`.  The :class:`ILRClosure`
+and :class:`PWLRClosure` adapters below are available for callers that want a
+log-ratio ``ClosureStrategy`` but are not currently wired into any shipped solver.
 
 The three adapters are:
 

@@ -28,15 +28,21 @@ Example
 -------
 >>> from cflibs.benchmark import BenchmarkDataset, BenchmarkMetrics
 >>>
->>> # Load a benchmark dataset
->>> dataset = BenchmarkDataset.from_json("nist_steel_crm.json")
+>>> # Reconstruct a benchmark dataset from its serialized dict form
+>>> dataset = BenchmarkDataset.from_dict(dataset_dict)
 >>>
->>> # Get train/test splits
+>>> # Get train/test splits (each is a list of BenchmarkSpectrum)
 >>> train, test = dataset.get_split("default")
 >>>
->>> # Evaluate predictions
+>>> # Build ground-truth and predicted compositions as {element: [values]}
+>>> true_values = {
+...     elem: [spec.true_composition.get(elem, 0.0) for spec in test]
+...     for elem in dataset.elements
+... }
+>>>
+>>> # Evaluate predictions (same {element: [values]} shape as true_values)
 >>> metrics = BenchmarkMetrics()
->>> results = metrics.evaluate(predictions, test.true_compositions)
+>>> results = metrics.evaluate(predictions, true_values)
 >>> print(results.summary())
 
 References

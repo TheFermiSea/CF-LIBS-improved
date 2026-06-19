@@ -44,7 +44,7 @@ References
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, Union, Any
+from typing import Optional, Tuple, Union, Any, NoReturn
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
@@ -828,13 +828,13 @@ if HAS_JAX:
 
 else:
     # Stubs when JAX is not available
-    def pca_transform_jax(*args, **kwargs):
+    def pca_transform_jax(*args: Any, **kwargs: Any) -> NoReturn:
         raise ImportError("JAX not available")
 
-    def pca_inverse_transform_jax(*args, **kwargs):
+    def pca_inverse_transform_jax(*args: Any, **kwargs: Any) -> NoReturn:
         raise ImportError("JAX not available")
 
-    def pca_reconstruction_error_jax(*args, **kwargs):
+    def pca_reconstruction_error_jax(*args: Any, **kwargs: Any) -> NoReturn:
         raise ImportError("JAX not available")
 
 

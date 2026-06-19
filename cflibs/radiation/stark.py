@@ -154,15 +154,17 @@ def deconvolve_stark_fwhm(
 
         f_V  = 0.5346 f_L + sqrt(0.2166 f_L^2 + f_G^2)
 
-    solved for the Lorentzian component ``f_L`` given the measured Voigt FWHM
-    ``f_V`` and the combined Gaussian FWHM ``f_G = sqrt(f_inst^2 + f_dopp^2)``::
+    is solved for the Lorentzian component ``f_L`` given the measured Voigt FWHM
+    ``f_V`` and the combined Gaussian FWHM ``f_G = sqrt(f_inst^2 + f_dopp^2)``.
+    Squaring the relation yields the quadratic in ``f_L``::
 
-        f_L = (f_V^2 - f_G^2) / (f_V + 0.5346 * something)
+        (0.5346^2 - 0.2166) f_L^2 - 2 * 0.5346 * f_V * f_L + (f_V^2 - f_G^2) = 0
 
-    We use the algebraically exact inversion of the Olivero-Longbothum form,
-    which for the pure-Gaussian-subtraction limit reduces to quadrature
-    subtraction. Returns 0.0 if the Gaussian component already accounts for the
-    full measured width (no recoverable Stark contribution).
+    which is solved exactly via the quadratic formula, taking the physical
+    (positive) root. Quadrature subtraction ``sqrt(f_V^2 - f_G^2)`` is used only
+    as the fallback when the discriminant is negative (Gaussian-dominated edge).
+    Returns 0.0 if the Gaussian component already accounts for the full measured
+    width (no recoverable Stark contribution).
 
     Parameters
     ----------

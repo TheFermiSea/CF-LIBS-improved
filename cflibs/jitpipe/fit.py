@@ -40,18 +40,12 @@ physics JAX twins. No SQLite, no host imports, no ``sklearn``/``torch``/
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 
 from cflibs.inversion.physics.boltzmann_jax import batched_boltzmann_fit
 from cflibs.inversion.solve.iterative import _common_slope_kernel, _saha_correct_kernel
-
-if TYPE_CHECKING:  # pragma: no cover
-    from cflibs.jitpipe.params import PipelineParams, StaticConfig
-    from cflibs.jitpipe.snapshot import PipelineSnapshot
 
 # Static top-K per element (physics/line_selection.py:145, max_lines_per_element).
 TOP_K_PER_ELEMENT = 20
@@ -995,33 +989,3 @@ def keystone_degenerate(
     eff_min = float(max(int(min_elements), 2))
     max_c = jnp.max(jnp.where(mask_b, concentrations, -jnp.inf), axis=-1)
     return (n_present >= eff_min) & (max_c > threshold)
-
-
-# ---------------------------------------------------------------------------
-# Stage entry point (J0 skeleton signature, now implemented)
-# ---------------------------------------------------------------------------
-
-
-def boltzmann_fit(
-    line_intensities: Any,
-    line_index: Any,
-    line_mask: Any,
-    snapshot: "PipelineSnapshot",
-    params: "PipelineParams",
-    static: "StaticConfig",
-) -> Any:
-    """Per-species Boltzmann/SB-graph fit for identified lines (J4 entry point).
-
-    Thin orchestrator over the kernels in this module. The padded ``(E, N)``
-    arrays are assembled by the host adapter (``jitpipe.parity.fit_parity``) from
-    the snapshot; this function runs the pooled SB-graph fit (the production
-    geological estimator) and returns ``(slope, intercepts, r_squared)`` plus the
-    validity flag. The per-stage host wiring lands at J7 integration; the kernels
-    above are the parity surface.
-    """
-    raise NotImplementedError(
-        "boltzmann_fit host wiring lands at J7 integration; the J4 parity surface "
-        "is the kernels (select_lines, sb_graph_fit, common_slope_fit, "
-        "sigma_clip_fit, ransac_fit, huber_fit, closure_*, keystone_degenerate, "
-        "masked_median)."
-    )

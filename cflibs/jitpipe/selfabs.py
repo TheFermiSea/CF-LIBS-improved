@@ -51,7 +51,6 @@ else:  # pragma: no cover - jitpipe requires JAX (see cflibs.jitpipe.__init__)
     raise ImportError("cflibs.jitpipe.selfabs requires JAX")
 
 if TYPE_CHECKING:  # pragma: no cover
-    from cflibs.jitpipe.params import PipelineParams, StaticConfig
     from cflibs.jitpipe.snapshot import PipelineSnapshot
 
 
@@ -856,33 +855,3 @@ def _per_element_median(intensity: Any, line_element: Any, line_valid: Any) -> A
     hi_val = sorted_vals[rows, upper_idx]
     med = 0.5 * (lo_val + hi_val)
     return jnp.where(c > 0, med, 0.0)
-
-
-def correct_self_absorption(
-    line_intensities: Any,
-    line_index: Any,
-    snapshot: "PipelineSnapshot",
-    params: "PipelineParams",
-    static: "StaticConfig",
-) -> Any:
-    """J0-skeleton entry point — thin adapter to :func:`correct_self_absorption_arrays`.
-
-    The J0 stub signature (``line_intensities, line_index, snapshot, params,
-    static``) is retained for pipeline wiring at integration. The real
-    fixed-shape kernel is :func:`correct_self_absorption_arrays`, which also
-    takes the per-line uncertainties, element ids, and the local doublet-pair
-    table the J5 spec §3 requires. Until the J2/J4 stages emit those padded
-    arrays, this adapter raises a clear error rather than guessing them.
-
-    Raises
-    ------
-    NotImplementedError
-        The pipeline wiring (uncertainty + pair-table plumbing) lands at
-        integration; call :func:`correct_self_absorption_arrays` directly with
-        explicit padded inputs (as the parity test does).
-    """
-    raise NotImplementedError(
-        "Use correct_self_absorption_arrays with explicit padded inputs; the "
-        "5-arg pipeline adapter is wired at J-integration once J2/J4 emit the "
-        "per-line uncertainty + local doublet-pair arrays."
-    )

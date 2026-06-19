@@ -1,5 +1,5 @@
 """
-End-to-end integration tests for the CF-LIBS pipeline.
+End-to-end integration tests for the CF-LIBS pipeline (the broad suite).
 
 Self-contained tests with an in-memory atomic database.  No external DB required.
 Conditions are ps-LIBS regime (T ≈ 0.8 eV, ne ≈ 4×10¹⁶ cm⁻³) with three elements
@@ -8,6 +8,10 @@ Conditions are ps-LIBS regime (T ≈ 0.8 eV, ne ≈ 4×10¹⁶ cm⁻³) with thr
 Pipeline exercised:
   forward model → synthetic spectrum → line detection/identification
   → Boltzmann fitting → closure → composition recovery
+
+NOTE: distinct from ``tests/test_pipeline_e2e.py`` (transposed name), which is a
+single narrow multistage-recovery spot check.  This module is the broad
+integration suite (forward, detection, ALIAS, round-trips, solver, prod DB).
 """
 
 from __future__ import annotations

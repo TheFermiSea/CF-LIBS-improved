@@ -7,7 +7,6 @@ This module provides:
 - Configuration and logging
 - Caching utilities
 - Abstract base classes
-- Factory patterns
 - Connection pooling
 """
 
@@ -29,12 +28,6 @@ __all__ = [
     # Abstract base classes
     "AtomicDataSource",
     "SolverStrategy",
-    "PlasmaModel",
-    "InstrumentModelInterface",
-    # Factories
-    "SolverFactory",
-    "PlasmaModelFactory",
-    "InstrumentFactory",
     # Connection pooling
     "DatabaseConnectionPool",
     "get_pool",
@@ -64,10 +57,7 @@ _ATTRIBUTE_EXPORT_GROUPS = {
     "cflibs.core.abc": [
         "AtomicDataSource",
         "SolverStrategy",
-        "PlasmaModel",
-        "InstrumentModelInterface",
     ],
-    "cflibs.core.factory": ["SolverFactory", "PlasmaModelFactory", "InstrumentFactory"],
     "cflibs.core.pool": ["DatabaseConnectionPool", "get_pool", "close_all_pools"],
 }
 

@@ -135,7 +135,13 @@ def test_vector_index_save_load():
 
 
 def test_vector_index_without_faiss():
-    """Test that VectorIndex raises ImportError when faiss not available."""
+    """Test that VectorIndex raises ImportError when faiss not available.
+
+    KNOWN GAP: this test is permanently skipped in any environment where faiss
+    is installed (the dev/CI env -- faiss is ``importorskip``'d by other test
+    modules, i.e. it is present). The ImportError path it guards is therefore
+    only exercised in a faiss-absent environment; CI does not validate it.
+    """
     # This test only makes sense if faiss is not installed
     # Skip if faiss is available
     try:

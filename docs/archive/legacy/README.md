@@ -1,6 +1,13 @@
 # Legacy Scripts
 
-This directory contains legacy scripts from the early development of CF-LIBS. These scripts have been superseded by the modular package structure in `cflibs/`, but are preserved for reference and gradual migration.
+This directory contains legacy scripts from the early development of CF-LIBS. These scripts have been superseded by the modular package structure in `cflibs/`, and are preserved only for historical reference.
+
+> **Status note (2026-06):** The migrations described below as "(planned)" are now
+> **complete** — AirPLS baseline correction, NNLS deconvolution, element
+> identification, and the one-point calibration solver all live in the shipped
+> `cflibs.inversion` sub-packages. The "(planned)" / "Phase N" framing in the
+> sections that follow is retained as a historical record of the original
+> migration roadmap, not as a description of pending work.
 
 ## Scripts
 

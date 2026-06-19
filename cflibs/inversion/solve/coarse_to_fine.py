@@ -20,7 +20,7 @@ import numpy as np
 
 from cflibs.core.constants import KB_EV, EV_TO_J, EV_TO_K, C_LIGHT
 from cflibs.core.logging_config import get_logger
-from cflibs.inversion.physics.closure_strategy import ClosureStrategy
+from cflibs.inversion.physics.closure_strategy import ClosureStrategy, SoftmaxClosure
 
 logger = get_logger("inversion.hybrid")
 
@@ -274,8 +274,6 @@ class HybridInverter:
 
         # Closure strategy — defaults to softmax for backward compatibility.
         if closure is None:
-            from cflibs.inversion.physics.closure_strategy import SoftmaxClosure
-
             closure = SoftmaxClosure()
         # HybridInverter traces the loss through jax.value_and_grad, so the closure
         # must be JAX-native. NumPy closures (ILR/PWLR) call np.asarray(params) which
@@ -547,8 +545,6 @@ class SpectralFitter:
         self.wavelength = jnp.array(wavelength)
         self.n_elements = len(elements)
         if closure is None:
-            from cflibs.inversion.physics.closure_strategy import SoftmaxClosure
-
             closure = SoftmaxClosure()
         # SpectralFitter traces the loss through jax.value_and_grad — see the
         # matching check in HybridInverter for full rationale.

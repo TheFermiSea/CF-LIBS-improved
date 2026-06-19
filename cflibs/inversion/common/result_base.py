@@ -1,12 +1,16 @@
 """
 Shared result formatting utilities for CF-LIBS inversion results.
 
-This module provides mixins for common result formatting patterns used across:
-- MCMCResult (bayesian.py)
-- NestedSamplingResult (bayesian.py)
-- MonteCarloResult (uncertainty.py)
+This module provides two mixins:
 
-The mixins eliminate code duplication while maintaining consistent output format.
+- :class:`ResultTableMixin` -- shared concentration-table formatting.
+- :class:`StatisticsMixin` -- credible-interval / quantile helpers.
+
+The only current consumer is
+:class:`cflibs.inversion.solve.joint_optimizer.JointOptimizationResult`,
+which inherits both mixins. The mixins remain available as a reusable
+formatting/statistics base for other result classes (e.g. the Bayesian and
+Monte-Carlo result types), but those classes do not use them today.
 """
 
 from typing import Dict, Optional, Tuple

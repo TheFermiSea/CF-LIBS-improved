@@ -11,7 +11,7 @@ finding for real spectra, or understand why the quantitative inversion accepted
 or rejected a line. For the equations used after line observations are built,
 see [Physics: Equations](../physics/Equations.md) and
 [Physics: Inversion Algorithm](../physics/Inversion_Algorithm.md). For the
-module map, see [Codebase Architecture](../reference/Codebase_Architecture.md).
+module map, see [Codebase Architecture](../CF-LIBS_Codebase_Technical_Documentation.md).
 
 ## Where Identification Fits
 

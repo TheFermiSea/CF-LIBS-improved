@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
@@ -493,8 +491,8 @@ def test_mcnemar_test_counts_disagreements_symmetrically():
     ]
 
     result = mcnemar_test(left_records, right_records)
-    if math.isnan(result["chi2"]):
-        pytest.skip("McNemar requires SciPy in this environment")
+    # scipy is a hard core dependency (pyproject.toml), so chi2 is always a
+    # real number here -- no scipy-absent skip guard (a NaN would be a bug).
     assert result["b"] == 1
     assert result["c"] == 1
     assert result["chi2"] == pytest.approx(0.5)
@@ -509,9 +507,8 @@ def test_friedman_nemenyi_orders_workflows_by_rank():
     }
 
     result = friedman_nemenyi(blocks, higher_is_better=True, alpha=0.05)
-    if not result:
-        pytest.skip("Friedman/Nemenyi requires SciPy in this environment")
-
+    # scipy is a hard core dependency (pyproject.toml), so friedman_nemenyi
+    # always returns a populated result -- no scipy-absent skip guard.
     assert result["friedman_statistic"] >= 0.0
     assert result["friedman_p_value"] <= 1.0
     assert result["average_ranks"]["alias"] < result["average_ranks"]["comb"]

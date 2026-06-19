@@ -40,6 +40,11 @@ ENV/
 htmlcov/
 .tox/
 
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.complexipy_cache/
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
@@ -78,6 +83,7 @@ conductor/setup_state.json
 
 # Beads credentials and cache (not the issue data)
 .beads/.beads-credential-key
+.beads-credential-key
 .beadhub
 .beadhub-cache/
 .beadhub*.bak*
@@ -91,12 +97,7 @@ conductor/setup_state.json
 .aw/
 
 
-# Beads / Dolt files (added by bd init)
-.beads-credential-key
-
-# Track the production atomic database (4MB, small enough for git)
-!ASD_da/libs_production.db
-# SQLite temporary files
+# SQLite temporary files (the production DB itself is un-ignored at the top, near *.db)
 *.db-shm
 *.db-wal
 

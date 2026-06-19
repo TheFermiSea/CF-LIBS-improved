@@ -1,4 +1,5 @@
-# Bootstrap workspace-local BeadHub identity for every worktree.
-# This avoids relying on ~/.config/aw writes, which fail in sandboxed Codex worktrees.
-post-create = "bash ./scripts/beadhub-bootstrap.sh --quiet"
-post-switch = "bash ./scripts/beadhub-bootstrap.sh --quiet"
+# Worktree configuration.
+#
+# The former post-create/post-switch hooks invoked scripts/beadhub-bootstrap.sh,
+# but BeadHub was removed from this project (CLAUDE.md: commit 6b64e93) and that
+# script no longer exists. No bootstrap hook is needed for native `bd` worktrees.

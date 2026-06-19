@@ -519,7 +519,7 @@ extractor = EchelleExtractor('calibration.json')
 
 ### Getting Help
 
-- Check the [API Reference](../reference/API_Reference.md)
+- Check the [API Reference](../API_Reference.md)
 - Review the [`examples/`](../../examples/) directory in the repository root
 - See [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for development questions
 
@@ -612,7 +612,7 @@ for al_conc in al_concentrations:
 
 ## Next Steps
 
-- Explore the [API Reference](../reference/API_Reference.md) for detailed function documentation
+- Explore the [API Reference](../API_Reference.md) for detailed function documentation
 - Check out the [`examples/`](../../examples/) directory for more use cases
 - Read [`CONTRIBUTING.md`](../../CONTRIBUTING.md) if you want to help develop CF-LIBS
 

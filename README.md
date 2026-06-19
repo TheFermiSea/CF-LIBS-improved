@@ -82,7 +82,7 @@ cflibs forward my_config.yaml --output spectrum.csv
 
 ## Architecture
 
-CF-LIBS is organized into 18 top-level packages reflecting the physics pipeline.
+CF-LIBS is organized into a set of top-level packages reflecting the physics pipeline.
 
 ### Core Physics
 
@@ -106,7 +106,7 @@ The `cflibs/inversion/` package is organized into 6 sub-packages reflecting the 
 | `solve/` | Plasma parameter inference: iterative CF-LIBS loop, closed-form ILR solver, Bayesian (NumPyro NUTS + dynesty), manifold coarse-to-fine |
 | `runtime/` | Real-time DAQ streaming, temporal gate optimization, hardware interface |
 
-Backward-compatible shims at old flat paths (`from cflibs.inversion.solver import X`) still work. Full API: [docs/API_Reference.md](docs/API_Reference.md).
+The old flat module paths (`from cflibs.inversion.solver import X`) have been removed; import from the canonical sub-package paths above. Full API: [docs/API_Reference.md](docs/API_Reference.md).
 
 ### Validation & Analysis
 
@@ -128,7 +128,7 @@ Backward-compatible shims at old flat paths (`from cflibs.inversion.solver impor
 | `cflibs/hpc/` | Cluster utilities, SLURM integration |
 | `cflibs/evolution/` | LLM-driven algorithm optimization tooling (hierarchical-ES, blocklist scanner). The only place under `cflibs/` where ML libraries are permitted. |
 
-Rust components in `native/cflibs-core/` (comb matching, partition functions) and `native/rust-plugin/` (DAQ interface).
+Rust component in `native/cflibs-core/` (comb matching, partition functions), built via maturin as the `cflibs._core` extension.
 
 ### Physics Constraint
 

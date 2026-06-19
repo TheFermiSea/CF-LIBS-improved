@@ -60,6 +60,15 @@ kernel — no SQLite, no host imports, no data-dependent shapes (J11
 import-hygiene + fixed-shape rules). numpyro is the shipped CF-LIBS sampler
 (``solve/bayesian/``) and is the only ML-adjacent dep used here; jaxopt /
 optimistix / lineax / equinox stay TID251-banned and ``jax.nn`` is never used.
+
+Consumption status (2026-06)
+----------------------------
+This is the documented differentiability surface (ADR-0004 §6.2). None of its
+public symbols (``knob_gradient``, ``knob_objective``, ``run_joint_nuts``,
+``soft_f1``, ``fixed_point_custom_vjp``, …) are referenced from any production
+``cflibs/`` module or script; the only importer is the J11 parity test
+(``tests/jitpipe/test_parity_j11.py``). It is intentional research
+infrastructure, not cruft — kept as the differentiable-pipeline payoff spike.
 """
 
 from __future__ import annotations

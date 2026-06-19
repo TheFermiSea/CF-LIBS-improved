@@ -40,8 +40,10 @@ Dependencies
 ------------
 - Core: numpy
 - Analytical propagation: `pip install uncertainties>=3.2.0`
-- Parallel execution: `pip install joblib` (optional, falls back to serial)
-Install with: `pip install cflibs[uncertainty]`
+- Parallel execution: `pip install joblib` (optional, falls back to serial).
+  NOTE: joblib is an undocumented soft opt-in — it is NOT pulled in by any
+  pyproject extra (including `cflibs[uncertainty]`); install it explicitly.
+Install with: `pip install cflibs[uncertainty]`  (covers `uncertainties`, not joblib)
 
 References
 ----------
@@ -141,6 +143,12 @@ def create_boltzmann_uncertainties(
     ------
     ImportError
         If uncertainties package is not installed
+
+    Notes
+    -----
+    Public-API helper with no shipped-code callers; the iterative solver builds
+    Boltzmann uncertainties via its own ``_build_uncertainty_abundance_multipliers``.
+    Exercised only by ``tests/test_uncertainty.py``.
     """
     check_uncertainties_available()
 
@@ -1205,7 +1213,10 @@ def run_monte_carlo_uq(
     Convenience function to run Monte Carlo UQ.
 
     This is a simple wrapper around MonteCarloUQ for quick uncertainty
-    estimation. For more control, use the MonteCarloUQ class directly.
+    estimation. For more control, use the MonteCarloUQ class directly. Note
+    that the shipped pipeline uses :class:`MonteCarloUQ` directly (see
+    ``pipeline.py``); this wrapper has no shipped-code callers and is exercised
+    only by ``tests/test_uncertainty.py``.
 
     By default this propagates **both** spectral noise and atomic-data (A_ki)
     uncertainty (``perturbation_type=COMBINED``). Dropping the A_ki term

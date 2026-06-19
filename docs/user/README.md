@@ -15,4 +15,4 @@ a LIBS spectrum and want results.
 
 For the physics behind these workflows, see
 [../physics/](../physics/README.md). For API details, see
-[../reference/API_Reference.md](../reference/API_Reference.md).
+[../API_Reference.md](../API_Reference.md).

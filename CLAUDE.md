@@ -182,7 +182,6 @@ The Serena MCP server is the **default code-intelligence tool** for this project
 | `cflibs/hpc/` | Cluster utilities, SLURM integration |
 | `cflibs/evolution/` | Hierarchical-ES driver + physics-only blocklist scanner for LLM-driven algorithm evolution. Optimization-process tooling only (see docs/Evolution_Framework.md). |
 | `native/cflibs-core/` | Rust computational core: comb matching, partition functions |
-| `native/rust-plugin/` | Rust plugin interface for DAQ |
 
 ### Inversion Sub-Packages
 

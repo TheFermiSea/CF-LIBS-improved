@@ -1,15 +1,16 @@
 """Bayesian forward models and NumPyro graph builders (T1-6).
 
 This module hosts the JAX-compiled CF-LIBS forward models that map plasma
-parameters ``(T, n_e, concentrations)`` to a synthetic spectrum, plus the
-NumPyro graph builders that wire them up with priors:
+parameters ``(T, n_e, concentrations)`` to a synthetic spectrum:
 
 * :class:`BayesianForwardModel` -- single-zone LTE forward model.
 * :class:`TwoZoneBayesianForwardModel` -- core+shell self-reversed model.
-* :func:`log_likelihood` -- module-level log-likelihood used by dynesty.
-* :func:`bayesian_model` / :func:`two_zone_bayesian_model` -- NumPyro graph
-  builders that combine the forward model with the priors from
-  :mod:`cflibs.inversion.solve.bayesian.priors`.
+
+The module-level :func:`log_likelihood` (used by dynesty) and the NumPyro graph
+builders :func:`bayesian_model` / :func:`two_zone_bayesian_model` are defined in
+the sibling :mod:`likelihood` and :mod:`models` modules respectively and merely
+re-exported here for back-compat (see the re-export block at the bottom of this
+file).
 
 Atomic-data carriers (:class:`AtomicDataArrays`, :func:`load_atomic_data`,
 the guarded :func:`partition_function` delegator, :func:`mcwhirter_log_penalty`,

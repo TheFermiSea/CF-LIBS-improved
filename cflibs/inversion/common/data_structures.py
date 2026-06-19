@@ -29,9 +29,24 @@ class LineObservation:
 
     Attributes
     ----------
-    wavelength_nm, intensity, intensity_uncertainty, element,
-    ionization_stage, E_k_ev, g_k, A_ki
-        See class signature.
+    wavelength_nm : float
+        Line center wavelength in nm.
+    intensity : float
+        Measured line intensity (integrated area), arbitrary but
+        self-consistent units across all observations.
+    intensity_uncertainty : float
+        Absolute 1-sigma uncertainty on ``intensity`` (same units).
+    element : str
+        Element symbol (e.g. ``"Fe"``).
+    ionization_stage : int
+        Ionization stage of the emitting species (1 = neutral, 2 = singly
+        ionized, ...).
+    E_k_ev : float
+        Upper-level energy in eV.
+    g_k : int
+        Statistical weight (degeneracy) of the upper level.
+    A_ki : float
+        Einstein spontaneous-emission coefficient in s^-1.
     aki_uncertainty : float or None, optional
         Fractional uncertainty on the Einstein coefficient (sigma(A_ki) / A_ki),
         as supplied by the atomic database (NIST grades B/C/D/E map to

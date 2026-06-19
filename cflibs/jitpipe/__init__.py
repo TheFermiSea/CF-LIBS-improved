@@ -13,7 +13,8 @@ Public API
 - :class:`PipelineParams` — traced pytree of every continuous knob.
 - :class:`StaticConfig` — hashable jit cache key (statics).
 - :func:`run_one`, :func:`run_batch` — single / batched pipeline entry points
-  (stage logic lands in J1-J7; the J0 skeleton wires the signatures).
+  (the full J1-J11 stage logic has shipped; see :mod:`cflibs.jitpipe.pipeline`
+  and :mod:`cflibs.jitpipe.host`).
 
 JAX requirement
 ---------------

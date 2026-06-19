@@ -54,13 +54,7 @@ from cflibs.benchmark.datasets.usgs import (
     oxide_to_element_wt,
 )
 
-# Backwards-compatible alias: nist_steel was the first adapter and exported
-# CERTIFIED_COMPOSITIONS unprefixed. Keep that name pointing at NIST so
-# existing callers don't break.
-CERTIFIED_COMPOSITIONS = NIST_STEEL_CERTIFIED_COMPOSITIONS
-
 __all__ = [
-    "CERTIFIED_COMPOSITIONS",
     "NIST_STEEL_CERTIFIED_COMPOSITIONS",
     "NISTSteelComposition",
     "NISTSteelDataset",

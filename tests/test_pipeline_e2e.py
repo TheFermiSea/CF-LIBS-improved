@@ -1,5 +1,11 @@
 """
-End-to-end synthetic spectrum validation for the classic CF-LIBS pipeline.
+Single focused end-to-end check: full-pipeline recovery of one multi-stage
+(Fe/Cu) synthetic sample (``test_full_pipeline_recovers_multistage_sample``).
+
+NOTE: distinct from ``tests/test_e2e_pipeline.py`` (transposed name), which is
+the broader integration suite (9 tests: forward model, line detection, ALIAS
+identification, noiseless/noisy round-trips, solver quality, production-DB
+round-trips). This module is the narrow multistage-recovery spot check.
 """
 
 from __future__ import annotations

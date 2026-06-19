@@ -1,5 +1,11 @@
 # JAX port: comb.py + correlation.py — consultation synthesis
 
+> **SUPERSEDED (historical):** This 2026-05-12 consultation is kept as design
+> provenance only. The JAX/jittable inversion effort was subsequently
+> re-scoped by [ADR-0004](../adr/ADR-0004-jittable-inversion-pipeline.md) and
+> implemented in the shipped `cflibs/jitpipe/` package; some conclusions below
+> were revised by that decision. Do not treat this as current guidance.
+
 Date: 2026-05-12
 Consultants: `gpt-5.3-codex`, `gemini-3-flash-preview` (Gemini 3.1 Pro
 rate-limited at `RESOURCE_EXHAUSTED`).

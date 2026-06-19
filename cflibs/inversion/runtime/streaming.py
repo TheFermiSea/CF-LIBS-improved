@@ -54,7 +54,6 @@ Example
 >>> analyzer.stop()
 """
 
-import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -75,7 +74,11 @@ import numpy as np
 
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
-from cflibs.inversion.solve.iterative import CFLIBSResult, IterativeCFLIBSSolver
+from cflibs.inversion.solve.iterative import (
+    CFLIBSResult,
+    IterativeCFLIBSSolver,
+    _jax_boltzmann_composition_enabled,
+)
 from cflibs.inversion.physics.line_selection import LineSelector
 
 __all__ = [
@@ -96,22 +99,11 @@ __all__ = [
 ]
 
 
-def _jax_boltzmann_composition_enabled() -> bool:
-    """Opt-in env-var toggle for routing the inner Boltzmann sigma-clip
-    WLS step through the JAX kernel in composition workflows.
-
-    Default (unset or "0") preserves byte-for-byte the CPU behavior. Set
-    ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION=1`` to enable. See
-    ``docs/jax-port/iterative-boltzmann-consultation.md`` for design
-    rationale.
-
-    This function only SEEDS the constructor default of
-    :class:`FastAnalyzer` (c5 env-var lift, matching
-    ``IterativeCFLIBSSolver.use_jax_boltzmann``): passing an explicit
-    ``use_jax_boltzmann=True/False`` to the analyzer is authoritative and
-    overrides the environment.
-    """
-    return os.environ.get("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", "0") == "1"
+# ``_jax_boltzmann_composition_enabled`` is imported from
+# :mod:`cflibs.inversion.solve.iterative` (its canonical home). Here it only
+# SEEDS the :class:`FastAnalyzer` constructor default (c5 env-var lift, matching
+# ``IterativeCFLIBSSolver.use_jax_boltzmann``): an explicit
+# ``use_jax_boltzmann=True/False`` to the analyzer overrides the environment.
 
 
 logger = get_logger("inversion.streaming")
@@ -663,11 +655,9 @@ class FastAnalyzer(BaseStreamingAnalyzer):
         self.elements = elements
         self.config = config or StreamingConfig(mode=AnalysisMode.FAST)
         # JAX numerical-path selector lifted onto the interface (c5 pattern,
-        # matching ``IterativeCFLIBSSolver.use_jax_boltzmann``). Default
-        # ``None`` SEEDS the flag from ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION``
-        # so default construction is byte-identical to the historical
-        # env-driven behavior; an explicit ``True``/``False`` is authoritative
-        # and overrides the env var.
+        # matching ``IterativeCFLIBSSolver.use_jax_boltzmann``). See the
+        # ``use_jax_boltzmann`` docstring above for the None-seeds-from-env
+        # contract.
         self.use_jax_boltzmann = (
             _jax_boltzmann_composition_enabled()
             if use_jax_boltzmann is None

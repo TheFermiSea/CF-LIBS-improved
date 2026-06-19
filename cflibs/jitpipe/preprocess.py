@@ -33,6 +33,15 @@ mandatory (ADR-0004 §5.3): the LLS exp/log round-trip and the λ=1e6 ALS Gram a
 the precision-sensitive spots.
 
 No SQLite, no host imports (import-hygiene test); arrays in, arrays out.
+
+Consumption status (2026-06)
+----------------------------
+These J1 kernels are parity-tested (``tests/jitpipe/test_parity_j1.py``) but are
+NOT yet composed into the live pipeline: ``run_one`` /
+``host.run_front_end_ondevice`` apply the host-side response multiply on-device
+and do not currently run a jitpipe baseline/noise stage. Per ADR-0004's staged
+plan a parity-tested-but-unwired kernel is an intentional intermediate state, not
+dead code — wiring this stage into the front-end is the residual integration gap.
 """
 
 from __future__ import annotations

@@ -49,8 +49,6 @@ logger = get_logger("inversion.preprocess.response_correction")
 __all__ = [
     "ResponseCurveCoverageError",
     "SpectralResponseCorrection",
-    "apply_response_correction",
-    "derive_response_from_argon_branching_ratios",
     "load_response_curve",
 ]
 
@@ -339,77 +337,3 @@ class SpectralResponseCorrection:
             return corrected
         corrected_unc = np.asarray(intensity_uncertainty, dtype=float) / eff
         return corrected, corrected_unc
-
-
-def apply_response_correction(
-    wavelength: np.ndarray,
-    intensity: np.ndarray,
-    correction: Optional[SpectralResponseCorrection] = None,
-) -> np.ndarray:
-    """
-    Apply an optional spectral-response correction (identity when ``None``).
-
-    The identity path returns the *same* ``intensity`` object unchanged --
-    pinned by a regression test so the default pipeline behaviour is
-    bit-identical with and without the hook.
-    """
-    if correction is None:
-        return intensity
-    result = correction.apply(wavelength, intensity)
-    assert isinstance(result, np.ndarray)
-    return result
-
-
-def derive_response_from_argon_branching_ratios(
-    wavelength: np.ndarray,
-    intensity: np.ndarray,
-    *,
-    branching_ratio_table: Optional[np.ndarray] = None,
-) -> SpectralResponseCorrection:
-    """
-    Lamp-free relative spectral response from argon branching ratios (stub).
-
-    Placeholder API for internal (standards-free) calibration: lines sharing
-    an upper level have intensity ratios fixed by their transition
-    probabilities (branching ratios), independent of the plasma state. The
-    deviation of measured Ar line ratios from the tabulated branching ratios
-    therefore measures the relative response E(lambda) at the line
-    wavelengths -- no calibrated lamp required. Validated against a quartz
-    tungsten halogen lamp above 350 nm in the LIBS context.
-
-    Intended use on the 1 ps / 1040 nm instrument: record an LIBS plasma in an
-    argon atmosphere (or an Ar-filled hollow-cathode lamp), pass the spectrum
-    here, and feed the returned :class:`SpectralResponseCorrection` to the
-    inversion pipeline (``--response-curve`` accepts a file produced from it).
-
-    References
-    ----------
-    "Relative spectral response calibration of a spectrometer system for laser
-    induced breakdown spectroscopy using the argon branching ratio method",
-    J. Anal. At. Spectrom. 29 (2014) 657-664, DOI 10.1039/C3JA50371B.
-
-    Whaling et al., "Argon branching ratios for spectrometer response
-    calibration", J. Quant. Spectrosc. Radiat. Transf. 50 (1993) 7-18
-    (branching-ratio tables spanning 210-4591 nm).
-
-    Parameters
-    ----------
-    wavelength, intensity : np.ndarray
-        Measured argon emission spectrum.
-    branching_ratio_table : np.ndarray, optional
-        Override table of ``(wavelength_nm, upper_level_id, branching_ratio)``
-        rows; defaults to the Whaling 1993 Ar I/Ar II tables once implemented.
-
-    Raises
-    ------
-    NotImplementedError
-        Always -- this is a designed-but-unimplemented surface. Tracked as
-        follow-up to bead CF-LIBS-improved-gzwd.
-    """
-    raise NotImplementedError(
-        "Argon branching-ratio internal calibration is not implemented yet. "
-        "Planned method: J. Anal. At. Spectrom. 29 (2014) 657-664, "
-        "DOI 10.1039/C3JA50371B, using the Whaling et al. JQSRT 50 (1993) 7-18 "
-        "Ar branching-ratio tables. Until then, supply a measured response "
-        "curve (calibrated lamp) via SpectralResponseCorrection.from_file()."
-    )

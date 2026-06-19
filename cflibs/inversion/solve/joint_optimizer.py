@@ -851,6 +851,11 @@ class MultiStartJointOptimizer:
     the best result. This is important for CF-LIBS where the loss landscape
     may have multiple local minima.
 
+    .. note::
+        Public-API class with no shipped-code callers; the CLI, pipeline, and
+        benchmark harness use :class:`JointOptimizer` directly. Exercised only
+        by ``tests/test_joint_optimizer.py`` / ``tests/test_joint_vs_iterative.py``.
+
     Parameters
     ----------
     optimizer : JointOptimizer

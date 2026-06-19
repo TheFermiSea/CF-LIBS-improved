@@ -123,8 +123,8 @@ NIST_SRM_612_GLASS: Mapping[str, float] = {
 # Map ingest-time dataset_ids to the certified composition for the
 # physical sample. The benchmark loader (cflibs/benchmark/loaders.py)
 # uses this to populate each spectrum's ``true_composition`` when the
-# spectra are ingested. Empty for now; populated by the BHVO-2 / NIST
-# SRM 612 ingest PR (CF-LIBS-improved bd issue).
+# spectra are ingested. Currently registers the BHVO-2, BIR-1, and NIST
+# SRM 612 reference materials.
 REFERENCE_COMPOSITIONS: Mapping[str, Mapping[str, float]] = {
     "bhvo2_usgs": BHVO2_BASALT_USGS,
     "bir1_usgs": BIR1_BASALT_USGS,

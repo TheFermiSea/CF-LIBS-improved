@@ -20,7 +20,6 @@ from scipy.stats import binom, linregress
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
-from cflibs.core.logging_config import get_logger as _get_alias_logger
 from cflibs.inversion.common.element_id import (
     ElementIdentification,
     ElementIdentificationResult,
@@ -36,7 +35,6 @@ from cflibs.inversion.preprocess.preprocessing import estimate_baseline, estimat
 from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
 
 logger = get_logger("inversion.identify.alias")
-_alias_logger = _get_alias_logger("inversion.identify.alias")
 
 # Canonical ALIAS confidence threshold C_th (Noel 2025 sec 3.8): an element is
 # detected when ``k_det > C_th``. These are the single source of truth for the
@@ -631,59 +629,13 @@ class ALIASIdentifier:
 
     Parameters
     ----------
-    atomic_db : AtomicDatabase
-        Atomic database for transitions and partition functions
-    resolving_power : float, optional
-        Instrument resolving power R = λ/Δλ (default: 5000.0)
-    T_range_K : Tuple[float, float], optional
-        Temperature grid range in K (default: (8000.0, 12000.0))
-    n_e_range_cm3 : Tuple[float, float], optional
-        Electron density grid range in cm^-3 (default: (3e16, 3e17))
-    T_steps : int, optional
-        Number of temperature grid points (default: 5)
-    n_e_steps : int, optional
-        Number of electron density grid points (default: 3)
-    intensity_threshold_factor : float, optional
-        Peak detection threshold = factor × noise_estimate. If ``None`` (the
-        default), resolved from ``high_recall``: ``2.0`` when
-        ``high_recall=True`` and ``3.0`` otherwise (strict mode, the
-        precision-king baseline). Passing an explicit float overrides
-        ``high_recall`` for this knob.
-    detection_threshold : float, optional
-        The paper's confidence threshold ``C_th`` (Noel 2025 sec 3.8): an
-        element is detected when ``k_det > C_th``. If ``None`` (the
-        default), resolved from ``high_recall``: ``0.4`` when
-        ``high_recall=True`` and ``0.5`` otherwise (strict mode, the paper
-        default and precision-king baseline). Passing an explicit float
-        overrides ``high_recall`` for this knob.
-    high_recall : bool, optional
-        Opt-in preset that loosens the two peak/identification thresholds
-        for higher recall at the cost of precision. When ``True`` (and the
-        caller has not pinned the corresponding knob explicitly) it lowers
-        ``intensity_threshold_factor`` from ``3.0`` to ``2.0`` and
-        ``detection_threshold`` (the paper C_th) from ``0.5`` to ``0.4``. The default
-        (``False``) preserves the strict precision-king behavior captured
-        in the F1 leaderboard baseline at
-        ``.swarm/identifier-f1-baseline.json`` (precision=1.000, FP/spec=0
-        on n=33 cross-shard). See the PR for the closed PR #134 that
-        silently flipped these defaults — this knob is the opt-in
-        replacement (default: False).
-    chance_window_scale : float, optional
-        Scale factor for chance-coincidence windows used in fill-factor estimation.
-        The chance half-window is `chance_window_scale * (lambda / R)`.
-    elements : Optional[List[str]], optional
-        List of elements to search for. If None, uses default common LIBS elements:
-        ["Fe", "H", "Cu", "Al", "Ti", "Ca", "Mg", "Si"] (default: None)
-    max_screening_candidates : int, optional
-        Maximum number of candidates retained by fast screening (default: 12)
-    relative_cl_threshold : float, optional
-        CL must be >= max_CL * relative_cl_threshold to count as detected.
-        Set to 0 to disable the relative threshold (default: 0.1)
-    boltzmann_r2_min : float, optional
-        Minimum Boltzmann-plot R^2 required for candidates with at least three
-        matched lines. Must be finite and in [0, 1]. Candidates with fewer
-        than three matched lines are rejected before committing identification
-        because no meaningful Boltzmann regression can be performed (default: 0.85).
+    See the ``__init__`` docstring for the full, authoritative description of
+    every constructor argument. The constructor docstring is the single source
+    of truth for the ~28 configuration knobs (peak/detection thresholds, the
+    Saha-Boltzmann grid, the relative-CL gate variants, ``r2_gate_mode``,
+    ``temperature_estimator_mode``, the ``use_jax_*`` flags, and the
+    ``self_absorption_*`` knobs); the named presets are in ``ALIAS_PRESETS``
+    (see ``alias_preset``).
     """
 
     # Temperature bounds for physics validation
@@ -2179,6 +2131,9 @@ class ALIASIdentifier:
         # Legacy "intensity" mode (opt-in): find_peaks on baseline-corrected
         # intensity, gated by positive curvature (d2 > 0) in a +/-2-pt window.
         # The paper-faithful "second_derivative" mode is the default (above).
+        # NOTE: this pre-paper-faithful path is vestigial — no preset,
+        # benchmark, or CLI sets peak_mode="intensity"; it is kept alive only
+        # by the round-trip assertion in tests/test_paper_faithful_contract.py.
         prominence = max(threshold / 3, np.finfo(float).eps)
         peak_indices, _ = find_peaks(corrected, height=threshold, prominence=prominence)
         confirmed = []
@@ -2516,6 +2471,11 @@ class ALIASIdentifier:
 
         # Weighted mode (opt-in): drop the bottom quartile by intensity
         # (SNR proxy) to deprioritize the noisy weak high-E_k lines.
+        # NOTE: this third estimator strategy (and its helper
+        # ``_prune_low_snr_slope_points``) is a Vrabel universal-miss
+        # investigation leftover that never graduated to a preset or sweep.
+        # It is exercised only by tests/test_alias_unit.py; production and
+        # benchmark presets use only "legacy" (default) and "robust".
         if self.temperature_estimator_mode == "weighted":
             E_k_vals, y_vals, I_vals = self._prune_low_snr_slope_points(E_k_vals, y_vals, I_vals)
 

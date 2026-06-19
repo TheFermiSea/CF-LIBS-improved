@@ -25,13 +25,12 @@ from __future__ import annotations
 
 import ast
 import json
-import logging
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable
 
 import pandas as pd
 
-logger = logging.getLogger(__name__)
+from cflibs.observability._csv_io import load_csvs as _load_csvs
 
 # Thresholds (centralised so tests and the CLI agree)
 THRESH_BASIS_FWHM_NM = 0.05
@@ -160,24 +159,6 @@ def _classify_row(row: pd.Series) -> list[str]:
     modes += _annotation_modes(ann, workflow)
     modes += _element_modes(predicted, true, row.get("f1"))
     return modes
-
-
-def _load_csvs(csv_paths: Sequence[Path]) -> pd.DataFrame:
-    frames: list[pd.DataFrame] = []
-    for path in csv_paths:
-        try:
-            df = pd.read_csv(path)
-        except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
-            logger.warning("skipping unreadable id_records.csv %s: %s", path, exc)
-            continue
-        if df.empty:
-            continue
-        df = df.copy()
-        df["_source_csv"] = str(path)
-        frames.append(df)
-    if not frames:
-        return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
 
 
 def attribute_failures(csv_paths: Iterable[Path]) -> dict:

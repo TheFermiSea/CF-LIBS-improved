@@ -20,6 +20,7 @@ from typing import List, Optional, Tuple
 
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.identify._coverage import log_peak_detection
+from cflibs.inversion.preprocess.outliers import MAD_SCALE_FACTOR
 
 logger = get_logger("inversion.preprocessing")
 
@@ -340,7 +341,7 @@ def estimate_noise(intensity: np.ndarray, baseline: np.ndarray) -> float:
     for _ in range(3):
         med = np.median(residuals)
         mad = np.median(np.abs(residuals - med))
-        sigma = mad * 1.4826
+        sigma = mad * MAD_SCALE_FACTOR
         if sigma < 1e-10:
             break
         mask = np.abs(residuals - med) < 3.0 * sigma
@@ -350,7 +351,7 @@ def estimate_noise(intensity: np.ndarray, baseline: np.ndarray) -> float:
     # Final estimate
     med = np.median(residuals)
     mad = np.median(np.abs(residuals - med))
-    noise = mad * 1.4826
+    noise = mad * MAD_SCALE_FACTOR
 
     # Floor noise to prevent zero thresholds that cause find_peaks to
     # return many trivial local maxima.
