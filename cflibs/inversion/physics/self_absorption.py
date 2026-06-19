@@ -1962,3 +1962,389 @@ class CurveOfGrowthAnalyzer:
             diagnosed[line_data.wavelength_nm] = is_absorbed
 
         return diagnosed
+
+
+# =============================================================================
+# Columnar-Density Saha-Boltzmann (CD-SB) quantification  --  OPT-IN
+# =============================================================================
+#
+# Reference (primary):
+#   A. Safi, S. H. Tavassoli, G. Cristoforetti, S. Legnaioli, V. Palleschi,
+#   F. Rezaei, E. Tognoni, "Determination of excitation temperature in
+#   laser-induced plasmas using columnar density Saha-Boltzmann plot",
+#   Journal of Advanced Research 18 (2019) 1-10,
+#   https://doi.org/10.1016/j.jare.2019.01.008  (CD-SB plot, Eqs. 6-10).
+# Supporting:
+#   J. A. Aguilera & C. Aragon, "Curve of growth (C-sigma) graphs for
+#   self-absorption correction in CF-LIBS", Spectrochim. Acta B 63 (2008);
+#   El-Sherbini et al. (2005), line-width-ratio SA parameter.
+#
+# Idea
+# ----
+# The conventional Saha-Boltzmann plot uses the *measured line intensity* as
+# its ordinate, ``y = ln(I lambda / (g_k A_ki))`` vs upper-level energy E_k,
+# with slope ``-1/(k_B T)``. A self-absorbed line has a SUPPRESSED measured
+# intensity ``I_obs = I_thin * f(tau_0)``, so it sits BELOW the Boltzmann line
+# and biases both the slope (temperature) and the intercept (column density).
+# The usual remedy is to EXCLUDE such lines.
+#
+# CD-SB instead replaces the intensity-derived ordinate with the *columnar
+# density of the lower level* ``n_i * l`` (cm^-2). The column density is
+# recovered from the optically-thick curve of growth via the line-center
+# optical depth ``tau_0`` (Safi 2019, Eq. 8), so a self-absorbed line
+# CONTRIBUTES CORRECTLY rather than being thrown away. Because ``n_i * l``
+# is derived from the radiative-transfer optical depth (not the suppressed
+# intensity), it is immune to the self-absorption bias.
+#
+# CD-SB plot (Safi 2019, Eq. 6), here written for a single ionization stage:
+#
+#     y_CDSB = ln( (n_i * l) / g_i )   plotted vs   x = E_i  (lower-level eV)
+#     slope  = -1 / (k_B T)            ->  T = -1 / (k_B * slope)
+#
+# (For a full multi-stage Saha-Boltzmann variant the Saha term shifts ionic
+# points onto the neutral plane; this opt-in path implements the single-stage
+# Boltzmann form, which is exactly the case where self-absorption of resonance
+# lines does the most damage. Multi-stage Saha mapping is left to the existing
+# solver, which can consume the per-line column densities produced here.)
+#
+# Column density from optical depth (inverse of this module's forward
+# ``SelfAbsorptionCorrector._estimate_optical_depth``; Hutchinson eq. 5.13):
+#
+#     tau_0 = (pi e^2 / m_e c) * f_lu * (n_i l) * phi(nu_0),
+#     phi(nu_0) = 1 / (sqrt(pi) * Delta_nu_D),
+#     Delta_nu_D = (nu_0 / c) * sqrt(2 k_B T / M)
+#  => n_i l   = tau_0 * sqrt(pi) * Delta_nu_D / [ (pi e^2 / m_e c) * f_lu ]
+#
+# This is the CGS-consistent inverse used below, reusing the module constant
+# ``_PI_E2_OVER_MEC_CGS`` and the same f_lu = 1.4992 lambda[cm]^2 A (g_k/g_i)
+# conversion used throughout this file.
+
+
+@dataclass
+class CDSBLineInput:
+    """
+    Input for one line of a Columnar-Density Saha-Boltzmann (CD-SB) fit.
+
+    A CD-SB point is built from the line's *optical depth at line center*
+    (``tau_0``), which carries the column-density information that survives
+    self-absorption, plus the atomic data needed to convert ``tau_0`` to a
+    lower-level columnar density ``n_i * l`` and to place the point on the
+    plot (Safi et al., J. Adv. Res. 18 (2019), Eqs. 6 and 8).
+
+    Attributes
+    ----------
+    wavelength_nm : float
+        Transition central wavelength in nm.
+    tau_0 : float
+        Line-center optical depth ``k(lambda_0) * l`` (dimensionless). May be
+        measured from the self-absorption (SA) parameter via the El-Sherbini
+        line-width-ratio method, from a doublet ratio, or supplied directly.
+        Must be > 0; the recovered column density scales linearly with it.
+    A_ki : float
+        Einstein spontaneous-emission coefficient (s^-1).
+    g_k : int
+        Statistical weight (degeneracy) of the upper level.
+    g_i : int
+        Statistical weight (degeneracy) of the lower level.
+    E_i_ev : float
+        LOWER-level energy in eV (the CD-SB abscissa, Safi 2019 Eq. 6).
+    element : str
+        Element symbol (used only for the Doppler-width atomic mass).
+    ionization_stage : int, default 1
+        1 = neutral, 2 = singly ionized. A single CD-SB fit should mix only
+        one stage (the Boltzmann form); ionic points need a Saha shift.
+    mass_amu : float or None, default None
+        Atomic mass in amu for the Doppler width. ``None`` falls back to the
+        module's per-element table (Si-like 28 amu for unknown elements).
+    """
+
+    wavelength_nm: float
+    tau_0: float
+    A_ki: float
+    g_k: int
+    g_i: int
+    E_i_ev: float
+    element: str
+    ionization_stage: int = 1
+    mass_amu: Optional[float] = None
+
+
+@dataclass
+class CDSBResult:
+    """
+    Result of a Columnar-Density Saha-Boltzmann (CD-SB) fit.
+
+    Attributes
+    ----------
+    temperature_K : float
+        Excitation temperature recovered from the CD-SB plot slope,
+        ``T = -1 / (k_B * slope)`` (Safi 2019, Eq. 6).
+    temperature_uncertainty_K : float
+        1-sigma temperature uncertainty propagated from the slope error.
+    slope : float
+        Slope of ``ln(n_i l / g_i)`` vs ``E_i`` (units eV^-1); ``-1/(k_B T)``.
+    intercept : float
+        Y-intercept of the CD-SB plot (``ln`` of the total columnar density
+        divided by the partition function, up to the common prefactor).
+    column_densities_cm2 : Dict[float, float]
+        Wavelength (nm) -> recovered lower-level columnar density ``n_i * l``
+        (cm^-2) for each input line.
+    r_squared : float
+        Coefficient of determination of the linear CD-SB fit.
+    n_lines : int
+        Number of lines used.
+    warnings : List[str]
+        Diagnostic messages.
+    """
+
+    temperature_K: float
+    temperature_uncertainty_K: float
+    slope: float
+    intercept: float
+    column_densities_cm2: Dict[float, float]
+    r_squared: float
+    n_lines: int
+    warnings: List[str] = field(default_factory=list)
+
+
+def column_density_from_optical_depth(
+    tau_0: float,
+    A_ki: float,
+    g_k: int,
+    g_i: int,
+    wavelength_nm: float,
+    temperature_K: float,
+    mass_amu: float,
+) -> float:
+    """
+    Recover the lower-level columnar density ``n_i * l`` (cm^-2) from a
+    line-center optical depth ``tau_0`` via the Doppler curve-of-growth.
+
+    This is the algebraic inverse of the forward optical-depth formula used
+    in :meth:`SelfAbsorptionCorrector._estimate_optical_depth` (Hutchinson,
+    *Principles of Plasma Diagnostics*, eq. 5.13; Safi et al. 2019, Eq. 8):
+
+    .. math::
+
+        \\tau_0 = \\frac{\\pi e^2}{m_e c}\\, f_{lu}\\, (n_i l)\\, \\phi(\\nu_0),
+        \\qquad
+        \\phi(\\nu_0) = \\frac{1}{\\sqrt{\\pi}\\,\\Delta\\nu_D},
+        \\qquad
+        \\Delta\\nu_D = \\frac{\\nu_0}{c}\\sqrt{\\frac{2 k_B T}{M}}
+
+    so that
+
+    .. math::
+
+        n_i l = \\frac{\\tau_0\\,\\sqrt{\\pi}\\,\\Delta\\nu_D}
+                     {(\\pi e^2 / m_e c)\\, f_{lu}}.
+
+    The absorption oscillator strength is obtained from ``A_ki`` with the
+    standard relation ``f_lu = 1.4992 lambda[cm]^2 A_ki (g_k / g_i)`` (Cowan
+    1981, eq. 14.39), matching every other oscillator-strength conversion in
+    this module. All quantities are evaluated in CGS, reusing the module
+    constant ``_PI_E2_OVER_MEC_CGS = pi e^2 / (m_e c)``.
+
+    Parameters
+    ----------
+    tau_0 : float
+        Line-center optical depth (dimensionless, > 0).
+    A_ki : float
+        Einstein A coefficient in s^-1.
+    g_k, g_i : int
+        Upper / lower level statistical weights.
+    wavelength_nm : float
+        Central wavelength in nm.
+    temperature_K : float
+        Excitation temperature in K (sets the Doppler width).
+    mass_amu : float
+        Atomic mass in amu (sets the thermal velocity).
+
+    Returns
+    -------
+    float
+        Lower-level columnar density ``n_i * l`` in cm^-2 (>= 0).
+    """
+    if tau_0 <= 0 or A_ki <= 0 or g_i <= 0 or temperature_K <= 0:
+        return 0.0
+
+    lambda_cm = wavelength_nm * 1e-7
+    # f_lu from A_ki (CGS, lambda in cm) -- identical to the rest of the file.
+    f_lu = 1.4992 * (lambda_cm**2) * A_ki * (g_k / g_i)
+    if f_lu <= 0:
+        return 0.0
+
+    # Doppler 1/e half-width in Hz: Delta_nu_D = (nu_0 / c) * sqrt(2 k T / M).
+    mass_kg = mass_amu * M_PROTON
+    v_th_m_per_s = np.sqrt(2.0 * KB * temperature_K / mass_kg)
+    nu_0_Hz = _C_CGS_CM_PER_S / lambda_cm  # nu_0 = c / lambda (CGS, Hz)
+    delta_nu_D_Hz = nu_0_Hz * (v_th_m_per_s / C_LIGHT)
+    if delta_nu_D_Hz <= 0:
+        return 0.0
+
+    # n_i l = tau_0 * sqrt(pi) * Delta_nu_D / [ (pi e^2 / m_e c) * f_lu ]
+    n_i_l = tau_0 * np.sqrt(np.pi) * delta_nu_D_Hz / (_PI_E2_OVER_MEC_CGS * f_lu)
+    return max(0.0, float(n_i_l))
+
+
+def cdsb_quantify(
+    lines: Sequence[CDSBLineInput],
+    temperature_guess_K: float = 10000.0,
+    max_iterations: int = 5,
+    tol_K: float = 1.0,
+) -> CDSBResult:
+    """
+    Columnar-Density Saha-Boltzmann (CD-SB) quantification  --  OPT-IN path.
+
+    Build the Boltzmann plot in COLUMN-DENSITY space rather than intensity
+    space, so self-absorbed lines contribute correctly instead of being
+    excluded (Safi, Tavassoli, Cristoforetti, Legnaioli, Palleschi, Rezaei,
+    Tognoni, *J. Adv. Res.* 18 (2019) 1-10, Eqs. 6-10).
+
+    For each line the lower-level columnar density ``n_i l`` is recovered
+    from the line-center optical depth ``tau_0`` via the Doppler curve of
+    growth (:func:`column_density_from_optical_depth`). The CD-SB ordinate
+    and abscissa are (Safi 2019, Eq. 6)
+
+    .. math::
+
+        y = \\ln\\!\\left(\\frac{n_i l}{g_i}\\right), \\qquad x = E_i,
+
+    and a weighted linear fit ``y = slope * x + intercept`` gives the
+    temperature from the slope ``slope = -1 / (k_B T)``:
+
+    .. math::
+
+        T = -\\frac{1}{k_B\\, \\text{slope}}.
+
+    The Doppler width in :func:`column_density_from_optical_depth` depends
+    weakly (``\\sqrt{T}``, inside a logarithm of the ordinate) on ``T``, so
+    a short fixed-point iteration over ``T`` is performed; Safi 2019 notes
+    the dependence is weak and "the iteration ... is not needed in practice",
+    so it converges in 1-2 steps.
+
+    This routine changes NO default behaviour: it is a standalone opt-in
+    quantifier. Callers must explicitly assemble :class:`CDSBLineInput`
+    objects (carrying per-line ``tau_0``) and call this function.
+
+    Parameters
+    ----------
+    lines : sequence of CDSBLineInput
+        Lines of a single species + ionization stage, with per-line
+        ``tau_0``. At least 2 lines with distinct lower-level energies are
+        required for a slope.
+    temperature_guess_K : float, default 10000
+        Initial temperature for the Doppler-width seed of the iteration.
+    max_iterations : int, default 5
+        Maximum fixed-point iterations on T.
+    tol_K : float, default 1.0
+        Convergence tolerance on T in K.
+
+    Returns
+    -------
+    CDSBResult
+        Recovered temperature and per-line columnar densities.
+
+    Raises
+    ------
+    ValueError
+        If fewer than 2 usable lines, or all lower-level energies are equal
+        (no slope determinable).
+    """
+    warnings_list: List[str] = []
+
+    usable = [ln for ln in lines if ln.tau_0 > 0 and ln.A_ki > 0 and ln.g_i > 0]
+    if len(usable) < 2:
+        raise ValueError(f"CD-SB needs >= 2 lines with positive tau_0/A_ki/g_i; got {len(usable)}")
+
+    e_lower = np.array([ln.E_i_ev for ln in usable], dtype=float)
+    if np.ptp(e_lower) < 1e-9:
+        raise ValueError(
+            "CD-SB needs lines spanning a range of lower-level energies "
+            "(all E_i are equal -> slope is undetermined)."
+        )
+
+    temperature_K = float(temperature_guess_K)
+    slope = -1.0 / (KB_EV * temperature_K)
+    intercept = 0.0
+    r_squared = 0.0
+    col_densities: Dict[float, float] = {}
+
+    for _iteration in range(max_iterations):
+        col_densities = {}
+        y_vals = np.empty(len(usable), dtype=float)
+        for idx, ln in enumerate(usable):
+            mass_amu = (
+                ln.mass_amu
+                if ln.mass_amu is not None
+                else _ATOMIC_MASS_AMU.get(ln.element, _DEFAULT_ATOMIC_MASS_AMU)
+            )
+            n_i_l = column_density_from_optical_depth(
+                tau_0=ln.tau_0,
+                A_ki=ln.A_ki,
+                g_k=ln.g_k,
+                g_i=ln.g_i,
+                wavelength_nm=ln.wavelength_nm,
+                temperature_K=temperature_K,
+                mass_amu=mass_amu,
+            )
+            col_densities[ln.wavelength_nm] = n_i_l
+            # CD-SB ordinate y = ln(n_i l / g_i) (Safi 2019, Eq. 6).
+            y_vals[idx] = np.log(n_i_l / ln.g_i) if n_i_l > 0 else -np.inf
+
+        finite = np.isfinite(y_vals)
+        if np.count_nonzero(finite) < 2:
+            raise ValueError("CD-SB: fewer than 2 lines yielded a positive column density.")
+
+        x_fit = e_lower[finite]
+        y_fit = y_vals[finite]
+        if np.ptp(x_fit) < 1e-9:
+            raise ValueError("CD-SB: usable lines do not span a lower-level energy range.")
+
+        # Ordinary least squares for slope/intercept of y = slope * x + intercept.
+        x_mean = float(np.mean(x_fit))
+        y_mean = float(np.mean(y_fit))
+        ss_xx = float(np.sum((x_fit - x_mean) ** 2))
+        ss_xy = float(np.sum((x_fit - x_mean) * (y_fit - y_mean)))
+        new_slope = ss_xy / ss_xx
+        intercept = y_mean - new_slope * x_mean
+
+        y_pred = new_slope * x_fit + intercept
+        ss_res = float(np.sum((y_fit - y_pred) ** 2))
+        ss_tot = float(np.sum((y_fit - y_mean) ** 2))
+        r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+
+        slope = new_slope
+        if slope >= 0:
+            # Positive slope -> unphysical (population increasing with energy).
+            warnings_list.append(
+                "CD-SB slope is non-negative; temperature undefined. Check tau_0 / E_i data."
+            )
+            new_T = temperature_K  # keep last value; do not iterate into NaN
+        else:
+            new_T = -1.0 / (KB_EV * slope)
+
+        if abs(new_T - temperature_K) < tol_K:
+            temperature_K = new_T
+            break
+        temperature_K = new_T
+
+    # Temperature uncertainty from slope standard error (1-sigma OLS).
+    temperature_uncertainty_K = 0.0
+    if slope < 0 and r_squared < 1.0 and len(x_fit) > 2:
+        dof = len(x_fit) - 2
+        resid_var = ss_res / dof if dof > 0 else 0.0
+        slope_se = np.sqrt(resid_var / ss_xx) if ss_xx > 0 else 0.0
+        # T = -1/(k_B slope)  =>  dT = T^2 k_B * d(slope)
+        temperature_uncertainty_K = float(temperature_K**2 * KB_EV * slope_se)
+
+    return CDSBResult(
+        temperature_K=float(temperature_K),
+        temperature_uncertainty_K=temperature_uncertainty_K,
+        slope=float(slope),
+        intercept=float(intercept),
+        column_densities_cm2=col_densities,
+        r_squared=float(r_squared),
+        n_lines=len(usable),
+        warnings=warnings_list,
+    )
