@@ -1,0 +1,23 @@
+name: asta-corpus-synthesis
+description: >-
+  Studio-only: synthesize ACROSS sources already loaded into the notebook, into
+  a cross-source briefing + an audio overview. Run AFTER loading multiple
+  asta-gathered sources with `nlm source add` (e.g. several `asta papers`
+  URLs, or `asta pdf-extraction` / `asta documents fetch` text). Has no
+  source_add step, so it operates on whatever the notebook already holds.
+steps:
+  - action: notebook_query
+    params:
+      query: >-
+        Synthesize across ALL sources in this notebook: the shared themes and
+        consensus, where sources disagree or contradict each other, and the
+        open questions that no source resolves. Cite which source supports each
+        point.
+  - action: studio_create
+    params:
+      artifact_type: report
+      report_format: Briefing Doc
+  - action: studio_create
+    params:
+      artifact_type: audio
+      audio_format: deep_dive

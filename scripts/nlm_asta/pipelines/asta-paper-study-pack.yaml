@@ -1,0 +1,20 @@
+name: asta-paper-study-pack
+description: >-
+  Turn a paper URL ($INPUT_URL) into a self-study pack: a briefing report,
+  flashcards, and a quiz. Pair with `asta papers search/get` or
+  `asta papers citations` to pick the paper, then learn it actively.
+steps:
+  - action: source_add
+    params:
+      type: url
+      url: $INPUT_URL
+  - action: studio_create
+    params:
+      artifact_type: report
+      report_format: Briefing Doc
+  - action: studio_create
+    params:
+      artifact_type: flashcards
+  - action: studio_create
+    params:
+      artifact_type: quiz

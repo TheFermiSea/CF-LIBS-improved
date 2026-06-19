@@ -1,0 +1,24 @@
+name: asta-paper-podcast
+description: >-
+  From an asta-found paper URL ($INPUT_URL): ingest it, summarize the science,
+  and produce an audio deep-dive + a briefing report. Pair with
+  `asta papers search/get` (Semantic Scholar) -> paper URL.
+steps:
+  - action: source_add
+    params:
+      type: url
+      url: $INPUT_URL
+  - action: notebook_query
+    params:
+      query: >-
+        Summarize this paper for a researcher: the problem it addresses, the
+        method/approach, the key quantitative results, and its limitations or
+        open questions.
+  - action: studio_create
+    params:
+      artifact_type: audio
+      audio_format: deep_dive
+  - action: studio_create
+    params:
+      artifact_type: report
+      report_format: Briefing Doc
