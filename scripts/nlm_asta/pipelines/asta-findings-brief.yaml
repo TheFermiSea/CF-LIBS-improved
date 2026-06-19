@@ -1,0 +1,23 @@
+name: asta-findings-brief
+description: >-
+  Studio-only: turn asta AGENT outputs into a reviewable brief + a self-check
+  quiz. Designed for the non-literature asta tools — `asta analyze-data`
+  (DataVoyager) and `asta generate-theories` (Theorizer) — whose A2A results
+  you export to Markdown with `asta artifacts --format md` and load via
+  `nlm source add --file`. Produces a findings/decision brief and a quiz that
+  probes whether the claimed findings are actually supported.
+steps:
+  - action: notebook_query
+    params:
+      query: >-
+        These sources are outputs of an automated analysis/theory-generation
+        run. Extract the concrete findings or proposed theories, the evidence
+        each rests on, and any stated assumptions or caveats. Flag claims that
+        look under-supported by the evidence provided.
+  - action: studio_create
+    params:
+      artifact_type: report
+      report_format: Briefing Doc
+  - action: studio_create
+    params:
+      artifact_type: quiz
