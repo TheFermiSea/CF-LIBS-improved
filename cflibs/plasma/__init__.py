@@ -16,6 +16,11 @@ from cflibs.plasma.saha_boltzmann import (
     ionization_potential_lowering,
 )
 from cflibs.plasma.lte_validator import LTEValidator, LTEReport, LTECheckResult
+from cflibs.plasma.ipd import (
+    StewartPyattIPD,
+    make_ipd_model,
+    stewart_pyatt_lowering,
+)
 
 __all__ = [
     "PlasmaState",
@@ -28,4 +33,7 @@ __all__ = [
     "LTEValidator",
     "LTEReport",
     "LTECheckResult",
+    "StewartPyattIPD",
+    "make_ipd_model",
+    "stewart_pyatt_lowering",
 ]

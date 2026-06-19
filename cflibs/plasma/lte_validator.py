@@ -1,15 +1,21 @@
 """
 LTE validity checker for CF-LIBS plasma diagnostics.
 
-Implements the McWhirter criterion (necessary condition for LTE) and a
-simplified temporal relaxation check. Results are surfaced in CFLIBSResult
-quality_metrics so users are warned when LTE assumptions may be invalid.
+Implements the McWhirter criterion (necessary condition for LTE), a
+simplified electron-thermalisation (Spitzer) check, and — opt-in — the
+Cristoforetti relaxation-time criterion (the time to reach excitation/
+ionization equilibrium vs. the plasma evolution timescale). Results are
+surfaced in CFLIBSResult quality_metrics so users are warned when LTE
+assumptions may be invalid.
 
 References
 ----------
 - McWhirter, R.W.P. (1965) in "Plasma Diagnostic Techniques", ed. Huddlestone & Leonard
-- Cristoforetti, G. et al. (2010) Spectrochim. Acta B 65, 86-95
-  (notes McWhirter as necessary but not sufficient)
+- Griem, H.R. (1964) "Plasma Spectroscopy", McGraw-Hill (relaxation times)
+- Cristoforetti, G. et al. (2010) Spectrochim. Acta B 65, 86-95,
+  "Local Thermodynamic Equilibrium in Laser-Induced Breakdown Spectroscopy:
+  Beyond the McWhirter criterion" (notes McWhirter as necessary but not
+  sufficient; Eq. 4 relaxation-time criterion)
 """
 
 from dataclasses import dataclass, field
@@ -48,7 +54,9 @@ class LTEReport:
     mcwhirter : LTECheckResult
         McWhirter criterion check
     temporal : LTECheckResult or None
-        Temporal relaxation check (if performed)
+        Electron-thermalisation (Spitzer) check (if performed)
+    relaxation : LTECheckResult or None
+        Cristoforetti relaxation-time criterion (if performed)
     overall_satisfied : bool
         True only if all performed checks pass
     warnings : list of str
@@ -59,6 +67,7 @@ class LTEReport:
 
     mcwhirter: LTECheckResult
     temporal: Optional[LTECheckResult] = None
+    relaxation: Optional[LTECheckResult] = None
     warnings: List[str] = field(default_factory=list)
 
     @property
@@ -66,6 +75,8 @@ class LTEReport:
         checks = [self.mcwhirter]
         if self.temporal is not None:
             checks.append(self.temporal)
+        if self.relaxation is not None:
+            checks.append(self.relaxation)
         return all(c.satisfied for c in checks)
 
     @property
@@ -77,6 +88,10 @@ class LTEReport:
         }
         if self.temporal is not None:
             metrics["lte_temporal_satisfied"] = self.temporal.satisfied
+        if self.relaxation is not None:
+            metrics["lte_relaxation_satisfied"] = self.relaxation.satisfied
+            # tau_rel [ns] is stored in n_e_actual; surface it as a diagnostic.
+            metrics["lte_relaxation_tau_ns"] = self.relaxation.n_e_actual
         return metrics
 
 
@@ -213,6 +228,140 @@ class LTEValidator:
         )
 
     @staticmethod
+    def check_relaxation(
+        T_K: float,
+        n_e_cm3: float,
+        delta_E_eV: float,
+        plasma_lifetime_ns: float = 1000.0,
+        oscillator_strength: float = 0.5,
+        gaunt_factor: float = 1.0,
+        margin: float = 10.0,
+    ) -> LTECheckResult:
+        r"""
+        Cristoforetti relaxation-time LTE criterion (opt-in; beyond McWhirter).
+
+        The McWhirter density floor is a *necessary but not sufficient*
+        condition: it guarantees only that collisional rates exceed
+        radiative rates at steady state, and says nothing about whether a
+        *transient* plasma has had enough time to reach the equilibrium
+        populations. Cristoforetti et al. (2010), Spectrochim. Acta B 65,
+        86-95 ("Local Thermodynamic Equilibrium in Laser-Induced Breakdown
+        Spectroscopy: Beyond the McWhirter criterion") add a temporal
+        criterion: the relaxation time to reach excitation/ionization
+        equilibrium between two levels :math:`n,m` must be much shorter than
+        the timescale over which the plasma thermodynamic parameters
+        (:math:`T`, :math:`n_e`) evolve.
+
+        The relaxation time (Cristoforetti et al. 2010, Eq. 4; after Griem
+        1964) is
+
+        .. math::
+
+            \tau_{rel} \approx \frac{6.3\times10^{4}}
+                {n_e\, \langle g\rangle\, f_{nm}}\;
+                \Delta E_{nm}\, (k_B T)^{1/2}\,
+                \exp\!\left(\frac{\Delta E_{nm}}{k_B T}\right)
+
+        with :math:`n_e` in cm\ :sup:`-3`, :math:`\Delta E_{nm}` and
+        :math:`k_B T` in eV, and :math:`\tau_{rel}` in **seconds**.
+        :math:`f_{nm}` is the absorption oscillator strength of the
+        transition and :math:`\langle g\rangle` the effective (EEDF-averaged)
+        Gaunt factor (order unity). Verified against the worked example in
+        the LIBS literature (a colliding-carbon plasma with
+        :math:`\Delta E = 2.9\,\mathrm{eV}`, :math:`f_{12}=0.914`,
+        :math:`n_e = 3\times10^{16}\,\mathrm{cm^{-3}}`,
+        :math:`k_B T = 1.45\,\mathrm{eV}`, :math:`\langle g\rangle\approx1`)
+        which yields :math:`\tau_{rel}\approx6\times10^{-11}\,\mathrm{s}`.
+
+        The exponential :math:`\exp(\Delta E/k_B T)` makes :math:`\tau_{rel}`
+        grow rapidly for large gaps / low temperatures, and the
+        :math:`1/n_e` prefactor makes it *grow* as the plasma rarefies — so
+        a low-:math:`n_e`, fast-evolving plasma can satisfy the (steady-state)
+        McWhirter floor yet still fail this transient criterion, exactly the
+        regime this check is meant to catch.
+
+        Criterion (Cristoforetti et al. 2010): LTE requires
+        :math:`\tau_{rel} \ll \tau_{evol}`, here imposed with a factor-of-
+        ``margin`` safety margin as
+        :math:`\tau_{rel} < \tau_{evol}/\text{margin}`, where
+        :math:`\tau_{evol}` is the plasma lifetime (the characteristic time
+        over which :math:`T` and :math:`n_e` vary). The conventional margin
+        is one order of magnitude (``margin=10``).
+
+        Parameters
+        ----------
+        T_K : float
+            Plasma temperature [K].
+        n_e_cm3 : float
+            Electron density [cm^-3].
+        delta_E_eV : float
+            Energy gap :math:`\Delta E_{nm}` of the slowest-thermalising
+            transition [eV] (largest resonance gap; same physical quantity
+            used by the McWhirter check).
+        plasma_lifetime_ns : float
+            Plasma evolution timescale :math:`\tau_{evol}` [ns]
+            (default 1000 ns = 1 µs, typical LIBS gate).
+        oscillator_strength : float
+            Absorption oscillator strength :math:`f_{nm}` (default 0.5,
+            a representative strong-line value).
+        gaunt_factor : float
+            Effective Gaunt factor :math:`\langle g\rangle` (default 1.0,
+            the order-unity value used in the canonical estimate).
+        margin : float
+            Safety margin: require :math:`\tau_{rel} < \tau_{evol}/`
+            ``margin`` (default 10, i.e. one decade).
+
+        Returns
+        -------
+        LTECheckResult
+            ``n_e_required`` / ``n_e_actual`` / ``ratio`` are repurposed for
+            the time-domain comparison: ``n_e_required`` holds the maximum
+            tolerable :math:`\tau_{rel}` [ns], ``n_e_actual`` the computed
+            :math:`\tau_{rel}` [ns], and ``ratio`` =
+            :math:`(\tau_{evol}/\text{margin})/\tau_{rel}` (>= 1 passes).
+        """
+        T_eV = T_K * KB_EV
+        f_nm = max(oscillator_strength, 1e-6)
+        g_eff = max(gaunt_factor, 1e-6)
+
+        # Cristoforetti et al. 2010 Eq. 4 (Griem 1964); n_e in cm^-3,
+        # delta_E and kT in eV -> tau_rel in seconds. RELAX_CONST = 6.3e4.
+        RELAX_CONST = 6.3e4
+        tau_rel_s = (
+            RELAX_CONST
+            / (max(n_e_cm3, 1.0) * g_eff * f_nm)
+            * delta_E_eV
+            * np.sqrt(T_eV)
+            * np.exp(delta_E_eV / T_eV)
+        )
+        tau_rel_ns = tau_rel_s * 1e9
+
+        tau_max_ns = plasma_lifetime_ns / margin
+        ratio = tau_max_ns / tau_rel_ns if tau_rel_ns > 0 else float("inf")
+        satisfied = tau_rel_ns < tau_max_ns
+
+        if satisfied:
+            msg = (
+                f"Relaxation: PASS  tau_rel = {tau_rel_ns:.2e} ns << "
+                f"tau_evol/{margin:.0f} = {tau_max_ns:.2e} ns (margin = {ratio:.2f})"
+            )
+        else:
+            msg = (
+                f"Relaxation: FAIL  tau_rel = {tau_rel_ns:.2e} ns not << "
+                f"tau_evol/{margin:.0f} = {tau_max_ns:.2e} ns (margin = {ratio:.2f}) "
+                f"— plasma may evolve before reaching equilibrium (transient non-LTE)"
+            )
+
+        return LTECheckResult(
+            criterion="relaxation",
+            satisfied=satisfied,
+            n_e_required=tau_max_ns,
+            n_e_actual=tau_rel_ns,
+            ratio=ratio,
+            message=msg,
+        )
+
+    @staticmethod
     def _delta_e_from_observations(observations: list) -> float:
         """
         Derive the McWhirter delta_E_eV from observed lines.
@@ -267,6 +416,7 @@ class LTEValidator:
     def _collect_warnings(
         mcwhirter: LTECheckResult,
         temporal: Optional[LTECheckResult],
+        relaxation: Optional[LTECheckResult] = None,
     ) -> List[str]:
         """Gather and log warning messages from failed checks."""
         warnings: List[str] = []
@@ -274,6 +424,8 @@ class LTEValidator:
             warnings.append(mcwhirter.message)
         if temporal is not None and not temporal.satisfied:
             warnings.append(temporal.message)
+        if relaxation is not None and not relaxation.satisfied:
+            warnings.append(relaxation.message)
 
         if warnings:
             for w in warnings:
@@ -288,6 +440,10 @@ class LTEValidator:
         observations: Optional[list] = None,
         check_temporal: bool = False,
         plasma_lifetime_ns: float = 1000.0,
+        check_relaxation: bool = False,
+        relaxation_oscillator_strength: float = 0.5,
+        relaxation_gaunt_factor: float = 1.0,
+        relaxation_margin: float = 10.0,
     ) -> LTEReport:
         """
         Run all LTE validity checks.
@@ -308,7 +464,23 @@ class LTEValidator:
         check_temporal : bool
             Whether to also run the temporal equilibration check.
         plasma_lifetime_ns : float
-            Plasma lifetime for temporal check [ns].
+            Plasma evolution timescale (lifetime) for the temporal and
+            relaxation checks [ns].
+        check_relaxation : bool
+            Opt-in. Whether to also run the Cristoforetti et al. (2010)
+            relaxation-time criterion (``check_relaxation`` of
+            :meth:`check_relaxation`). Defaults to ``False`` so the default
+            behaviour is unchanged — this is a *diagnostic* flag and, like
+            the temporal check, does not by itself cause lines/spectra to be
+            rejected anywhere in the default pipeline.
+        relaxation_oscillator_strength : float
+            Oscillator strength :math:`f_{nm}` for the relaxation check
+            (default 0.5).
+        relaxation_gaunt_factor : float
+            Effective Gaunt factor :math:`\\langle g\\rangle` for the
+            relaxation check (default 1.0).
+        relaxation_margin : float
+            Safety margin for the relaxation check (default 10).
 
         Returns
         -------
@@ -322,6 +494,23 @@ class LTEValidator:
         if check_temporal:
             temporal = self.check_temporal(T_K, n_e_cm3, plasma_lifetime_ns)
 
-        warnings = self._collect_warnings(mcwhirter, temporal)
+        relaxation = None
+        if check_relaxation:
+            relaxation = self.check_relaxation(
+                T_K,
+                n_e_cm3,
+                delta_E_eV,
+                plasma_lifetime_ns=plasma_lifetime_ns,
+                oscillator_strength=relaxation_oscillator_strength,
+                gaunt_factor=relaxation_gaunt_factor,
+                margin=relaxation_margin,
+            )
 
-        return LTEReport(mcwhirter=mcwhirter, temporal=temporal, warnings=warnings)
+        warnings = self._collect_warnings(mcwhirter, temporal, relaxation)
+
+        return LTEReport(
+            mcwhirter=mcwhirter,
+            temporal=temporal,
+            relaxation=relaxation,
+            warnings=warnings,
+        )

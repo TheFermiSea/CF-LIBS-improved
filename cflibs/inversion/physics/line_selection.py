@@ -59,11 +59,43 @@ Added functions to assess line suitability for Boltzmann analysis:
 - filter_self_absorbed(): Exclude lines with high Aki and low E_k
 - compute_boltzmann_fitness(): Composite score considering all factors
 
+Partial-LTE Thermalization Cut (opt-in)
+---------------------------------------
+In a laser-induced plasma the free-electron temperature thermalizes only those
+bound levels that are strongly coupled to the electron continuum by inelastic
+collisions. Low-lying levels (large energy gaps to neighbouring levels) are
+populated/depopulated predominantly by radiative processes and therefore deviate
+from a Boltzmann distribution at the electron temperature — a state of *partial*
+LTE (pLTE). Cristoforetti et al. (2010) show that only excited levels lying close
+to the ionization limit attain Saha–Boltzmann equilibrium, so lines whose lower
+level sits below a thermalization limit E* bias the Boltzmann/Saha plot.
+
+The thermalization limit is obtained by inverting the McWhirter criterion, which
+gives the minimum electron density for collisional dominance over a radiative gap
+ΔE [eV] at temperature T [K]:
+
+    n_e [cm^-3] >= 1.6e12 * sqrt(T) * (ΔE)^3            (McWhirter)
+
+Solving for the largest gap that the measured plasma can thermalize yields the
+thermalization-limit energy
+
+    E* = ( n_e / (1.6e12 * sqrt(T)) )^(1/3)   [eV]
+
+A transition is retained only if its **lower-level** energy E_i >= E*; lines whose
+lower level lies below E* are not collisionally thermalized and are excluded.
+This cut is **strictly opt-in** (see ``apply_plte_thermalization_cut``); it does
+not change the default ``select()`` behaviour.
+
 Literature References
 ---------------------
 - Clegg et al. (2017): Line selection strategies for LIBS quantification
 - Tognoni et al. (2006): Quantitative LIBS analysis review
 - NIST ASD: Atomic transition probability accuracy grades
+- Cristoforetti et al. (2010), Spectrochim. Acta B 65, 86-95: "Local
+  Thermodynamic Equilibrium in Laser-Induced Breakdown Spectroscopy: Beyond
+  the McWhirter criterion" — partial-LTE thermalization limit.
+- McWhirter, R.W.P. (1965), in *Plasma Diagnostic Techniques* — collisional
+  LTE electron-density criterion.
 """
 
 from dataclasses import dataclass, field
@@ -75,6 +107,65 @@ from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.boltzmann import LineObservation
 
 logger = get_logger("inversion.line_selection")
+
+# McWhirter criterion prefactor in the cgs/eV/K convention
+#   n_e [cm^-3] >= 1.6e12 * sqrt(T[K]) * (ΔE[eV])^3
+# (McWhirter 1965; see e.g. Cristoforetti et al. 2010, Spectrochim. Acta B 65, 86)
+MCWHIRTER_PREFACTOR_CM3_K = 1.6e12
+
+
+def mcwhirter_thermalization_limit_ev(
+    temperature_K: float,
+    electron_density_cm3: float,
+) -> float:
+    r"""
+    Partial-LTE thermalization-limit energy E\* from the McWhirter criterion.
+
+    A bound level is collisionally thermalized to the free-electron temperature
+    only when the McWhirter criterion is satisfied for the relevant energy gap
+    :math:`\Delta E`:
+
+    .. math::
+
+        n_e\,[\mathrm{cm^{-3}}] \ge 1.6\times10^{12}\,\sqrt{T[\mathrm{K}]}\,
+        (\Delta E[\mathrm{eV}])^{3}.
+
+    Inverting for the largest gap the measured plasma can thermalize gives the
+    thermalization-limit energy
+
+    .. math::
+
+        E^{*} = \left(\frac{n_e}{1.6\times10^{12}\,\sqrt{T}}\right)^{1/3}
+        \quad[\mathrm{eV}].
+
+    Levels whose energy lies below :math:`E^{*}` are populated/depopulated
+    predominantly by radiation rather than collisions, so they deviate from the
+    Saha–Boltzmann distribution (partial LTE).
+
+    Parameters
+    ----------
+    temperature_K : float
+        Plasma (excitation) temperature in kelvin. Must be > 0.
+    electron_density_cm3 : float
+        Free-electron number density in cm^-3. Must be > 0.
+
+    Returns
+    -------
+    float
+        Thermalization-limit energy E* in eV.
+
+    References
+    ----------
+    Cristoforetti et al. (2010), Spectrochim. Acta Part B 65, 86-95.
+    McWhirter, R.W.P. (1965), *Plasma Diagnostic Techniques*, Ch. 5.
+    """
+    if temperature_K <= 0.0:
+        raise ValueError(f"temperature_K must be > 0, got {temperature_K}")
+    if electron_density_cm3 <= 0.0:
+        raise ValueError(f"electron_density_cm3 must be > 0, got {electron_density_cm3}")
+
+    denominator = MCWHIRTER_PREFACTOR_CM3_K * np.sqrt(temperature_K)
+    return float((electron_density_cm3 / denominator) ** (1.0 / 3.0))
 
 
 @dataclass
@@ -100,6 +191,32 @@ class LineSelectionResult:
     energy_spread_ev: float
     n_elements: int
     warnings: List[str] = field(default_factory=list)
+
+
+@dataclass
+class PLTECutResult:
+    """
+    Result of the opt-in partial-LTE thermalization cut.
+
+    Attributes
+    ----------
+    thermalized_lines : List[LineObservation]
+        Lines whose lower-level energy lies at or above the thermalization
+        limit E* (kept).
+    sub_threshold_lines : List[LineObservation]
+        Lines whose lower-level energy lies below E* (removed — not
+        collisionally thermalized to the electron temperature).
+    e_star_ev : float
+        Thermalization-limit energy E* in eV used for the cut.
+    skipped_lines : List[LineObservation]
+        Lines for which no lower-level energy was supplied; conservatively
+        kept (never removed) so missing data cannot silently drop lines.
+    """
+
+    thermalized_lines: List[LineObservation]
+    sub_threshold_lines: List[LineObservation]
+    e_star_ev: float
+    skipped_lines: List[LineObservation] = field(default_factory=list)
 
 
 class LineSelector:
@@ -387,6 +504,124 @@ class LineSelector:
         isolation = 1.0 - np.exp(-min_separation / self.isolation_wavelength_nm)
 
         return isolation
+
+    def apply_plte_thermalization_cut(
+        self,
+        observations: List[LineObservation],
+        lower_level_energies_ev: Dict[Tuple[str, int, float], float],
+        *,
+        enable: bool = False,
+        temperature_K: Optional[float] = None,
+        electron_density_cm3: Optional[float] = None,
+        e_star_ev: Optional[float] = None,
+    ) -> PLTECutResult:
+        r"""
+        Opt-in partial-LTE cut: drop lines whose lower level is below E\*.
+
+        In partial LTE only levels lying above the thermalization limit E* are
+        collisionally coupled to the free-electron temperature and follow the
+        Saha–Boltzmann distribution; lines whose **lower** level lies below E*
+        bias the Boltzmann/Saha plot and are removed. ``LineObservation`` carries
+        only the upper-level energy, so the lower-level energies are supplied
+        explicitly via ``lower_level_energies_ev`` (keyed by
+        ``(element, ionization_stage, wavelength_nm)``), matching the existing
+        ``select()`` convention for ``resonance_lines``/``atomic_uncertainties``.
+
+        This method is **strictly opt-in**: it is a no-op (returns every line as
+        thermalized) unless ``enable=True``. It never mutates ``select()`` nor
+        any default path.
+
+        Parameters
+        ----------
+        observations : List[LineObservation]
+            Candidate lines.
+        lower_level_energies_ev : Dict[Tuple[str, int, float], float]
+            Lower-level energy E_i [eV] keyed by
+            ``(element, ionization_stage, wavelength_nm)``. Lines absent from
+            this mapping are conservatively kept (reported in ``skipped_lines``).
+        enable : bool, keyword-only, default False
+            Master switch. When ``False`` the cut is a no-op and **all** lines
+            are returned as thermalized (default behaviour unchanged).
+        temperature_K : float, optional
+            Plasma temperature [K], used with ``electron_density_cm3`` to derive
+            E* from the McWhirter criterion. Ignored if ``e_star_ev`` is given.
+        electron_density_cm3 : float, optional
+            Electron density [cm^-3]; see ``temperature_K``.
+        e_star_ev : float, optional
+            Thermalization limit E* [eV] supplied directly. Overrides the
+            ``(temperature_K, electron_density_cm3)`` derivation when provided
+            (e.g. for tests with a known E*).
+
+        Returns
+        -------
+        PLTECutResult
+            Thermalized (kept) lines, sub-threshold (removed) lines, the E*
+            used, and any lines skipped for lack of lower-level data.
+
+        Raises
+        ------
+        ValueError
+            If ``enable=True`` but neither ``e_star_ev`` nor both
+            ``temperature_K`` and ``electron_density_cm3`` are provided.
+
+        References
+        ----------
+        Cristoforetti et al. (2010), Spectrochim. Acta Part B 65, 86-95.
+
+        Notes
+        -----
+        The lower-level criterion is additive to the existing upper-level energy
+        *span* requirement (``min_energy_spread_ev``): the span controls slope
+        precision, while this cut removes levels that are physically not in pLTE.
+        """
+        if not enable:
+            # No-op: cut disabled, every line is treated as thermalized.
+            return PLTECutResult(
+                thermalized_lines=list(observations),
+                sub_threshold_lines=[],
+                e_star_ev=0.0,
+            )
+
+        if e_star_ev is None:
+            if temperature_K is None or electron_density_cm3 is None:
+                raise ValueError(
+                    "pLTE cut requires either e_star_ev, or both temperature_K "
+                    "and electron_density_cm3."
+                )
+            e_star_ev = mcwhirter_thermalization_limit_ev(temperature_K, electron_density_cm3)
+
+        thermalized: List[LineObservation] = []
+        sub_threshold: List[LineObservation] = []
+        skipped: List[LineObservation] = []
+
+        for obs in observations:
+            key = (obs.element, obs.ionization_stage, obs.wavelength_nm)
+            e_lower = lower_level_energies_ev.get(key)
+            if e_lower is None:
+                # No lower-level data: keep conservatively (cannot judge pLTE).
+                skipped.append(obs)
+                thermalized.append(obs)
+            elif e_lower < e_star_ev:
+                sub_threshold.append(obs)
+            else:
+                thermalized.append(obs)
+
+        if sub_threshold:
+            logger.info(
+                "pLTE cut (E*=%.3f eV): removed %d sub-threshold line(s), "
+                "kept %d thermalized, skipped %d (no lower-level data).",
+                e_star_ev,
+                len(sub_threshold),
+                len(thermalized),
+                len(skipped),
+            )
+
+        return PLTECutResult(
+            thermalized_lines=thermalized,
+            sub_threshold_lines=sub_threshold,
+            e_star_ev=e_star_ev,
+            skipped_lines=skipped,
+        )
 
     def recommend_lines(
         self,

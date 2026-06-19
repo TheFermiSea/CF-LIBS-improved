@@ -49,6 +49,15 @@ class BoltzmannPlotFitter:
     - **ransac**: Random Sample Consensus for gross outlier rejection
     - **huber**: M-estimation with Huber loss function
 
+    The inner linear-fit kernel of the sigma-clip loop defaults to weighted
+    ordinary least squares (``numpy.polyfit``). Passing ``use_odr=True`` swaps
+    it for an **opt-in** weighted orthogonal distance regression (errors-in-
+    variables / total least squares via :mod:`scipy.odr`) that accounts for
+    uncertainty on both axes — ``y = ln(I lambda / g A)`` and ``x = E_k`` — and
+    removes the regression-dilution bias on the slope (hence temperature). The
+    default remains weighted OLS; with zero x-noise the ODR result is
+    ``allclose`` to OLS.
+
     Examples
     --------
     >>> fitter = BoltzmannPlotFitter(method=FitMethod.RANSAC)
@@ -66,6 +75,8 @@ class BoltzmannPlotFitter:
         ransac_max_trials: int = 100,
         huber_epsilon: float = 1.2,
         use_jax: bool = False,
+        use_odr: bool = False,
+        odr_x_uncertainty: float = 0.0,
     ):
         """
         Initialize fitter.
@@ -103,6 +114,31 @@ class BoltzmannPlotFitter:
             ``cflibs/inversion/solve/iterative.py`` and
             ``cflibs/inversion/runtime/streaming.py`` flip this from the
             ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION=1`` env var.
+        use_odr : bool
+            **Opt-in** errors-in-variables fit. When True, the slope/intercept
+            of the (already inlier-selected) Boltzmann plot are estimated by
+            weighted orthogonal distance regression (ODR / total least squares)
+            via :mod:`scipy.odr` instead of the default weighted ordinary
+            least squares (``numpy.polyfit``). ODR accounts for uncertainty on
+            **both** axes — ``y = ln(I lambda / g A)`` (intensity + A_ki) and
+            ``x = E_k`` — and removes the regression-dilution (attenuation)
+            bias that biases the OLS slope, hence the temperature, when the
+            upper-level energies carry non-negligible error
+            (Boggs & Rodgers 1990; Aragón & Aguilera 2008). Default ``False``
+            preserves the existing weighted-OLS behavior **exactly**. The
+            outlier-rejection scheme is unchanged — ODR only replaces the
+            inner linear-fit kernel of the sigma-clip loop. With zero x-noise
+            ODR reduces to OLS (``allclose``).
+        odr_x_uncertainty : float
+            Default 1-sigma uncertainty (in eV) on the upper-level energy
+            ``E_k`` used by the ODR fit when a per-line value is unavailable.
+            Per-line x-uncertainties take precedence and are read from an
+            optional ``E_k_uncertainty`` attribute on each
+            :class:`LineObservation` (via ``getattr``, so the dataclass need
+            not define it). ``0.0`` means "no per-axis x-error supplied for
+            this line" and the fit then falls back to this scalar; if it too
+            is ``0.0`` ODR degenerates to OLS (the zero-x-noise limit). Only
+            consulted when ``use_odr=True``. Default ``0.0``.
         """
         self.outlier_sigma = outlier_sigma
         self.max_iterations = max_iterations
@@ -112,6 +148,8 @@ class BoltzmannPlotFitter:
         self.ransac_max_trials = ransac_max_trials
         self.huber_epsilon = huber_epsilon
         self.use_jax = use_jax
+        self.use_odr = use_odr
+        self.odr_x_uncertainty = odr_x_uncertainty
 
     def fit(
         self,
@@ -186,6 +224,9 @@ class BoltzmannPlotFitter:
             result = self._fit_ransac(x_all, y_all, y_err_all, valid_mask)
         elif self.method == FitMethod.HUBER:
             result = self._fit_huber(x_all, y_all, y_err_all, valid_mask)
+        elif self.use_odr:  # SIGMA_CLIP loop, ODR inner kernel (opt-in EIV fit)
+            x_err_all = self._build_sigma_x(observations, agg_to_obs_indices)
+            result = self._fit_sigma_clip_odr(x_all, y_all, y_err_all, x_err_all, valid_mask)
         elif self.use_jax:  # SIGMA_CLIP + JAX kernel for inner WLS step
             result = self._fit_sigma_clip_jax(x_all, y_all, y_err_all, valid_mask)
         else:  # SIGMA_CLIP (default, CPU)
@@ -626,6 +667,245 @@ class BoltzmannPlotFitter:
             len(outlier_global_indices),
         )
         return False
+
+    def _fit_sigma_clip_odr(
+        self,
+        x_all: np.ndarray,
+        y_all: np.ndarray,
+        y_err_all: np.ndarray,
+        x_err_all: np.ndarray,
+        valid_mask: np.ndarray,
+    ) -> BoltzmannFitResult:
+        """Sigma-clip Boltzmann fit with an orthogonal-distance-regression kernel.
+
+        Errors-in-variables (total least squares) replacement for the inner
+        linear fit of :meth:`_fit_sigma_clip`. Identical iterative
+        residual-sigma outlier rejection (so the inlier set is selected the
+        same way), but the slope/intercept at each iteration come from
+        weighted orthogonal distance regression rather than weighted OLS.
+
+        Physics / statistics
+        --------------------
+        The Boltzmann/Saha-Boltzmann plot regresses ``y = ln(I lambda / g A)``
+        on ``x = E_k`` with the slope ``m = -1 / (k_B T)``. Ordinary least
+        squares assumes the predictor ``x`` is error-free; when ``E_k`` carries
+        non-negligible uncertainty the OLS slope is *attenuated* toward zero
+        (the classic regression-dilution / errors-in-variables bias), which
+        systematically *overestimates* ``T`` because ``T = -1/(k_B m)`` and
+        ``|m|`` is biased low. Orthogonal distance regression minimises the
+        sum of squared distances measured orthogonally in the
+        error-scaled metric ``sum_i [ (x_i - x*_i)^2 / sigma_x_i^2 +
+        (y_i - (m x*_i + c))^2 / sigma_y_i^2 ]`` over both the line parameters
+        and the latent true abscissae ``x*_i``, removing that bias to first
+        order (Boggs & Rodgers 1990). In the limit ``sigma_x -> 0`` the
+        orthogonal metric collapses to the vertical one and ODR reduces to
+        weighted OLS, so this path is ``allclose`` to the default fit on data
+        with no x-noise.
+
+        References
+        ----------
+        Boggs, P.T. & Rodgers, J.E. (1990), "Orthogonal Distance Regression",
+        Contemporary Mathematics 112, 183-194 (the ODRPACK algorithm wrapped
+        by :mod:`scipy.odr`).
+        Aragón, C. & Aguilera, J.A. (2008), "Characterization of laser induced
+        plasmas by optical emission spectroscopy: A review of experiments and
+        methods", Spectrochim. Acta B 63, 893-916 (Saha-Boltzmann plot and the
+        role of E_k uncertainties in plasma-parameter retrieval).
+        """
+        indices = np.arange(len(x_all))
+        mask = valid_mask.copy()
+
+        slope = 0.0
+        intercept = 0.0
+        slope_err = 0.0
+        intercept_err = 0.0
+        r_squared = 0.0
+        n_iterations = 0
+        covariance_matrix: np.ndarray | None = None
+
+        for iteration in range(self.max_iterations):
+            n_iterations = iteration + 1
+            x = x_all[mask]
+            y = y_all[mask]
+            y_err = y_err_all[mask]
+            x_err = x_err_all[mask]
+
+            if len(x) < 2:
+                logger.warning("Too few points remaining after rejection")
+                break
+
+            fit = self._odr_linear_fit(x, y, x_err, y_err)
+            if fit is None:
+                logger.error("Orthogonal distance regression failed")
+                return self._empty_result()
+            m, c, slope_err, intercept_err, covariance_matrix = fit
+
+            slope = m
+            intercept = c
+
+            # R^2 uses the same inverse-variance y-weights convention as the
+            # CPU OLS path so the reported goodness-of-fit is comparable.
+            weights = self._compute_weights(y_err)
+            y_pred = m * x + c
+            r_squared = self._compute_r_squared(y, y_pred, weights)
+
+            # Outlier rejection: identical predicate to the OLS sigma-clip
+            # path (vertical residuals vs. residual std), so the inlier set is
+            # selected consistently across fit kernels.
+            residuals = y - y_pred
+            std_res = float(np.std(residuals))
+            if std_res == 0:
+                break
+
+            bad_indices = np.abs(residuals) > self.outlier_sigma * std_res
+            if not np.any(bad_indices):
+                break
+
+            current_indices = indices[mask]
+            mask[current_indices[bad_indices]] = False
+            logger.debug(
+                "Iteration %d (ODR): Rejected %d outliers", iteration, int(np.sum(bad_indices))
+            )
+
+        return self._create_result(
+            slope,
+            slope_err,
+            intercept,
+            intercept_err,
+            r_squared,
+            mask,
+            indices,
+            "sigma_clip_odr",
+            n_iterations,
+            covariance_matrix,
+        )
+
+    def _odr_linear_fit(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        x_err: np.ndarray,
+        y_err: np.ndarray,
+    ) -> tuple[float, float, float, float, np.ndarray | None] | None:
+        """Weighted orthogonal distance regression of ``y`` on ``x``.
+
+        Returns ``(slope, intercept, slope_err, intercept_err, cov)`` where
+        ``cov`` is the 2x2 covariance matrix ``[[var(m), cov(m,c)],
+        [cov(m,c), var(c)]]``, scaled by the residual variance so it matches
+        the chi^2/dof scaling that :func:`numpy.polyfit` applies on the OLS
+        path. Returns ``None`` on solver failure (mirrors the OLS
+        ``LinAlgError`` path so the caller can emit an empty result).
+
+        Parameters
+        ----------
+        x_err, y_err : np.ndarray
+            1-sigma uncertainties on the abscissae (``E_k``) and ordinates
+            (``ln(I lambda / g A)``). Non-positive or non-finite entries are
+            replaced by a small floor so ODR's reciprocal weights stay finite
+            (a zero ``sigma_x`` for every point recovers the OLS limit).
+        """
+        # Local, lazily-imported so the default path never touches scipy.odr.
+        # scipy.odr is deprecation-flagged (SciPy >=1.17) but still functional
+        # and is the physics-only ODRPACK wrapper this method is specified to
+        # use; suppress that one warning at the call site only.
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            import scipy.odr as odr
+
+        # Initial guess from weighted OLS (same kernel as the default path).
+        polyfit_w = np.sqrt(self._compute_weights(y_err))
+        try:
+            m0, c0 = np.polyfit(x, y, 1, w=polyfit_w)
+        except np.linalg.LinAlgError:
+            return None
+
+        # ODR consumes per-point standard deviations directly. Floor any
+        # zero/invalid sigma so the implied weight 1/sigma^2 stays finite; a
+        # vanishing sigma_x then makes the orthogonal metric collapse to the
+        # vertical one (OLS limit).
+        sx = self._sanitize_sigma(x_err, x)
+        sy = self._sanitize_sigma(y_err, y)
+
+        data = odr.RealData(x, y, sx=sx, sy=sy)
+        model = odr.Model(lambda beta, xv: beta[0] * xv + beta[1])
+        try:
+            out = odr.ODR(data, model, beta0=[float(m0), float(c0)]).run()
+        except Exception as exc:  # pragma: no cover - solver-internal failure
+            logger.error("scipy.odr ODR.run() failed: %s", exc)
+            return None
+
+        m, c = float(out.beta[0]), float(out.beta[1])
+        if not (np.isfinite(m) and np.isfinite(c)):
+            return None
+
+        # out.cov_beta is the *unscaled* parameter covariance; out.res_var is
+        # the residual variance (chi^2/dof). The product is the scaled
+        # covariance, matching numpy.polyfit(..., cov=True) so downstream
+        # uncertainty propagation is convention-consistent. out.sd_beta is
+        # already sqrt(diag(scaled cov)).
+        if len(x) > 2 and out.cov_beta is not None:
+            cov = np.asarray(out.cov_beta, dtype=float) * float(out.res_var)
+            slope_err = float(out.sd_beta[0])
+            intercept_err = float(out.sd_beta[1])
+        else:
+            cov = None
+            slope_err = float("inf")
+            intercept_err = float("inf")
+
+        return m, c, slope_err, intercept_err, cov
+
+    @staticmethod
+    def _sanitize_sigma(sigma: np.ndarray, values: np.ndarray) -> np.ndarray:
+        """Replace non-positive/non-finite sigmas with a tiny relative floor.
+
+        A vanishing ``sigma_x`` is physically meaningful (errorless abscissa,
+        the OLS limit) but ODR forms ``1/sigma`` weights internally, so an
+        exact zero would be non-finite. We substitute a floor proportional to
+        the data scale so the corresponding axis is treated as effectively
+        error-free without overflowing the weight.
+        """
+        sigma = np.asarray(sigma, dtype=float)
+        scale = float(np.max(np.abs(values))) if values.size else 1.0
+        floor = max(scale, 1.0) * 1e-12
+        out = np.where(np.isfinite(sigma) & (sigma > 0.0), sigma, floor)
+        return out
+
+    def _build_sigma_x(
+        self,
+        observations: list[LineObservation],
+        agg_to_obs_indices: list[list[int]] | None,
+    ) -> np.ndarray:
+        """Per-point 1-sigma uncertainty on ``E_k`` aligned with the fit array.
+
+        For non-aggregated fits each entry is the per-line value taken from an
+        optional ``E_k_uncertainty`` attribute on the observation (read via
+        ``getattr`` so the :class:`LineObservation` dataclass need not declare
+        it), falling back to the scalar ``self.odr_x_uncertainty`` when a line
+        provides no value. For multiplet-aggregated points the constituent
+        ``E_k`` values are collapsed to a gA-weighted mean upstream; we
+        conservatively assign the scalar ``self.odr_x_uncertainty`` to those
+        aggregated abscissae rather than attempting to propagate the per-line
+        x-errors through the weighting.
+        """
+
+        def per_obs_sigma(obs: LineObservation) -> float:
+            val = getattr(obs, "E_k_uncertainty", None)
+            if val is not None and np.isfinite(val) and val > 0.0:
+                return float(val)
+            return float(self.odr_x_uncertainty)
+
+        if agg_to_obs_indices is None:
+            return np.array([per_obs_sigma(obs) for obs in observations])
+
+        sigma_x: list[float] = []
+        for obs_idxs in agg_to_obs_indices:
+            if len(obs_idxs) == 1:
+                sigma_x.append(per_obs_sigma(observations[obs_idxs[0]]))
+            else:
+                sigma_x.append(float(self.odr_x_uncertainty))
+        return np.array(sigma_x)
 
     def _fit_ransac(
         self,

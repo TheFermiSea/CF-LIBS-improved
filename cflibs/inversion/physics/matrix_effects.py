@@ -8,6 +8,8 @@ sample types. This module provides:
 2. **MatrixEffectCorrector** - Applies empirical corrections based on matrix type
 3. **InternalStandardizer** - Normalizes concentrations using internal standard ratios
 4. **CorrectionFactorDB** - Database of empirical correction factors
+5. **OnePointCalibrator** - OPT-IN one-point calibration (OPC) of the Boltzmann
+   plot using a single certified reference standard (Cavalcanti et al., 2013)
 
 Physics Background
 ------------------
@@ -28,15 +30,23 @@ References
 - Hahn & Omenetto (2010): LIBS: Part I. Fundamentals and Diagnostics
 - Cremers & Radziemski (2013): Handbook of LIBS, Chapter 6
 - Tognoni et al. (2010): Signal and noise in LIBS - Review
+- Cavalcanti, Teixeira, Legnaioli, Lorenzetti, Pardini & Palleschi (2013):
+  "One-point calibration for calibration-free laser-induced breakdown
+  spectroscopy quantitative analysis", Spectrochim. Acta B 87, 51-56,
+  doi:10.1016/j.sab.2013.05.016  (basis for :class:`OnePointCalibrator`)
 """
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import ClassVar, Dict, Optional, Tuple, Set, Union
+from typing import ClassVar, Dict, List, Optional, Sequence, Tuple, Set, Union
 import json
 from pathlib import Path
 
+import numpy as np
+
+from cflibs.core.constants import KB_EV
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common import LineObservation
 from cflibs.inversion.solve.iterative import CFLIBSResult
 
 logger = get_logger("inversion.matrix_effects")
@@ -1131,3 +1141,386 @@ def combine_corrections(
     matrix_result = corrector.correct(result, matrix_type)
 
     return matrix_result.corrected_concentrations
+
+
+# ============================================================================
+# One-Point Calibration (OPC) -- Cavalcanti et al., SAB 2013
+# ============================================================================
+#
+# Physics
+# -------
+# Standardless CF-LIBS reads the composition of each species ``s`` from the
+# intercept of its Boltzmann plot. For an optically thin LTE plasma the
+# integrated intensity of line ``i`` of species ``s`` obeys (Cremers &
+# Radziemski 2013, Ch. 6; Tognoni et al. 2010, Eq. 1):
+#
+#     I_i = F * (g_i A_i / lambda_i) * (n_s / U_s(T)) * exp(-E_i / (kB T))   (1)
+#
+# where ``F`` is a single experimental factor (collection efficiency, ablated
+# mass, plasma volume) common to *all* lines of *all* species in one spectrum.
+# Taking the logarithm of the standard Boltzmann-plot ordinate
+# ``y_i = ln( I_i * lambda_i / (g_i A_i) )`` gives the familiar linear form
+#
+#     y_i = -E_i / (kB T) + ln( F * n_s / U_s(T) ) = -E_i/(kB T) + q_s ,     (2)
+#
+# i.e. each species contributes a line of common slope ``-1/(kB T)`` and an
+# intercept ``q_s`` from which ``n_s`` -- hence the composition -- is recovered.
+#
+# In practice the *measured* ordinate is biased by a wavelength-dependent term
+# that Eq. (1) ignores: the spectrometer/detector spectral response
+# ``R(lambda)``, errors in the tabulated transition probabilities ``A_i``, and
+# residual (uncorrected) self-absorption. Collect all of these into one
+# multiplicative intensity bias ``B(lambda)`` so that the recorded intensity is
+# ``I_meas,i = B(lambda_i) * I_i``. This corrupts the ordinate additively:
+#
+#     y_meas,i = y_i + ln B(lambda_i) .                                       (3)
+#
+# Cavalcanti et al. (2013) one-point calibration: measure the SAME bias from a
+# single certified reference standard. With the standard's certified number
+# fractions ``n_s^cert`` and its measured plasma temperature ``T``, the
+# bias-free ordinate predicted by Eq. (2) is known up to the global, species-
+# *independent* offset ``ln F`` (which cancels in the closure Sum C_s = 1).
+# The per-line log-correction is therefore
+#
+#     delta(lambda_i) = ln F_corr(lambda_i)
+#                     = y_pred,i - y_meas,i                                   (4)
+#         with  y_pred,i = -E_i/(kB T) + ln( n_s^cert / U_s(T) ) .
+#
+# ``delta(lambda) = -ln B(lambda) + ln F`` recovers the *negative* bias plus an
+# irrelevant global constant. Applying the correction to an unknown sample that
+# shares the matrix bias multiplies its line intensity by
+# ``F_corr(lambda) = exp(delta(lambda))`` (equivalently adds ``delta`` to its
+# Boltzmann ordinate), removing ``B`` and forcing the standard's CF result onto
+# its certified composition by construction (residual ~ 0).
+#
+# DEFAULT = no OPC. Nothing above runs unless the caller explicitly fits an
+# :class:`OnePointCalibrator` on a standard and applies it -- this is strictly
+# opt-in and changes no existing CF-LIBS code path.
+
+
+@dataclass
+class OnePointCalibration:
+    """
+    Fitted one-point-calibration (OPC) correction, per Cavalcanti et al. (2013).
+
+    Holds the wavelength-dependent log-correction ``delta(lambda)`` derived from a
+    single certified standard. Apply it to the Boltzmann-plot points
+    (:class:`~cflibs.inversion.common.LineObservation`) of an unknown sample with
+    :meth:`apply` (or :meth:`apply_intensity`).
+
+    Attributes
+    ----------
+    wavelengths_nm : np.ndarray
+        Sorted line wavelengths (nm) of the certified standard used as the
+        interpolation knots for ``delta(lambda)``.
+    log_correction : np.ndarray
+        Per-knot additive Boltzmann-ordinate correction ``delta`` of Eq. (4),
+        i.e. ``ln F_corr``. The equivalent multiplicative intensity factor is
+        ``exp(log_correction)``.
+    temperature_K : float
+        Plasma excitation temperature (K) of the standard at which ``delta`` was
+        fitted. OPC is exact only when the unknown shares this ``T`` (same
+        ``E_k/(kB T)`` mapping); a large mismatch degrades the correction.
+    reference_label : str
+        Free-text label identifying the certified standard (provenance only).
+    extrapolate : bool
+        If True, ``delta`` is held flat (clamped to the nearest knot) outside the
+        fitted wavelength range; if False, out-of-range lines receive
+        ``delta = 0`` (no correction) and are logged. Default False.
+
+    Notes
+    -----
+    See module-level "One-Point Calibration (OPC)" section for the derivation.
+    Cavalcanti et al., Spectrochim. Acta B 87 (2013) 51-56,
+    doi:10.1016/j.sab.2013.05.016.
+    """
+
+    wavelengths_nm: np.ndarray
+    log_correction: np.ndarray
+    temperature_K: float
+    reference_label: str = "standard"
+    extrapolate: bool = False
+
+    def correction_at(self, wavelength_nm: float) -> float:
+        """
+        Return the additive Boltzmann-ordinate correction ``delta(lambda)`` at one
+        wavelength via linear interpolation over the fitted knots.
+
+        Parameters
+        ----------
+        wavelength_nm : float
+            Line wavelength (nm).
+
+        Returns
+        -------
+        float
+            ``delta(lambda)`` (= ``ln F_corr``). Zero outside the fitted range when
+            ``extrapolate`` is False.
+        """
+        wl = float(wavelength_nm)
+        lo, hi = float(self.wavelengths_nm[0]), float(self.wavelengths_nm[-1])
+        if (wl < lo or wl > hi) and not self.extrapolate:
+            return 0.0
+        # np.interp clamps to the endpoints outside [lo, hi], which is exactly the
+        # "flat extrapolation" behaviour we want when extrapolate is True.
+        return float(np.interp(wl, self.wavelengths_nm, self.log_correction))
+
+    def factor_at(self, wavelength_nm: float) -> float:
+        """Multiplicative intensity factor ``F_corr(lambda) = exp(delta(lambda))``."""
+        return float(np.exp(self.correction_at(wavelength_nm)))
+
+    def apply_intensity(self, wavelength_nm: float, intensity: float) -> float:
+        """
+        Apply the OPC factor to a single raw line intensity.
+
+        ``I_corrected = F_corr(lambda) * I_measured`` -- the multiplicative
+        rescaling of Eq. (3)/(4) that cancels the matrix/response bias.
+        """
+        return self.factor_at(wavelength_nm) * float(intensity)
+
+    def apply(self, observations: Sequence[LineObservation]) -> List[LineObservation]:
+        """
+        Apply OPC to a list of Boltzmann-plot points of an unknown sample.
+
+        Returns new :class:`LineObservation` objects with intensity (and its
+        uncertainty) multiplied by ``F_corr(lambda)``. Because the Boltzmann
+        ordinate is ``ln( I lambda / (g A) )``, this is equivalent to *adding*
+        ``delta(lambda)`` to each ordinate -- the OPC rescaling of the
+        Boltzmann-plot points requested by Cavalcanti et al. (2013).
+
+        Parameters
+        ----------
+        observations : Sequence[LineObservation]
+            Boltzmann-plot points for the unknown sample (must share the
+            standard's matrix bias for the correction to be physical).
+
+        Returns
+        -------
+        list[LineObservation]
+            New observations with OPC-corrected intensities. Input is unmodified.
+        """
+        corrected: List[LineObservation] = []
+        for obs in observations:
+            f = self.factor_at(obs.wavelength_nm)
+            corrected.append(
+                LineObservation(
+                    wavelength_nm=obs.wavelength_nm,
+                    intensity=obs.intensity * f,
+                    intensity_uncertainty=obs.intensity_uncertainty * f,
+                    element=obs.element,
+                    ionization_stage=obs.ionization_stage,
+                    E_k_ev=obs.E_k_ev,
+                    g_k=obs.g_k,
+                    A_ki=obs.A_ki,
+                    aki_uncertainty=obs.aki_uncertainty,
+                )
+            )
+        return corrected
+
+
+class OnePointCalibrator:
+    """
+    OPT-IN one-point calibration (OPC) of the CF-LIBS Boltzmann plot.
+
+    Implements Cavalcanti et al. (2013): a single certified reference standard is
+    analysed first; the deviation of its measured Boltzmann-plot points from the
+    points predicted by its *certified* composition defines a wavelength-dependent
+    correction ``F_corr(lambda)`` that absorbs the combined spectral-response /
+    transition-probability / residual-self-absorption bias. The same
+    ``F_corr(lambda)`` is then applied (multiplicatively to line intensity, i.e.
+    additively to the Boltzmann ordinate) to unknown samples sharing that bias.
+
+    This class is **strictly opt-in**: constructing/using it changes no default
+    CF-LIBS path. The standardless pipeline behaves exactly as before unless a
+    caller fits a calibrator on a standard and applies it.
+
+    Examples
+    --------
+    >>> calibrator = OnePointCalibrator()
+    >>> opc = calibrator.fit(
+    ...     standard_observations,            # measured Boltzmann-plot points
+    ...     certified_number_fractions={"Fe": 0.70, "Cu": 0.30},
+    ...     partition_functions={"Fe": {1: 30.0}, "Cu": {1: 8.0}},
+    ...     temperature_K=10000.0,
+    ... )
+    >>> corrected = opc.apply(unknown_observations)   # rescaled Boltzmann points
+
+    Notes
+    -----
+    - The correction is referenced *per species' neutral plane* in the same way
+      CF-LIBS reads composition: lines are grouped by (element, ionization stage)
+      and the ordinate predicted from the species' certified number fraction.
+    - The global, species-independent factor ``ln F`` of Eq. (2) is not
+      identifiable from one standard and is irrelevant to relative composition
+      (it cancels in closure). It is fixed here by the intensity-weighted mean of
+      the raw residuals so the typical correction magnitude stays small and the
+      multiplicative factors stay near unity; choosing a different global offset
+      only multiplies every unknown intensity by a constant, leaving the recovered
+      *relative* composition unchanged.
+
+    References
+    ----------
+    Cavalcanti, Teixeira, Legnaioli, Lorenzetti, Pardini & Palleschi,
+    Spectrochim. Acta B 87 (2013) 51-56, doi:10.1016/j.sab.2013.05.016.
+    """
+
+    def __init__(self, extrapolate: bool = False) -> None:
+        """
+        Parameters
+        ----------
+        extrapolate : bool
+            Whether the fitted correction is held flat outside the standard's
+            wavelength range when applied to an unknown (True), or set to zero
+            there (False, default -- conservative: never correct where the
+            standard provides no information).
+        """
+        self.extrapolate = extrapolate
+
+    @staticmethod
+    def _partition_value(
+        partition_functions: Dict[str, Dict[int, float]],
+        element: str,
+        ionization_stage: int,
+    ) -> float:
+        """Look up U_s(T) for (element, stage); default 1.0 with a warning."""
+        per_element = partition_functions.get(element, {})
+        u = per_element.get(ionization_stage)
+        if u is None or u <= 0:
+            logger.warning(
+                "OPC: no positive partition function for %s stage %d; using U=1.0",
+                element,
+                ionization_stage,
+            )
+            return 1.0
+        return float(u)
+
+    def fit(
+        self,
+        standard_observations: Sequence[LineObservation],
+        certified_number_fractions: Dict[str, float],
+        partition_functions: Dict[str, Dict[int, float]],
+        temperature_K: float,
+        reference_label: str = "standard",
+    ) -> OnePointCalibration:
+        """
+        Fit the OPC correction ``delta(lambda)`` from one certified standard.
+
+        For every standard line ``i`` of species ``s = (element, stage)`` the
+        bias-free Boltzmann ordinate predicted by the certified composition is
+
+            ``y_pred,i = -E_i/(kB T) + ln( n_s^cert / U_s(T) )``     (Eq. 4)
+
+        and the per-line log-correction is ``delta_i = y_pred,i - y_meas,i`` with
+        ``y_meas,i = ln( I_i lambda_i / (g_i A_i) )``. An intensity-weighted mean
+        of ``delta_i`` is removed as the (irrelevant) global offset ``ln F``, and
+        the residual is stored on the sorted wavelength grid for interpolation.
+
+        Parameters
+        ----------
+        standard_observations : Sequence[LineObservation]
+            Measured Boltzmann-plot points of the certified standard.
+        certified_number_fractions : Dict[str, float]
+            Certified composition of the standard as *number* fractions per
+            element (need not sum exactly to 1; only relative values matter).
+            Must be positive for every element appearing in the observations.
+        partition_functions : Dict[str, Dict[int, float]]
+            ``U_s(T)`` per element and ionization stage, evaluated at
+            ``temperature_K`` (e.g. ``{"Fe": {1: 30.0, 2: 45.0}}``).
+        temperature_K : float
+            Plasma excitation temperature (K) of the standard.
+        reference_label : str
+            Provenance label for the standard.
+
+        Returns
+        -------
+        OnePointCalibration
+            Fitted correction ready to apply to unknown samples.
+
+        Raises
+        ------
+        ValueError
+            If no usable lines remain, or a certified number fraction needed by
+            the observations is missing/non-positive, or ``temperature_K`` is not
+            positive.
+        """
+        if temperature_K <= 0:
+            raise ValueError(f"temperature_K must be positive, got {temperature_K}")
+
+        kT = KB_EV * float(temperature_K)  # eV
+        wls: List[float] = []
+        deltas: List[float] = []
+        weights: List[float] = []
+
+        for obs in standard_observations:
+            if obs.intensity <= 0 or obs.g_k <= 0 or obs.A_ki <= 0:
+                logger.debug(
+                    "OPC: skipping non-physical standard line at %.3f nm " "(I=%.3g, g=%s, A=%.3g)",
+                    obs.wavelength_nm,
+                    obs.intensity,
+                    obs.g_k,
+                    obs.A_ki,
+                )
+                continue
+            n_s = certified_number_fractions.get(obs.element)
+            if n_s is None or n_s <= 0:
+                raise ValueError(
+                    f"OPC: certified number fraction for element '{obs.element}' "
+                    f"is missing or non-positive ({n_s}); required to fit the "
+                    "standard's Boltzmann ordinate."
+                )
+            u_s = self._partition_value(partition_functions, obs.element, obs.ionization_stage)
+            # Predicted bias-free ordinate (Eq. 4), modulo global ln F.
+            y_pred = -obs.E_k_ev / kT + np.log(n_s / u_s)
+            y_meas = obs.y_value  # ln( I lambda / (g A) )
+            delta = float(y_pred - y_meas)
+            wls.append(float(obs.wavelength_nm))
+            deltas.append(delta)
+            # Weight by line intensity: brighter (higher-SNR) lines pin the global
+            # offset more strongly. Strictly positive by the guard above.
+            weights.append(float(obs.intensity))
+
+        if not wls:
+            raise ValueError("OPC: no usable standard lines to fit the correction.")
+
+        wl_arr = np.asarray(wls, dtype=float)
+        delta_arr = np.asarray(deltas, dtype=float)
+        w_arr = np.asarray(weights, dtype=float)
+
+        # Remove the species-independent global offset ln F (Eq. 2). It does not
+        # affect relative composition (cancels in closure); subtracting the
+        # intensity-weighted mean keeps the multiplicative factors near unity.
+        global_offset = float(np.average(delta_arr, weights=w_arr))
+        delta_arr = delta_arr - global_offset
+
+        # Collapse duplicate wavelengths (intensity-weighted) and sort for interp.
+        order = np.argsort(wl_arr)
+        wl_sorted = wl_arr[order]
+        delta_sorted = delta_arr[order]
+        w_sorted = w_arr[order]
+        uniq_wl, inverse = np.unique(wl_sorted, return_inverse=True)
+        if uniq_wl.size != wl_sorted.size:
+            num = np.zeros(uniq_wl.size)
+            den = np.zeros(uniq_wl.size)
+            np.add.at(num, inverse, delta_sorted * w_sorted)
+            np.add.at(den, inverse, w_sorted)
+            uniq_delta = num / den
+        else:
+            uniq_delta = delta_sorted
+
+        logger.info(
+            "OPC fit on '%s': %d lines, T=%.0f K, |delta| max=%.3f "
+            "(global ln F offset=%.3f removed)",
+            reference_label,
+            uniq_wl.size,
+            temperature_K,
+            float(np.max(np.abs(uniq_delta))) if uniq_delta.size else 0.0,
+            global_offset,
+        )
+
+        return OnePointCalibration(
+            wavelengths_nm=uniq_wl,
+            log_correction=uniq_delta,
+            temperature_K=float(temperature_K),
+            reference_label=reference_label,
+            extrapolate=self.extrapolate,
+        )
