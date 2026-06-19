@@ -223,5 +223,5 @@ priors used.
 - [User Guide](../user/User_Guide.md) —
   inspecting per-element Boltzmann fits, residuals, and convergence
   history.
-- [Codebase Architecture](../reference/Codebase_Architecture.md) — full
+- [Codebase Architecture](../CF-LIBS_Codebase_Technical_Documentation.md) — full
   module map.

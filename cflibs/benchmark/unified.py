@@ -146,8 +146,8 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     HAS_NUMPYRO = False
 
-try:  # The JAX iterative solver is being built in parallel by Agent B; the
-    # benchmark gate must keep working even when it lands later.
+try:  # IterativeCFLIBSSolverJax is optional; the benchmark gate must keep
+    # working on hosts where JAX (and thus the JAX solver) is unavailable.
     from cflibs.inversion.solve.iterative import IterativeCFLIBSSolverJax  # type: ignore
 
     HAS_JAX_ITERATIVE_SOLVER = True
@@ -288,6 +288,13 @@ def derive_truth_elements(
     spectrum: BenchmarkSpectrum,
     presence_threshold: float = 1e-9,
 ) -> List[str]:
+    """Return the ground-truth present elements for a benchmark spectrum.
+
+    Internal helper (not part of the package public API). Prefers an
+    explicit ``expected_elements`` annotation, otherwise derives presence
+    from ``true_composition`` above ``presence_threshold``. Returns an empty
+    list for blind-truth spectra.
+    """
     if spectrum.truth_type == TruthType.BLIND:
         return []
     annotated = spectrum.annotations.get("expected_elements")
@@ -305,6 +312,12 @@ def _clone_spectrum(spectrum: BenchmarkSpectrum, **updates: Any) -> BenchmarkSpe
 def subset_dataset(
     dataset: BenchmarkDataset, spectrum_ids: Sequence[str], name: str
 ) -> BenchmarkDataset:
+    """Build a new ``BenchmarkDataset`` from a subset of spectrum ids.
+
+    Internal helper (not part of the package public API). Carries over the
+    parent dataset's metadata (version, elements, citation, ...) onto the
+    named subset.
+    """
     spectra = [dataset.get_spectrum(spec_id) for spec_id in spectrum_ids]
     return BenchmarkDataset(
         name=name,
@@ -637,6 +650,13 @@ def build_outer_splits(dataset: BenchmarkDataset) -> List[DataSplit]:
 
 
 def build_inner_splits(train_dataset: BenchmarkDataset) -> List[DataSplit]:
+    """Build inner cross-validation splits for nested CV hyper-tuning.
+
+    Internal helper (not part of the package public API). Uses grouped
+    LOOCV when fewer than five groups are present, otherwise grouped
+    stratified k-fold (k <= 5). Returns an empty list when there is at most
+    one group to split on.
+    """
     group_count = len(train_dataset._group_spectrum_ids("group_id"))
     if group_count <= 1:
         return []
@@ -714,26 +734,6 @@ class IDEvaluationRecord:
 # ``CompositionEvaluationRecord`` lives in :mod:`cflibs.benchmark.composition_eval`
 # (re-exported below near the module's checkpoint imports) so the
 # per-spectrum evaluator can construct it without depending on this module.
-
-
-def _empty_identification_result(
-    algorithm: str,
-    warnings: Optional[List[str]] = None,
-) -> ElementIdentificationResult:
-    from cflibs.inversion.common.element_id import ElementIdentificationResult
-
-    return ElementIdentificationResult(
-        detected_elements=[],
-        rejected_elements=[],
-        all_elements=[],
-        experimental_peaks=[],
-        n_peaks=0,
-        n_matched_peaks=0,
-        n_unmatched_peaks=0,
-        algorithm=algorithm,
-        parameters={},
-        warnings=warnings or [],
-    )
 
 
 class UnifiedBenchmarkContext:
@@ -2435,10 +2435,9 @@ def _fit_iterative_jax_pipeline(
     Mirrors :func:`_fit_iterative_pipeline` but routes the inner-loop linear
     algebra through ``IterativeCFLIBSSolverJax`` so the heavy Boltzmann +
     closure passes execute on GPU when ``JAX_PLATFORMS=cuda`` is set. When
-    the JAX solver is unavailable (Agent B's solver hasn't landed, or JAX
-    isn't installed), the workflow logs a warning and falls back to the
-    numpy ``IterativeCFLIBSSolver`` path so the benchmark gate keeps running
-    end-to-end on CPU-only hosts.
+    the JAX solver is unavailable (e.g. JAX isn't installed), the workflow
+    logs a warning and falls back to the numpy ``IterativeCFLIBSSolver``
+    path so the benchmark gate keeps running end-to-end on CPU-only hosts.
     """
     use_jax = _iterative_jax_configure()
 
@@ -3442,6 +3441,17 @@ def bootstrap_ci(
     ci: float = 0.95,
     seed: int = 42,
 ) -> Tuple[float, float, float]:
+    """Percentile bootstrap confidence interval for the mean.
+
+    Internal helper (not part of the package public API). Non-finite values
+    are dropped; returns ``(0.0, 0.0, 0.0)`` for an empty sample.
+
+    Returns
+    -------
+    Tuple[float, float, float]
+        ``(mean, lower, upper)`` where ``lower``/``upper`` are the
+        ``ci``-level percentile bounds of the bootstrap mean distribution.
+    """
     array = np.asarray(list(values), dtype=float)
     array = array[np.isfinite(array)]
     if array.size == 0:
@@ -3828,6 +3838,19 @@ def mcnemar_test(
     left_records: Sequence[IDEvaluationRecord],
     right_records: Sequence[IDEvaluationRecord],
 ) -> Dict[str, float]:
+    """McNemar test on paired exact-match outcomes of two ID workflows.
+
+    Internal helper (not part of the package public API). Pairs records by
+    ``(outer_split_id, spectrum_id)``; ``b``/``c`` are the discordant counts
+    (one workflow exact-matches, the other does not). Uses the
+    continuity-corrected chi-square statistic with one degree of freedom.
+
+    Returns
+    -------
+    Dict[str, float]
+        ``{"b", "c", "chi2", "p_value"}``. ``chi2``/``p_value`` are NaN when
+        SciPy is unavailable.
+    """
     if chi2 is None:
         return {"b": 0, "c": 0, "chi2": float("nan"), "p_value": float("nan")}
     left_map = {
@@ -3861,6 +3884,14 @@ def friedman_nemenyi(
     higher_is_better: bool,
     alpha: float = 0.05,
 ) -> Dict[str, Any]:
+    """Friedman omnibus test with Nemenyi post-hoc critical difference.
+
+    Internal helper (not part of the package public API). ``blocks`` maps a
+    block id (e.g. dataset/fold) to ``{workflow: metric}``; only blocks that
+    cover every workflow contribute. Per-block ranks honor
+    ``higher_is_better``. Returns ``{}`` when SciPy is unavailable, there are
+    fewer than three workflows, or fewer than two complete blocks.
+    """
     if friedmanchisquare is None or studentized_range is None:
         return {}
     workflows = sorted({workflow for values in blocks.values() for workflow in values.keys()})
@@ -4435,9 +4466,6 @@ class UnifiedBenchmarkRunner:
         return outputs
 
 
-build_default_datasets = load_default_datasets
-
-
 __all__ = [
     "CompositionEvaluationRecord",
     "CompositionWorkflowSpec",
@@ -4447,7 +4475,6 @@ __all__ = [
     "UnifiedBenchmarkRunner",
     "bootstrap_ci",
     "build_composition_workflow_registry",
-    "build_default_datasets",
     "build_id_workflow_registry",
     "build_inner_splits",
     "build_outer_splits",

@@ -543,6 +543,10 @@ def detect_and_select_lines(
         with ``return_diagnostics=True``, a ``(selected_lines, diagnostics)``
         tuple.
     """
+    # Imports are kept function-local to preserve this module's light
+    # import-time contract: the cross-package symbols below are lazy to avoid
+    # circular imports (see module docstring), and ``time``/``numpy`` are kept
+    # alongside them so that merely importing this module does not pull numpy.
     import time
 
     import numpy as np
@@ -799,6 +803,9 @@ def run_pipeline(
     timings (``stage_timings``: calibration / detection+ID / stark n_e /
     solve, in seconds) for the goal-metric scoreboard (bead A1).
     """
+    # Function-local imports preserve the module's light import-time contract:
+    # ``IterativeCFLIBSSolver`` is lazy to avoid a circular import (see module
+    # docstring), and ``time`` is kept local alongside it.
     import time
 
     from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver

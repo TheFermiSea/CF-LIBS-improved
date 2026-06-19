@@ -39,7 +39,6 @@ __all__ = [
     "gaussian_profile",
     "lorentzian_profile",
     "resolving_power_sigma",
-    "total_lorentzian_width",
     "voigt_fwhm",
     "voigt_profile",
 ]
@@ -277,9 +276,7 @@ def voigt_profile(
        no radial truncation. Verified: the Voigt tail matches the
        analytic Lorentzian to 1e-6 relative error out to 1000× FWHM_L
        (200 nm offset for FWHM_L=0.1 nm) — no observable clipping at
-       any tested radius. The deprecated ``_faddeeva_humlicek_jax``
-       (manifold-only, not on the inversion path) uses piecewise
-       rational regions for *accuracy*, not radial clipping. The only
+       any tested radius. The only
        ``n_sigma=5.0`` constant in the radiation tree is in
        ``spectrum_model.py:432-433`` for the *instrument Gaussian kernel
        array size* — that is kernel-length truncation, NOT Voigt
@@ -385,29 +382,6 @@ def apply_voigt_broadening(
         spectrum += p
 
     return spectrum
-
-
-def total_lorentzian_width(
-    gamma_natural: float = 0.0, gamma_stark: float = 0.0, gamma_vdw: float = 0.0
-) -> float:
-    """
-    Calculate total Lorentzian width (HWHM).
-
-    Parameters
-    ----------
-    gamma_natural : float
-        Natural broadening HWHM
-    gamma_stark : float
-        Stark broadening HWHM
-    gamma_vdw : float
-        Van der Waals broadening HWHM
-
-    Returns
-    -------
-    float
-        Total HWHM
-    """
-    return gamma_natural + gamma_stark + gamma_vdw
 
 
 # --- JAX IMPLEMENTATION ---
@@ -641,90 +615,6 @@ if HAS_JAX:
         return (amplitude / jnp.pi) * (gamma / ((wavelength - center) ** 2 + gamma**2))
 
     @jit
-    def _faddeeva_humlicek_jax(z):
-        """
-        Humlicek W4 approximation to Faddeeva function w(z) for JAX.
-
-        DEPRECATED: This implementation has gradient stability issues at high
-        electron densities (log_ne > 17.5) due to JAX evaluating all branches
-        of jnp.where during backpropagation. Use _faddeeva_weideman_jax instead.
-
-        Uses rational approximation that works for all z without requiring
-        complex erfc. Accurate to ~1e-4 relative error.
-
-        Reference: Humlicek, JQSRT 27 (1982) 437
-        """
-        x = jnp.real(z)
-        y = jnp.imag(z)
-
-        # Work in upper half plane (y >= 0 for Voigt with gamma > 0)
-        y = jnp.abs(y)
-
-        # Humlicek W4 algorithm regions
-        s = jnp.abs(x) + y
-        t = y - 1j * x
-
-        # Region 1: s >= 15 (asymptotic)
-        def region1(x, y, t):
-            w = t * 0.5641896 / (0.5 + t * t)
-            return w
-
-        # Region 2: 5.5 <= s < 15
-        def region2(x, y, t):
-            u = t * t
-            w = t * (1.410474 + u * 0.5641896) / (0.75 + u * (3.0 + u))
-            return w
-
-        # Region 3: s < 5.5 and y >= 0.195 * |x| - 0.176
-        def region3(x, y, t):
-            w = (16.4955 + t * (20.20933 + t * (11.96482 + t * (3.778987 + t * 0.5642236)))) / (
-                16.4955 + t * (38.82363 + t * (39.27121 + t * (21.69274 + t * (6.699398 + t))))
-            )
-            return w
-
-        # Region 4: s < 5.5 and y < 0.195 * |x| - 0.176
-        def region4(x, y, t):
-            u = t * t
-            w = jnp.exp(u) - t * (
-                36183.31
-                - u
-                * (
-                    3321.9905
-                    - u
-                    * (1540.787 - u * (219.0313 - u * (35.76683 - u * (1.320522 - u * 0.56419))))
-                )
-            ) / (
-                32066.6
-                - u
-                * (
-                    24322.84
-                    - u
-                    * (
-                        9022.228
-                        - u * (2186.181 - u * (364.2191 - u * (61.57037 - u * (1.841439 - u))))
-                    )
-                )
-            )
-            return w
-
-        # Select region based on conditions
-        w = jnp.where(
-            s >= 15.0,
-            region1(x, y, t),
-            jnp.where(
-                s >= 5.5,
-                region2(x, y, t),
-                jnp.where(
-                    y >= 0.195 * jnp.abs(x) - 0.176,
-                    region3(x, y, t),
-                    region4(x, y, t),
-                ),
-            ),
-        )
-
-        return w
-
-    @jit
     def voigt_profile_jax(
         wavelength: jnp.ndarray, center: float, sigma: float, gamma: float, amplitude: float = 1.0
     ) -> jnp.ndarray:
@@ -913,23 +803,23 @@ if HAS_JAX:
 
 else:
 
-    def voigt_profile_jax(*args, **kwargs):
+    def voigt_profile_jax(*args, **kwargs) -> None:
         _raise_jax_missing()
 
-    def gaussian_profile_jax(*args, **kwargs):
+    def gaussian_profile_jax(*args, **kwargs) -> None:
         _raise_jax_missing()
 
-    def lorentzian_profile_jax(*args, **kwargs):
+    def lorentzian_profile_jax(*args, **kwargs) -> None:
         _raise_jax_missing()
 
-    def doppler_sigma_jax(*args, **kwargs):
+    def doppler_sigma_jax(*args, **kwargs) -> None:
         _raise_jax_missing()
 
-    def apply_gaussian_broadening_jax(*args, **kwargs):
+    def apply_gaussian_broadening_jax(*args, **kwargs) -> None:
         _raise_jax_missing()
 
-    def apply_voigt_broadening_jax(*args, **kwargs):
+    def apply_voigt_broadening_jax(*args, **kwargs) -> None:
         _raise_jax_missing()
 
-    def voigt_spectrum_jax(*args, **kwargs):
+    def voigt_spectrum_jax(*args, **kwargs) -> None:
         _raise_jax_missing()

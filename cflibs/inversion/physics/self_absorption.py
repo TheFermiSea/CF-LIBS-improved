@@ -1224,6 +1224,11 @@ def estimate_optical_depth_from_intensity_ratio(
     This is commonly used with doublets where the stronger line
     may be self-absorbed while the weaker line remains optically thin.
 
+    .. note::
+        Public-API helper with no shipped-code callers; the inversion pipeline
+        does not use the doublet-ratio optical-depth estimate. Exercised only
+        by the unit tests in ``tests/test_self_absorption.py``.
+
     Parameters
     ----------
     intensity_strong : float

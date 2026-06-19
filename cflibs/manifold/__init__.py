@@ -31,6 +31,9 @@ try:
     from cflibs.manifold.vector_index import VectorIndex, VectorIndexConfig, HAS_FAISS  # noqa: F401
     from cflibs.manifold.basis_index import BasisIndex  # noqa: F401
 
+    # HAS_FAISS is re-imported only to derive the package-level capability flag
+    # below; HAS_VECTOR_INDEX is the documented public flag (in __all__), so
+    # HAS_FAISS itself is intentionally NOT exported.
     HAS_VECTOR_INDEX = HAS_FAISS
 except ImportError:
     HAS_VECTOR_INDEX = False

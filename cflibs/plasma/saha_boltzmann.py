@@ -626,7 +626,7 @@ def ionization_potential_lowering(
 #    and cached as ``jnp.ndarray`` lookup tables outside any ``jit``
 #    boundary. This matches the convention used by
 #    ``cflibs/inversion/physics/boltzmann_jax.py`` and
-#    ``cflibs/plasma/partition.py::_direct_sum_single_temp``.
+#    ``cflibs/plasma/partition.py`` (BatchedPartitionFunctionProvider).
 #  - The number-crunching kernels (``_saha_balance_kernel``,
 #    ``_boltzmann_populations_kernel``) are pure functions of jnp arrays and
 #    Python scalars only, so they can be jit-compiled once and re-used.
@@ -649,8 +649,8 @@ def _ipd_eV(n_e_cm3: float, T_K: float) -> float:
 
 
 # JIT-compiled inner kernels live in cflibs.plasma.kernels (ADR-0001 T1-1
-# host/kernel split). Re-exported here for back-compat with callers that
-# imported the private names directly from ``cflibs.plasma.saha_boltzmann``.
+# host/kernel split). Imported here because SahaBoltzmannSolverJax (below) calls
+# them directly in its partition/Saha/Boltzmann steps.
 from cflibs.plasma.kernels import (  # noqa: E402
     _boltzmann_populations_kernel,
     _partition_sum_jax,

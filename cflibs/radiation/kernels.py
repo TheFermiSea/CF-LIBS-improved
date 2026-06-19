@@ -519,12 +519,6 @@ def _saha_three_stage_populations(plasma_state, snapshot, total_species_density_
     return C_per_line * N_total * pop_fraction * boltz * level_bound
 
 
-# Back-compat alias: the pre-rs7e name. External callers (none in-tree) that
-# imported the private two-stage symbol keep working; the physics is now the
-# three-stage + IPD system documented above.
-_saha_two_stage_populations = _saha_three_stage_populations
-
-
 # ---------------------------------------------------------------------------
 # Per-line broadening helpers
 # ---------------------------------------------------------------------------

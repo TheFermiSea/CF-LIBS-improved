@@ -3,12 +3,16 @@
 This module hosts:
 
 * :class:`Sampler` -- runtime-checkable Protocol for posterior-sampling
-  backends, plus a generic :class:`SamplerResult` envelope.
-* :class:`NumPyroNUTSSampler` -- canonical NUTS adapter (NumPyro).
-* :class:`DynestyNestedSampler` -- canonical nested-sampling adapter (dynesty).
-* :class:`MCMCSampler` / :class:`NestedSampler` -- legacy class names retained
-  as aliases for back-compat. Their ``.run(observed, ...)`` signatures and
-  return types are unchanged (``MCMCResult`` / ``NestedSamplingResult``).
+  backends, plus a generic :class:`SamplerResult` envelope. Note: the
+  ``Sampler.fit`` API and ``SamplerResult`` envelope are not yet wired into
+  any consumer; every live caller uses the ``.run`` API below.
+* :class:`MCMCSampler` -- NUTS adapter (NumPyro). The actual class used by the
+  CLI, benchmark harness, and visualization.
+* :class:`NestedSampler` -- nested-sampling adapter (dynesty). The actual class
+  used in production.
+* :class:`NumPyroNUTSSampler` / :class:`DynestyNestedSampler` -- aliases of the
+  two classes above, kept for back-compat. These alias names currently have no
+  callers anywhere; ``MCMCSampler`` / ``NestedSampler`` are the real names.
 * :func:`run_mcmc` -- convenience wrapper returning a legacy ``dict``.
 
 The two-zone sampler lives in :mod:`two_zone`; the forward physics live in
@@ -95,6 +99,13 @@ from .diagnostics import (  # noqa: E402,F401  (re-export for back-compat + test
 @dataclass(frozen=True)
 class SamplerResult:
     """Common result envelope across NumPyro and dynesty backends.
+
+    .. note::
+        Not yet wired into any consumer: ``SamplerResult`` is only ever
+        constructed inside the :meth:`Sampler.fit` adapters below and never
+        consumed. Every live caller (CLI, benchmark harness, visualization)
+        uses the ``.run`` API, which returns the legacy
+        ``MCMCResult`` / ``NestedSamplingResult`` / ``dict`` types.
 
     Attributes
     ----------
@@ -438,8 +449,8 @@ class MCMCSampler:
         )
 
 
-# Canonical alias under the new naming convention. New code should prefer
-# ``NumPyroNUTSSampler``; ``MCMCSampler`` remains for back-compat.
+# Back-compat alias. ``MCMCSampler`` is the real class used everywhere;
+# ``NumPyroNUTSSampler`` currently has no callers.
 NumPyroNUTSSampler = MCMCSampler
 
 

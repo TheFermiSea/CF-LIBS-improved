@@ -39,6 +39,14 @@ References
 Multi-gate Saha-Boltzmann reconciliation is discussed in recent
 Applied Physics B / Spectrochimica Acta B work; see e.g. Appl. Phys. B
 (2025), https://link.springer.com/article/10.1007/s00340-025-08606-9 .
+
+Public-surface note
+-------------------
+Unlike its comparable-scope sibling runtime modules ``streaming.py`` and
+``temporal.py`` (both wired into the ``cflibs.inversion`` lazy-export map),
+this module is intentionally NOT re-exported from any package ``__init__``.
+Import its symbols (``joint_multi_gate_fit``, ``JointMultiGateResult``) via
+the full path ``cflibs.inversion.runtime.multi_gate``.
 """
 
 from __future__ import annotations

@@ -2016,9 +2016,10 @@ class IterativeCFLIBSSolver:
             # _CommonSlopeFit on the Python path; the final lax kernel fit on
             # the lax path).
             "boltzmann_r_squared": fit_r2,
-            # Deprecated alias of ``boltzmann_r_squared`` kept for legacy
-            # consumers (tests/scripts predating the canonical key); same
-            # provenance, do not read both.
+            # Compatibility alias of ``boltzmann_r_squared`` with the same
+            # provenance (do not read both). Still load-bearing: the CLI reads
+            # it as the fallback for ``boltzmann_r_squared`` (cli/main.py) and
+            # several active tests assert on it, so it is not removable.
             "r_squared_last": fit_r2,
             # Number of elements that received an intercept from the fit and
             # entered the closure.
@@ -2029,7 +2030,9 @@ class IterativeCFLIBSSolver:
             # even though the solver already refuses to flag such a solve as
             # converged.
             "degenerate_composition": float(closure_degenerate),
-            # Deprecated alias of ``degenerate_composition`` (pre-cxxq key).
+            # Compatibility alias of ``degenerate_composition`` (pre-cxxq key).
+            # Still load-bearing: the CLI reads ``closure_degenerate`` directly
+            # (cli/main.py) and closed_form.py emits it, so it is not removable.
             "closure_degenerate": float(closure_degenerate),
             "boltzmann_degenerate": float(boltzmann_degenerate),
             # n_e provenance: 1.0 when the canonical Stark-width diagnostic drove
@@ -3193,9 +3196,10 @@ class IterativeCFLIBSSolverJax(IterativeCFLIBSSolver):
             :class:`IterativeCFLIBSSolver`, which selects the
             :func:`jax.lax.while_loop` path with the same numerics. This
             subclass now delegates to that path (or to the parent's Python
-            loop) and is retained as an alias for one release; new callers
-            should use :class:`IterativeCFLIBSSolver` directly with the env
-            flag set.
+            loop). It is still wired into the benchmark harness and exported
+            from ``cflibs.inversion``, so it remains a live (if deprecated)
+            class rather than dead code; new callers should use
+            :class:`IterativeCFLIBSSolver` directly with the env flag set.
 
         Falls back to the parent Python implementation when JAX is not
         available, preserving the prior behavior contract.

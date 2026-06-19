@@ -1,10 +1,9 @@
 """
-Instrument response and detector modeling.
+Instrument response modeling.
 
 This module provides:
 - Instrument response functions
-- Detector models
-- Wavelength calibration and rebinning tools
+- Instrument-function convolution (fixed FWHM / resolving-power modes)
 - Echellogram extraction for 2D spectral images
 """
 

@@ -426,7 +426,7 @@ self-absorption correction. It does not model:
 If your problem needs any of the above, the calibration-free framework
 is not the right tool, or the shipped model needs to be extended. The
 extension points are documented in
-[Codebase Architecture](../reference/Codebase_Architecture.md).
+[Codebase Architecture](../CF-LIBS_Codebase_Technical_Documentation.md).
 
 ---
 

@@ -2522,7 +2522,7 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
     byte-for-byte to the reference ``detect_and_select_lines``. The flow mirrors
     the reference stage order (``pipeline.py:806-916``):
 
-        response (host) -> [segmented wavelength calibration — reference] ->
+        response (host) -> [segmented wavelength calibration (DEVICE)] ->
         [adaptive tolerances — reference] -> [catalog SQL + gA-Boltzmann comb
         ranking — host gather] -> J1 detect_peaks_detection (DEVICE) ->
         kdet pre-filter (DEVICE, coherence branch) -> J3 comb scan + shift select
@@ -2533,9 +2533,12 @@ def run_front_end_ondevice(wavelength, intensity, atomic_db, pipeline, snapshot)
     coherence keep-rule (``kdet_keep_mask``), the LineSelector score kernel
     (``_line_selector_scores``), and (this change) the J6 Stark n_e diagnostic
     (:func:`_ondevice_stark_ne`, composing the ``cflibs.jitpipe.stark`` kernels);
-    the reference-delegated stages (segmented calibration and the kdet density
-    branch) feed the kernels their
-    byte-identical inputs so the produced observation line-key set matches the
+    segmented calibration is on-device via :func:`_ondevice_calibrate_segmented`
+    (``_ld_calibrate`` is retained only as the single-segment fallback + parity
+    oracle). The lone residual reference-delegated stage is the kdet density-score
+    branch (dispatched to Rust in the reference, dead-by-default under the
+    shift-coherence veto); the kernels are fed byte-identical inputs so the produced
+    observation line-key set matches the
     reference ``detect_and_select_lines`` (the parity oracle). Never raises on
     zero observations (returns ``n_observations == 0`` for the caller — the J8
     plan §4 failure policy).

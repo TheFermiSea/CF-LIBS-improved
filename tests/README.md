@@ -80,10 +80,8 @@ Common fixtures available in `conftest.py`:
 - `sample_plasma`: Sample plasma state
 - `sample_transition`: Sample atomic transition
 - `sample_energy_level`: Sample energy level
-- `sample_wavelength_grid`: Sample wavelength array
 - `sample_config_dict`: Sample configuration
 - `temp_config_file`: Temporary config file
-- `mock_echellogram_image`: Mock 2D image
 
 ## Test Coverage Goals
 
@@ -134,6 +132,27 @@ def test_error_handling():
     with pytest.raises(ValueError, match="must be positive"):
         function_that_raises(-1.0)
 ```
+
+### Gating tests on optional dependencies (JAX, etc.)
+
+There are three mechanisms in the suite for skipping when an optional dependency
+is missing. Use **exactly one** per module -- do not stack them:
+
+- `@pytest.mark.requires_jax` (and `requires_bayesian`, `requires_uncertainty`,
+  `requires_rust`): the **preferred** mechanism. The `pytest_collection_modifyitems`
+  hook in `conftest.py` makes these markers functional -- it probes the dependency
+  once at collection time and skips only the marked items. Use a module-level
+  `pytestmark = pytest.mark.requires_jax` to gate the whole file.
+- `jax = pytest.importorskip("jax")`: aborts the **whole module** at import time
+  if JAX is absent. Use this *instead of* the marker only when you need the import
+  to short-circuit before module-level JAX code runs.
+- Manual `if <dep> is None: pytest.skip(...)` inside a test body: avoid -- it is the
+  least discoverable form and is only justified for a per-test (not per-module)
+  condition that the markers cannot express.
+
+Do **not** combine `importorskip` + `requires_jax` + per-test manual skips in one
+module (belt-and-suspenders). When `importorskip("jax")` runs, JAX is guaranteed
+present, so any later `if not HAS_JAX...` guard is dead code.
 
 ## Continuous Integration
 

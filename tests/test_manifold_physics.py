@@ -21,24 +21,21 @@ from cflibs.radiation.profiles import (  # noqa: E402
     voigt_profile,
 )
 
-# Import JAX versions
-try:
-    from cflibs.radiation.profiles import (
-        doppler_sigma_jax,
-        voigt_profile_jax,
-        gaussian_profile_jax,
-        lorentzian_profile_jax,
-    )
-    from cflibs.radiation.stark import (
-        stark_hwhm,
-        stark_hwhm_jax,
-        estimate_stark_parameter,
-        estimate_stark_parameter_jax,
-    )
-
-    HAS_JAX_FUNCS = True
-except ImportError:
-    HAS_JAX_FUNCS = False
+# Import JAX versions. The module-level ``pytest.importorskip("jax")`` above
+# guarantees JAX is present, and these ``*_jax`` symbols always exist when JAX
+# is installed, so the import is unconditional (no HAS_JAX_FUNCS guard needed).
+from cflibs.radiation.profiles import (  # noqa: E402
+    doppler_sigma_jax,
+    voigt_profile_jax,
+    gaussian_profile_jax,
+    lorentzian_profile_jax,
+)
+from cflibs.radiation.stark import (  # noqa: E402
+    stark_hwhm,
+    stark_hwhm_jax,
+    estimate_stark_parameter,
+    estimate_stark_parameter_jax,
+)
 
 
 def _jnp_trapezoid(y: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
@@ -66,9 +63,6 @@ class TestDopplerWidthJAX:
 
     def test_doppler_sigma_jax_basic(self, sample_params):
         """Test basic Doppler sigma calculation."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         sigma = doppler_sigma_jax(
             sample_params["wavelength_nm"],
             sample_params["T_eV"],
@@ -81,9 +75,6 @@ class TestDopplerWidthJAX:
 
     def test_doppler_sigma_matches_numpy(self, sample_params):
         """Test JAX Doppler sigma matches NumPy reference."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         # Calculate using JAX
         sigma_jax = float(
             doppler_sigma_jax(
@@ -106,9 +97,6 @@ class TestDopplerWidthJAX:
 
     def test_doppler_scaling_with_temperature(self):
         """Test Doppler width scales as sqrt(T)."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         sigma_1 = float(doppler_sigma_jax(500.0, 1.0, 48.0))
         sigma_4 = float(doppler_sigma_jax(500.0, 4.0, 48.0))
 
@@ -118,9 +106,6 @@ class TestDopplerWidthJAX:
 
     def test_doppler_scaling_with_mass(self):
         """Test Doppler width scales as 1/sqrt(m)."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         sigma_light = float(doppler_sigma_jax(500.0, 1.0, 12.0))  # C
         sigma_heavy = float(doppler_sigma_jax(500.0, 1.0, 48.0))  # Ti
 
@@ -136,9 +121,6 @@ class TestStarkBroadeningJAX:
 
     def test_stark_hwhm_jax_basic(self, sample_params):
         """Test basic Stark HWHM calculation."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         gamma = stark_hwhm_jax(
             sample_params["n_e_cm3"],
             sample_params["T_eV"],
@@ -150,9 +132,6 @@ class TestStarkBroadeningJAX:
 
     def test_stark_hwhm_scaling_with_density(self, sample_params):
         """Test Stark width scales linearly with electron density."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         gamma_1e17 = float(
             stark_hwhm_jax(1e17, sample_params["T_eV"], sample_params["stark_w_ref"], 0.5)
         )
@@ -166,9 +145,6 @@ class TestStarkBroadeningJAX:
 
     def test_stark_hwhm_matches_numpy(self, sample_params):
         """Test JAX Stark HWHM matches NumPy reference."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         # Calculate using JAX
         gamma_jax = float(
             stark_hwhm_jax(
@@ -194,9 +170,6 @@ class TestStarkBroadeningJAX:
 
     def test_estimate_stark_parameter_jax(self):
         """Test JAX Stark parameter estimation."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         # Estimate for a typical line
         w_est = float(
             estimate_stark_parameter_jax(
@@ -212,9 +185,6 @@ class TestStarkBroadeningJAX:
 
     def test_estimate_stark_matches_numpy(self):
         """Test JAX Stark estimation matches NumPy."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         params = (500.0, 3.0, 6.0, 1)
 
         w_jax = float(estimate_stark_parameter_jax(*params))
@@ -229,9 +199,6 @@ class TestVoigtProfileJAX:
 
     def test_voigt_profile_jax_basic(self):
         """Test basic Voigt profile calculation."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         wl_grid = jnp.linspace(499.0, 501.0, 100)
         center = 500.0
         sigma = 0.05
@@ -249,9 +216,6 @@ class TestVoigtProfileJAX:
 
     def test_voigt_matches_gaussian_limit(self):
         """Test Voigt approaches Gaussian when gamma → 0."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         wl_grid = jnp.linspace(499.0, 501.0, 200)
         center = 500.0
         sigma = 0.05
@@ -266,9 +230,6 @@ class TestVoigtProfileJAX:
 
     def test_voigt_matches_lorentzian_limit(self):
         """Test Voigt approaches Lorentzian when sigma → 0."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         wl_grid = jnp.linspace(499.0, 501.0, 200)
         center = 500.0
         sigma = 1e-10  # Very small Gaussian width
@@ -285,9 +246,6 @@ class TestVoigtProfileJAX:
 
     def test_voigt_jax_matches_numpy(self):
         """Test JAX Voigt matches NumPy reference."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         wl_grid = np.linspace(499.0, 501.0, 100)
         center = 500.0
         sigma = 0.05
@@ -308,9 +266,6 @@ class TestProfilesVmap:
 
     def test_voigt_under_vmap(self):
         """Test Voigt profile works correctly when vmapped over lines."""
-        if not HAS_JAX_FUNCS:
-            pytest.skip("JAX physics functions not available")
-
         wl_grid = jnp.linspace(499.0, 501.0, 100)
 
         # Multiple lines

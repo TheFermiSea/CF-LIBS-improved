@@ -112,7 +112,6 @@ _ATTRIBUTE_EXPORT_GROUPS = {
         "extract_values_and_uncertainties",
     ],
     "cflibs.inversion.preprocess.outliers": [
-        "OutlierMethod",
         "SAMResult",
         "SpectralAngleMapper",
         "sam_distance",
@@ -283,7 +282,6 @@ __all__ = [
     "AtomicDataUncertainty",
     "run_monte_carlo_uq",
     "HAS_JOBLIB",
-    "OutlierMethod",
     "SAMResult",
     "SpectralAngleMapper",
     "sam_distance",

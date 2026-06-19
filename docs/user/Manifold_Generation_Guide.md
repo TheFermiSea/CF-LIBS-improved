@@ -274,5 +274,5 @@ pip install jax[cuda] -f https://storage.googleapis.com/jax-releases/jax_cuda_re
 
 ## See Also
 
-- [API Reference](../reference/API_Reference.md) — `ManifoldGenerator` API
+- [API Reference](../API_Reference.md) — `ManifoldGenerator` API
 - `docs/archive/legacy/HIGH_THROUGHPUT_FRAMEWORK.md` — historical architecture notes (superseded)

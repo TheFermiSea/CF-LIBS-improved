@@ -1181,31 +1181,6 @@ def export_to_csv(
     exporter.export(data, path)
 
 
-def export_to_hdf5(
-    data: ExportData,
-    path: PathLike,
-    **kwargs,
-) -> None:
-    """
-    Convenience function to export data to HDF5.
-
-    Parameters
-    ----------
-    data : ExportData
-        Data to export
-    path : PathLike
-        Output file path
-    **kwargs
-        Options passed to HDF5Exporter
-
-    Notes
-    -----
-    Requires h5py: pip install h5py
-    """
-    exporter = HDF5Exporter(**kwargs)
-    exporter.export(data, path)
-
-
 def export_to_json(
     data: ExportData,
     path: PathLike,

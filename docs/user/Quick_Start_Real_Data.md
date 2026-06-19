@@ -396,7 +396,7 @@ for el, c in result.concentrations.items():
 
 The same `result` object exposes per-element Boltzmann fit objects, the
 selected line list, and the convergence history — useful for diagnostics.
-See [API Reference](../reference/API_Reference.md).
+See [API Reference](../API_Reference.md).
 
 ---
 
@@ -439,4 +439,4 @@ and the diagnostics CF-LIBS exposes to detect failure, is in
   forward model and inversion solve.
 - [Physics: Assumptions and Validity](../physics/Assumptions_And_Validity.md)
   — every assumption baked into the algorithm and how to test it.
-- [API Reference](../reference/API_Reference.md) — module-by-module API.
+- [API Reference](../API_Reference.md) — module-by-module API.

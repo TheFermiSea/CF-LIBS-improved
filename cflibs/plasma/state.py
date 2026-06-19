@@ -394,6 +394,11 @@ class TwoRegionPlasma(SingleZoneLTEPlasma):
     Based on Hermann (2017), modeling the plasma as a hot core
     and a cooler corona. This helps reduce bias for high-Z elements
     emitting from outer shells.
+
+    .. note::
+       Status: experimental. This subclass is not exported from
+       ``cflibs.plasma.__init__`` and has no shipped-code consumer; it is
+       currently exercised only by ``tests/test_two_region_fit.py``.
     """
 
     def __init__(

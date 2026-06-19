@@ -61,7 +61,6 @@ import jax.numpy as jnp
 from cflibs.radiation.profiles import _voigt_profile_kernel_jax
 
 if TYPE_CHECKING:  # pragma: no cover
-    from cflibs.jitpipe.params import PipelineParams, StaticConfig
     from cflibs.jitpipe.snapshot import PipelineSnapshot
 
 # ---------------------------------------------------------------------------
@@ -1193,59 +1192,3 @@ def is_preferred_diagnostic(
     same_sp = cand_sp[:, None] == pref_sp[None, :]  # (C, P)
     close = jnp.abs(cand_wl[:, None] - pref_wl[None, :]) < tol_nm  # (C, P)
     return jnp.any(same_sp & close, axis=1)
-
-
-# ---------------------------------------------------------------------------
-# Stage entry point (J0 stub signature) — thin convenience wrapper.
-# ---------------------------------------------------------------------------
-
-
-def stark_electron_density(
-    line_widths_nm: Any,
-    line_index: Any,
-    temperature_eV: Any,
-    snapshot: "PipelineSnapshot",
-    params: "PipelineParams",
-    static: "StaticConfig",
-) -> Any:
-    """Solver-coupling entry point: n_e from already-measured Stark widths (J6).
-
-    Convenience wrapper around :func:`stark_ne_from_widths` that pulls the
-    per-line reference Stark width / exponent from the ``snapshot`` line table
-    by ``line_index`` and combines into a single robust n_e at the supplied
-    temperature. This is the J7-facing per-iteration coupling (closes lax seam
-    (iii); see spec §1). The window-extraction + LM measurement path is
-    :func:`measure_stark_ne_jit`.
-
-    Parameters
-    ----------
-    line_widths_nm : array, shape (D,)
-        Measured Lorentzian (Stark) FWHM per diagnostic line, nm. Instrument /
-        Doppler are assumed already removed (pinned-Gaussian fit convention).
-    line_index : array of int, shape (D,)
-        Index of each diagnostic into the snapshot per-line tables.
-    temperature_eV : scalar
-        Plasma temperature, eV.
-    snapshot : PipelineSnapshot
-        Atomic-data snapshot (``line_stark_w`` / ``line_stark_alpha``).
-    params : PipelineParams
-        Traced knobs (unused here; kept for stage-signature uniformity).
-    static : StaticConfig
-        Static config (unused here; kept for stage-signature uniformity).
-
-    Returns
-    -------
-    array, scalar
-        Robust electron-density estimate, cm^-3 (NaN when no line is usable).
-    """
-    del params, static
-    from cflibs.core.constants import EV_TO_K
-
-    idx = jnp.asarray(line_index)
-    w_ref = jnp.asarray(snapshot.line_stark_w)[idx]
-    alpha = jnp.asarray(snapshot.line_stark_alpha)[idx]
-    alpha = jnp.where(alpha == 0.0, DEFAULT_STARK_ALPHA, alpha)
-    valid = w_ref > 0.0
-    t_k = jnp.asarray(temperature_eV) * EV_TO_K
-    _, ne_median, _, _ = stark_ne_from_widths(jnp.asarray(line_widths_nm), w_ref, alpha, valid, t_k)
-    return ne_median

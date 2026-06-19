@@ -96,6 +96,10 @@ def test_labcal_contract_and_gaps():
 
 
 def test_scct_contract():
+    # CI GAP: astropy is declared only in the `fits` pyproject extra, but CI
+    # installs `.[dev,ci]` (no `fits`), so astropy is absent and this test
+    # silently skips in CI. Fix belongs in pyproject.toml/ci.yml (add astropy
+    # to the `ci` extra or install `.[fits]`), not here.
     pytest.importorskip("astropy")
     for record in _probe(iter_supercam_scct_spectra, 3):
         _assert_record_contract(record)

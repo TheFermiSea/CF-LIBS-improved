@@ -967,7 +967,9 @@ class InternalStandardizer:
         result : CFLIBSResult
             CF-LIBS inversion result
         propagate_uncertainty : bool
-            Whether to propagate uncertainty from standard (not yet implemented)
+            Reserved for future uncertainty propagation from the standard.
+            Currently accepted but ignored: the method body does not read this
+            flag and no uncertainty is propagated regardless of its value.
 
         Returns
         -------

@@ -6,6 +6,16 @@ for the fixed-point iteration g(log n_e) -> log n_e arising from charge
 neutrality in an LTE plasma.  Falls back to Picard iteration when the
 Anderson depth m=0.
 
+.. note::
+   Status: research/experimental. This module is NOT wired into any shipped
+   pipeline (no production ``cflibs/`` module imports it, and it is not
+   exported from ``cflibs.plasma.__init__``). Its only consumers are
+   ``tests/test_anderson_solver.py`` and the standalone
+   ``scripts/benchmarks/bench_anderson.py`` benchmark. Unlike the rest of the
+   package (JAX optional throughout), it hard-raises ``ImportError`` at import
+   time when JAX is absent, so it must only be imported in JAX-available
+   environments.
+
 # ASSERT_CONVENTION: n_e [cm^-3], T_eV [eV], C_i dimensionless sum-to-1,
 #   SAHA_CONST_CM3 from cflibs.core.constants
 

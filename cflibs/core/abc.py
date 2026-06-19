@@ -3,13 +3,11 @@ Abstract base classes and protocols for extensibility.
 
 ABCs are used for core interfaces (SolverStrategy) that must be inherited.
 Protocols are used for structural typing of classes that may implement the
-interface without explicit inheritance (AtomicDataSource, PlasmaModel,
-InstrumentModelProtocol).
+interface without explicit inheritance (AtomicDataSource).
 """
 
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple, Optional, Protocol, TYPE_CHECKING, runtime_checkable
-import numpy as np
 
 from cflibs.atomic.structures import Transition, EnergyLevel
 
@@ -97,61 +95,3 @@ class SolverStrategy(ABC):
     def solve_plasma(self, plasma: "SingleZoneLTEPlasma") -> Dict[Tuple[str, int, float], float]:
         """Solve complete plasma system."""
         pass
-
-
-@runtime_checkable
-class PlasmaModel(Protocol):
-    """
-    Protocol for plasma models (structural typing).
-
-    Any class with these properties/methods can be used as a PlasmaModel
-    without explicit inheritance.
-    """
-
-    def validate(self) -> None:
-        """Validate plasma state."""
-        ...
-
-    @property
-    def T_e_eV(self) -> float:
-        """Electron temperature in eV."""
-        ...
-
-    @property
-    def n_e(self) -> float:
-        """Electron density in cm^-3."""
-        ...
-
-    @property
-    def species(self) -> Dict[str, float]:
-        """Species densities in cm^-3."""
-        ...
-
-
-@runtime_checkable
-class InstrumentModelProtocol(Protocol):
-    """
-    Protocol for instrument models (structural typing).
-
-    Any class with these methods/properties can be used as an instrument model
-    without explicit inheritance.
-    """
-
-    def apply_response(self, wavelength: np.ndarray, intensity: np.ndarray) -> np.ndarray:
-        """Apply spectral response curve."""
-        ...
-
-    def apply_instrument_function(
-        self, wavelength: np.ndarray, intensity: np.ndarray
-    ) -> np.ndarray:
-        """Apply instrument function (convolution)."""
-        ...
-
-    @property
-    def resolution_sigma_nm(self) -> float:
-        """Instrument resolution (Gaussian sigma) in nm."""
-        ...
-
-
-# Backward compatibility alias
-InstrumentModelInterface = InstrumentModelProtocol

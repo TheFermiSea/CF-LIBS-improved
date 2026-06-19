@@ -27,6 +27,9 @@ import pytest
 
 pyarrow = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
+# duckdb is declared in the `ci` and `parquet` pyproject extras but never
+# imported by shipped cflibs/ code -- it is needed ONLY here (and for downstream
+# parquet analysis). Keep it in those extras; it is not an unused dependency.
 duckdb = pytest.importorskip("duckdb")
 
 from cflibs.benchmark.results import (  # noqa: E402  (after importorskip)

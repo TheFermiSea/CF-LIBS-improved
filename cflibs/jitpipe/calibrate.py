@@ -42,15 +42,11 @@ The returned :class:`CalibrationKernelResult` is a pytree (vmap/grad clean).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 from jax import lax
-
-if TYPE_CHECKING:  # pragma: no cover
-    from cflibs.jitpipe.params import PipelineParams, StaticConfig
-    from cflibs.jitpipe.snapshot import PipelineSnapshot
 
 # --------------------------------------------------------------------------
 # Static shape constants (ADR-0004 §4: P_max=2048, K_pair=48, H=4096).
@@ -1763,17 +1759,3 @@ def _restore_seam_monotonicity(
     samp_shift = jnp.where(wl_mask, seg_shifts[segment_id], 0.0)
     corrected = corrected + samp_shift
     return corrected, cum_total, n_clamped
-
-
-# Placeholder kept so importers see the public name before the body lands.
-def calibrate_wavelengths(
-    peak_wavelengths_nm: Any,
-    snapshot: "PipelineSnapshot",
-    candidate_line_index: Any,
-    params: "PipelineParams",
-    static: "StaticConfig",
-) -> Any:
-    """Back-compat shim for the J0 stub signature; see :func:`calibrate_axis_kernel`."""
-    raise NotImplementedError(
-        "Use calibrate_axis_kernel (J2). The J0 stub signature is superseded."
-    )

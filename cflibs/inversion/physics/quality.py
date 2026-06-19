@@ -71,6 +71,14 @@ class QualityMetrics:
 class QualityAssessor:
     """
     Assesses quality of CF-LIBS analysis results.
+
+    .. note::
+        This is a parallel quality-metrics path that the shipped iterative
+        solver does NOT use: the solver builds its own metrics via
+        ``_build_python_quality_metrics`` / ``_assemble_quality_metrics`` in
+        ``solve/iterative.py``. ``QualityAssessor`` (and the module-level
+        :func:`compute_reconstruction_chi_squared`) are public-API surface with
+        no shipped-code consumers — exercised only by the test suite.
     """
 
     # Thresholds for quality flags

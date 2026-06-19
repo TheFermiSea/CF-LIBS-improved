@@ -205,14 +205,15 @@ def select_candidate_elements(
     candidate set from 50+ to K_max before passing to BayesianForwardModel.
 
     The algorithm:
-    1. Run NNLS identification at the estimated (T, ne)
-    2. Optionally run at T ± offsets and pool results (union)
-    3. Filter by SNR > min_snr (noise gate)
-    4. Aggregate across ionization stages (MAX coefficient per element)
-    5. Keep elements where coefficient > coeff_ratio * max_coefficient
-    6. Sort by coefficient descending, take top K_max
-    7. If fewer than K_min, pad from rejected list
-    8. Union with force_include
+    1-2. Run NNLS identification at the estimated (T, ne), optionally also at
+         T ± offsets, and pool the results (union).
+    3. Filter by SNR > min_snr (noise gate) and aggregate across ionization
+       stages (MAX coefficient per element).
+    4. Compute the adaptive threshold coeff_ratio * max_coefficient.
+    5. Keep elements above the threshold and sort by coefficient descending.
+    6. Apply the K_max cap, always retaining force_include (force_include does
+       not count against the cap unless len(force_include) > k_max).
+    7. If fewer than K_min remain, pad from the rejected list.
 
     Parameters
     ----------

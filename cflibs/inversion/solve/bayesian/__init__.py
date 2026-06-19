@@ -7,14 +7,17 @@ along Bayesian-inference axes:
   noise parameters, and convergence-status enum.
 * :mod:`atomic` -- per-line atomic-data carrier (``AtomicDataArrays``),
   SQLite query helpers, partition function, McWhirter penalty.
-* :mod:`forward` -- single-zone and two-zone JAX forward models, plus the
-  NumPyro graph builders ``bayesian_model`` / ``two_zone_bayesian_model``.
+* :mod:`forward` -- single-zone and two-zone JAX forward models. The NumPyro
+  graph builders ``bayesian_model`` / ``two_zone_bayesian_model`` live in
+  :mod:`models` and the log-likelihood in :mod:`likelihood`; both are
+  re-exported from :mod:`forward` for back-compat.
 * :mod:`results` -- ``MCMCResult`` / ``NestedSamplingResult`` /
   ``TwoZoneMCMCResult`` dataclasses.
-* :mod:`samplers` -- ``Sampler`` Protocol + ``SamplerResult`` envelope plus
-  the NumPyro NUTS and dynesty nested-sampling backends. Legacy class names
-  ``MCMCSampler`` / ``NestedSampler`` are preserved alongside the new
-  ``NumPyroNUTSSampler`` / ``DynestyNestedSampler`` aliases.
+* :mod:`samplers` -- ``Sampler`` Protocol + ``SamplerResult`` envelope (not yet
+  wired into any consumer) plus the NumPyro NUTS and dynesty nested-sampling
+  backends. ``MCMCSampler`` / ``NestedSampler`` are the real classes used in
+  production; ``NumPyroNUTSSampler`` / ``DynestyNestedSampler`` are back-compat
+  aliases of them with no current callers.
 
 This ``__init__`` re-exports every name that used to live in the monolith so
 ``from cflibs.inversion.solve.bayesian import *`` and every concrete import path

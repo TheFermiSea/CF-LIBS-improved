@@ -89,7 +89,11 @@ class Transition:
 
     @property
     def energy_diff_ev(self) -> float:
-        """Energy difference between upper and lower levels."""
+        """Energy difference between upper and lower levels.
+
+        Note: convenience accessor with no shipped-code consumer; currently
+        exercised only by ``tests/test_atomic.py``.
+        """
         return self.E_k_ev - self.E_i_ev
 
 

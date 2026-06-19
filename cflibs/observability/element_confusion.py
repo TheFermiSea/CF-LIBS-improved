@@ -22,15 +22,13 @@ from __future__ import annotations
 
 import ast
 import json
-import logging
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable
 
 import pandas as pd
 
 from cflibs.benchmark.scoring import FN, FP, TP, classify_element
-
-logger = logging.getLogger(__name__)
+from cflibs.observability._csv_io import load_csvs as _load_csvs
 
 
 def _parse_list_cell(value: object) -> list[str]:
@@ -54,24 +52,6 @@ def _parse_list_cell(value: object) -> list[str]:
     if not isinstance(parsed, (list, tuple)):
         return []
     return [str(x) for x in parsed]
-
-
-def _load_csvs(csv_paths: Sequence[Path]) -> pd.DataFrame:
-    frames: list[pd.DataFrame] = []
-    for path in csv_paths:
-        try:
-            df = pd.read_csv(path)
-        except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
-            logger.warning("skipping unreadable id_records.csv %s: %s", path, exc)
-            continue
-        if df.empty:
-            continue
-        df = df.copy()
-        df["_source_csv"] = str(path)
-        frames.append(df)
-    if not frames:
-        return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
 
 
 def _safe_div(num: float, den: float) -> float:

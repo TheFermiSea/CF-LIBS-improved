@@ -14,65 +14,35 @@ Example
 
 from __future__ import annotations
 
-import argparse
-import glob
-import logging
 import sys
-from pathlib import Path
 
 from cflibs.observability.element_confusion import aggregate_confusion, render_markdown
 
+try:
+    from scripts._observability_cli import import_observability_cli
+except ImportError:
+    from pathlib import Path as _Path
 
-def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "--results-glob",
-        required=True,
-        help="Glob pattern matching id_records.csv files (quote it!).",
-    )
-    parser.add_argument(
-        "--output",
-        required=True,
-        type=Path,
-        help="Path to write the Markdown report.",
-    )
-    parser.add_argument(
-        "--top-n-per-element",
-        type=int,
-        default=50,
-        help="Number of (workflow, dataset, element) rows to surface in table A (default: 50).",
-    )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Verbose logging."
-    )
-    return parser.parse_args(argv)
+    sys.path.insert(0, str(_Path(__file__).resolve().parent))
+    from _observability_cli import import_observability_cli  # type: ignore[no-redef]
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    run = import_observability_cli()
+    return run(
+        logger_name="element_confusion",
+        extra_arg_name="--top-n-per-element",
+        extra_arg_default=50,
+        extra_arg_help=(
+            "Number of (workflow, dataset, element) rows to surface in table A "
+            "(default: 50)."
+        ),
+        extra_arg_dest="top_n_per_element",
+        aggregate=aggregate_confusion,
+        render_markdown=render_markdown,
+        description=__doc__.splitlines()[0],
+        argv=argv,
     )
-    log = logging.getLogger("element_confusion")
-
-    matched = sorted(glob.glob(args.results_glob, recursive=True))
-    if not matched:
-        log.error("no files matched --results-glob %r", args.results_glob)
-        return 2
-    log.info("matched %d id_records.csv file(s)", len(matched))
-
-    result = aggregate_confusion([Path(p) for p in matched])
-    markdown = render_markdown(
-        result,
-        top_n_per_element=args.top_n_per_element,
-        source_count=len(matched),
-    )
-
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(markdown)
-    log.info("wrote %s", args.output)
-    return 0
 
 
 if __name__ == "__main__":

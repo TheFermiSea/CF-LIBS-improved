@@ -629,7 +629,7 @@ class BenchmarkDataset:
 
     Example
     -------
-    >>> dataset = BenchmarkDataset.from_json("nist_steel.json")
+    >>> dataset = BenchmarkDataset.from_dict(dataset_dict)
     >>> print(f"Dataset: {dataset.name}, {dataset.n_spectra} spectra")
     >>> train, test = dataset.get_split("default")
     >>> print(f"Train: {len(train)}, Test: {len(test)}")

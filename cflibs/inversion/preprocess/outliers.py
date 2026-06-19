@@ -21,7 +21,6 @@ References:
 """
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import Optional, Tuple
 import numpy as np
 
@@ -31,7 +30,6 @@ __all__ = [
     "MADOutlierDetector",
     "MADResult",
     "MAD_SCALE_FACTOR",
-    "OutlierMethod",
     "SAMResult",
     "SpectralAngleMapper",
     "detect_outlier_spectra",
@@ -43,13 +41,6 @@ __all__ = [
 
 
 logger = get_logger("inversion.outliers")
-
-
-class OutlierMethod(Enum):
-    """Method for outlier detection."""
-
-    SAM = "sam"  # Spectral Angle Mapper
-    MAD = "mad"  # Median Absolute Deviation
 
 
 @dataclass
@@ -437,8 +428,8 @@ class SpectralAngleMapper:
             mad = float(np.median(np.abs(angles - median_angle)))
 
             # Scale MAD to approximate standard deviation for normal distribution
-            # For normal distribution: MAD ≈ 0.6745 × σ
-            mad_scaled = mad * 1.4826
+            # (MAD ~ 0.6745 x sigma; see MAD_SCALE_FACTOR).
+            mad_scaled = mad * MAD_SCALE_FACTOR
 
             threshold = median_angle + self.threshold_sigma * mad_scaled
 

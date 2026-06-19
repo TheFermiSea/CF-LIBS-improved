@@ -9,9 +9,10 @@ data-dependent work (catalog SQL, gA-Boltzmann ranking, peak finding); this
 module receives **padded arrays + validity masks** and never branches on a
 data-dependent shape (the 7394-cache-entry pathology, ADR §1.1).
 
-J0 stub ``identify_lines`` is preserved below for the eventual ALIAS/comb/
-correlation *presence*-scoring port (J10); the J3 detection kernel is the new
-public surface used by the parity tests.
+The J3 detection kernel (greedy matcher + gate stack) is the public surface used
+by the parity tests. The ALIAS/comb/correlation *presence*-scoring port shipped
+separately as :func:`cflibs.jitpipe.forward_id.forward_fit_presence_scores`
+(parity-tested in ``test_parity_j10.py``).
 
 Layout (host <-> device seam)
 -----------------------------
@@ -41,7 +42,7 @@ Implemented (parity-tested vs the real reference)
 * trapezoid intensity + Poisson sigma over fixed windows — ``_build_observation``
   (trapezoid path; the Gaussian-area fallback is host-flagged, see notes).
 
-NOT yet implemented (see module ``IMPL_NOTES`` / J3 remaining_todo)
+NOT yet implemented (see the IMPL_NOTES comment block / J3 remaining_todo)
 ------------------------------------------------------------------
 * Gaussian-area FWHM fallback intensity (degenerate-trapezoid path) — the
   trapezoid path covers every real spectrum; the fallback only fires on
@@ -52,14 +53,10 @@ NOT yet implemented (see module ``IMPL_NOTES`` / J3 remaining_todo)
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp
-
-if TYPE_CHECKING:  # pragma: no cover
-    from cflibs.jitpipe.params import PipelineParams, StaticConfig
-    from cflibs.jitpipe.snapshot import PipelineSnapshot
 
 # Gaussian area-per-(height*FWHM); mirrors line_detection._GAUSSIAN_AREA_PER_HEIGHT_FWHM.
 _GAUSSIAN_AREA_PER_HEIGHT_FWHM = float(jnp.sqrt(jnp.pi / (4.0 * jnp.log(2.0))))
@@ -657,7 +654,8 @@ def extract_intensity_trapezoid(
     the count floor only applies inside the real window — matched by masking).
 
     Returns ``(line_area, sigma)``. The Gaussian-area FWHM fallback (degenerate
-    trapezoid) is host-flagged and not implemented here (see ``IMPL_NOTES``).
+    trapezoid) is host-flagged and not implemented here (see the IMPL_NOTES
+    comment block).
     """
     n = wavelength.shape[0]
     offsets = jnp.arange(-half_width_px, half_width_px + 1)
@@ -872,43 +870,18 @@ def build_observations(
     )
 
 
-# Static doc anchor for the honest impl-completeness report.
-IMPL_NOTES = """\
-Implemented & parity-tested: greedy comb matcher, comb scoring grid, best/
-fallback shift selection (np.isclose tie-break), kdet coherence keep-mask,
-residual consensus + shift-coherence veto, trapezoid intensity + Poisson sigma,
-and the observation-build ownership/gate/min-kept-bars scan (see
-build_observations).
-
-Not implemented (host-flagged / dead-by-default): Gaussian-area FWHM fallback
-intensity (degenerate-trapezoid path), Voigt deconvolution dispatch (pipeline
-never enables it), the LineDetectionResult string rebuild (J8 glue), and the
-kdet density-score branch (dead under shift_coherence_veto=True, dispatched to
-Rust in the reference).
-"""
-
-
-# ---------------------------------------------------------------------------
-# J0 stub — presence scoring (ALIAS/comb/correlation) lands in J10.
-# ---------------------------------------------------------------------------
-
-
-def identify_lines(
-    peak_wavelengths_nm: Any,
-    peak_intensities: Any,
-    snapshot: "PipelineSnapshot",
-    params: "PipelineParams",
-    static: "StaticConfig",
-) -> Any:
-    """Identify catalog lines for each detected peak (presence scoring, J10).
-
-    The J3 detection kernel (greedy matcher + gate stack) is the public surface
-    used by the parity tests; this presence-scoring entry stays a stub until the
-    ALIAS/comb/correlation/NNLS ports land (J10).
-
-    Raises
-    ------
-    NotImplementedError
-        Presence scoring lands in J10 (see module docstring).
-    """
-    raise NotImplementedError("jitpipe.identify presence scoring lands in J10")
+# IMPL_NOTES — honest impl-completeness report (a comment, not a module global,
+# since nothing reads it programmatically; the three "see IMPL_NOTES" pointers
+# above refer here):
+#
+# Implemented & parity-tested: greedy comb matcher, comb scoring grid, best/
+# fallback shift selection (np.isclose tie-break), kdet coherence keep-mask,
+# residual consensus + shift-coherence veto, trapezoid intensity + Poisson sigma,
+# and the observation-build ownership/gate/min-kept-bars scan (see
+# build_observations).
+#
+# Not implemented (host-flagged / dead-by-default): Gaussian-area FWHM fallback
+# intensity (degenerate-trapezoid path), Voigt deconvolution dispatch (pipeline
+# never enables it), the LineDetectionResult string rebuild (J8 glue), and the
+# kdet density-score branch (dead under shift_coherence_veto=True, dispatched to
+# Rust in the reference).

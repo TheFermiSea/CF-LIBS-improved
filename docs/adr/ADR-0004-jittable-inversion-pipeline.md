@@ -1,6 +1,6 @@
 # ADR-0004 — Ground-up jittable inversion pipeline (`cflibs/jitpipe/`)
 
-- **Status:** PROPOSED — the maintainer accepts this ADR by starting J0 (see §8; do **not** start J1–J9 before the §8.4 start criteria hold)
+- **Status:** ACCEPTED & IMPLEMENTED — the ADR was accepted by starting J0; J0–J12 have since shipped (`cflibs/jitpipe/`, ~20 modules; see [`docs/jitpipe/J12-status.md`](../jitpipe/J12-status.md) for the M3 promotion harness and J9 completion). The original proposal text below (§8 start criteria, "do not start J1–J9 before §8.4") is retained as historical record of the acceptance gate.
 - **Date:** 2026-06-10
 - **Authors:** CF-LIBS Architecture working group (Brian Squires + Opus 4.7 design team, four parallel read-only analyses 2026-06-10)
 - **Inputs:** four independent design analyses against worktree `w4-integration` (== `dev` tip `0720737`, Phase A scoreboard merged): (1) front-end per-stage jittability with measured padding bounds from 32 real spectra across 8 scoreboard datasets; (2) back-end per-stage jittability with device-memory sizing against `ASD_da/libs_production.db`; (3) architecture/infrastructure/program mechanics with live adapter measurements; (4) prior-art survey + staging plan + acceptance economics. Conflicts between the analyses are resolved explicitly in §3.

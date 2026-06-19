@@ -1,5 +1,12 @@
 # JAX port consultation — `line_detection.py`
 
+> **SUPERSEDED (historical):** This 2026-05-12 consultation is kept only as ADR
+> provenance. Its central recommendation — the rule *against* porting
+> `find_peaks` — was premised on B=1 CPU work and was **explicitly reversed by
+> [ADR-0004](../adr/ADR-0004-jittable-inversion-pipeline.md) §1.3**. The shipped
+> `cflibs/jitpipe/` kernels implement the ported peak-detection this doc argued
+> against. Do not treat the conclusions below as current guidance.
+
 **Date:** 2026-05-12
 **Issue:** `CF-LIBS-improved-wstf` (partial — line_detection.py scope)
 **Branch:** `feat/jax-line-detection`
