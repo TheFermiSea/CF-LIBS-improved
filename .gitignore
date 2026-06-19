@@ -125,3 +125,7 @@ docs/refs_*.pdf
 # Large local raw datasets (regenerable/external; never commit)
 data/supercam_calib/
 data/qu2025_marscode_eqm/
+
+# Guard against accidental nested test symlinks (machine-specific)
+ASD_da/ASD_da
+data/data
