@@ -203,6 +203,152 @@ def ilr_inverse(coords: np.ndarray, D: int) -> np.ndarray:
     return comp / np.sum(comp, axis=-1, keepdims=True)
 
 
+def ilr_propagate_covariance(
+    composition: np.ndarray,
+    covariance: np.ndarray,
+    symmetrize: bool = True,
+) -> np.ndarray:
+    """
+    Propagate a simplex covariance into full-rank ILR-coordinate covariance.
+
+    A composition covariance expressed on the *closed* simplex (raw parts
+    summing to one) is necessarily rank-deficient: the closure constraint
+    ``1^T c = 1`` forces ``1^T Sigma_c = 0`` (every row/column sums to zero),
+    so ``Sigma_c`` has rank at most ``D - 1`` and is singular. Mapping it into
+    isometric log-ratio (ILR) coordinates removes the degenerate direction and
+    yields a full-rank ``(D-1) x (D-1)`` covariance suitable for inference,
+    confidence-region construction, or Mahalanobis distances.
+
+    The propagation is the first-order (delta-method) push-forward of the ILR
+    map ``z = ilr(c) = V^T clr(c)`` through the orthonormal Helmert basis ``V``
+    (:func:`_helmert_basis`). The clr Jacobian is ``J_clr = G diag(1/c)`` with
+    centering matrix ``G = I - (1/D) 1 1^T``; composing with ``V`` and using the
+    fact that the Helmert columns already sum to zero (``V^T G = V^T``) gives
+
+        J = V^T diag(1/c)        (shape (D-1, D))
+        Sigma_z = J Sigma_c J^T  (shape (D-1, D-1), full rank).
+
+    Parameters
+    ----------
+    composition : np.ndarray
+        Composition vector on the simplex, shape ``(D,)`` (``D >= 2``). The
+        expansion point for the linearization; values must be positive and are
+        clipped at :data:`LOGRATIO_CLIP_FLOOR` for numerical safety.
+    covariance : np.ndarray
+        Covariance of the (closed) composition, shape ``(D, D)``. Typically
+        rank ``D - 1`` with rows/columns summing to ~0, but any symmetric
+        matrix is accepted (the closure-degenerate direction is projected out
+        by the transform).
+    symmetrize : bool, optional
+        If ``True`` (default) the returned matrix is symmetrized as
+        ``0.5 (Sigma_z + Sigma_z^T)`` to suppress floating-point asymmetry.
+
+    Returns
+    -------
+    np.ndarray
+        ILR-coordinate covariance, shape ``(D-1, D-1)``. Positive semidefinite
+        and, for a full-rank ``Sigma_c`` restricted to the simplex tangent
+        space, positive definite.
+
+    References
+    ----------
+    Egozcue, J.J. et al. (2003). "Isometric Logratio Transformations for
+    Compositional Data Analysis." Mathematical Geology 35(3), 279-300.
+    Aitchison, J. (1986). "The Statistical Analysis of Compositional Data."
+    Chapman & Hall. (Closure-induced singularity of the raw covariance and the
+    log-ratio resolution thereof.)
+    """
+    comp = np.asarray(composition, dtype=np.float64)
+    cov = np.asarray(covariance, dtype=np.float64)
+    if comp.ndim != 1:
+        raise ValueError("composition must be a 1-D vector for covariance propagation")
+    D = comp.shape[-1]
+    if D < 2:
+        raise ValueError("ILR covariance propagation requires D >= 2")
+    if cov.shape != (D, D):
+        raise ValueError(f"covariance must have shape ({D}, {D}), got {cov.shape}")
+
+    V = _helmert_basis(D)
+    inv_comp = 1.0 / np.clip(comp, LOGRATIO_CLIP_FLOOR, None)
+    # J = V^T @ diag(1/c); V^T G = V^T because Helmert columns sum to zero.
+    jacobian = V.T * inv_comp  # (D-1, D): scales column k by 1/c_k
+    sigma_z = jacobian @ cov @ jacobian.T
+    if symmetrize:
+        sigma_z = 0.5 * (sigma_z + sigma_z.T)
+    return sigma_z
+
+
+def simplex_covariance_from_ilr(
+    coords: np.ndarray,
+    covariance: np.ndarray,
+    symmetrize: bool = True,
+) -> np.ndarray:
+    """
+    Back-propagate an ILR-coordinate covariance to the closed simplex.
+
+    Inverse of :func:`ilr_propagate_covariance`. Given a full-rank covariance
+    ``Sigma_z`` in ILR coordinates, returns the closure-consistent simplex
+    covariance ``Sigma_c`` obtained by the delta-method push-forward of the
+    inverse ILR map ``c = C(exp(V z))`` (closure of the softmax over clr
+    coordinates ``y = V z``):
+
+        J_back = (diag(c) - c c^T) V    (shape (D, D-1))
+        Sigma_c = J_back Sigma_z J_back^T.
+
+    Because ``1^T (diag(c) - c c^T) = c^T - (1^T c) c^T = 0`` whenever
+    ``1^T c = 1``, the result satisfies ``1^T Sigma_c = 0`` and ``Sigma_c 1 =
+    0`` exactly: rows and columns sum to ~0, consistent with the simplex
+    closure constraint. The matrix is positive semidefinite (congruence of the
+    positive semidefinite ``Sigma_z``) and rank-deficient by construction
+    (rank at most ``D - 1``), reflecting the unrecoverable closed-composition
+    null direction.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        ILR coordinates ``z``, shape ``(D-1,)``. The expansion point; the
+        composition ``c`` is recovered via :func:`ilr_inverse`.
+    covariance : np.ndarray
+        ILR-coordinate covariance, shape ``(D-1, D-1)``.
+    symmetrize : bool, optional
+        If ``True`` (default) the returned matrix is symmetrized as
+        ``0.5 (Sigma_c + Sigma_c^T)`` to suppress floating-point asymmetry.
+
+    Returns
+    -------
+    np.ndarray
+        Closure-consistent simplex covariance, shape ``(D, D)``, with rows and
+        columns summing to ~0 and positive semidefinite.
+
+    References
+    ----------
+    Egozcue, J.J. et al. (2003). "Isometric Logratio Transformations for
+    Compositional Data Analysis." Mathematical Geology 35(3), 279-300.
+    Aitchison, J. (1986). "The Statistical Analysis of Compositional Data."
+    Chapman & Hall.
+    """
+    z = np.asarray(coords, dtype=np.float64)
+    sigma_z = np.asarray(covariance, dtype=np.float64)
+    if z.ndim != 1:
+        raise ValueError("coords must be a 1-D vector for covariance back-propagation")
+    Dm1 = z.shape[-1]
+    if Dm1 < 1:
+        raise ValueError("ILR coordinates require at least one dimension (D >= 2)")
+    if sigma_z.shape != (Dm1, Dm1):
+        raise ValueError(f"covariance must have shape ({Dm1}, {Dm1}), got {sigma_z.shape}")
+
+    D = Dm1 + 1
+    comp = ilr_inverse(z, D)  # (D,) expansion point on the simplex
+    V = _helmert_basis(D)
+    # J_back = (diag(c) - c c^T) @ V; the softmax-on-clr Jacobian times V.
+    softmax_jac = np.diag(comp) - np.outer(comp, comp)  # (D, D)
+    jacobian = softmax_jac @ V  # (D, D-1)
+    sigma_c = jacobian @ sigma_z @ jacobian.T
+    if symmetrize:
+        sigma_c = 0.5 * (sigma_c + sigma_c.T)
+    return sigma_c
+
+
 def _pivot_permutation(D: int, pivot_index: int) -> np.ndarray:
     """Return index permutation with the selected pivot moved to position 0."""
     if pivot_index < 0 or pivot_index >= D:

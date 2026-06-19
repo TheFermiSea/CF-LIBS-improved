@@ -8,9 +8,10 @@ section 6. They are exposed as module-level functions and the legacy
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+from scipy import stats as scipy_stats
 
 from cflibs.core.logging_config import get_logger
 
@@ -196,6 +197,11 @@ __all__ = [
     "plot_corner",
     "plot_forest",
     "posterior_predictive_check",
+    "SBCResult",
+    "sbc_rank",
+    "sbc_ranks",
+    "sbc_uniformity_test",
+    "run_sbc",
     "HAS_ARVIZ",
 ]
 
@@ -308,3 +314,447 @@ def _ess_numpy(arr: np.ndarray) -> float:
         tau = 1.0
     ess = m_chains * n_draws / tau
     return float(ess)
+
+
+# ---------------------------------------------------------------------------
+# Simulation-Based Calibration (SBC) rank-uniformity harness.
+#
+# Talts, Betancourt, Simpson, Vehtari & Gelman, "Validating Bayesian Inference
+# Algorithms with Simulation-Based Calibration", arXiv:1804.06788 (2018).
+#
+# Self-consistency theorem (their Eq. 1-3): for any prior pi(theta) and
+# likelihood pi(y|theta), if {theta_1, ..., theta_L} are L exact posterior
+# draws given y ~ pi(y | theta_tilde) with theta_tilde ~ pi(theta), then the
+# rank statistic
+#
+#     r = #{ l : f(theta_l) < f(theta_tilde) }   in {0, 1, ..., L}
+#
+# of the prior draw within the posterior draws (for any one-dimensional test
+# quantity f) is *uniformly* distributed on the L+1 integers {0, ..., L}. A
+# correct sampler therefore yields flat rank histograms; systematic deviations
+# diagnose miscalibration:
+#   - U / bathtub shape (mass at 0 and L)  -> posterior too NARROW (overconfident)
+#   - inverted-U / dome shape              -> posterior too WIDE (underconfident)
+#   - monotone slope                       -> biased posterior (location shift)
+# This module is physics-only: numpy + scipy.stats (chi-square GoF) only.
+# ---------------------------------------------------------------------------
+
+
+class SBCResult:
+    """Container for the outcome of a Simulation-Based Calibration run.
+
+    Bundles the per-parameter rank statistics with the chi-square uniformity
+    test results from :func:`sbc_uniformity_test`, following Talts et al.
+    (arXiv:1804.06788).
+
+    Parameters
+    ----------
+    ranks : dict of str -> np.ndarray
+        Per-parameter integer rank statistics, each of shape ``(n_sims,)`` with
+        values in ``{0, ..., n_posterior_draws}``.
+    n_posterior_draws : int
+        Number of posterior draws ``L`` used per simulation. Ranks therefore
+        take ``L + 1`` distinct values.
+    p_values : dict of str -> float
+        Per-parameter chi-square uniformity p-value (large = consistent with a
+        uniform / well-calibrated rank distribution).
+    chi2 : dict of str -> float
+        Per-parameter chi-square goodness-of-fit statistic.
+    n_bins : int
+        Number of histogram bins used for the chi-square test.
+
+    References
+    ----------
+    .. [1] Talts, Betancourt, Simpson, Vehtari & Gelman, "Validating Bayesian
+       Inference Algorithms with Simulation-Based Calibration",
+       arXiv:1804.06788 (2018).
+    """
+
+    def __init__(
+        self,
+        ranks: Dict[str, np.ndarray],
+        n_posterior_draws: int,
+        p_values: Dict[str, float],
+        chi2: Dict[str, float],
+        n_bins: int,
+    ) -> None:
+        self.ranks = ranks
+        self.n_posterior_draws = n_posterior_draws
+        self.p_values = p_values
+        self.chi2 = chi2
+        self.n_bins = n_bins
+
+    @property
+    def n_sims(self) -> int:
+        """Number of SBC simulations (length of any rank array)."""
+        if not self.ranks:
+            return 0
+        return int(len(next(iter(self.ranks.values()))))
+
+    def is_calibrated(self, alpha: float = 0.05) -> Dict[str, bool]:
+        """Per-parameter calibration verdict at significance level ``alpha``.
+
+        A parameter is flagged calibrated when its uniformity p-value exceeds
+        ``alpha`` (i.e. the rank histogram is *not* significantly non-uniform).
+
+        Parameters
+        ----------
+        alpha : float, optional
+            Significance threshold for the chi-square uniformity test.
+
+        Returns
+        -------
+        dict of str -> bool
+            ``True`` where the rank histogram is consistent with uniform.
+        """
+        return {name: (p > alpha) for name, p in self.p_values.items()}
+
+    def __repr__(self) -> str:  # pragma: no cover - cosmetic
+        return (
+            f"SBCResult(n_sims={self.n_sims}, L={self.n_posterior_draws}, "
+            f"n_bins={self.n_bins}, params={list(self.ranks)})"
+        )
+
+
+def sbc_rank(
+    prior_draw: float,
+    posterior_draws: np.ndarray,
+    rng: Optional[np.random.Generator] = None,
+) -> int:
+    """Rank of a prior draw among posterior draws (Talts et al. Eq. 2).
+
+    Computes ``r = #{ l : theta_l < theta_tilde }`` with ``theta_tilde`` the
+    prior draw and ``{theta_l}`` the ``L`` posterior draws, giving an integer in
+    ``{0, ..., L}``. Exact ties (which only arise for discrete test quantities
+    or repeated draws) are broken by randomisation so that the rank remains
+    uniform on ``{0, ..., L}`` under correct calibration, as recommended by
+    Talts et al. (arXiv:1804.06788).
+
+    Parameters
+    ----------
+    prior_draw : float
+        The prior draw ``theta_tilde`` (or a test quantity ``f(theta_tilde)``).
+    posterior_draws : np.ndarray
+        The ``L`` posterior draws ``{theta_l}`` (or ``{f(theta_l)}``), shape
+        ``(L,)``.
+    rng : numpy.random.Generator, optional
+        Generator used only to break exact ties. When ``None``, a default
+        generator is created (ties are rare for continuous quantities).
+
+    Returns
+    -------
+    int
+        The rank statistic in ``{0, ..., L}``.
+
+    References
+    ----------
+    .. [1] Talts et al., arXiv:1804.06788 (2018), Section 2 / Algorithm 1.
+    """
+    draws = np.asarray(posterior_draws, dtype=float).ravel()
+    n_less = int(np.count_nonzero(draws < prior_draw))
+    n_equal = int(np.count_nonzero(draws == prior_draw))
+    if n_equal == 0:
+        return n_less
+    # Randomised tie-break: distribute the tied draws uniformly above/below the
+    # prior draw so the rank stays uniform under the null (Talts et al. note 2).
+    if rng is None:
+        rng = np.random.default_rng()
+    extra = int(rng.integers(0, n_equal + 1))
+    return n_less + extra
+
+
+def sbc_ranks(
+    prior_draws: np.ndarray,
+    posterior_draws: np.ndarray,
+    param_names: Optional[Sequence[str]] = None,
+    seed: int = 0,
+) -> Dict[str, np.ndarray]:
+    """Collect per-parameter SBC rank statistics over many simulations.
+
+    Vectorised form of :func:`sbc_rank` for a full SBC run: given ``N`` prior
+    draws and the corresponding ``N x L`` posterior draws for each of ``P``
+    parameters, return the ``N`` rank statistics per parameter (Talts et al.,
+    arXiv:1804.06788).
+
+    Parameters
+    ----------
+    prior_draws : np.ndarray
+        Prior draws ``theta_tilde``, shape ``(n_sims,)`` for a single parameter
+        or ``(n_sims, n_params)`` for several. ``theta_tilde[i]`` is the prior
+        draw used to simulate the data for simulation ``i``.
+    posterior_draws : np.ndarray
+        Posterior draws, shape ``(n_sims, n_draws)`` for a single parameter or
+        ``(n_sims, n_draws, n_params)`` for several. ``posterior_draws[i]`` are
+        the ``L = n_draws`` posterior samples from the data simulated with
+        ``prior_draws[i]``.
+    param_names : sequence of str, optional
+        Names for the parameter axis. Defaults to ``["param_0", ...]`` (or
+        ``["param"]`` for the single-parameter case).
+    seed : int, optional
+        Seed for the (rarely used) tie-break randomisation; kept fixed for
+        reproducibility.
+
+    Returns
+    -------
+    dict of str -> np.ndarray
+        Mapping ``param_name -> ranks`` with each array shape ``(n_sims,)`` and
+        integer values in ``{0, ..., L}``.
+
+    Raises
+    ------
+    ValueError
+        If the simulation counts of ``prior_draws`` and ``posterior_draws`` do
+        not match, or the parameter axes are inconsistent.
+
+    References
+    ----------
+    .. [1] Talts et al., arXiv:1804.06788 (2018), Algorithm 1.
+    """
+    prior = np.asarray(prior_draws, dtype=float)
+    post = np.asarray(posterior_draws, dtype=float)
+
+    if prior.ndim == 1:
+        prior = prior[:, None]
+    if post.ndim == 2:
+        post = post[:, :, None]
+    if prior.ndim != 2 or post.ndim != 3:
+        raise ValueError(
+            "prior_draws must be (n_sims,) or (n_sims, n_params); "
+            "posterior_draws must be (n_sims, n_draws) or "
+            "(n_sims, n_draws, n_params)"
+        )
+
+    n_sims, n_params = prior.shape
+    if post.shape[0] != n_sims:
+        raise ValueError(
+            f"simulation-count mismatch: prior has {n_sims} sims, " f"posterior has {post.shape[0]}"
+        )
+    if post.shape[2] != n_params:
+        raise ValueError(
+            f"parameter-count mismatch: prior has {n_params} params, "
+            f"posterior has {post.shape[2]}"
+        )
+
+    if param_names is None:
+        names: List[str] = ["param"] if n_params == 1 else [f"param_{j}" for j in range(n_params)]
+    else:
+        names = list(param_names)
+        if len(names) != n_params:
+            raise ValueError(f"param_names has {len(names)} entries but data has {n_params} params")
+
+    rng = np.random.default_rng(seed)
+    ranks: Dict[str, np.ndarray] = {}
+    for j, name in enumerate(names):
+        # Broadcasted comparison: (n_sims, n_draws) < (n_sims, 1).
+        post_j = post[:, :, j]
+        prior_j = prior[:, j][:, None]
+        n_less = np.count_nonzero(post_j < prior_j, axis=1)
+        n_equal = np.count_nonzero(post_j == prior_j, axis=1)
+        rank = n_less.astype(np.int64)
+        tie_mask = n_equal > 0
+        if np.any(tie_mask):
+            # integers(high) is exclusive, so high = count + 1 gives [0, count].
+            extra = rng.integers(0, n_equal[tie_mask] + 1)
+            rank[tie_mask] += extra.astype(np.int64)
+        ranks[name] = rank
+    return ranks
+
+
+def sbc_uniformity_test(
+    ranks: Dict[str, np.ndarray],
+    n_posterior_draws: int,
+    n_bins: Optional[int] = None,
+) -> Tuple[Dict[str, float], Dict[str, float], int]:
+    """Chi-square goodness-of-fit test of SBC rank uniformity.
+
+    Under correct calibration the rank statistic is uniform on the ``L + 1``
+    integers ``{0, ..., L}`` (Talts et al., arXiv:1804.06788). This bins the
+    ranks into ``n_bins`` equal-width bins and runs Pearson's chi-square test
+    against the uniform expectation ``E_b = n_sims / n_bins`` per bin, with
+    ``n_bins - 1`` degrees of freedom. A *small* p-value (e.g. ``< 0.01``)
+    indicates a non-uniform — hence miscalibrated — histogram.
+
+    Parameters
+    ----------
+    ranks : dict of str -> np.ndarray
+        Per-parameter rank arrays from :func:`sbc_ranks` / :func:`sbc_rank`,
+        each with integer values in ``{0, ..., n_posterior_draws}``.
+    n_posterior_draws : int
+        Number of posterior draws ``L`` (so ranks span ``L + 1`` values).
+    n_bins : int, optional
+        Number of histogram bins. Defaults to a divisor of ``L + 1`` close to
+        ``sqrt(n_sims)`` so the uniform expectation is exact in every bin
+        (Talts et al. recommend choosing ``L`` so that ``L + 1`` is divisible by
+        the bin count). Falls back to a single contiguous binning of the
+        ``L + 1`` rank values when no clean divisor exists.
+
+    Returns
+    -------
+    p_values : dict of str -> float
+        Per-parameter chi-square uniformity p-value.
+    chi2 : dict of str -> float
+        Per-parameter chi-square statistic.
+    n_bins : int
+        The bin count actually used.
+
+    Raises
+    ------
+    ValueError
+        If ``ranks`` is empty or ``n_posterior_draws`` is negative.
+
+    References
+    ----------
+    .. [1] Talts et al., arXiv:1804.06788 (2018), Section 3 (rank histograms).
+    """
+    if not ranks:
+        raise ValueError("ranks must contain at least one parameter")
+    if n_posterior_draws < 0:
+        raise ValueError("n_posterior_draws must be non-negative")
+
+    n_rank_values = n_posterior_draws + 1
+    n_sims = int(len(next(iter(ranks.values()))))
+
+    if n_bins is None:
+        n_bins = _choose_sbc_bins(n_rank_values, n_sims)
+    n_bins = max(1, min(int(n_bins), n_rank_values))
+
+    # Equal-count partition of the L+1 integer rank values into n_bins bins.
+    # np.linspace edges over [0, L+1] give contiguous integer ranges; using
+    # np.histogram with these edges keeps the uniform expectation E = N/n_bins.
+    edges = np.linspace(0, n_rank_values, n_bins + 1)
+    expected = n_sims / n_bins
+
+    p_values: Dict[str, float] = {}
+    chi2_stats: Dict[str, float] = {}
+    for name, rank_arr in ranks.items():
+        observed, _ = np.histogram(np.asarray(rank_arr, dtype=float), bins=edges)
+        if n_bins < 2:
+            # A single bin cannot test uniformity; report a vacuous pass.
+            p_values[name] = 1.0
+            chi2_stats[name] = 0.0
+            continue
+        result = scipy_stats.chisquare(f_obs=observed, f_exp=np.full(n_bins, expected))
+        chi2_stats[name] = float(result.statistic)
+        p_values[name] = float(result.pvalue)
+    return p_values, chi2_stats, n_bins
+
+
+def _choose_sbc_bins(n_rank_values: int, n_sims: int) -> int:
+    """Pick an SBC histogram bin count dividing ``n_rank_values`` (= L + 1).
+
+    Targets roughly ``sqrt(n_sims)`` bins (a standard rank-histogram heuristic)
+    while requiring exact divisibility of the ``L + 1`` integer rank values, so
+    every bin holds the same number of rank values and the uniform expectation
+    is exact. Falls back to the largest sensible divisor when no near-target one
+    exists.
+    """
+    if n_rank_values <= 1:
+        return 1
+    target = max(2, int(round(np.sqrt(max(n_sims, 1)))))
+    divisors = [d for d in range(2, n_rank_values + 1) if n_rank_values % d == 0]
+    if not divisors:
+        return 1
+    # Choose the divisor closest to the target bin count.
+    return min(divisors, key=lambda d: (abs(d - target), d))
+
+
+def run_sbc(
+    prior_sample_fn: Callable[[np.random.Generator], np.ndarray],
+    simulate_fn: Callable[[np.ndarray, np.random.Generator], Any],
+    posterior_sample_fn: Callable[[Any, int, np.random.Generator], np.ndarray],
+    n_sims: int,
+    n_posterior_draws: int,
+    param_names: Optional[Sequence[str]] = None,
+    n_bins: Optional[int] = None,
+    seed: int = 0,
+) -> SBCResult:
+    """Run the full Simulation-Based Calibration harness (Talts et al. 2018).
+
+    Implements Algorithm 1 of Talts, Betancourt, Simpson, Vehtari & Gelman
+    (arXiv:1804.06788): for each of ``n_sims`` simulations draw a prior sample
+    ``theta_tilde``, simulate data ``y ~ pi(y | theta_tilde)``, draw ``L``
+    posterior samples ``theta ~ pi(theta | y)``, and record the rank of the
+    prior draw among the posterior draws for every parameter. A correctly
+    calibrated posterior sampler yields uniform rank histograms; this routine
+    returns both the raw ranks and a per-parameter chi-square uniformity test.
+
+    Parameters
+    ----------
+    prior_sample_fn : callable
+        ``prior_sample_fn(rng) -> theta``, returning a prior draw as a scalar or
+        1D array of length ``n_params``.
+    simulate_fn : callable
+        ``simulate_fn(theta, rng) -> data``, simulating data from the parameter
+        draw. The returned object is passed verbatim to ``posterior_sample_fn``.
+    posterior_sample_fn : callable
+        ``posterior_sample_fn(data, n_draws, rng) -> draws``, returning ``L``
+        posterior draws of shape ``(n_draws,)`` (single parameter) or
+        ``(n_draws, n_params)`` (multi-parameter), with the parameter ordering
+        matching ``prior_sample_fn``.
+    n_sims : int
+        Number of SBC simulations ``N``.
+    n_posterior_draws : int
+        Number of posterior draws ``L`` per simulation.
+    param_names : sequence of str, optional
+        Parameter names; inferred as ``param`` / ``param_j`` when omitted.
+    n_bins : int, optional
+        Histogram bin count for the uniformity test (see
+        :func:`sbc_uniformity_test`).
+    seed : int, optional
+        Master seed; each simulation uses an independent child generator for
+        reproducibility.
+
+    Returns
+    -------
+    SBCResult
+        Bundled ranks, chi-square statistics, and uniformity p-values.
+
+    Raises
+    ------
+    ValueError
+        If ``n_sims`` or ``n_posterior_draws`` is not positive.
+
+    References
+    ----------
+    .. [1] Talts, Betancourt, Simpson, Vehtari & Gelman, "Validating Bayesian
+       Inference Algorithms with Simulation-Based Calibration",
+       arXiv:1804.06788 (2018).
+    """
+    if n_sims <= 0:
+        raise ValueError("n_sims must be positive")
+    if n_posterior_draws <= 0:
+        raise ValueError("n_posterior_draws must be positive")
+
+    # Independent child generators per simulation for reproducible parallelism.
+    seed_seq = np.random.SeedSequence(seed)
+    child_seeds = seed_seq.spawn(n_sims)
+
+    prior_rows: List[np.ndarray] = []
+    post_rows: List[np.ndarray] = []
+    for i in range(n_sims):
+        rng = np.random.default_rng(child_seeds[i])
+        theta = np.atleast_1d(np.asarray(prior_sample_fn(rng), dtype=float)).ravel()
+        data = simulate_fn(theta if theta.size > 1 else theta[0], rng)
+        draws = np.asarray(posterior_sample_fn(data, n_posterior_draws, rng), dtype=float)
+        if draws.ndim == 1:
+            draws = draws[:, None]
+        if draws.shape[0] != n_posterior_draws:
+            raise ValueError(
+                f"posterior_sample_fn returned {draws.shape[0]} draws, "
+                f"expected {n_posterior_draws}"
+            )
+        prior_rows.append(theta)
+        post_rows.append(draws)
+
+    prior_arr = np.vstack(prior_rows)  # (n_sims, n_params)
+    post_arr = np.stack(post_rows, axis=0)  # (n_sims, n_draws, n_params)
+
+    ranks = sbc_ranks(prior_arr, post_arr, param_names=param_names, seed=seed)
+    p_values, chi2_stats, used_bins = sbc_uniformity_test(ranks, n_posterior_draws, n_bins=n_bins)
+    return SBCResult(
+        ranks=ranks,
+        n_posterior_draws=n_posterior_draws,
+        p_values=p_values,
+        chi2=chi2_stats,
+        n_bins=used_bins,
+    )

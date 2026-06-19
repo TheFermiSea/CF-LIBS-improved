@@ -74,6 +74,160 @@ class ConvergenceStatus(Enum):
 
 
 @dataclass
+class OEDiagnostics:
+    """Optimal-estimation (Rodgers) closure diagnostics for a linearized retrieval.
+
+    These are *additive* diagnostics computed at the converged solution: they
+    quantify how well the measurement constrains each retrieved parameter. They
+    do not alter the point estimate.
+
+    Attributes
+    ----------
+    posterior_covariance : np.ndarray
+        Retrieval (posterior) error covariance ``S_hat``, shape ``(n, n)``.
+        With a prior, ``S_hat = (K^T S_e^-1 K + S_a^-1)^-1`` (Rodgers 2000,
+        Eq. 2.27). Without a prior it falls back to the Gauss-Newton covariance
+        ``(K^T S_e^-1 K)^-1``.
+    averaging_kernel : np.ndarray
+        Averaging-kernel matrix ``A = S_hat K^T S_e^-1 K`` (Rodgers 2000,
+        Eq. 2.31), shape ``(n, n)``. Row ``i`` describes the sensitivity of
+        retrieved parameter ``i`` to the true state; rows tend to the unit
+        vector (and ``A`` to identity) in the well-constrained limit. When no
+        prior is supplied ``A`` is the identity, since the unregularized
+        least-squares retrieval is fully data-driven.
+    dofs : float
+        Degrees of freedom for signal, ``trace(A)`` (Rodgers 2000, Sec. 2.4).
+        Bounded by ``0 <= DOFS <= n_params``; equals ``n_params`` when ``A`` is
+        identity (no prior / well-constrained).
+    has_prior : bool
+        Whether a prior covariance ``S_a`` was used. If ``False`` the
+        Gauss-Newton fallback was taken.
+
+    References
+    ----------
+    Rodgers, C. D. (2000). *Inverse Methods for Atmospheric Sounding: Theory
+    and Practice*. World Scientific. Chapters 2-3.
+    """
+
+    posterior_covariance: np.ndarray
+    averaging_kernel: np.ndarray
+    dofs: float
+    has_prior: bool
+
+
+def compute_oe_diagnostics(
+    jacobian: np.ndarray,
+    measurement_covariance: np.ndarray,
+    prior_covariance: Optional[np.ndarray] = None,
+) -> OEDiagnostics:
+    r"""Compute Rodgers optimal-estimation closure diagnostics.
+
+    Given the forward-model Jacobian ``K = df/dx`` evaluated at the solution, the
+    measurement error covariance ``S_e``, and an optional prior (a priori) error
+    covariance ``S_a``, compute the linear-Gaussian retrieval diagnostics from
+    optimal-estimation theory (Rodgers 2000). These are diagnostic only and do
+    not modify the retrieved state.
+
+    The posterior covariance, averaging kernel, and degrees of freedom for
+    signal are
+
+    .. math::
+
+        \hat{S} &= \left(K^{T} S_e^{-1} K + S_a^{-1}\right)^{-1} \\
+        A &= \hat{S}\, K^{T} S_e^{-1} K \\
+        \mathrm{DOFS} &= \mathrm{tr}(A).
+
+    If ``S_a`` is ``None`` the prior is treated as infinitely broad
+    (``S_a^{-1} = 0``), reducing ``S_hat`` to the Gauss-Newton covariance
+    ``(K^T S_e^-1 K)^-1`` and ``A`` to the identity, so ``DOFS = n_params``.
+
+    Parameters
+    ----------
+    jacobian : np.ndarray
+        Forward-model Jacobian ``K`` of shape ``(m, n)`` (``m`` measurements,
+        ``n`` parameters), evaluated at the converged state.
+    measurement_covariance : np.ndarray
+        Measurement error covariance ``S_e`` of shape ``(m, m)``. A 1-D array of
+        length ``m`` is accepted and treated as the diagonal (per-channel
+        variances).
+    prior_covariance : np.ndarray, optional
+        Prior (a priori) error covariance ``S_a`` of shape ``(n, n)``. A 1-D
+        array of length ``n`` is accepted as the diagonal. If ``None``, the
+        Gauss-Newton fallback is used.
+
+    Returns
+    -------
+    OEDiagnostics
+        Posterior covariance, averaging kernel, DOFS, and the ``has_prior`` flag.
+
+    Raises
+    ------
+    ValueError
+        If the supplied shapes are mutually inconsistent.
+
+    Notes
+    -----
+    The fitting (information) matrix ``K^T S_e^-1 K`` is formed via solves
+    against ``S_e`` rather than an explicit inverse, for numerical stability.
+
+    References
+    ----------
+    Rodgers, C. D. (2000). *Inverse Methods for Atmospheric Sounding: Theory
+    and Practice*. World Scientific. Eqs. 2.27, 2.31; Sec. 2.4.
+    """
+    K = np.asarray(jacobian, dtype=float)
+    if K.ndim != 2:
+        raise ValueError(f"jacobian must be 2-D (m, n), got shape {K.shape}")
+    m, n = K.shape
+
+    S_e = np.asarray(measurement_covariance, dtype=float)
+    if S_e.ndim == 1:
+        if S_e.shape[0] != m:
+            raise ValueError(
+                f"diagonal measurement_covariance length {S_e.shape[0]} "
+                f"does not match jacobian rows {m}"
+            )
+        S_e = np.diag(S_e)
+    elif S_e.shape != (m, m):
+        raise ValueError(
+            f"measurement_covariance shape {S_e.shape} does not match (m, m)=({m}, {m})"
+        )
+
+    # Information matrix K^T S_e^-1 K, formed via a solve for stability.
+    se_inv_K = np.linalg.solve(S_e, K)  # S_e^-1 K, shape (m, n)
+    fisher = K.T @ se_inv_K  # K^T S_e^-1 K, shape (n, n)
+
+    has_prior = prior_covariance is not None
+    if has_prior:
+        S_a = np.asarray(prior_covariance, dtype=float)
+        if S_a.ndim == 1:
+            if S_a.shape[0] != n:
+                raise ValueError(
+                    f"diagonal prior_covariance length {S_a.shape[0]} "
+                    f"does not match jacobian columns {n}"
+                )
+            S_a = np.diag(S_a)
+        elif S_a.shape != (n, n):
+            raise ValueError(
+                f"prior_covariance shape {S_a.shape} does not match (n, n)=({n}, {n})"
+            )
+        prior_precision = np.linalg.inv(S_a)
+    else:
+        prior_precision = np.zeros((n, n))
+
+    posterior_covariance = np.linalg.inv(fisher + prior_precision)
+    averaging_kernel = posterior_covariance @ fisher
+    dofs = float(np.trace(averaging_kernel))
+
+    return OEDiagnostics(
+        posterior_covariance=posterior_covariance,
+        averaging_kernel=averaging_kernel,
+        dofs=dofs,
+        has_prior=has_prior,
+    )
+
+
+@dataclass
 class JointOptimizationResult(ResultTableMixin, StatisticsMixin):
     """
     Result of multi-element joint optimization.
@@ -146,6 +300,19 @@ class JointOptimizationResult(ResultTableMixin, StatisticsMixin):
     # Uncertainty estimates (from Hessian)
     correlation_matrix: Optional[np.ndarray] = field(default=None, repr=False)
     parameter_uncertainties: Dict[str, float] = field(default_factory=dict)
+
+    # Optimal-estimation (Rodgers 2000) closure diagnostics. Additive: posterior
+    # covariance, averaging kernel, and DOFS, computed from the Jacobian at the
+    # solution. None when the Jacobian / measurement covariance were unavailable.
+    oe_diagnostics: Optional[OEDiagnostics] = field(default=None, repr=False)
+
+    @property
+    def dofs(self) -> Optional[float]:
+        """Degrees of freedom for signal (``trace`` of the averaging kernel).
+
+        Returns ``None`` if optimal-estimation diagnostics were not computed.
+        """
+        return None if self.oe_diagnostics is None else self.oe_diagnostics.dofs
 
     # Metadata
     method: str = "L-BFGS-B"
@@ -336,6 +503,7 @@ class JointOptimizer:
         initial_concentrations: Optional[Dict[str, float]] = None,
         bounds: Optional[Dict[str, Tuple[float, float]]] = None,
         method: str = "BFGS",
+        prior_covariance: Optional[np.ndarray] = None,
     ) -> JointOptimizationResult:
         """
         Perform joint optimization of all plasma parameters.
@@ -356,11 +524,20 @@ class JointOptimizer:
             Parameter bounds (T_eV, n_e range)
         method : str
             Optimization method: 'BFGS', 'L-BFGS-B', 'CG' (default: 'BFGS')
+        prior_covariance : np.ndarray, optional
+            Prior (a priori) error covariance ``S_a`` in the optimization-parameter
+            basis ``(log T, log10 n_e, theta)``, shape ``(n_params, n_params)`` (a
+            1-D array of length ``n_params`` is read as its diagonal). When given,
+            the Rodgers optimal-estimation diagnostics (posterior covariance,
+            averaging kernel, DOFS) on the result use this prior; otherwise the
+            Gauss-Newton fallback is used. This is a diagnostic only and never
+            changes the point estimate.
 
         Returns
         -------
         JointOptimizationResult
-            Optimization results with uncertainties
+            Optimization results with uncertainties and optimal-estimation
+            (Rodgers) closure diagnostics in ``result.oe_diagnostics``.
         """
         # Validate inputs and resolve defaults
         measured, uncertainties, bounds, initial_concentrations = self._prepare_optimize_inputs(
@@ -401,6 +578,12 @@ class JointOptimizer:
             loss_fn, final_x, final_T, reduced_chi_squared
         )
 
+        # Additive Rodgers optimal-estimation closure diagnostics (does not
+        # affect the point estimate above).
+        oe_diagnostics = self._compute_oe_diagnostics(
+            final_x, uncertainties, prior_covariance
+        )
+
         logger.info(
             f"Optimization complete: T={final_T:.3f} eV, n_e={final_ne:.2e} cm^-3, "
             f"chi^2_red={reduced_chi_squared:.3f}, status={status.value}"
@@ -423,6 +606,7 @@ class JointOptimizer:
             hessian_condition=hessian_condition,
             correlation_matrix=correlation_matrix,
             parameter_uncertainties=param_uncertainties,
+            oe_diagnostics=oe_diagnostics,
             method=method,
             loss_type=self.loss_type.value,
         )
@@ -595,6 +779,52 @@ class JointOptimizer:
             logger.debug(f"Hessian computation failed: {e}")
 
         return param_uncertainties, correlation_matrix, hessian_condition
+
+    def _compute_oe_diagnostics(
+        self,
+        final_x: jnp.ndarray,
+        uncertainties: jnp.ndarray,
+        prior_covariance: Optional[np.ndarray],
+    ) -> Optional[OEDiagnostics]:
+        """Compute Rodgers optimal-estimation diagnostics at the solution.
+
+        Builds the forward-model Jacobian ``K = d(predicted)/d(params)`` at the
+        converged optimization vector and the (diagonal) measurement covariance
+        ``S_e = diag(uncertainties^2)``, then delegates to
+        :func:`compute_oe_diagnostics`. The parameter vector is the unconstrained
+        optimization state ``(log T, log10 n_e, theta)``, so the diagnostics are
+        in that natural retrieval basis.
+
+        This is purely additive — it never touches ``final_x`` — and is best
+        effort: any failure (singular ``S_e``, missing JAX autodiff) returns
+        ``None`` so the point estimate is always returned.
+
+        Parameters
+        ----------
+        final_x : jnp.ndarray
+            Converged optimization vector.
+        uncertainties : jnp.ndarray
+            Per-channel measurement standard deviations (length ``n_wavelength``).
+        prior_covariance : np.ndarray, optional
+            Prior covariance ``S_a`` in the optimization-parameter basis. If
+            ``None``, the Gauss-Newton fallback is used (DOFS = n_params).
+
+        Returns
+        -------
+        OEDiagnostics or None
+        """
+        try:
+
+            def _predict(x: jnp.ndarray) -> jnp.ndarray:
+                T_eV, n_e, conc = self._unpack_params(x)
+                return self.forward_model(T_eV, n_e, conc, self.wavelength)
+
+            jacobian = np.array(jax.jacobian(_predict)(final_x))
+            s_e = np.asarray(uncertainties, dtype=float) ** 2
+            return compute_oe_diagnostics(jacobian, s_e, prior_covariance)
+        except Exception as e:  # pragma: no cover - best-effort diagnostic
+            logger.debug(f"OE diagnostics computation failed: {e}")
+            return None
 
     def _pack_params(
         self, T_eV: float, n_e: float, concentrations: Dict[str, float]
