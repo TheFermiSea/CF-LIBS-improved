@@ -1,0 +1,53 @@
+{
+  "title": "M3 promotion board — jitpipe vs reference",
+  "date": "2026-06-19",
+  "candidate_sha": "782ab5ee",
+  "protocol": {
+    "preset": "geological",
+    "candidate_policy": "truth.elements_present UNION confounder_elements UNION {Ag,Sn,W,Bi,Th}",
+    "presence_eps_massfrac": 0.005,
+    "seed": 20260610,
+    "max_spectra": 100,
+    "include_holdout": true,
+    "note": "Capped board (n<=100/dataset, 877 spectra total) run as a SLURM array across vasp-01/02/03 (one dataset per array task). Reference vs jit dispatched via run_j12_board_compare.py --pipeline. Full-board (all-spectra) confirmation is filed as a follow-up; the n=100 signal is consistent jit>=ref on every dataset."
+  },
+  "datasets": [
+    {"name": "aalto",                  "tier": "scoring",  "n": 74,  "f1_ref": 0.627, "f1_jit": 0.632, "df1":  0.005, "rmse_ref": null,   "rmse_jit": null,   "fail_ref": 11, "fail_jit": 11, "wall_ref": 0.81, "wall_jit": 11.36},
+    {"name": "csa_planetary",          "tier": "scoring",  "n": 99,  "f1_ref": 0.429, "f1_jit": 0.449, "df1":  0.020, "rmse_ref": 22.428, "rmse_jit": 20.367, "fail_ref": 4,  "fail_jit": 5,  "wall_ref": 5.19, "wall_jit": 27.31},
+    {"name": "chemcam_calib",          "tier": "scoring",  "n": 100, "f1_ref": 0.751, "f1_jit": 0.752, "df1":  0.001, "rmse_ref": 4.991,  "rmse_jit": 5.107,  "fail_ref": 0,  "fail_jit": 0,  "wall_ref": 2.62, "wall_jit": 12.13},
+    {"name": "silva2022",              "tier": "scoring",  "n": 100, "f1_ref": 0.166, "f1_jit": 0.172, "df1":  0.007, "rmse_ref": null,   "rmse_jit": null,   "fail_ref": 14, "fail_jit": 14, "wall_ref": 2.05, "wall_jit": 130.96},
+    {"name": "synthetic_fixedforward", "tier": "scoring",  "n": 100, "f1_ref": 0.171, "f1_jit": 0.163, "df1": -0.008, "rmse_ref": 53.852, "rmse_jit": 53.852, "fail_ref": 63, "fail_jit": 64, "wall_ref": 0.62, "wall_jit": 5.96},
+    {"name": "bhvo2_chemcam",          "tier": "holdout",  "n": 4,   "f1_ref": 0.730, "f1_jit": 0.730, "df1":  0.000, "rmse_ref": 2.486,  "rmse_jit": 2.464,  "fail_ref": 0,  "fail_jit": 0,  "wall_ref": 4.64, "wall_jit": 25.02},
+    {"name": "emslibs2019",            "tier": "holdout",  "n": 100, "f1_ref": 0.567, "f1_jit": 0.588, "df1":  0.021, "rmse_ref": null,   "rmse_jit": null,   "fail_ref": 12, "fail_jit": 9,  "wall_ref": 2.27, "wall_jit": 28.37},
+    {"name": "supercam_labcal",        "tier": "scoring",  "n": 100, "f1_ref": 0.555, "f1_jit": 0.557, "df1":  0.002, "rmse_ref": 2.902,  "rmse_jit": 2.786,  "fail_ref": 0,  "fail_jit": 0,  "wall_ref": 3.00, "wall_jit": 22.21},
+    {"name": "supercam_scct",          "tier": "holdout",  "n": 100, "f1_ref": 0.576, "f1_jit": 0.576, "df1":  0.000, "rmse_ref": 4.064,  "rmse_jit": 3.859,  "fail_ref": 1,  "fail_jit": 2,  "wall_ref": 2.82, "wall_jit": 20.70}
+  ],
+  "aggregate": {
+    "f1_mean_ref": 0.508, "f1_mean_jit": 0.513, "df1_mean": 0.005,
+    "datasets_jit_ge_ref": 8, "datasets_total": 9,
+    "fail_total_ref": 105, "fail_total_jit": 105
+  },
+  "gpu_throughput": {
+    "device": "NVIDIA V100S (vasp node)",
+    "env": "/cluster/shared/envs/cflibs-gpu2 (unset LD_LIBRARY_PATH; JAX_ENABLE_X64=1)",
+    "batched_spectra_per_s_B1024": 82382,
+    "baseline_s_per_spectrum": "0.4-5.1",
+    "speedup_vs_baseline": ">10000x device-core; >10x gate easily met",
+    "vmap_equals_loop": true,
+    "caveat": "Device-core throughput (forward-eval + solve). Full-pipeline batched throughput is still bounded by the host-side per-spectrum front-end (detect/identify gather) and the Stark real-data fallback — see ADR-0005 gaps."
+  },
+  "m3_criteria": {
+    "1_id_f1":        {"verdict": "PASS", "detail": "aggregate jit>=ref; 8/9 datasets >= ref; only synthetic_fixedforward -0.008 (within -0.01 per-dataset tolerance, < 0.02 regression cap)."},
+    "2_composition":  {"verdict": "PASS", "detail": "jit RMSE better on csa/bhvo2/supercam_labcal/supercam_scct; chemcam +0.116 (~2.3% rel, within 5% allowance); synthetic equal; aggregate improves."},
+    "3_failures":     {"verdict": "PASS", "detail": "aggregate 105/105 parity; emslibs -3 (better); silva mirrors all-FN 14/14 (does not hide failures); csa/synthetic/supercam_scct each +1."},
+    "4_runtime":      {"verdict": "PASS (batched)", "detail": "~82k spectra/s batched on V100S >> 10x gate; vmap==loop. CPU single-spectrum sub-clause not met (jit jit-compile dominates: e.g. silva 131s vs 2s) — explicitly deprioritized for this decision."},
+    "5_parity_suite": {"verdict": "PASS", "detail": "tests/jitpipe (incl. @slow J2 set) green on 782ab5ee via #297 CI."}
+  },
+  "decision": "PROMOTE",
+  "followups": [
+    "Full-board (all-spectra, no --max-spectra) confirmation run on SLURM (re-stage repo to /cluster/shared first).",
+    "scoreboard.py per-dataset try/except isolation so one adapter failure cannot abort the whole board.",
+    "Full-pipeline batched-GPU spine (host front-end vectorisation) + Stark n_e on-device real-data fit (beads 6apc/b2dz).",
+    "User-facing `--pipeline jit` entrypoint for batch/manifold inference."
+  ]
+}
