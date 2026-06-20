@@ -612,18 +612,38 @@ def per_element_reliability_from_uncertainty(
     ``rel > reject`` -> ``"reject"``, ``rel > poor`` -> ``"poor"``, else ``"ok"``.
     A missing/zero uncertainty -> ``"ok"`` (no information to downgrade on); a
     zero concentration with non-zero sigma -> ``"reject"`` (infinite relative CI).
+    Negative sigmas are treated by magnitude. Non-finite or malformed reported
+    uncertainties/concentrations are conservative ``"reject"`` labels.
     """
     tiers = tiers or RELATIVE_UNCERTAINTY_TIERS
+    poor_tier = float(tiers["poor"])
+    reject_tier = float(tiers["reject"])
     out: Dict[str, str] = {}
     for el, c in concentrations.items():
-        sigma = float(concentration_uncertainties.get(el, 0.0) or 0.0)
-        if sigma <= 0.0:
+        raw_sigma = concentration_uncertainties.get(el, 0.0)
+        if raw_sigma is None:
             out[el] = "ok"
             continue
-        rel = sigma / c if c > 0 else float("inf")
-        if rel > tiers["reject"]:
+        try:
+            sigma = abs(float(raw_sigma))
+        except (TypeError, ValueError):
             out[el] = "reject"
-        elif rel > tiers["poor"]:
+            continue
+        if sigma == 0.0:
+            out[el] = "ok"
+            continue
+        try:
+            c_value = float(c)
+        except (TypeError, ValueError):
+            out[el] = "reject"
+            continue
+        if not np.isfinite(sigma) or not np.isfinite(c_value) or c_value <= 0.0:
+            out[el] = "reject"
+            continue
+        rel = sigma / c_value
+        if rel > reject_tier:
+            out[el] = "reject"
+        elif rel > poor_tier:
             out[el] = "poor"
         else:
             out[el] = "ok"
