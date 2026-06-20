@@ -591,6 +591,83 @@ class QualityAssessor:
                 return "poor"
 
 
+# Relative-concentration-uncertainty tiers (sigma_C / C) for the M8 reliability
+# coupling (accuracy-first roadmap Lever 7). HEURISTIC defaults pending empirical
+# tuning on the synthetic-corpus coverage data (roadmap blocker #7): an over-strict
+# gate over-flags precise weak-emitter results.
+RELATIVE_UNCERTAINTY_TIERS = {"poor": 0.5, "reject": 1.0}
+
+_FLAG_ORDER = ("excellent", "good", "acceptable", "poor", "reject")
+
+
+def per_element_reliability_from_uncertainty(
+    concentrations: Dict[str, float],
+    concentration_uncertainties: Dict[str, float],
+    tiers: Optional[Dict[str, float]] = None,
+) -> Dict[str, str]:
+    """Per-element reliability label from relative concentration uncertainty.
+
+    Lever 7 (accuracy-first roadmap §4/§6C): a weak emitter with a huge CI is
+    *unreliable even when its fit metrics look fine*. ``rel = sigma_C / C``;
+    ``rel > reject`` -> ``"reject"``, ``rel > poor`` -> ``"poor"``, else ``"ok"``.
+    A missing/zero uncertainty -> ``"ok"`` (no information to downgrade on); a
+    zero concentration with non-zero sigma -> ``"reject"`` (infinite relative CI).
+    Negative sigmas are treated by magnitude. Non-finite or malformed reported
+    uncertainties/concentrations are conservative ``"reject"`` labels.
+    """
+    tiers = tiers or RELATIVE_UNCERTAINTY_TIERS
+    poor_tier = float(tiers["poor"])
+    reject_tier = float(tiers["reject"])
+    out: Dict[str, str] = {}
+    for el, c in concentrations.items():
+        raw_sigma = concentration_uncertainties.get(el, 0.0)
+        if raw_sigma is None:
+            out[el] = "ok"
+            continue
+        try:
+            sigma = abs(float(raw_sigma))
+        except (TypeError, ValueError):
+            out[el] = "reject"
+            continue
+        # sigma is a magnitude (>= 0); <= 0 means "no uncertainty info" -> ok.
+        # (Avoids a float == 0.0 equality check; the result is identical.)
+        if sigma <= 0.0:
+            out[el] = "ok"
+            continue
+        try:
+            c_value = float(c)
+        except (TypeError, ValueError):
+            out[el] = "reject"
+            continue
+        if not np.isfinite(sigma) or not np.isfinite(c_value) or c_value <= 0.0:
+            out[el] = "reject"
+            continue
+        rel = sigma / c_value
+        if rel > reject_tier:
+            out[el] = "reject"
+        elif rel > poor_tier:
+            out[el] = "poor"
+        else:
+            out[el] = "ok"
+    return out
+
+
+def downgrade_quality_flag(quality_flag: str, per_element_reliability: Dict[str, str]) -> str:
+    """Downgrade an overall ``quality_flag`` to the worst per-element CI tier.
+
+    Never *upgrades*: returns the worse of the input flag and the worst element
+    label. ``"ok"`` element labels do not downgrade. Couples the CI-width
+    reliability (Lever 7) into the single trust signal (Lever 6 ``overall_reliable``).
+    """
+    if quality_flag not in _FLAG_ORDER:
+        return quality_flag
+    worst_idx = _FLAG_ORDER.index(quality_flag)
+    for label in per_element_reliability.values():
+        if label in _FLAG_ORDER:
+            worst_idx = max(worst_idx, _FLAG_ORDER.index(label))
+    return _FLAG_ORDER[worst_idx]
+
+
 def compute_reconstruction_chi_squared(
     measured_spectrum: np.ndarray,
     modeled_spectrum: np.ndarray,
