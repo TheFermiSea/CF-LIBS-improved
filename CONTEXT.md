@@ -44,6 +44,38 @@ Both adapters are produced by the one factory from the **same** coefficients and
 bounds; that is what makes "direct-sum-preferred, always guarded" provable in a
 single place rather than smeared across nine call sites.
 
+## Instrument calibration (the instrument seam)
+
+- **`InstrumentCalibration`** — the single, immutable, provenance-tracked carrier of all
+  instrument physics (ADR-0006; `cflibs/instrument/calibration.py`). It holds exactly three
+  measured terms plus a provenance record, and is the *only* seam pipelines use for the
+  spectrometer — no path reaches around it to a bare FWHM or a loose response array. The forward
+  operator it represents is `S_meas = E(λ) · [ LSF_σ(λ) * Σ_s C_s ε_s(T,n_e) ]` on the `λ(pixel)`
+  grid.
+- **Wavelength solution** `λ(pixel)` — detector pixel → wavelength, fit from line-lamp centroids.
+  A resample/sub-pixel shift in the fit (**nonlinear** if unknown).
+- **LSF (line-spread function)** `σ_LSF(λ)` — how a δ-line is smeared by the instrument, measured
+  from a glow-discharge lamp (cold, thin → intrinsic width ≪ instrumental, so the lamp line *is*
+  the LSF). Folded **exactly** into the Voigt Gaussian core (`Gaussian ⊗ Voigt = Voigt`).
+  **Nonlinear** if unknown — and it **confounds with the Stark `n_e`** diagnostic.
+- **Spectral response** `E(λ)` — relative radiometric efficiency, measured as
+  `E(λ) = I_meas_lamp / L_cert` from a radiance lamp (deuterium-halogen) and its certificate.
+  **Linear** (multiplicative) in the forward; if unknown it **rotates the Boltzmann plot**
+  (`E_k`-correlated bias on slope→`T` and intercept→composition) and does *not* cancel.
+- **Scalar efficiency `F`** — the wavelength-*independent* factor (volume, solid angle, gain). It
+  **cancels via closure `Σ C_s = 1`** and is therefore *not* represented in `InstrumentCalibration`;
+  this single cancellation is the entire legitimate content of "calibration-free".
+- **Calibration modes** — every calibration declares one: **Mode A (calibrated)** built from the
+  user's own lamps (`from_lamps`); **Mode B (vendor pre-corrected)** for flight/commercial
+  instruments with a published correction (ChemCam/SuperCam); **Mode C (self-calibrating)** fits the
+  missing terms from the science spectrum with a **loud quality flag**. **Mode A or B is required for
+  any quantitative / accuracy-claimed result** (ADR-0006 D3); Mode C can never flip a scoreboard
+  default.
+- **The two bridges** — `to_instrument_model()` produces an `InstrumentModel` for the legacy
+  integrated-intensity path; `as_snapshot_arrays()` produces fixed-shape static arrays for the jit /
+  real-time / Bayesian / manifold paths. One object, two adapters — the same CPU-scalar / JAX-batched
+  split as the partition-function provider.
+
 ## Identification
 
 - **Identifier** — a module that decides which elements are present in a
