@@ -76,6 +76,20 @@ except ImportError:  # pragma: no cover - exercised when JAX absent
 logger = get_logger("inversion.solver")
 
 
+def _reliability_from_uncertainty_enabled() -> bool:
+    """M8 Lever 7: opt-in coupling of per-element CI width to the reliability flag.
+
+    Controlled by ``CFLIBS_RELIABILITY_FROM_UNCERTAINTY`` (default OFF == legacy:
+    no per-element reliability labels, quality_flag/overall_reliable unchanged).
+    """
+    return os.environ.get("CFLIBS_RELIABILITY_FROM_UNCERTAINTY", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 @dataclass
 class CFLIBSResult:
     """
@@ -133,6 +147,7 @@ class CFLIBSResult:
     electron_density_uncertainty_cm3: float = 0.0
     boltzmann_covariance: Optional[np.ndarray] = field(default=None, repr=False)
     overall_reliable: bool = False
+    per_element_reliability: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -2801,11 +2816,36 @@ class IterativeCFLIBSSolver:
         if covariance_element is not None:
             quality_metrics["boltzmann_covariance_element"] = covariance_element
 
+        # M8 Lever 7 (opt-in): couple per-element CI width into the reliability
+        # flag. A weak emitter with a huge relative CI is downgraded even if its
+        # fit metrics look fine. Gated CFLIBS_RELIABILITY_FROM_UNCERTAINTY
+        # (default OFF == bit-identical: empty labels, flag/overall_reliable
+        # unchanged). Pure annotation -- never alters composition/T/n_e.
+        final_conc = conc_nominal if conc_nominal else result.concentrations
+        per_element_reliability: Dict[str, str] = {}
+        if _reliability_from_uncertainty_enabled() and conc_uncert:
+            from cflibs.inversion.physics.quality import (
+                downgrade_quality_flag,
+                per_element_reliability_from_uncertainty,
+            )
+
+            per_element_reliability = per_element_reliability_from_uncertainty(
+                final_conc, conc_uncert
+            )
+            qf = quality_metrics.get("quality_flag")
+            if isinstance(qf, str):
+                new_qf = downgrade_quality_flag(qf, per_element_reliability)
+                quality_metrics["quality_flag"] = new_qf
+                mcw = bool(quality_metrics.get("lte_mcwhirter_satisfied", False))
+                quality_metrics["overall_reliable"] = bool(
+                    mcw and new_qf in ("excellent", "good", "acceptable")
+                )
+
         return CFLIBSResult(
             temperature_K=result.temperature_K,
             temperature_uncertainty_K=T_err,
             electron_density_cm3=result.electron_density_cm3,
-            concentrations=conc_nominal if conc_nominal else result.concentrations,
+            concentrations=final_conc,
             concentration_uncertainties=conc_uncert if conc_uncert else {},
             iterations=result.iterations,
             converged=result.converged,
@@ -2814,6 +2854,7 @@ class IterativeCFLIBSSolver:
             electron_density_uncertainty_cm3=0.0,  # Would need iterative uncertainty
             boltzmann_covariance=selected_covariance,
             overall_reliable=bool(quality_metrics.get("overall_reliable", False)),
+            per_element_reliability=per_element_reliability,
         )
 
 

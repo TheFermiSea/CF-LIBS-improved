@@ -591,6 +591,61 @@ class QualityAssessor:
                 return "poor"
 
 
+# Relative-concentration-uncertainty tiers (sigma_C / C) for the M8 reliability
+# coupling (accuracy-first roadmap Lever 7). HEURISTIC defaults pending empirical
+# tuning on the synthetic-corpus coverage data (roadmap blocker #7): an over-strict
+# gate over-flags precise weak-emitter results.
+RELATIVE_UNCERTAINTY_TIERS = {"poor": 0.5, "reject": 1.0}
+
+_FLAG_ORDER = ("excellent", "good", "acceptable", "poor", "reject")
+
+
+def per_element_reliability_from_uncertainty(
+    concentrations: Dict[str, float],
+    concentration_uncertainties: Dict[str, float],
+    tiers: Optional[Dict[str, float]] = None,
+) -> Dict[str, str]:
+    """Per-element reliability label from relative concentration uncertainty.
+
+    Lever 7 (accuracy-first roadmap §4/§6C): a weak emitter with a huge CI is
+    *unreliable even when its fit metrics look fine*. ``rel = sigma_C / C``;
+    ``rel > reject`` -> ``"reject"``, ``rel > poor`` -> ``"poor"``, else ``"ok"``.
+    A missing/zero uncertainty -> ``"ok"`` (no information to downgrade on); a
+    zero concentration with non-zero sigma -> ``"reject"`` (infinite relative CI).
+    """
+    tiers = tiers or RELATIVE_UNCERTAINTY_TIERS
+    out: Dict[str, str] = {}
+    for el, c in concentrations.items():
+        sigma = float(concentration_uncertainties.get(el, 0.0) or 0.0)
+        if sigma <= 0.0:
+            out[el] = "ok"
+            continue
+        rel = sigma / c if c > 0 else float("inf")
+        if rel > tiers["reject"]:
+            out[el] = "reject"
+        elif rel > tiers["poor"]:
+            out[el] = "poor"
+        else:
+            out[el] = "ok"
+    return out
+
+
+def downgrade_quality_flag(quality_flag: str, per_element_reliability: Dict[str, str]) -> str:
+    """Downgrade an overall ``quality_flag`` to the worst per-element CI tier.
+
+    Never *upgrades*: returns the worse of the input flag and the worst element
+    label. ``"ok"`` element labels do not downgrade. Couples the CI-width
+    reliability (Lever 7) into the single trust signal (Lever 6 ``overall_reliable``).
+    """
+    if quality_flag not in _FLAG_ORDER:
+        return quality_flag
+    worst_idx = _FLAG_ORDER.index(quality_flag)
+    for label in per_element_reliability.values():
+        if label in _FLAG_ORDER:
+            worst_idx = max(worst_idx, _FLAG_ORDER.index(label))
+    return _FLAG_ORDER[worst_idx]
+
+
 def compute_reconstruction_chi_squared(
     measured_spectrum: np.ndarray,
     modeled_spectrum: np.ndarray,
