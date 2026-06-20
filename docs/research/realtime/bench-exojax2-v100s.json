@@ -1,0 +1,61 @@
+{
+  "device": "cuda:0 (Tesla V100S-PCIE-32GB)",
+  "backend": "gpu",
+  "jax_version": "0.9.2",
+  "exojax_version": "2.5.0",
+  "node": "vasp-01",
+  "dtype": "float32",
+  "channels": 4000,
+  "n_lines": 300,
+  "n_elements": 15,
+  "n_params": 17,
+  "n_timing_calls": 200,
+  "timing_method": "warm (compile-once) then median of 150-200 per-call block_until_ready at batch=1",
+  "opacity_method": "ExoJAX OpaDirect (LPF line-by-line, init_lpf numatrix + vmapped Voigt-Hjerting hjert + line_strength + gamma_exomol + doppler_sigma)",
+  "install_path_or_blocker": "/tmp/exojax_venv (venv from cflibs-gpu2 py3.12; exojax 2.5.0 via pip; venv CPU jax/jaxlib 0.10.2 UNINSTALLED, gpu2 CUDA jax 0.9.2 reused via PYTHONPATH=/cluster/shared/envs/cflibs-gpu2/lib/python3.12/site-packages). Synthetic exomol-type mdb fed in -> NO VALD/Kurucz download needed.",
+
+  "forward_us": 389.6,
+  "forward_min_us": 336.5,
+  "forward_mean_us": 434.1,
+  "jacobian_us": 3386.4,
+  "jacobian_min_us": 3159.0,
+  "jacobian_mean_us": 3432.1,
+  "jacobian_mode": "jax.jacfwd (forward-mode, 17 inputs). jacrev OOMs at 4000ch (tries to alloc 17.95 GiB).",
+  "est_k3_us": 11328.1,
+  "est_k3_note": "3 * (forward + jacfwd) Gauss-Newton estimate at 300 lines / 4000 channels",
+
+  "op_count_jaxpr_eqns": 34,
+  "op_count_hlo_lines": 726,
+  "op_count_hlo_fusion_approx": 16,
+  "op_count_note": "34 jaxpr eqns / ~16 fused HLO kernels for the forward. Few launches, BUT the dominant fusion is the (300 x 4000) = 1.2M-element Voigt-Hjerting numatrix; jacfwd replicates it across 17 tangents.",
+
+  "compile_fwd_ms": 1288.6,
+  "compile_jac_ms": 2373.9,
+
+  "roi_sweep_jacfwd": {
+    "note": "median us at batch=1, 300 lines, jacfwd; K3 = 3*(fwd+jacfwd)",
+    "ch256":  {"forward_us": 214.6, "jacfwd_us": 266.4, "k3_us": 1443.0},
+    "ch500":  {"forward_us": 203.1, "jacfwd_us": 311.9, "k3_us": 1545.2},
+    "ch1000": {"forward_us": 207.6, "jacfwd_us": 345.3, "k3_us": 1658.5},
+    "ch2000": {"forward_us": 323.4, "jacfwd_us": 1814.1, "k3_us": 6412.5},
+    "ch4000": {"forward_us": 369.5, "jacfwd_us": 3176.8, "k3_us": 10638.9}
+  },
+  "linecount_sweep_1000ch_jacfwd": {
+    "nlines100": {"forward_us": 151.7, "jacfwd_us": 243.9, "k3_us": 1186.9},
+    "nlines300": {"forward_us": 254.7, "jacfwd_us": 358.4, "k3_us": 1839.3}
+  },
+
+  "baseline_handrolled_forward_us": 142.1,
+  "baseline_handrolled_jacobian_us": 520.0,
+  "baseline_handrolled_k3_us": 1543.5,
+  "baseline_launch_overhead_us": 125.9,
+
+  "comparison_vs_handrolled": {
+    "forward_ratio": "2.7x slower (389.6 vs 142.1 at 4000ch; ~1.5x at 256ch)",
+    "jacobian_ratio": "6.5x slower (3386 vs 520 at 4000ch)",
+    "k3_ratio": "7.3x slower (11328 vs 1543 at 4000ch)"
+  },
+
+  "verdict": "OFFLINE-ONLY",
+  "reasoning": "ExoJAX OpaDirect at the CF-LIBS target (300 lines x 4000 channels) gives forward=390us and jacfwd Jacobian=3386us, so a K=3 Gauss-Newton inversion estimates ~11.3 ms -- 7.3x over the hand-rolled 1.54 ms and far above the <1 ms hot-path budget. The forward op-launch count is FINE (~16 fused kernels, 34 jaxpr eqns), confirming the forward is NOT launch-limited; the killer is the (Nline x Nchan)=1.2M-element Voigt-Hjerting numatrix ExoJAX materializes per line per channel, whose cost the 17-input Jacobian multiplies ~9x. Even the most aggressive trim (100 lines @ 1000 channels) still yields K3 ~ 1.19 ms, and NO measured configuration crossed under 1 ms for K=3. ExoJAX targets high-accuracy OFFLINE opacity/manifold generation (PreMODIT/MODIT + partition-function rigor), not single-shot real-time inversion. Keep the hand-rolled forward on the hot path; use ExoJAX OFFLINE for manifold pre-computation and reference-accuracy cross-checks."
+}

@@ -1,0 +1,51 @@
+{
+  "device": "cuda:0 (Tesla V100S-PCIE-32GB)",
+  "backend": "gpu",
+  "jax_version": "0.9.2",
+  "node": "vasp-01",
+  "dtype": "float32",
+  "channels": 4000,
+  "n_lines": 300,
+  "n_elements": 15,
+  "n_params": 17,
+  "gn_lambda": 0.01,
+  "n_timing_calls": 200,
+  "timing_method": "warm; compile-once then median of >=200 per-call block_until_ready",
+
+  "forward_us": 142.1,
+  "forward_min_us": 116.6,
+  "jacobian_us": 520.0,
+  "jacobian_min_us": 461.1,
+  "gn_step_us": 657.1,
+  "gn_step_min_us": 614.5,
+  "k3_us": 1543.5,
+  "k3_min_us": 1459.2,
+  "k3_mean_us": 1555.6,
+  "k2_us": 1139.0,
+  "launch_overhead_us": 125.9,
+  "launch_overhead_min_us": 91.7,
+  "compile_ms": 2292.3,
+
+  "verdict": "STRICT single-shot <1ms is NOT met by the full K=3 @ 4000-channel inversion (1.46-1.54 ms). It IS feasible with cheap levers (see levers).",
+
+  "dispatch_analysis": {
+    "trivial_blocking_med_us": 150.5,
+    "trivial_blocking_min_us": 89.4,
+    "trivial_pipelined_us": 51.2,
+    "k3_pipelined_us": 1262.0,
+    "note": "B=1 is dispatch/launch-bound, not compute-bound. Async-pipelined trivial floor is ~51us; per-call blocking floor ~90-150us. Even K=3 at 256 channels floors at ~500us due to stacked op launches across 3 GN steps."
+  },
+
+  "levers_to_cross_1ms": {
+    "K_steps_at_4000ch_blocking_med_us": {"K1": 605.3, "K2": 1013.4, "K3": 1451.0},
+    "ROI_channels_at_K3_blocking_med_us": {"ch4000": 1495.8, "ch1000": 683.8, "ch500": 571.2, "ch256": 501.9},
+    "feasible_under_1ms": [
+      "K=3 + ROI<=1000 channels  -> 684 us",
+      "K=3 + ROI 500 channels    -> 571 us",
+      "K=2 + ROI<=1000 channels  -> ~550 us (interp)",
+      "K=1 + 4000 channels       -> 605 us (may under-converge)"
+    ],
+    "borderline": ["K=2 + 4000 channels -> 1013 us (just over 1ms)"],
+    "over_budget": ["K=3 + 4000 channels -> 1496 us (the most demanding config)"]
+  }
+}
