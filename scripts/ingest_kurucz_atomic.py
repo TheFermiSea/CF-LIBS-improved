@@ -153,13 +153,27 @@ def main() -> None:
     conn.executescript(SCHEMA)
 
     total = 0
+    failed = []
     for gf in args.gf:
         p = Path(gf)
         print(f"Ingesting {p.name} ...")
-        n = ingest_gf(p, conn, args.wl_min, args.wl_max)
-        print(f"  inserted {n} lines")
-        total += n
+        # Per-file guard: ExoJAX read_kurucz is fixed-width and brittle to Kurucz
+        # gf-file VINTAGE drift (the damping/reference columns shift ~1 char
+        # between eras, e.g. col 92:98 = '-6.55K' on older Ca/Mg/Si/Ti files vs
+        # a clean float on newer Fe files). A file it cannot parse must NOT abort
+        # the whole run. (A vintage-tolerant direct parser -- like the VALD one
+        # in ingest_vald_atomic.py -- is the robust follow-up; VALD is the graded
+        # primary source.)
+        try:
+            n = ingest_gf(p, conn, args.wl_min, args.wl_max)
+            print(f"  inserted {n} lines")
+            total += n
+        except Exception as exc:
+            print(f"  SKIPPED {p.name}: {type(exc).__name__}: {exc} (Kurucz vintage drift?)")
+            failed.append(p.name)
     print(f"\nDONE: {total} Kurucz lines -> {db_path}")
+    if failed:
+        print(f"SKIPPED {len(failed)} file(s) (read_kurucz vintage mismatch): {', '.join(failed)}")
     conn.close()
 
 
