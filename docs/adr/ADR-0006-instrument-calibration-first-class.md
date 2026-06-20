@@ -82,6 +82,16 @@ naive separate `jnp.convolve` lowers to a cuDNN `convForward` that fails to auto
 LSF is thus a *parameter of the forward operator*, not a post-hoc filter — exactly the seam this ADR
 formalises.
 
+That same validation campaign corroborates this ADR's central thesis — **input quality dominates the
+solver** — from the *other* direction. Its controlled round-trip
+([`docs/research/realtime/2026-06-20-realtime-plan-v4-real-data-accuracy.md`](../research/realtime/2026-06-20-realtime-plan-v4-real-data-accuracy.md)
+§3) found the inversion *algorithm* floor at RMSE ≈ 2.9e-6 (≈ 0) while the *atomic-data* line-list
+mismatch alone injected ≈ 0.17 RMSE — i.e. the data inputs, not the math, are the binding error. Those
+real-data tests were themselves run **uncalibrated** (fixed-FWHM proxy, no `E(λ)`, no measured LSF — a
+Mode-C configuration in this ADR's terms), so the instrument is the *second* uncontrolled input alongside
+the atomic data. Atomic-data curation (plan v4 STEP A) and instrument calibration (this ADR) are sibling
+input-quality levers, both ahead of solver speed.
+
 ### 1.4 What already exists (assets to build on, not replace)
 
 | Asset | Location | Role |
