@@ -101,7 +101,6 @@ def ingest_gf(gf_path: Path, conn: sqlite3.Connection, wl_min: float, wl_max: fl
     gi = (2 * np.asarray(adb.jlower) + 1).astype(int)
     ielem = np.asarray(adb.ielem).astype(int)
     iion = np.asarray(adb.iion).astype(int)  # ExoJAX iion: neutral=1
-    gam_rad = np.asarray(adb._gamRad) if hasattr(adb, "_gamRad") else np.zeros_like(aki)
     gam_vdw = np.asarray(adb._vdWdamp) if hasattr(adb, "_vdWdamp") else np.zeros_like(aki)
 
     rows = []
