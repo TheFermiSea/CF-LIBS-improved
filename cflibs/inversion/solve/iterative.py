@@ -111,6 +111,14 @@ class CFLIBSResult:
         (slope, intercept). For multi-element uncertainty solves this stores
         the covariance for the selected reference element noted in
         ``quality_metrics["boltzmann_covariance_element"]``.
+    overall_reliable : bool
+        M7 refuse-to-report verdict (Lever 6, Cristoforetti 2010). True only
+        when the McWhirter LTE criterion is satisfied AND the Cristoforetti
+        multi-check ``quality_flag`` is acceptable-or-better. Defaults False
+        (conservative): a fallback/degenerate solve that never reached the
+        quality assessment is correctly not-reliable. Consumed by the CLI
+        refuse-to-report gate when ``CFLIBS_REFUSE_TO_REPORT`` is set; always
+        computed (a pure annotation — never alters T/n_e/composition).
     """
 
     temperature_K: float
@@ -124,6 +132,7 @@ class CFLIBSResult:
     quality_metrics: Dict[str, float] = field(default_factory=dict)
     electron_density_uncertainty_cm3: float = 0.0
     boltzmann_covariance: Optional[np.ndarray] = field(default=None, repr=False)
+    overall_reliable: bool = False
 
 
 @dataclass
@@ -1984,6 +1993,125 @@ class IterativeCFLIBSSolver:
             100.0 * self.degeneracy_dominance_threshold,
         )
 
+    def _mcwhirter_delta_e_resonance(self, observations: List[LineObservation]) -> Optional[float]:
+        """Resonance-line McWhirter delta_E from the lines table (M7 sub-lever b).
+
+        The physically-correct McWhirter delta_E is the energy of the resonance
+        transition — the dipole-allowed line out of the ground state, whose fast
+        radiative decay is precisely what electron collisions must overcome for
+        LTE to hold (Cristoforetti et al. 2010, Spectrochim. Acta B 65, 86-95).
+        For each (element, ionization_stage) present in the observations we take
+        the upper-level energy of the STRONGEST (max A_ki) resonance line
+        (``is_resonance``, i.e. E_lower ~ 0); the binding delta_E for the
+        multi-element plasma is the MAX over species (the hardest-to-thermalise
+        species sets the LTE floor). Validated against literature resonance
+        energies: Ca I 2.93, Na I 2.10, Mg I 4.35, Si I 4.93 eV (DB matches).
+
+        Returns ``None`` if no species exposes a resonance line, so the caller
+        falls back to the observation-derived delta_E (legacy ``max(E_k)``).
+
+        Why not the largest adjacent level gap, nor ``max(E_k)``: the largest
+        adjacent gap lands on low-lying SAME-PARITY (forbidden) terms that do
+        not stress LTE (Fe I -> 0.74 eV, too lax); ``max(E_k)`` models an
+        implausible single ground->highest-level collision (Fe I -> 7.5 eV,
+        too strict -> false-rejects valid LTE via the cubic n_e floor).
+        """
+        seen: set = set()
+        best: Optional[float] = None
+        for obs in observations:
+            key = (obs.element, obs.ionization_stage)
+            if key in seen:
+                continue
+            seen.add(key)
+            # Defensive per-species: a malformed / pluggable AtomicDataSource
+            # backend (transition missing A_ki, non-numeric E_k_ev, raising
+            # get_transitions) must degrade to "skip this species", never abort
+            # the solve. Mirrors _assess_reliability's broad-guard posture, so
+            # the docstring's "returns None when no resonance line" promise holds
+            # for any backend, not just the well-formed AtomicDatabase rows.
+            try:
+                transitions = self.atomic_db.get_transitions(obs.element, obs.ionization_stage)
+            except Exception:  # pragma: no cover - defensive backend guard
+                continue
+            best_species_aki: Optional[float] = None
+            best_species_de: Optional[float] = None
+            for transition in transitions:
+                try:
+                    if not getattr(transition, "is_resonance", False):
+                        continue
+                    aki = float(getattr(transition, "A_ki", float("nan")))
+                    de = float(getattr(transition, "E_k_ev", float("nan")))
+                except Exception:
+                    continue
+                if not (np.isfinite(aki) and aki > 0.0 and np.isfinite(de) and de > 0.0):
+                    continue
+                if best_species_aki is None or aki > best_species_aki:
+                    best_species_aki = aki
+                    best_species_de = de
+            if best_species_de is None:
+                continue
+            de = best_species_de
+            if best is None or de > best:
+                best = de
+        return best
+
+    def _assess_reliability(
+        self,
+        observations: List[LineObservation],
+        T_K: float,
+        n_e: float,
+        concentrations: Dict[str, float],
+    ) -> Dict[str, object]:
+        """Run the Cristoforetti multi-check (``QualityAssessor.assess``).
+
+        M7 Lever 6: wire the previously-dead ``QualityAssessor`` into the
+        production solver so every result carries a Saha-Boltzmann-consistency
+        / inter-element-T-scatter / closure ``quality_flag`` (Cristoforetti et
+        al. 2010, Spectrochim. Acta B 65, 86-95 — necessary, not sufficient).
+
+        DEFENSIVE BY DESIGN: reliability is an *annotation*, never core math.
+        Any failure (missing IP/partition data, a mock DB, a numerical edge)
+        yields a conservative ``quality_flag='unknown'`` rather than breaking
+        the solve. The IP/partition inputs are sourced from the same atomic-DB
+        provider the solve itself used, evaluated at the fitted ``T_K``.
+        """
+        unknown = {
+            "quality_flag": "unknown",
+            "saha_boltzmann_consistency": float("nan"),
+            "inter_element_t_std_frac": float("nan"),
+        }
+        try:
+            from cflibs.inversion.physics.quality import QualityAssessor
+
+            ips: Dict[str, float] = {}
+            u_i: Dict[str, float] = {}
+            u_ii: Dict[str, float] = {}
+            concentrations_for_assess = dict(concentrations)
+            for el in concentrations_for_assess:
+                ip = self.atomic_db.get_ionization_potential(el, 1)
+                if ip is None:
+                    continue
+                ips[el] = float(ip)
+                u_i[el] = float(self._evaluate_partition_function(el, 1, T_K))
+                u_ii[el] = float(self._evaluate_partition_function(el, 2, T_K))
+            metrics = QualityAssessor().assess(
+                observations=observations,
+                temperature_K=T_K,
+                electron_density_cm3=n_e,
+                concentrations=concentrations_for_assess,
+                ionization_potentials=ips,
+                partition_funcs_I=u_i,
+                partition_funcs_II=u_ii,
+            )
+            return {
+                "quality_flag": str(metrics.quality_flag),
+                "saha_boltzmann_consistency": float(metrics.saha_boltzmann_consistency),
+                "inter_element_t_std_frac": float(metrics.inter_element_t_std_frac),
+            }
+        except Exception as exc:  # pragma: no cover - defensive annotation path
+            logger.debug("Reliability assessment failed (annotation only): %s", exc)
+            return dict(unknown)
+
     def _assemble_quality_metrics(
         self,
         observations: List[LineObservation],
@@ -2009,10 +2137,24 @@ class IterativeCFLIBSSolver:
         from cflibs.plasma.lte_validator import LTEValidator
 
         lte_validator = LTEValidator()
+        # M7 sub-lever b (opt-in): use the strongest resonance-line upper
+        # energy from the transitions table for the McWhirter delta_E instead
+        # of the legacy max(E_k). Gated behind CFLIBS_MCWHIRTER_RESONANCE_DE
+        # (default OFF == byte-identical legacy LTE verdict); falls back to the
+        # observation-derived delta_E when no resonance line is available.
+        delta_e_override: Optional[float] = None
+        if os.environ.get("CFLIBS_MCWHIRTER_RESONANCE_DE", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            delta_e_override = self._mcwhirter_delta_e_resonance(observations)
         lte_report = lte_validator.validate(
             T_K=T_K,
             n_e_cm3=n_e,
             observations=observations,
+            delta_E_eV=delta_e_override,
         )
         quality_metrics = {
             # CANONICAL fit quality: R^2 of the common-slope plane / SB-graph
@@ -2060,6 +2202,20 @@ class IterativeCFLIBSSolver:
         quality_metrics["max_tau_estimate"] = float(sa.max_tau) if sa else 0.0
         quality_metrics["n_lines_sa_corrected"] = float(sa.n_corrected) if sa else 0.0
         quality_metrics["n_lines_sa_suspect"] = float(sa.n_suspect) if sa else 0.0
+
+        # M7 Lever 6 refuse-to-report: Cristoforetti multi-check + overall_reliable.
+        # Pure additive annotation — these keys never alter T/n_e/composition.
+        # Computed on BOTH solve paths (shared builder) so key-set parity holds.
+        reliability = self._assess_reliability(observations, T_K, n_e, dict(concentrations))
+        quality_metrics["quality_flag"] = reliability["quality_flag"]
+        quality_metrics["saha_boltzmann_consistency"] = reliability["saha_boltzmann_consistency"]
+        quality_metrics["inter_element_t_std_frac"] = reliability["inter_element_t_std_frac"]
+        # overall_reliable = {McWhirter satisfied} AND {quality_flag >= acceptable}
+        # (roadmap M7c). 'unknown'/'poor'/'reject' are NOT reliable.
+        mcwhirter_ok = bool(lte_report.mcwhirter.satisfied)
+        quality_metrics["overall_reliable"] = bool(
+            mcwhirter_ok and reliability["quality_flag"] in ("excellent", "good", "acceptable")
+        )
         return quality_metrics
 
     def _build_python_quality_metrics(
@@ -2215,6 +2371,7 @@ class IterativeCFLIBSSolver:
             quality_metrics=quality_metrics,
             electron_density_uncertainty_cm3=ne_uncertainty,
             boltzmann_covariance=None,
+            overall_reliable=bool(quality_metrics.get("overall_reliable", False)),
         )
 
     def _solve_lax(
@@ -2369,6 +2526,7 @@ class IterativeCFLIBSSolver:
             quality_metrics=quality_metrics,
             electron_density_uncertainty_cm3=0.0,
             boltzmann_covariance=None,
+            overall_reliable=bool(quality_metrics.get("overall_reliable", False)),
         )
 
     def _build_uncertainty_abundance_multipliers(
@@ -2655,6 +2813,7 @@ class IterativeCFLIBSSolver:
             quality_metrics=quality_metrics,
             electron_density_uncertainty_cm3=0.0,  # Would need iterative uncertainty
             boltzmann_covariance=selected_covariance,
+            overall_reliable=bool(quality_metrics.get("overall_reliable", False)),
         )
 
 

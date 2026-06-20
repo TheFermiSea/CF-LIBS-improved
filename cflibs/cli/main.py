@@ -4,6 +4,7 @@ Main CLI entry point for CF-LIBS.
 
 import argparse
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -218,6 +219,22 @@ def _ne_source_label(quality_metrics: dict) -> Optional[str]:
     return "stark" if ne_from_stark else "pressure_balance_fallback"
 
 
+def _refuse_to_report_enabled() -> bool:
+    """M7 Lever 6: opt-in CLI refuse-to-report gate.
+
+    Controlled by the ``CFLIBS_REFUSE_TO_REPORT`` env flag (default OFF). When
+    OFF the CLI trust report is byte-for-byte identical to legacy behaviour
+    (non-regression); when ON, a result that fails the LTE/quality gate
+    (``overall_reliable`` is False) is additionally marked RESULT UNRELIABLE.
+    """
+    return os.environ.get("CFLIBS_REFUSE_TO_REPORT", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 def _trust_report(result, diagnostics: Optional[dict] = None) -> tuple[list, list]:
     """Build ``(info_lines, warning_lines)`` for the CLI trust/quality report.
 
@@ -286,12 +303,30 @@ def _trust_report(result, diagnostics: Optional[dict] = None) -> tuple[list, lis
             f"(n_e ratio = {qm.get('lte_n_e_ratio', 0):.2f})"
         )
 
+    # M7 Lever 6: surface the Cristoforetti multi-check quality flag.
+    quality_flag = qm.get("quality_flag")
+    if quality_flag is not None:
+        info.append(f"Quality flag: {quality_flag}")
+    overall_reliable = getattr(result, "overall_reliable", None)
+
     dropped = (diagnostics or {}).get("dropped_elements") or {}
     if dropped:
         detail = ", ".join(f"{el} ({stage})" for el, stage in sorted(dropped.items()))
         warnings_out.append(f"WARNING: requested elements dropped: {detail}")
 
-    if not result.converged or qm.get("boltzmann_degenerate") or qm.get("closure_degenerate"):
+    # Always-on hard gates (convergence + degeneracy) — unchanged.
+    unreliable = bool(
+        not result.converged or qm.get("boltzmann_degenerate") or qm.get("closure_degenerate")
+    )
+    # M7 refuse-to-report (opt-in): also refuse when the LTE/quality gate fails.
+    if _refuse_to_report_enabled() and overall_reliable is False:
+        unreliable = True
+        warnings_out.append(
+            "WARNING: result fails the refuse-to-report gate "
+            f"(quality_flag={quality_flag}, McWhirter satisfied={bool(lte_ok)}); "
+            "composition withheld as non-quantitative."
+        )
+    if unreliable:
         warnings_out.append("RESULT UNRELIABLE: see warnings above.")
     return info, warnings_out
 
