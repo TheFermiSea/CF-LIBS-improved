@@ -26,7 +26,7 @@ import pytest
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 from cflibs.atomic.database import AtomicDatabase  # noqa: E402
-from cflibs.atomic.structures import PartitionFunction  # noqa: E402
+from cflibs.atomic.structures import PartitionFunction, Transition  # noqa: E402
 from cflibs.cli.main import _trust_report  # noqa: E402
 from cflibs.inversion.solve.iterative import (  # noqa: E402
     CFLIBSResult,
@@ -230,3 +230,125 @@ def test_hard_gate_fires_regardless_of_flag(monkeypatch):
     monkeypatch.delenv("CFLIBS_REFUSE_TO_REPORT", raising=False)
     _, warns = _trust_report(_mk_result(converged=False, overall_reliable=True))
     assert any("RESULT UNRELIABLE" in w for w in warns)
+
+
+# --------------------------------------------------------------------------- #
+# M7 sub-lever b: resonance-line McWhirter delta_E (opt-in, default OFF)       #
+# --------------------------------------------------------------------------- #
+
+
+def _txn(el, sp, ek, aki, resonance=True):
+    return Transition(
+        element=el,
+        ionization_stage=sp,
+        wavelength_nm=400.0,
+        A_ki=aki,
+        E_k_ev=ek,
+        E_i_ev=0.0 if resonance else 1.5,
+        g_k=3,
+        g_i=1,
+        is_resonance=resonance,
+    )
+
+
+def _db_with_transitions(transitions_by_species):
+    db = MagicMock(spec=AtomicDatabase)
+    db.get_ionization_potential.return_value = 7.0
+    db.get_transitions.side_effect = lambda el, sp=None, **k: transitions_by_species.get(
+        (el, sp), []
+    )
+    return db
+
+
+def test_resonance_delta_e_picks_strongest_resonance_max_over_species():
+    """delta_E = max over species of the strongest (max A_ki) resonance line E_k."""
+    db = _db_with_transitions(
+        {
+            # Fe I: strongest resonance (highest A_ki) at 4.99 eV, a weaker one at 3.3
+            ("Fe", 1): [_txn("Fe", 1, 3.3, 1e7), _txn("Fe", 1, 4.99, 5e8)],
+            # Na I: strongest resonance at 2.10 eV
+            ("Na", 1): [_txn("Na", 1, 2.10, 6e7)],
+        }
+    )
+    solver = IterativeCFLIBSSolver(db, max_iterations=3)
+    obs = [
+        LineObservation(373.0, 100.0, 1.0, "Fe", 1, 4.3, 5, 1e8),
+        LineObservation(589.0, 100.0, 1.0, "Na", 1, 2.10, 2, 1e8),
+    ]
+    de = solver._mcwhirter_delta_e_resonance(obs)
+    assert de == pytest.approx(4.99)  # Fe I strongest resonance, max over {Fe,Na}
+
+
+def test_resonance_delta_e_ignores_non_resonance_lines():
+    """Non-resonance (excited-lower) lines must not set delta_E."""
+    db = _db_with_transitions(
+        {("Ca", 1): [_txn("Ca", 1, 6.0, 9e9, resonance=False), _txn("Ca", 1, 2.93, 5e7)]}
+    )
+    solver = IterativeCFLIBSSolver(db, max_iterations=3)
+    obs = [LineObservation(422.7, 100.0, 1.0, "Ca", 1, 2.93, 3, 1e8)]
+    assert solver._mcwhirter_delta_e_resonance(obs) == pytest.approx(2.93)
+
+
+def test_resonance_delta_e_none_when_no_resonance_lines():
+    """No resonance lines -> None -> caller falls back to observation-derived delta_E."""
+    db = _db_with_transitions({("Cu", 1): []})
+    solver = IterativeCFLIBSSolver(db, max_iterations=3)
+    obs = [LineObservation(324.0, 100.0, 1.0, "Cu", 1, 3.8, 4, 1e8)]
+    assert solver._mcwhirter_delta_e_resonance(obs) is None
+
+
+def test_resonance_de_flag_changes_only_lte_keys(mock_db, monkeypatch):
+    """The resonance-delta_E flag must touch ONLY the McWhirter/LTE keys, never
+    any other quality metric (non-regression on T/n_e/composition by isolation)."""
+    db = _db_with_transitions({("Fe", 1): [_txn("Fe", 1, 4.99, 5e8)]})
+    db.get_partition_coefficients.side_effect = mock_db.get_partition_coefficients.side_effect
+    solver = IterativeCFLIBSSolver(db, max_iterations=3)
+    solver._last_sa_result = None
+    obs = [LineObservation(373.0, 100.0, 1.0, "Fe", 1, 2.0, 5, 1e8)]  # max(E_k)=2.0 != 4.99
+    kw = dict(
+        fit_r2=0.97,
+        boltzmann_degenerate=False,
+        closure_degenerate=False,
+        ne_from_stark=True,
+    )
+    monkeypatch.delenv("CFLIBS_MCWHIRTER_RESONANCE_DE", raising=False)
+    off = solver._assemble_quality_metrics(obs, 10000.0, 5e15, {"Fe": 1.0}, **kw)
+    monkeypatch.setenv("CFLIBS_MCWHIRTER_RESONANCE_DE", "1")
+    on = solver._assemble_quality_metrics(obs, 10000.0, 5e15, {"Fe": 1.0}, **kw)
+    changed = {k for k in set(off) | set(on) if off.get(k) != on.get(k)}
+    allowed = {
+        "lte_n_e_required_cm3",
+        "lte_n_e_ratio",
+        "lte_mcwhirter_satisfied",
+        "overall_reliable",
+    }
+    assert changed, "flag ON must change the McWhirter floor for this fixture"
+    assert changed <= allowed, f"flag leaked into non-LTE keys: {changed - allowed}"
+    # The resonance delta_E (4.99) exceeds max(E_k)=2.0 here -> stricter floor.
+    assert on["lte_n_e_required_cm3"] > off["lte_n_e_required_cm3"]
+
+
+def test_resonance_de_flag_off_is_legacy(mock_db, monkeypatch):
+    """Flag OFF: delta_E is observation-derived (legacy max(E_k)); resonance
+    lookup is not consulted."""
+    db = _db_with_transitions({("Fe", 1): [_txn("Fe", 1, 4.99, 5e8)]})
+    db.get_transitions.side_effect = lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("get_transitions must NOT be called when flag is OFF")
+    )
+    db.get_partition_coefficients.side_effect = mock_db.get_partition_coefficients.side_effect
+    solver = IterativeCFLIBSSolver(db, max_iterations=3)
+    solver._last_sa_result = None
+    obs = [LineObservation(373.0, 100.0, 1.0, "Fe", 1, 2.0, 5, 1e8)]
+    monkeypatch.delenv("CFLIBS_MCWHIRTER_RESONANCE_DE", raising=False)
+    # Must not raise (get_transitions never consulted with flag OFF).
+    qm = solver._assemble_quality_metrics(
+        obs,
+        10000.0,
+        5e15,
+        {"Fe": 1.0},
+        fit_r2=0.97,
+        boltzmann_degenerate=False,
+        closure_degenerate=False,
+        ne_from_stark=True,
+    )
+    assert "lte_n_e_required_cm3" in qm

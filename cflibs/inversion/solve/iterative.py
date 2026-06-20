@@ -1993,6 +1993,55 @@ class IterativeCFLIBSSolver:
             100.0 * self.degeneracy_dominance_threshold,
         )
 
+    def _mcwhirter_delta_e_resonance(self, observations: List[LineObservation]) -> Optional[float]:
+        """Resonance-line McWhirter delta_E from the lines table (M7 sub-lever b).
+
+        The physically-correct McWhirter delta_E is the energy of the resonance
+        transition — the dipole-allowed line out of the ground state, whose fast
+        radiative decay is precisely what electron collisions must overcome for
+        LTE to hold (Cristoforetti et al. 2010, Spectrochim. Acta B 65, 86-95).
+        For each (element, ionization_stage) present in the observations we take
+        the upper-level energy of the STRONGEST (max A_ki) resonance line
+        (``is_resonance``, i.e. E_lower ~ 0); the binding delta_E for the
+        multi-element plasma is the MAX over species (the hardest-to-thermalise
+        species sets the LTE floor). Validated against literature resonance
+        energies: Ca I 2.93, Na I 2.10, Mg I 4.35, Si I 4.93 eV (DB matches).
+
+        Returns ``None`` if no species exposes a resonance line, so the caller
+        falls back to the observation-derived delta_E (legacy ``max(E_k)``).
+
+        Why not the largest adjacent level gap, nor ``max(E_k)``: the largest
+        adjacent gap lands on low-lying SAME-PARITY (forbidden) terms that do
+        not stress LTE (Fe I -> 0.74 eV, too lax); ``max(E_k)`` models an
+        implausible single ground->highest-level collision (Fe I -> 7.5 eV,
+        too strict -> false-rejects valid LTE via the cubic n_e floor).
+        """
+        seen: set = set()
+        best: Optional[float] = None
+        for obs in observations:
+            key = (obs.element, obs.ionization_stage)
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                transitions = self.atomic_db.get_transitions(obs.element, obs.ionization_stage)
+            except Exception:  # pragma: no cover - defensive DB-access guard
+                continue
+            resonance = [
+                t
+                for t in transitions
+                if getattr(t, "is_resonance", False)
+                and t.A_ki
+                and np.isfinite(t.E_k_ev)
+                and t.E_k_ev > 0.0
+            ]
+            if not resonance:
+                continue
+            de = float(max(resonance, key=lambda t: t.A_ki).E_k_ev)
+            if best is None or de > best:
+                best = de
+        return best
+
     def _assess_reliability(
         self,
         observations: List[LineObservation],
@@ -2074,10 +2123,24 @@ class IterativeCFLIBSSolver:
         from cflibs.plasma.lte_validator import LTEValidator
 
         lte_validator = LTEValidator()
+        # M7 sub-lever b (opt-in): use the resonance ground->first-excited gap
+        # from energy_levels for the McWhirter delta_E instead of the legacy
+        # max(E_k). Gated behind CFLIBS_MCWHIRTER_RESONANCE_DE (default OFF ==
+        # byte-identical legacy LTE verdict); falls back to the observation-
+        # derived delta_E when no term scheme is available.
+        delta_e_override: Optional[float] = None
+        if os.environ.get("CFLIBS_MCWHIRTER_RESONANCE_DE", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            delta_e_override = self._mcwhirter_delta_e_resonance(observations)
         lte_report = lte_validator.validate(
             T_K=T_K,
             n_e_cm3=n_e,
             observations=observations,
+            delta_E_eV=delta_e_override,
         )
         quality_metrics = {
             # CANONICAL fit quality: R^2 of the common-slope plane / SB-graph
