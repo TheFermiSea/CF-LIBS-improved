@@ -352,3 +352,40 @@ def test_resonance_de_flag_off_is_legacy(mock_db, monkeypatch):
         ne_from_stark=True,
     )
     assert "lte_n_e_required_cm3" in qm
+
+
+def test_resonance_delta_e_survives_malformed_transitions():
+    """A pluggable backend returning malformed transitions (missing A_ki,
+    non-numeric E_k_ev) must degrade to None, never raise (adversarial-verify
+    finding: the resonance filter + max() were outside the try/except)."""
+    import types
+
+    bad_missing_aki = types.SimpleNamespace(is_resonance=True, E_k_ev=4.0)  # no A_ki
+    bad_nonnumeric_ek = types.SimpleNamespace(is_resonance=True, A_ki=5e8, E_k_ev="oops")
+    db = _db_with_transitions(
+        {
+            ("Fe", 1): [bad_missing_aki],
+            ("Ca", 1): [bad_nonnumeric_ek],
+        }
+    )
+    solver = IterativeCFLIBSSolver(db, max_iterations=3)
+    obs = [
+        LineObservation(373.0, 100.0, 1.0, "Fe", 1, 4.3, 5, 1e8),
+        LineObservation(422.7, 100.0, 1.0, "Ca", 1, 2.9, 3, 1e8),
+    ]
+    # Must NOT raise; both species skipped -> None (legacy fallback).
+    assert solver._mcwhirter_delta_e_resonance(obs) is None
+
+
+def test_solve_survives_malformed_transitions_with_flag_on(mock_db, monkeypatch):
+    """Full solve with the resonance flag ON and a malformed backend must not
+    abort the solve (the defect propagated through _assemble_quality_metrics)."""
+    import types
+
+    monkeypatch.setenv("CFLIBS_MCWHIRTER_RESONANCE_DE", "1")
+    mock_db.get_transitions.side_effect = lambda *a, **k: [
+        types.SimpleNamespace(is_resonance=True, E_k_ev=4.0)  # missing A_ki
+    ]
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=5)
+    res = solver.solve(_clean_obs())  # must complete, not raise
+    assert "lte_n_e_required_cm3" in res.quality_metrics

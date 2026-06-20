@@ -2023,21 +2023,27 @@ class IterativeCFLIBSSolver:
             if key in seen:
                 continue
             seen.add(key)
+            # Defensive per-species: a malformed / pluggable AtomicDataSource
+            # backend (transition missing A_ki, non-numeric E_k_ev, raising
+            # get_transitions) must degrade to "skip this species", never abort
+            # the solve. Mirrors _assess_reliability's broad-guard posture, so
+            # the docstring's "returns None when no resonance line" promise holds
+            # for any backend, not just the well-formed AtomicDatabase rows.
             try:
                 transitions = self.atomic_db.get_transitions(obs.element, obs.ionization_stage)
-            except Exception:  # pragma: no cover - defensive DB-access guard
+                resonance = [
+                    t
+                    for t in transitions
+                    if getattr(t, "is_resonance", False)
+                    and getattr(t, "A_ki", None)
+                    and np.isfinite(getattr(t, "E_k_ev", float("nan")))
+                    and t.E_k_ev > 0.0
+                ]
+                if not resonance:
+                    continue
+                de = float(max(resonance, key=lambda t: t.A_ki).E_k_ev)
+            except Exception:  # pragma: no cover - defensive backend guard
                 continue
-            resonance = [
-                t
-                for t in transitions
-                if getattr(t, "is_resonance", False)
-                and t.A_ki
-                and np.isfinite(t.E_k_ev)
-                and t.E_k_ev > 0.0
-            ]
-            if not resonance:
-                continue
-            de = float(max(resonance, key=lambda t: t.A_ki).E_k_ev)
             if best is None or de > best:
                 best = de
         return best
