@@ -129,3 +129,7 @@ data/qu2025_marscode_eqm/
 # Guard against accidental nested test symlinks (machine-specific)
 ASD_da/ASD_da
 data/data
+
+# Atomic line-list dumps (multi-MB, fetched offline; do not commit)
+data/kurucz/
+data/vald/
