@@ -786,6 +786,7 @@ def _solve_analyze_result(
             iterations=result.iterations,
             converged=result.converged,
             quality_metrics=result.quality_metrics,
+            overall_reliable=getattr(result, "overall_reliable", False),
         )
     else:
         return solver.solve(

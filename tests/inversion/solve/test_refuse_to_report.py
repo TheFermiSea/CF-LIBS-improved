@@ -18,6 +18,7 @@ T/n_e/composition and must NEVER raise (defensive fallback to 'unknown').
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -101,6 +102,37 @@ def test_assess_reliability_never_raises(mock_db):
         "inter_element_t_std_frac",
     }
     assert isinstance(out["quality_flag"], str)
+
+
+def test_assess_annotation_cannot_mutate_concentrations(mock_db, monkeypatch):
+    """Reliability assessment is pure annotation: even an adversarial assessor
+    cannot mutate the concentrations dict later returned as the point estimate."""
+    solver = IterativeCFLIBSSolver(mock_db, max_iterations=5)
+
+    def _mutating_assess(observations, T_K, n_e, concentrations):
+        concentrations["A"] = 0.0
+        concentrations["B"] = 1.0
+        return {
+            "quality_flag": "good",
+            "saha_boltzmann_consistency": 0.01,
+            "inter_element_t_std_frac": 0.01,
+        }
+
+    monkeypatch.setattr(solver, "_assess_reliability", _mutating_assess)
+    concentrations = {"A": 0.5, "B": 0.5}
+    solver._last_sa_result = None
+    qm = solver._assemble_quality_metrics(
+        _clean_obs(),
+        8000.0,
+        1e18,
+        concentrations,
+        fit_r2=0.99,
+        boltzmann_degenerate=False,
+        closure_degenerate=False,
+        ne_from_stark=True,
+    )
+    assert qm["quality_flag"] == "good"
+    assert concentrations == {"A": 0.5, "B": 0.5}
 
 
 # --------------------------------------------------------------------------- #
@@ -377,6 +409,23 @@ def test_resonance_delta_e_survives_malformed_transitions():
     assert solver._mcwhirter_delta_e_resonance(obs) is None
 
 
+def test_resonance_delta_e_uses_valid_rows_when_one_row_is_malformed():
+    """Malformed transition rows must not mask the strongest valid resonance
+    row for that species."""
+    db = _db_with_transitions(
+        {
+            ("Fe", 1): [
+                SimpleNamespace(is_resonance=True, A_ki=float("nan"), E_k_ev=7.0),
+                SimpleNamespace(is_resonance=True, A_ki="oops", E_k_ev=6.0),
+                _txn("Fe", 1, 4.99, 5e8),
+            ],
+        }
+    )
+    solver = IterativeCFLIBSSolver(db, max_iterations=3)
+    obs = [LineObservation(373.0, 100.0, 1.0, "Fe", 1, 4.3, 5, 1e8)]
+    assert solver._mcwhirter_delta_e_resonance(obs) == pytest.approx(4.99)
+
+
 def test_solve_survives_malformed_transitions_with_flag_on(mock_db, monkeypatch):
     """Full solve with the resonance flag ON and a malformed backend must not
     abort the solve (the defect propagated through _assemble_quality_metrics)."""
@@ -389,3 +438,47 @@ def test_solve_survives_malformed_transitions_with_flag_on(mock_db, monkeypatch)
     solver = IterativeCFLIBSSolver(mock_db, max_iterations=5)
     res = solver.solve(_clean_obs())  # must complete, not raise
     assert "lte_n_e_required_cm3" in res.quality_metrics
+
+
+def test_mc_uncertainty_rewrap_preserves_overall_reliable(monkeypatch):
+    """The analyze MC-mode result reconstruction must not drop the M7 field."""
+    from cflibs.inversion import pipeline as pipeline_mod
+    from cflibs.inversion.physics import uncertainty as uncertainty_mod
+
+    class FakeMonteCarloUQ:
+        def __init__(self, solver, n_samples):
+            self.solver = solver
+            self.n_samples = n_samples
+
+        def run(self, observations):
+            return SimpleNamespace(
+                T_mean=9000.0,
+                T_std=100.0,
+                ne_mean=2e17,
+                concentrations_mean={"Fe": 1.0},
+                concentrations_std={"Fe": 0.01},
+            )
+
+    class FakeSolver:
+        def solve(self, observations, closure_mode, stark_diagnostics=None, **closure_kwargs):
+            return CFLIBSResult(
+                temperature_K=9000.0,
+                temperature_uncertainty_K=0.0,
+                electron_density_cm3=2e17,
+                concentrations={"Fe": 1.0},
+                concentration_uncertainties={},
+                iterations=3,
+                converged=True,
+                quality_metrics={"overall_reliable": True},
+                overall_reliable=True,
+            )
+
+    monkeypatch.setattr(uncertainty_mod, "MonteCarloUQ", FakeMonteCarloUQ)
+    result = pipeline_mod._solve_analyze_result(
+        FakeSolver(),
+        observations=[],
+        closure_mode="standard",
+        closure_kwargs={},
+        uncertainty_mode="mc",
+    )
+    assert result.overall_reliable is True

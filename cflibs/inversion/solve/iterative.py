@@ -2031,19 +2031,26 @@ class IterativeCFLIBSSolver:
             # for any backend, not just the well-formed AtomicDatabase rows.
             try:
                 transitions = self.atomic_db.get_transitions(obs.element, obs.ionization_stage)
-                resonance = [
-                    t
-                    for t in transitions
-                    if getattr(t, "is_resonance", False)
-                    and getattr(t, "A_ki", None)
-                    and np.isfinite(getattr(t, "E_k_ev", float("nan")))
-                    and t.E_k_ev > 0.0
-                ]
-                if not resonance:
-                    continue
-                de = float(max(resonance, key=lambda t: t.A_ki).E_k_ev)
             except Exception:  # pragma: no cover - defensive backend guard
                 continue
+            best_species_aki: Optional[float] = None
+            best_species_de: Optional[float] = None
+            for transition in transitions:
+                try:
+                    if not getattr(transition, "is_resonance", False):
+                        continue
+                    aki = float(getattr(transition, "A_ki", float("nan")))
+                    de = float(getattr(transition, "E_k_ev", float("nan")))
+                except Exception:
+                    continue
+                if not (np.isfinite(aki) and aki > 0.0 and np.isfinite(de) and de > 0.0):
+                    continue
+                if best_species_aki is None or aki > best_species_aki:
+                    best_species_aki = aki
+                    best_species_de = de
+            if best_species_de is None:
+                continue
+            de = best_species_de
             if best is None or de > best:
                 best = de
         return best
@@ -2068,18 +2075,19 @@ class IterativeCFLIBSSolver:
         the solve. The IP/partition inputs are sourced from the same atomic-DB
         provider the solve itself used, evaluated at the fitted ``T_K``.
         """
-        from cflibs.inversion.physics.quality import QualityAssessor
-
         unknown = {
             "quality_flag": "unknown",
             "saha_boltzmann_consistency": float("nan"),
             "inter_element_t_std_frac": float("nan"),
         }
         try:
+            from cflibs.inversion.physics.quality import QualityAssessor
+
             ips: Dict[str, float] = {}
             u_i: Dict[str, float] = {}
             u_ii: Dict[str, float] = {}
-            for el in concentrations:
+            concentrations_for_assess = dict(concentrations)
+            for el in concentrations_for_assess:
                 ip = self.atomic_db.get_ionization_potential(el, 1)
                 if ip is None:
                     continue
@@ -2090,7 +2098,7 @@ class IterativeCFLIBSSolver:
                 observations=observations,
                 temperature_K=T_K,
                 electron_density_cm3=n_e,
-                concentrations=concentrations,
+                concentrations=concentrations_for_assess,
                 ionization_potentials=ips,
                 partition_funcs_I=u_i,
                 partition_funcs_II=u_ii,
@@ -2129,11 +2137,11 @@ class IterativeCFLIBSSolver:
         from cflibs.plasma.lte_validator import LTEValidator
 
         lte_validator = LTEValidator()
-        # M7 sub-lever b (opt-in): use the resonance ground->first-excited gap
-        # from energy_levels for the McWhirter delta_E instead of the legacy
-        # max(E_k). Gated behind CFLIBS_MCWHIRTER_RESONANCE_DE (default OFF ==
-        # byte-identical legacy LTE verdict); falls back to the observation-
-        # derived delta_E when no term scheme is available.
+        # M7 sub-lever b (opt-in): use the strongest resonance-line upper
+        # energy from the transitions table for the McWhirter delta_E instead
+        # of the legacy max(E_k). Gated behind CFLIBS_MCWHIRTER_RESONANCE_DE
+        # (default OFF == byte-identical legacy LTE verdict); falls back to the
+        # observation-derived delta_E when no resonance line is available.
         delta_e_override: Optional[float] = None
         if os.environ.get("CFLIBS_MCWHIRTER_RESONANCE_DE", "").strip().lower() in (
             "1",
@@ -2198,7 +2206,7 @@ class IterativeCFLIBSSolver:
         # M7 Lever 6 refuse-to-report: Cristoforetti multi-check + overall_reliable.
         # Pure additive annotation — these keys never alter T/n_e/composition.
         # Computed on BOTH solve paths (shared builder) so key-set parity holds.
-        reliability = self._assess_reliability(observations, T_K, n_e, concentrations)
+        reliability = self._assess_reliability(observations, T_K, n_e, dict(concentrations))
         quality_metrics["quality_flag"] = reliability["quality_flag"]
         quality_metrics["saha_boltzmann_consistency"] = reliability["saha_boltzmann_consistency"]
         quality_metrics["inter_element_t_std_frac"] = reliability["inter_element_t_std_frac"]
