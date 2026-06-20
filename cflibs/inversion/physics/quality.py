@@ -629,7 +629,9 @@ def per_element_reliability_from_uncertainty(
         except (TypeError, ValueError):
             out[el] = "reject"
             continue
-        if sigma == 0.0:
+        # sigma is a magnitude (>= 0); <= 0 means "no uncertainty info" -> ok.
+        # (Avoids a float == 0.0 equality check; the result is identical.)
+        if sigma <= 0.0:
             out[el] = "ok"
             continue
         try:
