@@ -14,6 +14,11 @@ from cflibs.atomic.masses import (
     resolve_element_mass,
 )
 from cflibs.atomic.structures import EnergyLevel, Transition, SpeciesPhysics, PartitionFunction
+from cflibs.atomic.wavelength_conversion import (
+    AIR_VACUUM_BOUNDARY_NM,
+    air_to_vacuum_nm,
+    vacuum_to_air_nm,
+)
 
 
 # Lazy import to avoid circular dependency
@@ -34,4 +39,7 @@ __all__ = [
     "STANDARD_ATOMIC_MASSES",
     "DEFAULT_ATOMIC_MASS_AMU",
     "resolve_element_mass",
+    "air_to_vacuum_nm",
+    "vacuum_to_air_nm",
+    "AIR_VACUUM_BOUNDARY_NM",
 ]
