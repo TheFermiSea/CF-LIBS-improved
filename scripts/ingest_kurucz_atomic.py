@@ -3,17 +3,19 @@
 
 M5 / Lever 1C (accuracy-first roadmap): Kurucz is the *completeness* backend for
 the atomic line list (measured ~5-6 wt% better than NIST on line-rich SuperCam;
-~15x more Fe I lines in 240-850 nm). This is an OFFLINE acquisition tool: it uses
-ExoJAX's ``AdbKurucz`` parser (NOT a shipped cflibs dependency) to read the Kurucz
-``gf????.all`` files downloaded from http://kurucz.harvard.edu/atoms/<Zion>/ and
-writes them into a SQLite ``lines`` table matching ``datagen_v2.py`` so the existing
-``AtomicDatabase`` / ``AtomicDataSource`` consumes them unchanged.
+~15x more Fe I lines in 240-850 nm). This is an OFFLINE acquisition tool with its
+own ROBUST direct fixed-width parser (NOT ExoJAX's brittle ``read_kurucz``) that
+ingests BOTH ``gf<Zion>.all`` and the older ``gf<Zion>.lines`` files (same layout)
+and is tolerant of the Kurucz vintage column-drift in the damping fields that makes
+``read_kurucz`` skip whole older-era files (e.g. Ca I gf2000). Downloaded from
+http://kurucz.harvard.edu/atoms/<Zion>/; writes a SQLite ``lines`` table matching
+``datagen_v2.py`` so the existing ``AtomicDatabase`` consumes it unchanged.
 
 Key normalizations (so the line list, wavelength solution and forward model share
 one convention — Ciucci/Tognoni):
-- ExoJAX returns VACUUM wavenumbers; we convert to AIR wavelengths via the
-  ``cflibs.atomic.wavelength_conversion`` Edlen/Morton converter (M2 prereq, #307),
-  matching the NIST ``obs_wl_air`` convention used by the rest of the DB.
+- Kurucz wavelengths are vacuum below 200 nm, air above; we convert the <200 nm
+  ones to AIR via the ``cflibs.atomic.wavelength_conversion`` Edlen/Morton converter
+  (M2 prereq, #307), matching the NIST ``obs_wl_air`` convention used by the DB.
 - Kurucz lines carry NO per-line NIST-style accuracy grade -> ``accuracy_grade='U'``
   (unknown), ``aki_uncertainty=NULL``. Grade-aware quantitation selection should
   prefer NIST-graded lines where they exist and fall back to Kurucz 'U' for coverage.
@@ -32,8 +34,6 @@ from __future__ import annotations
 import argparse
 import sqlite3
 from pathlib import Path
-
-import numpy as np
 
 CM_TO_EV = 1.239841984e-4  # eV per cm^-1 (hc/e, matches datagen_v2.py)
 
@@ -56,78 +56,80 @@ def _z_to_symbol(z: int) -> str:
     return periodictable.elements[z].symbol
 
 
-def _read_clean_gf(path: Path) -> Path:
-    """Drop the rare malformed fixed-width Kurucz records (typos like '-1 72'
-    that break ExoJAX's fixed-column ``read_kurucz``). Returns a cleaned-file path.
-    """
-    raw = path.read_text().splitlines()
-    kept = []
-    for line in raw:
-        try:
-            float(line[0:11])
-            float(line[11:18])
-            float(line[24:36])
-            float(line[52:64])
-            kept.append(line)
-        except Exception:
-            continue
-    if len(kept) == len(raw):
-        return path
-    clean = path.with_suffix(path.suffix + ".clean")
-    clean.write_text("\n".join(kept) + "\n")
-    print(f"  cleaned {path.name}: kept {len(kept)}/{len(raw)} records -> {clean.name}")
-    return clean
-
-
 def ingest_gf(gf_path: Path, conn: sqlite3.Connection, wl_min: float, wl_max: float) -> int:
-    """Parse one Kurucz gf file via ExoJAX AdbKurucz and insert into ``lines``."""
-    from exojax.database.kurucz.api import AdbKurucz
+    """Robustly parse one Kurucz gf file (``.all`` OR ``.lines``) into ``lines``.
 
+    Direct fixed-width parser of the STABLE Kurucz columns, tolerant of the
+    vintage column-drift in the damping/reference region (cols 80+) that breaks
+    ExoJAX's ``read_kurucz`` (which forces whole older-vintage files, e.g. Ca I
+    gf2000, to be skipped). ``.all`` and ``.lines`` share this exact layout, so
+    both ingest identically. We read only what cflibs needs::
+
+        [0:11] wl(nm; <200 vacuum else air)  [11:18] log gf  [18:24] code Z.charge
+        [24:36] E_lower(cm^-1, may be <0 = predicted)  [36:41] J_lower
+        [52:64] E_upper(cm^-1)  [64:69] J_upper
+
+    A_ki = 6.6702e15 * 10**loggf / (g_up * lambda_Angstrom^2). Levels are ordered
+    by |energy| (Kurucz marks predicted levels with a negative sign).
+    """
     from cflibs.atomic.wavelength_conversion import vacuum_to_air_nm
 
-    clean = _read_clean_gf(gf_path)
-    # ExoJAX nurange is wavenumber [cm^-1]; gpu_transfer=True is REQUIRED (the
-    # False path skips self.ielem creation that AdbKurucz.__init__ then reads).
-    nu_range = [1e7 / wl_max, 1e7 / wl_min]
-    adb = AdbKurucz(str(clean), nurange=nu_range)
-
-    nu = np.asarray(adb.nu_lines)
-    wl_vac_nm = 1e7 / nu
-    wl_air_nm = np.asarray(vacuum_to_air_nm(wl_vac_nm))
-    aki = np.asarray(adb.A)
-    ei_ev = np.asarray(adb.elower) * CM_TO_EV
-    ek_ev = np.asarray(adb.eupper) * CM_TO_EV
-    gk = np.asarray(adb.gupper).astype(int)
-    gi = (2 * np.asarray(adb.jlower) + 1).astype(int)
-    ielem = np.asarray(adb.ielem).astype(int)
-    iion = np.asarray(adb.iion).astype(int)  # ExoJAX iion: neutral=1
-    gam_vdw = np.asarray(adb._vdWdamp) if hasattr(adb, "_vdWdamp") else np.zeros_like(aki)
-
+    aki_const = 6.6702e15
     rows = []
-    for i in range(len(nu)):
-        sym = _z_to_symbol(int(ielem[i]))
-        rows.append(
-            (
-                sym,
-                int(iion[i]),
-                float(wl_air_nm[i]),
-                float(aki[i]),
-                float(ei_ev[i]),
-                float(ek_ev[i]),
-                int(gi[i]),
-                int(gk[i]),
-                None,  # rel_int: Kurucz has none
-                None,  # stark_w: not derived here (gamSta is log; separate lever)
-                None,  # stark_alpha
-                None,  # stark_shift
-                1 if ei_ev[i] < 0.01 else 0,  # is_resonance (ground-state line)
-                None,  # aki_uncertainty: Kurucz carries no per-line grade
-                "U",  # accuracy_grade: unknown (Kurucz theoretical/semi-empirical)
-                float(gam_vdw[i]) if np.isfinite(gam_vdw[i]) else None,
-                None,  # gamma_self_log
-                "kurucz",  # provenance
+    bad = 0
+    with open(gf_path, errors="replace") as fh:
+        for line in fh:
+            try:
+                wl_nm = float(line[0:11])
+                loggf = float(line[11:18])
+                code = line[18:24].strip()
+                z = int(code.split(".")[0])
+                charge = int(code.split(".")[1])
+                e1 = abs(float(line[24:36]))
+                j1 = float(line[36:41])
+                e2 = abs(float(line[52:64]))
+                j2 = float(line[64:69])
+            except (ValueError, IndexError):
+                bad += 1
+                continue
+            wl_air_nm = float(vacuum_to_air_nm(wl_nm)) if wl_nm < 200.0 else wl_nm
+            if not (wl_min <= wl_air_nm <= wl_max):
+                continue
+            ei, ek, jlo, jup = (e1, e2, j1, j2) if e2 >= e1 else (e2, e1, j2, j1)
+            gi = int(round(2 * jlo + 1))
+            gk = int(round(2 * jup + 1))
+            wl_a = wl_air_nm * 10.0
+            aki = aki_const * (10.0**loggf) / (gk * wl_a * wl_a) if gk > 0 else 0.0
+            try:
+                sym = _z_to_symbol(z)
+            except Exception:
+                bad += 1
+                continue
+            ei_ev = ei * CM_TO_EV
+            rows.append(
+                (
+                    sym,
+                    charge + 1,
+                    wl_air_nm,
+                    aki,
+                    ei_ev,
+                    ek * CM_TO_EV,
+                    gi,
+                    gk,
+                    None,
+                    None,
+                    None,
+                    None,
+                    1 if ei_ev < 0.01 else 0,
+                    None,
+                    "U",
+                    None,
+                    None,
+                    "kurucz",
+                )
             )
-        )
+    if bad:
+        print(f"  ({bad} unparseable records skipped)")
     conn.executemany(
         "INSERT INTO lines (element,sp_num,wavelength_nm,aki,ei_ev,ek_ev,gi,gk,"
         "rel_int,stark_w,stark_alpha,stark_shift,is_resonance,aki_uncertainty,"
@@ -157,13 +159,8 @@ def main() -> None:
     for gf in args.gf:
         p = Path(gf)
         print(f"Ingesting {p.name} ...")
-        # Per-file guard: ExoJAX read_kurucz is fixed-width and brittle to Kurucz
-        # gf-file VINTAGE drift (the damping/reference columns shift ~1 char
-        # between eras, e.g. col 92:98 = '-6.55K' on older Ca/Mg/Si/Ti files vs
-        # a clean float on newer Fe files). A file it cannot parse must NOT abort
-        # the whole run. (A vintage-tolerant direct parser -- like the VALD one
-        # in ingest_vald_atomic.py -- is the robust follow-up; VALD is the graded
-        # primary source.)
+        # Per-file guard: a file that still cannot be parsed (truncated/corrupt)
+        # must NOT abort the whole multi-file run.
         try:
             n = ingest_gf(p, conn, args.wl_min, args.wl_max)
             print(f"  inserted {n} lines")
