@@ -133,3 +133,5 @@ data/data
 # Atomic line-list dumps (multi-MB, fetched offline; do not commit)
 data/kurucz/
 data/vald/
+data/exomol/
+output/
