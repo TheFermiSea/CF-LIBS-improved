@@ -28,7 +28,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import re
 import time
 from pathlib import Path
 
@@ -64,8 +63,14 @@ def _dump(page, dbg: Path, tag: str) -> None:
 
 def submit_one(
     page, species: str, wl_min_a: float, wl_max_a: float, email: str, debug: bool, dbg: Path
-) -> str | None:
-    """Run the Extract-Element form for one species; return job-number text or None."""
+) -> str:
+    """Run the Extract-Element form for one species; return submit status.
+
+    VALD does NOT show the job number on the confirmation page (it emails it), so
+    we only confirm the 'Request has been submitted' success text. The completed
+    job is later discovered by ``vald_auto_download.py`` scanning a forward
+    job-number range (404-skipping) — no email parsing needed.
+    """
     page.goto("http://vald.astro.uu.se", timeout=60000)
     # login (email-only)
     page.fill('input[name="user"]', email)
@@ -91,9 +96,8 @@ def submit_one(
     page.wait_for_load_state("networkidle")
     if debug:
         _dump(page, dbg, "4_submitted")
-    text = page.inner_text("body")
-    m = re.search(r"\b(\d{5,7})\b", text)  # job number heuristic; verify in --debug
-    return m.group(1) if m else None
+    text = page.inner_text("body").lower()
+    return "submitted" if "request has been submitted" in text else "UNKNOWN-check-debug"
 
 
 def main() -> None:
