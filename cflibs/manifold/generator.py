@@ -108,17 +108,9 @@ class ManifoldGenerator:
             f"λ=[{config.wavelength_range[0]:.1f}, {config.wavelength_range[1]:.1f}] nm"
         )
 
-    def _load_atomic_data(self) -> Tuple:
+    def _fetch_spectral_lines_df(self) -> Tuple:
         """
-        Load atomic data from database and convert to JAX arrays.
-
-        Returns
-        -------
-        Tuple
-            Atomic data as JAX arrays:
-            (lines_wl, lines_aki, lines_ek, lines_gk, lines_ip, lines_z, lines_el_idx,
-             partition_coeffs, ionization_potentials, lines_stark_w, lines_stark_alpha,
-             lines_mass_amu)
+        Query the database to load spectral lines and their Stark parameters.
         """
         import pandas as pd
 
@@ -157,6 +149,10 @@ class ManifoldGenerator:
         # Load atomic masses per element from database (with fallback)
         element_masses = self._resolve_element_masses()
 
+        return df, el_map, placeholders, element_masses
+
+    def _convert_lines_to_arrays(self, df, element_masses) -> Tuple:
+        """Extract data from DataFrame into JAX arrays for line variables."""
         # Map masses to each line based on element
         df["mass_amu"] = df["element"].map(element_masses)
 
@@ -180,6 +176,21 @@ class ManifoldGenerator:
         stark_count = df["stark_w"].notna().sum()
         logger.info(f"Loaded {len(df)} spectral lines ({stark_count} with Stark data)")
 
+        return (
+            lines_wl,
+            lines_aki,
+            lines_ek,
+            lines_gk,
+            lines_ip,
+            lines_z,
+            lines_el_idx,
+            lines_stark_w,
+            lines_stark_alpha,
+            lines_mass_amu,
+        )
+
+    def _build_partition_arrays(self, el_map: dict, placeholders: str) -> Tuple:
+        """Initialize and populate the partition function arrays."""
         # --- Load Partition Function Coefficients & Ionization Potentials ---
         # Shapes:
         # partition_coeffs: (num_elements, max_stages, 5)
@@ -194,7 +205,7 @@ class ManifoldGenerator:
         # the canonical CF-LIBS fit range; default g0 = 1.0 is the
         # conservative physical lower bound.  Without these the polynomial
         # in :meth:`_calculate_partition_functions` would extrapolate
-        # outside the fit window — the Ca I @ 100 000 K, 560× error case
+        # outside the fit window — the Ca I @ 100 000 K, 560x error case
         # documented in CF-LIBS-improved-s1qr.1.
         tmin = np.full((num_elements, max_stages), 2000.0, dtype=np.float32)
         tmax = np.full((num_elements, max_stages), 25000.0, dtype=np.float32)
@@ -220,6 +231,49 @@ class ManifoldGenerator:
         partition_t_min = jnp.array(tmin, dtype=jnp.float32)
         partition_t_max = jnp.array(tmax, dtype=jnp.float32)
         partition_g0 = jnp.array(g0, dtype=jnp.float32)
+
+        return (
+            partition_coeffs,
+            ionization_potentials,
+            partition_t_min,
+            partition_t_max,
+            partition_g0,
+        )
+
+    def _load_atomic_data(self) -> Tuple:
+        """
+        Load atomic data from database and convert to JAX arrays.
+
+        Returns
+        -------
+        Tuple
+            Atomic data as JAX arrays:
+            (lines_wl, lines_aki, lines_ek, lines_gk, lines_ip, lines_z, lines_el_idx,
+             partition_coeffs, ionization_potentials, lines_stark_w, lines_stark_alpha,
+             lines_mass_amu, partition_t_min, partition_t_max, partition_g0)
+        """
+        df, el_map, placeholders, element_masses = self._fetch_spectral_lines_df()
+
+        (
+            lines_wl,
+            lines_aki,
+            lines_ek,
+            lines_gk,
+            lines_ip,
+            lines_z,
+            lines_el_idx,
+            lines_stark_w,
+            lines_stark_alpha,
+            lines_mass_amu,
+        ) = self._convert_lines_to_arrays(df, element_masses)
+
+        (
+            partition_coeffs,
+            ionization_potentials,
+            partition_t_min,
+            partition_t_max,
+            partition_g0,
+        ) = self._build_partition_arrays(el_map, placeholders)
 
         return (
             lines_wl,
