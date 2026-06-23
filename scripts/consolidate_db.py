@@ -73,9 +73,15 @@ def _run(script: str, args: list[str]) -> None:
 
 
 def consolidate(
-    vald_dir: str, db_path: str, tio: bool, wl_min: float, wl_max: float, local_db: str
+    vald_dir: str,
+    db_path: str,
+    tio: bool,
+    wl_min: float,
+    wl_max: float,
+    local_db: str,
+    pattern: str = "*.linelist.gz",
 ) -> None:
-    vald_files = sorted(glob.glob(str(Path(vald_dir) / "*.linelist.gz")))
+    vald_files = sorted(glob.glob(str(Path(vald_dir) / pattern)))
     if not vald_files:
         raise SystemExit(f"no *.linelist.gz under {vald_dir}")
     Path(db_path).unlink(missing_ok=True)  # rebuild clean (idempotent)
@@ -273,6 +279,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--db", required=True, help="output / target DB path")
     ap.add_argument("--vald-dir", default="data/vald", help="dir of *.linelist.gz")
+    ap.add_argument(
+        "--pattern",
+        default="*.linelist.gz",
+        help="glob within --vald-dir; use 'vald_BrianSquires_*.linelist.gz' for the "
+        "clean ions-1-3 sweep only (excludes old Extract-All high-ion slices)",
+    )
     ap.add_argument("--tio", action="store_true", help="also ingest ExoMol TiO")
     ap.add_argument("--local-db", default="data/exomol", help="ExoMol cache root")
     ap.add_argument("--wl-min", type=float, default=100.0)
@@ -282,7 +294,9 @@ def main() -> None:
     args = ap.parse_args()
 
     if not args.validate_only:
-        consolidate(args.vald_dir, args.db, args.tio, args.wl_min, args.wl_max, args.local_db)
+        consolidate(
+            args.vald_dir, args.db, args.tio, args.wl_min, args.wl_max, args.local_db, args.pattern
+        )
     report = validate_db(args.db, expect_tio=args.tio)
 
     print(f"\n=== VALIDATION: {report['status']} ===")
