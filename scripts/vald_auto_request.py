@@ -61,24 +61,30 @@ def _dump(page, dbg: Path, tag: str) -> None:
     print(f"  [debug] wrote {tag}.png + {tag}.html")
 
 
-def submit_one(
-    page, species: str, wl_min_a: float, wl_max_a: float, email: str, debug: bool, dbg: Path
-) -> str:
-    """Run the Extract-Element form for one species; return submit status.
+def login(page, email: str, debug: bool, dbg: Path) -> None:
+    """Log in once (email-only); the session is reused for every submit."""
+    page.goto("http://vald.astro.uu.se", timeout=60000)
+    page.fill('input[name="user"]', email)
+    page.click('input[type="submit"]')
+    page.wait_for_load_state("networkidle")
+    if debug:
+        _dump(page, dbg, "1_after_login")
+
+
+def logged_in(page) -> bool:
+    """True if the Extract Element control is present (i.e. session is live)."""
+    return page.locator('input[value="Extract Element"]').count() > 0
+
+
+def submit_one(page, species: str, wl_min_a: float, wl_max_a: float, debug: bool, dbg: Path) -> str:
+    """Submit one species via Extract Element (assumes already logged in).
 
     VALD does NOT show the job number on the confirmation page (it emails it), so
     we only confirm the 'Request has been submitted' success text. The completed
     job is later discovered by ``vald_auto_download.py`` scanning a forward
     job-number range (404-skipping) — no email parsing needed.
     """
-    page.goto("http://vald.astro.uu.se", timeout=60000)
-    # login (email-only)
-    page.fill('input[name="user"]', email)
-    page.click('input[type="submit"]')
-    page.wait_for_load_state("networkidle")
-    if debug:
-        _dump(page, dbg, "1_after_login")
-    # Extract Element
+    # Extract Element — from the persistent left-nav, no re-login per species.
     page.click('input[value="Extract Element"]')
     page.wait_for_load_state("networkidle")
     if debug:
@@ -128,20 +134,29 @@ def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
+        login(page, args.email, args.debug, dbg)
         with manifest.open("a") as mf:
             for i, sp in enumerate(species):
                 try:
-                    job = submit_one(
-                        page, sp, args.wl_min_a, args.wl_max_a, args.email, args.debug, dbg
-                    )
-                    print(f"[{i+1}/{len(species)}] submitted {sp!r} -> job {job}")
+                    if not logged_in(page):  # session dropped over a long sweep -> re-login
+                        print("  (session expired; re-logging in)")
+                        login(page, args.email, False, dbg)
+                    job = submit_one(page, sp, args.wl_min_a, args.wl_max_a, args.debug, dbg)
+                    print(f"[{i+1}/{len(species)}] submitted {sp!r} -> {job}")
                     mf.write(f"{sp}\t{job}\n")
                     mf.flush()
                 except Exception as e:
                     print(f"[{i+1}/{len(species)}] FAILED {sp!r}: {type(e).__name__}: {e}")
+                    mf.write(f"{sp}\tFAILED\n")
+                    mf.flush()
                     if args.debug:
                         _dump(page, dbg, "error")
-                    break
+                        break
+                    # non-debug sweep: reset to a known state and keep going.
+                    try:
+                        page.goto("http://vald.astro.uu.se", timeout=60000)
+                    except Exception:
+                        pass
                 if not args.debug and i < len(species) - 1:
                     time.sleep(args.throttle)
         browser.close()
