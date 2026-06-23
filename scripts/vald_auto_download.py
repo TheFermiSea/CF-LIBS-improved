@@ -25,7 +25,7 @@ import argparse
 import subprocess
 from pathlib import Path
 
-FTP = "http://vald.astro.uu.se/~vald/FTP"
+FTP = "https://vald.astro.uu.se/FTP"  # current path (2020 HELIOS-K used ~vald/FTP/)
 
 
 def _curl(url: str, dest: Path) -> bool:
