@@ -262,6 +262,7 @@ class LineSelector:
         max_lines_per_element: int = 20,
         target_sigma_t: Optional[float] = None,
         plasma_temperature_K: float = 10000.0,
+        reliability_ranked_selection: bool = False,
     ):
         """
         Initialize line selector.
@@ -302,6 +303,7 @@ class LineSelector:
         self.max_lines_per_element = max_lines_per_element
         self.target_sigma_t = target_sigma_t
         self.plasma_temperature_K = plasma_temperature_K
+        self.reliability_ranked_selection = reliability_ranked_selection
 
     def select(
         self,
@@ -451,8 +453,12 @@ class LineSelector:
         rejected_scores: List[LineScore],
         warnings: List[str],
     ) -> List[LineScore]:
-        """Per element: sort, warn on spread, take top lines, reject the excess."""
+        """Per element: keep the best lines up to the cap, reject the excess. With
+        ``reliability_ranked_selection`` the kept subset MAXIMIZES upper-level energy spread
+        (best temperature conditioning, ``twoLineBeta_stable_sharp``) when the cap binds;
+        otherwise the highest-scored lines. Only differs from the baseline when the cap binds."""
         selected_scores: List[LineScore] = []
+        cap = self.max_lines_per_element
         for element, elem_scores in by_element.items():
             # Sort by score descending
             elem_scores.sort(key=lambda s: s.score, reverse=True)
@@ -460,16 +466,46 @@ class LineSelector:
             # Check energy spread
             self._warn_energy_spread(element, elem_scores, warnings)
 
-            # Select top lines up to max
-            n_select = min(len(elem_scores), self.max_lines_per_element)
-            selected_scores.extend(elem_scores[:n_select])
+            if self.reliability_ranked_selection and len(elem_scores) > cap:
+                keep = self._max_spread_subset(elem_scores, cap)
+            else:
+                keep = elem_scores[:cap]
 
-            # Mark excess as rejected
-            for score in elem_scores[n_select:]:
-                score.rejection_reason = "Exceeded max lines per element"
-                rejected_scores.append(score)
+            keep_ids = {id(s) for s in keep}
+            selected_scores.extend(keep)
+            for score in elem_scores:
+                if id(score) not in keep_ids:
+                    score.rejection_reason = "Exceeded max lines per element"
+                    rejected_scores.append(score)
 
         return selected_scores
+
+    @staticmethod
+    def _max_spread_subset(scores: List[LineScore], k: int) -> List[LineScore]:
+        """Pick ``k`` lines maximizing upper-level energy spread via farthest-point sampling
+        on ``E_k``: seed with the two extremes (the best-conditioned pair,
+        ``twoLineBeta_stable_sharp``), then greedily add the line farthest from the chosen
+        set. Better temperature conditioning than a score-only top-k when the cap binds."""
+        if k >= len(scores):
+            return list(scores)
+        energies = [s.observation.E_k_ev for s in scores]
+        lo = min(range(len(scores)), key=lambda i: energies[i])
+        hi = max(range(len(scores)), key=lambda i: energies[i])
+        chosen = [lo] if lo == hi else [lo, hi]
+        chosen_set = set(chosen)
+        while len(chosen) < k:
+            best_i, best_d = None, -1.0
+            for i in range(len(scores)):
+                if i in chosen_set:
+                    continue
+                d = min(abs(energies[i] - energies[c]) for c in chosen)
+                if d > best_d:
+                    best_d, best_i = d, i
+            if best_i is None:
+                break
+            chosen.append(best_i)
+            chosen_set.add(best_i)
+        return [scores[i] for i in chosen]
 
     def _warn_energy_spread(
         self,

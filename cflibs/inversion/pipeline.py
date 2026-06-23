@@ -146,6 +146,10 @@ class AnalysisPipelineConfig:
     target_sigma_t: Optional[float] = None
     #: Representative plasma T (K) for the σ_T -> slope-target conversion; only used with target_sigma_t.
     plasma_temperature_K: float = 10000.0
+    #: Reliability-ranked selection (gated): when the per-element max-lines cap binds, keep
+    #: the max-energy-spread subset (best T-conditioning, twoLineBeta_stable_sharp) instead
+    #: of the top-scored lines. No-op when the cap does not bind.
+    reliability_ranked_selection: bool = False
     wavelength_calibration: bool = True
     shift_coherence_veto: bool = True
     #: Residual comb shift-scan half-width (nm) AFTER a quality-passed
@@ -334,6 +338,7 @@ def build_pipeline_config(
         grade_aware_selection=bool(knob("grade_aware_selection", None, False)),
         target_sigma_t=knob("target_sigma_t", None, None),
         plasma_temperature_K=knob("plasma_temperature_K", None, 10000.0),
+        reliability_ranked_selection=bool(knob("reliability_ranked_selection", None, False)),
         wavelength_calibration=bool(knob("wavelength_calibration", wavelength_calibration, True)),
         shift_coherence_veto=bool(knob("shift_coherence_veto", shift_coherence_veto, True)),
         residual_shift_scan_nm=float(
@@ -456,6 +461,7 @@ def detect_and_select_lines(
     grade_aware_selection: bool = False,
     target_sigma_t: Optional[float] = None,
     plasma_temperature_K: float = 10000.0,
+    reliability_ranked_selection: bool = False,
     detection_overrides: Optional[dict] = None,
     return_diagnostics: bool = False,
 ):
@@ -704,6 +710,7 @@ def detect_and_select_lines(
         max_lines_per_element=max_lines_per_element,
         target_sigma_t=target_sigma_t,
         plasma_temperature_K=plasma_temperature_K,
+        reliability_ranked_selection=reliability_ranked_selection,
     )
 
     # Lever 1B (grade-aware selection, gated default-off): feed grade-derived A_ki
@@ -902,6 +909,7 @@ def run_pipeline(
         grade_aware_selection=pipeline.grade_aware_selection,
         target_sigma_t=pipeline.target_sigma_t,
         plasma_temperature_K=pipeline.plasma_temperature_K,
+        reliability_ranked_selection=pipeline.reliability_ranked_selection,
         detection_overrides=pipeline.detection_overrides,
         return_diagnostics=True,
     )

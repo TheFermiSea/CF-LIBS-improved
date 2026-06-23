@@ -191,7 +191,14 @@ def mcwhirter_min_ne(t_k: float, d_e_ev: float) -> float:
     -------
     float
         The minimum electron density (cm⁻³) for LTE validity.
+
+    Raises
+    ------
+    ValueError
+        If ``t_k`` is negative (the bound is scoped to nonnegative temperature).
     """
+    if t_k < 0.0:
+        raise ValueError(f"t_k must be nonnegative, got {t_k}")
     return MCWHIRTER_CONST * math.sqrt(t_k) * d_e_ev**3
 
 
