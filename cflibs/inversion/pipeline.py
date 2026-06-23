@@ -23,6 +23,7 @@ The CLI keeps thin backward-compatible aliases (``_build_pipeline_config``,
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
@@ -137,6 +138,7 @@ class AnalysisPipelineConfig:
     min_lines_per_element: int = 3
     isolation_wavelength_nm: float = 0.1
     max_lines_per_element: int = 20
+    grade_aware_selection: bool = False
     wavelength_calibration: bool = True
     shift_coherence_veto: bool = True
     #: Residual comb shift-scan half-width (nm) AFTER a quality-passed
@@ -322,6 +324,7 @@ def build_pipeline_config(
         min_lines_per_element=knob("min_lines_per_element", None, 3),
         isolation_wavelength_nm=knob("isolation_wavelength_nm", None, 0.1),
         max_lines_per_element=knob("max_lines_per_element", None, 20),
+        grade_aware_selection=bool(knob("grade_aware_selection", None, False)),
         wavelength_calibration=bool(knob("wavelength_calibration", wavelength_calibration, True)),
         shift_coherence_veto=bool(knob("shift_coherence_veto", shift_coherence_veto, True)),
         residual_shift_scan_nm=float(
@@ -441,6 +444,7 @@ def detect_and_select_lines(
     global_shift_scan_nm: float = 0.5,
     affine_coverage_gate: bool = True,
     line_residual_gate: bool = True,
+    grade_aware_selection: bool = False,
     detection_overrides: Optional[dict] = None,
     return_diagnostics: bool = False,
 ):
@@ -689,9 +693,25 @@ def detect_and_select_lines(
         max_lines_per_element=max_lines_per_element,
     )
 
+    # Lever 1B (grade-aware selection, gated default-off): feed grade-derived A_ki
+    # uncertainties into the selector so the per-element top-N prefers high-grade
+    # (A/B) lines over D/U. Without this the selector defaults every line to 0.10
+    # (grade-blind), so a completeness DB's many D/U lines pollute the analytical
+    # set. Unknown grade (aki_uncertainty None) -> worst (1.0), NOT the optimistic
+    # 0.10 default, so 'U' lines are downweighted rather than treated as accurate.
+    atomic_uncertainties: Optional[dict] = None
+    if grade_aware_selection:
+        atomic_uncertainties = {}
+        for o in detection.observations:
+            unc = o.aki_uncertainty
+            if unc is None or not math.isfinite(unc) or unc <= 0.0:
+                unc = 1.0
+            atomic_uncertainties[(o.element, o.ionization_stage, o.wavelength_nm)] = float(unc)
+
     selection = selector.select(
         detection.observations,
         resonance_lines=detection.resonance_lines,
+        atomic_uncertainties=atomic_uncertainties,
     )
     if not return_diagnostics:
         return selection.selected_lines
@@ -866,6 +886,7 @@ def run_pipeline(
         global_shift_scan_nm=pipeline.global_shift_scan_nm,
         affine_coverage_gate=pipeline.affine_coverage_gate,
         line_residual_gate=pipeline.line_residual_gate,
+        grade_aware_selection=pipeline.grade_aware_selection,
         detection_overrides=pipeline.detection_overrides,
         return_diagnostics=True,
     )
