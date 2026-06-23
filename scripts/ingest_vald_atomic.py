@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import math
 import re
 import sqlite3
 from pathlib import Path
@@ -124,6 +125,19 @@ def parse_vald(path: Path, wl_min_nm: float, wl_max_nm: float) -> Iterator[dict]
                     gam_waals = float(parts[12]) if len(parts) > 12 and parts[12] else None
                 except (ValueError, IndexError):
                     continue
+                # Sanity gate: a minority of Kurucz-sourced (high-ion, predicted) records
+                # use a compact/variant column layout that misreads here as loggf>5 and/or
+                # negative J -> garbage A_ki / negative g. Skip rather than store garbage.
+                if (
+                    loggf > 5.0
+                    or j_low < 0
+                    or j_up < 0
+                    or e_low == e_up  # degenerate: zero transition energy
+                    or not all(math.isfinite(v) for v in (wl_a, loggf, e_low, e_up, j_low, j_up))
+                ):
+                    continue
+                # Negative energy is the Kurucz "predicted level" marker; magnitude is real.
+                e_low, e_up = abs(e_low), abs(e_up)
                 # Atomic iff the strict element regex also matches; else molecular.
                 kind = "atomic" if _DATA_RE.match(line) else "molecular"
                 wl_nm = wl_a / 10.0
