@@ -98,7 +98,9 @@ def main() -> None:
     p_max, l_max, w_max = _p2(peak_wl.size, 64), _p2(line_wl.size, 64), _p2(seg_wl.size, 64)
 
     def pad(a, n, fill=0.0):
-        out = np.full(n, fill, dtype=float); out[: a.size] = a; return out
+        out = np.full(n, fill, dtype=float)
+        out[: a.size] = a
+        return out
 
     inputs = dict(
         peak_wl=jnp.asarray(pad(peak_wl, p_max)),

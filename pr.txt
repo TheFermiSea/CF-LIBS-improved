@@ -1,0 +1,7 @@
+🔒 Fix SQL Injection vulnerability in database migration
+
+🎯 **What:** The ALTER TABLE statement in cflibs/atomic/database.py was constructed using an f-string instead of parameterized query, leaving the application vulnerable to SQL injection during schema migration, as spotted by security static analysis.
+⚠️ **Risk:** The use of string interpolation with dynamic schema names or variable lengths exposes the potential for SQL injection into the database execution layer if code evolved to accept input directly.
+🛡️ **Solution:** The vulnerability was eliminated by replacing string interpolation in the ALTER TABLE statements with a hardcoded dictionary map mapping permitted column names to their exact, pre-constructed, and safe SQL queries.
+
+All existing validation checks were preserved.

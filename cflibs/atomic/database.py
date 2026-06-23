@@ -106,34 +106,31 @@ class AtomicDatabase:
         cursor.execute("PRAGMA table_info(lines)")
         columns = {row[1] for row in cursor.fetchall()}
 
-        required_line_cols = {
-            "stark_w": "REAL",
-            "stark_alpha": "REAL",
-            "stark_shift": "REAL",
-            "is_resonance": "INTEGER",
-            "aki_uncertainty": "REAL",
-            "accuracy_grade": "TEXT",
+        _ADD_COLUMN_QUERIES = {
+            "stark_w": "ALTER TABLE lines ADD COLUMN stark_w REAL",
+            "stark_alpha": "ALTER TABLE lines ADD COLUMN stark_alpha REAL",
+            "stark_shift": "ALTER TABLE lines ADD COLUMN stark_shift REAL",
+            "is_resonance": "ALTER TABLE lines ADD COLUMN is_resonance INTEGER",
+            "aki_uncertainty": "ALTER TABLE lines ADD COLUMN aki_uncertainty REAL",
+            "accuracy_grade": "ALTER TABLE lines ADD COLUMN accuracy_grade TEXT",
             # Provenance of stark_w (e.g. 'stark_b' literature-grade vs
             # 'konjevic_lambda_sq_scaled' heuristic). NULL = unknown, which the
             # Stark n_e diagnostic treats as not literature-grade.
-            "stark_w_source": "TEXT",
+            "stark_w_source": "ALTER TABLE lines ADD COLUMN stark_w_source TEXT",
         }
 
-        valid_dtypes = {"REAL", "INTEGER", "TEXT", "BLOB", "NUMERIC"}
-        for col, dtype in required_line_cols.items():
+        for col, query in _ADD_COLUMN_QUERIES.items():
             if col not in columns:
-                AtomicDatabase._add_line_column(cursor, col, dtype, valid_dtypes)
+                AtomicDatabase._add_line_column(cursor, col, query, _ADD_COLUMN_QUERIES)
 
     @staticmethod
-    def _add_line_column(cursor: sqlite3.Cursor, col: str, dtype: str, valid_dtypes: set[str]):
+    def _add_line_column(cursor: sqlite3.Cursor, col: str, query: str, allowed_queries: dict[str, str]):
         """Validate and add a single column to the lines table, backfilling as needed."""
-        if not col.isidentifier():
-            raise ValueError(f"Invalid column name for migration: {col}")
-        if dtype.upper() not in valid_dtypes:
-            raise ValueError(f"Invalid data type for migration: {dtype}")
+        if col not in allowed_queries or query != allowed_queries[col]:
+            raise ValueError(f"Invalid column name or query for migration: {col}")
 
         logger.info(f"Migrating schema: Adding {col} to lines table")
-        cursor.execute(f"ALTER TABLE lines ADD COLUMN {col} {dtype}")
+        cursor.execute(query)
 
         # Backfill is_resonance if we just added it
         if col == "is_resonance":
