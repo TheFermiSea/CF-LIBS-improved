@@ -48,8 +48,30 @@ analytical set is curated — exactly the regime where the repo measured complet
   structured-GN, apples-to-apples with the repo's winning measurement, to see if VALD-curated beats
   NIST-curated.
 
-## Bottom line
+## Grade-aware LineSelector (Lever 1B) — implemented, MEASURED no-op for VALD
 
-The new databases do **not** improve accuracy by naive substitution into the current pipeline (raw
-regresses; grade-B too sparse). The improvement, if it exists, requires **grade-aware selection** —
-either the R4 hybrid DB or a grade-aware LineSelector — which are the concrete next experiments.
+Implemented `grade_aware_selection` (gated, default-off): feed grade-derived `aki_uncertainty`
+into the selector so per-element top-N prefers A/B over D/U (U→worst, not the optimistic 0.10).
+Found the selector was **grade-blind** (pipeline never passed `atomic_uncertainties`); the flag
+activates the existing scoring path.
+
+**Result: byte-identical RMSE on VALD-complete (ON == OFF).** Root cause: VALD's LIBS-major species
+are **almost entirely D-grade (Kurucz-theoretical) with no A/B alternatives** — Si/Fe 1/Ca/Ti/Mn/Na/K
+are all D/U. **You cannot prefer accurate lines that do not exist.** So VALD's ~2× regression is a
+pure **gf-VALUE-accuracy** issue (Kurucz-theoretical D-grade < NIST graded for the same lines),
+*not* a selection problem — unfixable by any selection change *within VALD*.
+
+## DEFINITIVE conclusion
+
+The new databases do **NOT** improve accuracy by substitution: VALD-complete is ~75% Kurucz-theoretical
+D-grade, so its gf values are less accurate than NIST's graded set for the LIBS analytical lines, and
+it regresses ~2×. Grade-aware selection can't recover it (no high-grade alternatives in VALD).
+
+**The only path that can improve accuracy is R4 — NIST-A/B authoritative + VALD backfill ONLY where
+NIST lacks coverage.** Keep NIST's accurate gf where it has lines; use VALD purely to *widen* coverage.
+And the grade-aware selector built here is **exactly the mechanism R4 needs**: in a NIST∪VALD merged DB,
+NIST lines are A/B and VALD backfill is D, so `grade_aware_selection=True` would prefer the NIST-accurate
+lines. This is also the literature-recommended approach and the basis of the repo's own Kurucz-beats-NIST
+measurement (curated graded set, not raw dump).
+
+**Next experiment: build R4 (merged NIST-A/B ∪ VALD-backfill) and benchmark with grade-aware ON.**
