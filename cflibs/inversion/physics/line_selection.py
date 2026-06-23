@@ -260,6 +260,8 @@ class LineSelector:
         exclude_resonance: bool = False,
         isolation_wavelength_nm: float = 0.1,
         max_lines_per_element: int = 20,
+        target_sigma_t: Optional[float] = None,
+        plasma_temperature_K: float = 10000.0,
     ):
         """
         Initialize line selector.
@@ -282,6 +284,15 @@ class LineSelector:
             Minimum wavelength separation for isolation check
         max_lines_per_element : int
             Maximum lines to select per element (to avoid overweighting)
+        target_sigma_t : float, optional
+            Target RELATIVE temperature accuracy (σ_T/T). When set (gated,
+            default None=off), the SNR/spread/min-lines gates are DERIVED from
+            this target + the spectrum's measured energy spread via the verified
+            ``ErrorBudget`` (see ``derived_thresholds``), replacing the tuned
+            magic numbers. ``target_sigma_t≈0.10`` reproduces the legacy min_snr=10.
+        plasma_temperature_K : float
+            Representative plasma T for the σ_T → slope-target conversion
+            (τβ = σ_T/T / (kB·T)); only used when ``target_sigma_t`` is set.
         """
         self.min_snr = min_snr
         self.min_energy_spread_ev = min_energy_spread_ev
@@ -289,6 +300,8 @@ class LineSelector:
         self.exclude_resonance = exclude_resonance
         self.isolation_wavelength_nm = isolation_wavelength_nm
         self.max_lines_per_element = max_lines_per_element
+        self.target_sigma_t = target_sigma_t
+        self.plasma_temperature_K = plasma_temperature_K
 
     def select(
         self,
@@ -319,6 +332,16 @@ class LineSelector:
             atomic_uncertainties = {}
 
         warnings: list[str] = []
+
+        # Derived thresholds (gated): when a target σ_T/T is set, replace the tuned
+        # min_snr/min_energy_spread/min_lines gates with values DERIVED from the target +
+        # the spectrum's measured energy spread, via the verified ErrorBudget. No-op when off.
+        if self.target_sigma_t is not None:
+            (
+                self.min_snr,
+                self.min_energy_spread_ev,
+                self.min_lines_per_element,
+            ) = self._derive_thresholds(observations)
 
         # Score all lines
         scores = [
@@ -354,6 +377,48 @@ class LineSelector:
             n_elements=len(by_element),
             warnings=warnings,
         )
+
+    def _derive_thresholds(self, observations: List[LineObservation]) -> Tuple[float, float, int]:
+        """Derive (min_snr, min_energy_spread_ev, min_lines) from the target σ_T/T and the
+        spectrum's measured per-element energy spread, via the verified ErrorBudget formulas
+        (``derived_thresholds``). The hard gate is min_snr: a line needs per-line ordinate
+        error ε ≤ ``max_per_line_error`` (= τβ·√(ssE/n)), i.e. SNR ≥ 1/ε_max. Falls back to
+        the configured values if no element has ≥2 lines with positive energy spread."""
+        from cflibs.core.constants import KB_EV
+        from cflibs.inversion.physics import derived_thresholds as dt
+
+        tau_beta = dt.slope_target_from_temp_rel(
+            self.target_sigma_t, KB_EV, self.plasma_temperature_K
+        )
+        by_el: Dict[str, List[LineObservation]] = defaultdict(list)
+        for o in observations:
+            by_el[o.element].append(o)
+        ns: list[float] = []
+        ss_es: list[float] = []
+        eps: list[float] = []
+        for obs in by_el.values():
+            energies = [o.E_k_ev for o in obs]
+            n = len(energies)
+            if n < 2:
+                continue
+            e_bar = sum(energies) / n
+            ss_e = sum((e - e_bar) ** 2 for e in energies)
+            if ss_e <= 0.0:
+                continue
+            ns.append(float(n))
+            ss_es.append(ss_e)
+            eps.extend(o.y_uncertainty for o in obs if o.y_uncertainty > 0)
+        if not ns:
+            return self.min_snr, self.min_energy_spread_ev, self.min_lines_per_element
+        n_med = float(np.median(ns))
+        ss_e_med = float(np.median(ss_es))
+        eps_med = float(np.median(eps)) if eps else 0.02
+        v_per_line = ss_e_med / n_med
+        eps_max = dt.max_per_line_error(tau_beta, n_med, ss_e_med)
+        derived_snr = (1.0 / eps_max) if eps_max > 0 else self.min_snr
+        derived_lines = max(2, int(np.ceil(dt.required_min_lines(tau_beta, eps_med, v_per_line))))
+        derived_spread = float(np.sqrt(dt.required_energy_spread(tau_beta, eps_med, n_med) / n_med))
+        return derived_snr, derived_spread, derived_lines
 
     def _partition_by_criteria(
         self,

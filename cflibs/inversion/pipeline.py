@@ -139,6 +139,13 @@ class AnalysisPipelineConfig:
     isolation_wavelength_nm: float = 0.1
     max_lines_per_element: int = 20
     grade_aware_selection: bool = False
+    #: Target relative temperature accuracy σ_T/T (gated, default None=off). When set, the
+    #: line-selection SNR/spread/min-lines gates are DERIVED from this target via the verified
+    #: ErrorBudget (cflibs.inversion.physics.derived_thresholds), replacing the tuned magic
+    #: numbers. ~0.10 reproduces the legacy min_snr=10.
+    target_sigma_t: Optional[float] = None
+    #: Representative plasma T (K) for the σ_T -> slope-target conversion; only used with target_sigma_t.
+    plasma_temperature_K: float = 10000.0
     wavelength_calibration: bool = True
     shift_coherence_veto: bool = True
     #: Residual comb shift-scan half-width (nm) AFTER a quality-passed
@@ -325,6 +332,8 @@ def build_pipeline_config(
         isolation_wavelength_nm=knob("isolation_wavelength_nm", None, 0.1),
         max_lines_per_element=knob("max_lines_per_element", None, 20),
         grade_aware_selection=bool(knob("grade_aware_selection", None, False)),
+        target_sigma_t=knob("target_sigma_t", None, None),
+        plasma_temperature_K=knob("plasma_temperature_K", None, 10000.0),
         wavelength_calibration=bool(knob("wavelength_calibration", wavelength_calibration, True)),
         shift_coherence_veto=bool(knob("shift_coherence_veto", shift_coherence_veto, True)),
         residual_shift_scan_nm=float(
@@ -445,6 +454,8 @@ def detect_and_select_lines(
     affine_coverage_gate: bool = True,
     line_residual_gate: bool = True,
     grade_aware_selection: bool = False,
+    target_sigma_t: Optional[float] = None,
+    plasma_temperature_K: float = 10000.0,
     detection_overrides: Optional[dict] = None,
     return_diagnostics: bool = False,
 ):
@@ -691,6 +702,8 @@ def detect_and_select_lines(
         exclude_resonance=exclude_resonance,
         isolation_wavelength_nm=isolation_wavelength_nm,
         max_lines_per_element=max_lines_per_element,
+        target_sigma_t=target_sigma_t,
+        plasma_temperature_K=plasma_temperature_K,
     )
 
     # Lever 1B (grade-aware selection, gated default-off): feed grade-derived A_ki
@@ -887,6 +900,8 @@ def run_pipeline(
         affine_coverage_gate=pipeline.affine_coverage_gate,
         line_residual_gate=pipeline.line_residual_gate,
         grade_aware_selection=pipeline.grade_aware_selection,
+        target_sigma_t=pipeline.target_sigma_t,
+        plasma_temperature_K=pipeline.plasma_temperature_K,
         detection_overrides=pipeline.detection_overrides,
         return_diagnostics=True,
     )
