@@ -1302,42 +1302,15 @@ class ManifoldGenerator:
             elif i % (self.config.batch_size * 10) == 0:
                 logger.info(f"Generated {i}/{n_samples} ({i / n_samples:.1%})")
 
-    def generate_manifold(
+    def _build_batch_spectrum_fn(
         self,
-        progress_callback: Optional[Callable[[int, int, float], None]] = None,
-    ) -> None:
-        """
-        Generate the complete spectral manifold.
-
-        Parameters
-        ----------
-        progress_callback : callable, optional
-            Callback function(completed, total, percentage) for progress updates
-        """
-        logger.info("Starting manifold generation...")
-
-        # Build parameter grid
-        params_arr = self._build_param_grid()
-        n_samples = len(params_arr)
-
-        # Create wavelength grid
-        wl_grid = jnp.linspace(
-            self.config.wavelength_range[0], self.config.wavelength_range[1], self.config.pixels
-        )
-
-        # Move atomic data to device
-        atomic_data = tuple(jax.device_put(x) for x in self.atomic_data)
-
-        # Broadening dispatch (ADR-0001 T1-4 / bead 8n4i):
-        # The LDM path needs a pre-built log-σ grid that brackets the full
-        # range of per-line widths the manifold sweep can produce. We bound
-        # σ_total from below (cold plasma, heaviest line) and above (hot
-        # plasma, lightest line) and pass build_sigma_grid those two
-        # endpoints; LDM clips out-of-grid lines to the boundary layers.
+        wl_grid: jnp.ndarray,
+        atomic_data: Tuple,
+        sigma_inst: float,
+        fwhm_nm: float,
+    ) -> Callable[[jnp.ndarray], jnp.ndarray]:
+        """Build the JIT-compiled batched spectrum generation function."""
         broadening_mode = self.config.broadening_mode
-
-        # Instrument Gaussian σ from configured FWHM (D3 fix).
-        fwhm_nm, sigma_inst = self._compute_instrument_sigma()
 
         if broadening_mode is BroadeningMode.LDM_GAUSSIAN:
             sigma_grid_arr = self._build_ldm_sigma_grid(sigma_inst)
@@ -1367,6 +1340,8 @@ class ManifoldGenerator:
                     in_axes=0,
                 )(batch_params)
 
+            return batch_spectrum
+
         else:
             logger.info(
                 f"Manifold broadening: {broadening_mode.value} "
@@ -1390,6 +1365,17 @@ class ManifoldGenerator:
                     in_axes=0,
                 )(batch_params)
 
+            return batch_spectrum
+
+    def _save_manifold_data(
+        self,
+        params_arr: np.ndarray,
+        batch_spectrum: Callable[[jnp.ndarray], jnp.ndarray],
+        wl_grid: jnp.ndarray,
+        progress_callback: Optional[Callable[[int, int, float], None]],
+    ) -> None:
+        """Create storage, write metadata, and run batch generation."""
+        n_samples = len(params_arr)
         output_path = Path(self.config.output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         storage_format = _infer_storage_format(output_path)
@@ -1429,3 +1415,37 @@ class ManifoldGenerator:
             f"({n_samples / total_time:.0f} spectra/sec)"
         )
         logger.info(f"Output saved to: {output_path} ({storage_format})")
+
+    def generate_manifold(
+        self,
+        progress_callback: Optional[Callable[[int, int, float], None]] = None,
+    ) -> None:
+        """
+        Generate the complete spectral manifold.
+
+        Parameters
+        ----------
+        progress_callback : callable, optional
+            Callback function(completed, total, percentage) for progress updates
+        """
+        logger.info("Starting manifold generation...")
+
+        # Build parameter grid
+        params_arr = self._build_param_grid()
+
+        # Create wavelength grid
+        wl_grid = jnp.linspace(
+            self.config.wavelength_range[0], self.config.wavelength_range[1], self.config.pixels
+        )
+
+        # Move atomic data to device
+        atomic_data = tuple(jax.device_put(x) for x in self.atomic_data)
+
+        # Instrument Gaussian σ from configured FWHM (D3 fix).
+        fwhm_nm, sigma_inst = self._compute_instrument_sigma()
+
+        # Build batched spectrum generation function
+        batch_spectrum = self._build_batch_spectrum_fn(wl_grid, atomic_data, sigma_inst, fwhm_nm)
+
+        # Execute generation and save to disk
+        self._save_manifold_data(params_arr, batch_spectrum, wl_grid, progress_callback)
