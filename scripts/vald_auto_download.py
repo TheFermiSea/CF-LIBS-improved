@@ -60,13 +60,19 @@ def main() -> None:
             print(f"SKIP {num} (already have)")
             got += 1
             continue
-        if _curl(f"{FTP}/{args.jobname}.{num}.gz", ll):
-            size_mb = ll.stat().st_size / 1e6
-            # bibliography is optional; ignore failure
-            _curl(f"{FTP}/{args.jobname}.{num}.bib.gz", out / f"vald_{args.jobname}_{num}.bib.gz")
-            print(f"OK   {num}  ({size_mb:.1f} MB) -> {ll.name}")
-            got += 1
-        else:
+        # VALD names job files zero-padded to 6 digits (e.g. BrianSquires.019856.gz);
+        # fall back to the unpadded form for >6-digit numbers / other accounts.
+        jobstrs = [f"{num:06d}", str(num)]
+        ok = False
+        for js in jobstrs:
+            if _curl(f"{FTP}/{args.jobname}.{js}.gz", ll):
+                size_mb = ll.stat().st_size / 1e6
+                _curl(f"{FTP}/{args.jobname}.{js}.bib.gz", out / f"vald_{args.jobname}_{num}.bib.gz")
+                print(f"OK   {num} (as {js})  ({size_mb:.1f} MB) -> {ll.name}")
+                got += 1
+                ok = True
+                break
+        if not ok:
             print(f"MISS {num} (404 / not ready)")
             missing += 1
     print(f"\nDONE: {got} downloaded/present, {missing} missing in [{args.jobstart},{args.jobend}]")
