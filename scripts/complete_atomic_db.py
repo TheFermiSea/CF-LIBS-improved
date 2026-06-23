@@ -33,7 +33,10 @@ import numpy as np
 ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI"}
 PF_FIT_T_MIN = 2000.0  # LIBS-relevant validity floor
 PF_FIT_T_MAX = 10000.0  # Barklem 2016 grid ceiling (hard)
-PF_SOURCE = "Barklem & Collet 2016"
+PF_SOURCE = "BarklemCollet2016"  # MUST match cflibs AUTHORITATIVE_PF_SOURCES (partition.py)
+# exactly, else derive_partition_spec discards the stored poly and falls back to a
+# direct-sum over line-derived energy_levels (which carry ground-state offsets that
+# inflate e.g. K II / Na II U(T) ~5x). The display name is "Barklem & Collet 2016".
 
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS species_physics "
