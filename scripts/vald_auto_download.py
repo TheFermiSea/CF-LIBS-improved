@@ -32,7 +32,8 @@ def _curl(url: str, dest: Path) -> bool:
     """Fetch url -> dest with curl; return True on success, False on 404/error."""
     tmp = dest.with_suffix(dest.suffix + ".tmp")
     r = subprocess.run(
-        ["curl", "-fsS", "--max-time", "300", "--retry", "2", "-o", str(tmp), url],
+        # -L: VALD redirects http->https; without it curl stops at the 302.
+        ["curl", "-fsSL", "--max-time", "300", "--retry", "2", "-o", str(tmp), url],
         capture_output=True,
     )
     if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
