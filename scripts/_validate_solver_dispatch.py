@@ -10,10 +10,20 @@ from cflibs.benchmark.scoreboard import run_scoreboard
 
 SOLVERS = sys.argv[1:] or ["iterative", "closed_form", "joint", "bayesian"]
 
+#: Keep the full-spectrum solvers cheap enough for a smoke run (they are the
+#: GPU-targeted solvers; on a CPU 7933-pixel SuperCam axis they are slow).
+_SOLVER_OVERRIDES = {
+    "joint": {"max_iterations_joint": 40},
+    "bayesian": {"num_warmup": 50, "num_samples": 50},
+}
+
 
 def main() -> None:
     db = AtomicDatabase("ASD_da/libs_production.db")
     for solver in SOLVERS:
+        overrides = {"solver": solver}
+        if solver in _SOLVER_OVERRIDES:
+            overrides["solver_overrides"] = _SOLVER_OVERRIDES[solver]
         try:
             board = run_scoreboard(
                 db,
@@ -21,7 +31,7 @@ def main() -> None:
                 max_spectra=3,
                 seed=7,
                 pipeline_impl="reference",
-                config_overrides={"solver": solver},
+                config_overrides=overrides,
             )
             comp = board["datasets"][0].get("composition") or {}
             rmse = comp.get("rmse_wt_median")
