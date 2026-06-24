@@ -867,6 +867,31 @@ def _number_to_mass_fractions(concentrations: dict) -> dict:
     return {el: w / total for el, w in weighted.items()}
 
 
+#: Physically meaningful floors for a LIBS plasma solution. Unbounded BFGS (the
+#: only method jax.scipy.optimize.minimize implements) can drive T/n_e to a
+#: tiny-but-positive value (~1e-6 K, ~1e-38 cm^-3) that is non-physical yet
+#: passes a bare ``> 0`` test. A LIBS plasma is several thousand K with
+#: n_e well above 1e10 cm^-3.
+_T_FLOOR_K = 1000.0
+_NE_FLOOR_CM3 = 1e10
+
+
+def _physical_solution(temperature_K, electron_density_cm3) -> bool:
+    """True when T and n_e are finite and above the LIBS-plasma floors.
+
+    A collapsed optimizer result (T ~ 0, n_e ~ 0, or NaN) must be scored as a
+    failure rather than a misleadingly finite composition RMSE.
+    """
+    import math
+
+    try:
+        T = float(temperature_K)
+        ne = float(electron_density_cm3)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(T) and math.isfinite(ne) and T >= _T_FLOOR_K and ne >= _NE_FLOOR_CM3
+
+
 def _to_cflibs_result(
     *,
     concentrations_mass: dict,
@@ -1049,13 +1074,19 @@ def _run_full_spectrum_solver(
             return _failed_full_spectrum_result(elements, f"joint optimize: {exc!r}")
 
         conc_mass = _number_to_mass_fractions(jr.concentrations)
-        finite = np.isfinite(jr.temperature_K) and np.isfinite(jr.electron_density_cm3)
+        # Unbounded BFGS (jax.scipy only implements BFGS) can collapse T/n_e to a
+        # non-physical value (~0). Score such a result as a failure rather than a
+        # misleadingly finite RMSE.
+        if not _physical_solution(jr.temperature_K, jr.electron_density_cm3):
+            return _failed_full_spectrum_result(
+                elements, f"joint: non-physical T={jr.temperature_K} ne={jr.electron_density_cm3}"
+            )
         return _to_cflibs_result(
             concentrations_mass=conc_mass,
             temperature_K=jr.temperature_K,
             electron_density_cm3=jr.electron_density_cm3,
             converged=jr.is_converged,
-            failed=not finite,
+            failed=False,
             iterations=jr.iterations,
             extra_quality={"final_loss": float(jr.final_loss)},
         )
@@ -1099,13 +1130,16 @@ def _run_full_spectrum_solver(
             return _failed_full_spectrum_result(elements, f"bayesian run: {exc!r}")
 
         conc_mass = _number_to_mass_fractions(mr.concentrations_mean)
-        finite = np.isfinite(mr.T_K_mean) and np.isfinite(mr.n_e_mean)
+        if not _physical_solution(mr.T_K_mean, mr.n_e_mean):
+            return _failed_full_spectrum_result(
+                elements, f"bayesian: non-physical T={mr.T_K_mean} ne={mr.n_e_mean}"
+            )
         return _to_cflibs_result(
             concentrations_mass=conc_mass,
             temperature_K=mr.T_K_mean,
             electron_density_cm3=mr.n_e_mean,
             converged=mr.is_converged,
-            failed=not finite,
+            failed=False,
             iterations=int(ov.get("num_samples", 200)),
         )
 
