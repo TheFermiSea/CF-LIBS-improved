@@ -173,9 +173,23 @@ class AnalysisPipelineConfig:
     #: consensus residual shift (bead ye6t): kills contaminated matches and
     #: lucky-coherent FP line sets that survive the element-level veto.
     line_residual_gate: bool = True
+    #: Build the wavelength-calibration reference line pool ONCE over the full
+    #: axis and slice it per segment (flag ``CFLIBS_CALIB_POOL_CACHE``), instead
+    #: of re-querying SQLite + re-ranking per segment. Parity-exact with the
+    #: per-segment build; default ``False`` (also honours the env var so the
+    #: benchmark can toggle without editing config).
+    calib_pool_cache: bool = False
     #: Optional path to a spectral-response curve E(lambda); identity when None
     #: (audit 02-F5 — ChemCam CCS data arrive response-corrected upstream).
     response_curve: Optional[str] = None
+    #: Deterministic Hough coarse-dispersion seed for the RANSAC wavelength
+    #: calibrator (RASCAL-style, arXiv:1912.05883). ``None`` (default) defers to
+    #: the ``CFLIBS_HOUGH_CALIB`` env var (off when unset), keeping the
+    #: calibration path byte-identical to the legacy RNG-only RANSAC. When
+    #: enabled a consensus affine seed warm-starts RANSAC and the loop runs a
+    #: small polishing pass instead of the full cold-start budget (faster; NOT
+    #: parity-exact -> benchmark-gated).
+    hough_calib_seed: Optional[bool] = None
     # Iterative-solver knobs (mirror ``IterativeCFLIBSSolver``).
     max_iterations: int = 20
     t_tolerance_k: float = 100.0
@@ -199,6 +213,17 @@ class AnalysisPipelineConfig:
     #: Scalar 1-sigma E_k uncertainty (eV) for the ODR fit when per-line E_k
     #: uncertainties are unavailable; 0.0 degenerates ODR to weighted OLS.
     odr_x_uncertainty: float = 0.0
+    #: Enable the adaptive RANSAC early-exit rule in robust wavelength
+    #: calibration (prototype, default off; flag ``CFLIBS_RANSAC_EARLY_EXIT``).
+    #: The sampling loop stops once the inlier-count plateaus (no improvement
+    #: for ``patience`` iters) or the standard RANSAC confidence bound is met,
+    #: instead of always running the full fixed iteration budget. PARITY-
+    #: AFFECTING on hard low-inlier cases (a late lucky sample can be skipped),
+    #: so it is benchmark-gated. Default ``False`` reproduces the legacy loop.
+    #: The active runtime toggle is the env var (read inside the calibrator) so
+    #: the benchmark can flip it without editing code; this field declares the
+    #: default-off knob and is resolved/logged like every other knob.
+    ransac_early_exit: bool = False
     #: Extra keyword overrides passed verbatim to ``detect_line_observations``
     #: (Campaign 1 knob plumbing, docs/audit/2026-06-10-goalfirst/
     #: optimization-program-design.md §3.1-B). Plain data only — keys must be
@@ -261,8 +286,10 @@ def build_pipeline_config(
     residual_shift_scan_nm: Optional[float] = None,
     affine_coverage_gate: Optional[bool] = None,
     line_residual_gate: Optional[bool] = None,
+    calib_pool_cache: Optional[bool] = None,
     response_curve: Optional[str] = None,
     stark_ne: Optional[bool] = None,
+    hough_calib_seed: Optional[bool] = None,
 ) -> AnalysisPipelineConfig:
     """Resolve the shared pipeline configuration for analyze/invert/batch.
 
@@ -355,7 +382,9 @@ def build_pipeline_config(
         line_residual_gate=bool(
             knob("line_residual_gate", line_residual_gate, preset_knobs["line_residual_gate"])
         ),
+        calib_pool_cache=bool(knob("calib_pool_cache", calib_pool_cache, False)),
         response_curve=knob("response_curve", response_curve),
+        hough_calib_seed=knob("hough_calib_seed", hough_calib_seed, None),
         max_iterations=knob("max_iterations", None, 20),
         t_tolerance_k=knob("t_tolerance_k", None, 100.0),
         ne_tolerance_frac=knob("ne_tolerance_frac", None, 0.1),
@@ -375,6 +404,7 @@ def build_pipeline_config(
         stark_ne=bool(knob("stark_ne", stark_ne, preset_knobs["stark_ne"])),
         use_odr=bool(knob("use_odr", None, False)),
         odr_x_uncertainty=float(knob("odr_x_uncertainty", None, 0.0)),
+        ransac_early_exit=bool(knob("ransac_early_exit", None, False)),
         detection_overrides=dict(ov.get("detection_overrides", None) or {}),
     )
     _log_pipeline_config(pipeline)
@@ -458,6 +488,9 @@ def detect_and_select_lines(
     global_shift_scan_nm: float = 0.5,
     affine_coverage_gate: bool = True,
     line_residual_gate: bool = True,
+    calib_pool_cache: bool = False,
+    hough_calib_seed: Optional[bool] = None,
+    ransac_early_exit: Optional[bool] = None,
     grade_aware_selection: bool = False,
     target_sigma_t: Optional[float] = None,
     plasma_temperature_K: float = 10000.0,
@@ -552,6 +585,20 @@ def detect_and_select_lines(
         Drop individual matched lines whose residual is incoherent with the
         consensus residual shift (see ``detect_line_observations``). Default
         True (bead ye6t).
+    calib_pool_cache : bool
+        Build the wavelength-calibration reference line pool once over the full
+        axis and slice it per segment (flag ``CFLIBS_CALIB_POOL_CACHE``; see
+        :func:`calibrate_wavelength_axis_segmented`). Parity-exact; default
+        False. Also honoured via the ``CFLIBS_CALIB_POOL_CACHE`` env var.
+    hough_calib_seed : bool or None
+        Deterministic Hough coarse-dispersion warm start for the RANSAC
+        calibrator (flag ``CFLIBS_HOUGH_CALIB``; RASCAL-style). ``None`` (default)
+        defers to the env var (off when unset). NOT parity-exact ->
+        benchmark-gated.
+    ransac_early_exit : bool or None
+        Adaptive RANSAC early-exit on inlier-count plateau / confidence bound
+        (flag ``CFLIBS_RANSAC_EARLY_EXIT``). ``None`` (default) defers to the env
+        var (off when unset). Parity-affecting -> benchmark-gated.
     detection_overrides : dict or None
         Extra keyword overrides forwarded verbatim to
         ``detect_line_observations`` (Campaign 1 knob plumbing; see
@@ -621,6 +668,9 @@ def detect_and_select_lines(
                 atomic_db=atomic_db,
                 elements=elements,
                 affine_coverage_gate=affine_coverage_gate,
+                calib_pool_cache=calib_pool_cache,
+                hough_calib_seed=hough_calib_seed,
+                ransac_early_exit=ransac_early_exit,
             )
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning(f"Wavelength calibration failed ({exc!r}); using raw axis.")
@@ -906,6 +956,12 @@ def run_pipeline(
         global_shift_scan_nm=pipeline.global_shift_scan_nm,
         affine_coverage_gate=pipeline.affine_coverage_gate,
         line_residual_gate=pipeline.line_residual_gate,
+        calib_pool_cache=pipeline.calib_pool_cache,
+        hough_calib_seed=pipeline.hough_calib_seed,
+        # ``False`` (the default) -> ``None`` so the ``CFLIBS_RANSAC_EARLY_EXIT``
+        # env var is still consulted inside the calibrator (config True forces on;
+        # config False defers to the env var, matching the prototype's behaviour).
+        ransac_early_exit=(pipeline.ransac_early_exit or None),
         grade_aware_selection=pipeline.grade_aware_selection,
         target_sigma_t=pipeline.target_sigma_t,
         plasma_temperature_K=pipeline.plasma_temperature_K,

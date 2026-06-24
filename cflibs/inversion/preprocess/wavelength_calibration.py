@@ -10,6 +10,8 @@ rejection. Supported mappings:
 - ``quadratic``: y = c2*x^2 + c1*x + c0
 """
 
+import math
+import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
@@ -253,6 +255,179 @@ def _select_sample_indices(
     return None
 
 
+def _hough_calib_enabled(flag: Optional[bool]) -> bool:
+    """Resolve the Hough-seed flag: explicit pipeline knob > env var > off.
+
+    The deterministic Hough coarse-dispersion seed (RASCAL-style, arXiv:1912.05883)
+    is OFF by default so the production RANSAC path is byte-identical to the
+    legacy RNG-only behaviour. It is enabled either by the pipeline knob
+    (``hough_calib_seed=True``, threaded through ``calibrate_wavelength_axis``)
+    or by setting ``CFLIBS_HOUGH_CALIB=1`` so a benchmark can toggle it without
+    editing code.
+    """
+    if flag is not None:
+        return bool(flag)
+    return os.environ.get("CFLIBS_HOUGH_CALIB", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _hough_coarse_dispersion(
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    max_slope_dev: float = 0.002,
+    n_slope_bins: int = 200,
+    n_intercept_bins: int = 400,
+) -> Optional[Tuple[float, float]]:
+    """Vote a consensus affine dispersion ``y = m*x + c`` from candidate pairs.
+
+    Every candidate (peak wavelength ``x_i``, reference-line wavelength ``y_j``)
+    pair constrains the linear map ``y = m*x + c``. Sweeping a small grid of
+    plausible slopes ``m`` in ``[1 - max_slope_dev, 1 + max_slope_dev]`` (the
+    dispersion error is sub-percent), each ``(pair, m)`` implies an intercept
+    ``c = y_j - m*x_i``. Accumulating those ``(m, c)`` points into a 2D histogram
+    (fully vectorised over all pairs at once) and taking the argmax bin gives the
+    consensus ``(m*, c*)`` — the RASCAL Hough accumulator over
+    ``lambda = m*pixel + c`` (arXiv:1912.05883, BSD-3
+    github.com/jveitchmichaelis/rascal).
+
+    Returns the consensus ``(m, c)`` (bin centres), or ``None`` if there are too
+    few pairs to vote.
+    """
+    if x.size < 2 or y.size < 2:
+        return None
+
+    m_edges = np.linspace(1.0 - max_slope_dev, 1.0 + max_slope_dev, n_slope_bins + 1)
+    m_centers = 0.5 * (m_edges[:-1] + m_edges[1:])
+
+    # c_grid[i, b] = y_i - m_centers[b] * x_i, fully vectorised over all pairs.
+    c_grid = y[:, None] - m_centers[None, :] * x[:, None]
+    m_grid = np.broadcast_to(m_centers[None, :], c_grid.shape)
+
+    # Bound the intercept histogram to the observed consensus cloud (robust to
+    # the handful of wildly-off alias pairs that would otherwise blow the range).
+    c_lo = float(np.percentile(c_grid, 1.0))
+    c_hi = float(np.percentile(c_grid, 99.0))
+    if not np.isfinite(c_lo) or not np.isfinite(c_hi) or c_hi <= c_lo:
+        return None
+    c_edges = np.linspace(c_lo, c_hi, n_intercept_bins + 1)
+
+    hist, _, _ = np.histogram2d(m_grid.ravel(), c_grid.ravel(), bins=[m_edges, c_edges])
+    if hist.max() <= 0:
+        return None
+
+    mi, ci = np.unravel_index(int(np.argmax(hist)), hist.shape)
+    c_centers = 0.5 * (c_edges[:-1] + c_edges[1:])
+    return float(m_centers[mi]), float(c_centers[ci])
+
+
+def _hough_seed_coef(
+    model: CalibrationModel,
+    x: np.ndarray,
+    y: np.ndarray,
+    peak_ids: np.ndarray,
+    line_ids: np.ndarray,
+    weights: np.ndarray,
+    min_pts: int,
+    inlier_tolerance_nm: float,
+) -> Tuple[Optional[Tuple[float, ...]], np.ndarray, Tuple[int, float]]:
+    """Deterministic Hough-vote seed for the RANSAC loop.
+
+    Votes a coarse affine ``(m*, c*)`` from the candidate-pair cloud, selects an
+    initial inlier set within ``inlier_tolerance_nm`` of that affine map,
+    de-duplicates to one-to-one peak/line assignments, and refits ``model`` once
+    on the inliers. Returns ``(seed_coef, seed_inliers, seed_score)`` matching the
+    ``(best_coef, best_inliers, best_score)`` contract of :func:`_ransac_search`,
+    or ``(None, empty, (-1, inf))`` when no consensus is found. This is a strong
+    deterministic warm start — RANSAC then only has to *improve* on it.
+    """
+    empty_score: Tuple[int, float] = (-1, float(np.inf))
+    seed = _hough_coarse_dispersion(x, y)
+    if seed is None:
+        return None, np.array([], dtype=int), empty_score
+    m_star, c_star = seed
+
+    # Initial inlier set against the consensus affine map.
+    residual_affine = np.abs(m_star * x + c_star - y)
+    inlier_mask = residual_affine <= inlier_tolerance_nm
+    selected = _dedupe_one_to_one(residual_affine, peak_ids, line_ids, inlier_mask)
+    if selected.size < min_pts:
+        return None, np.array([], dtype=int), empty_score
+
+    # Refine: fit the requested model once on the consensus inliers, then
+    # recompute the inlier set / score under that model so the seed score is
+    # directly comparable with the RANSAC loop's scoring.
+    coef = _fit_model(x[selected], y[selected], model, weights=weights[selected])
+    if coef is None:
+        return None, np.array([], dtype=int), empty_score
+    pred = _eval_model(x, model, coef)
+    residual = np.abs(pred - y)
+    inlier_mask = residual <= inlier_tolerance_nm
+    seed_inliers = _dedupe_one_to_one(residual, peak_ids, line_ids, inlier_mask)
+    if seed_inliers.size < min_pts:
+        return None, np.array([], dtype=int), empty_score
+    seed_score = (int(seed_inliers.size), float(np.median(residual[seed_inliers])))
+    return coef, seed_inliers, seed_score
+
+
+#: Environment flag enabling the adaptive RANSAC early-exit rule (default off).
+#: Parity-AFFECTING: on hard (low-inlier) cases it can stop before a late lucky
+#: sample, so it is benchmark-gated rather than parity-exact. Off == legacy
+#: fixed-iteration loop. The benchmark toggles ON by exporting the flag = "1".
+RANSAC_EARLY_EXIT_ENV = "CFLIBS_RANSAC_EARLY_EXIT"
+
+
+@dataclass(frozen=True)
+class _RansacEarlyExitConfig:
+    """Adaptive stopping configuration for the RANSAC sampling loop."""
+
+    enabled: bool = False
+    #: Stop after this many consecutive iterations with no improvement.
+    patience: int = 100
+    #: Target probability that >=1 all-inlier sample was drawn (std RANSAC bound).
+    confidence: float = 0.999
+    #: Never stop before this many iterations have run.
+    min_iters: int = 50
+
+
+def _ransac_early_exit_config(enabled: Optional[bool] = None) -> _RansacEarlyExitConfig:
+    """Resolve the early-exit config from an explicit flag, else the env var.
+
+    ``enabled`` (the pipeline knob, default ``None``) takes precedence when set;
+    otherwise the ``CFLIBS_RANSAC_EARLY_EXIT`` environment variable is consulted
+    so the benchmark can toggle OFF (unset) vs ON (=1) without editing code.
+    """
+    if enabled is None:
+        env = os.environ.get(RANSAC_EARLY_EXIT_ENV, "")
+        enabled = env.strip().lower() in {"1", "true", "yes", "on"}
+    return _RansacEarlyExitConfig(enabled=bool(enabled))
+
+
+def _ransac_required_iters(
+    n_inliers: int,
+    n_total: int,
+    min_pts: int,
+    confidence: float,
+    iterations: int,
+    min_iters: int,
+) -> int:
+    """Standard RANSAC confidence-bound iteration count, clamped to bounds.
+
+    ``N_req = ceil(log(1 - confidence) / log(1 - w**min_pts))`` with
+    ``w = n_inliers / n_total`` the estimated inlier ratio. Returns ``iterations``
+    (no early stop possible) for degenerate ratios (w<=0 or w>=1).
+    """
+    if n_total <= 0 or n_inliers <= 0:
+        return iterations
+    w = n_inliers / n_total
+    if w >= 1.0:
+        return max(min_iters, min(iterations, min_iters))
+    p_inlier_sample = w**min_pts
+    if p_inlier_sample <= 0.0 or p_inlier_sample >= 1.0:
+        return iterations
+    n_req = math.ceil(math.log(1.0 - confidence) / math.log(1.0 - p_inlier_sample))
+    return int(max(min_iters, min(iterations, n_req)))
+
+
 def _ransac_search(
     model: CalibrationModel,
     x: np.ndarray,
@@ -265,13 +440,38 @@ def _ransac_search(
     min_pts: int,
     inlier_tolerance_nm: float,
     iterations: int,
+    seed_coef: Optional[Tuple[float, ...]] = None,
+    seed_inliers: Optional[np.ndarray] = None,
+    seed_score: Optional[Tuple[int, float]] = None,
+    early_exit: Optional[_RansacEarlyExitConfig] = None,
 ) -> Tuple[Optional[Tuple[float, ...]], np.ndarray]:
-    """Run the RANSAC sampling loop, returning the best coefficients/inliers."""
-    best_coef: Optional[Tuple[float, ...]] = None
-    best_inliers: np.ndarray = np.array([], dtype=int)
-    best_score = (-1, np.inf)  # maximize n_inliers, then minimize median residual
+    """Run the RANSAC sampling loop, returning the best coefficients/inliers.
 
-    for _ in range(iterations):
+    ``seed_coef``/``seed_inliers``/``seed_score`` optionally pre-load the best
+    candidate (the deterministic Hough warm start, :func:`_hough_seed_coef`), so
+    the random sampling only has to *improve* on a strong deterministic start.
+    When unset the loop cold-starts exactly as before.
+
+    When ``early_exit`` is enabled the loop may stop before ``iterations`` once
+    either (a) no improvement to the best score has occurred for ``patience``
+    consecutive iterations, or (b) the standard RANSAC confidence bound on the
+    current inlier ratio is met. Both checks only ever *remove* trailing
+    iterations; the best score so far is kept deterministically, so the result
+    is unchanged unless a late lucky sample would have improved it. The Hough
+    warm start and the early-exit rule are independent: each may be on or off,
+    and when both are on the seed pre-loads the incumbent while the early-exit
+    bound terminates the (already shortened) polishing loop.
+    """
+    if early_exit is None:
+        early_exit = _ransac_early_exit_config()
+
+    best_coef: Optional[Tuple[float, ...]] = seed_coef
+    best_inliers: np.ndarray = seed_inliers if seed_inliers is not None else np.array([], dtype=int)
+    # maximize n_inliers, then minimize median residual
+    best_score: Tuple[int, float] = seed_score if seed_score is not None else (-1, np.inf)
+    last_improve = -1
+
+    for it in range(iterations):
         sample = _select_sample_indices(rng, x.size, min_pts, x, probs)
         if sample is None:
             continue
@@ -292,6 +492,21 @@ def _ransac_search(
             best_score = score
             best_coef = coef
             best_inliers = selected
+            last_improve = it
+
+        if early_exit.enabled and best_coef is not None:
+            if it - last_improve >= early_exit.patience:
+                break
+            n_req = _ransac_required_iters(
+                best_inliers.size,
+                x.size,
+                min_pts,
+                early_exit.confidence,
+                iterations,
+                early_exit.min_iters,
+            )
+            if it + 1 >= n_req:
+                break
 
     return best_coef, best_inliers
 
@@ -356,6 +571,12 @@ def _build_model_fit(
     )
 
 
+#: RANSAC iteration count once a deterministic Hough seed (RASCAL-style) has
+#: supplied the consensus model: the remaining iterations only *polish* the
+#: warm start, so far fewer are needed than the cold-start default (600 -> 80).
+_HOUGH_SEEDED_RANSAC_ITERATIONS = 80
+
+
 def _ransac_fit(
     model: CalibrationModel,
     x: np.ndarray,
@@ -367,6 +588,8 @@ def _ransac_fit(
     inlier_tolerance_nm: float,
     iterations: int,
     seed: int,
+    hough_seed: Optional[bool] = None,
+    early_exit: Optional[_RansacEarlyExitConfig] = None,
 ) -> Optional[_ModelFit]:
     min_pts = _model_min_points(model)
     if x.size < min_pts:
@@ -374,6 +597,22 @@ def _ransac_fit(
 
     rng = np.random.default_rng(seed + _model_param_count(model))
     probs = weights / np.sum(weights)
+
+    # Deterministic Hough coarse-dispersion warm start (flag-gated, default off).
+    # When enabled, vote a consensus affine seed from the candidate-pair cloud
+    # and pre-load it as the RANSAC incumbent, then run only a small polishing
+    # loop. The seed path introduces no RNG dependence, so the winning inlier
+    # set changes deterministically (NOT parity-exact -> benchmark-gated).
+    seed_coef: Optional[Tuple[float, ...]] = None
+    seed_inliers: Optional[np.ndarray] = None
+    seed_score: Optional[Tuple[int, float]] = None
+    ransac_iterations = iterations
+    if _hough_calib_enabled(hough_seed):
+        seed_coef, seed_inliers, seed_score = _hough_seed_coef(
+            model, x, y, peak_ids, line_ids, weights, min_pts, inlier_tolerance_nm
+        )
+        if seed_coef is not None:
+            ransac_iterations = min(iterations, _HOUGH_SEEDED_RANSAC_ITERATIONS)
 
     best_coef, best_inliers = _ransac_search(
         model,
@@ -386,7 +625,11 @@ def _ransac_fit(
         rng,
         min_pts,
         inlier_tolerance_nm,
-        iterations,
+        ransac_iterations,
+        seed_coef=seed_coef,
+        seed_inliers=seed_inliers,
+        seed_score=seed_score,
+        early_exit=early_exit,
     )
     if best_coef is None or best_inliers.size < min_pts:
         return None
@@ -436,6 +679,140 @@ def _build_reference_line_pool(
         return np.array([], dtype=float), np.array([], dtype=float)
 
     return np.asarray(line_wl, dtype=float), np.asarray(line_strength, dtype=float)
+
+
+#: Precomputed reference-line pool spanning the full axis, sliced per segment.
+#: ``(line_wl, line_strength, line_elem_idx)`` — parallel arrays where
+#: ``line_elem_idx`` records which element (index into ``elements``) each line
+#: belongs to, so the per-element ``max_lines_per_element`` cap can be re-applied
+#: *after* slicing to a segment window (preserving per-segment parity). The pool
+#: is built with an effectively unbounded per-element cap (no truncation) and the
+#: same ``min_aki_gk`` filter + strength formula as :func:`_build_reference_line_pool`.
+PrecomputedLinePool = Tuple[np.ndarray, np.ndarray, np.ndarray]
+
+#: Effectively-unbounded per-element cap used when precomputing the pool over the
+#: full axis. Re-ranking after slicing applies the real per-segment cap.
+_UNBOUNDED_LINES_PER_ELEMENT = 1 << 30
+
+
+def calib_pool_cache_enabled(config_value: Optional[bool] = None) -> bool:
+    """Resolve whether the precomputed calibration line-pool cache is active.
+
+    The optimization (build the reference line pool once per axis, slice per
+    segment) is gated behind ``CFLIBS_CALIB_POOL_CACHE`` for safety while its
+    parity equivalence is benchmark-confirmed. It is enabled when *either* the
+    pipeline config field is truthy *or* the ``CFLIBS_CALIB_POOL_CACHE`` env var
+    is set to a truthy value (``1``/``true``/``yes``/``on``). Default OFF: when
+    neither is set the original per-segment build path runs unchanged.
+    """
+    if config_value:
+        return True
+    raw = os.environ.get("CFLIBS_CALIB_POOL_CACHE")
+    if raw is None:
+        return False
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_precomputed_line_pool(
+    atomic_db: AtomicDatabase,
+    elements: Sequence[str],
+    wavelength_min: float,
+    wavelength_max: float,
+    min_aki_gk: float,
+    reference_temperature_K: float,
+) -> PrecomputedLinePool:
+    """Build the full-axis reference line pool once, tagged with element index.
+
+    Computes line strengths with the exact same formula as
+    :func:`_build_reference_line_pool` but applies *no* per-element truncation
+    (the cap is re-applied after slicing). Within each element, lines retain the
+    database wavelength-ascending order so the later stable strength sort breaks
+    ties identically to the per-segment build -> parity-exact.
+    """
+    line_wl: List[float] = []
+    line_strength: List[float] = []
+    line_elem_idx: List[int] = []
+    kT = KB_EV * reference_temperature_K
+
+    for elem_i, element in enumerate(elements):
+        transitions = atomic_db.get_transitions(
+            element, wavelength_min=wavelength_min, wavelength_max=wavelength_max
+        )
+        if min_aki_gk > 0:
+            transitions = [t for t in transitions if (t.A_ki * t.g_k) >= min_aki_gk]
+        if not transitions:
+            continue
+        for t in transitions:
+            line_wl.append(float(t.wavelength_nm))
+            strength = max((t.A_ki * t.g_k) * np.exp(-max(t.E_k_ev, 0.0) / max(kT, 1e-9)), 1e-12)
+            line_strength.append(float(strength))
+            line_elem_idx.append(elem_i)
+
+    if not line_wl:
+        return (
+            np.array([], dtype=float),
+            np.array([], dtype=float),
+            np.array([], dtype=int),
+        )
+
+    return (
+        np.asarray(line_wl, dtype=float),
+        np.asarray(line_strength, dtype=float),
+        np.asarray(line_elem_idx, dtype=int),
+    )
+
+
+def _slice_precomputed_line_pool(
+    pool: PrecomputedLinePool,
+    seg_min: float,
+    seg_max: float,
+    max_lines_per_element: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Slice the precomputed full-axis pool to a segment window and re-rank.
+
+    Masks to ``[seg_min, seg_max]`` (the caller supplies the pre-padded window),
+    then re-applies the per-element ``max_lines_per_element`` cap by ranking each
+    element's surviving lines by descending strength (stable, mirroring the
+    ``sorted(..., reverse=True)`` of :func:`_build_reference_line_pool`) and
+    truncating to the top ``max_lines_per_element``. The result is identical to a
+    fresh per-segment :func:`_build_reference_line_pool` over the same window.
+
+    Parity note: the per-segment build ranks by the *unclamped* strength while
+    storing ``max(strength, 1e-12)``. Here we rank by the stored (clamped) value.
+    These differ only if two lines both fall below the ``1e-12`` floor, which is
+    impossible after the default ``min_aki_gk`` filter (``A_ki*g_k >= 3e3`` keeps
+    the product well above the floor), so the slice+re-rank is parity-exact.
+    """
+    full_wl, full_strength, full_elem = pool
+    if full_wl.size == 0:
+        return np.array([], dtype=float), np.array([], dtype=float)
+
+    mask = (full_wl >= seg_min) & (full_wl <= seg_max)
+    if not np.any(mask):
+        return np.array([], dtype=float), np.array([], dtype=float)
+
+    sel_wl = full_wl[mask]
+    sel_strength = full_strength[mask]
+    sel_elem = full_elem[mask]
+
+    out_wl: List[float] = []
+    out_strength: List[float] = []
+    # Iterate elements in their original order so the concatenated pool matches
+    # the per-element loop order of the per-segment build.
+    for elem_i in np.unique(sel_elem):
+        em = sel_elem == elem_i
+        e_wl = sel_wl[em]
+        e_strength = sel_strength[em]
+        # Stable descending sort by strength: ``np.argsort`` is stable with
+        # ``kind="stable"``; negating the key turns it into descending while
+        # preserving the wavelength-ascending tie order of the source array.
+        order = np.argsort(-e_strength, kind="stable")[:max_lines_per_element]
+        out_wl.extend(float(v) for v in e_wl[order])
+        out_strength.extend(float(v) for v in e_strength[order])
+
+    if not out_wl:
+        return np.array([], dtype=float), np.array([], dtype=float)
+    return np.asarray(out_wl, dtype=float), np.asarray(out_strength, dtype=float)
 
 
 def _build_candidate_pairs(
@@ -488,6 +865,8 @@ def _fit_candidate_models(
     inlier_tolerance_nm: float,
     ransac_iterations: int,
     random_seed: int,
+    hough_seed: Optional[bool] = None,
+    early_exit: Optional[_RansacEarlyExitConfig] = None,
 ) -> List[_ModelFit]:
     """RANSAC-fit each candidate model, keeping only monotonic fits."""
     fits: List[_ModelFit] = []
@@ -503,6 +882,8 @@ def _fit_candidate_models(
             inlier_tolerance_nm=inlier_tolerance_nm,
             iterations=ransac_iterations,
             seed=random_seed,
+            hough_seed=hough_seed,
+            early_exit=early_exit,
         )
         if fit is None:
             continue
@@ -620,6 +1001,9 @@ def calibrate_wavelength_axis(
     quality_max_rmse_nm: float = 0.10,
     quality_min_inlier_span_fraction: float = 0.25,
     quality_max_abs_correction_nm: float = 2.5,
+    precomputed_line_pool: Optional[PrecomputedLinePool] = None,
+    hough_calib_seed: Optional[bool] = None,
+    ransac_early_exit: Optional[bool] = None,
 ) -> WavelengthCalibrationResult:
     """
     Estimate and apply robust wavelength calibration using matched strong lines.
@@ -671,6 +1055,29 @@ def calibrate_wavelength_axis(
         Minimum inlier peak span as a fraction of full wavelength span.
     quality_max_abs_correction_nm : float
         Maximum absolute correction magnitude over the wavelength axis.
+    precomputed_line_pool : PrecomputedLinePool, optional
+        Full-axis reference line pool (``(line_wl, line_strength, line_elem_idx)``)
+        built once by :func:`_build_precomputed_line_pool`. When provided, the
+        per-segment :func:`_build_reference_line_pool` call (a SQLite query plus a
+        Python re-rank) is replaced by a boolean-mask slice of the precomputed
+        pool over this window followed by a per-element top-N re-rank, which is
+        parity-exact with the per-segment build. Gated by ``CFLIBS_CALIB_POOL_CACHE``
+        at the segmented caller; ``None`` (default) runs the original build path.
+    hough_calib_seed : bool or None
+        Enable the deterministic Hough coarse-dispersion warm start for the
+        RANSAC loop (RASCAL-style, arXiv:1912.05883). ``None`` (default) defers
+        to the ``CFLIBS_HOUGH_CALIB`` environment variable (off when unset), so
+        the production path is byte-identical to the legacy RNG-only RANSAC.
+        When enabled the consensus affine seed pre-loads the RANSAC incumbent
+        and the loop runs a small polishing pass instead of the full cold-start
+        iteration budget (NOT parity-exact -> benchmark-gated).
+    ransac_early_exit : bool, optional
+        Enable the adaptive RANSAC early-exit rule (default ``None`` -> read the
+        ``CFLIBS_RANSAC_EARLY_EXIT`` env var; off when unset). Parity-affecting:
+        on hard low-inlier cases it can stop before a late lucky sample, so it is
+        benchmark-gated. Off reproduces the legacy fixed-iteration loop exactly.
+        Independent of ``hough_calib_seed``: both may be set, in which case the
+        Hough seed warm-starts the loop and the early-exit bound terminates it.
 
     Returns
     -------
@@ -721,15 +1128,27 @@ def calibrate_wavelength_axis(
     peak_wl = np.asarray([p[1] for p in peaks], dtype=float)
     peak_amp = np.maximum(intensity[peak_idx], 1e-12)
 
-    line_wl, line_strength = _build_reference_line_pool(
-        atomic_db=atomic_db,
-        elements=elements,
-        wavelength_min=float(np.min(wavelength)) - max_pair_window_nm,
-        wavelength_max=float(np.max(wavelength)) + max_pair_window_nm,
-        max_lines_per_element=max_lines_per_element,
-        min_aki_gk=min_aki_gk,
-        reference_temperature_K=reference_temperature_K,
-    )
+    seg_pool_min = float(np.min(wavelength)) - max_pair_window_nm
+    seg_pool_max = float(np.max(wavelength)) + max_pair_window_nm
+    if precomputed_line_pool is not None:
+        # Slice the once-built full-axis pool to this segment window and re-apply
+        # the per-element top-N cap (parity-exact with the per-segment build).
+        line_wl, line_strength = _slice_precomputed_line_pool(
+            precomputed_line_pool,
+            seg_min=seg_pool_min,
+            seg_max=seg_pool_max,
+            max_lines_per_element=max_lines_per_element,
+        )
+    else:
+        line_wl, line_strength = _build_reference_line_pool(
+            atomic_db=atomic_db,
+            elements=elements,
+            wavelength_min=seg_pool_min,
+            wavelength_max=seg_pool_max,
+            max_lines_per_element=max_lines_per_element,
+            min_aki_gk=min_aki_gk,
+            reference_temperature_K=reference_temperature_K,
+        )
 
     if line_wl.size == 0:
         return WavelengthCalibrationResult(
@@ -787,6 +1206,8 @@ def calibrate_wavelength_axis(
         inlier_tolerance_nm=inlier_tolerance_nm,
         ransac_iterations=ransac_iterations,
         random_seed=random_seed,
+        hough_seed=hough_calib_seed,
+        early_exit=_ransac_early_exit_config(ransac_early_exit),
     )
 
     if not fits:
@@ -1025,6 +1446,7 @@ def _apply_segment_coverage_gate(
     max_pair_window_nm: float,
     random_seed: int,
     calibrate_kwargs: Dict[str, Any],
+    precomputed_line_pool: Optional[PrecomputedLinePool] = None,
 ) -> Tuple[WavelengthCalibrationResult, str, float]:
     """Degrade a slope model to ``shift`` when its anchors do not cover the segment.
 
@@ -1061,6 +1483,7 @@ def _apply_segment_coverage_gate(
         max_pair_window_nm=max_pair_window_nm,
         apply_quality_gate=False,
         random_seed=random_seed,
+        precomputed_line_pool=precomputed_line_pool,
         **calibrate_kwargs,
     )
     logger.info(
@@ -1102,6 +1525,7 @@ def _fit_one_segment(
     coverage_max_extrapolation_px: float,
     random_seed: int,
     calibrate_kwargs: Dict[str, Any],
+    precomputed_line_pool: Optional[PrecomputedLinePool] = None,
 ) -> _SegmentOutcome:
     """Calibrate one segment, writing its correction into ``corrected[a:b]``."""
     seg_wl = wavelength[a:b]
@@ -1130,6 +1554,7 @@ def _fit_one_segment(
             max_pair_window_nm=max_pair_window_nm,
             apply_quality_gate=False,
             random_seed=random_seed + index,
+            precomputed_line_pool=precomputed_line_pool,
             **calibrate_kwargs,
         )
         trusted = _segment_fit_trusted(seg_cal, segment_min_inliers, segment_max_rmse_nm)
@@ -1146,6 +1571,7 @@ def _fit_one_segment(
                 max_pair_window_nm=max_pair_window_nm,
                 random_seed=random_seed + index,
                 calibrate_kwargs=calibrate_kwargs,
+                precomputed_line_pool=precomputed_line_pool,
             )
             trusted = _segment_fit_trusted(seg_cal, segment_min_inliers, segment_max_rmse_nm)
             if coverage_status == "degraded_to_shift" and not trusted:
@@ -1232,6 +1658,7 @@ def _run_segments(
     coverage_max_extrapolation_px: float,
     random_seed: int,
     calibrate_kwargs: Dict[str, Any],
+    precomputed_line_pool: Optional[PrecomputedLinePool] = None,
 ) -> Tuple[List[Dict[str, Any]], List[str], int, List[float]]:
     """Calibrate every segment, accumulating diagnostics and inlier stats."""
     seg_diag: List[Dict[str, Any]] = []
@@ -1265,6 +1692,7 @@ def _run_segments(
             coverage_max_extrapolation_px=coverage_max_extrapolation_px,
             random_seed=random_seed,
             calibrate_kwargs=calibrate_kwargs,
+            precomputed_line_pool=precomputed_line_pool,
         )
         if outcome.status == "fit":
             total_inliers += outcome.n_inliers
@@ -1416,6 +1844,7 @@ def calibrate_wavelength_axis_segmented(
     coverage_max_extrapolation_px: float = 1.0,
     random_seed: int = 42,
     fallback_to_global: bool = True,
+    calib_pool_cache: Optional[bool] = None,
     **calibrate_kwargs: Any,
 ) -> WavelengthCalibrationResult:
     """
@@ -1495,6 +1924,14 @@ def calibrate_wavelength_axis_segmented(
     fallback_to_global : bool
         If True, low-confidence segments use the global single-axis fit before
         falling back to a neighbour offset.
+    calib_pool_cache : bool, optional
+        Build the reference line pool ONCE over the full axis span and slice it
+        per segment instead of re-querying + re-ranking the database per segment
+        (flag ``CFLIBS_CALIB_POOL_CACHE``). Eliminates N per-segment SQLite
+        queries + Python re-rank passes on a stitched multi-segment axis. The
+        slice+re-rank is parity-exact with the per-segment build. Resolved via
+        :func:`calib_pool_cache_enabled` (config field OR env var); default OFF
+        runs the original per-segment build path unchanged.
     **calibrate_kwargs
         Extra keyword args forwarded to :func:`calibrate_wavelength_axis`.
 
@@ -1513,6 +1950,24 @@ def calibrate_wavelength_axis_segmented(
 
     seams = detect_ccd_seams(wavelength, ratio_threshold=seam_ratio_threshold, window=seam_window)
 
+    # Build the reference line pool ONCE over the full axis span and slice it per
+    # segment (flag CFLIBS_CALIB_POOL_CACHE). Every per-segment and global
+    # ``calibrate_wavelength_axis`` call would otherwise re-query SQLite and
+    # re-rank the candidate lines for its own window. ``min_aki_gk`` /
+    # ``reference_temperature_K`` are pulled from ``calibrate_kwargs`` with the
+    # exact ``calibrate_wavelength_axis`` defaults so the precomputed pool matches
+    # the per-segment build; the per-element cap is re-applied after slicing.
+    precomputed_line_pool: Optional[PrecomputedLinePool] = None
+    if calib_pool_cache_enabled(calib_pool_cache):
+        precomputed_line_pool = _build_precomputed_line_pool(
+            atomic_db=atomic_db,
+            elements=elements,
+            wavelength_min=float(np.min(wavelength)) - max_pair_window_nm,
+            wavelength_max=float(np.max(wavelength)) + max_pair_window_nm,
+            min_aki_gk=float(calibrate_kwargs.get("min_aki_gk", 3e3)),
+            reference_temperature_K=float(calibrate_kwargs.get("reference_temperature_K", 10000.0)),
+        )
+
     # Always compute a global single-axis fit. For single-segment axes this IS
     # the answer; for multi-segment axes it is the per-segment fallback.
     global_result = calibrate_wavelength_axis(
@@ -1525,6 +1980,7 @@ def calibrate_wavelength_axis_segmented(
         inlier_tolerance_nm=inlier_tolerance_nm,
         max_pair_window_nm=max_pair_window_nm,
         random_seed=random_seed,
+        precomputed_line_pool=precomputed_line_pool,
         **calibrate_kwargs,
     )
 
@@ -1561,6 +2017,7 @@ def calibrate_wavelength_axis_segmented(
                 inlier_tolerance_nm=inlier_tolerance_nm,
                 max_pair_window_nm=max_pair_window_nm,
                 random_seed=random_seed,
+                precomputed_line_pool=precomputed_line_pool,
                 **calibrate_kwargs,
             )
             global_result.details["coverage_gate"] = "degraded_to_shift"
@@ -1606,6 +2063,7 @@ def calibrate_wavelength_axis_segmented(
         coverage_max_extrapolation_px=coverage_max_extrapolation_px,
         random_seed=random_seed,
         calibrate_kwargs=calibrate_kwargs,
+        precomputed_line_pool=precomputed_line_pool,
     )
 
     # Fallback 2: if the global fit was unavailable (offset all zero) for a
