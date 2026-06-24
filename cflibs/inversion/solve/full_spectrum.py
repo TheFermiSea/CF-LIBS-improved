@@ -636,7 +636,30 @@ def solve_full_spectrum(
     # defensively so 10**log_ne can never overflow a Python float.
     fit_ne = float(10.0 ** float(np.clip(np.asarray(log_ne_fit), 1.0, 25.0)))
 
-    adopted = real_fit
+    # Physical-plausibility adoption gate (truth-free). A *real* converged fit
+    # is only ADOPTED into the returned composition when its (T, n_e) stayed
+    # physically near the warm start — i.e. it did not ride to a box edge. The
+    # prior-free ``joint`` objective on the SVD-compressed spectrum is degenerate
+    # and rides T to whichever box edge minimises the spectral residual (a
+    # classic LIBS T<->composition degeneracy); that is a real optimum of the
+    # spectral objective but NOT a trustworthy composition, so it falls back to
+    # the warm start here. The informative-prior ``bayesian`` fit, which stays
+    # in the warm-start neighbourhood, is adopted. ``converged`` still records
+    # that a real fit ran; ``adopted_fit`` records whether it was trusted.
+    T_ratio = abs(np.log(max(fit_T_K, 1.0) / max(float(warm_start_T_K), 1.0)))
+    ne_ratio = abs(np.log10(max(fit_ne, 1e1) / max(float(warm_start_ne_cm3), 1e1)))
+    physically_near = T_ratio < np.log(1.8) and ne_ratio < 0.7
+    adopted = bool(real_fit and physically_near)
+    if real_fit and not physically_near:
+        logger.warning(
+            "Full-spectrum fit converged but rode T/n_e to a degenerate "
+            "edge (T %.0f vs warm %.0f K, n_e %.2e vs %.2e); not adopting "
+            "(keeping warm start composition).",
+            fit_T_K,
+            float(warm_start_T_K),
+            fit_ne,
+            float(warm_start_ne_cm3),
+        )
     if adopted:
         adopted_T_K = fit_T_K
         adopted_ne = fit_ne
