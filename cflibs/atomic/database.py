@@ -403,12 +403,18 @@ class AtomicDatabase:
 
         try:
             with self._get_connection() as conn:
-                df = pd.read_sql_query(query, conn, params=params)
+                cursor = conn.execute(query, params)
+                columns = [c[0] for c in cursor.description]
+                rows = cursor.fetchall()
         except Exception as e:
             logger.error(f"Error querying transitions: {e}")
             return []
 
-        transitions = [self._row_to_transition(row) for _, row in df.iterrows()]
+        # Plain-dict rows from sqlite3 instead of pd.read_sql_query + df.iterrows(): dict access is
+        # ~100x faster than pd.Series scalar access. The RANSAC wavelength calibration calls this
+        # thousands of times per inversion, so the old pandas path was the single largest CPU cost
+        # of the whole inversion (115k pd.Series.__getitem__ in profiling). Same data, same results.
+        transitions = [self._row_to_transition(dict(zip(columns, r))) for r in rows]
 
         logger.debug(f"Retrieved {len(transitions)} transitions for {element}")
         return transitions
@@ -454,49 +460,36 @@ class AtomicDatabase:
         return query, params
 
     @staticmethod
-    def _row_to_transition(row: "pd.Series") -> Transition:
-        """Convert a single ``lines`` query row into a :class:`Transition`."""
-        # Handle potential missing columns if something went wrong, defaulting to None
-        stark_w = float(row["stark_w"]) if "stark_w" in row and pd.notna(row["stark_w"]) else None
-        stark_alpha = (
-            float(row["stark_alpha"])
-            if "stark_alpha" in row and pd.notna(row["stark_alpha"])
-            else None
-        )
-        stark_shift = (
-            float(row["stark_shift"])
-            if "stark_shift" in row and pd.notna(row["stark_shift"])
-            else None
-        )
-        is_resonance = (
-            bool(row["is_resonance"])
-            if "is_resonance" in row and pd.notna(row["is_resonance"])
-            else False
-        )
+    def _row_to_transition(row: dict) -> Transition:
+        """Convert one ``lines`` row (a plain dict from sqlite3) into a :class:`Transition`.
 
-        aki_uncertainty = (
-            float(row["aki_uncertainty"]) if pd.notna(row["aki_uncertainty"]) else None
-        )
-        accuracy_grade = str(row["accuracy_grade"]) if pd.notna(row["accuracy_grade"]) else None
+        Plain-dict access replaces the former ``pd.Series`` path. SQLite NULL -> Python None
+        (no NaN coercion), so ``_nz`` only needs a None / NaN guard. Semantics are identical to
+        the old pandas version (same defaults: E_i_ev -> 0.0, g_i -> 1, is_resonance -> False)."""
 
+        def _nz(key):
+            v = row.get(key)
+            return None if v is None or (isinstance(v, float) and v != v) else v
+
+        ei, gi, ri = _nz("ei_ev"), _nz("gi"), _nz("rel_int")
+        sw, sa, ss = _nz("stark_w"), _nz("stark_alpha"), _nz("stark_shift")
+        res, au, ag = _nz("is_resonance"), _nz("aki_uncertainty"), _nz("accuracy_grade")
         return Transition(
             element=row["element"],
             ionization_stage=int(row["sp_num"]),
             wavelength_nm=float(row["wavelength_nm"]),
             A_ki=float(row["aki"]),
             E_k_ev=float(row["ek_ev"]),
-            E_i_ev=(0.0 if pd.isna(row.get("ei_ev", 0.0)) else float(row.get("ei_ev", 0.0))),
+            E_i_ev=0.0 if ei is None else float(ei),
             g_k=int(row["gk"]),
-            g_i=1 if pd.isna(row.get("gi", 1)) else int(row.get("gi", 1)),
-            relative_intensity=(
-                float(row.get("rel_int", 0.0)) if pd.notna(row.get("rel_int")) else None
-            ),
-            stark_w=stark_w,
-            stark_alpha=stark_alpha,
-            stark_shift=stark_shift,
-            is_resonance=is_resonance,
-            aki_uncertainty=aki_uncertainty,
-            accuracy_grade=accuracy_grade,
+            g_i=1 if gi is None else int(gi),
+            relative_intensity=None if ri is None else float(ri),
+            stark_w=None if sw is None else float(sw),
+            stark_alpha=None if sa is None else float(sa),
+            stark_shift=None if ss is None else float(ss),
+            is_resonance=False if res is None else bool(res),
+            aki_uncertainty=None if au is None else float(au),
+            accuracy_grade=None if ag is None else str(ag),
         )
 
     def get_energy_levels(self, element: str, ionization_stage: int) -> list[EnergyLevel]:
