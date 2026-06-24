@@ -382,11 +382,11 @@ class _RansacEarlyExitConfig:
 
     enabled: bool = False
     #: Stop after this many consecutive iterations with no improvement.
-    patience: int = 100
+    patience: int = 50
     #: Target probability that >=1 all-inlier sample was drawn (std RANSAC bound).
     confidence: float = 0.999
     #: Never stop before this many iterations have run.
-    min_iters: int = 50
+    min_iters: int = 25
 
 
 def _ransac_early_exit_config(enabled: Optional[bool] = None) -> _RansacEarlyExitConfig:
