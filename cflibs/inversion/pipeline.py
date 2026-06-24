@@ -39,6 +39,11 @@ logger = get_logger("inversion.pipeline")
 #: Closure modes accepted by the iterative solver / CLI.
 CLOSURE_MODES = ("standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residual")
 
+#: Inversion solver backends accepted by the pipeline ``solver`` knob.
+#: ``iterative`` = classic Boltzmann-plot/closure loop; ``joint``/``bayesian``
+#: = full-spectrum forward-model fit (warm-started by the iterative solver).
+SOLVER_BACKENDS = ("iterative", "joint", "bayesian")
+
 #: Preset bundles for the accuracy-critical solver knobs, measured on real
 #: ChemCam BHVO-2 (docs/audit/2026-06-09-overhaul/04-pipeline-defaults.md):
 #: the default ``analyze`` path scored RMSE 10.29 wt% (Fe 39 vs certified
@@ -194,6 +199,16 @@ class AnalysisPipelineConfig:
     #: ``shift_scan_nm`` is NOT accepted here: the global scan width is the
     #: first-class ``global_shift_scan_nm`` field above. Empty in production.
     detection_overrides: dict = field(default_factory=dict)
+    #: Inversion solver backend. ``'iterative'`` (default) is the classic
+    #: Boltzmann-plot / closure CF-LIBS loop. ``'joint'`` and ``'bayesian'``
+    #: run the memory-efficient, SVD-conditioned full-spectrum forward-model
+    #: fit (``cflibs.inversion.solve.full_spectrum.solve_full_spectrum``) on
+    #: top of the iterative warm start: ``'joint'`` is the pure conditioned
+    #: data term, ``'bayesian'`` adds informative warm-start priors + an
+    #: entropy/Dirichlet composition regulariser. Both share the chunked
+    #: (``forward_model_chunked``) differentiable forward so reverse-mode AD
+    #: no longer OOMs past ~3 elements.
+    solver: str = "iterative"
 
 
 #: Sentinel marking "knob not provided at this tier". Unlike ``None`` it lets
@@ -304,6 +319,13 @@ def build_pipeline_config(
             f"Valid modes: {list(CLOSURE_MODES)}"
         )
 
+    resolved_solver = knob("solver", None, "iterative")
+    if resolved_solver not in SOLVER_BACKENDS:
+        raise ValueError(
+            f"Unknown solver backend {resolved_solver!r}. "
+            f"Valid backends: {list(SOLVER_BACKENDS)}"
+        )
+
     pipeline = AnalysisPipelineConfig(
         preset=preset_name,
         elements=list(elements),
@@ -359,6 +381,7 @@ def build_pipeline_config(
         use_odr=bool(knob("use_odr", None, False)),
         odr_x_uncertainty=float(knob("odr_x_uncertainty", None, 0.0)),
         detection_overrides=dict(ov.get("detection_overrides", None) or {}),
+        solver=resolved_solver,
     )
     _log_pipeline_config(pipeline)
     return pipeline
@@ -797,6 +820,119 @@ def _solve_analyze_result(
         )
 
 
+def _run_full_spectrum_solver(
+    wavelength,
+    intensity,
+    atomic_db,
+    pipeline: AnalysisPipelineConfig,
+    *,
+    warm_start,
+    diagnostics: dict,
+):
+    """Run the SVD-conditioned, chunked full-spectrum fit on the iterative warm start.
+
+    The iterative ``warm_start`` (a :class:`CFLIBSResult`) supplies the initial
+    ``T``, ``n_e`` and composition.  The full-spectrum solver
+    (:func:`cflibs.inversion.solve.full_spectrum.solve_full_spectrum`) fits the
+    measured spectrum in a low-dimensional SVD basis using the
+    memory-efficient chunked forward kernel.  Both the warm-start and the
+    converged-fit accounting are written into ``diagnostics['full_spectrum']``
+    so callers can honestly report whether a *real* converged fit was reached
+    and whether it improved on the iterative warm start.
+
+    Returns a :class:`CFLIBSResult`.  When the full-spectrum optimiser does not
+    produce a real converged optimum, the warm start is returned UNCHANGED (the
+    honest "fell back" outcome).
+    """
+    from cflibs.inversion.solve.full_spectrum import solve_full_spectrum
+
+    warm_concentrations = {
+        el: float(c) for el, c in warm_start.concentrations.items() if float(c) > 0.0
+    }
+    fit_elements = sorted(warm_concentrations) or list(pipeline.elements)
+
+    try:
+        fs = solve_full_spectrum(
+            wavelength,
+            intensity,
+            fit_elements,
+            str(atomic_db.db_path),
+            warm_start_T_K=float(warm_start.temperature_K),
+            warm_start_ne_cm3=float(warm_start.electron_density_cm3),
+            warm_start_concentrations=warm_concentrations,
+            resolving_power=pipeline.resolving_power,
+            method=pipeline.solver,
+        )
+    except Exception as exc:  # noqa: BLE001 — never crash the pipeline on the fit
+        logger.warning(
+            "Full-spectrum solver (%s) raised %r; keeping the iterative warm start.",
+            pipeline.solver,
+            exc,
+        )
+        diagnostics["full_spectrum"] = {
+            "solver": pipeline.solver,
+            "error": f"{type(exc).__name__}: {exc}",
+            "converged_fit": False,
+            "adopted_fit": False,
+        }
+        return warm_start
+
+    diagnostics["full_spectrum"] = {
+        "solver": pipeline.solver,
+        "converged_fit": bool(fs.converged),
+        "adopted_fit": bool(fs.adopted_fit),
+        "initial_objective": fs.initial_objective,
+        "final_objective": fs.final_objective,
+        "iterations": fs.iterations,
+        "gradient_norm": fs.gradient_norm,
+        "warm_start_T_K": fs.warm_start_temperature_K,
+        "warm_start_ne_cm3": fs.warm_start_electron_density_cm3,
+        "fit_T_K": fs.fit_temperature_K,
+        "fit_ne_cm3": fs.fit_electron_density_cm3,
+        "warm_start_concentrations": dict(fs.warm_start_concentrations),
+        "fit_concentrations": dict(fs.fit_concentrations),
+        **{f"diag_{k}": v for k, v in fs.diagnostics.items()},
+    }
+    logger.info(
+        "Full-spectrum %s: converged_fit=%s adopted=%s obj %.4g -> %.4g "
+        "(%d iters, |grad|=%.2g), T %.0f->%.0f K",
+        pipeline.solver,
+        fs.converged,
+        fs.adopted_fit,
+        fs.initial_objective,
+        fs.final_objective,
+        fs.iterations,
+        fs.gradient_norm,
+        fs.warm_start_temperature_K,
+        fs.fit_temperature_K,
+    )
+
+    if not fs.adopted_fit:
+        # Honest fall-back: the optimiser did not beat the warm start. Return
+        # the iterative result unchanged so the reported composition is the
+        # one that was actually solved for.
+        return warm_start
+
+    # Adopt the converged fit. Re-wrap into the CFLIBSResult contract so the
+    # rest of the pipeline (scoreboard, CLI trust report) is unchanged.
+    quality_metrics = dict(getattr(warm_start, "quality_metrics", {}) or {})
+    quality_metrics["full_spectrum_converged"] = 1.0
+    quality_metrics["full_spectrum_adopted"] = 1.0
+    return warm_start.__class__(
+        temperature_K=float(fs.temperature_K),
+        temperature_uncertainty_K=float(getattr(warm_start, "temperature_uncertainty_K", 0.0)),
+        electron_density_cm3=float(fs.electron_density_cm3),
+        concentrations=dict(fs.concentrations),
+        concentration_uncertainties=dict(
+            getattr(warm_start, "concentration_uncertainties", {}) or {}
+        ),
+        iterations=int(fs.iterations),
+        converged=bool(fs.converged),
+        quality_metrics=quality_metrics,
+        overall_reliable=getattr(warm_start, "overall_reliable", False),
+    )
+
+
 def run_pipeline(
     wavelength,
     intensity,
@@ -959,6 +1095,23 @@ def run_pipeline(
     )
     _solve_s = time.perf_counter() - _t_solve0
 
+    # Full-spectrum solver dispatch (bead: full-spectrum convergence). The
+    # iterative result above is the WARM START for the memory-efficient,
+    # SVD-conditioned forward-model fit. ``solver='iterative'`` (default) skips
+    # this block entirely and is byte-identical to the classic path.
+    _full_spectrum_s = 0.0
+    if pipeline.solver in ("joint", "bayesian"):
+        _t_fs0 = time.perf_counter()
+        result = _run_full_spectrum_solver(
+            wavelength,
+            intensity,
+            atomic_db,
+            pipeline,
+            warm_start=result,
+            diagnostics=diagnostics,
+        )
+        _full_spectrum_s = time.perf_counter() - _t_fs0
+
     # Per-stage wall-clock timings (bead A1 scoreboard): runtime is a goal
     # metric, so the production pipeline reports where each second went.
     # ``calibration_s`` is measured inside ``detect_and_select_lines`` and is
@@ -970,6 +1123,7 @@ def run_pipeline(
         "detection_id_s": max(_detect_s - _calibration_s, 0.0),
         "stark_ne_s": _stark_s,
         "solve_s": _solve_s,
+        "full_spectrum_s": _full_spectrum_s,
         "total_s": time.perf_counter() - _t_start,
     }
 
