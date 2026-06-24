@@ -106,14 +106,16 @@ def correctness_gate() -> tuple[bool, str]:
     return True, "ok"
 
 
-def score_split(split: str, max_spectra: int) -> tuple[float, dict]:
+def score_split(
+    split: str, max_spectra: int, db_path: str = "ASD_da/libs_production.db"
+) -> tuple[float, dict]:
     """Median composition RMSE (wt%) over the split's datasets via run_scoreboard."""
     from cflibs.atomic.database import AtomicDatabase
     from cflibs.benchmark.scoreboard import ensure_default_datasets, run_scoreboard
 
     provision_untracked_data()  # fill in untracked data (supercam_calib) for fresh Arbor worktrees
     ensure_default_datasets()
-    db = AtomicDatabase("ASD_da/libs_production.db")
+    db = AtomicDatabase(db_path)
     datasets, include_holdout = SPLIT_DATASETS[split]
     board = run_scoreboard(
         db,
@@ -138,6 +140,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--split", choices=list(SPLIT_DATASETS), default="dev")
     ap.add_argument("--max-spectra", type=int, default=20)
+    ap.add_argument("--db", default="ASD_da/libs_production.db", help="atomic database to evaluate")
     ap.add_argument("--out", default="arbor_metrics.json")
     args = ap.parse_args()
 
@@ -155,13 +158,14 @@ def main() -> None:
             json.dump(metrics, f, indent=2)
         return  # exit 0: Arbor reads the sentinel score and refuses the merge
 
-    rmse, per = score_split(args.split, args.max_spectra)
+    rmse, per = score_split(args.split, args.max_spectra, args.db)
     # score = 100/RMSE: HIGHER is better, and Arbor's "% gain" merge threshold then maps ~1:1 to
     # the RELATIVE RMSE reduction (e.g. 3.33 -> 3.23 wt% is a ~3% score gain).
     score = 100.0 / rmse if (rmse and rmse > 0 and rmse == rmse) else SENTINEL_BAD
     metrics = {
         "valid": True,
         "score": score,
+        "db": args.db,
         "rmse_wt": rmse,
         "per_dataset_rmse_wt": per,
         "split": args.split,
