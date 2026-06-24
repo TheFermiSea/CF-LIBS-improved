@@ -472,3 +472,70 @@ def fit_csigma(
         converged=bool(sol.success),
         points=points,
     )
+
+
+def solve_csigma_composition(
+    observations: Sequence[LineObservation],
+    atomic_db,
+    *,
+    t_init_K: float = 10000.0,
+) -> tuple[dict[str, float], float] | None:
+    """C-sigma composition solver WITH the per-element partition-function correction.
+
+    ``fit_csigma`` returns ``relative_concentrations = C_s / U_s(T)``: the partition function
+    is deliberately omitted from the cross-section (see ``_log_sigma_rel``), and the bare fit
+    has no atomic database so it cannot restore ``U_s``. Used as-is those numbers are NOT a
+    composition — they are wrong by up to the inter-element ``U`` ratio (~2-50x), which the
+    cflibs-formal oracle's per-element-``U_s`` test is built to catch.
+
+    This wrapper restores ``U_s(T)`` from ``atomic_db`` and forms the true number density
+    ``n_s ∝ (C_s/U_s)·U_s(T)``, recovering the composition. The C-sigma graph is fit per
+    ionization stage (Aragón & Aguilera 2014, Spectrochim. Acta B 90, 77); the per-stage
+    ``U_s``-corrected densities are summed per element on the recovered-density basis.
+
+    Parameters
+    ----------
+    observations : sequence of LineObservation
+        Detected lines (any mix of elements / ionization stages).
+    atomic_db : AtomicDataSource
+        Supplies ``U_s(T)`` via ``SahaBoltzmannSolver.calculate_partition_function``.
+    t_init_K : float, optional
+        Initial temperature for the first stage's fit (chained to later stages).
+
+    Returns
+    -------
+    (composition, temperature_K) : tuple[dict[str, float], float] or None
+        ``composition`` is a number-fraction dict summing to 1; ``None`` if no stage yields a
+        usable C-sigma fit (each stage needs >= 3 positive-intensity lines).
+    """
+    from collections import defaultdict
+
+    from cflibs.plasma.saha_boltzmann import SahaBoltzmannSolver
+
+    sb = SahaBoltzmannSolver(atomic_db)
+    by_stage: dict[int, list[LineObservation]] = defaultdict(list)
+    for o in observations:
+        by_stage[o.ionization_stage].append(o)
+
+    n_elem: dict[str, float] = defaultdict(float)
+    temperature_K = t_init_K
+    any_fit = False
+    for stage, obs in by_stage.items():
+        if sum(1 for o in obs if o.intensity > 0.0) < 3:
+            continue
+        try:
+            fit = fit_csigma(obs, t_init_K=temperature_K)
+        except (ValueError, RuntimeError):
+            continue
+        any_fit = True
+        temperature_K = fit.temperature_K
+        t_eV = KB_EV * temperature_K
+        for el, rel in fit.relative_concentrations.items():
+            u_s = sb.calculate_partition_function(el, stage, t_eV)
+            if u_s and u_s > 0.0:
+                n_elem[el] += rel * u_s  # rel = C/U  ->  rel*U = C (per stage)
+
+    total = sum(n_elem.values())
+    if not any_fit or total <= 0.0:
+        return None
+    return {el: n / total for el, n in n_elem.items()}, temperature_K
