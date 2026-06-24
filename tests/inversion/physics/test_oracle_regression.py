@@ -10,6 +10,13 @@ physical (Kelvin/eV). The bridge is ``E_eV = E * KB_EV * T_REF`` so
 ``exp(-E_eV/(KB_EV*T_REF)) = exp(-E)`` reproduces the spec's Boltzmann factor, with constant
 wavelength so the energy ordinate ``ln(I*lambda/gA)`` shares the spec's reduced-ordinate slope.
 See ``tests/data/cflibs_formal_oracle/README.md``.
+
+Coverage: escape factor, partition function, closure composition, two-line temperature,
+error-budget thresholds, Stark width->n_e, and the McWhirter LTE bound are regression-tested
+here against the verified spec. Intentionally NOT unit-regressed (no pure function to pin):
+the Saha factor is solver/uncertainty-bound in this pipeline (the spec's ``saha-boltzmann``
+fixture validates the Saha math; the pipeline's Saha is exercised end-to-end), and the classic
+single-line density de-normalisation is solver-intrinsic (covered by the round-trip tests).
 """
 
 from __future__ import annotations
@@ -199,3 +206,39 @@ def test_line_selector_from_accuracy_target_is_spec_derived() -> None:
     # The tuned default constructor is unchanged.
     assert LineSelector().min_energy_spread_ev == 2.0
     assert LineSelector().min_snr == 10.0
+
+
+@pytest.mark.unit
+def test_stark_density_matches_spec(fixtures: dict) -> None:
+    """``estimate_ne_from_stark`` reproduces the verified Griem linear inverse ``nRef*width/(2w)``.
+
+    The spec is dimensionless; the pipeline's ``REF_NE`` enters via ``stark_w_ref = 2w`` at the
+    reference temperature (so the ``(T/ref_T_K)^alpha`` correction is unity). Pins
+    ``StarkBroadening.starkDensity_recovers``.
+    """
+    from cflibs.radiation.stark import REF_NE, REF_T_K, estimate_ne_from_stark
+
+    c = _scenario(fixtures, "stark")["constants"]
+    w, n_ref, width = c["w"], c["nRef"], c["width"]
+    ne_oracle = _scenario(fixtures, "stark")["checks"]["stark_density"]["ne"]
+
+    ne_pipeline = estimate_ne_from_stark(width, REF_T_K, stark_w_ref=2.0 * w)
+    assert ne_pipeline == pytest.approx(REF_NE * ne_oracle / n_ref, rel=RTOL)
+
+
+@pytest.mark.unit
+def test_mcwhirter_bound_matches_spec(fixtures: dict) -> None:
+    """The pipeline's McWhirter floor reproduces the verified ``1.6e12 * sqrt(T) * dE^3``.
+
+    Pins ``StarkBroadening.mcWhirterBound``: the verified constant and the bound shape.
+    """
+    from cflibs.core.constants import MCWHIRTER_CONST
+    from cflibs.plasma.lte_validator import LTEValidator
+
+    ch = _scenario(fixtures, "stark")["checks"]["mcwhirter"]
+    c = _scenario(fixtures, "stark")["constants"]
+    t_mc, de, shape = c["T"], c["dE"], ch["shape"]
+
+    assert MCWHIRTER_CONST == pytest.approx(1.6e12, rel=RTOL)
+    required = LTEValidator.check_mcwhirter(t_mc, 1.0e17, de).n_e_required
+    assert required == pytest.approx(MCWHIRTER_CONST * shape, rel=RTOL)
