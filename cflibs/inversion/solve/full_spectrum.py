@@ -342,11 +342,26 @@ class _ChunkedForward:
         )
         return jnp.clip(intensity, 0.0, 1e12)
 
+    def spectrum_jit(self):
+        """Return a cached ``jax.jit`` of :meth:`spectrum` (compile once, reuse).
+
+        The warm-start library sweep evaluates the forward ~15 times; without a
+        shared compiled graph each call re-traces. Caching the jit collapses
+        that to a single XLA compile.
+        """
+        cached = getattr(self, "_spectrum_jit_fn", None)
+        if cached is None:
+            import jax  # noqa: PLC0415
+
+            cached = jax.jit(self.spectrum)
+            self._spectrum_jit_fn = cached
+        return cached
+
     def spectrum_numpy(
         self, T_eV: float, log_ne: float, number_fractions: np.ndarray
     ) -> np.ndarray:
         jnp = self._jnp
-        out = self.spectrum(
+        out = self.spectrum_jit()(
             jnp.asarray(float(T_eV)),
             jnp.asarray(float(log_ne)),
             jnp.asarray(np.asarray(number_fractions, dtype=np.float64)),
@@ -371,8 +386,9 @@ def solve_full_spectrum(
     resolving_power: Optional[float] = None,
     instrument_fwhm_nm: Optional[float] = None,
     n_components: int = 20,
-    max_iterations: int = 60,
+    max_iterations: int = 40,
     sweep_points: int = 9,
+    fit_pixels: Optional[int] = 1500,
     method: str = "bayesian",
 ) -> FullSpectrumResult:
     """Run the memory-efficient, SVD-conditioned full-spectrum fit.
@@ -396,6 +412,14 @@ def solve_full_spectrum(
         Optimiser iteration cap.
     sweep_points : int
         Number of warm-start-centred forward spectra used to seed the SVD basis.
+    fit_pixels : int or None
+        Resample the spectrum onto a uniform ``fit_pixels``-point grid for the
+        differentiable fit.  The chunked-forward XLA graph (a ``lax.scan`` of
+        per-line Voigt over the wavelength axis) compiles and evaluates with
+        cost ~``O(n_wl)``, so a few-thousand-point fit grid is dramatically
+        cheaper to optimise on CPU than the native ~8000-px SuperCam axis while
+        preserving the SVD-compressed composition signal (the basis is
+        peak-dominated, not per-pixel).  ``None`` keeps the native grid.
     method : {'bayesian', 'joint'}
         ``'bayesian'`` adds informative Gaussian priors on (T, log n_e) from the
         warm start and an entropy (Dirichlet-like) regulariser on composition;
@@ -418,6 +442,19 @@ def solve_full_spectrum(
     n_el = len(elements)
     wl = np.asarray(wavelength, dtype=np.float64)
     obs = np.asarray(intensity, dtype=np.float64)
+
+    # Resample onto a coarser uniform fit grid (CPU-tractable XLA compile/eval).
+    # Real SuperCam axes have inter-spectrometer gaps; a uniform grid that spans
+    # the same range with linear interpolation of the observed spectrum keeps
+    # the chunked forward's wavelength axis contiguous (the kernel assumes a
+    # uniform grid for overlap-and-add).
+    if fit_pixels is not None and fit_pixels < wl.shape[0]:
+        order = np.argsort(wl)
+        wl_sorted = wl[order]
+        obs_sorted = obs[order]
+        fit_wl = np.linspace(float(wl_sorted[0]), float(wl_sorted[-1]), int(fit_pixels))
+        obs = np.interp(fit_wl, wl_sorted, obs_sorted)
+        wl = fit_wl
 
     warm_mass = dict(warm_start_concentrations)
     warm_T_eV = float(warm_start_T_K) * K_TO_EV

@@ -150,12 +150,18 @@ def test_full_spectrum_gradient_does_not_oom(production_db):
     from cflibs.inversion.solve.full_spectrum import _ChunkedForward
 
     db_path = str(production_db.db_path)
+    # 5 elements => the dense (n_lines x n_wl) matrix path OOMed past ~3.
+    # A 2000-px wide grid over the full SuperCam range keeps the CPU XLA
+    # compile tractable while still exercising the chunked scan (the native
+    # 7933-px axis is several minutes of silent XLA compile on CPU — that is
+    # the per-spectrum fit's job, not this regression guard's).
     elements = ["Si", "Al", "Fe", "Ca", "Mg"]
-    wl = np.linspace(243.8, 852.8, 7933)
+    wl = np.linspace(243.8, 852.8, 2000)
     fwd = _ChunkedForward(db_path, elements, wl, resolving_power=2400.0)
     # Chunking is in effect: more than one chunk, and the chunk matrix is far
     # smaller than the dense one.
     assert fwd.plan.nstitch >= 4
+    assert fwd.n_lines * fwd.n_wl * 8 / 1e6 > 50.0  # dense matrix is large
 
     conc = jnp.asarray(np.full(len(elements), 1.0 / len(elements)))
 
