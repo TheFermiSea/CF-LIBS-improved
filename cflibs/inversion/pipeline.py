@@ -404,7 +404,7 @@ def build_pipeline_config(
         stark_ne=bool(knob("stark_ne", stark_ne, preset_knobs["stark_ne"])),
         use_odr=bool(knob("use_odr", None, False)),
         odr_x_uncertainty=float(knob("odr_x_uncertainty", None, 0.0)),
-        ransac_early_exit=bool(knob("ransac_early_exit", None, False)),
+        ransac_early_exit=bool(knob("ransac_early_exit", None, True)),
         detection_overrides=dict(ov.get("detection_overrides", None) or {}),
     )
     _log_pipeline_config(pipeline)
