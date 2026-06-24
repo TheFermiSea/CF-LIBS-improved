@@ -496,18 +496,43 @@ def solve_full_spectrum(
     mean = jnp.asarray(mean_np)
     obs_proj = jnp.asarray(obs_proj_np)
 
+    # PC-residual noise scale. The data term is a proper Gaussian chi-square
+    # ``0.5 * sum((resid/sigma_d)^2)`` that must be COMMENSURATE with the
+    # ``0.5*(Delta/sigma)^2`` priors below, otherwise the data term dwarfs the
+    # prior and the fit rides T to the box edge (observed). We anchor sigma_d to
+    # the *warm-start* PC residual: the model at the warm parameters already
+    # matches the data to within this residual, so chi-square ~ k (the PC count)
+    # at a good fit and a prior with sigma_logT~0.15 genuinely competes with a
+    # T excursion. A floor keeps it from collapsing to zero on a perfect seed.
+    warm_model = fwd.spectrum_numpy(warm_T_eV, warm_log_ne, warm_numfrac)
+    warm_proj = (_normalise_spectrum(warm_model) - mean_np) @ basis_np.T
+    warm_resid = warm_proj - obs_proj_np
+    sigma_d = float(
+        max(np.sqrt(np.mean(warm_resid**2)), 0.05 * (np.std(obs_proj_np) + 1e-12), 1e-12)
+    )
+
     # ---- Bounded/transformed parameter packing ----
-    # x[0] = log T_eV, x[1] = log10 n_e, x[2:] = softmax logits (composition).
+    # x[0], x[1] are unconstrained ``tanh`` pre-images for log T_eV / log10 n_e
+    # (see ``_params``); x[2:] are softmax logits for composition. The warm
+    # start sits at tanh-preimage 0 (= warm value) and the warm composition.
     log_T0 = float(np.log(max(warm_T_eV, 0.05)))
     theta0 = np.log(np.maximum(warm_numfrac, 1e-8))
-    x0 = jnp.asarray(np.concatenate([[log_T0, warm_log_ne], theta0]))
+    x0 = jnp.asarray(np.concatenate([[0.0, 0.0], theta0]))
 
-    # Prior strengths (Bayesian MAP). Loose but informative — the warm start
-    # is trusted to ~30% in T and ~0.5 dex in n_e.
+    # Box half-widths: the ``tanh`` reparameterisation in ``_params`` confines T
+    # to [warm/3, warm*3] and n_e to +/- box_logne dex of the warm start *by
+    # construction*, so the prior-free SVD objective can no longer run T/n_e off
+    # to an unphysical global minimum (the classic LIBS T<->composition
+    # degeneracy). The Bayesian path additionally pulls (T, n_e) toward the warm
+    # start with informative Gaussian priors (~15% in T, ~0.4 dex in n_e) and
+    # adds a max-entropy composition regulariser; the joint path uses only the
+    # bounded data term.
     use_prior = method.lower() == "bayesian"
-    sigma_logT = 0.30
-    sigma_logne = 0.50
+    sigma_logT = 0.15
+    sigma_logne = 0.40
     entropy_weight = 1e-3 if use_prior else 0.0
+    box_logT = float(np.log(3.0))  # +/- a factor of 3 in T
+    box_logne = 1.5  # +/- 1.5 dex in n_e
 
     def _proj(spec_norm):
         return (spec_norm - mean) @ basis.T
@@ -520,10 +545,17 @@ def solve_full_spectrum(
         return exp / jnp.sum(exp)
 
     def _params(x):
-        T_eV = jnp.exp(x[0])
-        log_ne = x[1]
-        logits = x[2:]
-        conc = _softmax(logits)
+        # T and log n_e use a ``tanh`` box reparameterisation so they CANNOT
+        # leave the physical neighbourhood of the warm start by construction
+        # (T within [warm/3, warm*3]; n_e within +/- box_logne dex). This is
+        # what prevents the prior-free SVD objective from running T/n_e off to
+        # an unphysical global minimum -- the classic failure mode for both the
+        # joint and Bayesian full-spectrum fits. ``x[0]``/``x[1]`` are the
+        # unconstrained tanh pre-images; ``x[2:]`` are softmax logits.
+        log_T = log_T0 + box_logT * jnp.tanh(x[0])
+        log_ne = warm_log_ne + box_logne * jnp.tanh(x[1])
+        T_eV = jnp.exp(log_T)
+        conc = _softmax(x[2:])
         return T_eV, log_ne, conc
 
     def objective(x):
@@ -532,13 +564,22 @@ def solve_full_spectrum(
         area = jnp.sum(jnp.abs(model)) + 1e-30
         model_norm = model / area
         resid = _proj(model_norm) - obs_proj
-        data = jnp.mean(resid**2)
+        # Gaussian negative-log-likelihood data term (0.5 * chi-square), in the
+        # same units as the 0.5*(Delta/sigma)^2 priors below so they compete on
+        # equal footing.
+        data = 0.5 * jnp.sum((resid / sigma_d) ** 2)
         if use_prior:
-            prior = ((x[0] - log_T0) / sigma_logT) ** 2 + ((x[1] - warm_log_ne) / sigma_logne) ** 2
+            # Informative Gaussian priors pulling (T, n_e) toward the warm
+            # start. The actual log-deviation is ``box_log* * tanh(x[i])``
+            # (see ``_params``); sigma_log* is in nats.
+            prior = 0.5 * (
+                (box_logT * jnp.tanh(x[0]) / sigma_logT) ** 2
+                + (box_logne * jnp.tanh(x[1]) / sigma_logne) ** 2
+            )
             # Maximum-entropy (Dirichlet alpha->1) push away from degenerate
             # single-element minima: maximise entropy => subtract it.
             entropy = -jnp.sum(conc * jnp.log(conc + 1e-12))
-            return data + 1e-4 * prior - entropy_weight * entropy
+            return data + prior - entropy_weight * entropy
         return data
 
     objective_jit = jax.jit(objective)
@@ -591,7 +632,9 @@ def solve_full_spectrum(
     fit_numfrac = {el: float(np.asarray(conc_fit)[i]) for i, el in enumerate(elements)}
     fit_mass = _number_to_mass_fractions(fit_numfrac)
     fit_T_K = float(np.asarray(T_eV_fit)) * EV_TO_K
-    fit_ne = float(10.0 ** float(np.asarray(log_ne_fit)))
+    # log_ne_fit is tanh-bounded to warm_log_ne +/- box_logne, but clamp
+    # defensively so 10**log_ne can never overflow a Python float.
+    fit_ne = float(10.0 ** float(np.clip(np.asarray(log_ne_fit), 1.0, 25.0)))
 
     adopted = real_fit
     if adopted:
