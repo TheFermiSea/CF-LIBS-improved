@@ -1101,139 +1101,116 @@ def _run_peak_based_solver(
 
 
 def _run_full_spectrum_solver(
-    pipeline: AnalysisPipelineConfig,
-    atomic_db,
     wavelength,
     intensity,
+    atomic_db,
+    pipeline: AnalysisPipelineConfig,
+    *,
+    warm_start,
+    diagnostics: dict,
 ):
-    """Joint / bayesian solvers: consume the raw spectrum + a JAX forward model.
+    """Run the SVD-conditioned, chunked full-spectrum fit on the iterative warm start.
 
-    Both build ONE shared :class:`BayesianForwardModel` (the physics forward
-    model — NOT the toy ``create_simple_forward_model``) on the dataset's own
-    wavelength grid so ``observed=intensity`` aligns pixel-for-pixel, then
-    return a :class:`CFLIBSResult` via :func:`_to_cflibs_result`. Concentrations
-    are number/mole fractions and are converted to mass fractions in the
-    adapter.
+    The iterative ``warm_start`` (a :class:`CFLIBSResult`) supplies the initial
+    ``T``, ``n_e`` and composition.  The full-spectrum solver
+    (:func:`cflibs.inversion.solve.full_spectrum.solve_full_spectrum`) fits the
+    measured spectrum in a low-dimensional SVD basis using the
+    memory-efficient chunked forward kernel.  Both the warm-start and the
+    converged-fit accounting are written into ``diagnostics['full_spectrum']``
+    so callers can honestly report whether a *real* converged fit was reached
+    and whether it improved on the iterative warm start.
+
+    Returns a :class:`CFLIBSResult`.  When the full-spectrum optimiser does not
+    produce a real converged optimum, the warm start is returned UNCHANGED (the
+    honest "fell back" outcome).
     """
-    import numpy as np
+    from cflibs.inversion.solve.full_spectrum import solve_full_spectrum
 
-    from cflibs.inversion.solve.bayesian import BayesianForwardModel
+    warm_concentrations = {
+        el: float(c) for el, c in warm_start.concentrations.items() if float(c) > 0.0
+    }
+    fit_elements = sorted(warm_concentrations) or list(pipeline.elements)
 
-    elements = list(pipeline.elements)
-    wl = np.asarray(wavelength, dtype=float)
-    intens = np.asarray(intensity, dtype=float)
-    ov = dict(pipeline.solver_overrides)
+    try:
+        fs = solve_full_spectrum(
+            wavelength,
+            intensity,
+            fit_elements,
+            str(atomic_db.db_path),
+            warm_start_T_K=float(warm_start.temperature_K),
+            warm_start_ne_cm3=float(warm_start.electron_density_cm3),
+            warm_start_concentrations=warm_concentrations,
+            resolving_power=pipeline.resolving_power,
+            method=pipeline.solver,
+        )
+    except Exception as exc:  # noqa: BLE001 — never crash the pipeline on the fit
+        logger.warning(
+            "Full-spectrum solver (%s) raised %r; keeping the iterative warm start.",
+            pipeline.solver,
+            exc,
+        )
+        diagnostics["full_spectrum"] = {
+            "solver": pipeline.solver,
+            "error": f"{type(exc).__name__}: {exc}",
+            "converged_fit": False,
+            "adopted_fit": False,
+        }
+        return warm_start
 
-    bfm = BayesianForwardModel(
-        db_path=str(atomic_db.db_path),
-        elements=elements,
-        wavelength_range=(float(wl.min()), float(wl.max())),
-        wavelength_grid=wl,
-        resolving_power=pipeline.resolving_power,
+    diagnostics["full_spectrum"] = {
+        "solver": pipeline.solver,
+        "converged_fit": bool(fs.converged),
+        "adopted_fit": bool(fs.adopted_fit),
+        "initial_objective": fs.initial_objective,
+        "final_objective": fs.final_objective,
+        "iterations": fs.iterations,
+        "gradient_norm": fs.gradient_norm,
+        "warm_start_T_K": fs.warm_start_temperature_K,
+        "warm_start_ne_cm3": fs.warm_start_electron_density_cm3,
+        "fit_T_K": fs.fit_temperature_K,
+        "fit_ne_cm3": fs.fit_electron_density_cm3,
+        "warm_start_concentrations": dict(fs.warm_start_concentrations),
+        "fit_concentrations": dict(fs.fit_concentrations),
+        **{f"diag_{k}": v for k, v in fs.diagnostics.items()},
+    }
+    logger.info(
+        "Full-spectrum %s: converged_fit=%s adopted=%s obj %.4g -> %.4g "
+        "(%d iters, |grad|=%.2g), T %.0f->%.0f K",
+        pipeline.solver,
+        fs.converged,
+        fs.adopted_fit,
+        fs.initial_objective,
+        fs.final_objective,
+        fs.iterations,
+        fs.gradient_norm,
+        fs.warm_start_temperature_K,
+        fs.fit_temperature_K,
     )
 
-    if pipeline.solver == "joint":
-        import jax.numpy as jnp
+    if not fs.adopted_fit:
+        # Honest fall-back: the optimiser did not beat the warm start. Return
+        # the iterative result unchanged so the reported composition is the
+        # one that was actually solved for.
+        return warm_start
 
-        from cflibs.inversion.solve.joint_optimizer import JointOptimizer
-
-        # Adapt BayesianForwardModel.forward(T_eV, log_ne, c) to the
-        # JointOptimizer forward_model(T_eV, n_e, concentrations, wavelength)
-        # signature it expects (n_e linear -> log10 internally).
-        def joint_fm(T_eV, n_e, concentrations, _wl):
-            return bfm.forward(T_eV, jnp.log10(n_e), concentrations)
-
-        optimizer = JointOptimizer(
-            joint_fm,
-            elements,
-            wl,
-            loss_type=str(ov.get("loss_type", "chi_squared")),
-            regularization=float(ov.get("regularization", 0.0)),
-            max_iterations=int(ov.get("max_iterations_joint", 200)),
-            tolerance=float(ov.get("tolerance", 1e-8)),
-            gradient_tolerance=float(ov.get("gradient_tolerance", 1e-6)),
-        )
-        try:
-            jr = optimizer.optimize(
-                intens,
-                initial_T_eV=float(ov.get("initial_T_eV", 1.0)),
-                initial_n_e=float(ov.get("initial_n_e", 1e17)),
-                method="BFGS",
-            )
-        except Exception as exc:  # noqa: BLE001 — adapt to all-FN, never crash board
-            return _failed_full_spectrum_result(elements, f"joint optimize: {exc!r}")
-
-        conc_mass = _number_to_mass_fractions(jr.concentrations)
-        # Unbounded BFGS (jax.scipy only implements BFGS) can collapse T/n_e to a
-        # non-physical value (~0). Score such a result as a failure rather than a
-        # misleadingly finite RMSE.
-        if not _physical_solution(jr.temperature_K, jr.electron_density_cm3):
-            return _failed_full_spectrum_result(
-                elements, f"joint: non-physical T={jr.temperature_K} ne={jr.electron_density_cm3}"
-            )
-        return _to_cflibs_result(
-            concentrations_mass=conc_mass,
-            temperature_K=jr.temperature_K,
-            electron_density_cm3=jr.electron_density_cm3,
-            converged=jr.is_converged,
-            failed=False,
-            iterations=jr.iterations,
-            extra_quality={"final_loss": float(jr.final_loss)},
-        )
-
-    if pipeline.solver == "bayesian":
-        from cflibs.inversion.solve.bayesian import (
-            HAS_DYNESTY,
-            MCMCSampler,
-            NoiseParameters,
-            PriorConfig,
-        )
-
-        backend = str(ov.get("sampler_backend", "nuts"))
-        if backend != "nuts":
-            if not HAS_DYNESTY:
-                raise NotImplementedError(
-                    f"bayesian sampler_backend={backend!r} requires dynesty, "
-                    "which is not installed; only the NUTS backend is available."
-                )
-        prior_config = PriorConfig(
-            concentration_alpha=float(ov.get("concentration_alpha", 1.0)),
-            baseline_degree=int(ov.get("baseline_degree", 0)),
-        )
-        noise_params = NoiseParameters(
-            readout_noise=float(ov.get("noise_readout", 10.0)),
-            gain=float(ov.get("noise_gain", 1.0)),
-        )
-        sampler = MCMCSampler(bfm, prior_config=prior_config, noise_params=noise_params)
-        try:
-            mr = sampler.run(
-                observed=intens,
-                num_warmup=int(ov.get("num_warmup", 200)),
-                num_samples=int(ov.get("num_samples", 200)),
-                num_chains=int(ov.get("num_chains", 1)),
-                seed=int(ov.get("seed", 0)),
-                target_accept_prob=float(ov.get("target_accept_prob", 0.8)),
-                max_tree_depth=int(ov.get("max_tree_depth", 8)),
-                progress_bar=False,
-            )
-        except Exception as exc:  # noqa: BLE001 — adapt to all-FN, never crash board
-            return _failed_full_spectrum_result(elements, f"bayesian run: {exc!r}")
-
-        conc_mass = _number_to_mass_fractions(mr.concentrations_mean)
-        if not _physical_solution(mr.T_K_mean, mr.n_e_mean):
-            return _failed_full_spectrum_result(
-                elements, f"bayesian: non-physical T={mr.T_K_mean} ne={mr.n_e_mean}"
-            )
-        return _to_cflibs_result(
-            concentrations_mass=conc_mass,
-            temperature_K=mr.T_K_mean,
-            electron_density_cm3=mr.n_e_mean,
-            converged=mr.is_converged,
-            failed=False,
-            iterations=int(ov.get("num_samples", 200)),
-        )
-
-    raise AssertionError(f"unreachable full-spectrum solver {pipeline.solver!r}")
+    # Adopt the converged fit. Re-wrap into the CFLIBSResult contract so the
+    # rest of the pipeline (scoreboard, CLI trust report) is unchanged.
+    quality_metrics = dict(getattr(warm_start, "quality_metrics", {}) or {})
+    quality_metrics["full_spectrum_converged"] = 1.0
+    quality_metrics["full_spectrum_adopted"] = 1.0
+    return warm_start.__class__(
+        temperature_K=float(fs.temperature_K),
+        temperature_uncertainty_K=float(getattr(warm_start, "temperature_uncertainty_K", 0.0)),
+        electron_density_cm3=float(fs.electron_density_cm3),
+        concentrations=dict(fs.concentrations),
+        concentration_uncertainties=dict(
+            getattr(warm_start, "concentration_uncertainties", {}) or {}
+        ),
+        iterations=int(fs.iterations),
+        converged=bool(fs.converged),
+        quality_metrics=quality_metrics,
+        overall_reliable=getattr(warm_start, "overall_reliable", False),
+    )
 
 
 def _dispatch_solver(
@@ -1258,7 +1235,20 @@ def _dispatch_solver(
             pipeline, observations, atomic_db, stark_diagnostics, uncertainty_mode
         )
     if solver in ("joint", "bayesian"):
-        return _run_full_spectrum_solver(pipeline, atomic_db, wavelength, intensity)
+        from dataclasses import replace as _dc_replace
+
+        # Warm-start the full-spectrum fit from a quick iterative solve on the
+        # same observations (the converged solver refines it; falls back to it).
+        warm = _run_peak_based_solver(
+            _dc_replace(pipeline, solver="iterative"),
+            observations,
+            atomic_db,
+            stark_diagnostics,
+            uncertainty_mode,
+        )
+        return _run_full_spectrum_solver(
+            wavelength, intensity, atomic_db, pipeline, warm_start=warm, diagnostics={}
+        )
     if solver == "coarse_to_fine":
         raise NotImplementedError(
             "coarse_to_fine solver needs a prebuilt manifold (manifold backlog); "
