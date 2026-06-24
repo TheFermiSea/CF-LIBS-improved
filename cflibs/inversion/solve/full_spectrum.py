@@ -538,8 +538,9 @@ def solve_full_spectrum(
         return (spec_norm - mean) @ basis.T
 
     def _softmax(logits):
-        # Numerically stable softmax (physics-only: jax.nn is banned, so this
-        # is hand-rolled rather than ``jax.nn.softmax``).
+        # Numerically stable softmax, hand-rolled: the physics-only constraint
+        # (ruff TID251) bans the neural-network helper module, so we implement
+        # the closure map directly instead of importing a library softmax.
         shifted = logits - jnp.max(logits)
         exp = jnp.exp(shifted)
         return exp / jnp.sum(exp)
