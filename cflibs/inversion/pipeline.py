@@ -205,6 +205,33 @@ class AnalysisPipelineConfig:
     #: Stark-broadening n_e diagnostic (bead pxex): measure n_e from observed
     #: literature-grade line widths; falls back (with warning) when none qualify.
     stark_ne: bool = True
+    # --- Solver dispatch (unified solver seam) ---
+    #: Which solver implementation run_pipeline dispatches to. Peak-based
+    #: solvers ({"iterative", "closed_form"}) consume the detected+identified
+    #: ``observations`` list; full-spectrum solvers ({"joint", "bayesian"})
+    #: consume the raw wavelength+intensity spectrum via a JAX forward model.
+    #: ``"coarse_to_fine"`` is reserved (needs a prebuilt manifold) and raises
+    #: NotImplementedError for now. The solver axis is orthogonal to
+    #: ``pipeline_impl`` — select it via ``config_overrides={"solver": ...}``.
+    solver: str = "iterative"
+    #: Solver-specific sub-config passed verbatim to the dispatched solver's
+    #: factory branch (e.g. ClosedFormConfig fields, joint loss_type/n_starts,
+    #: bayesian num_samples/priors). Read only inside ``_dispatch_solver`` so
+    #: unknown joint/bayesian keys never trip build_pipeline_config's whitelist.
+    solver_overrides: dict = field(default_factory=dict)
+    # --- Iterative-solver knobs not previously sweepable (lifted onto the
+    #     config so they ride config_overrides / the Optuna knob space) ---
+    #: Apply ionization-potential depression in the Saha balance.
+    apply_ipd: bool = False
+    #: Fit a two-region (core + corona) Boltzmann plane.
+    two_region: bool = False
+    #: Weight Boltzmann ordinates by A_ki transition-probability uncertainty.
+    aki_uncertainty_weighting: bool = True
+    #: Fraction of closure mass a single element may soak before the solve is
+    #: flagged as a degenerate composition.
+    degeneracy_dominance_threshold: float = 0.8
+    #: Minimum candidate-element count for the degeneracy guard to fire.
+    degeneracy_min_elements: int = 4
     #: Errors-in-variables (orthogonal distance regression) Boltzmann / Saha-
     #: Boltzmann slope fit (Boggs & Rodgers 1990): accounts for E_k-axis
     #: uncertainty, removing the OLS regression-dilution bias on T. Default off
@@ -402,6 +429,13 @@ def build_pipeline_config(
         matrix_element=knob("matrix_element", None),
         oxide_elements=knob("oxide_elements", None),
         stark_ne=bool(knob("stark_ne", stark_ne, preset_knobs["stark_ne"])),
+        solver=str(knob("solver", None, "iterative")),
+        solver_overrides=dict(ov.get("solver_overrides", None) or {}),
+        apply_ipd=bool(knob("apply_ipd", None, False)),
+        two_region=bool(knob("two_region", None, False)),
+        aki_uncertainty_weighting=bool(knob("aki_uncertainty_weighting", None, True)),
+        degeneracy_dominance_threshold=float(knob("degeneracy_dominance_threshold", None, 0.8)),
+        degeneracy_min_elements=int(knob("degeneracy_min_elements", None, 4)),
         use_odr=bool(knob("use_odr", None, False)),
         odr_x_uncertainty=float(knob("odr_x_uncertainty", None, 0.0)),
         ransac_early_exit=bool(knob("ransac_early_exit", None, True)),
@@ -876,6 +910,7 @@ def _solve_analyze_result(
             iterations=result.iterations,
             converged=result.converged,
             quality_metrics=result.quality_metrics,
+            overall_reliable=getattr(result, "overall_reliable", False),
         )
     else:
         return solver.solve(
@@ -884,6 +919,355 @@ def _solve_analyze_result(
             stark_diagnostics=stark_diagnostics,
             **closure_kwargs,
         )
+
+
+# ---------------------------------------------------------------------------
+# Unified solver dispatch (the single solver-selection fork)
+# ---------------------------------------------------------------------------
+
+#: Closure modes the closed-form solver accepts (it constructs the closure at
+#: __init__ time, not as a solve() kwarg; ``matrix`` needs a global element
+#: absent per-spectrum, and the ILR/PWLR/dirichlet variants are not part of
+#: its closed-form regression). The factory clamps anything else to standard.
+_CLOSED_FORM_CLOSURES = ("standard", "oxide")
+
+
+def _number_to_mass_fractions(concentrations: dict) -> dict:
+    """Convert a number/atom-fraction simplex to mass fractions.
+
+    The Saha-Boltzmann forward model (and the Dirichlet MCMC prior / softmax
+    joint closure that feed it) treat ``concentrations`` as **number/mole
+    fractions**. The benchmark scoreboard scores ``result.concentrations``
+    directly as mass fractions (``predicted_wt = 100 * c``), so a full-spectrum
+    solver's number-fraction output MUST be converted here or every wt% RMSE is
+    silently mis-scored.
+
+    ``C_mass_i = C_i * AW_i / sum_j (C_j * AW_j)`` with atomic weights from
+    :data:`cflibs.atomic.masses.STANDARD_ATOMIC_MASSES`.
+    """
+    from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES
+
+    weighted = {
+        el: max(float(c), 0.0) * STANDARD_ATOMIC_MASSES.get(el, 50.0)
+        for el, c in concentrations.items()
+    }
+    total = sum(weighted.values())
+    if total <= 0.0:
+        return {el: 0.0 for el in concentrations}
+    return {el: w / total for el, w in weighted.items()}
+
+
+#: Physically meaningful floors for a LIBS plasma solution. Unbounded BFGS (the
+#: only method jax.scipy.optimize.minimize implements) can drive T/n_e to a
+#: tiny-but-positive value (~1e-6 K, ~1e-38 cm^-3) that is non-physical yet
+#: passes a bare ``> 0`` test. A LIBS plasma is several thousand K with
+#: n_e well above 1e10 cm^-3.
+_T_FLOOR_K = 1000.0
+_NE_FLOOR_CM3 = 1e10
+
+
+def _physical_solution(temperature_K, electron_density_cm3) -> bool:
+    """True when T and n_e are finite and above the LIBS-plasma floors.
+
+    A collapsed optimizer result (T ~ 0, n_e ~ 0, or NaN) must be scored as a
+    failure rather than a misleadingly finite composition RMSE.
+    """
+    import math
+
+    try:
+        T = float(temperature_K)
+        ne = float(electron_density_cm3)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(T) and math.isfinite(ne) and T >= _T_FLOOR_K and ne >= _NE_FLOOR_CM3
+
+
+def _to_cflibs_result(
+    *,
+    concentrations_mass: dict,
+    temperature_K: float,
+    electron_density_cm3: float,
+    converged: bool,
+    failed: bool,
+    iterations: int = 0,
+    extra_quality: Optional[dict] = None,
+):
+    """Adapt a full-spectrum solver result to the :class:`CFLIBSResult` contract.
+
+    ``_score_spectrum`` reads a fixed surface off the returned object:
+    ``concentrations`` (scored as mass fractions), ``temperature_K``,
+    ``electron_density_cm3``, ``converged``, and ``quality_metrics`` (whose
+    ``failed`` key gates the all-FN failure branch). We synthesize exactly that
+    surface so the joint/bayesian branches plug into the same scoring path as
+    the peak-based solvers.
+    """
+    from cflibs.inversion.solve.iterative import CFLIBSResult
+
+    quality_metrics = {"failed": 1.0 if failed else 0.0}
+    if extra_quality:
+        quality_metrics.update(extra_quality)
+    return CFLIBSResult(
+        temperature_K=float(temperature_K),
+        temperature_uncertainty_K=0.0,
+        electron_density_cm3=float(electron_density_cm3),
+        concentrations=dict(concentrations_mass),
+        concentration_uncertainties={el: 0.0 for el in concentrations_mass},
+        iterations=int(iterations),
+        converged=bool(converged),
+        quality_metrics=quality_metrics,
+    )
+
+
+def _failed_full_spectrum_result(elements, reason: str):
+    """All-FN result mirroring the scoreboard's failure-policy parity branch."""
+    logger.warning("Full-spectrum solver produced no usable composition: %s", reason)
+    return _to_cflibs_result(
+        concentrations_mass={el: 0.0 for el in elements},
+        temperature_K=0.0,
+        electron_density_cm3=0.0,
+        converged=False,
+        failed=True,
+    )
+
+
+def _run_peak_based_solver(
+    pipeline: AnalysisPipelineConfig,
+    observations,
+    atomic_db,
+    stark_diagnostics,
+    uncertainty_mode: str,
+):
+    """Iterative / closed-form solvers: consume the identified observations."""
+    if pipeline.solver == "iterative":
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+
+        solver = IterativeCFLIBSSolver(
+            atomic_db=atomic_db,
+            max_iterations=pipeline.max_iterations,
+            t_tolerance_k=pipeline.t_tolerance_k,
+            ne_tolerance_frac=pipeline.ne_tolerance_frac,
+            pressure_pa=pipeline.pressure_pa,
+            apply_self_absorption=pipeline.apply_self_absorption,
+            min_boltzmann_r2=pipeline.min_boltzmann_r2,
+            boltzmann_weight_cap=pipeline.boltzmann_weight_cap,
+            saha_boltzmann_graph=pipeline.saha_boltzmann_graph,
+            use_odr=pipeline.use_odr,
+            odr_x_uncertainty=pipeline.odr_x_uncertainty,
+            apply_ipd=pipeline.apply_ipd,
+            two_region=pipeline.two_region,
+            aki_uncertainty_weighting=pipeline.aki_uncertainty_weighting,
+            degeneracy_dominance_threshold=pipeline.degeneracy_dominance_threshold,
+            degeneracy_min_elements=pipeline.degeneracy_min_elements,
+        )
+        closure_kwargs = _finalize_closure_kwargs(pipeline, observations)
+        return _solve_analyze_result(
+            solver,
+            observations,
+            pipeline.closure_mode,
+            closure_kwargs,
+            uncertainty_mode,
+            stark_diagnostics=stark_diagnostics,
+        )
+
+    # closed_form: ClosedFormILRSolver builds its closure at construction time
+    # and ``solve()`` takes NO closure_mode/stark_diagnostics/**closure_kwargs,
+    # so we call it directly (bypassing _solve_analyze_result).
+    from cflibs.inversion.solve.closed_form import ClosedFormConfig, ClosedFormILRSolver
+
+    ov = dict(pipeline.solver_overrides)
+    cf_closure = ov.get("cf_closure_mode", pipeline.closure_mode)
+    if cf_closure not in _CLOSED_FORM_CLOSURES:
+        cf_closure = "standard"
+
+    config_kwargs: dict = {
+        "closure_mode": cf_closure,
+        "saha_passes": int(ov.get("saha_passes", 2)),
+        "partition_refine": bool(ov.get("partition_refine", True)),
+        "ne_mode": str(ov.get("ne_mode", "pressure")),
+        "pressure_pa": float(ov.get("cf_pressure_pa", pipeline.pressure_pa)),
+        "apply_ipd": bool(ov.get("cf_apply_ipd", pipeline.apply_ipd)),
+    }
+    if cf_closure == "oxide":
+        oxide_stoich = _finalize_closure_kwargs(pipeline, observations).get("oxide_stoichiometry")
+        if oxide_stoich is not None:
+            config_kwargs["oxide_stoichiometry"] = oxide_stoich
+
+    solver = ClosedFormILRSolver(atomic_db, config=ClosedFormConfig(**config_kwargs))
+    return solver.solve(
+        observations,
+        initial_T_K=float(ov.get("initial_T_K", 10000.0)),
+        initial_ne_cm3=float(ov.get("initial_ne_cm3", 1e17)),
+    )
+
+
+def _run_full_spectrum_solver(
+    pipeline: AnalysisPipelineConfig,
+    atomic_db,
+    wavelength,
+    intensity,
+):
+    """Joint / bayesian solvers: consume the raw spectrum + a JAX forward model.
+
+    Both build ONE shared :class:`BayesianForwardModel` (the physics forward
+    model — NOT the toy ``create_simple_forward_model``) on the dataset's own
+    wavelength grid so ``observed=intensity`` aligns pixel-for-pixel, then
+    return a :class:`CFLIBSResult` via :func:`_to_cflibs_result`. Concentrations
+    are number/mole fractions and are converted to mass fractions in the
+    adapter.
+    """
+    import numpy as np
+
+    from cflibs.inversion.solve.bayesian import BayesianForwardModel
+
+    elements = list(pipeline.elements)
+    wl = np.asarray(wavelength, dtype=float)
+    intens = np.asarray(intensity, dtype=float)
+    ov = dict(pipeline.solver_overrides)
+
+    bfm = BayesianForwardModel(
+        db_path=str(atomic_db.db_path),
+        elements=elements,
+        wavelength_range=(float(wl.min()), float(wl.max())),
+        wavelength_grid=wl,
+        resolving_power=pipeline.resolving_power,
+    )
+
+    if pipeline.solver == "joint":
+        import jax.numpy as jnp
+
+        from cflibs.inversion.solve.joint_optimizer import JointOptimizer
+
+        # Adapt BayesianForwardModel.forward(T_eV, log_ne, c) to the
+        # JointOptimizer forward_model(T_eV, n_e, concentrations, wavelength)
+        # signature it expects (n_e linear -> log10 internally).
+        def joint_fm(T_eV, n_e, concentrations, _wl):
+            return bfm.forward(T_eV, jnp.log10(n_e), concentrations)
+
+        optimizer = JointOptimizer(
+            joint_fm,
+            elements,
+            wl,
+            loss_type=str(ov.get("loss_type", "chi_squared")),
+            regularization=float(ov.get("regularization", 0.0)),
+            max_iterations=int(ov.get("max_iterations_joint", 200)),
+            tolerance=float(ov.get("tolerance", 1e-8)),
+            gradient_tolerance=float(ov.get("gradient_tolerance", 1e-6)),
+        )
+        try:
+            jr = optimizer.optimize(
+                intens,
+                initial_T_eV=float(ov.get("initial_T_eV", 1.0)),
+                initial_n_e=float(ov.get("initial_n_e", 1e17)),
+                method="BFGS",
+            )
+        except Exception as exc:  # noqa: BLE001 — adapt to all-FN, never crash board
+            return _failed_full_spectrum_result(elements, f"joint optimize: {exc!r}")
+
+        conc_mass = _number_to_mass_fractions(jr.concentrations)
+        # Unbounded BFGS (jax.scipy only implements BFGS) can collapse T/n_e to a
+        # non-physical value (~0). Score such a result as a failure rather than a
+        # misleadingly finite RMSE.
+        if not _physical_solution(jr.temperature_K, jr.electron_density_cm3):
+            return _failed_full_spectrum_result(
+                elements, f"joint: non-physical T={jr.temperature_K} ne={jr.electron_density_cm3}"
+            )
+        return _to_cflibs_result(
+            concentrations_mass=conc_mass,
+            temperature_K=jr.temperature_K,
+            electron_density_cm3=jr.electron_density_cm3,
+            converged=jr.is_converged,
+            failed=False,
+            iterations=jr.iterations,
+            extra_quality={"final_loss": float(jr.final_loss)},
+        )
+
+    if pipeline.solver == "bayesian":
+        from cflibs.inversion.solve.bayesian import (
+            HAS_DYNESTY,
+            MCMCSampler,
+            NoiseParameters,
+            PriorConfig,
+        )
+
+        backend = str(ov.get("sampler_backend", "nuts"))
+        if backend != "nuts":
+            if not HAS_DYNESTY:
+                raise NotImplementedError(
+                    f"bayesian sampler_backend={backend!r} requires dynesty, "
+                    "which is not installed; only the NUTS backend is available."
+                )
+        prior_config = PriorConfig(
+            concentration_alpha=float(ov.get("concentration_alpha", 1.0)),
+            baseline_degree=int(ov.get("baseline_degree", 0)),
+        )
+        noise_params = NoiseParameters(
+            readout_noise=float(ov.get("noise_readout", 10.0)),
+            gain=float(ov.get("noise_gain", 1.0)),
+        )
+        sampler = MCMCSampler(bfm, prior_config=prior_config, noise_params=noise_params)
+        try:
+            mr = sampler.run(
+                observed=intens,
+                num_warmup=int(ov.get("num_warmup", 200)),
+                num_samples=int(ov.get("num_samples", 200)),
+                num_chains=int(ov.get("num_chains", 1)),
+                seed=int(ov.get("seed", 0)),
+                target_accept_prob=float(ov.get("target_accept_prob", 0.8)),
+                max_tree_depth=int(ov.get("max_tree_depth", 8)),
+                progress_bar=False,
+            )
+        except Exception as exc:  # noqa: BLE001 — adapt to all-FN, never crash board
+            return _failed_full_spectrum_result(elements, f"bayesian run: {exc!r}")
+
+        conc_mass = _number_to_mass_fractions(mr.concentrations_mean)
+        if not _physical_solution(mr.T_K_mean, mr.n_e_mean):
+            return _failed_full_spectrum_result(
+                elements, f"bayesian: non-physical T={mr.T_K_mean} ne={mr.n_e_mean}"
+            )
+        return _to_cflibs_result(
+            concentrations_mass=conc_mass,
+            temperature_K=mr.T_K_mean,
+            electron_density_cm3=mr.n_e_mean,
+            converged=mr.is_converged,
+            failed=False,
+            iterations=int(ov.get("num_samples", 200)),
+        )
+
+    raise AssertionError(f"unreachable full-spectrum solver {pipeline.solver!r}")
+
+
+def _dispatch_solver(
+    pipeline: AnalysisPipelineConfig,
+    observations,
+    atomic_db,
+    wavelength,
+    intensity,
+    stark_diagnostics,
+    uncertainty_mode: str,
+):
+    """Select and run the configured solver, returning a :class:`CFLIBSResult`.
+
+    The single solver-selection fork: peak-based solvers (iterative,
+    closed_form) consume the already-built ``observations``; full-spectrum
+    solvers (joint, bayesian) consume the raw ``wavelength``/``intensity`` via a
+    JAX forward model. ``coarse_to_fine`` is reserved (needs a manifold).
+    """
+    solver = pipeline.solver
+    if solver in ("iterative", "closed_form"):
+        return _run_peak_based_solver(
+            pipeline, observations, atomic_db, stark_diagnostics, uncertainty_mode
+        )
+    if solver in ("joint", "bayesian"):
+        return _run_full_spectrum_solver(pipeline, atomic_db, wavelength, intensity)
+    if solver == "coarse_to_fine":
+        raise NotImplementedError(
+            "coarse_to_fine solver needs a prebuilt manifold (manifold backlog); "
+            "not yet wired into the unified dispatch."
+        )
+    raise ValueError(
+        f"Unknown solver {solver!r}; choose from "
+        "{iterative, closed_form, joint, bayesian, coarse_to_fine}."
+    )
 
 
 def run_pipeline(
@@ -904,11 +1288,9 @@ def run_pipeline(
     solve, in seconds) for the goal-metric scoreboard (bead A1).
     """
     # Function-local imports preserve the module's light import-time contract:
-    # ``IterativeCFLIBSSolver`` is lazy to avoid a circular import (see module
-    # docstring), and ``time`` is kept local alongside it.
+    # Solver imports are lazy (inside ``_dispatch_solver``) to avoid a circular
+    # import (see module docstring); ``time`` is kept local for stage timings.
     import time
-
-    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
 
     _t_start = time.perf_counter()
 
@@ -1032,29 +1414,15 @@ def run_pipeline(
                 stark_diagnostics = stark_result.diagnostics
     _stark_s = time.perf_counter() - _t_stark0
 
-    solver = IterativeCFLIBSSolver(
-        atomic_db=atomic_db,
-        max_iterations=pipeline.max_iterations,
-        t_tolerance_k=pipeline.t_tolerance_k,
-        ne_tolerance_frac=pipeline.ne_tolerance_frac,
-        pressure_pa=pipeline.pressure_pa,
-        apply_self_absorption=pipeline.apply_self_absorption,
-        min_boltzmann_r2=pipeline.min_boltzmann_r2,
-        boltzmann_weight_cap=pipeline.boltzmann_weight_cap,
-        saha_boltzmann_graph=pipeline.saha_boltzmann_graph,
-        use_odr=pipeline.use_odr,
-        odr_x_uncertainty=pipeline.odr_x_uncertainty,
-    )
-
-    closure_kwargs = _finalize_closure_kwargs(pipeline, observations)
     _t_solve0 = time.perf_counter()
-    result = _solve_analyze_result(
-        solver,
+    result = _dispatch_solver(
+        pipeline,
         observations,
-        pipeline.closure_mode,
-        closure_kwargs,
+        atomic_db,
+        wavelength,
+        intensity,
+        stark_diagnostics,
         uncertainty_mode,
-        stark_diagnostics=stark_diagnostics,
     )
     _solve_s = time.perf_counter() - _t_solve0
 

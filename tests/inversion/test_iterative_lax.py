@@ -424,11 +424,17 @@ def test_no_sqlite_inside_loop(mock_db, lax_enabled):
         + mock_db.get_partition_coefficients.call_count
         + mock_db.get_energy_levels.call_count
     )
-    # Strict upper bound: each element queried at most once each for IP +
-    # 2 stages of levels + 2 stages of poly coefficients = 5 calls/element.
-    assert total_calls <= 5 * n_elements, (
-        f"Too many DB queries: {total_calls} > {5 * n_elements} -- "
-        "queries leaking into the loop body?"
+    # Upper bound = the one-time pre-fetch budget (1 IP + 2 stages of levels +
+    # 2 stages of poly coefficients = 5 calls/element) PLUS the M7 post-loop
+    # reliability assessment (_assess_reliability runs ONCE after the loop in
+    # _assemble_quality_metrics: 1 IP + 2 partition-stage evals/element). Both
+    # are one-time host-side costs (cache-served on the real AtomicDatabase),
+    # NOT per-iteration. The guard still catches a genuine loop-body leak: that
+    # would scale with max_iterations (=20 here), i.e. >> 8 * n_elements.
+    assert total_calls <= 8 * n_elements, (
+        f"Too many DB queries: {total_calls} > {8 * n_elements} -- "
+        "queries leaking into the loop body? (one-time pre-fetch + M7 post-loop "
+        "assess is bounded by 8/element; a per-iteration leak would be ~20x)"
     )
 
 

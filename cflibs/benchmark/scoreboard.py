@@ -309,6 +309,14 @@ def _score_spectrum(
     record["ne_source"] = (
         "stark" if (result.quality_metrics or {}).get("ne_from_stark") else "pressure_balance"
     )
+    # M7 reliability surface: per-spectrum quality_flag + refuse-to-report verdict,
+    # so the scoreboard can compute conditional (reliable-subset) RMSE and the
+    # LTE false-reject confusion against synthetic-corpus n_e truth.
+    _qm = result.quality_metrics or {}
+    record["quality_flag"] = _qm.get("quality_flag")
+    record["overall_reliable"] = bool(getattr(result, "overall_reliable", False))
+    record["lte_mcwhirter_satisfied"] = bool(_qm.get("lte_mcwhirter_satisfied", False))
+    record["lte_n_e_required_cm3"] = float(_qm.get("lte_n_e_required_cm3", 0.0))
     record["n_observations"] = int(diagnostics.get("n_observations", 0))
     record["stage_timings_s"] = dict(diagnostics.get("stage_timings", {}))
 
