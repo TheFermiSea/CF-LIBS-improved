@@ -48,6 +48,32 @@ def _bindir() -> str:
     return os.path.dirname(sys.executable)
 
 
+#: Main checkout that holds the UNTRACKED data dirs (e.g. data/supercam_calib). Arbor worktrees
+#: only check out git-TRACKED files, so the eval must symlink the rest in. Override via env.
+DATA_SRC = os.environ.get(
+    "CFLIBS_ARBOR_DATA_SRC", "/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5"
+)
+
+
+def provision_untracked_data() -> None:
+    """Symlink any data/ subdir present in the main checkout but missing here (idempotent).
+
+    A fresh Arbor worktree has only the tracked datasets (aalto, bhvo2); the SuperCam data lives in
+    the UNTRACKED data/supercam_calib, so supercam_labcal/supercam_scct silently skip and the eval
+    returns a sentinel. This fills the gaps so candidates are actually scored on the real splits."""
+    src = os.path.join(DATA_SRC, "data")
+    if not os.path.isdir(src) or os.path.realpath(os.getcwd()) == os.path.realpath(DATA_SRC):
+        return
+    os.makedirs("data", exist_ok=True)
+    for name in os.listdir(src):
+        dst = os.path.join("data", name)
+        if not os.path.exists(dst):  # only fill gaps; tracked dirs are already checked out
+            try:
+                os.symlink(os.path.join(src, name), dst)
+            except OSError:
+                pass
+
+
 def correctness_gate() -> tuple[bool, str]:
     """Physics-only import blocklist + verified-spec oracle conformance. (ok, reason)."""
     ruff = os.path.join(_bindir(), "ruff")
@@ -85,6 +111,7 @@ def score_split(split: str, max_spectra: int) -> tuple[float, dict]:
     from cflibs.atomic.database import AtomicDatabase
     from cflibs.benchmark.scoreboard import ensure_default_datasets, run_scoreboard
 
+    provision_untracked_data()  # fill in untracked data (supercam_calib) for fresh Arbor worktrees
     ensure_default_datasets()
     db = AtomicDatabase("ASD_da/libs_production.db")
     datasets, include_holdout = SPLIT_DATASETS[split]
