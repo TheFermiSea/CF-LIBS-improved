@@ -1,0 +1,31 @@
+# Arbor research config for CF-LIBS accuracy optimization (keyless mode, driven by Claude Code).
+# Launch (inside Claude Code, after `claude plugin install arbor`):
+#   /arbor-research-agent optimize this repo using scripts/arbor/research_config.yaml
+# or headless:  arbor --cwd "$PWD" --config scripts/arbor/research_config.yaml
+
+task: >
+  Improve CF-LIBS composition accuracy. Evaluate every candidate with:
+    PYTHONPATH=$PWD JAX_PLATFORMS=cpu python scripts/arbor/run_eval.py --split dev --max-spectra 20
+  It emits JSON with `score` (HIGHER is better = lower RMSE; MAXIMIZE this) and `valid`. A candidate
+  with valid=false (score=-1e9) FAILED the cflibs-formal oracle conformance or the physics-only
+  import blocklist and MUST NOT be merged -- that is the correctness gate. Use
+  `--split test` (held-out holdout tier) for the merge decision; merge only on a held-out gain.
+
+  FOCUS the search ONLY on levers that can actually move accuracy on this data (the others are
+  benchmarked inert -- do not re-explore them):
+    1. SELF-ABSORPTION correction -- apply_self_absorption='observable' is a measured win
+       (-0.21 wt%, the spec's selfAbsorbed_corrects_bias). Explore its parameters, the optical-depth
+       estimation, and when to enable it (per-line / per-element gating).
+    2. ATOMIC-DATA / GRADE WEIGHTING in the Boltzmann fit -- composition_error_bound says the
+       per-line density error dominates on high-SNR data, so weight lines by accuracy_grade /
+       aki_uncertainty (the grade_aware path) and tune how strongly.
+
+  DO NOT touch: the evaluation harness (scripts/arbor/, cflibs/benchmark/), the datasets, tests/,
+  the cflibs-formal oracle. DO NOT re-explore line-SELECTION gates (min_snr / max_lines /
+  reliability ranking) -- proven inert. DO NOT add ML imports (sklearn/torch/jax.nn/...) to cflibs/
+  -- the blocklist rejects them (score=-1e9). Keep every change physics-only and oracle-conformant.
+
+coordinator:
+  max_cycles: 8          # exploration rounds; raise once a lever shows signal
+  max_depth: 2           # Idea Tree depth
+  merge_threshold: 3.0   # require >= ~3% held-out (test-split) RMSE reduction to merge (anti-overfit)
