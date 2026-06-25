@@ -208,9 +208,7 @@ def compute_oe_diagnostics(
                 )
             S_a = np.diag(S_a)
         elif S_a.shape != (n, n):
-            raise ValueError(
-                f"prior_covariance shape {S_a.shape} does not match (n, n)=({n}, {n})"
-            )
+            raise ValueError(f"prior_covariance shape {S_a.shape} does not match (n, n)=({n}, {n})")
         prior_precision = np.linalg.inv(S_a)
     else:
         prior_precision = np.zeros((n, n))
@@ -580,9 +578,7 @@ class JointOptimizer:
 
         # Additive Rodgers optimal-estimation closure diagnostics (does not
         # affect the point estimate above).
-        oe_diagnostics = self._compute_oe_diagnostics(
-            final_x, uncertainties, prior_covariance
-        )
+        oe_diagnostics = self._compute_oe_diagnostics(final_x, uncertainties, prior_covariance)
 
         logger.info(
             f"Optimization complete: T={final_T:.3f} eV, n_e={final_ne:.2e} cm^-3, "
@@ -676,18 +672,53 @@ class JointOptimizer:
         gradient evaluation, and the status branching are byte-identical.
         """
         try:
-            # Use JAX minimize
-            result = jax_minimize(
-                loss_fn,
-                x0,
-                method=method.lower().replace("-", ""),
-                options={"maxiter": self.max_iterations},
-            )
+            method_norm = method.lower().replace("-", "")
+            if method_norm == "bfgs":
+                # jax.scipy.optimize.minimize implements ONLY BFGS.
+                result = jax_minimize(
+                    loss_fn,
+                    x0,
+                    method="bfgs",
+                    options={"maxiter": self.max_iterations},
+                )
+                final_x = jnp.asarray(result.x)
+                final_loss = float(result.fun)
+                converged = bool(result.success)
+                iterations = int(result.nit) if hasattr(result, "nit") else self.max_iterations
+            else:
+                # L-BFGS-B / CG: jax.scipy.optimize.minimize does NOT implement
+                # these — passing them raised ``ValueError: Method lbfgsb not
+                # recognized`` (audit C4), despite both being documented. Route
+                # through scipy.optimize.minimize with a JAX value-and-grad bridge
+                # so the documented API works. The parameterization is
+                # unconstrained (tanh/softmax transforms), so L-BFGS-B runs
+                # unbounded here — same feasible set as BFGS, just a different
+                # quasi-Newton update.
+                from scipy.optimize import minimize as scipy_minimize
 
-            final_x = result.x
-            final_loss = float(result.fun)
-            converged = result.success
-            iterations = result.nit if hasattr(result, "nit") else self.max_iterations
+                _value_and_grad = jax.value_and_grad(loss_fn)
+
+                def _fun_and_grad(x_np: np.ndarray) -> Tuple[float, np.ndarray]:
+                    val, grad = _value_and_grad(jnp.asarray(x_np))
+                    return float(val), np.asarray(grad, dtype=float)
+
+                scipy_method = {"lbfgsb": "L-BFGS-B", "cg": "CG"}.get(method_norm)
+                if scipy_method is None:
+                    raise ValueError(
+                        f"Unsupported optimization method {method!r}; "
+                        "use one of 'BFGS', 'L-BFGS-B', 'CG'."
+                    )
+                res = scipy_minimize(
+                    _fun_and_grad,
+                    np.asarray(x0, dtype=float),
+                    jac=True,
+                    method=scipy_method,
+                    options={"maxiter": self.max_iterations},
+                )
+                final_x = jnp.asarray(res.x)
+                final_loss = float(res.fun)
+                converged = bool(res.success)
+                iterations = int(res.nit) if hasattr(res, "nit") else self.max_iterations
 
             # Compute gradient at solution
             grad_fn = jax.grad(loss_fn)

@@ -411,7 +411,10 @@ def solve_full_spectrum(
     max_iterations : int
         Optimiser iteration cap.
     sweep_points : int
-        Number of warm-start-centred forward spectra used to seed the SVD basis.
+        Total target for the warm-start-centred SVD seed library. The base
+        library is always a 3x3 T/ne grid plus one composition-boost row per
+        element (so composition directions are always spanned); values above
+        ``9`` add that many extra warm-centred T-refinement rows.
     fit_pixels : int or None
         Resample the spectrum onto a uniform ``fit_pixels``-point grid for the
         differentiable fit.  The chunked-forward XLA graph (a ``lax.scan`` of
@@ -478,14 +481,24 @@ def solve_full_spectrum(
     for tf in T_factors:
         for dne in ne_offsets:
             lib_rows.append(fwd.spectrum_numpy(warm_T_eV * tf, warm_log_ne + dne, warm_numfrac))
-    # A few composition perturbations (boost each element in turn) up to the
-    # sweep budget so the residual's composition directions are represented.
-    extra = max(0, sweep_points - len(lib_rows))
-    for i in range(min(extra, n_el)):
+    # Composition perturbations: boost each element in turn. ALWAYS generated
+    # (one per element) so the SVD basis spans composition directions. The 3x3
+    # T/ne grid alone does not — without these rows the optimizer moves in
+    # composition directions orthogonal to the basis (treated as zero residual).
+    # Audit C3: previously gated behind `extra = sweep_points - len(lib_rows)`,
+    # which is 0 at the default sweep_points=9 (the T/ne grid already fills it),
+    # so the basis never saw composition and the fit ran in a T/ne-only subspace.
+    # Hebert et al. 2020 §3 uses single-element spectra precisely for this.
+    for i in range(n_el):
         boosted = warm_numfrac.copy()
         boosted[i] = boosted[i] * 3.0 + 0.05
         boosted = boosted / boosted.sum()
         lib_rows.append(fwd.spectrum_numpy(warm_T_eV, warm_log_ne, boosted))
+    # `sweep_points` now requests OPTIONAL extra warm-centred T-refinement rows
+    # beyond the base 3x3 T/ne grid + per-element composition rows.
+    extra_tne = max(0, int(sweep_points) - 9)
+    for tf in np.linspace(0.8, 1.2, extra_tne) if extra_tne else ():
+        lib_rows.append(fwd.spectrum_numpy(warm_T_eV * float(tf), warm_log_ne, warm_numfrac))
     library = np.vstack(lib_rows)
 
     basis_np, mean_np, k = build_svd_basis(library, obs, n_components=n_components)
