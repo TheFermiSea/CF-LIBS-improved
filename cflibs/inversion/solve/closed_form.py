@@ -329,7 +329,7 @@ class ClosedFormILRSolver:
 
     @staticmethod
     def _extract_parameters(
-        theta: np.ndarray, D: int, element_order: List[str]
+        theta: np.ndarray, D: int, element_order: List[str], prior_T_K: float
     ) -> Tuple[float, Dict[str, float], bool]:
         """Extract T and compositions from regression parameters.
 
@@ -338,13 +338,27 @@ class ClosedFormILRSolver:
         tuple
             (T_K, compositions, physical) where physical is False if the
             fitted slope was non-negative (indicating a non-physical fit).
+
+        On a non-physical (non-negative) slope the temperature is HELD at
+        ``prior_T_K`` (the caller's current best estimate) and ``physical`` is
+        set False — mirroring the iterative solver, which holds T at the prior
+        and marks the solve non-converged. Previously this clamped T to 50000 K,
+        which drives the Boltzmann factors toward 1 and collapses the closure to
+        a raw-intensity softmax ("keystone collapse"); worse, since 50000 K
+        passes the pass-1 ``1000 < T < 100000`` range gate it silently became the
+        reported temperature and propagated into the partition/Saha multipliers
+        of the n_e refinement (audit C2).
         """
         m = theta[0]
         physical = True
         if m >= 0:
-            T_K = 50000.0
+            T_K = prior_T_K
             physical = False
-            logger.warning("Non-negative slope; clamping T to 50000 K")
+            logger.warning(
+                "Non-negative Boltzmann slope (non-physical); holding T at the "
+                "prior %.0f K and flagging the solve non-physical.",
+                prior_T_K,
+            )
         else:
             T_K = -1.0 / (m * KB_EV)
 
@@ -443,7 +457,9 @@ class ClosedFormILRSolver:
         theta1, _ = self._solve_wls(X1, y1, W1)
         if theta1 is None:
             return T_K
-        T_pass1, _, _ = self._extract_parameters(theta1, len(neutral_elements), neutral_elements)
+        T_pass1, _, _ = self._extract_parameters(
+            theta1, len(neutral_elements), neutral_elements, prior_T_K=T_K
+        )
         if 1000 < T_pass1 < 100000:
             return T_pass1
         return T_K
@@ -602,7 +618,7 @@ class ClosedFormILRSolver:
         if theta is None:
             return None
 
-        T_K, compositions, physical = self._extract_parameters(theta, D, elements)
+        T_K, compositions, physical = self._extract_parameters(theta, D, elements, prior_T_K=T_K)
         if not physical:
             converged = False
 
