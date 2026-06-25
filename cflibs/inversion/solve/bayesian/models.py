@@ -127,6 +127,12 @@ def bayesian_model(
     numpyro.sample("obs", dist.Normal(pred_safe, sigma), obs=observed)
 
 
+#: Stiffness (per eV^2) of the smooth T_core > T_shell ordering penalty in the
+#: two-zone model. Large enough to strongly enforce ordering while keeping the
+#: potential C^1 (HMC-differentiable); approaches a hard truncation as it grows.
+_T_ORDERING_PENALTY_SCALE = 1.0e4
+
+
 def two_zone_bayesian_model(
     forward_model: "TwoZoneBayesianForwardModel",
     observed,
@@ -149,7 +155,18 @@ def two_zone_bayesian_model(
     )
 
     if prior_config.enforce_T_ordering:
-        numpyro.factor("T_ordering", jnp.where(T_core_eV > T_shell_eV, 0.0, -1e6))
+        # Smooth one-sided penalty enforcing T_core > T_shell. The previous
+        # ``jnp.where(T_core>T_shell, 0.0, -1e6)`` is a flat cliff: ZERO gradient
+        # on both sides plus a discontinuity at the boundary, so NUTS gets no
+        # restoring force and diverges when a trajectory crosses it (audit C6).
+        # A quadratic hinge ``-k*max(T_shell-T_core,0)^2`` is C^1 with a genuine
+        # restoring gradient ``2k*(T_shell-T_core)`` in the violated region and
+        # recovers the hard truncation as k grows, while staying differentiable.
+        # (Reparameterizing T_core onto (T_shell, hi] is the tuning-free ideal,
+        # but it changes the sample sites and the marginal T_shell prior, so it
+        # is deferred to the Step-4 MCMC sampling-quality validation.)
+        violation = jnp.maximum(T_shell_eV - T_core_eV, 0.0)
+        numpyro.factor("T_ordering", -_T_ORDERING_PENALTY_SCALE * jnp.square(violation))
 
     log_ne = numpyro.sample(
         "log_ne",
