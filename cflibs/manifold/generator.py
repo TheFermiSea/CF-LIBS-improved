@@ -799,9 +799,17 @@ class ManifoldGenerator:
             atomic_data,
         )
 
+        # n_upper from the Saha-Boltzmann solver is in cm⁻³ (project convention,
+        # SAHA_CONST_CM3). The emissivity uses SI constants (H_PLANCK J·s,
+        # C_LIGHT m/s, l_wl in m), so n_upper must be in m⁻³ — the same * 1.0e6
+        # conversion applied in kernels.forward_model and the two-zone Bayesian
+        # forward (forward.py:519). Omitting it underscaled every emissivity
+        # (and thus every stored manifold) by 1e6.
+        n_upper_m3 = n_upper * 1.0e6
+
         # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
 
-        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
+        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper_m3
 
         # --- Proper Voigt Broadening (Phase 2) ---
 
@@ -922,8 +930,10 @@ class ManifoldGenerator:
             atomic_data,
         )
 
+        # cm⁻³ -> m⁻³ before the SI-constant emissivity (see _compute_spectrum_snapshot).
+        n_upper_m3 = n_upper * 1.0e6
         # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
-        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
+        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper_m3
 
         # Doppler sigma + instrument floor. ``sigma_inst`` is threaded in
         # from ``ManifoldConfig.instrument_fwhm_nm`` (D3 fix; previously the
