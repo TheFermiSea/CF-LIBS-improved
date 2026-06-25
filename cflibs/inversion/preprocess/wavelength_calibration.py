@@ -511,6 +511,127 @@ def _ransac_search(
     return best_coef, best_inliers
 
 
+def _batched_minimal_fit(
+    model: CalibrationModel, xs: np.ndarray, ys: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Exact minimal-sample fits for every RANSAC hypothesis at once.
+
+    ``xs``/``ys`` are ``(n_iter, k)`` minimal samples (k = parameter count).
+    Returns ``(coefs (n_iter, k_params), valid (n_iter,))``; degenerate
+    (collinear / singular) samples are flagged invalid with zeroed coefficients.
+    """
+    n_iter = xs.shape[0]
+    if model == "shift":
+        return ys[:, :1] - xs[:, :1], np.ones(n_iter, dtype=bool)
+    if model == "affine":
+        dx = xs[:, 1] - xs[:, 0]
+        valid = np.abs(dx) > 1e-12
+        a = np.where(valid, (ys[:, 1] - ys[:, 0]) / np.where(valid, dx, 1.0), 0.0)
+        b = np.where(valid, ys[:, 0] - a * xs[:, 0], 0.0)
+        return np.column_stack([a, b]), valid
+    if model == "quadratic":
+        vander = np.stack([xs * xs, xs, np.ones_like(xs)], axis=-1)  # (n_iter, 3, 3)
+        valid = np.abs(np.linalg.det(vander)) > 1e-18
+        safe = np.where(valid[:, None, None], vander, np.eye(3)[None, :, :])
+        rhs = np.where(valid[:, None], ys, 0.0)[:, :, None]
+        coefs = np.linalg.solve(safe, rhs)[:, :, 0]
+        return np.where(valid[:, None], coefs, 0.0), valid
+    return np.zeros((n_iter, 1)), np.zeros(n_iter, dtype=bool)
+
+
+def _batched_eval(model: CalibrationModel, x: np.ndarray, coefs: np.ndarray) -> np.ndarray:
+    """Evaluate every hypothesis over all candidates -> ``(n_hyp, n_cand)``."""
+    xr = x[None, :]
+    if model == "shift":
+        return xr + coefs[:, :1]
+    if model == "affine":
+        return coefs[:, :1] * xr + coefs[:, 1:2]
+    if model == "quadratic":
+        return coefs[:, :1] * xr * xr + coefs[:, 1:2] * xr + coefs[:, 2:3]
+    return np.broadcast_to(xr, (coefs.shape[0], x.size)).copy()
+
+
+def _ransac_search_vectorized(
+    model: CalibrationModel,
+    x: np.ndarray,
+    y: np.ndarray,
+    peak_ids: np.ndarray,
+    line_ids: np.ndarray,
+    weights: np.ndarray,
+    probs: np.ndarray,
+    rng: np.random.Generator,
+    min_pts: int,
+    inlier_tolerance_nm: float,
+    iterations: int,
+    seed_coef: Optional[Tuple[float, ...]] = None,
+    seed_inliers: Optional[np.ndarray] = None,
+    seed_score: Optional[Tuple[int, float]] = None,
+    early_exit: Optional["_RansacEarlyExitConfig"] = None,
+) -> Tuple[Optional[Tuple[float, ...]], np.ndarray]:
+    """Vectorized equivalent of :func:`_ransac_search`.
+
+    Same minimal-sample model, inlier tolerance and
+    maximize-inliers/minimize-median-residual ranking, but every hypothesis is
+    scored in batched numpy instead of an ``iterations``-long Python loop with a
+    per-iteration ``np.median``. Weighted minimal samples are drawn without
+    replacement via the Gumbel-top-k trick; the consensus uses a vectorized
+    peak-unique stand-in for the greedy one-to-one dedup, and the single winning
+    hypothesis is then passed through the EXACT :func:`_dedupe_one_to_one` so the
+    returned inlier set matches the scalar path's contract.
+
+    ``seed_coef`` (the deterministic Hough warm start) competes as one extra
+    hypothesis in the batch. ``early_exit`` is accepted for signature parity but
+    ignored: the batch evaluates all hypotheses at once, so there is no trailing
+    loop to terminate. NOT byte-identical to the RNG loop -> benchmark-gated.
+    """
+
+    def _exact(coef):
+        res = np.abs(_eval_model(x, model, coef) - y)
+        return coef, _dedupe_one_to_one(res, peak_ids, line_ids, res <= inlier_tolerance_nm)
+
+    n_cand = x.size
+    if n_cand < min_pts:
+        return _exact(seed_coef) if seed_coef is not None else (None, np.array([], dtype=int))
+
+    # 1. Batched weighted sampling without replacement (Gumbel-top-k).
+    logp = np.log(np.clip(probs, 1e-300, None))
+    keys = logp[None, :] + rng.gumbel(size=(iterations, n_cand))
+    samples = np.argpartition(-keys, min_pts - 1, axis=1)[:, :min_pts]  # (n_iter, k)
+    coefs, valid = _batched_minimal_fit(model, x[samples], y[samples])
+
+    # The Hough warm start competes as an extra hypothesis.
+    if seed_coef is not None:
+        coefs = np.vstack([np.asarray(seed_coef, dtype=float)[None, :], coefs])
+        valid = np.concatenate([[True], valid])
+
+    # 2-3. Batched residuals + inlier masks over all candidates.
+    residual = np.abs(_batched_eval(model, x, coefs) - y[None, :])
+    inlier = residual <= inlier_tolerance_nm
+
+    # 4. Peak-unique consensus (one nanmedian replaces the per-iteration median).
+    n_peaks = int(peak_ids.max()) + 1
+    n_hyp = coefs.shape[0]
+    masked = np.where(inlier, residual, np.inf)
+    peak_min = np.full((n_hyp, n_peaks), np.inf)
+    np.minimum.at(peak_min, (np.arange(n_hyp)[:, None], peak_ids[None, :]), masked)
+    finite = np.isfinite(peak_min)
+    n_matched = np.where(valid, finite.sum(axis=1), -1)
+    med = np.nanmedian(np.where(finite, peak_min, np.nan), axis=1)
+    med = np.where(np.isnan(med), np.inf, med)
+
+    if int(n_matched.max()) <= 0:
+        if seed_coef is not None:
+            return seed_coef, (
+                seed_inliers if seed_inliers is not None else np.array([], dtype=int)
+            )
+        return None, np.array([], dtype=int)
+
+    # 5. Best hypothesis: max inliers, then min median residual.
+    best_i = int(np.lexsort((med, -n_matched))[0])
+    # 6. EXACT one-to-one dedup on the winner (scalar-path contract).
+    return _exact(tuple(float(c) for c in coefs[best_i]))
+
+
 def _refine_robust_inliers(
     model: CalibrationModel,
     x: np.ndarray,
@@ -614,7 +735,12 @@ def _ransac_fit(
         if seed_coef is not None:
             ransac_iterations = min(iterations, _HOUGH_SEEDED_RANSAC_ITERATIONS)
 
-    best_coef, best_inliers = _ransac_search(
+    _search = (
+        _ransac_search_vectorized
+        if os.environ.get("CFLIBS_VECTORIZED_RANSAC", "") in ("1", "true", "True")
+        else _ransac_search
+    )
+    best_coef, best_inliers = _search(
         model,
         x,
         y,
