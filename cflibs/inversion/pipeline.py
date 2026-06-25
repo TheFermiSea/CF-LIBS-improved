@@ -40,6 +40,14 @@ logger = get_logger("inversion.pipeline")
 #: Closure modes accepted by the iterative solver / CLI.
 CLOSURE_MODES = ("standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residual")
 
+#: Solver backends the unified pipeline supports end-to-end (peak-based
+#: ``iterative`` plus the full-spectrum ``joint``/``bayesian`` fits).
+SOLVER_BACKENDS = ("iterative", "joint", "bayesian")
+#: All solver names ``build_pipeline_config`` accepts. ``closed_form`` is an
+#: additional peak-based backend; ``coarse_to_fine`` is reserved for the
+#: manifold path (``_dispatch_solver`` raises NotImplementedError until wired).
+_VALID_SOLVERS = SOLVER_BACKENDS + ("closed_form", "coarse_to_fine")
+
 #: Preset bundles for the accuracy-critical solver knobs, measured on real
 #: ChemCam BHVO-2 (docs/audit/2026-06-09-overhaul/04-pipeline-defaults.md):
 #: the default ``analyze`` path scored RMSE 10.29 wt% (Fe 39 vs certified
@@ -371,6 +379,12 @@ def build_pipeline_config(
             f"Valid modes: {list(CLOSURE_MODES)}"
         )
 
+    solver_name = str(knob("solver", None, "iterative"))
+    if solver_name not in _VALID_SOLVERS:
+        raise ValueError(
+            f"Unknown solver backend {solver_name!r}; choose from {sorted(_VALID_SOLVERS)}."
+        )
+
     pipeline = AnalysisPipelineConfig(
         preset=preset_name,
         elements=list(elements),
@@ -429,7 +443,7 @@ def build_pipeline_config(
         matrix_element=knob("matrix_element", None),
         oxide_elements=knob("oxide_elements", None),
         stark_ne=bool(knob("stark_ne", stark_ne, preset_knobs["stark_ne"])),
-        solver=str(knob("solver", None, "iterative")),
+        solver=solver_name,
         solver_overrides=dict(ov.get("solver_overrides", None) or {}),
         apply_ipd=bool(knob("apply_ipd", None, False)),
         two_region=bool(knob("two_region", None, False)),
