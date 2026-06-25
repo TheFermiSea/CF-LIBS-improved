@@ -178,3 +178,39 @@ genuinely-undecided experiments.
 Each accuracy-changing fix follows the standing discipline: default-OFF flag → benchmark flag-off vs -on on
 dev + held-out → promote to default only on a measured win with zero regression → **then remove the flag** so
 the simplification actually lands.
+
+---
+
+## Execution status (2026-06-25)
+
+### Landed + verified + pushed (`v4/m5-kurucz-atomic`)
+- **C1** manifold 10⁶× emissivity scale — fixed both snapshot paths; real-DB parity verified; regression test added.
+- **C2** ILR non-physical-slope holds prior T (no 50000 K clamp); unit test.
+- **C3** full-spectrum SVD basis always spans composition; real-DB recovery verified; test. (NOTE: composition is now *movable* but the solver still under-recovers in float64 — see "needs benchmark" below.)
+- **C4** `JointOptimizer` L-BFGS-B/CG route through scipy (were silent no-ops); parametrized test.
+- **C5** Bayesian Poisson readout residual `observed−predicted`; unit test.
+- **C6** NUTS T-ordering smooth quadratic hinge (was zero-gradient cliff); `jax.grad` test.
+- **X1** deleted vectorized RANSAC (`_ransac_search_vectorized` + `CFLIBS_VECTORIZED_RANSAC`) — proven 1.8× slower + parity-breaking.
+- **M5** oxide-closure docstring (O/cation, not molar-mass ratio).
+- **SOLVER_BACKENDS** + `build_pipeline_config` solver validation (fixed 2 pre-existing dispatch tests).
+
+Fast gate (`not slow and not requires_db`): **3488 passed**; the only reds are pre-existing (below).
+
+### Audit findings CORRECTED (false positives — do NOT apply)
+- **QualityAssessor "dead code"** is FALSE — it is live in `iterative.py:2099` (M7 Lever 6). Not deleted.
+- **M2 Saha S2 guard** is FALSE — S2 = n_III/n_II uses the *second* ionization potential `ip_II` (correctly used); the existing `if ip_II is not None` guard is correct. The proposed `ip_III` guard would wrongly zero stage-III populations.
+- *Lesson:* the workflow only adversarially-verified CRITICAL/HIGH findings; the unverified MEDIUM/complexity tier produced these false positives. Treat remaining MEDIUM/complexity items as leads requiring per-item verification.
+
+### Deferred — needs a node benchmark (scoring/accuracy-affecting; gate per standing rules)
+- **C7** NNLS SNR covariance — synthetic **ID-F1** benchmark (identifier-scoring change).
+- **Default flips**: McWhirter resonance-δE ON; LEGACY→PHYSICAL_DOPPLER broadening; **M3/M4/M10**.
+- **Full-spectrum convergence quality** (C3 follow-on: under-recovers in float64) — the sigma_d/Hessian items + Step-4 validation.
+
+### Deferred — design decision + benchmark
+- **`test_dispatch_routes_full_spectrum`** (the one remaining red, pre-existing since integration c7a43f8): the oracle spec forbids a peak-solver call in the full-spectrum dispatch, but the integration computes an iterative warm-start there and `solve_full_spectrum` requires a warm-start. Options: (a) move warm-start into `_run_full_spectrum_solver` (re-detect internally); (b) default warm-start; (c) update the spec to pass observations. Decide via a benchmark: does the iterative warm-start improve full-spectrum accuracy? (Ties into Step-4.)
+
+### Deferred — per-item verification (unverified MEDIUM tier)
+- M1 (corona two-region T in lax path), M6/M7 (self-absorption g_i / τ-ratio), M8 (MC A_ki floor), M9 (joint Hessian covariance), M11 (RANSAC+BIC n), M12 (n_e floor guard).
+
+### Deferred — safe perf (latency = lowest priority)
+- O2 `detect_ccd_seams`→`scipy.ndimage.median_filter` (parity-exact ~100×), O3 per-line broadening vectorization, O4 grad caching.
