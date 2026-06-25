@@ -816,7 +816,9 @@ class ClosureEquation:
         Apply oxide closure: Elements exist as oxides, sum(Oxides) = 1.
 
         Used for geological samples.
-        e.g. Si -> SiO2 (factor ~2.14), Al -> Al2O3
+        The oxide factor is OXYGEN ATOMS PER CATION (stoichiometric), NOT the
+        molar-mass ratio: e.g. Si -> SiO2 has 2 O per Si = 2.0 (not 2.139), and
+        Al -> Al2O3 has 1.5 O per Al = 1.5.
 
         C_oxide_s = C_s * oxide_factor_s
         sum(C_oxide_s) = 1
@@ -830,8 +832,10 @@ class ClosureEquation:
         partition_funcs : Dict[str, float]
             Partition function values U_s(T) for each element.
         oxide_stoichiometry : Dict[str, float]
-            Map of element to oxide conversion factor (e.g. ``{"Si": 2.139}``
-            for SiO2).
+            Map of element to OXYGEN ATOMS PER CATION (e.g. ``{"Si": 2.0}`` for
+            SiO2, ``{"Al": 1.5}`` for Al2O3); see ``OXIDE_OXYGEN_PER_CATION``.
+            This is the stoichiometric O/cation ratio, NOT the molar-mass ratio
+            (M(SiO2)/M(Si) = 2.139) — passing molar-mass ratios corrupts closure.
         abundance_multipliers : Dict[str, float], optional
             Optional per-element scaling that maps the fitted intercept from
             the neutral Saha-Boltzmann plane back to total elemental abundance
