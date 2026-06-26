@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -238,6 +239,25 @@ def _median(values: Sequence[float]) -> Optional[float]:
 # ---------------------------------------------------------------------------
 
 
+def _mass_fraction_scoring_enabled() -> bool:
+    """Whether to convert peak-based solver number-fractions to mass before wt% scoring.
+
+    Audit M3 / Völker 2024: the iterative & closed_form solvers emit NUMBER/mole
+    fractions, but every truth corpus stores MASS fractions (wt%); the scoreboard
+    scored ``100 * concentrations`` directly, comparing mole to mass (+362% error
+    on trace elements). Gated default-OFF for a benchmark-first rollout — the OLD
+    mole-as-mass baseline is known-wrong, so the gate compares the corrected
+    numbers to GROUND TRUTH, not to the old baseline. ``full_spectrum`` (joint /
+    bayesian) already returns mass fractions, so it is excluded from conversion.
+    """
+    return os.environ.get("CFLIBS_MASS_FRACTION_SCORING", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def _score_spectrum(
     atomic_db: Any,
     spectrum_id: str,
@@ -301,8 +321,20 @@ def _score_spectrum(
 
     record["wall_s"] = time.perf_counter() - t0
     predicted = dict(result.concentrations)
+    # presence_confusion is basis-invariant (c==0 iff mass==0), so detect on raw output.
     record.update(presence_confusion(predicted, truth.elements_present, candidates))
-    record["predicted_wt"] = {el: 100.0 * float(predicted.get(el, 0.0)) for el in candidates}
+    # M3 (Völker 2024): peak-based solvers emit NUMBER fractions; convert to the
+    # truth's MASS basis before scoring wt%. full_spectrum already returns mass.
+    predicted_for_wt = predicted
+    if (
+        _mass_fraction_scoring_enabled()
+        and truth.composition_basis == "element_wt"
+        and pipeline.solver in ("iterative", "closed_form")
+    ):
+        from cflibs.inversion.pipeline import _number_to_mass_fractions
+
+        predicted_for_wt = _number_to_mass_fractions(predicted)
+    record["predicted_wt"] = {el: 100.0 * float(predicted_for_wt.get(el, 0.0)) for el in candidates}
     record["temperature_K"] = float(result.temperature_K)
     record["electron_density_cm3"] = float(result.electron_density_cm3)
     record["converged"] = bool(result.converged)
@@ -321,7 +353,9 @@ def _score_spectrum(
     record["stage_timings_s"] = dict(diagnostics.get("stage_timings", {}))
 
     if truth.composition_wt is not None:
-        rmse_wt, signed = composition_errors(predicted, truth.composition_wt)
+        # Score against truth in the SAME basis: predicted_for_wt is mass-converted
+        # for peak-based solvers when the truth is element_wt (M3 gate above).
+        rmse_wt, signed = composition_errors(predicted_for_wt, truth.composition_wt)
         record["rmse_wt"] = rmse_wt
         record["signed_errors_wt"] = signed
     return record
