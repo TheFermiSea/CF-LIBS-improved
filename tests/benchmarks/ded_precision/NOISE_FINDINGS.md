@@ -103,3 +103,28 @@ tracking the answer to noise is **shot averaging** (reduces the noise floor so
 weak lines stay measurable), NOT dropping low-SNR lines. The `min_snr` parameter
 is kept (default 0 = OFF) for major-element-only scenarios but must NOT be used
 when a tracked element is a weak minor constituent.
+
+## Partition-data gaps for alloy elements (2026-06-26)
+
+Energy-level counts in the DB (`energy_levels`, by `sp_num`) for the alloy
+species — these drive the direct-sum partition fits:
+
+| element | I | II | III |
+|---|---|---|---|
+| Ti | 202 | 101 | 1 |
+| V  | 290 | 359 | 0 |
+| Cr | 265 | 75 | 1 |
+| Mo | 329 | **1** | 0 |
+| Nb | **0** | **0** | 0 |
+
+Implications:
+- **Stage-III partitions cannot be fit** (V III, Mo III, Nb III, and effectively
+  Cr III / Ti III from a single level) -> they use the generic U fallback. Low
+  marginal impact at T~11000 K (small III fraction) but a real ceiling for
+  high-T / high-ionization regimes.
+- **Mo II has only 1 level** and **Nb has none at all** (Nb I/II partitions come
+  from a stored polynomial, not levels) -> Mo/Nb Saha balance rests on weak
+  partition data. This likely contributes to the Mo/Nb errors seen in Inconel625.
+- FIX requires ingesting NIST ASD / Barklem-Collet 2016 energy levels for these
+  species (a data task, network + DB migration) -- NOT fittable from the current
+  DB. Flagged for the atomic-data backlog; gated on NIST ground truth.
