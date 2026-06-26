@@ -148,17 +148,24 @@ def fetch_ionization_potential(element, stage_roman):
     }
     try:
         response = ie_session.get(url, params=params)
+        # NIST format=3 is tab-delimited with QUOTED fields, e.g.
+        #   Prefix\tIonization Energy (eV)\tSuffix
+        #   ""\t"7.9024681"\t""
+        # The data line starts with an (empty) quoted prefix, NOT the element,
+        # so the old ``startswith(element)`` never matched -> always None. Parse
+        # every quote-stripped tab field and take the first plausible eV value.
         for line in response.text.splitlines():
-            if line.strip().startswith(element):
-                parts = line.split()
-                for part in parts:
-                    clean = re.sub(r"[()\[\]]", "", part)
-                    try:
-                        val = float(clean)
-                        if val > 0 and val < 5000:
-                            return val
-                    except ValueError:
-                        continue
+            line = line.strip()
+            if not line or line.lower().startswith("prefix") or line.startswith(("Notes", "(")):
+                continue
+            for part in line.split("\t"):
+                clean = re.sub(r'[()\[\]"]', "", part).strip()
+                try:
+                    val = float(clean)
+                    if 0 < val < 5000:
+                        return val
+                except ValueError:
+                    continue
         return None
     except Exception:
         return None
@@ -299,8 +306,7 @@ def build_production_db(
     conn = sqlite3.connect(db_path)
 
     # 1. SPECTRA TABLE
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS lines (
             id INTEGER PRIMARY KEY,
             element TEXT,
@@ -316,32 +322,27 @@ def build_production_db(
             accuracy_grade TEXT,
             UNIQUE(element, sp_num, wavelength_nm, ek_ev)
         )
-    """
-    )
+    """)
 
     # 2. PHYSICS TABLE
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS species_physics (
             element TEXT,
             sp_num INTEGER,
             ip_ev REAL,
             PRIMARY KEY (element, sp_num)
         )
-    """
-    )
+    """)
 
     # 3. ENERGY LEVELS TABLE
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS energy_levels (
             element TEXT,
             sp_num INTEGER,
             g_level INTEGER,
             energy_ev REAL
         )
-    """
-    )
+    """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_levels ON energy_levels(element, sp_num)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_main ON lines(element, sp_num, wavelength_nm)")
 
