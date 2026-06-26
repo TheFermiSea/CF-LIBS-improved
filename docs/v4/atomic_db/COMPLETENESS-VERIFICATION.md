@@ -1,12 +1,36 @@
-# Atomic DB Completeness — Verification + Build Plan (2026-06-26)
+# Atomic DB Completeness — Verification + Build (2026-06-26)
+
+## FINAL STATUS — built from the gold standard + validated
+
+The gold-standard **`ASD59_dump.sql`** (full NIST ASD `monograph8`, MySQL, 115 MB,
+2022) was obtained from the user's laptop and loaded into local MariaDB. The DB
+was then built directly from it (the `CAAAMLIBS/LIBS` netCDF turned out to be a
+LOSSY conversion — it had dropped ~half the lines).
+
+| Table | Final | vs gold standard | Fields |
+|---|---|---|---|
+| `lines` | **203,695** | 99.6% of 204,574 (rest = degenerate Rydberg lines colliding on the coarse UNIQUE key) | 19 → **31** |
+| `energy_levels` (I/II/III) | **62,752** | ≥ dump 62,617 (union of dump + current NIST) | 4 → **11** |
+| `species_physics` (IP) | **324, 0 gaps** | complete | 4 |
+
+**Stochastic live-NIST validation (18 random species incl. Ti/Al/V/Fe/Cr/Ni):
+18/18 levels covered (DB ≥ live NIST), 17/17 IPs match within 2%.** The DB is the
+union of the 2022 dump and a current-NIST level/IP ingest, so it slightly exceeds
+current live NIST per species. All 28,331 derived Stark fields preserved.
+`integrity_check` = ok. The IP table is from live NIST (the dump's `IPs` table is
+corrupt — Fe I shows 9277 eV). Scripts: `ingest_asd_dump_lines.py`,
+`add_missing_dump_lines.py` (transition-identity dedup), `ingest_dump_levels.py`,
+`ingest_nist_ips.py`, `validate_db_vs_nist.py`.
+
+---
+
+## Earlier verification (netCDF + live NIST, pre-dump)
 
 Cross-checked `ASD_da/libs_production.db` against three sources: the
 `CAAAMLIBS/LIBS` netCDF reconstruction (full ASD-5.9, pulled via the LFS API:
 Levels 124 MB / Lines 206 MB / IPs 6 MB), live NIST ASD (the fetch scripts), and
-internal consistency. (`ASD59_dump.sql` in that repo is an empty 0-byte
-placeholder; the real dump is on the `ceng` Windows box / a laptop — pending
-key authorization or a copy.) Decisions (user): **complete the SQLite DB**;
-**netCDF base + live-NIST reconcile + stochastic direct-NIST validation.**
+internal consistency. Decisions (user): **complete the SQLite DB**;
+**dump base + live-NIST reconcile + stochastic direct-NIST validation.**
 
 ## Verdict per table
 
