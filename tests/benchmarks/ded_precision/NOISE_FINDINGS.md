@@ -43,3 +43,25 @@ the clean floor).
    likely fix for the residual weak-line bias — to be added once real noise is known.
 4. The stable clean-floor bias is **calibratable** against a known standard, which
    matters less for *drift* tracking (it cancels in measured − nominal).
+
+## Multi-alloy clean-floor coverage (2026-06-26)
+
+The benchmark + constrained solver generalize to the other AM alloys, with
+element-specific accuracy that the benchmark now quantifies (clean floor, RMSEP wt%):
+
+| alloy | best elements | weak element |
+|---|---|---|
+| Ti-6Al-4V {Ti,Al,V} | Al 1.1, V 0.8, Ti 1.4 | — (all < 1.5) |
+| Inconel625 {Ni,Cr,Mo,Nb} | Nb 0.08, Mo 0.64 | Cr -4.5, Ni +5.1 |
+| 316L {Fe,Cr,Ni,Mo} | Ni 0.12, Mo 0.60 | Cr -2.6, Fe +3.2 |
+
+**Cr is systematically under-estimated** (~-3 to -5 wt%) across Inconel + 316L,
+independent of resonance-line handling. Because the forward and solver share the
+same atomic data, a persistent bias in this self-consistency test points to an
+**ionization-stage gap**: line selection uses stages I/II, but at T=11000 K a
+non-trivial fraction of Cr sits in Cr III, which the I/II inversion may not fully
+recover via the Saha correction. Candidate fixes (future work): include stage-III
+lines / partition data for the high-ionization transition metals (Cr, V, Ti) and
+verify the closure's Saha extrapolation accounts for unobserved stages. This is a
+solver-physics item, gated on NIST/atomic-data ground truth, independent of the
+benchmark scoring.
