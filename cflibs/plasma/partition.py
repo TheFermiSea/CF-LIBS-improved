@@ -22,19 +22,21 @@ Two computation methods are provided:
 
    Stored in ``partition_functions`` (a0..a4, t_min, t_max, source).  Less
    accurate than direct summation when energy levels are available
-   (errors up to 66 % for some species) — use only as a fallback when the
-   ``energy_levels`` table is missing rows for a species.
+   (errors up to 66 % for some species) — use only as a genuine last resort
+   for the handful of species the ``energy_levels`` table cannot cover
+   (Si IV-class high ions).
 
-Historical note (2026-05-09 fix): the previous docstring ambiguously said
-"log U = Σ aₙ (log T)ⁿ" without specifying base.  The implementation has
-always used natural log (``np.log``), and the 13 partition_functions rows
-in the production DB at the time of audit were fit to that convention.
-The 30–60 % poly-vs-direct-sum discrepancy noted in the audit was caused
-by *stale fit data* (the polynomial coefficients were fit against an
-older energy_levels snapshot than the one currently in the DB), not by a
-math/convention mismatch.  Re-fitting from the current EL table — which
-is what :mod:`scripts.archive.migrations.populate_partition_functions` does — restores the
-consistency.
+**Authoritative path (M5 complete-DB ingest).** The ``energy_levels`` table
+now carries the complete NIST/Kurucz level lists across stages I/II/III, so
+the plasma-truncated direct sum (method 1) is the SINGLE source of truth for
+every levelled species — Ca I / Na I / K I / Na II / Fe I, historically
+truncated by the old lines-table scrape, all resolve via the direct sum now.
+The stored polynomial (method 2) and the
+:func:`canonical_partition_fallback` ladder are demoted to warned last-resorts
+that should be unreachable for any species the complete DB covers.  A level
+with an unassigned ``g_level`` (unknown ``g = 2J+1``) is excluded at the DB
+layer — it cannot contribute a known Boltzmann weight — so the direct sum no
+longer silently crashes and degrades to a stale polynomial.
 """
 
 from dataclasses import dataclass
@@ -511,7 +513,20 @@ def derive_partition_spec(
     ip_ev: Optional[float] = None
     try:
         levels = atomic_db.get_energy_levels(element, ionization_stage)
-    except Exception:  # pragma: no cover - defensive DB-shape guard
+    except Exception as exc:  # pragma: no cover - defensive DB-shape guard
+        # Do NOT silently degrade to the stored polynomial: the complete-DB
+        # direct sum is the authoritative path, so a level-fetch failure is a
+        # data/backend regression that must be loud (the codebase's own
+        # "silent wrong physics is the bug" principle).  ``get_energy_levels``
+        # already filters NULL/non-finite degeneracies, so reaching here means
+        # a genuine backend fault, not the historical int(NaN) crash.
+        logger.warning(
+            "Energy-level fetch failed for %s %s (%s); partition spec degrades "
+            "to the stored-polynomial fallback.",
+            element,
+            _roman(ionization_stage),
+            exc,
+        )
         levels = None
     if levels:
         try:
@@ -520,6 +535,7 @@ def derive_partition_spec(
             ip_ev = None
         if ip_ev is None:
             ip_ev = max((lev.energy_ev for lev in levels), default=0.0) + 1.0
+            _warn_ip_synthesis(element, ionization_stage, ip_ev)
         g_arr = np.array([lev.g for lev in levels], dtype=np.float64)
         e_arr = np.array([lev.energy_ev for lev in levels], dtype=np.float64)
         fit = direct_sum_fit_coeffs(g_arr, e_arr, float(ip_ev))
@@ -588,6 +604,7 @@ def get_levels_for_species(
     if ip is None:
         # Fallback: use max level energy + 1 eV as rough IP
         ip = max(lev.energy_ev for lev in levels) + 1.0
+        _warn_ip_synthesis(element, ionization_stage, ip)
 
     g_arr = np.array([lev.g for lev in levels], dtype=np.float64)
     E_arr = np.array([lev.energy_ev for lev in levels], dtype=np.float64)
@@ -711,6 +728,34 @@ _GENERIC_PARTITION_FALLBACK_DEFAULT = 2.0
 # Warn-once registry so per-iteration solver loops do not spam the log.
 _FALLBACK_WARNED: set = set()
 
+# Warn-once registry for the IP=max(E)+1 synthesis fallback (see
+# :func:`_warn_ip_synthesis`).  Synthesising an ionization potential from the
+# highest tabulated level is a genuine data gap; warn once so a future missing
+# ``species_physics`` IP is loud rather than silent.
+_IP_SYNTH_WARNED: set = set()
+
+
+def _warn_ip_synthesis(element: str, ionization_stage: int, ip_ev: float) -> None:
+    """Warn once that an IP was synthesised as ``max(E_level) + 1`` eV.
+
+    Fires when ``species_physics`` has no ionization potential for the species
+    and the direct-sum cutoff had to be invented from the level list.  With the
+    complete DB this should not occur for any covered species; a warning here
+    flags a missing-data gap to ingest, not a value to trust.
+    """
+    key = (element, int(ionization_stage))
+    if key in _IP_SYNTH_WARNED:
+        return
+    _IP_SYNTH_WARNED.add(key)
+    logger.warning(
+        "No ionization potential in species_physics for %s %s; synthesising "
+        "IP = max(E_level) + 1 = %.3f eV for the direct-sum cutoff. Ingest the "
+        "IP for this species to silence this.",
+        element,
+        _roman(ionization_stage),
+        ip_ev,
+    )
+
 
 def clear_partition_module_caches() -> None:
     """Clear the process-global partition caches (spec, level, warn-once).
@@ -726,6 +771,7 @@ def clear_partition_module_caches() -> None:
     _spec_cache.clear()
     _level_cache.clear()
     _FALLBACK_WARNED.clear()
+    _IP_SYNTH_WARNED.clear()
 
 
 def _closed_shell_partition_value(element: str, ionization_stage: int) -> Optional[float]:

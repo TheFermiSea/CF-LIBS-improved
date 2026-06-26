@@ -518,10 +518,21 @@ class AtomicDatabase:
         list[EnergyLevel]
             list of energy level objects
         """
+        # Filter NULL / non-positive g_level at the SQL layer.  A level whose
+        # total angular momentum J was never assigned has an UNKNOWN degeneracy
+        # g = 2J+1 and therefore cannot contribute a known Boltzmann weight to
+        # the direct-sum partition function; including it would crash the
+        # ``int(g_level)`` coercion below (``cannot convert float NaN to
+        # integer``) and, worse, that crash used to be swallowed upstream so the
+        # complete-DB direct sum silently degraded to a stale stored polynomial.
+        # The excluded rows are high-lying (near/above the IP) and contribute
+        # <0.1% in-band, so dropping them is physically correct, not a band-aid.
         query = """
             SELECT g_level, energy_ev
             FROM energy_levels
             WHERE element = ? AND sp_num = ?
+              AND g_level IS NOT NULL AND g_level > 0
+              AND energy_ev IS NOT NULL
             ORDER BY energy_ev
         """
         with self._get_connection() as conn:
@@ -529,11 +540,22 @@ class AtomicDatabase:
 
         levels = []
         for _, row in df.iterrows():
+            g_raw = row["g_level"]
+            e_raw = row["energy_ev"]
+            # Belt-and-suspenders for pluggable backends that don't honour the
+            # SQL filter (e.g. NIST-API / HDF5 sources): skip any row whose
+            # degeneracy or energy is missing / non-finite / non-positive g.
+            if pd.isna(g_raw) or pd.isna(e_raw):
+                continue
+            g_val = float(g_raw)
+            e_val = float(e_raw)
+            if not np.isfinite(g_val) or not np.isfinite(e_val) or g_val <= 0.0:
+                continue
             level = EnergyLevel(
                 element=element,
                 ionization_stage=ionization_stage,
-                energy_ev=float(row["energy_ev"]),
-                g=int(row["g_level"]),
+                energy_ev=e_val,
+                g=int(round(g_val)),
             )
             levels.append(level)
 
