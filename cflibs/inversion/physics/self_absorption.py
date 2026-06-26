@@ -2187,6 +2187,53 @@ def column_density_from_optical_depth(
     return max(0.0, float(n_i_l))
 
 
+def optical_depth_from_column_density(
+    n_lower_columnar_cm2: float,
+    A_ki: float,
+    g_k: int,
+    g_i: int,
+    wavelength_nm: float,
+    temperature_K: float,
+    mass_amu: float,
+) -> float:
+    r"""Line-center optical depth ``tau_0`` from the lower-level column density.
+
+    The exact algebraic inverse of :func:`column_density_from_optical_depth`
+    (Doppler curve of growth, Hutchinson/Mihalas):
+
+    .. math::
+
+        \tau_0 = \frac{(\pi e^2 / m_e c)\, f_{lu}\, (n_i l)}
+                      {\sqrt{\pi}\, \Delta\nu_D}.
+
+    The absorption oscillator strength uses the same Cowan-1981 relation as the
+    rest of this module, ``f_lu = 1.4992 lambda[cm]^2 A_ki (g_k / g_i)``. Use
+    this instead of any ad-hoc ``tau ~ const * A * lambda^3 * n`` scaling, which
+    has no Doppler normalization and no oscillator-strength conversion and is
+    ~10^18x wrong.
+
+    Parameters mirror :func:`column_density_from_optical_depth`; returns
+    ``tau_0`` (dimensionless, >= 0).
+    """
+    if n_lower_columnar_cm2 <= 0 or A_ki <= 0 or g_i <= 0 or temperature_K <= 0:
+        return 0.0
+
+    lambda_cm = wavelength_nm * 1e-7
+    f_lu = 1.4992 * (lambda_cm**2) * A_ki * (g_k / g_i)
+    if f_lu <= 0:
+        return 0.0
+
+    mass_kg = mass_amu * M_PROTON
+    v_th_m_per_s = np.sqrt(2.0 * KB * temperature_K / mass_kg)
+    nu_0_Hz = _C_CGS_CM_PER_S / lambda_cm
+    delta_nu_D_Hz = nu_0_Hz * (v_th_m_per_s / C_LIGHT)
+    if delta_nu_D_Hz <= 0:
+        return 0.0
+
+    tau_0 = _PI_E2_OVER_MEC_CGS * f_lu * n_lower_columnar_cm2 / (np.sqrt(np.pi) * delta_nu_D_Hz)
+    return max(0.0, float(tau_0))
+
+
 def cdsb_quantify(
     lines: Sequence[CDSBLineInput],
     temperature_guess_K: float = 10000.0,

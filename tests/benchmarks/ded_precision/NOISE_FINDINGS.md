@@ -60,8 +60,9 @@ independent of resonance-line handling. Because the forward and solver share the
 same atomic data, a persistent bias in this self-consistency test points to an
 **ionization-stage gap**: line selection uses stages I/II, but at T=11000 K a
 non-trivial fraction of Cr sits in Cr III, which the I/II inversion may not fully
-recover via the Saha correction. Candidate fixes (future work): include stage-III
-lines / partition data for the high-ionization transition metals (Cr, V, Ti) and
-verify the closure's Saha extrapolation accounts for unobserved stages. This is a
-solver-physics item, gated on NIST/atomic-data ground truth, independent of the
-benchmark scoring.
+recover via the Saha correction. UPDATE: ruled OUT partition data too -- Cr I/II/III all have real direct_sum_fit
+partitions. With lines, resonance, stage-III, and partitions all ruled out, the
+Cr bias is the iterative Boltzmann+Saha **method's inherent approximation error**
+(element/condition-dependent), not a data bug. The converged full-spectrum (joint)
+solver fits the forward directly (no Saha-correction approximation) and is the
+likely improvement -- a future test on the synthetic benchmark.

@@ -53,9 +53,11 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple, Callable
 import numpy as np
 
+from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES
 from cflibs.core.constants import KB_EV, MCWHIRTER_CONST
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.boltzmann import LineObservation
+from cflibs.inversion.physics.self_absorption import optical_depth_from_column_density
 
 __all__ = [
     "GateOptimizationResult",
@@ -973,6 +975,7 @@ class TemporalSelfAbsorptionCorrector:
         concentration: float,
         total_number_density_cm3: float,
         partition_func: float,
+        mass_amu: float = 50.0,
     ) -> float:
         """
         Calculate optical depth at a specific time.
@@ -1015,14 +1018,24 @@ class TemporalSelfAbsorptionCorrector:
         exp_factor = np.exp(-E_lower_eV / T_eV)
         n_lower = n_s * (g_lower / partition_func) * exp_factor
 
-        # Wavelength in cm
-        lambda_cm = wavelength_nm * 1e-7
-
-        # Simplified optical depth scaling
-        # tau ~ n_lower * f * lambda^2 * L
-        # f ~ A_ki * lambda^2 (rough scaling)
-        SCALE_FACTOR = 1e-25
-        tau = SCALE_FACTOR * A_ki * (lambda_cm**3) * n_lower * self.plasma_length_cm
+        # Verified Doppler curve-of-growth optical depth (Hutchinson/Mihalas) --
+        # the exact inverse of physics.self_absorption.column_density_from_
+        # optical_depth, with the f_lu = 1.4992 lambda[cm]^2 A_ki (g_k/g_i)
+        # oscillator-strength conversion. Replaces a hand-rolled
+        # ``tau ~ 1e-25 * A * lambda^3 * n * L`` scaling that had no Doppler
+        # normalization and was ~10^18x too small (every line looked optically
+        # thin, silently disabling the temporal SA correction). The lower level
+        # is approximated as g_i ~ g_k, consistent with ``g_lower = g_k`` above.
+        n_lower_columnar_cm2 = n_lower * self.plasma_length_cm
+        tau = optical_depth_from_column_density(
+            n_lower_columnar_cm2,
+            A_ki,
+            g_k,
+            g_k,  # g_i ~ g_k approximation
+            wavelength_nm,
+            T_K,
+            mass_amu,
+        )
 
         return max(0.0, tau)
 
@@ -1036,6 +1049,7 @@ class TemporalSelfAbsorptionCorrector:
         concentration: float,
         total_number_density_cm3: float,
         partition_func_callable: Callable[[float], float],
+        mass_amu: float = 50.0,
     ) -> float:
         """
         Calculate gate-averaged optical depth.
@@ -1085,6 +1099,7 @@ class TemporalSelfAbsorptionCorrector:
                 concentration,
                 total_number_density_cm3,
                 U_T,
+                mass_amu,
             )
             tau_values.append(tau)
 
@@ -1235,6 +1250,7 @@ class TemporalSelfAbsorptionCorrector:
             return partition_func_callable(el, stage, T_K)
 
         # Calculate gate-averaged optical depth
+        mass_amu = STANDARD_ATOMIC_MASSES.get(obs.element, 50.0)
         tau_avg = self.gate_averaged_optical_depth(
             gate,
             obs.wavelength_nm,
@@ -1244,6 +1260,7 @@ class TemporalSelfAbsorptionCorrector:
             C_s,
             total_number_density_cm3,
             U_func,
+            mass_amu,
         )
 
         time_averaged_tau[obs.wavelength_nm] = tau_avg
