@@ -82,6 +82,28 @@ ANALYSIS_PRESETS = {
         "affine_coverage_gate": True,
         "line_residual_gate": True,
     },
+    # DED constrained-known-element-set preset (DED-PLAN Edit B). Tuned to keep
+    # a small fixed element set (e.g. {Ti,Al,V} for Ti-6Al-4V) intact end to
+    # end: metallic sum-to-one closure (no oxide), Stark n_e to break the
+    # T/n_e degeneracy, the degeneracy guard armed for K>=2, and the per-element
+    # selection floors relaxed so a faint minor element (Al/V at extreme drift)
+    # is never dropped. ``constrained_elements`` (the hard no-drop switch) is
+    # added to this preset in DED-PLAN step 7 once the field exists.
+    "metallic_ded": {
+        "saha_boltzmann_graph": True,
+        "closure_mode": "standard",
+        "stark_ne": True,
+        "residual_shift_scan_nm": 0.0,
+        "affine_coverage_gate": True,
+        "line_residual_gate": True,
+        "degeneracy_min_elements": 2,
+        "min_lines_per_element": 1,
+        "min_snr": 5.0,
+        "min_energy_spread_ev": 1.5,
+        "degeneracy_dominance_threshold": 0.95,
+        "max_lines_per_element": 30,
+        "top_k_per_element": 40,
+    },
     "raw": {
         "saha_boltzmann_graph": False,
         "closure_mode": "standard",
@@ -369,8 +391,21 @@ def build_pipeline_config(
     preset_knobs = ANALYSIS_PRESETS[preset_name]
 
     def knob(key, flag_value, *fallbacks):
-        """Resolve one knob: overrides > CLI flag > YAML > fallbacks."""
-        return _resolve(ov.get(key, _UNSET), _flag(flag_value), cfg.get(key, _UNSET), *fallbacks)
+        """Resolve one knob: overrides > CLI flag > YAML > preset > fallbacks.
+
+        The preset bundle is consulted as documented tier 4 for *every* knob
+        (not only the handful wired with an explicit ``preset_knobs[...]``
+        fallback), so a preset can set any config field. Backward-compatible:
+        presets that omit a key yield ``_UNSET`` here and fall through to the
+        built-in default exactly as before.
+        """
+        return _resolve(
+            ov.get(key, _UNSET),
+            _flag(flag_value),
+            cfg.get(key, _UNSET),
+            preset_knobs.get(key, _UNSET),
+            *fallbacks,
+        )
 
     resolved_closure_mode = knob("closure_mode", closure_mode, preset_knobs["closure_mode"])
     if resolved_closure_mode not in CLOSURE_MODES:
