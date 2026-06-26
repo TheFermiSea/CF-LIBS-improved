@@ -13,13 +13,16 @@ key authorization or a copy.) Decisions (user): **complete the SQLite DB**;
 | Table | Rows (DB vs netCDF, I/II/III) | Fields | Status |
 |---|---|---|---|
 | `energy_levels` | 61,507 vs 57,675 | 4 of 34 | **Rows COMPLETE + current** (faithful to live NIST: Au I 61=61, B I exact incl. 201 eV autoionizing levels). Missing FIELDS: J, term, config, Landé-g, uncertainty, reference. |
-| `lines` | 28,721 vs **31,145 with A-value** (104,995 incl. 70% observation-only, no A) | 19 of 42 | **~92% of the A-valued (CF-LIBS-useful) lines** (Fe I 2,439 ≥ netCDF-with-A 2,379). Real gap: ~8% A-valued + zero-line species (Ne II, Cs II, Co III…). Missing FIELDS: log_gf, osc_str, vac/obs wl, type, accuracy, references. |
+| `lines` | **28,721 vs 104,995 (DB has ~30% of ALL observed lines)** | 19 of 42 | **INCOMPLETE — missing ~73,850 observed transitions.** Only 30% carry a *measured* A; the other 70% have observed wavelength (100%), observed intensity (99%), and upper/lower level IDs (83%) — real lines missing only a measured transition probability (derivable from theory/log_gf/level link). These ARE needed: full-database synthetic spectra + better-than-CF-LIBS methods, not just classical CF-LIBS. Missing FIELDS: A, log_gf, osc_str, intens, vac/obs/calc wl, level IDs, type, accuracy, references. |
 | `species_physics` (IP) | ip_ev for 174 of 273 | 4 of 24 | **99 IP gaps** (81 stage III) — being filled from live NIST. Missing FIELDS: IP uncertainty, term, config, ground shells. |
 
-**Bottom line:** levels are complete + current; the database is far more complete
-than the raw line count implied (the 73% "gap" was observation-only lines).
-Genuine gaps: 99 IPs, ~8% of A-valued lines + zero-line species, and provenance
-fields across all tables.
+**Bottom line:** levels complete + current; IPs now complete. Lines are GENUINELY
+incomplete — the DB holds ~30% of all observed transitions. The goal is the FULL
+ASD: every observed line + every field, so the database can drive synthetic
+spectra over the entire spectrum AND serve methods beyond classical CF-LIBS
+(which is the floor, not the target). Lines without a measured A are kept with
+their observed intensity + level IDs; A is derived/estimated (with documented
+justification) at synthetic-generation time, not by dropping the line.
 
 ## Fixes/findings
 - **`datagen_v2.fetch_ionization_potential` was broken** (parsed for a line
@@ -33,8 +36,12 @@ fields across all tables.
 
 ## Build plan (complete the SQLite DB)
 1. **IPs (running):** fill 99 gaps from live NIST (`scripts/ingest_nist_ips.py`).
-2. **Lines:** add the A-valued netCDF lines my DB lacks (+ zero-line species);
-   add fields log_gf/osc_str/vac_wl/obs_wl/type/accuracy/references (ALTER + backfill).
+2. **Lines (full):** ingest ALL ~105k observed lines (not just the A-valued
+   subset), with every field — A, log_gf, osc_str, observed intensity, vac/obs/calc
+   wavelength, low/upp level IDs (FK to energy_levels), type, accuracy, references.
+   Add a `has_aki`/`aki_source` flag so synthetic generation can choose: measured
+   A, theory/log_gf-derived A, or intensity-anchored estimate (documented). Keep
+   the existing columns/values so the codebase still reads them.
 3. **Levels fields:** ALTER `energy_levels` to add J/term/config/Landé-g/uncertainty/
    reference; backfill by matching (element, stage, energy) to the netCDF.
 4. **Validate (stochastic):** fetch random (element, stage) chunks directly from
