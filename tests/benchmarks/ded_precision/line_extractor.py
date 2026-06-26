@@ -48,6 +48,7 @@ def extract_line_intensities(
     local_baseline: bool = True,
     skip_blended: bool = False,
     method: str = "integrate",
+    min_snr: float = 0.0,
 ) -> List[LineObservation]:
     """Measure each known line and return a LineObservation list.
 
@@ -98,6 +99,19 @@ def extract_line_intensities(
                 base = np.interp(x, [x[0], x[-1]], [left, right])
                 y = y - base
             area = float(_trapz(y, x))
+            if min_snr > 0.0:
+                # SNR gate: estimate per-pixel noise from the baseline-subtracted
+                # window edges (~0 + noise) and the integrated-area noise
+                # (sigma_pix * dx * sqrt(N)). Drop lines buried in noise -- they
+                # are the ones whose log-Boltzmann positivity requirement biases
+                # the fit under readout/Poisson noise (real LIBS SNR-gates too).
+                ke = max(2, x.size // 6)
+                edge = np.concatenate([y[:ke], y[-ke:]])
+                sigma_pix = float(np.std(edge)) if edge.size > 1 else 0.0
+                dx = float(np.median(np.diff(x))) if x.size > 1 else 1.0
+                noise_area = sigma_pix * dx * np.sqrt(x.size)
+                if noise_area > 0.0 and area / noise_area < min_snr:
+                    continue
         if not np.isfinite(area) or area <= 0.0:
             continue
         obs.append(

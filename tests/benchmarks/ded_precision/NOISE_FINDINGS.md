@@ -85,3 +85,21 @@ data bug. BUT joint worsens Ni/Mo/Nb, so its overall RMSE on Inconel is higher
 they distribute error differently. A per-element or ensemble strategy (or improving
 the iterative Saha extrapolation specifically for high-ionization transition metals)
 is the research direction — not a one-line fix.
+
+## SNR-gated line selection — counterproductive for minor elements (2026-06-26)
+
+Tested dropping lines below a per-shot SNR threshold (extractor `min_snr`) on
+noisy 10-shot Ti-6Al-4V:
+
+| min_snr | Ti | Al | V | note |
+|---|---|---|---|---|
+| 0 (off) | 70.7 | 15.6 | 13.6 | noisy baseline |
+| 5 | 86.6 | 13.4 | **0.0** | all V lines gated out -> V lost |
+| 10 | 0 | 0 | 0 | all lines gated -> solve fails |
+
+SNR-gating removes exactly the weak minor-element lines (V, low-concentration Al)
+that we are trying to track -> the element drops to 0. For DED minor-element drift
+tracking the answer to noise is **shot averaging** (reduces the noise floor so
+weak lines stay measurable), NOT dropping low-SNR lines. The `min_snr` parameter
+is kept (default 0 = OFF) for major-element-only scenarios but must NOT be used
+when a tracked element is a weak minor constituent.
