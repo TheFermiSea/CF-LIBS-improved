@@ -139,8 +139,17 @@ def build_alloy_line_list(
     T_K: float = 11000.0,
     budget: Optional[Dict[str, int]] = None,
     blend_tol_nm: float = 0.05,
+    prefer_spread: bool = False,
 ) -> Dict[str, List[LineSpec]]:
     """Build the per-element line list for an alloy and flag cross-element blends.
+
+    ``prefer_spread`` defaults to ``False`` (strongest, cleanest lines): with
+    the Saha-Boltzmann *graph* (common-slope) solver, T is constrained by the
+    E_k range across ALL elements jointly, so each element only needs accurate,
+    isolated intensities -- forcing per-element E_k spread selects weak, blended
+    high-E_k lines that corrupt dense-spectrum elements (measured: V recovery
+    13.0 -> 5.0 wt% on clean Ti-6Al-4V when spread-forcing is off). Set
+    ``prefer_spread=True`` only for a single-element Boltzmann plot.
 
     A line within ``blend_tol_nm`` of any other element's line is marked
     ``blended=True`` (the extractor/solver can down-weight or skip it).
@@ -150,7 +159,7 @@ def build_alloy_line_list(
     per_el: Dict[str, List[LineSpec]] = {}
     for el in elements_of(alloy):
         n = budget.get(el, DEFAULT_LINE_BUDGET.get(el, 10))
-        per_el[el] = select_lines(db, el, window, n, T_K=T_K)
+        per_el[el] = select_lines(db, el, window, n, T_K=T_K, prefer_spread=prefer_spread)
 
     # cross-element blend flagging
     allspecs = [s for specs in per_el.values() for s in specs]

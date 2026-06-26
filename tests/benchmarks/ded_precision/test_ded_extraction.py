@@ -26,11 +26,13 @@ def test_ti64_line_list_has_spread():
     if db_path is None:
         pytest.skip("libs_production.db not available")
     per_el = build_alloy_line_list(AtomicDatabase(db_path), "Ti-6Al-4V")
+    # Each element must contribute enough lines for a stable intercept.
     for el in ("Ti", "Al", "V"):
-        specs = per_el[el]
-        assert len(specs) >= 3, f"{el}: only {len(specs)} lines"
-        eks = [s.E_k_ev for s in specs]
-        assert max(eks) - min(eks) >= 1.0, f"{el}: insufficient E_k spread"
+        assert len(per_el[el]) >= 3, f"{el}: only {len(per_el[el])} lines"
+    # The Saha-Boltzmann graph fits ONE slope (T) over all elements jointly, so
+    # the ENSEMBLE E_k range (not per-element) must span enough to constrain T.
+    all_eks = [s.E_k_ev for specs in per_el.values() for s in specs]
+    assert max(all_eks) - min(all_eks) >= 1.5, "insufficient ensemble E_k spread"
 
 
 def test_extraction_recovers_all_elements():
