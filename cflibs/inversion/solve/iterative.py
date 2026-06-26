@@ -2758,7 +2758,15 @@ class IterativeCFLIBSSolver:
         ips = {}
         for el in elements:
             ip = self.atomic_db.get_ionization_potential(el, 1)
-            ips[el] = ip if ip is not None else 15.0
+            if ip is None:
+                logger.warning(
+                    "No ionization potential for %s I in the DB; using 15.0 eV fallback. "
+                    "The complete ASD DB covers all I/II/III species, so this signals a "
+                    "data gap, not a normal fallback.",
+                    el,
+                )
+                ip = 15.0
+            ips[el] = float(ip)
 
         effective_ips = self._compute_effective_ips(ips, n_e, T_K)
 
