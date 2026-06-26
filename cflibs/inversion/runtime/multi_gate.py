@@ -212,11 +212,22 @@ def joint_multi_gate_fit(
     # ladder (closed-shell exact values → g0 → warned generic constant)
     # instead of the historical silent 25.0 / 15.0 constants.
     ips = _resolve_ips(elements, ionization_potentials_eV, atomic_db)
+    # Pass a reference temperature so a missing dict entry resolves the FULL
+    # U(T) from the DB instead of the g0 lower bound. partition_func_I/II default
+    # to {} here, so WITHOUT T_K every transition metal got g0 as a fixed
+    # constant through the entire joint fit (partition overhaul step 2).
+    _T_ref = 10000.0  # reference T for the static U dict (warm-start T not yet known)
+    if initial_temperatures_K is not None:
+        _arr = np.asarray(initial_temperatures_K, dtype=float)
+        if _arr.size:
+            _T_ref = float(np.median(_arr))
     U_I = {
-        el: lookup_partition_function(partition_func_I or {}, el, 1, atomic_db) for el in elements
+        el: lookup_partition_function(partition_func_I or {}, el, 1, atomic_db, T_K=_T_ref)
+        for el in elements
     }
     U_II = {
-        el: lookup_partition_function(partition_func_II or {}, el, 2, atomic_db) for el in elements
+        el: lookup_partition_function(partition_func_II or {}, el, 2, atomic_db, T_K=_T_ref)
+        for el in elements
     }
 
     # --- Warm start from per-gate iterative solver ------------------------

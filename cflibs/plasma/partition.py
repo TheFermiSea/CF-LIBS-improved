@@ -870,6 +870,8 @@ def lookup_partition_function(
     element: str,
     ionization_stage: int,
     atomic_db: Any = None,
+    *,
+    T_K: Optional[float] = None,
 ) -> float:
     """Dict lookup with the canonical physics-grounded fallback.
 
@@ -882,6 +884,21 @@ def lookup_partition_function(
     value = partition_funcs.get(element)
     if value is not None:
         return float(value)
+    # Dict miss: consult the DB for the FULL U(T) before any g0/generic fallback.
+    # A prebuilt single-temperature dict that misses a species must NOT silently
+    # return g0 (a strict lower bound, e.g. Fe I ~9 vs true U~50 at 10 kK) when
+    # the DB has the levels -- this is the user's "why a dict when we have the
+    # database?" complaint. Requires T_K (the evaluation temperature); callers
+    # that cannot supply it keep the legacy fallback. (Partition overhaul step 2.)
+    if T_K is not None and atomic_db is not None:
+        getter = getattr(atomic_db, "partition_function_for", None)
+        if getter is not None:
+            try:
+                provider = getter(element, ionization_stage)
+                if provider is not None:
+                    return float(provider.at(T_K))
+            except Exception:  # pragma: no cover - DB hiccup -> canonical fallback
+                pass
     return canonical_partition_fallback(element, ionization_stage, atomic_db)
 
 
