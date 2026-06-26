@@ -55,7 +55,7 @@ def audit(conn: sqlite3.Connection, elements, stages):
 def ingest(db_path: str, elements, stages, min_levels: int, dry_run: bool = False):
     import datagen_v2 as d  # reuses the NIST energy1.pl scraper + parser
 
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=120)
     before = audit(conn, elements, stages)
     targets = [(el, st) for (el, st), n in before.items() if n < min_levels]
     print(f"{len(targets)} species below {min_levels} levels -> fetching from NIST ASD")
@@ -90,6 +90,13 @@ def ingest(db_path: str, elements, stages, min_levels: int, dry_run: bool = Fals
 
     if not dry_run:
         conn.commit()
+        # Fold the WAL into the main .db so a subsequent `git add` of the file
+        # captures the new rows (SQLite defaults to WAL; without this the data
+        # sits in a transient -wal sidecar and the committed .db is stale).
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.OperationalError as exc:  # contended; warn, don't fail
+            print(f"  WARNING: WAL checkpoint skipped ({exc}); run it before committing the DB")
     conn.close()
     print(f"\nIngested {fetched} species." + (f" Failed: {failed}" if failed else ""))
     return fetched, failed
