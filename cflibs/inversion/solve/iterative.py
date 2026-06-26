@@ -148,6 +148,11 @@ class CFLIBSResult:
     boltzmann_covariance: Optional[np.ndarray] = field(default=None, repr=False)
     overall_reliable: bool = False
     per_element_reliability: Dict[str, str] = field(default_factory=dict)
+    #: Mass (weight) fractions, sum to 1. ``concentrations`` are number/mole
+    #: fractions on the peak-based path; this parallel field carries the
+    #: mass-fraction view so consumers compare wt% like-for-like (DED Gap 4).
+    #: Populated by ``run_pipeline``; empty if not yet computed.
+    mass_fractions: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass

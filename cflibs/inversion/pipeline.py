@@ -1450,4 +1450,15 @@ def run_pipeline(
     for el in pipeline.elements:
         if el not in dropped and result.concentrations.get(el, 0.0) <= 0.0:
             dropped[el] = "solve"
+
+    # Number->mass fractions (DED Gap 4): the peak-based solvers emit number/mole
+    # fractions; the full-spectrum (joint/bayesian) path already returns mass.
+    # Expose a consistent mass-fraction view so consumers compare wt% like-for-
+    # like. For a metal-alloy known set there is no oxygen, so the conversion is
+    # clean (unlike the geological O-excluded case).
+    if not result.mass_fractions:
+        if pipeline.solver in ("joint", "bayesian"):
+            result.mass_fractions = dict(result.concentrations)
+        else:
+            result.mass_fractions = _number_to_mass_fractions(result.concentrations)
     return result, diagnostics
