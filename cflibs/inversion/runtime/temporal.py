@@ -53,7 +53,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple, Callable
 import numpy as np
 
-from cflibs.core.constants import KB_EV
+from cflibs.core.constants import KB_EV, MCWHIRTER_CONST
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.boltzmann import LineObservation
 
@@ -452,7 +452,7 @@ class PlasmaEvolutionModel:
         n_e = self.electron_density(time_ns)
 
         # McWhirter criterion threshold
-        n_e_threshold = 1.6e12 * np.sqrt(T_K) * (max_delta_E_eV**3)
+        n_e_threshold = MCWHIRTER_CONST * np.sqrt(T_K) * (max_delta_E_eV**3)
 
         # LTE score: how much n_e exceeds threshold
         if n_e <= 0:

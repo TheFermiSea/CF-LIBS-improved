@@ -58,9 +58,7 @@ def test_jax_plasma_exposes_jnp_views():
     # Numerical equivalence with the Python-float surface
     np.testing.assert_allclose(float(plasma.T_e_jax), plasma.T_e, rtol=1e-12)
     np.testing.assert_allclose(float(plasma.n_e_jax), plasma.n_e, rtol=1e-12)
-    np.testing.assert_allclose(
-        float(plasma.T_e_eV_jax), plasma.T_e_eV, rtol=1e-12
-    )
+    np.testing.assert_allclose(float(plasma.T_e_eV_jax), plasma.T_e_eV, rtol=1e-12)
 
     # species_densities_jax must be 1-D and ordered consistently with species_keys
     assert plasma.species_densities_jax.shape == (len(plasma.species),)
@@ -75,3 +73,24 @@ def test_from_plasma_round_trip():
     assert plasma_jax.T_e == plasma_np.T_e
     assert plasma_jax.n_e == plasma_np.n_e
     assert plasma_jax.species == plasma_np.species
+
+
+def test_two_region_plasma_concrete_jnp_array():
+    """TwoRegionPlasma must not raise ConcretizationTypeError with concrete jnp arrays (M1-11).
+
+    The old isinstance(T_core, _JAX_TRACER) guard missed concrete jnp.ndarray values
+    (they have .ndim but are not Tracer); _is_jax_tracer_or_array gates on both.
+    """
+    jax = pytest.importorskip("jax")
+    jnp = jax.numpy
+
+    from cflibs.plasma.state import TwoRegionPlasma
+
+    T_core = jnp.float32(10000.0)
+    T_corona = jnp.float32(6000.0)
+    n_e = jnp.float32(1.0e16)
+    species = {"Fe": 1.0e15, "Si": 5.0e14}
+
+    plasma = TwoRegionPlasma(T_core=T_core, T_corona=T_corona, n_e=n_e, species=species)
+    assert plasma.T_core == pytest.approx(float(T_core))
+    assert plasma.T_corona == pytest.approx(float(T_corona))

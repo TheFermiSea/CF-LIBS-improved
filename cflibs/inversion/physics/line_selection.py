@@ -103,15 +103,16 @@ from collections import defaultdict
 from typing import List, Dict, Optional, Tuple, Set
 import numpy as np
 
+from cflibs.core.constants import MCWHIRTER_CONST
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.boltzmann import LineObservation
 
 logger = get_logger("inversion.line_selection")
 
 # McWhirter criterion prefactor in the cgs/eV/K convention
-#   n_e [cm^-3] >= 1.6e12 * sqrt(T[K]) * (ΔE[eV])^3
+#   n_e [cm^-3] >= MCWHIRTER_CONST * sqrt(T[K]) * (ΔE[eV])^3
 # (McWhirter 1965; see e.g. Cristoforetti et al. 2010, Spectrochim. Acta B 65, 86)
-MCWHIRTER_PREFACTOR_CM3_K = 1.6e12
+MCWHIRTER_PREFACTOR_CM3_K = MCWHIRTER_CONST
 
 
 def mcwhirter_thermalization_limit_ev(

@@ -431,9 +431,9 @@ class TwoRegionPlasma(SingleZoneLTEPlasma):
         super().__init__(T_core, n_e, species, T_g, pressure)
         self.T_core = T_core
         self.T_corona = T_corona
-        # Gate logging on tracer detection to avoid ConcretizationTypeError
-        # when called inside JAX jit/vmap traces.
-        if not isinstance(T_core, _JAX_TRACER):
+        # Gate logging on tracer/array detection to avoid ConcretizationTypeError
+        # when called inside JAX jit/vmap traces or with batched arrays.
+        if not _is_jax_tracer_or_array(T_core):
             logger.info(
                 f"Created TwoRegionPlasma: T_core={T_core:.1f} K, T_corona={T_corona:.1f} K, "
                 f"n_e={n_e:.2e} cm^-3"
