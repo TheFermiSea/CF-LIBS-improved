@@ -31,6 +31,7 @@ import ingest_vald_atomic as iva  # noqa: E402
 #   Fe 2  — predicted levels (negative energies) -> kept with abs() energies
 #   Co 2  — degenerate (E_low == E_up) -> SKIPPED
 FIXTURE = """\
+Elm Ion       WL_air(A)     log gf*    E_low(eV)  J lo  E_up(eV)  J up  lande_low  lande_up  lande_mean  Rad.  Stark  Waals
 'Fe 1',     3734.860,  -0.500,   0.8590,  4.0,   4.2780,  5.0,  1.0,  1.0,  1.0,  8.00, -5.00, -7.00,
 '_          wl:K07 gf:K07 Fe 1'
 'CN 1',     3880.000,  -1.000,   0.5000, 10.0,   3.6900, 11.0,  1.0,  1.0,  1.0,  8.00, -5.00, -7.00,
