@@ -447,7 +447,16 @@ class AtomicDatabase:
                 aki_uncertainty, accuracy_grade
             FROM lines
             WHERE element = ?
+              AND aki IS NOT NULL AND aki > 0
+              AND ek_ev IS NOT NULL AND gk IS NOT NULL
         """
+        # The M5 complete-DB ingest added the full NIST line list, which includes
+        # ~74k observation-only transitions with NULL aki (and sometimes NULL
+        # upper-level ek_ev/gk). Those carry position+intensity for synthetic
+        # generation / beyond-CF-LIBS methods but cannot emit, so a Transition
+        # (which requires A_ki/E_k/g_k) is undefined for them -- exclude here so
+        # the forward model, RANSAC calibration and snapshot only see emitting
+        # lines (the old A-only DB made this filter implicit).
         params: list[object] = [element]
 
         if ionization_stage is not None:
