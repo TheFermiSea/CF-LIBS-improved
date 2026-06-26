@@ -66,3 +66,22 @@ Cr bias is the iterative Boltzmann+Saha **method's inherent approximation error*
 (element/condition-dependent), not a data bug. The converged full-spectrum (joint)
 solver fits the forward directly (no Saha-correction approximation) and is the
 likely improvement -- a future test on the synthetic benchmark.
+
+## Iterative vs joint (full-spectrum) solver — Cr (2026-06-26)
+
+Tested the converged full-spectrum (joint) solver on clean Inconel625 vs iterative:
+
+| element | truth | iterative | joint |
+|---|---|---|---|
+| Ni | 64.5 | 69.3 | 56.5 |
+| Cr | 22.5 | 18.3 | 24.3 |
+| Mo |  9.5 |  8.9 | 13.8 |
+| Nb |  3.5 |  3.6 |  5.3 |
+
+The joint solver **fixes the Cr under-estimate** (24.3 vs iterative 18.3, truth 22.5),
+confirming the Cr bias is the iterative Boltzmann+Saha *method* approximation, not a
+data bug. BUT joint worsens Ni/Mo/Nb, so its overall RMSE on Inconel is higher
+(~4.8 vs ~3.2 wt%). Conclusion: neither solver is uniformly best for these alloys;
+they distribute error differently. A per-element or ensemble strategy (or improving
+the iterative Saha extrapolation specifically for high-ionization transition metals)
+is the research direction — not a one-line fix.
