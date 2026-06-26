@@ -23,6 +23,22 @@ FWHM_TO_SIGMA = 1.0 / 2.354820045
 _trapz = getattr(np, "trapezoid", None) or np.trapz
 
 
+def _fit_line_area(x, y, center, sigma):
+    """Least-squares Gaussian (known center+sigma) + linear baseline -> area.
+
+    Model y ~ A*exp(-(x-c)^2/2sigma^2) + b0 + b1*(x-c), linear in (A,b0,b1).
+    The shape-matched fit rejects noise that does not look like the line, so
+    it is far less biased on weak lines than windowed integration + a hard
+    positivity clip (which rectifies/selects on noise). Returns area =
+    A*sigma*sqrt(2*pi) (may be <=0; caller filters).
+    """
+    g = np.exp(-0.5 * ((x - center) / sigma) ** 2)
+    M = np.column_stack([g, np.ones_like(x), (x - center)])
+    coef, *_ = np.linalg.lstsq(M, y, rcond=None)
+    amp = float(coef[0])
+    return amp * sigma * np.sqrt(2.0 * np.pi)
+
+
 def extract_line_intensities(
     wl: np.ndarray,
     intensity: np.ndarray,
@@ -31,8 +47,9 @@ def extract_line_intensities(
     n_sigma: float = 1.5,
     local_baseline: bool = True,
     skip_blended: bool = False,
+    method: str = "integrate",
 ) -> List[LineObservation]:
-    """Integrate each known line and return LineObservation list.
+    """Measure each known line and return a LineObservation list.
 
     Parameters
     ----------
@@ -40,7 +57,13 @@ def extract_line_intensities(
         Spectrum (noisy or clean) on a shared wavelength grid.
     line_specs : sequence of LineSpec
     instrument_fwhm_nm : float
-        Sets the integration half-width (max of n_sigma*sigma and 3 grid steps).
+        Line width; sets the window and the fit sigma.
+    method : {"integrate", "fit"}
+        "integrate" (default): trapz over a +/-n_sigma window after a robust
+        median-edge local baseline, no per-pixel clip. Gives the best clean
+        floor here. "fit": shape-matched Gaussian least-squares amplitude;
+        a pure-Gaussian model mismatches the Stark-broadened profile so it
+        biases the clean floor -- kept for noisy-data experiments only.
     skip_blended : bool
         If True, drop LineSpecs flagged ``blended`` (overlap another element).
     """
@@ -50,7 +73,8 @@ def extract_line_intensities(
         return []
     step = float(np.median(np.diff(wl)))
     sigma = instrument_fwhm_nm * FWHM_TO_SIGMA
-    half = max(n_sigma * sigma, 3.0 * step)
+    # Fitting needs the full profile; integration uses a tight window.
+    half = max((3.0 if method == "fit" else n_sigma) * sigma, 3.0 * step)
 
     obs: List[LineObservation] = []
     for ls in line_specs:
@@ -58,14 +82,22 @@ def extract_line_intensities(
             continue
         lo, hi = ls.wavelength_nm - half, ls.wavelength_nm + half
         mask = (wl >= lo) & (wl <= hi)
-        if int(mask.sum()) < 3:
+        if int(mask.sum()) < 4:
             continue
         x = wl[mask]
         y = inten[mask].astype(float).copy()
-        if local_baseline:
-            base = np.interp(x, [x[0], x[-1]], [y[0], y[-1]])
-            y = np.clip(y - base, 0.0, None)
-        area = float(_trapz(y, x))
+        if method == "fit":
+            area = _fit_line_area(x, y, ls.wavelength_nm, sigma)
+        else:
+            if local_baseline:
+                # robust median-edge baseline; subtract WITHOUT a per-pixel clip
+                # (clipping rectifies readout noise -> inflates weak lines)
+                k = max(1, x.size // 6)
+                left = float(np.median(y[:k]))
+                right = float(np.median(y[-k:]))
+                base = np.interp(x, [x[0], x[-1]], [left, right])
+                y = y - base
+            area = float(_trapz(y, x))
         if not np.isfinite(area) or area <= 0.0:
             continue
         obs.append(
