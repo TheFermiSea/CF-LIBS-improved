@@ -196,12 +196,17 @@ def test_dispatch_routes_peak_based(monkeypatch):
 def test_dispatch_routes_full_spectrum(monkeypatch):
     calls = {}
 
-    def fake_full(pipeline, atomic_db, wavelength, intensity):
+    def fake_full(wavelength, intensity, atomic_db, pipeline, warm_start=None, diagnostics=None):
         calls["full"] = pipeline.solver
+        calls["warm_start"] = warm_start
         return "FULL_RESULT"
 
-    def fake_peak(*args, **kwargs):  # pragma: no cover - must not be called
-        raise AssertionError("peak-based path called for a full-spectrum solver")
+    def fake_peak(pipeline, observations, atomic_db, stark, unc):
+        # The full-spectrum dispatch legitimately warm-starts from a quick
+        # iterative peak-based solve before the converged full-spectrum refine
+        # (added in "Integrate converged full-spectrum solver"); record it.
+        calls["warm_solver"] = pipeline.solver
+        return "WARM"
 
     monkeypatch.setattr(pl, "_run_full_spectrum_solver", fake_full)
     monkeypatch.setattr(pl, "_run_peak_based_solver", fake_peak)
@@ -210,6 +215,9 @@ def test_dispatch_routes_full_spectrum(monkeypatch):
         out = _dispatch_solver(_cfg(solver), [], object(), [1.0], [2.0], None, "none")
         assert out == "FULL_RESULT"
         assert calls["full"] == solver
+        # warm-start runs the iterative solver, then full-spectrum refines it
+        assert calls["warm_solver"] == "iterative"
+        assert calls["warm_start"] == "WARM"
 
 
 def test_dispatch_coarse_to_fine_is_not_implemented():
