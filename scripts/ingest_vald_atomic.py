@@ -91,6 +91,28 @@ def _open(path: Path):
     return gzip.open(path, "rt", errors="replace") if path.suffix == ".gz" else open(path)
 
 
+def _detect_vald_medium(path: Path) -> str:
+    """Return 'air' or 'vacuum' from the VALD file header, else raise ValueError.
+
+    VALD3 stores vacuum internally but delivers air OR vacuum depending on the
+    extraction unit selection (https://www.astro.uu.se/valdwiki/Air-to-vacuum
+    %20conversion). This ingest assumes AIR for λ ≥ 200 nm; a vacuum-extracted
+    file would silently shift every visible line by ~+114 pm. Detect the medium
+    from the ``WL_air``/``WL_vac`` column header so the mismatch fails loudly.
+    """
+    with _open(path) as fh:
+        for line in fh:
+            if "WL_air" in line:
+                return "air"
+            if "WL_vac" in line or "WL_vacuum" in line:
+                return "vacuum"
+            if line.strip().startswith("'"):
+                break  # reached data rows without finding a medium header
+    raise ValueError(
+        f"Cannot determine wavelength medium of {path}: no WL_air/WL_vac header found."
+    )
+
+
 def parse_vald(path: Path, wl_min_nm: float, wl_max_nm: float) -> Iterator[dict]:
     """Yield one record per VALD transition (data row + its ``gf:`` reference).
 
@@ -99,6 +121,15 @@ def parse_vald(path: Path, wl_min_nm: float, wl_max_nm: float) -> Iterator[dict]
     data row with the next reference row, robust to intervening config lines.
     """
     from cflibs.atomic.wavelength_conversion import vacuum_to_air_nm
+
+    medium = _detect_vald_medium(path)
+    if medium != "air":
+        raise ValueError(
+            f"{path}: VALD file is in {medium.upper()} units, but this ingest assumes AIR "
+            "for λ ≥ 200 nm. Re-extract with air units (VALD 'Unit selections'); ingesting "
+            "vacuum wavelengths uncorrected shifts all visible lines by ~+114 pm and breaks "
+            "line matching against the NIST-air DB."
+        )
 
     with _open(path) as fh:
         pending: Optional[dict] = None

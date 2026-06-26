@@ -4,7 +4,11 @@ Atomic line lists do not agree on the wavelength medium:
 
 - **NIST ASD** tabulates *observed* wavelengths in **air** for 200 nm < λ < 2000 nm and in
   **vacuum** outside that band (the standard spectroscopic convention).
-- **Kurucz** and **VALD3** ship line wavelengths in **vacuum**.
+- **Kurucz** ships vacuum below 200 nm and air above (the ingest converts λ < 200 nm).
+- **VALD3** stores vacuum internally but *delivers* air or vacuum depending on the
+  extraction units chosen; ``scripts/ingest_vald_atomic.py`` assumes AIR for λ ≥ 200 nm
+  and asserts the file's ``WL_air``/``WL_vac`` header so a vacuum-extracted file is not
+  silently ingested (https://www.astro.uu.se/valdwiki/Air-to-vacuum%20conversion).
 
 Mixing the two without converting introduces a systematic offset of ~+0.14 nm at 500 nm
 (``n_air − 1 ≈ 2.8e-4``), which is several resolution elements for a typical LIBS spectrometer.
