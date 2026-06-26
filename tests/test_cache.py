@@ -201,3 +201,39 @@ class TestGlobalCacheStats:
         stats = get_cache_stats()
         assert stats["partition_function"]["size"] == 0
         assert stats["partition_function"]["hits"] == 0
+
+
+class TestNoneIsCached:
+    """Regression: a function that legitimately returns None must be cached.
+
+    Audit M1-8 / verified core F3+F4: the decorator used ``get() is not None`` as
+    the hit check, so None-returning calls (e.g. get_ionization_potential for an
+    absent species) re-hit the DB every time and filled the cache with phantom
+    entries that evicted valid ones. The fix uses a distinct _MISS sentinel.
+    """
+
+    def test_none_result_is_cached_not_recomputed(self):
+        from cflibs.core.cache import LRUCache, _make_cache_decorator
+
+        cache = LRUCache(max_size=10)
+        calls = {"n": 0}
+
+        @_make_cache_decorator(cache)
+        def lookup(species):
+            calls["n"] += 1
+            return None  # absent species — a legitimate None result
+
+        assert lookup("Xx") is None
+        assert lookup("Xx") is None
+        assert calls["n"] == 1  # second call served from cache, not recomputed
+        assert cache.hits >= 1
+
+    def test_get_default_distinguishes_miss_from_cached_none(self):
+        from cflibs.core.cache import LRUCache
+
+        cache = LRUCache(max_size=10)
+        sentinel = object()
+        assert cache.get("absent", sentinel) is sentinel  # miss -> default
+        cache.set("k", None)
+        assert cache.get("k", sentinel) is None  # cached None -> the value, not default
+        assert cache.get("missing") is None  # back-compat: bare get() still None on miss
