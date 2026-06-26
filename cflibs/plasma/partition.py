@@ -572,8 +572,13 @@ def derive_partition_spec(
 # Energy level cache for partition function evaluation
 # ---------------------------------------------------------------------------
 
-# Module-level cache: {(db_path, element, stage): (g_array, E_array, ip_ev)}
-_level_cache: Dict[Tuple[str, str, int], Tuple[np.ndarray, np.ndarray, float]] = {}
+# Module-level cache: {(db_path, element, stage, cache_token): (g_array, E_array, ip_ev)}
+# cache_token = AtomicDatabase._partition_cache_token (the DB-file mtime_ns) so an
+# in-place DB rewrite (e.g. a re-ingest) invalidates cached levels exactly the way
+# it invalidates _spec_cache. Without the token this cache served stale levels
+# until an explicit clear_partition_module_caches() — a real hazard now that
+# ingests rewrite the production DB in place.
+_level_cache: Dict[Tuple[str, str, int, int], Tuple[np.ndarray, np.ndarray, float]] = {}
 
 
 def get_levels_for_species(
@@ -586,7 +591,12 @@ def get_levels_for_species(
     Returns (g_array, E_array, ip_ev) or None if data is unavailable.
     Levels above the ionization potential are pre-filtered.
     """
-    cache_key = (str(getattr(atomic_db, "db_path", id(atomic_db))), element, ionization_stage)
+    cache_key = (
+        str(getattr(atomic_db, "db_path", id(atomic_db))),
+        element,
+        ionization_stage,
+        int(getattr(atomic_db, "_partition_cache_token", 0)),
+    )
     if cache_key in _level_cache:
         return _level_cache[cache_key]
 
@@ -682,12 +692,14 @@ def get_ground_state_g(
 # Historically every consumer carried its own hardcoded U(T) fallback
 # (25.0 / 15.0 / 2.0 — and 10.0, ln 2, per-species dicts elsewhere) for
 # species the provider factory cannot resolve.  That was silently and
-# catastrophically wrong for closed-shell ions: the production DB has ZERO
-# energy levels and ZERO stored polynomials for Na II / Li II / H II, so the
-# stage-II constant 15.0 was used for Na II whose true U is ~1.00 (Ne-like
-# closed shell, first excited level ≈ 33 eV) — a ~15× error feeding straight
-# into the Saha multiplier of a basalt major (audit 2026-06-09, finding
-# 02-F1; bead CF-LIBS-improved-16m7).
+# catastrophically wrong for closed-shell ions when the level scrape was
+# incomplete: the pre-M5 DB had ZERO energy levels for Na II / Li II / H II, so
+# the stage-II constant 15.0 was used for Na II whose true U is ~1.00 (Ne-like
+# closed shell, first excited level ≈ 33 eV) — a ~15× error (audit 2026-06-09,
+# 02-F1; bead CF-LIBS-improved-16m7).  The M5 gold-standard ASD59 DB now carries
+# levels for every real I/II/III species, so the direct-sum provider resolves
+# them and this ladder is a genuine last resort (effectively only Si IV-class
+# < 2-level species) — retained as a loud, correct degrade, not a routine path.
 #
 # The ladder below replaces all of those sites:
 #
