@@ -290,3 +290,19 @@ def test_database_has_expanded_coefficients():
     conn.close()
 
     assert count >= 106, f"Database has {count} coefficient sets, expected >= 106"
+
+
+def test_spec_cache_invalidates_on_token_bump(partition_db):
+    """A cache_token bump forces re-derivation, so a DB change (new mtime token)
+    is picked up instead of serving the stale pre-change spec (overhaul step 1)."""
+    from cflibs.plasma import partition as _P
+    from cflibs.plasma.partition import derive_partition_spec
+
+    _P._spec_cache.clear()
+    derive_partition_spec(partition_db, "XA", 1, cache_token=0)
+    n0 = len(_P._spec_cache)
+    assert n0 == 1
+    derive_partition_spec(partition_db, "XA", 1, cache_token=0)  # same token -> hit
+    assert len(_P._spec_cache) == n0
+    derive_partition_spec(partition_db, "XA", 1, cache_token=1)  # bumped -> new entry
+    assert len(_P._spec_cache) == n0 + 1

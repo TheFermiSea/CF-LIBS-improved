@@ -200,4 +200,13 @@ def clear_all_caches() -> None:
     _partition_function_cache.clear()
     _transition_cache.clear()
     _ionization_cache.clear()
+    # Also clear the process-global partition spec/level caches (no TTL); lazy
+    # import + guard against the partition<->cache import cycle. Without this a
+    # long-lived process keeps stale U(T) after the DB's energy_levels change.
+    try:
+        from cflibs.plasma.partition import clear_partition_module_caches
+
+        clear_partition_module_caches()
+    except Exception:  # pragma: no cover - never let cache-clear hard-fail
+        pass
     logger.info("All caches cleared")

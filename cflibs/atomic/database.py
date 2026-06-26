@@ -54,6 +54,16 @@ class AtomicDatabase:
             raise FileNotFoundError(f"Atomic database not found: {path}")
 
         self.db_path = path
+        # Partition cache token = DB file mtime. derive_partition_spec keys its
+        # process-global spec cache on this, so when the DB's energy_levels
+        # change (e.g. a NIST ingest rewrites the file -> new mtime) a fresh
+        # AtomicDatabase derives partitions from the NEW levels instead of
+        # serving a stale cached spec. (Long-lived daemons holding an old handle
+        # should additionally call cflibs.core.cache.clear_all_caches.)
+        try:
+            self._partition_cache_token = int(path.stat().st_mtime_ns)
+        except OSError:
+            self._partition_cache_token = 0
         # Use connection pool for better performance
         try:
             self._pool = get_pool(str(path), max_connections=5)
@@ -652,7 +662,9 @@ class AtomicDatabase:
         """
         from cflibs.plasma.partition import derive_partition_spec
 
-        return derive_partition_spec(self, element, ionization_stage)
+        return derive_partition_spec(
+            self, element, ionization_stage, cache_token=self._partition_cache_token
+        )
 
     def partition_function_for(
         self, element: str, ionization_stage: int

@@ -412,7 +412,7 @@ class PartitionFunctionSpec:
 # × 2-3 stages at build time; without this cache it would refit on every
 # snapshot/spectrum. Keyed on the same (db_path, element, stage) tuple as
 # ``_level_cache``.
-_spec_cache: Dict[Tuple[str, str, int], "PartitionFunctionSpec"] = {}
+_spec_cache: Dict[Tuple[str, str, int, int], "PartitionFunctionSpec"] = {}
 
 
 #: Stored ``partition_functions.source`` values that outrank the direct-sum
@@ -458,6 +458,7 @@ def derive_partition_spec(
     atomic_db: Any,
     element: str,
     ionization_stage: int,
+    cache_token: int = 0,
 ) -> Optional["PartitionFunctionSpec"]:
     """Derive the single :class:`PartitionFunctionSpec` for a species.
 
@@ -492,6 +493,7 @@ def derive_partition_spec(
         str(getattr(atomic_db, "db_path", id(atomic_db))),
         element,
         int(ionization_stage),
+        int(cache_token),
     )
     cached = _spec_cache.get(cache_key)
     if cached is not None:
@@ -708,6 +710,22 @@ _GENERIC_PARTITION_FALLBACK_DEFAULT = 2.0
 
 # Warn-once registry so per-iteration solver loops do not spam the log.
 _FALLBACK_WARNED: set = set()
+
+
+def clear_partition_module_caches() -> None:
+    """Clear the process-global partition caches (spec, level, warn-once).
+
+    These module-level dicts are keyed on ``(db_path, element, stage, token)``
+    and have no TTL. They MUST be cleared when the underlying ``energy_levels``
+    change (e.g. after a NIST ingest that rewrites the DB in place), otherwise a
+    long-lived process keeps serving the stale pre-ingest spec (e.g. a 0-1-level
+    species cached as ``provider=None``). Wired into
+    :func:`cflibs.core.cache.clear_all_caches`; also reachable via an
+    ``AtomicDatabase`` cache-token bump.
+    """
+    _spec_cache.clear()
+    _level_cache.clear()
+    _FALLBACK_WARNED.clear()
 
 
 def _closed_shell_partition_value(element: str, ionization_stage: int) -> Optional[float]:

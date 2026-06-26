@@ -237,3 +237,18 @@ class TestNoneIsCached:
         cache.set("k", None)
         assert cache.get("k", sentinel) is None  # cached None -> the value, not default
         assert cache.get("missing") is None  # back-compat: bare get() still None on miss
+
+
+def test_clear_all_caches_clears_partition_module_caches():
+    """clear_all_caches() must also clear the process-global partition spec/level
+    caches (no TTL) so stale U(T) is not served after the DB changes (step 1)."""
+    from cflibs.core.cache import clear_all_caches
+    from cflibs.plasma import partition as _P
+
+    _P._spec_cache[("x", "Fe", 1, 0)] = object()
+    _P._level_cache[("x", "Fe", 1)] = (None, None, 0.0)
+    _P._FALLBACK_WARNED.add(("Fe", 1))
+    clear_all_caches()
+    assert not _P._spec_cache
+    assert not _P._level_cache
+    assert not _P._FALLBACK_WARNED
