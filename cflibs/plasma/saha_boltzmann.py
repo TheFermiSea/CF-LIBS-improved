@@ -592,7 +592,7 @@ def ionization_potential_lowering(
     Examples
     --------
     >>> delta_chi = ionization_potential_lowering(1e17, 10000)
-    >>> 0.03 <= delta_chi <= 0.06  # ~0.04 eV at canonical LIBS conditions
+    >>> 0.06 <= delta_chi <= 0.07  # ~0.066 eV at canonical LIBS conditions
     True
 
     References

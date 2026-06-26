@@ -45,3 +45,35 @@ def test_conversion_factors():
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_kb_ev_matches_codata():
+    """KB_EV must equal the CODATA Boltzmann constant in eV/K (k_B / e)."""
+    import scipy.constants as sc
+
+    from cflibs.core import constants
+
+    assert constants.KB_EV == pytest.approx(sc.k / sc.e, rel=1e-5)
+
+
+def test_cm_to_ev_matches_codata():
+    """CM_TO_EV must equal the energy (eV) of a 1 cm^-1 wavenumber: h*c*100/e."""
+    import scipy.constants as sc
+
+    from cflibs.core import constants
+
+    assert constants.CM_TO_EV == pytest.approx(sc.h * sc.c * 100.0 / sc.e, rel=1e-5)
+
+
+def test_saha_const_cm3_matches_codata_derivation():
+    """SAHA_CONST_CM3 must match the CODATA Saha prefactor with the x2 electron-
+    spin factor and T expressed in eV: 2*(2*pi*m_e*e/h^2)^1.5, m^-3 -> cm^-3.
+    (The missing x2 spin would give ~3.0e21, half the coded value, so this also
+    pins the spin factor.)"""
+    import numpy as np
+    import scipy.constants as sc
+
+    from cflibs.core import constants
+
+    saha = 2.0 * (2.0 * np.pi * sc.m_e * sc.e / sc.h**2) ** 1.5 * 1e-6
+    assert constants.SAHA_CONST_CM3 == pytest.approx(saha, rel=2e-3)  # within 0.2%
