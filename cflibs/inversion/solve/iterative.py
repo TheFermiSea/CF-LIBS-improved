@@ -958,6 +958,7 @@ class IterativeCFLIBSSolver:
         degeneracy_dominance_threshold: float = 0.8,
         degeneracy_min_elements: int = 4,
         assess_quality: bool = True,
+        fixed_temperature_K: Optional[float] = None,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
         # c5-solver-flags). ``use_lax_while_loop`` chooses between the CPU
@@ -1125,6 +1126,21 @@ class IterativeCFLIBSSolver:
         # consumers never KeyError. Default-False on the ded/batch/streaming
         # presets where the annotation layer is not consumed.
         self.assess_quality = bool(assess_quality)
+        # Optimal-temperature / OPC lever (real-steel L1; Zhao 2018, Plasma Sci.
+        # Technol. 20 035502). When set, the iterative solve HOLDS the plasma
+        # temperature at this fixed value instead of recovering it from the
+        # Boltzmann-plot slope. CF-LIBS composition is hypersensitive to T —
+        # an ion-only-biased fit drifts T low (~6700 K) and the Saha ion->total
+        # back-correction exp(E_ion/kT) then over-estimates trace minors. Fixing
+        # T at the matrix's optimal value (found by minimizing a matrix-matched
+        # standard's composition error) cuts that error substantially while the
+        # rest of the iteration (Saha shift, intercepts, closure, n_e) stays
+        # self-consistent at the held T. Default ``None`` => byte-identical
+        # legacy slope-recovered-T behaviour. Physics-only (a plasma temperature
+        # is a physical state variable, not a learned parameter).
+        self.fixed_temperature_K = (
+            float(fixed_temperature_K) if fixed_temperature_K is not None else None
+        )
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
         """Return fit-space uncertainty with optional A_ki contribution."""
@@ -1923,21 +1939,30 @@ class IterativeCFLIBSSolver:
         # the fit as degenerate. Holding T (rather than clamping high) keeps
         # the Boltzmann factor exp(-E_k/kT) discriminating between lines so
         # the intercepts stay physically meaningful for the closure step.
-        boltzmann_degenerate = slope >= 0 or fit_r2 < self.min_boltzmann_r2
-        if boltzmann_degenerate:
-            T_new = T_prev  # hold at prior; slope carries no usable T
+        if self.fixed_temperature_K is not None:
+            # L1 optimal-T lever: hold T at the fixed value (no slope->T update,
+            # no damping). The Boltzmann fit still supplies the per-element
+            # intercepts; only the temperature is pinned. The slope is not used
+            # for T, so it does not gate degeneracy here.
+            boltzmann_degenerate = False
+            T_new = self.fixed_temperature_K
+            T_K = self.fixed_temperature_K
         else:
-            T_new = -1.0 / (slope * KB_EV)
-            # Upper/lower physical clamp: a shallow-but-negative slope passing
-            # the R^2 gate can still invert to a runaway T (>1e5 K). Flag it
-            # degenerate and hold T at the prior rather than reporting an
-            # unphysical T as converged (do NOT silently clamp to 50000).
-            if not (T_PHYSICAL_MIN_K <= T_new <= T_PHYSICAL_MAX_K):
-                boltzmann_degenerate = True
-                T_new = T_prev
+            boltzmann_degenerate = slope >= 0 or fit_r2 < self.min_boltzmann_r2
+            if boltzmann_degenerate:
+                T_new = T_prev  # hold at prior; slope carries no usable T
+            else:
+                T_new = -1.0 / (slope * KB_EV)
+                # Upper/lower physical clamp: a shallow-but-negative slope passing
+                # the R^2 gate can still invert to a runaway T (>1e5 K). Flag it
+                # degenerate and hold T at the prior rather than reporting an
+                # unphysical T as converged (do NOT silently clamp to 50000).
+                if not (T_PHYSICAL_MIN_K <= T_new <= T_PHYSICAL_MAX_K):
+                    boltzmann_degenerate = True
+                    T_new = T_prev
 
-        # Damping
-        T_K = 0.5 * T_prev + 0.5 * T_new
+            # Damping
+            T_K = 0.5 * T_prev + 0.5 * T_new
 
         if self.two_region:
             # Empirical two-region DOF reduction: take the cooler outer/corona
@@ -2358,7 +2383,9 @@ class IterativeCFLIBSSolver:
         unset (default) or when JAX is unavailable.
         """
         # 1. Initialization
-        T_K = 10000.0
+        # L1 fixed-T lever: seed the loop at the held temperature so the first
+        # Saha correction / closure already use it (default None => 10000 K seed).
+        T_K = 10000.0 if self.fixed_temperature_K is None else self.fixed_temperature_K
         T_corona = None
         n_e = 1.0e17
 

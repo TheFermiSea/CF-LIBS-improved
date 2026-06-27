@@ -48,11 +48,19 @@ def run_constrained_solver(
     saha_boltzmann_graph: bool = True,
     closure_mode: str = "standard",
     apply_self_absorption: "bool | str" = "off",
+    fixed_temperature_K: "float | None" = None,
 ) -> CFLIBSResult:
-    """Solve on a fixed known element set with the true n_e injected."""
+    """Solve on a fixed known element set with the true n_e injected.
+
+    ``fixed_temperature_K`` (L1 optimal-T lever): when set, the solver holds the
+    plasma T at this value instead of recovering it from the Boltzmann slope.
+    """
     solver = IterativeCFLIBSSolver(
-        db, saha_boltzmann_graph=saha_boltzmann_graph, max_iterations=max_iterations,
+        db,
+        saha_boltzmann_graph=saha_boltzmann_graph,
+        max_iterations=max_iterations,
         apply_self_absorption=apply_self_absorption,
+        fixed_temperature_K=fixed_temperature_K,
     )
     res = solver.solve(
         list(observations),
