@@ -416,6 +416,15 @@ class PartitionFunctionSpec:
 # ``_level_cache``.
 _spec_cache: Dict[Tuple[str, str, int, int], "PartitionFunctionSpec"] = {}
 
+# Module-level provider cache keyed IDENTICALLY to ``_spec_cache`` on
+# ``(db_path, element, stage, cache_token)``.  ``spec.to_provider()`` rebuilds a
+# frozen provider and re-tuples every energy level on EVERY call (~30×/solve);
+# this was ~42 % of solve time.  Building the provider once and returning the
+# cached instance is bit-for-bit (the spec is immutable, so the provider it
+# vends is identical data each time).  Invalidated together with ``_spec_cache``
+# via :func:`clear_partition_module_caches` and the ``cache_token`` bump.
+_provider_cache: Dict[Tuple[str, str, int, int], "PartitionFunctionProvider"] = {}
+
 
 #: Stored ``partition_functions.source`` values that outrank the direct-sum
 #: fit over our (possibly incomplete) ``energy_levels`` table.  Barklem &
@@ -566,6 +575,46 @@ def derive_partition_spec(
         return None
     _spec_cache[cache_key] = stored
     return stored
+
+
+def provider_for(
+    atomic_db: Any,
+    element: str,
+    ionization_stage: int,
+    cache_token: int = 0,
+) -> Optional["PartitionFunctionProvider"]:
+    """Return a memoized CPU scalar :class:`PartitionFunctionProvider`.
+
+    Thin memoizing wrapper over :func:`derive_partition_spec` +
+    :meth:`PartitionFunctionSpec.to_provider`.  ``to_provider`` rebuilds a frozen
+    provider and re-tuples every energy level on each call, which the iterative
+    solver triggers ~30×/solve (~42 % of solve time).  The spec is immutable, so
+    its provider is identical data every time; caching the instance is therefore
+    bit-for-bit while removing the rebuild.
+
+    Keyed IDENTICALLY to :func:`derive_partition_spec`'s ``_spec_cache`` on
+    ``(db_path, element, stage, cache_token)`` so the ``cache_token`` invalidation
+    (DB-file mtime bump) drops both caches in lockstep.
+
+    Returns ``None`` when the species has neither energy levels nor a stored
+    polynomial row (same contract as :func:`derive_partition_spec`).
+    """
+    cache_key = (
+        str(getattr(atomic_db, "db_path", id(atomic_db))),
+        element,
+        int(ionization_stage),
+        int(cache_token),
+    )
+    cached = _provider_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    spec = derive_partition_spec(atomic_db, element, ionization_stage, cache_token=cache_token)
+    if spec is None:
+        return None
+    provider = spec.to_provider()
+    _provider_cache[cache_key] = provider
+    return provider
 
 
 # ---------------------------------------------------------------------------
@@ -781,6 +830,7 @@ def clear_partition_module_caches() -> None:
     ``AtomicDatabase`` cache-token bump.
     """
     _spec_cache.clear()
+    _provider_cache.clear()
     _level_cache.clear()
     _FALLBACK_WARNED.clear()
     _IP_SYNTH_WARNED.clear()

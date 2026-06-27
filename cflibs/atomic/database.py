@@ -723,10 +723,11 @@ class AtomicDatabase:
         diagnosis.md`` § 2.1, ``2026-05-26-architecture-review.md`` § Candidate 4
         and ADR-0001 § B-P7.
         """
-        spec = self.partition_spec_for(element, ionization_stage)
-        if spec is None:
-            return None
-        return spec.to_provider()
+        from cflibs.plasma.partition import provider_for
+
+        return provider_for(
+            self, element, ionization_stage, cache_token=self._partition_cache_token
+        )
 
     def get_species_physics(self, element: str, ionization_stage: int) -> SpeciesPhysics | None:
         """
