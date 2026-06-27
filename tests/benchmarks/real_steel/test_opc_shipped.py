@@ -48,6 +48,9 @@ from tests.benchmarks.real_steel.harness import PARQUET, load_real_steel, score 
 # Guard just above the achieved v2 held-out rmsep_overall (~10.12 wt%); the
 # shipped-API reproduction must clear it. Matches RMSEP_GUARD in the lever gate.
 RMSEP_GUARD = 11.0
+# Guard just above the achieved L5 thin_filter held-out rmsep_overall (9.561 wt%);
+# the shipped optically-thin-filter OPC path must clear it.
+RMSEP_GUARD_THIN = 9.7
 
 
 def _selected_to_linespecs(selected_lines):
@@ -84,15 +87,22 @@ def _neutral_anchor_specs(db, wl, elements):
     return specs
 
 
-def _build_standards(db):
+def _build_standards(db, *, thin_filter: bool = False):
     """Build a shipped :class:`Standard` per real-steel sample.
 
     Each standard's ``recover(T)`` runs the shipped neutral-anchor selection +
     extraction + constrained Saha-Boltzmann solver at fixed ``T`` (memoized), and
     its certified composition is the sample's renormalized truth. Returns
     ``(standards, samples)`` where ``samples`` preserves spectra for scoring.
+
+    When ``thin_filter`` is True the shipped optically-thin line filter
+    (:func:`cflibs.inversion.physics.opc.select_optically_thin_lines`) is applied
+    to the extracted observations BEFORE the solve, so ``calibrate_opc`` derives
+    the OPC ``F`` on the same (thin-filtered) pipeline the held-out solve applies
+    it to (the honest decoupling: ``F`` then carries only the residual static
+    sensitivity, not the per-spectrum self-absorption the filter already removed).
     """
-    from cflibs.inversion.physics.opc import Standard, StandardRecovery
+    from cflibs.inversion.physics.opc import Standard, StandardRecovery, select_optically_thin_lines
     from tests.benchmarks.ded_precision.line_extractor import extract_line_intensities
     from tests.benchmarks.ded_precision.solver_runner import recovered_wt, run_constrained_solver
 
@@ -104,13 +114,17 @@ def _build_standards(db):
     for idx, (sid, wl, inten, truth) in enumerate(samples):
         elements = list(truth)
 
-        def _make(wl=wl, inten=inten, elements=elements):
+        def _make(wl=wl, inten=inten, elements=elements, thin_filter=thin_filter):
             @lru_cache(maxsize=None)
             def _recover(T_K: float) -> StandardRecovery:
                 specs = _neutral_anchor_specs(db, wl, elements)
                 if not specs:
                     return StandardRecovery(composition={}, converged=False, degenerate=True)
                 obs = extract_line_intensities(wl, inten, specs, instrument_fwhm_nm=0.2)
+                if thin_filter:
+                    obs = select_optically_thin_lines(wl, inten, obs)
+                    if not obs:
+                        return StandardRecovery(composition={}, converged=False, degenerate=True)
                 res = run_constrained_solver(db, obs, 1e17, fixed_temperature_K=float(T_K))
                 degenerate = (
                     float((res.quality_metrics or {}).get("degenerate_composition", 0.0)) >= 0.5
@@ -127,9 +141,16 @@ def _build_standards(db):
     return standards, samples
 
 
-def _solve_heldout(db, wl, inten, elements, calibration) -> Dict[str, float]:
-    """Held-out solve: shipped neutral-anchor lines -> apply_opc -> fixed-T solve."""
-    from cflibs.inversion.physics.opc import apply_opc
+def _solve_heldout(
+    db, wl, inten, elements, calibration, *, thin_filter: bool = False
+) -> Dict[str, float]:
+    """Held-out solve: shipped neutral-anchor lines -> [thin filter] -> apply_opc -> solve.
+
+    With ``thin_filter`` the shipped optically-thin filter drops the width-broadened
+    (self-absorbed) matrix lines BEFORE the OPC ``F`` rescale, exactly as the
+    ``run_pipeline`` OPC pre-solve does (and matching how ``F`` was derived).
+    """
+    from cflibs.inversion.physics.opc import apply_opc, select_optically_thin_lines
     from tests.benchmarks.ded_precision.line_extractor import extract_line_intensities
     from tests.benchmarks.ded_precision.solver_runner import recovered_wt, run_constrained_solver
 
@@ -137,15 +158,25 @@ def _solve_heldout(db, wl, inten, elements, calibration) -> Dict[str, float]:
     if not specs:
         return {}
     obs = extract_line_intensities(wl, inten, specs, instrument_fwhm_nm=0.2)
+    if thin_filter:
+        obs = select_optically_thin_lines(wl, inten, obs)
+        if not obs:
+            return {}
     apply_opc(obs, calibration)  # rescales intensity in place by F[element]
     res = run_constrained_solver(db, obs, 1e17, fixed_temperature_K=float(calibration.robust_T_K))
     return recovered_wt(res)
 
 
-def run_shipped_opc_gate(db_path: str = "ASD_da/libs_production.db") -> Dict[str, object]:
-    """Reproduce the v2 held-out RMSEP through the shipped OPC API (honest LOO).
+def run_shipped_opc_gate(
+    db_path: str = "ASD_da/libs_production.db", *, thin_filter: bool = False
+) -> Dict[str, object]:
+    """Reproduce the held-out RMSEP through the shipped OPC API (honest LOO).
 
-    Returns the held-out score dict plus the full-calibration provenance.
+    With ``thin_filter=False`` (default) this reproduces the v2 plain-OPC result;
+    with ``thin_filter=True`` it exercises the shipped optically-thin line filter
+    (real-steel L5 winning lever) threaded through BOTH the ``calibrate_opc``
+    F-derivation and the held-out solve. Returns the held-out score dict plus the
+    full-calibration provenance.
     """
     import warnings
 
@@ -154,7 +185,7 @@ def run_shipped_opc_gate(db_path: str = "ASD_da/libs_production.db") -> Dict[str
     from cflibs.inversion.physics.opc import calibrate_opc
 
     db = AtomicDatabase(db_path)
-    standards, samples = _build_standards(db)
+    standards, samples = _build_standards(db, thin_filter=thin_filter)
 
     # Full calibration over ALL standards (shipped conditioning gate + robust T + geomean F).
     cal_full = calibrate_opc(standards)
@@ -176,7 +207,7 @@ def run_shipped_opc_gate(db_path: str = "ASD_da/libs_production.db") -> Dict[str
             cal = loo_cache[name]
         else:
             cal = cal_full
-        pred = _solve_heldout(db, wl, inten, list(truth), cal)
+        pred = _solve_heldout(db, wl, inten, list(truth), cal, thin_filter=thin_filter)
         results.append((truth, pred or {}))
         print(f"  [{i + 1}] sample {sid} done", flush=True)
 
@@ -187,6 +218,7 @@ def run_shipped_opc_gate(db_path: str = "ASD_da/libs_production.db") -> Dict[str
         "selected_standards": list(cal_full.selected_standards),
         "conditioning_rule": cal_full.conditioning_rule,
         "F": dict(cal_full.F),
+        "thin_filter": thin_filter,
         "held_out": held,
     }
 
@@ -207,10 +239,41 @@ def test_shipped_opc_heldout_rmsep_below_guard():
     )
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(
+    not os.path.exists(PARQUET), reason=f"real-steel parquet not present: {PARQUET}"
+)
+def test_shipped_opc_thin_filter_heldout_rmsep_below_guard():
+    """Shipped optically-thin line filter (real-steel L5 lever) on the OPC path.
+
+    Threads :func:`cflibs.inversion.physics.opc.select_optically_thin_lines` through
+    BOTH the ``calibrate_opc`` F-derivation and the held-out solve (the same
+    a-priori conditioning rule + honest leave-one-out as the plain-OPC gate, no
+    held-out peeking). The lever achieved held-out rmsep_overall 9.561 wt%; this
+    asserts the shipped path clears the 9.7 wt% guard just above it, improving on
+    the plain-OPC 10.12 baseline.
+    """
+    out = run_shipped_opc_gate(thin_filter=True)
+    held = out["held_out"]
+    overall = held["rmsep_overall"]
+    assert np.isfinite(overall), f"shipped-OPC thin-filter held-out RMSEP not finite: {overall!r}"
+    assert overall <= RMSEP_GUARD_THIN, (
+        f"shipped-API OPC thin-filter reproduction regressed: held-out rmsep_overall "
+        f"{overall:.3f} > guard {RMSEP_GUARD_THIN} (L5 lever achieved 9.561). per-element: "
+        + ", ".join(f"{k}={held[k]:.2f}" for k in sorted(held) if k.startswith("rmsep_"))
+    )
+
+
 if __name__ == "__main__":
-    res = run_shipped_opc_gate()
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--thin-filter", action="store_true")
+    a = ap.parse_args()
+    res = run_shipped_opc_gate(thin_filter=a.thin_filter)
     hs = res["held_out"]
-    print("\n[shipped-opc] real-steel held-out RMSEP (wt%):")
+    tag = "thin_filter" if res["thin_filter"] else "plain"
+    print(f"\n[shipped-opc:{tag}] real-steel held-out RMSEP (wt%):")
     print(f"  n_selected: {res['n_selected']} -> {res['selected_standards']}")
     print(f"  robust_T_K: {res['robust_T_K']:.0f}")
     print(f"  conditioning rule: {res['conditioning_rule']}")
