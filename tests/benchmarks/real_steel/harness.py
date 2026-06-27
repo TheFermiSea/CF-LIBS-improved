@@ -66,6 +66,7 @@ def run_benchmark(solve_fn: Callable, db_path: str = "ASD_da/libs_production.db"
 
     db = AtomicDatabase(db_path)
     results: List[Tuple[Dict[str, float], Dict[str, float]]] = []
+    verbose = os.environ.get("REALSTEEL_QUIET", "") != "1"
     for i, (sid, wl, inten, truth) in enumerate(load_real_steel()):
         if limit is not None and i >= limit:
             break
@@ -74,4 +75,6 @@ def run_benchmark(solve_fn: Callable, db_path: str = "ASD_da/libs_production.db"
         except Exception:  # noqa: BLE001 — a failed solve scores as all-nan, not a crash
             pred = {}
         results.append((truth, pred or {}))
+        if verbose:  # per-sample progress keeps long runs visible (sub-agent watchdog safety)
+            print(f"  [{i + 1}] sample {sid} done", flush=True)
     return score(results)
