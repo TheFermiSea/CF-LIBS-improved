@@ -46,6 +46,7 @@ def run_constrained_solver(
     *,
     max_iterations: int = 30,
     saha_boltzmann_graph: bool = True,
+    closure_mode: str = "standard",
 ) -> CFLIBSResult:
     """Solve on a fixed known element set with the true n_e injected."""
     solver = IterativeCFLIBSSolver(
@@ -53,7 +54,7 @@ def run_constrained_solver(
     )
     res = solver.solve(
         list(observations),
-        closure_mode="standard",
+        closure_mode=closure_mode,
         stark_diagnostics=[make_ne_diagnostic(ne_cm3)],
     )
     if not res.mass_fractions:

@@ -38,6 +38,12 @@ def run_composition_series(
     grid_step_nm: float = 0.02,
     clean: bool = False,
     seed: int = 0,
+    budget=None,
+    prefer_spread: bool = False,
+    line_T_K=None,
+    closure_mode: str = "standard",
+    max_iterations: int = 30,
+    saha_boltzmann_graph: bool = True,
 ) -> pd.DataFrame:
     """Run one drift axis (e.g. Ti-6Al-4V Al scan); return a long-form DataFrame.
 
@@ -49,7 +55,17 @@ def run_composition_series(
     els = elements_of(alloy)
     wl = default_grid(ALLOY_WINDOWS_NM[alloy], grid_step_nm)
     fwd = make_forward(db_path, els, wl, instrument_fwhm_nm)
-    line_specs = [s for v in build_alloy_line_list(db, alloy, T_K=T_K).values() for s in v]
+    line_specs = [
+        s
+        for v in build_alloy_line_list(
+            db,
+            alloy,
+            T_K=(line_T_K if line_T_K is not None else T_K),
+            budget=budget,
+            prefer_spread=prefer_spread,
+        ).values()
+        for s in v
+    ]
     noise = noise or DEDNoiseParams()
     rng = np.random.default_rng(seed)
     n_real = 1 if clean else n_monte_carlo
@@ -69,7 +85,14 @@ def run_composition_series(
                 wl, spec, line_specs, instrument_fwhm_nm=instrument_fwhm_nm
             )
             try:
-                res = run_constrained_solver(db, obs, ne_cm3)
+                res = run_constrained_solver(
+                    db,
+                    obs,
+                    ne_cm3,
+                    max_iterations=max_iterations,
+                    saha_boltzmann_graph=saha_boltzmann_graph,
+                    closure_mode=closure_mode,
+                )
                 pred = recovered_wt(res)
                 conv = bool(res.converged)
             except Exception as exc:  # solver failures are data, not crashes
