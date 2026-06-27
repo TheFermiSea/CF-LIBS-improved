@@ -25,10 +25,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.self_absorption_observable import normalize_self_absorption_mode
+
+if TYPE_CHECKING:
+    from cflibs.inversion.physics.opc import OPCCalibration
 
 logger = get_logger("inversion.pipeline")
 
@@ -294,6 +297,18 @@ class AnalysisPipelineConfig:
     #: ``shift_scan_nm`` is NOT accepted here: the global scan width is the
     #: first-class ``global_shift_scan_nm`` field above. Empty in production.
     detection_overrides: dict = field(default_factory=dict)
+    # --- Known-matrix / OPC mode (opt-in; default path byte-identical) ---
+    #: Hold the plasma temperature (K) at this value in the iterative solve
+    #: instead of recovering it from the Boltzmann slope. ``None`` (default) =
+    #: recover T as today (byte-identical). Set directly, or supplied
+    #: automatically from ``opc.robust_T_K`` when an OPC calibration is given.
+    fixed_temperature_K: Optional[float] = None
+    #: Optional known-matrix one-point calibration (``cflibs.inversion.physics
+    #: .opc.OPCCalibration``). When supplied, ``run_pipeline`` rescales each
+    #: detected observation's intensity by the per-element factor ``F`` and holds
+    #: the solve at ``robust_T_K`` (unless ``fixed_temperature_K`` is set
+    #: explicitly). ``None`` (default) leaves the calibration-free path unchanged.
+    opc: Optional["OPCCalibration"] = None
 
 
 #: Sentinel marking "knob not provided at this tier". Unlike ``None`` it lets
@@ -493,6 +508,8 @@ def build_pipeline_config(
         assess_quality=bool(knob("assess_quality", None, True)),
         ransac_early_exit=bool(knob("ransac_early_exit", None, True)),
         detection_overrides=dict(ov.get("detection_overrides", None) or {}),
+        fixed_temperature_K=knob("fixed_temperature_K", None, None),
+        opc=ov.get("opc", None),
     )
     _log_pipeline_config(pipeline)
     return pipeline
@@ -1110,6 +1127,7 @@ def _run_peak_based_solver(
             degeneracy_dominance_threshold=pipeline.degeneracy_dominance_threshold,
             degeneracy_min_elements=pipeline.degeneracy_min_elements,
             assess_quality=pipeline.assess_quality,
+            fixed_temperature_K=pipeline.fixed_temperature_K,
         )
         closure_kwargs = _finalize_closure_kwargs(pipeline, observations)
         return _solve_analyze_result(
@@ -1412,6 +1430,38 @@ def run_pipeline(
 
     if len(observations) == 0:
         raise ValueError("No usable spectral lines detected for inversion.")
+
+    # Known-matrix / OPC pre-solve step (opt-in; default path untouched). When a
+    # calibration is supplied, rescale each detected observation's intensity by
+    # the per-element relative-sensitivity factor F and hold the solve at the
+    # calibrated robust temperature (unless an explicit fixed_temperature_K was
+    # already set). apply_opc reads ONLY the observations + the calibration — it
+    # never sees a recovered composition, so there is no positive-feedback loop
+    # (the failure the 2026-06-09 audit condemned). When pipeline.opc is None the
+    # whole block is skipped and the calibration-free path is byte-identical.
+    opc = pipeline.opc
+    if opc is not None:
+        from dataclasses import replace as _dc_replace
+
+        from cflibs.inversion.physics.opc import apply_opc
+
+        apply_opc(observations, opc)
+        if pipeline.fixed_temperature_K is None:
+            pipeline = _dc_replace(pipeline, fixed_temperature_K=opc.robust_T_K)
+        diagnostics["opc"] = {
+            "robust_T_K": float(opc.robust_T_K),
+            "fixed_temperature_K": float(pipeline.fixed_temperature_K),
+            "selected_standards": list(opc.selected_standards),
+            "F": {str(el): float(f) for el, f in opc.F.items()},
+            "conditioning_rule": opc.conditioning_rule,
+        }
+        logger.info(
+            "Applied known-matrix OPC calibration: robust_T=%.0f K, %d per-element factors, "
+            "%d selected standards.",
+            opc.robust_T_K,
+            len(opc.F),
+            len(opc.selected_standards),
+        )
 
     # Stark-broadening n_e diagnostic (bead pxex; audit 02-F2): measure n_e
     # from the widths of observed literature-grade lines so it enters the Saha
