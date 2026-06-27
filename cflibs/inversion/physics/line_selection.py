@@ -100,10 +100,10 @@ Literature References
 
 from dataclasses import dataclass, field
 from collections import defaultdict
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Sequence, Tuple, Set
 import numpy as np
 
-from cflibs.core.constants import MCWHIRTER_CONST
+from cflibs.core.constants import KB_EV, MCWHIRTER_CONST
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.boltzmann import LineObservation
 
@@ -786,3 +786,299 @@ def identify_resonance_lines(
     # LineObservation dataclass. In practice, this would query the database.
     # For now, return empty set - caller should provide from database.
     return set()
+
+
+# ---------------------------------------------------------------------------
+# DB + window candidate-line selection policies (opt-in)
+# ---------------------------------------------------------------------------
+#
+# The ``LineSelector`` above scores already-extracted ``LineObservation``s. The
+# functions below operate one step earlier: they pick *candidate* atomic-data
+# lines per element directly from the atomic DB over a wavelength window, so a
+# downstream extractor knows where to integrate intensities. This is the entry
+# point used by the known-matrix / OPC mode.
+#
+# Two selection policies are offered via the ``policy`` argument of
+# :func:`select_lines_by_policy`:
+#
+# * ``"emissivity"`` (DEFAULT, current behavior): rank by Boltzmann-weighted
+#   emissivity over the neutral + singly-ionized stages, then take a wide
+#   upper-level-energy (E_k) spread of strong, isolated lines (resonance lines
+#   excluded with a too-few fallback). This mirrors the established
+#   ``tests/benchmarks/ded_precision/line_lists.select_lines`` behavior, so the
+#   default path is unchanged.
+# * ``"neutral_anchor"`` (opt-in): the real-steel accuracy lever L2 promoted
+#   from ``tests/benchmarks/real_steel/lever_l2_lines.select_l2_lines`` (see
+#   docs/research/real-steel-opc-promotion.md). Per element it prefers NEUTRAL
+#   (stage 1) lines with wide E_k spread so the Saha ion->total back-correction
+#   is applied on (or near) the neutral plane instead of extrapolated up from
+#   ion lines; admits a strong neutral *resonance* anchor when the element is
+#   effectively neutral-resonance-only; and DROPS an element that has no usable
+#   neutral line at all (better to omit a trace minor than let an ion-only Saha
+#   extrapolation soak the closure, e.g. Cu 0.2 wt% recovered as ~93%).
+#
+# Both policies are pure atomic-data + window functions (no measured intensity,
+# no recovered composition) — physics-only, no new dependencies.
+
+#: Selection temperature (K) for the emissivity ranking under the default
+#: ``"emissivity"`` policy. A fixed, physically reasonable alloy-plasma value;
+#: never fit per sample or tuned to any ground truth.
+DEFAULT_SELECT_T_K: float = 11000.0
+#: Selection temperature (K) for the ``"neutral_anchor"`` policy (lever L2).
+NEUTRAL_ANCHOR_SELECT_T_K: float = 8000.0
+#: Under ``"neutral_anchor"``, a neutral resonance line is admitted as an anchor
+#: only when the strongest neutral line is a resonance line that beats the best
+#: non-resonance neutral line by at least this factor (i.e. the element is
+#: effectively neutral-resonance-only; weak non-resonance neutrals will not
+#: extract from real spectra).
+RESONANCE_ANCHOR_RATIO: float = 8.0
+
+
+@dataclass(frozen=True)
+class SelectedLine:
+    """A candidate atomic-data line chosen from the DB by a selection policy.
+
+    This is the output of DB + window line selection: a pure atomic-data
+    candidate carrying no measured intensity (that is added later by the
+    extractor). Field set matches the benchmark ``LineSpec`` so existing line
+    extractors can consume it unchanged.
+    """
+
+    element: str
+    ionization_stage: int
+    wavelength_nm: float
+    E_k_ev: float
+    g_k: float
+    A_ki: float
+    aki_uncertainty: Optional[float] = None
+    is_resonance: bool = False
+
+
+def _emissivity_weight(transition, temperature_K: float) -> float:
+    """Boltzmann-weighted relative emissivity ``g_k * A_ki * exp(-E_k / kT)``."""
+    return float(
+        transition.g_k * transition.A_ki * np.exp(-transition.E_k_ev / (KB_EV * temperature_K))
+    )
+
+
+def _gather_candidate_transitions(
+    db,
+    element: str,
+    stages: Sequence[int],
+    window: Tuple[float, float],
+    temperature_K: float,
+    *,
+    allow_resonance: bool,
+) -> List:
+    """Collect usable transitions over ``stages`` in ``window``, emissivity-sorted.
+
+    Drops transitions with non-positive ``A_ki``/``g_k`` or a missing upper-level
+    energy, and (when ``allow_resonance`` is False) resonance lines. The result
+    is sorted by Boltzmann-weighted emissivity at ``temperature_K`` (descending).
+    """
+    wmin, wmax = window
+    out: List = []
+    for stage in stages:
+        for tr in db.get_transitions(
+            element, ionization_stage=stage, wavelength_min=wmin, wavelength_max=wmax
+        ):
+            if not tr.A_ki or tr.A_ki <= 0 or not tr.g_k or tr.g_k <= 0:
+                continue
+            if tr.E_k_ev is None:
+                continue
+            if not allow_resonance and getattr(tr, "is_resonance", False):
+                continue
+            out.append(tr)
+    out.sort(key=lambda t: _emissivity_weight(t, temperature_K), reverse=True)
+    return out
+
+
+def _spread_pick(cands: List, n_lines: int, min_separation_nm: float) -> List:
+    """Take up to ``n_lines`` strong, isolated lines spanning a wide ``E_k`` range.
+
+    Bins the strong-line pool by upper-level energy and takes the strongest
+    isolated line per bin, so the chosen set is well-conditioned for a Boltzmann
+    slope. Falls back to a strongest-first isolated greedy pick when the pool is
+    too small or has no energy spread.
+    """
+
+    def _isolated(tr, picked: List) -> bool:
+        return all(abs(tr.wavelength_nm - c.wavelength_nm) >= min_separation_nm for c in picked)
+
+    pool = cands[: max(n_lines * 4, n_lines)]
+    eks = np.array([t.E_k_ev for t in pool], dtype=float)
+    chosen: List = []
+    if len(pool) > n_lines and eks.size and float(eks.max() - eks.min()) > 0:
+        edges = np.linspace(eks.min(), eks.max(), n_lines + 1)
+        used: set = set()
+        for b in range(n_lines):
+            lo, hi = edges[b], edges[b + 1]
+            last = b == n_lines - 1
+            for i, tr in enumerate(pool):
+                if i in used:
+                    continue
+                ek = tr.E_k_ev
+                if (lo <= ek < hi) or (last and ek <= hi):
+                    if _isolated(tr, chosen):
+                        chosen.append(tr)
+                        used.add(i)
+                        break
+        for i, tr in enumerate(pool):
+            if len(chosen) >= n_lines:
+                break
+            if i not in used and _isolated(tr, chosen):
+                chosen.append(tr)
+                used.add(i)
+    else:
+        for tr in cands:
+            if _isolated(tr, chosen):
+                chosen.append(tr)
+            if len(chosen) >= n_lines:
+                break
+    return chosen
+
+
+def _to_selected_lines(element: str, transitions: List) -> List[SelectedLine]:
+    return [
+        SelectedLine(
+            element=element,
+            ionization_stage=int(tr.ionization_stage),
+            wavelength_nm=float(tr.wavelength_nm),
+            E_k_ev=float(tr.E_k_ev),
+            g_k=float(tr.g_k),
+            A_ki=float(tr.A_ki),
+            aki_uncertainty=getattr(tr, "aki_uncertainty", None),
+            is_resonance=bool(getattr(tr, "is_resonance", False)),
+        )
+        for tr in transitions
+    ]
+
+
+def _select_emissivity(
+    db,
+    element: str,
+    window: Tuple[float, float],
+    n_lines: int,
+    stages: Sequence[int],
+    select_temperature_K: float,
+    min_separation_nm: float,
+    exclude_resonance: bool,
+) -> List[SelectedLine]:
+    """Default policy: emissivity-ranked, wide-E_k spread over ``stages``."""
+    cands = _gather_candidate_transitions(
+        db, element, stages, window, select_temperature_K, allow_resonance=not exclude_resonance
+    )
+    if exclude_resonance and len(cands) < max(2, n_lines // 2):
+        # Too few non-resonance lines: admit resonance lines as a fallback.
+        cands = _gather_candidate_transitions(
+            db, element, stages, window, select_temperature_K, allow_resonance=True
+        )
+    return _to_selected_lines(element, _spread_pick(cands, n_lines, min_separation_nm))
+
+
+def _select_neutral_anchor(
+    db,
+    element: str,
+    window: Tuple[float, float],
+    n_lines: int,
+    select_temperature_K: float,
+    min_separation_nm: float,
+) -> List[SelectedLine]:
+    """Lever-L2 policy: neutral-anchored, wide-E_k selection (stage 1 only).
+
+    Returns an empty list when the element has no usable neutral line in band
+    (so the caller drops it from the closure rather than observing it ion-only).
+    """
+    neutral = _gather_candidate_transitions(
+        db, element, (1,), window, select_temperature_K, allow_resonance=True
+    )
+    nonres = [t for t in neutral if not getattr(t, "is_resonance", False)]
+    res = [t for t in neutral if getattr(t, "is_resonance", False)]
+
+    if len(nonres) >= 2:
+        pool = list(nonres)
+        # Admit the neutral resonance lines as an anchor only when the strongest
+        # neutral line overall is a much stronger resonance line (the element is
+        # effectively neutral-resonance-only in real spectra).
+        if res and neutral and getattr(neutral[0], "is_resonance", False):
+            best_res = _emissivity_weight(res[0], select_temperature_K)
+            best_nonres = _emissivity_weight(nonres[0], select_temperature_K)
+            if best_nonres <= 0 or best_res / best_nonres >= RESONANCE_ANCHOR_RATIO:
+                pool = list(neutral)
+    elif neutral:
+        pool = list(neutral)  # too few non-resonance: admit resonance anchor
+    else:
+        return []  # no neutral line in band -> drop element from closure
+
+    return _to_selected_lines(element, _spread_pick(pool, n_lines, min_separation_nm))
+
+
+def select_lines_by_policy(
+    db,
+    element: str,
+    window: Tuple[float, float],
+    n_lines: int = 8,
+    *,
+    policy: str = "emissivity",
+    stages: Sequence[int] = (1, 2),
+    select_temperature_K: Optional[float] = None,
+    min_separation_nm: float = 0.12,
+    exclude_resonance: bool = True,
+) -> List[SelectedLine]:
+    """Pick up to ``n_lines`` candidate lines for ``element`` from the DB + window.
+
+    Pure atomic-data + window selection (no measured intensity, no recovered
+    composition). The ``policy`` argument selects the strategy; the default keeps
+    the current emissivity-spread behavior so existing callers are unaffected.
+
+    Parameters
+    ----------
+    db
+        Atomic database exposing
+        ``get_transitions(element, ionization_stage, wavelength_min, wavelength_max)``.
+    element : str
+        Element symbol.
+    window : tuple of float
+        ``(wavelength_min_nm, wavelength_max_nm)`` selection window.
+    n_lines : int, default 8
+        Maximum number of lines to return for the element.
+    policy : {"emissivity", "neutral_anchor"}, default "emissivity"
+        ``"emissivity"`` (default, unchanged behavior): emissivity-ranked,
+        wide-E_k spread over ``stages``. ``"neutral_anchor"``: the opt-in
+        real-steel lever-L2 policy (neutral-plane anchored, ion-only minors
+        dropped); ``stages`` is ignored (neutral stage 1 only).
+    stages : sequence of int, default (1, 2)
+        Ionization stages to consider under the ``"emissivity"`` policy.
+    select_temperature_K : float, optional
+        Boltzmann-weighting temperature for the emissivity ranking. Defaults to
+        a policy-appropriate fixed value (``DEFAULT_SELECT_T_K`` for
+        ``"emissivity"``, ``NEUTRAL_ANCHOR_SELECT_T_K`` for ``"neutral_anchor"``).
+    min_separation_nm : float, default 0.12
+        Minimum wavelength separation between selected lines (isolation).
+    exclude_resonance : bool, default True
+        Under ``"emissivity"``, exclude resonance lines (with a too-few
+        fallback). Ignored by ``"neutral_anchor"`` (which manages resonance
+        anchoring itself).
+
+    Returns
+    -------
+    list of SelectedLine
+        Selected candidate lines (possibly empty under ``"neutral_anchor"`` when
+        the element has no usable neutral line in band).
+
+    Raises
+    ------
+    ValueError
+        If ``policy`` is not a recognized value.
+    """
+    if policy == "emissivity":
+        temp = DEFAULT_SELECT_T_K if select_temperature_K is None else select_temperature_K
+        return _select_emissivity(
+            db, element, window, n_lines, stages, temp, min_separation_nm, exclude_resonance
+        )
+    if policy == "neutral_anchor":
+        temp = NEUTRAL_ANCHOR_SELECT_T_K if select_temperature_K is None else select_temperature_K
+        return _select_neutral_anchor(db, element, window, n_lines, temp, min_separation_nm)
+    raise ValueError(
+        f"Unknown line-selection policy: {policy!r} (expected 'emissivity' or 'neutral_anchor')"
+    )
