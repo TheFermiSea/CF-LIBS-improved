@@ -5,7 +5,6 @@ actually lives. Paired same-element-set conditioned RMSE vs the default, on supe
 Selection levers were no-ops (the pipeline uses every line). These touch the estimator/physics:
   - apply_self_absorption: off -> observable  (selfAbsorbed_corrects_bias: undoes the downward
     bias of optically-thick major-element lines)
-  - use_odr: False -> True                    (errors-in-variables Boltzmann fit; twoLineBeta_stable)
   - closure_mode: oxide -> standard / ilr      (directly changes the composition mapping)
 
     PYTHONPATH=$PWD .venv/bin/python scripts/benchmark_physics_levers.py
@@ -31,10 +30,8 @@ SEED = 7
 
 LEVERS = {
     "self_absorption": {"apply_self_absorption": "observable"},
-    "use_odr": {"use_odr": True},
     "closure_standard": {"closure_mode": "standard"},
     "closure_ilr": {"closure_mode": "ilr"},
-    "self_abs+odr": {"apply_self_absorption": "observable", "use_odr": True},
 }
 
 

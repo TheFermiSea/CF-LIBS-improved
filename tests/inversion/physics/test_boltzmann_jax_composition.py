@@ -111,9 +111,7 @@ class TestNumericalAgreement:
             intercept = float(rng.uniform(15.0, 25.0))
             n_lines = int(rng.integers(8, 30))
             noise = float(rng.uniform(0.02, 0.10))
-            obs = _make_synthetic_obs(
-                n=n_lines, T_K=T, intercept=intercept, noise=noise, seed=sid
-            )
+            obs = _make_synthetic_obs(n=n_lines, T_K=T, intercept=intercept, noise=noise, seed=sid)
             r_cpu = BoltzmannPlotFitter(outlier_sigma=2.5).fit(obs)
             r_jax = BoltzmannPlotFitter(outlier_sigma=2.5, use_jax=True).fit(obs)
 
@@ -122,9 +120,7 @@ class TestNumericalAgreement:
             # if a residual sits within machine-eps of the cut).
             if r_cpu.n_points == r_jax.n_points:
                 np.testing.assert_allclose(r_jax.slope, r_cpu.slope, rtol=1e-5)
-                np.testing.assert_allclose(
-                    r_jax.temperature_K, r_cpu.temperature_K, rtol=1e-5
-                )
+                np.testing.assert_allclose(r_jax.temperature_K, r_cpu.temperature_K, rtol=1e-5)
                 slope_diffs.append(abs(r_jax.slope - r_cpu.slope))
                 T_diffs.append(abs(r_jax.temperature_K - r_cpu.temperature_K))
 
@@ -148,9 +144,7 @@ class TestNumericalAgreement:
         )
         assert r_jax.covariance_matrix is not None
         assert r_cpu.covariance_matrix is not None
-        np.testing.assert_allclose(
-            r_jax.covariance_matrix, r_cpu.covariance_matrix, rtol=1e-5
-        )
+        np.testing.assert_allclose(r_jax.covariance_matrix, r_cpu.covariance_matrix, rtol=1e-5)
 
 
 # ---------- 2) Outlier rejection parity ------------------------------------
@@ -202,8 +196,7 @@ class TestOutlierRejection:
         # Sanity: should have rejected at least the planted outliers
         for idx in outlier_idx:
             assert idx in r_cpu.rejected_points, (
-                f"CPU failed to reject planted outlier {idx}; "
-                f"rejected={r_cpu.rejected_points}"
+                f"CPU failed to reject planted outlier {idx}; " f"rejected={r_cpu.rejected_points}"
             )
             assert idx in r_jax.rejected_points
 
@@ -268,17 +261,17 @@ class TestEndToEnd:
     """Wire the env-var through and verify the solver path stays finite."""
 
     def test_env_var_flips_use_jax_on_solver(self, mock_db, monkeypatch):
-        """CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION=1 makes IterativeCFLIBSSolver
-        build a JAX-backed fitter."""
+        """CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION=1 flips IterativeCFLIBSSolver's
+        ``use_jax_boltzmann`` selector."""
         # First confirm default (env unset) is CPU.
         monkeypatch.delenv("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", raising=False)
         solver_cpu = IterativeCFLIBSSolver(mock_db, max_iterations=5)
-        assert solver_cpu.boltzmann_fitter.use_jax is False
+        assert solver_cpu.use_jax_boltzmann is False
 
         # Now flip it on.
         monkeypatch.setenv("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", "1")
         solver_jax = IterativeCFLIBSSolver(mock_db, max_iterations=5)
-        assert solver_jax.boltzmann_fitter.use_jax is True
+        assert solver_jax.use_jax_boltzmann is True
 
     def test_env_var_flips_use_jax_on_streaming(self, mock_db, monkeypatch):
         """Same env var also flips FastAnalyzer (the streaming-FAST path)."""
@@ -324,7 +317,7 @@ class TestEndToEnd:
             )
 
         solver_jax = IterativeCFLIBSSolver(mock_db, max_iterations=10)
-        assert solver_jax.boltzmann_fitter.use_jax is True
+        assert solver_jax.use_jax_boltzmann is True
         res_jax = solver_jax.solve(obs)
         assert np.isfinite(res_jax.temperature_K)
         assert abs(res_jax.temperature_K - 11604.0) < 500.0
@@ -333,7 +326,7 @@ class TestEndToEnd:
         # Compare to CPU baseline
         monkeypatch.delenv("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", raising=False)
         solver_cpu = IterativeCFLIBSSolver(mock_db, max_iterations=10)
-        assert solver_cpu.boltzmann_fitter.use_jax is False
+        assert solver_cpu.use_jax_boltzmann is False
         res_cpu = solver_cpu.solve(obs)
         np.testing.assert_allclose(res_jax.temperature_K, res_cpu.temperature_K, rtol=1e-3)
 

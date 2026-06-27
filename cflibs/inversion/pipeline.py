@@ -266,14 +266,6 @@ class AnalysisPipelineConfig:
     degeneracy_dominance_threshold: float = 0.8
     #: Minimum candidate-element count for the degeneracy guard to fire.
     degeneracy_min_elements: int = 4
-    #: Errors-in-variables (orthogonal distance regression) Boltzmann / Saha-
-    #: Boltzmann slope fit (Boggs & Rodgers 1990): accounts for E_k-axis
-    #: uncertainty, removing the OLS regression-dilution bias on T. Default off
-    #: mirrors the standard weighted-OLS fit (Track B B1; benchmark-gated).
-    use_odr: bool = False
-    #: Scalar 1-sigma E_k uncertainty (eV) for the ODR fit when per-line E_k
-    #: uncertainties are unavailable; 0.0 degenerates ODR to weighted OLS.
-    odr_x_uncertainty: float = 0.0
     #: Run the post-loop Cristoforetti reliability re-fit (perf knob). Default
     #: True preserves the M7 refuse-to-report annotation (quality_flag /
     #: saha_boltzmann_consistency / inter_element_t_std_frac / overall_reliable
@@ -498,8 +490,6 @@ def build_pipeline_config(
         aki_uncertainty_weighting=bool(knob("aki_uncertainty_weighting", None, True)),
         degeneracy_dominance_threshold=float(knob("degeneracy_dominance_threshold", None, 0.8)),
         degeneracy_min_elements=int(knob("degeneracy_min_elements", None, 4)),
-        use_odr=bool(knob("use_odr", None, False)),
-        odr_x_uncertainty=float(knob("odr_x_uncertainty", None, 0.0)),
         assess_quality=bool(knob("assess_quality", None, True)),
         ransac_early_exit=bool(knob("ransac_early_exit", None, True)),
         detection_overrides=dict(ov.get("detection_overrides", None) or {}),
@@ -1114,8 +1104,6 @@ def _run_peak_based_solver(
             min_boltzmann_r2=pipeline.min_boltzmann_r2,
             boltzmann_weight_cap=pipeline.boltzmann_weight_cap,
             saha_boltzmann_graph=pipeline.saha_boltzmann_graph,
-            use_odr=pipeline.use_odr,
-            odr_x_uncertainty=pipeline.odr_x_uncertainty,
             apply_ipd=pipeline.apply_ipd,
             two_region=pipeline.two_region,
             aki_uncertainty_weighting=pipeline.aki_uncertainty_weighting,

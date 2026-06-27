@@ -18,7 +18,7 @@ from cflibs.core.constants import (
 )
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.radiation.stark import estimate_ne_from_stark
-from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
+from cflibs.inversion.physics.boltzmann import LineObservation
 from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.self_absorption_observable import (
     ObservableSAResult,
@@ -957,26 +957,26 @@ class IterativeCFLIBSSolver:
         use_lax_while_loop: Optional[bool] = None,
         degeneracy_dominance_threshold: float = 0.8,
         degeneracy_min_elements: int = 4,
-        use_odr: bool = False,
-        odr_x_uncertainty: float = 0.0,
         assess_quality: bool = True,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
-        # c5-solver-flags). These two flags choose between the CPU reference
-        # path and an opt-in JAX kernel for, respectively, the inner Boltzmann
-        # sigma-clip WLS step (``use_jax_boltzmann``) and the whole iterative
-        # solve loop via ``jax.lax.while_loop`` (``use_lax_while_loop``, T1-3 /
-        # ADR-0001). They were previously read silently from the process
-        # environment (``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION`` /
-        # ``CFLIBS_USE_LAX_WHILE_LOOP``) at construction/solve time, which made
-        # the active numerical path invisible to callers and to tests.
+        # c5-solver-flags). ``use_lax_while_loop`` chooses between the CPU
+        # reference path and the JAX ``jax.lax.while_loop`` kernel for the whole
+        # iterative solve loop (T1-3 / ADR-0001) and is read by ``solve``.
+        # ``use_jax_boltzmann`` records the
+        # ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION`` env selection on the
+        # interface, mirroring the streaming FastAnalyzer's flag of the same
+        # name; it is retained as the queryable record of the env-selected path.
+        # Both flags were previously read silently from the process environment
+        # (``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION`` / ``CFLIBS_USE_LAX_WHILE_LOOP``)
+        # at construction/solve time, which made the active numerical path
+        # invisible to callers and to tests.
         #
         # Default ``None`` SEEDS each flag from its env var, so default
         # construction is byte-identical to the historical env-driven behavior
         # and every existing ``CFLIBS_USE_*`` invocation is unchanged. Passing
         # an explicit ``True``/``False`` is AUTHORITATIVE and overrides the env
-        # var. ``solve`` and the Boltzmann-fitter wiring read ``self.use_*``
-        # instead of touching ``os.environ`` directly.
+        # var.
         self.use_jax_boltzmann = (
             _jax_boltzmann_composition_enabled()
             if use_jax_boltzmann is None
@@ -1125,12 +1125,6 @@ class IterativeCFLIBSSolver:
         # consumers never KeyError. Default-False on the ded/batch/streaming
         # presets where the annotation layer is not consumed.
         self.assess_quality = bool(assess_quality)
-        self.boltzmann_fitter = BoltzmannPlotFitter(
-            outlier_sigma=2.5,
-            use_jax=self.use_jax_boltzmann,
-            use_odr=use_odr,
-            odr_x_uncertainty=odr_x_uncertainty,
-        )
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
         """Return fit-space uncertainty with optional A_ki contribution."""
