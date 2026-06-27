@@ -46,7 +46,7 @@ doi:10.1088/2058-6272/aa9b1f.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Iterable, Mapping, Protocol, Sequence
+from typing import Callable, Iterable, Mapping, Protocol, Sequence, TypeVar
 
 import numpy as np
 
@@ -59,6 +59,8 @@ __all__ = [
     "assess_conditioning",
     "calibrate_opc",
     "apply_opc",
+    "measure_line_width",
+    "select_optically_thin_lines",
     "DEFAULT_COND_T_K",
     "DEFAULT_T_GRID",
     "F_MIN",
@@ -66,6 +68,12 @@ __all__ = [
     "MIN_WT",
     "MAX_INSAMPLE_RMSEP",
     "MAX_NONMATRIX_FRAC",
+    "THIN_FILTER_MIN_CORR_LINES",
+    "THIN_FILTER_SNR_MIN",
+    "THIN_FILTER_THICK_RATIO",
+    "THIN_FILTER_INSTR_WIDTH_PCT",
+    "THIN_FILTER_WIDTH_HALF_NM",
+    "THIN_FILTER_MIN_KEEP",
 ]
 
 # --- a-priori constants (lifted unchanged from the winning benchmark lever) ---
@@ -89,6 +97,30 @@ MAX_INSAMPLE_RMSEP: float = 20.0
 MAX_NONMATRIX_FRAC: float = 60.0
 #: Coarse optimal-``T`` scan grid (K); the robust mean is insensitive to step.
 DEFAULT_T_GRID: tuple[float, ...] = tuple(float(t) for t in range(7000, 12001, 1000))
+
+# --- a-priori constants for the optically-thin line filter (real-steel L5) ---
+# Physical El Sherbini 2005 / IRSAC width-gating values, lifted unchanged from the
+# winning benchmark lever (``tests/benchmarks/real_steel/lever_l5_fe_selfabs.py``,
+# mode="thin_filter"). NOT tuned to the held-out gate.
+
+#: An element is considered for filtering only with >= this many well-measured lines.
+THIN_FILTER_MIN_CORR_LINES: int = 3
+#: Peak-SNR floor for a line to count toward the width statistics / filter.
+THIN_FILTER_SNR_MIN: float = 3.0
+#: An element is "optically thick" only when its MEDIAN measured width exceeds the
+#: per-spectrum instrument width by this factor (below it the element is thin and
+#: all its lines are kept -- this is what leaves optically-thin trace minors alone).
+THIN_FILTER_THICK_RATIO: float = 1.15
+#: Percentile of the well-measured line widths taken as the instrument width (the
+#: optically-thin floor of the width distribution).
+THIN_FILTER_INSTR_WIDTH_PCT: float = 10.0
+#: Half-window (nm) for the second-moment width measurement: wide enough to capture
+#: a self-absorption-broadened profile at moderate LIBS resolution.
+THIN_FILTER_WIDTH_HALF_NM: float = 0.6
+#: A thick element is filtered only if at least this many optically-thin anchor
+#: lines remain (else its lines are kept as-is, so a noisy spectrum never strips
+#: the matrix anchor entirely).
+THIN_FILTER_MIN_KEEP: int = 2
 
 
 # --- public data structures --------------------------------------------------
@@ -179,6 +211,18 @@ class _OPCObservation(Protocol):
 
     element: str
     intensity: float
+
+
+class _LineWidthObservation(Protocol):
+    """Structural type for a line observation the thin filter can measure."""
+
+    element: str
+    wavelength_nm: float
+
+
+#: Bound to :class:`_LineWidthObservation` so :func:`select_optically_thin_lines`
+#: returns the same concrete observation type it was given (a subset).
+_ThinObsT = TypeVar("_ThinObsT", bound=_LineWidthObservation)
 
 
 # --- internal helpers (pure NumPy; lifted from the benchmark lever) ----------
@@ -472,3 +516,161 @@ def apply_opc(observations: Iterable[_OPCObservation], calibration: OPCCalibrati
         unc = getattr(o, "intensity_uncertainty", None)
         if unc is not None:
             setattr(o, "intensity_uncertainty", max(float(unc) * f, 1e-12))
+
+
+# --- optically-thin line filter (opt-in known-matrix pre-OPC selection) ------
+#
+# Real-steel L5 winning lever (``tests/benchmarks/real_steel/lever_l5_fe_selfabs``
+# mode="thin_filter"; docs/research/real-steel-opc-promotion.md). The matrix
+# element (Fe in steel, 85-95 wt%) is optically thick, so its strong lines are
+# self-absorbed -- width-broadened and line-center-saturated -- by a *different*
+# amount in every spectrum (variable Fe content). A single shared OPC scalar
+# ``F_Fe`` captures only the AVERAGE matrix self-absorption bias, not the
+# per-spectrum variation.
+#
+# Instead of *correcting* the self-absorbed line intensities -- which double-counts
+# the OPC scalar ``F`` (a uniform per-element intensity boost lives in the SAME
+# scalar subspace as ``F`` and only re-centers it; benchmarked regression) -- this
+# filter DROPS the width-broadened lines of each optically-thick element and
+# anchors the closure on the optically-thin subset (lines at the instrument-width
+# floor). Because it is a line-SELECTION change, not an intensity scaling, it
+# composes cleanly with the OPC ``F`` (no double-correction).
+#
+# Held-out real-steel gate (36 samples, honest leave-one-out): off 10.124 ->
+# thin_filter 9.561 wt% overall (Fe 20.66 -> 19.62). It reads ONLY measured line
+# widths / intensities -- never a recovered composition -- so there is no
+# positive-feedback loop. The width-ratio criterion and constants are lifted
+# unchanged from the lever.
+
+
+def measure_line_width(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    center_nm: float,
+    half_nm: float = THIN_FILTER_WIDTH_HALF_NM,
+) -> tuple[float, float]:
+    """Robust FWHM (nm) and peak SNR of the line at ``center_nm`` from the spectrum.
+
+    Second-moment width after a robust median-edge local baseline (same baseline
+    policy as the line extractor), with the peak height measured against the
+    window-edge noise. Returns ``(nan, 0.0)`` when the line cannot be measured.
+
+    Parameters
+    ----------
+    wavelength, intensity : np.ndarray
+        Measured spectrum axes (nm, intensity).
+    center_nm : float
+        Line-center wavelength (nm) to measure around.
+    half_nm : float
+        Half-window (nm) over which the local profile is integrated.
+
+    Returns
+    -------
+    tuple of float
+        ``(fwhm_nm, peak_snr)``; ``(nan, 0.0)`` for an unmeasurable line.
+    """
+    wl = np.asarray(wavelength, dtype=float)
+    inten = np.asarray(intensity, dtype=float)
+    mask = (wl >= center_nm - half_nm) & (wl <= center_nm + half_nm)
+    if int(mask.sum()) < 5:
+        return float("nan"), 0.0
+    x = wl[mask]
+    y = inten[mask].astype(float)
+    k = max(1, x.size // 6)
+    base = np.interp(x, [x[0], x[-1]], [float(np.median(y[:k])), float(np.median(y[-k:]))])
+    y = y - base
+    peak = float(y.max())
+    if peak <= 0:
+        return float("nan"), 0.0
+    edge = np.concatenate([y[:k], y[-k:]])
+    noise = float(np.std(edge)) if edge.size > 1 else 0.0
+    snr = peak / noise if noise > 0 else float("inf")
+    yp = np.clip(y, 0.0, None)
+    tot = float(yp.sum())
+    if tot <= 0:
+        return float("nan"), 0.0
+    mu = float(np.sum(x * yp) / tot)
+    var = float(np.sum((x - mu) ** 2 * yp) / tot)
+    fwhm = 2.354820045 * np.sqrt(max(var, 1e-12))
+    return fwhm, snr
+
+
+def select_optically_thin_lines(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    observations: Sequence[_ThinObsT],
+    *,
+    min_corr_lines: int = THIN_FILTER_MIN_CORR_LINES,
+    snr_min: float = THIN_FILTER_SNR_MIN,
+    thick_ratio: float = THIN_FILTER_THICK_RATIO,
+    instr_width_pct: float = THIN_FILTER_INSTR_WIDTH_PCT,
+    width_half_nm: float = THIN_FILTER_WIDTH_HALF_NM,
+    min_keep: int = THIN_FILTER_MIN_KEEP,
+) -> list[_ThinObsT]:
+    """Drop the width-broadened (self-absorbed) lines of each optically-thick element.
+
+    IRSAC / SC-LIBS anchor strategy: instead of *correcting* the intensities of
+    self-absorbed matrix (e.g. Fe) lines, **exclude** them and keep only the
+    optically-thin subset (lines whose measured width is at the per-spectrum
+    instrument-width floor). This is a line-*selection* change -- not an intensity
+    scaling -- so it cannot live in the same scalar subspace as the OPC ``F`` and
+    therefore cannot double-correct with it.
+
+    Per spectrum: measure each line's FWHM + peak SNR; take the instrument width as
+    a low percentile of the well-measured widths; an element with at least
+    ``min_corr_lines`` well-measured lines whose MEDIAN width exceeds
+    ``thick_ratio * instr`` is optically thick, and its lines wider than
+    ``thick_ratio * instr`` are dropped (keeping the thin anchors). An optically
+    thin element is left untouched, and a thick element is only filtered if at
+    least ``min_keep`` thin anchors remain (else its lines are kept as-is so a
+    noisy spectrum never strips the matrix anchor entirely). Reads only measured
+    widths -- no composition feedback.
+
+    Parameters
+    ----------
+    wavelength, intensity : np.ndarray
+        Measured spectrum axes (nm, intensity) the widths are measured from.
+    observations : Sequence
+        Line observations, each exposing ``element`` and ``wavelength_nm``.
+    min_corr_lines, snr_min, thick_ratio, instr_width_pct, width_half_nm, min_keep
+        A-priori filter parameters (defaults are the lifted lever constants).
+
+    Returns
+    -------
+    list
+        The kept subset of ``observations`` (the same objects, optically-thick
+        broadened lines removed). When no line is well measured the full input is
+        returned unchanged.
+    """
+    widths: dict[int, float] = {}
+    snrs: dict[int, float] = {}
+    by_el: dict[str, list[int]] = {}
+    for i, o in enumerate(observations):
+        fwhm, snr = measure_line_width(wavelength, intensity, o.wavelength_nm, width_half_nm)
+        widths[i] = fwhm
+        snrs[i] = snr
+        by_el.setdefault(o.element, []).append(i)
+
+    good_all = [widths[i] for i in widths if np.isfinite(widths[i]) and snrs[i] >= snr_min]
+    if not good_all:
+        return list(observations)
+    instr = float(np.percentile(good_all, instr_width_pct))
+    if instr <= 0:
+        return list(observations)
+
+    drop: set[int] = set()
+    for _el, idxs in by_el.items():
+        good = [i for i in idxs if np.isfinite(widths[i]) and snrs[i] >= snr_min]
+        if len(good) < min_corr_lines:
+            continue
+        median_w = float(np.median([widths[i] for i in good]))
+        if median_w / instr < thick_ratio:
+            continue  # optically thin element -> keep all its lines
+        thin = [i for i in good if widths[i] / instr < thick_ratio]
+        if len(thin) < min_keep:
+            continue  # too few thin anchors -> keep the element's lines as-is
+        keep = set(thin)
+        for i in idxs:
+            if i not in keep:
+                drop.add(i)
+    return [o for i, o in enumerate(observations) if i not in drop]

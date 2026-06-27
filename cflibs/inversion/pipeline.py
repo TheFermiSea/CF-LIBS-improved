@@ -309,6 +309,17 @@ class AnalysisPipelineConfig:
     #: the solve at ``robust_T_K`` (unless ``fixed_temperature_K`` is set
     #: explicitly). ``None`` (default) leaves the calibration-free path unchanged.
     opc: Optional["OPCCalibration"] = None
+    #: Opt-in optically-thin line filter for the known-matrix / OPC mode (real-steel
+    #: L5 winning lever). When True AND an ``opc`` calibration is supplied,
+    #: ``run_pipeline`` drops the width-broadened (self-absorbed) lines of each
+    #: optically-thick element and anchors the closure on the optically-thin subset
+    #: BEFORE the OPC ``F`` rescale (``cflibs.inversion.physics.opc
+    #: .select_optically_thin_lines``). It is a line-SELECTION change, so it composes
+    #: cleanly with the OPC scalar ``F`` (no double-correction). Held-out real-steel
+    #: 10.124 -> 9.561 wt%. ``False`` (default) leaves the OPC path byte-identical.
+    #: The OPC ``F`` should be calibrated on the matching (thin-filtered) recovery
+    #: pipeline so the calibration and inference selections agree.
+    opc_thin_filter: bool = False
 
 
 #: Sentinel marking "knob not provided at this tier". Unlike ``None`` it lets
@@ -510,6 +521,7 @@ def build_pipeline_config(
         detection_overrides=dict(ov.get("detection_overrides", None) or {}),
         fixed_temperature_K=knob("fixed_temperature_K", None, None),
         opc=ov.get("opc", None),
+        opc_thin_filter=bool(knob("opc_thin_filter", None, False)),
     )
     _log_pipeline_config(pipeline)
     return pipeline
@@ -1444,6 +1456,36 @@ def run_pipeline(
         from dataclasses import replace as _dc_replace
 
         from cflibs.inversion.physics.opc import apply_opc
+
+        # Optically-thin line filter (opt-in; real-steel L5 winning lever). Drop the
+        # width-broadened (self-absorbed) matrix lines and anchor the closure on the
+        # optically-thin subset BEFORE the OPC F-rescale. A line-SELECTION change (not
+        # an intensity correction), so it composes cleanly with the OPC scalar F (no
+        # double-counting). Reads only the measured line widths -- never a recovered
+        # composition. Off by default (OPC path byte-identical when False).
+        if pipeline.opc_thin_filter:
+            from cflibs.inversion.physics.opc import select_optically_thin_lines
+
+            thin = select_optically_thin_lines(wavelength, intensity, observations)
+            n_dropped = len(observations) - len(thin)
+            if thin and n_dropped > 0:
+                observations = thin
+                observation_counts = {}
+                for obs in observations:
+                    element = getattr(obs, "element", None)
+                    if element is not None:
+                        observation_counts[element] = observation_counts.get(element, 0) + 1
+                diagnostics["observation_counts"] = observation_counts
+                diagnostics["n_observations"] = len(observations)
+                diagnostics["opc_thin_filter"] = {
+                    "n_dropped": int(n_dropped),
+                    "n_kept": int(len(thin)),
+                }
+                logger.info(
+                    "OPC optically-thin filter dropped %d self-absorbed line(s), kept %d.",
+                    n_dropped,
+                    len(thin),
+                )
 
         apply_opc(observations, opc)
         if pipeline.fixed_temperature_K is None:
