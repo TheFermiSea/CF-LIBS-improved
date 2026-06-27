@@ -51,6 +51,8 @@ import jax.numpy as jnp
 from cflibs.core.constants import EV_TO_K, KB, KB_EV, SAHA_CONST_CM3
 from cflibs.core.jax_runtime import check_jax64bit
 from cflibs.inversion.solve.iterative import (
+    T_PHYSICAL_MAX_K,
+    T_PHYSICAL_MIN_K,
     LoopState,
     _common_slope_kernel,
     _eval_partition_jax,
@@ -296,8 +298,13 @@ def _solve_iteration(
     intercepts = fit["intercepts"]
     r_squared = fit["r_squared"]
 
-    degenerate = jnp.logical_or(slope >= 0.0, r_squared < min_r2)
-    T_new = jnp.where(degenerate, T_prev, -1.0 / (slope * KB_EV))
+    T_candidate = -1.0 / (slope * KB_EV)
+    # Runaway/unphysical inverted-T guard (mirrors the reference lax body): a
+    # shallow-but-negative slope passing the R^2 gate can still escape the
+    # physical window; flag it degenerate and hold T at the prior.
+    t_out_of_window = jnp.logical_or(T_candidate < T_PHYSICAL_MIN_K, T_candidate > T_PHYSICAL_MAX_K)
+    degenerate = jnp.logical_or(jnp.logical_or(slope >= 0.0, r_squared < min_r2), t_out_of_window)
+    T_new = jnp.where(degenerate, T_prev, T_candidate)
     T_K = 0.5 * T_prev + 0.5 * T_new
 
     # Corona weighting is a no-op unless two_region; deferred per spec §11.
@@ -863,9 +870,14 @@ def joint_wls_solve(
     else:
         n_e_out = n_e_pinned
 
-    # Convergence flag, reported hard (ADR-0004 §6.4): physical slope and a
-    # finite, non-degenerate simplex.
-    converged = jnp.logical_and(physical, jnp.all(jnp.isfinite(comp)) & (jnp.sum(comp) > 0.0))
+    # Convergence flag, reported hard (ADR-0004 §6.4): physical slope, a T within
+    # the physical window (a shallow-but-negative slope inverts to a runaway T
+    # that must NOT be reported converged), and a finite, non-degenerate simplex.
+    t_in_window = jnp.logical_and(T_K >= T_PHYSICAL_MIN_K, T_K <= T_PHYSICAL_MAX_K)
+    converged = jnp.logical_and(
+        jnp.logical_and(physical, t_in_window),
+        jnp.all(jnp.isfinite(comp)) & (jnp.sum(comp) > 0.0),
+    )
 
     return JointWLSResult(
         theta=theta,

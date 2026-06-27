@@ -31,6 +31,15 @@ from cflibs.inversion.physics.self_absorption_inputs import (
 from cflibs.plasma.partition import canonical_partition_fallback, lookup_partition_function
 from cflibs.core.logging_config import get_logger
 
+# Physical temperature window for the Boltzmann slope→T inversion. T = -1/(slope*k)
+# blows up as the slope → 0⁻, so a shallow-but-negative slope that passes the R^2
+# gate can still yield a runaway T (>1e5 K, even ~1e6 K). Such a T is unphysical
+# for LIBS plasmas; outside this window the fit is flagged degenerate (T held at
+# the prior) and can never be reported as converged. This is NOT an R^2 bound —
+# it bounds the *inverted* temperature, the quantity the runaway actually escapes.
+T_PHYSICAL_MIN_K = 2000.0
+T_PHYSICAL_MAX_K = 50000.0
+
 
 def _jax_boltzmann_composition_enabled() -> bool:
     """Opt-in env-var toggle for routing the inner Boltzmann sigma-clip
@@ -842,8 +851,17 @@ def _run_lax_while_loop(
         # fit (non-negative slope or R^2 < min_r2) hold T at the prior value
         # instead of running it to the legacy 50000 K clamp, which collapses the
         # closure into a raw-intensity softmax.
-        degenerate = jnp.logical_or(slope >= 0.0, r_squared < min_r2)
-        T_new = jnp.where(degenerate, T_prev, -1.0 / (slope * KB_EV))
+        T_candidate = -1.0 / (slope * KB_EV)
+        # Flag a runaway/unphysical inverted T (shallow-but-negative slope) the
+        # same way as slope>=0 / low-R^2: hold T at the prior instead of letting
+        # it escape the physical window. Mirrors the Python path.
+        t_out_of_window = jnp.logical_or(
+            T_candidate < T_PHYSICAL_MIN_K, T_candidate > T_PHYSICAL_MAX_K
+        )
+        degenerate = jnp.logical_or(
+            jnp.logical_or(slope >= 0.0, r_squared < min_r2), t_out_of_window
+        )
+        T_new = jnp.where(degenerate, T_prev, T_candidate)
         T_K = 0.5 * T_prev + 0.5 * T_new
 
         # Two-region corona: weighted T for Saha scaling matches the Python
@@ -1912,6 +1930,13 @@ class IterativeCFLIBSSolver:
             T_new = T_prev  # hold at prior; slope carries no usable T
         else:
             T_new = -1.0 / (slope * KB_EV)
+            # Upper/lower physical clamp: a shallow-but-negative slope passing
+            # the R^2 gate can still invert to a runaway T (>1e5 K). Flag it
+            # degenerate and hold T at the prior rather than reporting an
+            # unphysical T as converged (do NOT silently clamp to 50000).
+            if not (T_PHYSICAL_MIN_K <= T_new <= T_PHYSICAL_MAX_K):
+                boltzmann_degenerate = True
+                T_new = T_prev
 
         # Damping
         T_K = 0.5 * T_prev + 0.5 * T_new
@@ -2409,6 +2434,11 @@ class IterativeCFLIBSSolver:
         # break left the loop's convergence flag set on a prior clean iteration.
         if closure_degenerate:
             self._warn_degenerate_composition(concentrations)
+        # Final-state T window guard: even if the loop's per-iteration flags were
+        # clean, a reported T outside the physical window is degenerate and must
+        # never be reported converged (mirrors the closure-degeneracy guard).
+        if not (T_PHYSICAL_MIN_K <= T_K <= T_PHYSICAL_MAX_K):
+            boltzmann_degenerate = True
         if boltzmann_degenerate or closure_degenerate:
             converged = False
 
@@ -2559,6 +2589,10 @@ class IterativeCFLIBSSolver:
         closure_degenerate = self._validate_composition_degeneracy(concentrations)
         if closure_degenerate:
             self._warn_degenerate_composition(concentrations)
+        # Final-state T window guard (mirrors the Python path): a reported T
+        # outside the physical window is degenerate and never converged.
+        if not (T_PHYSICAL_MIN_K <= T_K <= T_PHYSICAL_MAX_K):
+            boltzmann_degenerate = True
         if boltzmann_degenerate or closure_degenerate:
             converged_bool = False
 
