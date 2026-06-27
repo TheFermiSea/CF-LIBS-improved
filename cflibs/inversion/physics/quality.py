@@ -73,12 +73,13 @@ class QualityAssessor:
     Assesses quality of CF-LIBS analysis results.
 
     .. note::
-        This is a parallel quality-metrics path that the shipped iterative
-        solver does NOT use: the solver builds its own metrics via
-        ``_build_python_quality_metrics`` / ``_assemble_quality_metrics`` in
-        ``solve/iterative.py``. ``QualityAssessor`` (and the module-level
-        :func:`compute_reconstruction_chi_squared`) are public-API surface with
-        no shipped-code consumers — exercised only by the test suite.
+        The shipped iterative solver consumes this class: its
+        ``_assess_reliability`` (``solve/iterative.py``) calls :meth:`assess`
+        to obtain the Saha-Boltzmann-consistency / inter-element-T-scatter
+        ``quality_flag`` that feeds the M7 Lever-6 ``overall_reliable``
+        refuse-to-report verdict. The module-level
+        :func:`compute_reconstruction_chi_squared` remains public-API surface
+        with no shipped-code consumers — exercised only by the test suite.
     """
 
     # Thresholds for quality flags
@@ -359,26 +360,42 @@ class QualityAssessor:
         self,
         observations: List[LineObservation],
     ) -> Tuple[Dict[str, float], Dict[str, float]]:
-        """Compute R² and T for each element separately."""
+        """Compute R² and excitation T per element from PER-STAGE Boltzmann fits.
 
-        obs_by_element = defaultdict(list)
-        for obs in observations:
-            obs_by_element[obs.element].append(obs)
+        A Boltzmann plot is only physically valid within a single ionization
+        stage: neutral (I) and ionic (II) lines of the same element sit on
+        *different* intercept lines (their level populations differ by the Saha
+        ionization factor ``n_II/n_I``), so a single fit through the pooled I+II
+        points returns a corrupted slope — i.e. a wrong temperature and an
+        artificially low R². We therefore fit each ``(element, ionization_stage)``
+        group independently and aggregate per element by averaging the per-stage
+        excitation temperatures and R² (in LTE every stage shares the same
+        excitation temperature, so the average is the per-element estimate).
+        """
+        obs_by_element_stage = self._group_obs_by_element_stage(observations)
 
-        r_squared_by_element = {}
-        temp_by_element = {}
+        r_squared_by_element: Dict[str, float] = {}
+        temp_by_element: Dict[str, float] = {}
 
-        for element, obs_list in obs_by_element.items():
-            if len(obs_list) < 2:
-                continue
-
-            try:
-                result = self.fitter.fit(obs_list)
-                r_squared_by_element[element] = result.r_squared
+        for element, stages in obs_by_element_stage.items():
+            stage_r2: List[float] = []
+            stage_temps: List[float] = []
+            for obs_list in stages.values():
+                if len(obs_list) < 2:
+                    continue
+                try:
+                    result = self.fitter.fit(obs_list)
+                except Exception as e:
+                    logger.debug(f"Fit failed for {element}: {e}")
+                    continue
+                stage_r2.append(result.r_squared)
                 if np.isfinite(result.temperature_K) and result.temperature_K > 0:
-                    temp_by_element[element] = result.temperature_K
-            except Exception as e:
-                logger.debug(f"Fit failed for {element}: {e}")
+                    stage_temps.append(result.temperature_K)
+
+            if stage_r2:
+                r_squared_by_element[element] = float(np.mean(stage_r2))
+            if stage_temps:
+                temp_by_element[element] = float(np.mean(stage_temps))
 
         return r_squared_by_element, temp_by_element
 
@@ -402,10 +419,12 @@ class QualityAssessor:
 
             S(T) = (C_Saha / n_e) * T_eV^1.5 * exp(-IP / T_eV) * U_II / U_I
 
-        The observed II/I intensity ratio is proportional to S(T), so we
-        solve for T_saha by bisection on:
+        The Saha number-density ratio ``n_II/n_I`` is estimated from the lines
+        via their gA/E_k-reduced stage populations (see
+        :meth:`_estimate_element_t_saha`), NOT a raw mean-intensity ratio, and
+        we solve for T_saha by bisection on:
 
-            R_obs = mean(I_II) / mean(I_I) ~ S(T_saha)
+            R_obs = n_II / n_I ~ S(T_saha)
 
         Parameters
         ----------
@@ -436,6 +455,7 @@ class QualityAssessor:
             estimate = self._estimate_element_t_saha(
                 element,
                 stages,
+                temperature_K,
                 electron_density_cm3,
                 ionization_potentials,
                 partition_funcs_I,
@@ -456,6 +476,7 @@ class QualityAssessor:
         self,
         element: str,
         stages: "DefaultDict[int, List[LineObservation]]",
+        temperature_K: float,
         electron_density_cm3: float,
         ionization_potentials: Dict[str, float],
         partition_funcs_I: Dict[str, float],
@@ -479,12 +500,44 @@ class QualityAssessor:
         if U_I <= 0 or U_II <= 0:
             return None
 
-        # Observed intensity ratio (ion / neutral)
-        I_neutral = float(np.mean(np.asarray([obs.intensity for obs in stages[neutral_stage]])))
-        I_ion = float(np.mean(np.asarray([obs.intensity for obs in stages[ion_stage]])))
-        if I_neutral <= 0 or I_ion <= 0:
+        # Saha number-density ratio n_II / n_I from gA/E_k-reduced line
+        # intensities. A raw mean-intensity ratio is physically wrong: each
+        # line samples a Boltzmann-populated upper level whose g_k, A_ki and
+        # E_k all differ line-to-line, so the bare intensity is NOT proportional
+        # to the stage population. Reduce every line to its stage population
+        # proxy n_s/U_s using the Boltzmann-plot ordinate:
+        #     ln(n_s/U_s) ~ y_value + E_k / (kB * T)
+        #     y_value = ln(I * lambda / (g_k * A_ki))
+        # (the hc/4pi prefactor is common to both stages and cancels in the
+        # ratio). The inter-stage population ratio is then restored to the Saha
+        # number-density ratio via the U_II/U_I factor:
+        #     R_obs = n_II / n_I = (pop_II / pop_I) * (U_II / U_I).
+        T_eV = temperature_K * KB_EV
+        if T_eV <= 0:
             return None
-        R_obs = I_ion / I_neutral
+
+        def _log_stage_population(stage_obs: List[LineObservation]) -> Optional[float]:
+            # log of the mean reduced population, computed in a max-shifted
+            # (log-sum-exp) form so large |y_value| cannot overflow.
+            logs: List[float] = []
+            for obs in stage_obs:
+                y = obs.y_value
+                if not np.isfinite(y):
+                    continue
+                logs.append(y + obs.E_k_ev / T_eV)
+            if not logs:
+                return None
+            arr = np.asarray(logs)
+            m = float(np.max(arr))
+            return m + float(np.log(np.mean(np.exp(arr - m))))
+
+        log_pop_I = _log_stage_population(stages[neutral_stage])
+        log_pop_II = _log_stage_population(stages[ion_stage])
+        if log_pop_I is None or log_pop_II is None:
+            return None
+        R_obs = float(np.exp(log_pop_II - log_pop_I)) * (U_II / U_I)
+        if not np.isfinite(R_obs) or R_obs <= 0:
+            return None
 
         # NOTE: U_I and U_II are evaluated at the input temperature_K as an
         # approximation. For large differences between T_saha and temperature_K,

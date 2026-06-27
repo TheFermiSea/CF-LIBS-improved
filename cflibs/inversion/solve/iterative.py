@@ -136,12 +136,16 @@ class CFLIBSResult:
         ``quality_metrics["boltzmann_covariance_element"]``.
     overall_reliable : bool
         M7 refuse-to-report verdict (Lever 6, Cristoforetti 2010). True only
-        when the McWhirter LTE criterion is satisfied AND the Cristoforetti
-        multi-check ``quality_flag`` is acceptable-or-better. Defaults False
-        (conservative): a fallback/degenerate solve that never reached the
-        quality assessment is correctly not-reliable. Consumed by the CLI
-        refuse-to-report gate when ``CFLIBS_REFUSE_TO_REPORT`` is set; always
-        computed (a pure annotation — never alters T/n_e/composition).
+        when n_e was measured from a literature Stark-width line
+        (``ne_from_stark``) AND the McWhirter LTE criterion is satisfied AND
+        the Cristoforetti multi-check ``quality_flag`` is acceptable-or-better.
+        The Stark-provenance term is decisive: a pressure-balance fallback n_e
+        is physically invalid, and the McWhirter check runs on that same n_e so
+        it cannot catch the error. Defaults False (conservative): a
+        fallback/degenerate solve that never reached the quality assessment is
+        correctly not-reliable. Consumed by the CLI refuse-to-report gate when
+        ``CFLIBS_REFUSE_TO_REPORT`` is set; always computed (a pure annotation —
+        never alters T/n_e/composition).
     """
 
     temperature_K: float
@@ -2293,11 +2297,19 @@ class IterativeCFLIBSSolver:
                 "saha_boltzmann_consistency"
             ]
             quality_metrics["inter_element_t_std_frac"] = reliability["inter_element_t_std_frac"]
-            # overall_reliable = {McWhirter satisfied} AND {quality_flag >= acceptable}
-            # (roadmap M7c). 'unknown'/'poor'/'reject' are NOT reliable.
+            # overall_reliable = {n_e from a Stark line} AND {McWhirter satisfied}
+            # AND {quality_flag >= acceptable} (roadmap M7c).
+            # 'unknown'/'poor'/'reject' flags are NOT reliable. The n_e-provenance
+            # term is decisive: when the canonical Stark-width diagnostic was
+            # unavailable the solver falls back to a physically-invalid 1-atm
+            # pressure balance, and the McWhirter LTE check is itself evaluated
+            # ON that fallback n_e, so it cannot catch a bad n_e. A result whose
+            # n_e is a pressure-balance guess is therefore never trustworthy.
             mcwhirter_ok = bool(lte_report.mcwhirter.satisfied)
             quality_metrics["overall_reliable"] = bool(
-                mcwhirter_ok and reliability["quality_flag"] in ("excellent", "good", "acceptable")
+                ne_from_stark
+                and mcwhirter_ok
+                and reliability["quality_flag"] in ("excellent", "good", "acceptable")
             )
         else:
             quality_metrics["quality_flag"] = "unknown"
@@ -2929,8 +2941,12 @@ class IterativeCFLIBSSolver:
                 new_qf = downgrade_quality_flag(qf, per_element_reliability)
                 quality_metrics["quality_flag"] = new_qf
                 mcw = bool(quality_metrics.get("lte_mcwhirter_satisfied", False))
+                # Preserve the n_e-provenance gate from _assemble_quality_metrics:
+                # a pressure-balance fallback n_e is never trustworthy (the
+                # McWhirter check runs on that same fallback n_e).
+                ne_ok = bool(quality_metrics.get("ne_from_stark", 0.0))
                 quality_metrics["overall_reliable"] = bool(
-                    mcw and new_qf in ("excellent", "good", "acceptable")
+                    ne_ok and mcw and new_qf in ("excellent", "good", "acceptable")
                 )
 
         return CFLIBSResult(
