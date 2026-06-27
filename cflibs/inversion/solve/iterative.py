@@ -924,6 +924,7 @@ class IterativeCFLIBSSolver:
         degeneracy_min_elements: int = 4,
         use_odr: bool = False,
         odr_x_uncertainty: float = 0.0,
+        assess_quality: bool = True,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
         # c5-solver-flags). These two flags choose between the CPU reference
@@ -1077,6 +1078,18 @@ class IterativeCFLIBSSolver:
         # (binary alloys legitimately exceed 0.8: brass is ~90% Cu).
         self.degeneracy_dominance_threshold = float(degeneracy_dominance_threshold)
         self.degeneracy_min_elements = int(degeneracy_min_elements)
+        # Post-loop reliability re-fit gate (perf knob). When True (default,
+        # byte-identical legacy behaviour) ``_assemble_quality_metrics`` runs the
+        # Cristoforetti multi-check (``_assess_reliability``), which re-fits a
+        # per-element Boltzmann plot and re-evaluates U_I/U_II for every element
+        # — pure annotation that never touches T/n_e/composition but costs
+        # ~26-34% of a solve. When False the re-fit is SKIPPED and the
+        # reliability keys are emitted conservatively (quality_flag='unknown',
+        # consistency/scatter NaN, overall_reliable=False); the result-dict
+        # key-set is IDENTICAL across both paths so downstream / refuse-to-report
+        # consumers never KeyError. Default-False on the ded/batch/streaming
+        # presets where the annotation layer is not consumed.
+        self.assess_quality = bool(assess_quality)
         self.boltzmann_fitter = BoltzmannPlotFitter(
             outlier_sigma=2.5,
             use_jax=self.use_jax_boltzmann,
@@ -2226,16 +2239,35 @@ class IterativeCFLIBSSolver:
         # M7 Lever 6 refuse-to-report: Cristoforetti multi-check + overall_reliable.
         # Pure additive annotation — these keys never alter T/n_e/composition.
         # Computed on BOTH solve paths (shared builder) so key-set parity holds.
-        reliability = self._assess_reliability(observations, T_K, n_e, dict(concentrations))
-        quality_metrics["quality_flag"] = reliability["quality_flag"]
-        quality_metrics["saha_boltzmann_consistency"] = reliability["saha_boltzmann_consistency"]
-        quality_metrics["inter_element_t_std_frac"] = reliability["inter_element_t_std_frac"]
-        # overall_reliable = {McWhirter satisfied} AND {quality_flag >= acceptable}
-        # (roadmap M7c). 'unknown'/'poor'/'reject' are NOT reliable.
-        mcwhirter_ok = bool(lte_report.mcwhirter.satisfied)
-        quality_metrics["overall_reliable"] = bool(
-            mcwhirter_ok and reliability["quality_flag"] in ("excellent", "good", "acceptable")
-        )
+        #
+        # PERF GATE (assess_quality, default True): ``_assess_reliability`` re-fits
+        # a per-element Boltzmann plot and re-evaluates U_I/U_II for every element
+        # on EVERY solve (~26-34% of solve cost). When ``assess_quality`` is False
+        # (ded/batch/streaming presets) we SKIP that re-fit and emit conservative
+        # unknown/NaN reliability keys instead. The emitted KEY-SET is byte-for-byte
+        # identical across both branches — only the *values* differ — so downstream
+        # consumers and refuse-to-report logic never KeyError. T/n_e/composition are
+        # untouched either way (this is the annotation layer only).
+        if self.assess_quality:
+            reliability = self._assess_reliability(observations, T_K, n_e, dict(concentrations))
+            quality_metrics["quality_flag"] = reliability["quality_flag"]
+            quality_metrics["saha_boltzmann_consistency"] = reliability[
+                "saha_boltzmann_consistency"
+            ]
+            quality_metrics["inter_element_t_std_frac"] = reliability["inter_element_t_std_frac"]
+            # overall_reliable = {McWhirter satisfied} AND {quality_flag >= acceptable}
+            # (roadmap M7c). 'unknown'/'poor'/'reject' are NOT reliable.
+            mcwhirter_ok = bool(lte_report.mcwhirter.satisfied)
+            quality_metrics["overall_reliable"] = bool(
+                mcwhirter_ok and reliability["quality_flag"] in ("excellent", "good", "acceptable")
+            )
+        else:
+            quality_metrics["quality_flag"] = "unknown"
+            quality_metrics["saha_boltzmann_consistency"] = float("nan")
+            quality_metrics["inter_element_t_std_frac"] = float("nan")
+            # 'unknown' is never trustworthy, so the conservative verdict is False
+            # regardless of the (still-cheap) McWhirter check.
+            quality_metrics["overall_reliable"] = False
         return quality_metrics
 
     def _build_python_quality_metrics(

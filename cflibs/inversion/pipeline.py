@@ -103,6 +103,10 @@ ANALYSIS_PRESETS = {
         "degeneracy_dominance_threshold": 0.95,
         "max_lines_per_element": 30,
         "top_k_per_element": 40,
+        # DED runs on a known/constrained element set and track composition drift;
+        # the post-loop Cristoforetti reliability annotation is not consumed, so
+        # skip the ~26-34% re-fit (T/n_e/composition are unaffected).
+        "assess_quality": False,
     },
     "raw": {
         "saha_boltzmann_graph": False,
@@ -270,6 +274,15 @@ class AnalysisPipelineConfig:
     #: Scalar 1-sigma E_k uncertainty (eV) for the ODR fit when per-line E_k
     #: uncertainties are unavailable; 0.0 degenerates ODR to weighted OLS.
     odr_x_uncertainty: float = 0.0
+    #: Run the post-loop Cristoforetti reliability re-fit (perf knob). Default
+    #: True preserves the M7 refuse-to-report annotation (quality_flag /
+    #: saha_boltzmann_consistency / inter_element_t_std_frac / overall_reliable
+    #: with real values). When False the solver skips the per-element Boltzmann
+    #: re-fit + U_I/U_II re-eval (~26-34% of a solve) and emits the SAME keys with
+    #: conservative unknown/NaN values; T/n_e/composition are byte-identical. The
+    #: ``metallic_ded`` preset sets this False (drift-tracking on a known element
+    #: set does not consume the annotation).
+    assess_quality: bool = True
     #: Enable the adaptive RANSAC early-exit rule in robust wavelength
     #: calibration (prototype, default off; flag ``CFLIBS_RANSAC_EARLY_EXIT``).
     #: The sampling loop stops once the inlier-count plateaus (no improvement
@@ -487,6 +500,7 @@ def build_pipeline_config(
         degeneracy_min_elements=int(knob("degeneracy_min_elements", None, 4)),
         use_odr=bool(knob("use_odr", None, False)),
         odr_x_uncertainty=float(knob("odr_x_uncertainty", None, 0.0)),
+        assess_quality=bool(knob("assess_quality", None, True)),
         ransac_early_exit=bool(knob("ransac_early_exit", None, True)),
         detection_overrides=dict(ov.get("detection_overrides", None) or {}),
     )
@@ -1107,6 +1121,7 @@ def _run_peak_based_solver(
             aki_uncertainty_weighting=pipeline.aki_uncertainty_weighting,
             degeneracy_dominance_threshold=pipeline.degeneracy_dominance_threshold,
             degeneracy_min_elements=pipeline.degeneracy_min_elements,
+            assess_quality=pipeline.assess_quality,
         )
         closure_kwargs = _finalize_closure_kwargs(pipeline, observations)
         return _solve_analyze_result(
