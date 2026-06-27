@@ -592,10 +592,23 @@ def _make_closure_callback(
     mode = closure_mode.lower()
     E = len(elements)
 
+    def _stable_rel(intercepts, U_I, mult):
+        """Overflow-safe rel = mult * U_I * exp(intercepts) via log-sum-exp.
+
+        Mirrors :func:`closure._stabilized_relative_concentrations`: forming the
+        relative abundances in log space and subtracting the max keeps large
+        intercepts from overflowing ``jnp.exp`` to ``inf`` (the partition
+        ``jnp.exp`` is already clipped to ``[-700, 700]``; the intercept ``exp``
+        was not). The common shift cancels under every closure normalization
+        below, so the normalized composition is unchanged.
+        """
+        log_rel = jnp.log(mult) + jnp.log(U_I) + intercepts
+        return jnp.exp(log_rel - jnp.max(log_rel))
+
     if mode in {"", "standard"}:
 
         def _standard(intercepts, U_I, mult):
-            rel = mult * U_I * jnp.exp(intercepts)
+            rel = _stable_rel(intercepts, U_I, mult)
             total = jnp.sum(rel)
             return jnp.where(total > 0.0, rel / jnp.where(total > 0.0, total, 1.0), 0.0)
 
@@ -607,7 +620,7 @@ def _make_closure_callback(
         if matrix_element not in elements:
             # Mirror ClosureEquation.apply_matrix_mode: fall through to standard
             def _matrix_fallback(intercepts, U_I, mult):
-                rel = mult * U_I * jnp.exp(intercepts)
+                rel = _stable_rel(intercepts, U_I, mult)
                 total = jnp.sum(rel)
                 return jnp.where(total > 0.0, rel / jnp.where(total > 0.0, total, 1.0), 0.0)
 
@@ -615,7 +628,7 @@ def _make_closure_callback(
         m_idx = elements.index(matrix_element)
 
         def _matrix(intercepts, U_I, mult):
-            rel = mult * U_I * jnp.exp(intercepts)
+            rel = _stable_rel(intercepts, U_I, mult)
             rel_m = rel[m_idx]
             F = rel_m / matrix_fraction
             return jnp.where(F > 0.0, rel / jnp.where(F > 0.0, F, 1.0), 0.0)
@@ -629,7 +642,7 @@ def _make_closure_callback(
         )
 
         def _oxide(intercepts, U_I, mult):
-            rel = mult * U_I * jnp.exp(intercepts)
+            rel = _stable_rel(intercepts, U_I, mult)
             total_oxide = jnp.sum(rel * factors)
             return jnp.where(
                 total_oxide > 0.0,

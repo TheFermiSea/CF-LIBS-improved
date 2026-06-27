@@ -575,6 +575,75 @@ def _validated_abundance_multiplier(
     return float(multiplier)
 
 
+def _stabilized_relative_concentrations(
+    elements,
+    intercepts: Dict[str, float],
+    partition_funcs: Dict[str, float],
+    abundance_multipliers: Optional[Dict[str, float]],
+):
+    """Overflow-safe relative abundances ``rel_s = mult_s * U_s * exp(q_s)``.
+
+    The naive ``U_s * exp(q_s)`` form overflows to ``inf`` for large Boltzmann
+    intercepts ``q_s`` (and ``inf/inf`` -> ``NaN`` once normalized), which
+    silently produces a non-finite composition that downstream gates can
+    mistake for a converged result. To avoid this, the relative abundances are
+    formed in log space and shifted by their maximum (the classic log-sum-exp
+    trick)::
+
+        log_rel_s = log(mult_s) + log(U_s) + q_s
+        rel_s     = exp(log_rel_s - max_s log_rel_s)
+
+    Every closure mode normalizes ``rel`` by some weighted sum of its own
+    entries, so the common ``exp(-offset)`` shift cancels exactly and the
+    normalized composition is mathematically identical to the naive form while
+    never overflowing for finite ``q_s``.
+
+    Returns
+    -------
+    rel : np.ndarray
+        Stabilized relative abundances aligned to ``elements``.
+    offset : float
+        The subtracted maximum log abundance, so callers can reconstruct the
+        absolute scale (experimental factor / total_measured) as
+        ``rel * exp(offset)`` when ``offset`` is finite.
+    """
+    log_rel = np.array(
+        [
+            np.log(_validated_abundance_multiplier(abundance_multipliers, el))
+            + np.log(partition_funcs[el])
+            + intercepts[el]
+            for el in elements
+        ],
+        dtype=float,
+    )
+    if log_rel.size == 0:
+        return log_rel, 0.0
+    offset = float(np.max(log_rel))
+    if not np.isfinite(offset):
+        # offset == -inf: no measurable signal (every rel -> 0).
+        # offset == +inf: pathological intercept; emit NaN so the caller's
+        # finite-total guard flags it rather than reporting a fake composition.
+        if offset < 0:
+            return np.zeros_like(log_rel), offset
+        return np.full_like(log_rel, np.nan), offset
+    return np.exp(log_rel - offset), offset
+
+
+def _abs_scale(offset: float) -> float:
+    """Reconstruct the absolute scale ``exp(offset)`` removed by stabilization.
+
+    Returns ``+inf`` when the maximum log abundance genuinely overflows float64
+    (``offset > 709``) instead of letting ``np.exp`` emit a RuntimeWarning. The
+    absolute scale only feeds the reported ``experimental_factor`` /
+    ``total_measured`` fields, never the normalized composition.
+    """
+    if not np.isfinite(offset):
+        return float("inf") if offset > 0 else 0.0
+    if offset > 709.0:
+        return float("inf")
+    return float(np.exp(offset))
+
+
 @dataclass
 class ClosureResult:
     """
@@ -676,6 +745,11 @@ class ClosureEquation:
         bool
             ``True`` if degenerate, ``False`` otherwise.
         """
+        # A non-finite concentration (NaN/inf from an overflowed closure) is
+        # always degenerate: a NaN composition must never be reported as a
+        # converged result, regardless of candidate-set size.
+        if any(not np.isfinite(c) for c in concentrations.values()):
+            return True
         if len(concentrations) < max(int(min_elements), 2):
             return False
         return any(c > threshold for c in concentrations.values())
@@ -706,30 +780,30 @@ class ClosureEquation:
         -------
         ClosureResult
         """
-        # Calculate relative concentrations (unscaled)
-        # rel_C_s = U_s * exp(q_s)
-        rel_concentrations = {}
-        total_measured = 0.0
-
-        for element, q_s in intercepts.items():
+        # Relative concentrations rel_C_s = U_s * exp(q_s), formed in log space
+        # with max-subtraction so large intercepts cannot overflow to inf/NaN.
+        elements_order = []
+        for element in intercepts:
             if element not in partition_funcs:
                 logger.warning(f"Missing partition function for {element} in closure")
                 continue
+            elements_order.append(element)
 
-            U_s = partition_funcs[element]
-            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
-            rel_C = multiplier * U_s * np.exp(q_s)
-            rel_concentrations[element] = rel_C
-            total_measured += rel_C
+        rel, offset = _stabilized_relative_concentrations(
+            elements_order, intercepts, partition_funcs, abundance_multipliers
+        )
+        total_stable = float(np.sum(rel))
 
-        if total_measured == 0:
-            logger.error("Total measured concentration is zero")
+        if total_stable <= 0.0 or not np.isfinite(total_stable):
+            logger.error("Total measured concentration is zero or non-finite")
             return ClosureResult({}, 0.0, 0.0, "standard")
 
-        # F is effectively total_measured
-        F = total_measured
+        concentrations = {el: float(r / total_stable) for el, r in zip(elements_order, rel)}
 
-        concentrations = {el: val / F for el, val in rel_concentrations.items()}
+        # Reported absolute scale (may be +inf for genuine overflow; never used
+        # for the normalized composition above).
+        total_measured = total_stable * _abs_scale(offset)
+        F = total_measured
 
         return ClosureResult(
             concentrations=concentrations,
@@ -780,23 +854,24 @@ class ClosureEquation:
                 abundance_multipliers=abundance_multipliers,
             )
 
-        U_m = partition_funcs[matrix_element]
-        q_m = intercepts[matrix_element]
-        matrix_multiplier = _validated_abundance_multiplier(abundance_multipliers, matrix_element)
-        rel_C_m = matrix_multiplier * U_m * np.exp(q_m)
+        elements_order = [el for el in intercepts if el in partition_funcs]
+        rel, offset = _stabilized_relative_concentrations(
+            elements_order, intercepts, partition_funcs, abundance_multipliers
+        )
+        m_idx = elements_order.index(matrix_element)
+        rel_m = float(rel[m_idx])
+        F_stable = rel_m / matrix_fraction
 
-        F = rel_C_m / matrix_fraction
+        if F_stable <= 0.0 or not np.isfinite(F_stable):
+            logger.error("Matrix element relative concentration is zero or non-finite")
+            return ClosureResult({}, 0.0, 0.0, f"matrix({matrix_element}={matrix_fraction})")
 
-        concentrations = {}
-        total_measured = 0.0
+        concentrations = {el: float(r / F_stable) for el, r in zip(elements_order, rel)}
 
-        for element, q_s in intercepts.items():
-            if element in partition_funcs:
-                U_s = partition_funcs[element]
-                multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
-                rel_C = multiplier * U_s * np.exp(q_s)
-                total_measured += rel_C
-                concentrations[element] = rel_C / F
+        # Reported absolute scale (may be +inf for genuine overflow).
+        scale = _abs_scale(offset)
+        total_measured = float(np.sum(rel)) * scale
+        F = F_stable * scale
 
         return ClosureResult(
             concentrations=concentrations,
@@ -847,27 +922,24 @@ class ClosureEquation:
         ClosureResult
             Concentrations are ELEMENTAL fractions, but normalized such that oxides sum to 1.
         """
-        rel_concentrations = {}
-        total_oxide_rel = 0.0
+        elements_order = [el for el in intercepts if el in partition_funcs]
+        rel, offset = _stabilized_relative_concentrations(
+            elements_order, intercepts, partition_funcs, abundance_multipliers
+        )
+        factors = np.array(
+            [oxide_stoichiometry.get(el, 1.0) for el in elements_order],  # metal if no oxide
+            dtype=float,
+        )
+        total_oxide_stable = float(np.sum(rel * factors))
 
-        for element, q_s in intercepts.items():
-            if element not in partition_funcs:
-                continue
-
-            U_s = partition_funcs[element]
-            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
-            rel_C = multiplier * U_s * np.exp(q_s)
-            rel_concentrations[element] = rel_C
-
-            factor = oxide_stoichiometry.get(element, 1.0)  # Default to metal if no oxide
-            total_oxide_rel += rel_C * factor
-
-        if total_oxide_rel == 0:
+        if total_oxide_stable <= 0.0 or not np.isfinite(total_oxide_stable):
             return ClosureResult({}, 0.0, 0.0, "oxide")
 
-        F = total_oxide_rel
+        concentrations = {el: float(r / total_oxide_stable) for el, r in zip(elements_order, rel)}
 
-        concentrations = {el: val / F for el, val in rel_concentrations.items()}
+        # Reported absolute scale (may be +inf for genuine overflow).
+        total_oxide_rel = total_oxide_stable * _abs_scale(offset)
+        F = total_oxide_rel
 
         return ClosureResult(
             concentrations=concentrations,
@@ -911,35 +983,33 @@ class ClosureEquation:
         ClosureResult
             Concentrations on the simplex (sum=1, all positive).
         """
-        # Build deterministic ordered element list and raw relative concentrations
+        # Build deterministic ordered element list; relative abundances are
+        # formed in log space with max-subtraction (overflow-safe).
         elements = []
-        rel_values = []
-        total_measured = 0.0
-
         for element in sorted(intercepts):
-            q_s = intercepts[element]
             if element not in partition_funcs:
                 logger.warning(f"Missing partition function for {element} in ILR closure")
                 continue
-
-            U_s = partition_funcs[element]
-            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
-            rel_C = multiplier * U_s * np.exp(q_s)
             elements.append(element)
-            rel_values.append(rel_C)
-            total_measured += rel_C
 
-        if total_measured == 0 or len(elements) < 2:
+        rel, offset = _stabilized_relative_concentrations(
+            elements, intercepts, partition_funcs, abundance_multipliers
+        )
+        total_stable = float(np.sum(rel))
+
+        if total_stable <= 0.0 or not np.isfinite(total_stable) or len(elements) < 2:
             logger.error("ILR closure requires at least 2 elements with non-zero concentration")
             return ClosureResult({}, 0.0, 0.0, "ilr")
 
-        # Normalize to simplex, then round-trip through ILR
-        raw = np.array(rel_values)
-        simplex = raw / np.sum(raw)
+        # Normalize to simplex (the common stabilization shift cancels here),
+        # then round-trip through ILR
+        simplex = rel / total_stable
         ilr_coords = ilr_transform(simplex)
         final_simplex = ilr_inverse(ilr_coords, len(elements))
 
-        F = total_measured  # experimental factor matches standard definition
+        # experimental factor matches standard definition (absolute scale)
+        total_measured = total_stable * _abs_scale(offset)
+        F = total_measured
 
         concentrations = {el: float(final_simplex[i]) for i, el in enumerate(elements)}
 
@@ -988,31 +1058,27 @@ class ClosureEquation:
         if regularization_strength < 0.0 or not np.isfinite(regularization_strength):
             raise ValueError("regularization_strength must be finite and >= 0")
 
-        # Build deterministic ordered element list and raw relative concentrations
+        # Build deterministic ordered element list; relative abundances are
+        # formed in log space with max-subtraction (overflow-safe).
         elements = []
-        rel_values = []
-        total_measured = 0.0
-
         for element in sorted(intercepts):
-            q_s = intercepts[element]
             if element not in partition_funcs:
                 logger.warning(f"Missing partition function for {element} in PWLR closure")
                 continue
-
-            U_s = partition_funcs[element]
-            multiplier = _validated_abundance_multiplier(abundance_multipliers, element)
-            rel_C = multiplier * U_s * np.exp(q_s)
             elements.append(element)
-            rel_values.append(rel_C)
-            total_measured += rel_C
 
-        if total_measured == 0 or len(elements) < 2:
+        rel, offset = _stabilized_relative_concentrations(
+            elements, intercepts, partition_funcs, abundance_multipliers
+        )
+        total_stable = float(np.sum(rel))
+
+        if total_stable <= 0.0 or not np.isfinite(total_stable) or len(elements) < 2:
             logger.error("PWLR closure requires at least 2 elements with non-zero concentration")
             return ClosureResult({}, 0.0, 0.0, "pwlr")
 
-        # Normalize to simplex, optimize in PWLR space, then map back.
-        raw = np.array(rel_values)
-        simplex = raw / np.sum(raw)
+        # Normalize to simplex (the common stabilization shift cancels here),
+        # optimize in PWLR space, then map back.
+        simplex = rel / total_stable
 
         if pivot_element is not None:
             if pivot_element not in elements:
@@ -1028,7 +1094,9 @@ class ClosureEquation:
         )
         final_simplex = plr_inverse(coords, D=len(elements), pivot_index=pivot_index)
 
-        F = total_measured  # experimental factor matches standard definition
+        # experimental factor matches standard definition (absolute scale)
+        total_measured = total_stable * _abs_scale(offset)
+        F = total_measured
 
         concentrations = {el: float(final_simplex[i]) for i, el in enumerate(elements)}
 
@@ -1130,8 +1198,8 @@ class ClosureEquation:
             raw_concentrations[element] = multiplier * U_s * np.exp(q_s)
 
         raw_sum = sum(raw_concentrations.values())
-        if raw_sum == 0:
-            logger.error("Total measured concentration is zero")
+        if raw_sum == 0 or not np.isfinite(raw_sum):
+            logger.error("Total measured concentration is zero or non-finite")
             return DirichletResidualResult(
                 concentrations={},
                 residual_fraction=1.0,
