@@ -305,25 +305,39 @@ class ClosedFormILRSolver:
     def _solve_wls(
         X: np.ndarray, y: np.ndarray, W: np.ndarray
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        """Solve weighted least squares: θ = (X'WX)⁻¹ X'Wy."""
-        WX = X * W[:, np.newaxis]
-        XtWX = X.T @ WX
-        XtWy = WX.T @ y
+        """Solve weighted least squares via QR/SVD on sqrt(W)-scaled rows.
 
-        try:
-            theta = np.linalg.solve(XtWX, XtWy)
-        except np.linalg.LinAlgError:
-            logger.warning("WLS solve failed (singular matrix)")
+        Solves the scaled-row system ``Aw θ = yw`` (``Aw = X·sqrt(W)``) with
+        ``np.linalg.lstsq`` instead of forming-and-solving the normal equations
+        ``X'WX θ = X'Wy``. This keeps the working condition number at
+        ``cond(Aw)`` rather than squaring it to ``cond(X'WX)``. On healthy
+        well-conditioned data the result is algebraically identical to the old
+        normal-equations solve; on a rank-deficient system we return ``None``
+        (matching the previous singular-matrix fallback) rather than a garbage
+        "converged" θ.
+        """
+        sw = np.sqrt(W)
+        Aw = X * sw[:, np.newaxis]
+        yw = y * sw
+
+        n_cols = X.shape[1]
+        theta, _resid, rank, _sv = np.linalg.lstsq(Aw, yw, rcond=None)
+        if rank < n_cols:
+            logger.warning("WLS solve failed (rank-deficient: rank %d < %d cols)", rank, n_cols)
             return None, None
 
         residuals = y - X @ theta
         dof = max(len(y) - len(theta), 1)
         sigma2_hat = float(np.sum(W * residuals**2)) / dof
 
+        # cov(θ) = σ²·(X'WX)⁻¹ = σ²·R⁻¹R⁻ᵀ from the QR factor of Aw
+        # (X'WX = AwᵀAw = RᵀR), avoiding the squared-condition normal-matrix inv.
         try:
-            cov_theta = sigma2_hat * np.linalg.inv(XtWX)
+            R = np.linalg.qr(Aw, mode="r")
+            R_inv = np.linalg.solve(R, np.eye(n_cols))
+            cov_theta = sigma2_hat * (R_inv @ R_inv.T)
         except np.linalg.LinAlgError:
-            cov_theta = np.full((len(theta), len(theta)), np.nan)
+            cov_theta = np.full((n_cols, n_cols), np.nan)
 
         return theta, cov_theta
 
