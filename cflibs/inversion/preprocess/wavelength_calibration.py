@@ -1297,12 +1297,29 @@ def detect_ccd_seams(
         return np.array([], dtype=int)
 
     n = dl.size
-    local_med = np.empty(n, dtype=float)
     w = max(int(window), int(min_local_window))
-    for i in range(n):
-        lo = max(0, i - w)
-        hi = min(n, i + w + 1)
-        local_med[i] = np.median(dl[lo:hi])
+
+    # Vectorized shrinking-window rolling median (byte-exact with the former
+    # O(n*w) ``np.median(dl[lo:hi])`` Python loop, ~100x faster on a ~6000-sample
+    # axis). For each gap ``i`` gather the ``[i-w, ..., i+w]`` window, mask the
+    # out-of-range positions to ``+inf`` (the shrinking-edge semantics: edges see
+    # fewer neighbours), sort each row, then pick the median by the live
+    # (in-range) count exactly as ``np.median`` would for that count. Mirrors
+    # ``cflibs.jitpipe.calibrate.detect_ccd_seams_kernel``.
+    offs = np.arange(-w, w + 1)
+    win_idx = np.arange(n)[:, None] + offs[None, :]  # (n, 2w+1)
+    in_range = (win_idx >= 0) & (win_idx < n)
+    win_idx_c = np.clip(win_idx, 0, n - 1)
+    win_vals = dl[win_idx_c]
+    big = np.where(in_range, win_vals, np.inf)
+    srt = np.sort(big, axis=1)
+    cnt = in_range.sum(axis=1)
+    half = cnt // 2
+    last = srt.shape[1] - 1
+    lo = np.take_along_axis(srt, np.clip(half - 1, 0, last)[:, None], axis=1)[:, 0]
+    hi = np.take_along_axis(srt, np.clip(half, 0, last)[:, None], axis=1)[:, 0]
+    even = (cnt % 2) == 0
+    local_med = np.where(even, 0.5 * (lo + hi), hi)
 
     local_med = np.maximum(local_med, 1e-12)
     ratio = dl / local_med

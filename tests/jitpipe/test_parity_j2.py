@@ -712,6 +712,42 @@ def test_seam_detection_parity(wls):
     assert n_seg == len(ref_seams) + 1
 
 
+@pytest.mark.parametrize("where", ["leading", "trailing"])
+def test_seam_detection_parity_edge_seams(where):
+    """Edge-seam parity: seams inside the shrinking-window edge region.
+
+    The reference :func:`detect_ccd_seams` rolling median *shrinks* its window at
+    the axis edges (``dl[max(0,i-w):min(n,i+w+1)]``); a fixed-window /
+    edge-replicating filter would flip these near-edge decisions. This pins the
+    vectorized detector against the jit kernel for a seam placed at the very
+    first/last gap, where < w neighbours are available.
+    """
+    base = np.linspace(400.0, 700.0, 6000)
+    wl = base.copy()
+    if where == "leading":
+        wl[0] = base[0] - 5.0  # huge first gap -> seam at gap index 0 (edge)
+    else:
+        wl[-1] = base[-1] + 5.0  # huge last gap -> seam at gap index n-2 (edge)
+
+    ref_seams = W.detect_ccd_seams(wl, ratio_threshold=3.0, window=51)
+    assert ref_seams.size >= 1  # the edge seam must actually be detected
+
+    w_max = 8192
+    wl_pad = np.full(w_max, wl[-1], dtype=float)
+    wl_pad[: wl.size] = wl
+    mask = np.r_[np.ones(wl.size, bool), np.zeros(w_max - wl.size, bool)]
+    seam_mask, seg_id = C.detect_ccd_seams_kernel(
+        jnp.array(wl_pad), jnp.array(mask), ratio_threshold=3.0, window=51
+    )
+    jit_seams = np.where(np.array(seam_mask))[0]
+    assert set(jit_seams.tolist()) == set(ref_seams.tolist()), (
+        jit_seams.tolist(),
+        ref_seams.tolist(),
+    )
+    n_seg = int(np.max(np.array(seg_id)[mask])) + 1
+    assert n_seg == len(ref_seams) + 1
+
+
 def test_segmented_seam_free_degrades_to_global():
     """Seam-free axis: the segmented kernel inherits the global single-axis fit.
 
