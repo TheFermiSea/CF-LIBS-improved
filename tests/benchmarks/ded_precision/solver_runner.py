@@ -47,10 +47,12 @@ def run_constrained_solver(
     max_iterations: int = 30,
     saha_boltzmann_graph: bool = True,
     closure_mode: str = "standard",
+    apply_self_absorption: "bool | str" = "off",
 ) -> CFLIBSResult:
     """Solve on a fixed known element set with the true n_e injected."""
     solver = IterativeCFLIBSSolver(
-        db, saha_boltzmann_graph=saha_boltzmann_graph, max_iterations=max_iterations
+        db, saha_boltzmann_graph=saha_boltzmann_graph, max_iterations=max_iterations,
+        apply_self_absorption=apply_self_absorption,
     )
     res = solver.solve(
         list(observations),
