@@ -63,9 +63,29 @@ leave-one-out so a selected standard never sees its own ``F``. The headline is t
 held-out ``rmsep_overall`` over all 36 samples. No parameter is tuned to held-out
 truth; the SA constants are the same physical El Sherbini values L4 uses.
 
-This is a benchmark-layer lever (needs the measured spectrum / line widths). If it
-wins, the per-line correction promotes into the shipped ``cflibs/`` OPC pre-solve
-step (physics-only NumPy; DED no-regression gated).
+EMPIRICAL FINDING (full 36-sample honest held-out gate, robust T=10500 K)
+------------------------------------------------------------------------
+* ``mode="off"`` (v2 reproduction): overall 10.124, Fe 20.660.
+* ``mode="per_line"`` (per-line intensity boost): overall **11.900**, Fe **24.387**
+  -> REGRESSES. The "fixed T removes the slope constraint" hypothesis does not save
+  it: re-deriving ``F`` only re-centers the *average* boost, while the per-line /
+  per-spectrum boost *magnitude* still lives in the same scalar subspace as ``F_Fe``
+  and its variance leaks into the trace-minor balance (exactly the L4+OPC failure).
+* ``mode="thin_filter"`` (drop self-absorbed Fe lines, anchor on the optically-thin
+  subset; IRSAC / SC-LIBS): overall **9.561**, Fe **19.615** -> IMPROVES (overall
+  -0.56, Fe -1.05; Si 7.20->5.85, Mn 1.50->1.16, Mo 10.81->9.78). Because it is a
+  line *selection* change — not an intensity scaling — it does not occupy the OPC
+  scalar subspace and so does not double-correct. **This is the winning L5 mode.**
+
+The lesson: against an already-OPC-calibrated pipeline, *correcting* matrix
+self-absorption intensities double-counts ``F``; *excluding* the self-absorbed lines
+(keeping an optically-thin anchor) is the per-spectrum lever that composes cleanly.
+
+This is a benchmark-layer lever (needs the measured spectrum / line widths). The
+winning ``thin_filter`` mode is pure NumPy and promotes into the shipped ``cflibs/``
+OPC pre-solve step (physics-only; DED no-regression gated) as an opt-in known-matrix
+line filter. No shipped change is made in this commit (benchmark layer only), so the
+DED-precision gate is unaffected.
 """
 
 from __future__ import annotations
@@ -183,6 +203,63 @@ def apply_self_absorption_per_line(
     return n_boosted, max_boost
 
 
+def select_thin_lines(
+    wl: np.ndarray,
+    intensity: np.ndarray,
+    observations: Sequence,
+    *,
+    min_corr_lines: int = MIN_CORR_LINES,
+    snr_min: float = SNR_MIN,
+    thick_ratio: float = THICK_RATIO,
+    instr_width_pct: float = INSTR_WIDTH_PCT,
+    min_keep: int = 2,
+) -> List:
+    """Drop the width-broadened (self-absorbed) lines of each optically-thick element.
+
+    IRSAC / SC-LIBS anchor strategy (NotebookLM notebook ``f1d2a053``): instead of
+    *correcting* the intensities of self-absorbed matrix (Fe) lines, **exclude** them
+    and keep only the optically-thin subset (lines whose measured width is at the
+    instrument floor). This is a line-*selection* change — not an intensity scaling —
+    so it cannot live in the same scalar subspace as the OPC ``F_Fe`` and therefore
+    cannot double-correct with it. Thin elements are untouched. An element is only
+    filtered if at least ``min_keep`` thin lines remain (else its lines are kept as-is
+    so a noisy spectrum never strips the matrix anchor entirely). Reads only measured
+    widths — no composition feedback. Returns the kept ``observations`` subset.
+    """
+    widths: Dict[int, float] = {}
+    snrs: Dict[int, float] = {}
+    by_el: Dict[str, List[int]] = {}
+    for i, o in enumerate(observations):
+        fwhm, snr = measure_line_width(wl, intensity, o.wavelength_nm)
+        widths[i] = fwhm
+        snrs[i] = snr
+        by_el.setdefault(o.element, []).append(i)
+
+    good_all = [widths[i] for i in widths if np.isfinite(widths[i]) and snrs[i] >= snr_min]
+    if not good_all:
+        return list(observations)
+    instr = float(np.percentile(good_all, instr_width_pct))
+    if instr <= 0:
+        return list(observations)
+
+    drop: set = set()
+    for _el, idxs in by_el.items():
+        good = [i for i in idxs if np.isfinite(widths[i]) and snrs[i] >= snr_min]
+        if len(good) < min_corr_lines:
+            continue
+        median_w = float(np.median([widths[i] for i in good]))
+        if median_w / instr < thick_ratio:
+            continue  # optically thin element -> keep all its lines
+        thin = [i for i in good if widths[i] / instr < thick_ratio]
+        if len(thin) < min_keep:
+            continue  # too few thin anchors -> keep the element's lines as-is
+        keep = set(thin)
+        for i in idxs:
+            if i not in keep:
+                drop.add(i)
+    return [o for i, o in enumerate(observations) if i not in drop]
+
+
 def _l2_obs(db, wl, intensity, truth):
     window = (float(wl.min()), float(wl.max()))
     specs: List[LineSpec] = []
@@ -202,20 +279,31 @@ def solve_l5(
     T_star: float,
     F: Dict,
     per_line: bool = False,
-    use_sa: bool = True,
+    mode: str = "thin_filter",
 ) -> Dict[str, float]:
-    """v2 solve with the **per-line** self-absorption correction before the OPC rescale.
+    """v2 solve with a per-spectrum Fe self-absorption handling before the OPC rescale.
 
-    Order: extract L2 lines -> per-line self-absorption boost (``use_sa``) -> OPC
-    per-element ``F`` rescale -> constrained Saha-Boltzmann at fixed ``T_star``. The
-    self-absorption runs before the OPC rescale so ``F`` corrects only the residual
-    static relative-sensitivity the per-line correction leaves.
+    ``mode`` selects the self-absorption treatment of the optically-thick matrix:
+
+    * ``"off"`` -- reproduce v2 (no per-spectrum self-absorption handling).
+    * ``"per_line"`` -- per-line El Sherbini intensity boost (regresses on the gate;
+      double-corrects with the OPC scalar -- kept for the record).
+    * ``"thin_filter"`` -- drop the width-broadened (self-absorbed) matrix lines and
+      anchor on the optically-thin subset (line selection, not intensity scaling).
+
+    Order: extract L2 lines -> self-absorption handling (``mode``) -> OPC per-element
+    ``F`` rescale -> constrained Saha-Boltzmann at fixed ``T_star``. The handling runs
+    before the OPC rescale so ``F`` corrects only the residual static sensitivity.
     """
     obs = _l2_obs(db, wl, intensity, truth)
     if not obs:
         return {}
-    if use_sa:
+    if mode == "per_line":
         apply_self_absorption_per_line(wl, intensity, obs)
+    elif mode == "thin_filter":
+        obs = select_thin_lines(wl, intensity, obs)
+        if not obs:
+            return {}
     for o in obs:
         f = F.get(_line_key(o.element, o.wavelength_nm), 1.0) if per_line else F.get(o.element, 1.0)
         o.intensity = float(o.intensity) * float(f)
@@ -225,15 +313,15 @@ def solve_l5(
 
 
 def derive_F_l5(
-    db, standard, T_star: float, *, per_line: bool = False, use_sa: bool = True
+    db, standard, T_star: float, *, per_line: bool = False, mode: str = "thin_filter"
 ) -> Dict:
-    """OPC ``F`` from the standard's per-line-corrected (L2+SA+fixed-T) recovery at ``T_star``.
+    """OPC ``F`` from the standard's self-absorption-handled (L2+mode+fixed-T) recovery.
 
     ``F_e = C_true_e / C_rec_e`` (renormalized), clamped to the OPC band, derived on
-    the SAME per-line pipeline it is applied to (so SA + OPC compose, not double-count).
+    the SAME pipeline (``mode``) it is applied to (so the handling + OPC compose).
     """
     _sid, wl, inten, truth = standard
-    rec = solve_l5(db, wl, inten, truth, T_star=T_star, F={}, per_line=per_line, use_sa=use_sa)
+    rec = solve_l5(db, wl, inten, truth, T_star=T_star, F={}, per_line=per_line, mode=mode)
     rec = {e: rec.get(e, 0.0) for e in truth}
     tot = sum(v for v in rec.values() if np.isfinite(v) and v > 0)
     F_el: Dict[str, float] = {}
@@ -257,13 +345,13 @@ def run_l5(
     t_grid=DEFAULT_T_GRID,
     cond_T_K: float = COND_T_K,
     per_line: bool = False,
-    use_sa: bool = True,
+    mode: str = "thin_filter",
     limit: int | None = None,
 ) -> Dict[str, object]:
-    """Honest L5 run: conditioning-gated robust (T*, F) on the per-line SA pipeline, LOO-scored.
+    """Honest L5 run: conditioning-gated robust (T*, F) on the ``mode`` pipeline, LOO-scored.
 
-    Mirrors :func:`...best_config_v2.run_v2` but threads the per-line self-absorption
-    correction (``F`` derived on the same pipeline). ``use_sa=False`` reproduces v2.
+    Mirrors :func:`...best_config_v2.run_v2` but threads the per-spectrum self-absorption
+    handling (``mode``; ``F`` derived on the same pipeline). ``mode="off"`` reproduces v2.
     """
     import warnings
 
@@ -296,7 +384,7 @@ def run_l5(
         selected = [int(best["index"])]
         print(f"[L5] no standard passed; fallback to best in-sample idx {selected[0]}", flush=True)
 
-    # 3. Robust T + per-standard F on the per-line SA pipeline.
+    # 3. Robust T + per-standard F on the selected self-absorption-handling pipeline.
     T_stars: List[float] = []
     for i in selected:
         T_i, err_i, _curve = choose_optimal_T(db, samples[i], t_grid)
@@ -307,7 +395,7 @@ def run_l5(
 
     F_per_std: Dict[int, Dict] = {}
     for i in selected:
-        F_per_std[i] = derive_F_l5(db, samples[i], robust_T, per_line=per_line, use_sa=use_sa)
+        F_per_std[i] = derive_F_l5(db, samples[i], robust_T, per_line=per_line, mode=mode)
     robust_F = _geomean_F(list(F_per_std.values()), per_line)
 
     loo_F: Dict[Tuple[int, float], Dict] = {}
@@ -315,17 +403,17 @@ def run_l5(
         others = [F_per_std[j] for j in selected if j != i]
         loo_F[_fingerprint(samples[i][2])] = _geomean_F(others, per_line) if others else robust_F
 
-    # 4. Apply robust (T, F) + per-line SA held-out and score (LOO per sample).
+    # 4. Apply robust (T, F) + self-absorption handling held-out and score (LOO per sample).
     def solve_fn(db_, wl, intensity, truth):
         F = loo_F.get(_fingerprint(intensity), robust_F)
         return solve_l5(
-            db_, wl, intensity, truth, T_star=robust_T, F=F, per_line=per_line, use_sa=use_sa
+            db_, wl, intensity, truth, T_star=robust_T, F=F, per_line=per_line, mode=mode
         )
 
     held = run_benchmark(solve_fn, db_path=db_path, limit=limit)
 
     return {
-        "use_sa": use_sa,
+        "mode": mode,
         "robust_T_K": robust_T,
         "per_line": per_line,
         "n_selected": len(selected),
@@ -347,16 +435,22 @@ if __name__ == "__main__":
     ap.add_argument("--tmax", type=int, default=12000)
     ap.add_argument("--tstep", type=int, default=1000)
     ap.add_argument(
+        "--mode",
+        default="thin_filter",
+        choices=("off", "per_line", "thin_filter"),
+        help="self-absorption handling for the single-run path",
+    )
+    ap.add_argument(
         "--compare",
         action="store_true",
-        help="run L5 both with and without per-line SA and report Fe / overall deltas",
+        help="run mode=off (v2 baseline) vs each SA mode and report Fe / overall deltas",
     )
     a = ap.parse_args()
     grid = tuple(float(t) for t in range(a.tmin, a.tmax + 1, a.tstep))
 
     def _report(tag, out):
         hs = out["held_out"]
-        print(f"\n[{tag}] L5 real-steel results (use_sa={out['use_sa']}):")
+        print(f"\n[{tag}] L5 real-steel results (mode={out['mode']}):")
         print(f"  n_selected: {out['n_selected']} -> {out['selected_samples']}")
         print(f"  robust_T_K: {out['robust_T_K']:.0f}")
         print("  HELD-OUT RMSEP (wt%):")
@@ -365,42 +459,29 @@ if __name__ == "__main__":
             print(f"    {k}: {v:.3f}" if isinstance(v, float) else f"    {k}: {v}")
         return hs
 
+    def _run(mode):
+        return run_l5(
+            db_path=a.db_path,
+            t_grid=grid,
+            cond_T_K=a.cond_t,
+            per_line=a.per_line,
+            mode=mode,
+            limit=a.limit,
+        )
+
     if a.compare:
-        out_off = run_l5(
-            db_path=a.db_path,
-            t_grid=grid,
-            cond_T_K=a.cond_t,
-            per_line=a.per_line,
-            use_sa=False,
-            limit=a.limit,
-        )
-        hs_off = _report("v2 (no SA)", out_off)
-        out_on = run_l5(
-            db_path=a.db_path,
-            t_grid=grid,
-            cond_T_K=a.cond_t,
-            per_line=a.per_line,
-            use_sa=True,
-            limit=a.limit,
-        )
-        hs_on = _report("L5 (per-line SA)", out_on)
-        print(
-            "\n[compare] Fe RMSEP  v2={:.2f}  L5={:.2f}".format(
-                hs_off.get("rmsep_Fe", float("nan")), hs_on.get("rmsep_Fe", float("nan"))
+        hs_off = _report("v2 (mode=off)", _run("off"))
+        for m in ("thin_filter", "per_line"):
+            hs_m = _report(f"L5 ({m})", _run(m))
+            print(
+                "\n[compare:{0}] Fe RMSEP  v2={1:.2f}  L5={2:.2f}".format(
+                    m, hs_off.get("rmsep_Fe", float("nan")), hs_m.get("rmsep_Fe", float("nan"))
+                )
             )
-        )
-        print(
-            "[compare] overall  v2={:.2f}  L5={:.2f}".format(
-                hs_off["rmsep_overall"], hs_on["rmsep_overall"]
+            print(
+                "[compare:{0}] overall  v2={1:.2f}  L5={2:.2f}".format(
+                    m, hs_off["rmsep_overall"], hs_m["rmsep_overall"]
+                )
             )
-        )
     else:
-        out = run_l5(
-            db_path=a.db_path,
-            t_grid=grid,
-            cond_T_K=a.cond_t,
-            per_line=a.per_line,
-            use_sa=True,
-            limit=a.limit,
-        )
-        _report("L5", out)
+        _report("L5", _run(a.mode))
