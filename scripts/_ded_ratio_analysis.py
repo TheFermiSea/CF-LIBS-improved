@@ -8,8 +8,8 @@ existing Al-scan composition series.
 """
 import warnings
 warnings.filterwarnings("ignore")
-import numpy as np
-from tests.benchmarks.ded_precision.benchmark_runner import run_composition_series
+import numpy as np  # noqa: E402
+from tests.benchmarks.ded_precision.benchmark_runner import run_composition_series  # noqa: E402
 
 DB = "ASD_da/libs_production.db"
 print("Running Ti-6Al-4V Al-scan (clean) on the complete DB for ratio/drift metrics...")
