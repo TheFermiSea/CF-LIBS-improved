@@ -74,11 +74,12 @@ def test_build_shapes(db_path, tmp_path):
     snap = build_snapshot(db_path, cache=True, cache_dir=tmp_path)
     # Spec §2 measured values for libs_production.db.
     assert snap.n_lines > 20000, snap.n_lines
-    assert snap.n_species == 175, snap.n_species
-    # Padded level block: (175, 676) — Fe II has the most levels.
+    # Complete (gold-standard ASD59) DB: 324 species, 203k lines.
+    assert snap.n_species == 324, snap.n_species
+    # Padded level block: (324, 1027) on the complete DB.
     pad = snap.level_pad
-    assert pad[0] == 175
-    assert pad[1] == 676, pad
+    assert pad[0] == 324
+    assert pad[1] == 1027, pad
     # Every per-species block has the right first axis.
     for name in (
         "partition_coeffs",
@@ -89,7 +90,7 @@ def test_build_shapes(db_path, tmp_path):
         "partition_t_min",
         "partition_g0",
     ):
-        assert np.asarray(getattr(snap, name)).shape[0] == 175, name
+        assert np.asarray(getattr(snap, name)).shape[0] == 324, name
     # Doublet pairs + oxide present.
     assert snap.doublet_pairs.shape[1] == 2
     assert snap.doublet_pairs.shape[0] == snap.doublet_rho.shape[0]
