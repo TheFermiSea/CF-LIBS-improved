@@ -204,16 +204,26 @@ def direct_sum_partition_function(
 # Direct-sum-preferred polynomial coefficient fit (manifold/Bayesian fallback)
 # ---------------------------------------------------------------------------
 
-# Fit grid + LIBS validation band for :func:`direct_sum_fit_coeffs`.  These
-# mirror the standalone regeneration recipe in
-# ``scripts/archive/migrations/regenerate_partition_functions.py`` so the load-time fallback and
-# the persisted DB rows agree by construction.
+# Fit grid + LIBS validation band for :func:`direct_sum_fit_coeffs`.  The
+# persisted DB rows agree with this load-time fit by construction: the
+# regeneration script ``scripts/regenerate_partition_functions_complete_db.py``
+# writes exactly what :func:`derive_partition_spec` (i.e. this fit) produces.
 _DSFIT_T_MIN = 2000.0
 _DSFIT_T_MAX = 25000.0
 _DSFIT_N_POINTS = 60
 _DSFIT_KEY_TEMPS = (5000.0, 10000.0, 15000.0, 20000.0)
 _DSFIT_BAND_LO = 6000.0
 _DSFIT_BAND_HI = 12000.0
+# Dense ps-LIBS-band sampling + weighting for the degree-4 ln-poly fit. The
+# original recipe (KEY temps weighted 10x, NO band samples) let steep-knee
+# light metals -- Mg I most acutely -- drift up to +15% above the band direct
+# sum because the over-weighted hot KEY temps (15000/20000 K) dominated the
+# curve shape. Sampling the 6000-12000 K band densely and weighting it above
+# the KEY anchors pins the fit where the gate measures it (worst band error
+# across all fittable species now <7%, vs the prior 15%).
+_DSFIT_BAND_N = 40
+_DSFIT_KEY_WEIGHT = 4.0
+_DSFIT_BAND_WEIGHT = 8.0
 
 
 def direct_sum_fit_coeffs(
@@ -271,15 +281,24 @@ def direct_sum_fit_coeffs(
 
     T_grid = np.unique(
         np.concatenate(
-            [np.linspace(_DSFIT_T_MIN, _DSFIT_T_MAX, _DSFIT_N_POINTS), np.array(_DSFIT_KEY_TEMPS)]
+            [
+                np.linspace(_DSFIT_T_MIN, _DSFIT_T_MAX, _DSFIT_N_POINTS),
+                np.array(_DSFIT_KEY_TEMPS),
+                np.linspace(_DSFIT_BAND_LO, _DSFIT_BAND_HI, _DSFIT_BAND_N),
+            ]
         )
     )
     Q_grid = np.array([_ds(T) for T in T_grid])
     ln_T = np.log(T_grid)
     ln_Q = np.log(np.maximum(Q_grid, 1e-12))
+    # Weight the ps-LIBS band above the wide-range KEY anchors so the degree-4
+    # ln-poly tracks the direct sum where the gate measures it (see the
+    # _DSFIT_BAND_* rationale above) rather than chasing the hot tail.
     w = np.ones_like(T_grid)
     for kt in _DSFIT_KEY_TEMPS:
-        w[np.isclose(T_grid, kt)] = 10.0
+        w[np.isclose(T_grid, kt)] = _DSFIT_KEY_WEIGHT
+    in_band = (T_grid >= _DSFIT_BAND_LO) & (T_grid <= _DSFIT_BAND_HI)
+    w[in_band] = np.maximum(w[in_band], _DSFIT_BAND_WEIGHT)
     coeffs = list(np.polynomial.polynomial.polyfit(ln_T, ln_Q, 4, w=w))
     coeffs = (coeffs + [0.0] * 5)[:5]
 

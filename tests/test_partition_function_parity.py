@@ -81,13 +81,22 @@ def _fetch_ip(conn: sqlite3.Connection, element: str, sp_num: int) -> float:
 
 
 def _fetch_levels(conn: sqlite3.Connection, element: str, sp_num: int):
+    # Match the production direct sum exactly.  ``AtomicDatabase.get_energy_levels``
+    # filters levels with an unassigned J (NULL / non-positive ``g_level``) --
+    # their degeneracy g = 2J+1 is unknown so they carry no known Boltzmann
+    # weight -- and rounds g to the integer 2J+1.  The reference direct sum must
+    # use the SAME levels the stored polynomial was fit against; otherwise NULL-g
+    # rows (legitimate NIST metadata, e.g. high-lying Mg I / Al I levels) poison
+    # the sum with NaN and the comparison is meaningless.
     rows = conn.execute(
         "SELECT g_level, energy_ev FROM energy_levels "
-        "WHERE element=? AND sp_num=? ORDER BY energy_ev",
+        "WHERE element=? AND sp_num=? "
+        "AND g_level IS NOT NULL AND g_level > 0 AND energy_ev IS NOT NULL "
+        "ORDER BY energy_ev",
         (element, sp_num),
     ).fetchall()
-    g = np.array([r[0] for r in rows], dtype=np.float64)
-    e = np.array([r[1] for r in rows], dtype=np.float64)
+    g = np.array([round(float(r[0])) for r in rows], dtype=np.float64)
+    e = np.array([float(r[1]) for r in rows], dtype=np.float64)
     return g, e
 
 
