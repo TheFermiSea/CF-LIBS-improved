@@ -74,11 +74,22 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _REAL_SPECTRUM = _REPO_ROOT / "data" / "bhvo2_usgs" / "chemcam_bhvo2_loc1_spectrum.csv"
 
 # Parity config: the shared solve math path (see module docstring).
+#
+# ``ransac_early_exit=False`` pins the DETERMINISTIC full-iteration RANSAC
+# wavelength calibration. The on-device front-end runs its RANSAC inside a
+# fixed-shape JIT kernel that executes all iterations and CANNOT early-exit, so
+# it is byte-faithful only to the full-iteration reference; the early-exit
+# heuristic (default-on) stops at an iteration-count-dependent EARLIER model
+# (measured on real ChemCam BHVO-2: 73 vs 75 selected lines -> Ca 16/17,
+# Si 11/12) that no fixed-shape kernel can reproduce. Disabling it makes BOTH
+# the delegated and on-device device-vs-CPU comparisons assess the same
+# deterministic calibration (the solve itself is already bit-exact, J7).
 _PARITY_OVERRIDES = {
     "closure_mode": "standard",
     "saha_boltzmann_graph": False,
     "stark_ne": False,
     "response_curve": None,
+    "ransac_early_exit": False,
 }
 
 
