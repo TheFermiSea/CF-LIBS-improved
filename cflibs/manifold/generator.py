@@ -126,6 +126,13 @@ class ManifoldGenerator:
 
         # Build query for all elements (including Stark parameters)
         placeholders = ",".join(["?"] * len(self.config.elements))
+        # The M5 complete-DB ingest added the full NIST line list, which includes
+        # ~74k observation-only transitions with NULL aki (and sometimes NULL
+        # upper-level ek_ev/gk). Those cannot emit in LTE -- the emissivity
+        # epsilon = (hc/4pi lambda) * A_ki * n_k is undefined without A_ki/E_k/g_k
+        # -- and a single NaN aki poisons the whole summed snapshot (every pixel
+        # becomes NaN). Filter them out here, identical to the canonical
+        # AtomicDatabase.get_transitions query (database.py:450).
         query = f"""
             SELECT
                 l.element, l.sp_num, l.wavelength_nm, l.aki, l.ek_ev, l.gk,
@@ -134,6 +141,8 @@ class ManifoldGenerator:
             JOIN species_physics sp ON l.element = sp.element AND l.sp_num = sp.sp_num
             WHERE l.wavelength_nm BETWEEN ? AND ?
             AND l.element IN ({placeholders})
+            AND l.aki IS NOT NULL AND l.aki > 0
+            AND l.ek_ev IS NOT NULL AND l.gk IS NOT NULL
             ORDER BY l.wavelength_nm
         """
         params = [
