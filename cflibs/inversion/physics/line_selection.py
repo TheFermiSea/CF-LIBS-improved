@@ -1082,3 +1082,232 @@ def select_lines_by_policy(
     raise ValueError(
         f"Unknown line-selection policy: {policy!r} (expected 'emissivity' or 'neutral_anchor')"
     )
+
+
+# ---------------------------------------------------------------------------
+# Matrix-isolation filter for dominant-matrix alloys (opt-in)
+# ---------------------------------------------------------------------------
+#
+# In a dominant-matrix alloy (e.g. Ti-6Al-4V: Ti ~90 at.%, Al ~6 %, V ~4 %) the
+# matrix element emits a dense forest of lines. A trace/minor element's analytical
+# line that falls within the instrument resolution element of a strong matrix
+# transition is *blended*: the extracted integrated intensity is contaminated by
+# matrix emission, biasing the trace element high (V over-attribution) -- a
+# per-line error that no per-element OPC scalar ``F`` can undo. Classical CF-LIBS
+# line-selection guidance (Tognoni et al. 2006; Aragón & Aguilera 2008) requires
+# *isolated, interference-free* analytical lines for exactly this reason.
+#
+# :func:`filter_matrix_blended_lines` removes the trace-element observations that
+# are blended with a comparable-or-stronger matrix transition, while leaving the
+# matrix element's own lines untouched. It is a pure atomic-data + window function
+# (queries the DB for matrix transitions in the resolution window; never reads a
+# recovered composition) -- physics-only, opt-in, default path unchanged.
+
+#: Default assumed matrix:trace abundance ratio for the matrix-isolation filter.
+#: An order-of-magnitude property of a "dominant-matrix" alloy (the matrix
+#: element vastly outnumbers the traces) -- NOT a per-sample composition. Because
+#: the matrix is this many times more abundant, a matrix transition need only
+#: carry ~1/MATRIX_DOMINANCE of a trace line's per-atom emissivity to contribute
+#: equally to a blended peak, so even a per-atom-weak matrix line contaminates.
+DEFAULT_MATRIX_DOMINANCE: float = 15.0
+
+
+def _instrument_fwhm_nm(
+    wavelength_nm: float,
+    resolving_power: Optional[float],
+    fwhm_nm: Optional[float],
+) -> float:
+    """Instrument FWHM (nm) at ``wavelength_nm`` from an explicit value or R."""
+    if fwhm_nm is not None and fwhm_nm > 0:
+        return float(fwhm_nm)
+    if resolving_power is not None and resolving_power > 0:
+        return float(wavelength_nm) / float(resolving_power)
+    return 0.0
+
+
+def _matrix_contamination_ratio(
+    obs: LineObservation,
+    db,
+    matrix_element: str,
+    *,
+    half_window_nm: float,
+    matrix_dominance: float,
+    abundance_prior: Optional[Dict[str, float]],
+    select_temperature_K: float,
+    stages: Sequence[int],
+) -> Optional[float]:
+    """Largest matrix:trace blend-contribution ratio inside the window.
+
+    Returns the maximum, over matrix transitions within ``half_window_nm`` of the
+    trace line ``obs``, of the abundance-scaled per-atom-emissivity ratio
+    ``(g_k A_ki e^{-E_k/kT})_matrix * a_matrix / ((g_k A_ki e^{-E_k/kT})_trace *
+    a_trace)``. ``a_*`` come from ``abundance_prior`` when both elements are
+    present, else the scalar ``matrix_dominance`` (= a_matrix / a_trace). Returns
+    ``None`` when the ratio cannot be judged (zero window, non-positive trace
+    emissivity, or no matrix transition in band) so the caller keeps the line.
+    """
+    if half_window_nm <= 0.0:
+        return None
+    trace_w = float(obs.g_k * obs.A_ki * np.exp(-obs.E_k_ev / (KB_EV * select_temperature_K)))
+    if trace_w <= 0.0:
+        return None
+
+    if abundance_prior is not None:
+        a_matrix = float(abundance_prior.get(matrix_element, 0.0))
+        a_trace = float(abundance_prior.get(obs.element, 0.0))
+        dominance = (a_matrix / a_trace) if a_trace > 0 else matrix_dominance
+    else:
+        dominance = matrix_dominance
+
+    lo, hi = obs.wavelength_nm - half_window_nm, obs.wavelength_nm + half_window_nm
+    best: Optional[float] = None
+    for stage in stages:
+        for tr in db.get_transitions(
+            matrix_element, ionization_stage=stage, wavelength_min=lo, wavelength_max=hi
+        ):
+            if not tr.A_ki or tr.A_ki <= 0 or not tr.g_k or tr.g_k <= 0 or tr.E_k_ev is None:
+                continue
+            matrix_w = float(tr.g_k * tr.A_ki * np.exp(-tr.E_k_ev / (KB_EV * select_temperature_K)))
+            ratio = matrix_w * dominance / trace_w
+            if best is None or ratio > best:
+                best = ratio
+    return best
+
+
+def filter_matrix_blended_lines(
+    observations: List[LineObservation],
+    db,
+    matrix_element: str,
+    *,
+    resolving_power: Optional[float] = None,
+    fwhm_nm: Optional[float] = None,
+    n_fwhm: float = 1.0,
+    contamination_ratio: float = 0.3,
+    matrix_dominance: float = DEFAULT_MATRIX_DOMINANCE,
+    abundance_prior: Optional[Dict[str, float]] = None,
+    select_temperature_K: float = DEFAULT_SELECT_T_K,
+    stages: Sequence[int] = (1, 2),
+    min_lines_per_element: int = 1,
+) -> Tuple[List[LineObservation], List[LineObservation]]:
+    """Drop trace-element lines blended with a strong matrix-element transition.
+
+    For a dominant-matrix alloy (one element vastly more abundant than the rest),
+    each non-``matrix_element`` observation is tested for blending: if a matrix
+    transition lies within ``n_fwhm`` instrument-FWHM of the trace line AND its
+    abundance-scaled per-atom emissivity is at least ``contamination_ratio`` of
+    the trace line's contribution (see :func:`_matrix_contamination_ratio`), the
+    trace line's extracted intensity is contaminated by matrix emission and the
+    line is dropped. Matrix-element observations are always kept.
+
+    A per-element floor protects against over-pruning: if filtering would leave a
+    trace element with fewer than ``min_lines_per_element`` lines, its
+    *least-contaminated* dropped lines are restored up to the floor (a faint but
+    least-blended line still anchors the element's abundance on the shared
+    Saha-Boltzmann plane). The default ``1`` keeps every element that had at
+    least one line.
+
+    Pure atomic-data + window function: it queries the DB for matrix transitions
+    and computes Boltzmann-weighted emissivities, never a recovered composition.
+    Physics-only and opt-in -- callers that do not invoke it are unaffected.
+
+    Parameters
+    ----------
+    observations : list of LineObservation
+        Detected/selected lines (mixed elements).
+    db
+        Atomic database exposing ``get_transitions(element, ionization_stage,
+        wavelength_min, wavelength_max)``.
+    matrix_element : str
+        The dominant matrix element (e.g. ``"Ti"``). Its lines are never dropped.
+    resolving_power : float, optional
+        Instrument resolving power R; the FWHM at each trace line is ``lambda/R``.
+        Ignored when ``fwhm_nm`` is given.
+    fwhm_nm : float, optional
+        Explicit instrument FWHM (nm), constant across the band. Overrides
+        ``resolving_power`` when provided.
+    n_fwhm : float, default 1.0
+        Blend half-window in instrument FWHM: a matrix transition within
+        ``n_fwhm * FWHM`` of a trace line is a potential blend.
+    contamination_ratio : float, default 0.3
+        Drop a trace line when the matrix:trace blend-contribution ratio (see
+        :func:`_matrix_contamination_ratio`) is at least this value, i.e. the
+        matrix contributes >= 30 % of the trace line's expected signal.
+    matrix_dominance : float, default ``DEFAULT_MATRIX_DOMINANCE``
+        Assumed matrix:trace abundance ratio used when ``abundance_prior`` is not
+        supplied. An order-of-magnitude "dominant matrix" property, not a sample
+        composition.
+    abundance_prior : dict, optional
+        Per-element number-fraction prior (e.g. a known feedstock spec). When it
+        contains both the matrix and a trace element, their ratio replaces
+        ``matrix_dominance`` for that trace. ``None`` (default) uses the scalar.
+    select_temperature_K : float, default ``DEFAULT_SELECT_T_K``
+        Boltzmann-weighting temperature for the per-atom emissivities.
+    stages : sequence of int, default (1, 2)
+        Matrix ionization stages searched for contaminating transitions.
+    min_lines_per_element : int, default 1
+        Per-trace-element floor restored from the least-contaminated drops.
+
+    Returns
+    -------
+    (kept, dropped) : tuple of list of LineObservation
+        ``kept`` preserves the input order; ``dropped`` are the removed blended
+        trace lines.
+    """
+    half_base = float(n_fwhm)
+    kept: List[LineObservation] = []
+    # (obs, contamination_ratio) for trace lines flagged as blended, by element.
+    flagged: Dict[str, List[Tuple[LineObservation, float]]] = defaultdict(list)
+    kept_count: Dict[str, int] = defaultdict(int)
+
+    for obs in observations:
+        if obs.element == matrix_element:
+            kept.append(obs)
+            continue
+        fwhm = _instrument_fwhm_nm(obs.wavelength_nm, resolving_power, fwhm_nm)
+        ratio = _matrix_contamination_ratio(
+            obs,
+            db,
+            matrix_element,
+            half_window_nm=half_base * fwhm,
+            matrix_dominance=matrix_dominance,
+            abundance_prior=abundance_prior,
+            select_temperature_K=select_temperature_K,
+            stages=stages,
+        )
+        if ratio is not None and ratio >= contamination_ratio:
+            flagged[obs.element].append((obs, ratio))
+        else:
+            kept.append(obs)
+            kept_count[obs.element] += 1
+
+    # Restore the least-contaminated flagged lines for any element left below the
+    # per-element floor, so the filter never silently deletes an element.
+    dropped: List[LineObservation] = []
+    restore: Set[int] = set()
+    for element, items in flagged.items():
+        deficit = min_lines_per_element - kept_count[element]
+        if deficit > 0:
+            for obs, _ratio in sorted(items, key=lambda t: t[1])[:deficit]:
+                restore.add(id(obs))
+
+    if restore:
+        # Re-emit in original order with restored lines kept.
+        kept_ids = {id(o) for o in kept}
+        kept = [o for o in observations if id(o) in kept_ids or id(o) in restore]
+        for items in flagged.values():
+            for obs, _ratio in items:
+                if id(obs) not in restore:
+                    dropped.append(obs)
+    else:
+        for items in flagged.values():
+            for obs, _ratio in items:
+                dropped.append(obs)
+
+    if dropped:
+        logger.info(
+            "matrix-isolation filter (matrix=%s): dropped %d blended trace line(s), kept %d.",
+            matrix_element,
+            len(dropped),
+            len(kept),
+        )
+    return kept, dropped

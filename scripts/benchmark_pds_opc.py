@@ -76,6 +76,7 @@ def detect_observations(
     elements: Sequence[str],
     resolving_power: Optional[float],
     preset: str = "geological",
+    matrix_isolation_element: Optional[str] = None,
 ):
     """Run the shipped detection + Stark n_e ONCE for the given preset.
 
@@ -88,7 +89,14 @@ def detect_observations(
     from cflibs.inversion.pipeline import build_pipeline_config, detect_and_select_lines
     from cflibs.inversion.physics.stark_ne import measure_stark_ne
 
-    pipe = build_pipeline_config(list(elements), preset=preset, resolving_power=resolving_power)
+    overrides = (
+        {"matrix_isolation_element": matrix_isolation_element}
+        if matrix_isolation_element is not None
+        else None
+    )
+    pipe = build_pipeline_config(
+        list(elements), preset=preset, resolving_power=resolving_power, overrides=overrides
+    )
     obs = detect_and_select_lines(
         wl,
         inten,
@@ -113,6 +121,9 @@ def detect_observations(
         global_shift_scan_nm=pipe.global_shift_scan_nm,
         affine_coverage_gate=pipe.affine_coverage_gate,
         line_residual_gate=pipe.line_residual_gate,
+        matrix_isolation_element=pipe.matrix_isolation_element,
+        matrix_isolation_n_fwhm=pipe.matrix_isolation_n_fwhm,
+        matrix_isolation_contamination_ratio=pipe.matrix_isolation_contamination_ratio,
         return_diagnostics=False,
     )
     stark_diag = None
@@ -485,7 +496,7 @@ def _load_titanium_fits(path: Path) -> Tuple[np.ndarray, np.ndarray]:
     return enforce_strictly_increasing(wl, np.clip(inten, 0.0, None))
 
 
-def run_titanium(db, limit: Optional[int]) -> dict:
+def run_titanium(db, limit: Optional[int], matrix_isolation: bool = False) -> dict:
     """Constrained {Ti,Al,V} solve on real Mars SuperCam Ti-6Al-4V spectra.
 
     The SCCT_TITANIUM target is the rover-deck Ti6Al4V wavelength-calibration
@@ -510,12 +521,24 @@ def run_titanium(db, limit: Optional[int]) -> dict:
     )
 
     elements = list(_TI6AL4V_ELEMENTS)
+    # Dominant matrix element = the most abundant nominal constituent (Ti).
+    matrix_el = max(_TI6AL4V_NOMINAL_WT, key=_TI6AL4V_NOMINAL_WT.get) if matrix_isolation else None
+    if matrix_isolation:
+        print(f"  matrix-isolation ON: dropping trace lines blended with {matrix_el}")
     samples = []
     for i, p in enumerate(paths):
         sol = p.name.split("_")[1]
         wl, inten = _load_titanium_fits(p)
         t0 = time.perf_counter()
-        obs, stark = detect_observations(db, wl, inten, elements, 2000.0, preset="metallic_ded")
+        obs, stark = detect_observations(
+            db,
+            wl,
+            inten,
+            elements,
+            2000.0,
+            preset="metallic_ded",
+            matrix_isolation_element=matrix_el,
+        )
         cnt = {e: sum(1 for o in obs if o.element == e) for e in elements}
         samples.append((f"sol{sol}", obs, stark, dict(_TI6AL4V_NOMINAL_WT)))
         print(
@@ -560,6 +583,11 @@ def main(argv=None) -> None:
         help="Part 3: real Mars SuperCam Ti-6Al-4V (DED matrix) constrained OPC.",
     )
     ap.add_argument("--limit", type=int, default=None, help="Cap samples (debug).")
+    ap.add_argument(
+        "--matrix-isolation",
+        action="store_true",
+        help="Part 3: drop trace lines blended with the dominant matrix (Ti) element.",
+    )
     ap.add_argument("--out", default=None, help="Write the result JSON here.")
     args = ap.parse_args(argv)
     if not (args.bhvo2 or args.chemcam or args.titanium):
@@ -580,7 +608,7 @@ def main(argv=None) -> None:
     if args.chemcam:
         result["chemcam"] = run_chemcam(db, args.limit)
     if args.titanium:
-        result["titanium"] = run_titanium(db, args.limit)
+        result["titanium"] = run_titanium(db, args.limit, matrix_isolation=args.matrix_isolation)
 
     out_path = (
         Path(args.out) if args.out else (_REPO_ROOT / "output" / "pds_opc" / "benchmark.json")

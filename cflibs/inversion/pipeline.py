@@ -187,6 +187,17 @@ class AnalysisPipelineConfig:
     #: the max-energy-spread subset (best T-conditioning, twoLineBeta_stable_sharp) instead
     #: of the top-scored lines. No-op when the cap does not bind.
     reliability_ranked_selection: bool = False
+    #: Opt-in dominant-matrix line filter (default None = off). Set to the matrix
+    #: element symbol (e.g. "Ti" for Ti-6Al-4V) to drop trace-element lines
+    #: blended with a comparable-or-stronger matrix transition inside the
+    #: instrument resolution element, removing the matrix-contamination intensity
+    #: bias on the traces (V over-attribution). The matrix element's own lines are
+    #: untouched. Pure atomic-data + window; default path byte-identical.
+    matrix_isolation_element: Optional[str] = None
+    #: Blend half-window in instrument FWHM for the matrix-isolation filter.
+    matrix_isolation_n_fwhm: float = 1.0
+    #: Matrix:trace blend-contribution ratio at/above which a trace line is dropped.
+    matrix_isolation_contamination_ratio: float = 0.3
     wavelength_calibration: bool = True
     shift_coherence_veto: bool = True
     #: Residual comb shift-scan half-width (nm) AFTER a quality-passed
@@ -488,6 +499,11 @@ def build_pipeline_config(
         target_sigma_t=knob("target_sigma_t", None, None),
         plasma_temperature_K=knob("plasma_temperature_K", None, 10000.0),
         reliability_ranked_selection=bool(knob("reliability_ranked_selection", None, False)),
+        matrix_isolation_element=knob("matrix_isolation_element", None, None),
+        matrix_isolation_n_fwhm=float(knob("matrix_isolation_n_fwhm", None, 1.0)),
+        matrix_isolation_contamination_ratio=float(
+            knob("matrix_isolation_contamination_ratio", None, 0.3)
+        ),
         wavelength_calibration=bool(knob("wavelength_calibration", wavelength_calibration, True)),
         shift_coherence_veto=bool(knob("shift_coherence_veto", shift_coherence_veto, True)),
         residual_shift_scan_nm=float(
@@ -627,6 +643,9 @@ def detect_and_select_lines(
     target_sigma_t: Optional[float] = None,
     plasma_temperature_K: float = 10000.0,
     reliability_ranked_selection: bool = False,
+    matrix_isolation_element: Optional[str] = None,
+    matrix_isolation_n_fwhm: float = 1.0,
+    matrix_isolation_contamination_ratio: float = 0.3,
     detection_overrides: Optional[dict] = None,
     return_diagnostics: bool = False,
 ):
@@ -731,6 +750,21 @@ def detect_and_select_lines(
         Adaptive RANSAC early-exit on inlier-count plateau / confidence bound
         (flag ``CFLIBS_RANSAC_EARLY_EXIT``). ``None`` (default) defers to the env
         var (off when unset). Parity-affecting -> benchmark-gated.
+    matrix_isolation_element : str or None
+        Opt-in dominant-matrix line filter (default ``None`` = off). When set to
+        the matrix element symbol (e.g. ``"Ti"`` for Ti-6Al-4V), trace-element
+        lines blended with a comparable-or-stronger matrix transition inside the
+        instrument resolution element are dropped after selection
+        (:func:`cflibs.inversion.physics.line_selection.filter_matrix_blended_lines`),
+        removing the matrix-contamination intensity bias on the traces (e.g. V
+        over-attribution). The matrix element's own lines are untouched. Pure
+        atomic-data + window; default path byte-identical.
+    matrix_isolation_n_fwhm : float
+        Blend half-window in instrument FWHM for the matrix-isolation filter
+        (default 1.0). Only used when ``matrix_isolation_element`` is set.
+    matrix_isolation_contamination_ratio : float
+        Matrix:trace blend-contribution ratio at/above which a trace line is
+        dropped (default 0.3). Only used when ``matrix_isolation_element`` is set.
     detection_overrides : dict or None
         Extra keyword overrides forwarded verbatim to
         ``detect_line_observations`` (Campaign 1 knob plumbing; see
@@ -915,11 +949,34 @@ def detect_and_select_lines(
         resonance_lines=detection.resonance_lines,
         atomic_uncertainties=atomic_uncertainties,
     )
+
+    selected_lines = selection.selected_lines
+    matrix_dropped: list = []
+    # Matrix-isolation filter (opt-in, default-off): on a dominant-matrix alloy
+    # the dense forest of matrix-element lines blends with the trace elements'
+    # analytical lines, contaminating their extracted intensity (e.g. V over-
+    # attribution in Ti-6Al-4V). When ``matrix_isolation_element`` is set, drop
+    # the trace-element lines blended with a comparable-or-stronger matrix
+    # transition inside the instrument resolution element. Pure atomic-data +
+    # window function; the matrix element's own lines are untouched.
+    if matrix_isolation_element is not None:
+        from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
+
+        selected_lines, matrix_dropped = filter_matrix_blended_lines(
+            selected_lines,
+            atomic_db,
+            matrix_isolation_element,
+            resolving_power=resolving_power,
+            n_fwhm=matrix_isolation_n_fwhm,
+            contamination_ratio=matrix_isolation_contamination_ratio,
+            min_lines_per_element=max(1, min_lines_per_element),
+        )
+
     if not return_diagnostics:
-        return selection.selected_lines
+        return selected_lines
 
     detected_elements = {o.element for o in detection.observations}
-    selected_elements = {o.element for o in selection.selected_lines}
+    selected_elements = {o.element for o in selected_lines}
     dropped: dict = {}
     for el in elements:
         if el not in detected_elements:
@@ -931,6 +988,11 @@ def detect_and_select_lines(
         "detected_elements": sorted(detected_elements),
         "selected_elements": sorted(selected_elements),
         "dropped_elements": dropped,
+        # Trace lines removed by the opt-in matrix-isolation filter (blended with
+        # the dominant matrix element); empty when the filter is disabled.
+        "matrix_isolation_dropped": [
+            (o.element, o.ionization_stage, o.wavelength_nm) for o in matrix_dropped
+        ],
         # Per-line residual-gate diagnostics (bead ye6t): consensus residual,
         # band, and the contaminated matches dropped at observation build.
         "residual_gate": detection.residual_gate,
@@ -939,7 +1001,7 @@ def detect_and_select_lines(
         # scoreboard); ``run_pipeline`` folds this into ``stage_timings``.
         "calibration_s": calibration_s,
     }
-    return selection.selected_lines, diagnostics
+    return selected_lines, diagnostics
 
 
 def _finalize_closure_kwargs(pipeline: AnalysisPipelineConfig, observations) -> dict:
@@ -1436,6 +1498,9 @@ def run_pipeline(
         target_sigma_t=pipeline.target_sigma_t,
         plasma_temperature_K=pipeline.plasma_temperature_K,
         reliability_ranked_selection=pipeline.reliability_ranked_selection,
+        matrix_isolation_element=pipeline.matrix_isolation_element,
+        matrix_isolation_n_fwhm=pipeline.matrix_isolation_n_fwhm,
+        matrix_isolation_contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
         detection_overrides=pipeline.detection_overrides,
         return_diagnostics=True,
     )

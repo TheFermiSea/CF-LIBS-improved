@@ -157,3 +157,79 @@ def test_unknown_policy_raises():
     db = FakeDB(_emissivity_transitions("Fe"))
     with pytest.raises(ValueError, match="Unknown line-selection policy"):
         select_lines_by_policy(db, "Fe", (290.0, 400.0), 5, policy="bogus")
+
+
+# ---------------------------------------------------------------------------
+# Matrix-isolation filter (opt-in dominant-matrix deblending)
+# ---------------------------------------------------------------------------
+
+
+def _obs(element, stage, wl, e_k=4.0, a_ki=1e8, g_k=5):
+    from cflibs.inversion.physics.boltzmann import LineObservation
+
+    return LineObservation(
+        wavelength_nm=wl,
+        intensity=1.0,
+        intensity_uncertainty=0.01,
+        element=element,
+        ionization_stage=stage,
+        E_k_ev=e_k,
+        g_k=g_k,
+        A_ki=a_ki,
+    )
+
+
+def test_matrix_isolation_drops_blended_trace_keeps_isolated():
+    """A trace line on top of a strong matrix transition is dropped; an isolated
+    trace line and all matrix lines are kept."""
+    from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
+
+    # Ti matrix transitions: one near the blended V line, none near the isolated one.
+    db = FakeDB([_tr("Ti", 1, 306.62, e_k=4.1, a_ki=1e8)])
+    obs = [
+        _obs("V", 1, 306.64, e_k=4.1),  # 0.02 nm from a strong Ti line -> blended
+        _obs("V", 1, 350.00, e_k=3.5),  # no Ti nearby -> isolated, kept
+        _obs("Ti", 1, 306.62, e_k=4.1),  # matrix line itself -> always kept
+    ]
+    kept, dropped = filter_matrix_blended_lines(
+        obs, db, "Ti", resolving_power=2000.0, min_lines_per_element=0
+    )
+    kept_wl = {(o.element, round(o.wavelength_nm, 2)) for o in kept}
+    assert ("V", 306.64) not in kept_wl  # blended V dropped
+    assert ("V", 350.0) in kept_wl  # isolated V kept
+    assert ("Ti", 306.62) in kept_wl  # matrix line kept
+    assert [(o.element, round(o.wavelength_nm, 2)) for o in dropped] == [("V", 306.64)]
+
+
+def test_matrix_isolation_min_lines_floor_restores_least_contaminated():
+    """When every trace line is blended, the per-element floor restores the
+    least-contaminated one so the element is never silently deleted."""
+    from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
+
+    db = FakeDB(
+        [
+            _tr("Ti", 1, 306.62, e_k=4.1, a_ki=5e8),  # very strong -> high contamination
+            _tr("Ti", 1, 310.00, e_k=4.1, a_ki=1e8),  # weaker -> lower contamination
+        ]
+    )
+    obs = [
+        _obs("V", 1, 306.63, e_k=4.1),  # heavily blended
+        _obs("V", 1, 310.01, e_k=4.1),  # less blended (weaker Ti neighbour)
+    ]
+    kept, dropped = filter_matrix_blended_lines(
+        obs, db, "Ti", resolving_power=2000.0, min_lines_per_element=1
+    )
+    kept_v = [round(o.wavelength_nm, 2) for o in kept if o.element == "V"]
+    assert kept_v == [310.01], "the least-contaminated V line is restored to meet the floor"
+    assert len(dropped) == 1
+
+
+def test_matrix_isolation_noop_when_no_matrix_lines_in_band():
+    """No matrix transition in any window -> nothing dropped (default-path safe)."""
+    from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
+
+    db = FakeDB([_tr("Ti", 1, 500.0, e_k=4.1)])  # far from every trace line
+    obs = [_obs("V", 1, 306.64), _obs("Al", 1, 396.15), _obs("Ti", 1, 410.0)]
+    kept, dropped = filter_matrix_blended_lines(obs, db, "Ti", resolving_power=2000.0)
+    assert dropped == []
+    assert len(kept) == 3
