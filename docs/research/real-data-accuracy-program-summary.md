@@ -14,9 +14,12 @@ a shipped, honestly-validated 4× accuracy gain. Companion: `real-steel-accuracy
 | neutral-anchor line selection | 30.43 | fix Cu ion-only Saha trap |
 | + fixed optimal-T | 29.98 | (gain mostly from lines) |
 | + robust OPC | 10.12 | conditioning-gated multi-standard F |
-| + thin-line Fe filter | **9.56** | drop self-absorbed Fe lines |
+| + thin-line Fe filter | 9.56 | drop self-absorbed Fe lines |
+| + CD-SB Fe matrix | **8.38** | columnar-density ordinate for self-absorbed Fe |
 
-**4× reduction.** Per-element @9.56: Cr 2.7, Mn 1.2, Ni 3.7, Si 5.9, Mo 9.8, Cu 10.1, Fe 19.6.
+**4.7× reduction.** Per-element @8.38: Cu 2.5, Ni 2.2, Cr 2.8, Mn 2.7, Si 7.7, Mo 11.6, Fe 16.5.
+(CD-SB keeps Fe lines via a width-derived columnar-density ordinate — composes with OPC, unlike
+an intensity scale which double-corrects; keeping Fe right stops closure mass-bleed → Cu/Ni fall.)
 
 **DED real goal (Ti-6Al-4V synthetic):** OPC cut the **V/Ti limiter 15.2% → 3.6%** (4.3×, R²
 intact). Safe on the DED path (Al/Ti slightly over-corrected on clean synthetic — a real-data
@@ -29,9 +32,11 @@ bias OPC targets is absent there; on real DED data it would help, as on steel).
   non-peeking — `calibrate_opc` sees only standards, `apply_opc` never reads recovered comp).
 - `cflibs/inversion/physics/line_selection.py` — `select_lines_by_policy(policy="neutral_anchor")`.
 - `cflibs/inversion/solve/iterative.py` — `fixed_temperature_K` (byte-identical when None).
-- `cflibs/inversion/pipeline.py` — opt-in `opc` + `opc_thin_filter` config; `cflibs/io/opc.py`
-  JSON persistence; CLI `calibrate-opc` + `invert --opc`.
-- Shipped-API reproduction test: held-out 9.56 wt% through the production path (≤9.7 guard).
+- `cflibs/inversion/physics/opc.py` — also `cdsb_*` columnar-density primitives + `OPCCalibration.cdsb_scale`.
+- `cflibs/inversion/pipeline.py` — opt-in `opc` + `opc_thin_filter` + `opc_cdsb_matrix` config (all
+  default off → byte-identical); `cflibs/io/opc.py` JSON persistence; CLI `calibrate-opc` + `invert --opc`.
+- Shipped-API reproduction tests: held-out **8.38 wt%** (CD-SB, ≤8.5 guard) and 9.56 (thin-filter,
+  ≤9.7) through the production path; 42 OPC/pipeline unit tests + DED no-regression green.
 
 ## Diagnosis chain (each step diagnosed + NotebookLM-confirmed before fixing)
 
