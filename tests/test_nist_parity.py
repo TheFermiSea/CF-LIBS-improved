@@ -86,36 +86,41 @@ def _partition_function_cases():
 @pytest.mark.requires_db
 @pytest.mark.parametrize("element,stage,T_K,nist_U", _partition_function_cases())
 def test_partition_functions(solver, element, stage, T_K, nist_U):
-    """Partition function U(T) compared to NIST reference with T-dependent tolerance.
+    """Partition function U(T) reproduces the complete-DB bound-level reference.
 
-    Direct summation from our DB will not match the NIST reference JSON exactly
-    because:
-    - The reference was computed before the autoionizing-level cleanup script
-      (scripts/archive/migrations/cleanup_autoionizing_levels.py) removed spurious high-energy
-      levels, so the reference sums include dissolved Rydberg states.
-    - At high T (>= 15000 K), those missing high-E levels cause larger
-      divergence because their Boltzmann weights become non-negligible.
+    The reference JSON (``partition_functions.json``) is the bound-level direct
+    sum ``U(T) = Σ gᵢ exp(-Eᵢ/kT)`` for ``Eᵢ < IP`` over the complete ASD59
+    energy-level set, regenerated 2026-06 and cross-validated against the
+    gold-standard Barklem & Collet 2016 (A&A 588, A96) atomic partition
+    functions (computed from complete NIST level lists): 212 species-temp
+    comparisons at 5000/10000 K agree to median 0.017 % / mean 0.7 %, and every
+    LIBS test element here (Fe, Cu, Al, Ni, Ti, Cr) within ~1.2 %.
 
-    We use 5% tolerance at T <= 10000 K (low-lying levels dominate) and
-    20% at T >= 15000 K (level completeness matters more).
+    History: the prior reference was a frozen snapshot of an *incomplete* pre-M5
+    DB and read systematically LOW at high T (e.g. Cr II 10000 K = 13.21 vs the
+    correct 18.48 — B&C gives 18.48), which the old 65/70 % tolerance masked.
+    The earlier docstring's "reference includes dissolved Rydberg states, so it
+    is higher" narrative was inverted and is removed. The partition direct sum
+    already excludes autoionizing levels (``E ≥ IP``), so that was never the
+    cause; the divergence was pure level-completeness.
+
+    Now that the reference is the physically-correct value, this is a hard gate:
+    ``solver.calculate_partition_function`` (the bound-level direct sum, n_e=None)
+    must reproduce it to within 2 % at every key temperature.
     """
     T_eV = T_K / EV_TO_K
     our_U = solver.calculate_partition_function(element, stage, T_eV)
     rel_error = abs(our_U - nist_U) / nist_U
 
-    # Tolerance is temperature-dependent: at high T, excited-state level
-    # completeness matters more and our cleaned DB diverges from the
-    # pre-cleanup reference.  Cr I is the worst case: the cleanup removed
-    # many high-lying levels, giving ~60% deviation even at 10000 K.
-    if T_K >= 15000:
-        tol = 0.70
-        tol_label = "70%"
-    else:
-        tol = 0.65
-        tol_label = "65%"
+    # Hard gate: the reference is the complete-DB bound-level direct sum (this
+    # same quantity), so the solver must reproduce it near-exactly; 2 % absorbs
+    # only float rounding and the JSON's 4-decimal storage. A larger deviation
+    # signals a real regression in the energy-level data or the summation code.
+    tol = 0.02
+    tol_label = "2%"
 
     assert rel_error < tol, (
-        f"{element} {'I'*stage} at {T_K}K: U={our_U:.3f} vs NIST={nist_U:.3f} "
+        f"{element} {'I'*stage} at {T_K}K: U={our_U:.3f} vs reference={nist_U:.3f} "
         f"({rel_error:.1%} error, limit {tol_label})"
     )
 
