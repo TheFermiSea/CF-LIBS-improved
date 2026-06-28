@@ -1076,6 +1076,24 @@ def run_front_end(wavelength, intensity, atomic_db, pipeline) -> FrontEndResult:
         global_shift_scan_nm=pipeline.global_shift_scan_nm,
         affine_coverage_gate=pipeline.affine_coverage_gate,
         line_residual_gate=pipeline.line_residual_gate,
+        # Forward the SAME calibration/selection knobs the reference
+        # ``run_pipeline`` passes (pipeline.py): without these the delegated
+        # front-end silently fell back to ``detect_and_select_lines`` defaults
+        # and was NOT byte-faithful to the reference (M1 parity break).
+        # ``ransac_early_exit`` in particular is True in the raw preset, so
+        # omitting it ran a different RANSAC wavelength calibration -> a
+        # different matched-line set -> diverging concentrations on real
+        # ChemCam spectra.
+        calib_pool_cache=pipeline.calib_pool_cache,
+        hough_calib_seed=pipeline.hough_calib_seed,
+        ransac_early_exit=(pipeline.ransac_early_exit or None),
+        grade_aware_selection=pipeline.grade_aware_selection,
+        target_sigma_t=pipeline.target_sigma_t,
+        plasma_temperature_K=pipeline.plasma_temperature_K,
+        reliability_ranked_selection=pipeline.reliability_ranked_selection,
+        matrix_isolation_element=pipeline.matrix_isolation_element,
+        matrix_isolation_n_fwhm=pipeline.matrix_isolation_n_fwhm,
+        matrix_isolation_contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
         detection_overrides=pipeline.detection_overrides,
         return_diagnostics=True,
     )
