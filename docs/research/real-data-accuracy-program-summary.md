@@ -25,6 +25,21 @@ an intensity scale which double-corrects; keeping Fe right stops closure mass-bl
 intact). Safe on the DED path (Al/Ti slightly over-corrected on clean synthetic — a real-data
 bias OPC targets is absent there; on real DED data it would help, as on steel).
 
+**DED real goal (Ti-6Al-4V REAL Mars data):** real SuperCam SCCT_TITANIUM observations (32
+distinct-sol shots of the rover-deck Ti6Al4V wavelength-calibration plate; truth = nominal CCCT9
+{Ti 89.5, Al 6.1, V 4.0} wt%). Constrained known-feedstock force-extraction (force-extract at the
+KNOWN {Ti,Al,V} catalog line positions, peak-locked for the per-spectrometer wavelength offset,
+detector-gap lines dropped) + matrix-matched OPC, **through the shipped pipeline**, takes the
+honest leave-one-out held-out RMSEP from **24.1 wt% (early generic detection) → 4.88 (generic
+detection, tuned) → 0.65 per-shot / 0.35 averaged**. The generic detector drops Al in ~44% of
+these dense-Ti-forest spectra (Al silently vanishes from the closure); the constrained extraction
+measures every known line on **100%** of spectra. Per-element @0.65: Ti 0.81, Al 0.60, V 0.49.
+This is the first end-to-end real-Ti-6Al-4V DED-matrix validation (partially closes Open item 1).
+
+**Real-data validation summary (honest held-out RMSEP, wt%):** real steel 8.38 · BHVO-2 (USGS
+basalt) 8.11 · 66-standard ChemCam preflight 10.23 · real Mars Ti-6Al-4V 24.1 → 0.65/0.35
+(constrained known-feedstock).
+
 ## What shipped (production cflibs, opt-in, default path byte-identical)
 
 - `cflibs/inversion/physics/opc.py` — `OPCCalibration`, `calibrate_opc`, `apply_opc`,
@@ -35,8 +50,18 @@ bias OPC targets is absent there; on real DED data it would help, as on steel).
 - `cflibs/inversion/physics/opc.py` — also `cdsb_*` columnar-density primitives + `OPCCalibration.cdsb_scale`.
 - `cflibs/inversion/pipeline.py` — opt-in `opc` + `opc_thin_filter` + `opc_cdsb_matrix` config (all
   default off → byte-identical); `cflibs/io/opc.py` JSON persistence; CLI `calibrate-opc` + `invert --opc`.
+- `cflibs/inversion/physics/constrained_extraction.py` — `build_constrained_line_list`,
+  `extract_peak_locked`, `constrained_extract` (peak-lock at KNOWN feedstock line positions,
+  detector-gap drop; physics-only NumPy). `line_selection.select_lines_by_policy(prefer_spread=False)`
+  for the strongest-cleanest joint-Saha-Boltzmann regime.
+- `cflibs/inversion/pipeline.py` — opt-in `constrained_extraction` mode (`AnalysisPipelineConfig
+  .constrained_extraction` / `known_elements` / `constrained_line_budget` / `…_window_nm` /
+  `…_detector_gaps` / `…_instrument_fwhm_nm` / `…_search_tol_nm`): `run_pipeline` bypasses generic
+  detection and composes with the shipped matrix-isolation + OPC. Default off → byte-identical.
 - Shipped-API reproduction tests: held-out **8.38 wt%** (CD-SB, ≤8.5 guard) and 9.56 (thin-filter,
-  ≤9.7) through the production path; 42 OPC/pipeline unit tests + DED no-regression green.
+  ≤9.7) through the production path; real-Mars Ti-6Al-4V constrained+OPC **0.65 wt%** (≤0.8 guard,
+  `tests/benchmarks/real_steel/test_opc_shipped_titanium.py`); OPC/pipeline unit tests + DED
+  no-regression green.
 
 ## Diagnosis chain (each step diagnosed + NotebookLM-confirmed before fixing)
 
@@ -65,9 +90,12 @@ caught + rejected by a robustness gate.)
 
 ## Open items (ranked)
 
-1. **Ti-6Al-4V / Al-alloy real LIBS data with certified composition does not exist openly** — the
-   key blocker for end-to-end DED-matrix validation. Needs in-house CRM acquisition, a data
-   partnership, or paper-supplement extraction. (All upstream physics/method validated on steel.)
+1. **Ti-6Al-4V / Al-alloy real LIBS data with certified composition does not exist openly** —
+   _partially closed:_ the real Mars SuperCam SCCT_TITANIUM Ti6Al4V plate (nominal-panel truth)
+   now gives an end-to-end real-Ti-6Al-4V DED-matrix validation (0.65 wt% held-out via shipped
+   constrained extraction + OPC). Still missing: an Al-alloy and a *certified* (not nominal-panel)
+   Ti-6Al-4V CRM for absolute-accuracy confirmation. Needs in-house CRM acquisition, a data
+   partnership, or paper-supplement extraction.
 2. More steel (PhdYoda/266_steel_LIBS, 2160 spectra, license TBD) → deeper same-matrix stats.
 3. Marginal/regime-limited levers: Stark-n_e (neutral-anchored solve is less n_e-sensitive),
    3D-CF-LIBS (needs time-resolved multi-delay data; steel set is single-delay), cluster knob
