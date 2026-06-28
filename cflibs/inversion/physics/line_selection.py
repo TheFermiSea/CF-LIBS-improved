@@ -893,13 +893,20 @@ def _gather_candidate_transitions(
     return out
 
 
-def _spread_pick(cands: List, n_lines: int, min_separation_nm: float) -> List:
-    """Take up to ``n_lines`` strong, isolated lines spanning a wide ``E_k`` range.
+def _spread_pick(
+    cands: List, n_lines: int, min_separation_nm: float, prefer_spread: bool = True
+) -> List:
+    """Take up to ``n_lines`` strong, isolated lines for the Boltzmann plane.
 
-    Bins the strong-line pool by upper-level energy and takes the strongest
-    isolated line per bin, so the chosen set is well-conditioned for a Boltzmann
-    slope. Falls back to a strongest-first isolated greedy pick when the pool is
-    too small or has no energy spread.
+    With ``prefer_spread`` (default), bin the strong-line pool by upper-level
+    energy and take the strongest isolated line per bin, so the chosen set is
+    well-conditioned for a single-element Boltzmann slope (falls back to a
+    strongest-first isolated greedy pick when the pool is too small or has no
+    energy spread). With ``prefer_spread=False`` always use the strongest-first
+    isolated greedy pick: when T is constrained jointly across elements (the
+    Saha-Boltzmann graph) each element only needs accurate, isolated intensities,
+    and forcing per-element E_k spread selects weak, blended high-E_k lines that
+    corrupt dense-spectrum elements (the DED constrained-extraction regime).
     """
 
     def _isolated(tr, picked: List) -> bool:
@@ -908,7 +915,7 @@ def _spread_pick(cands: List, n_lines: int, min_separation_nm: float) -> List:
     pool = cands[: max(n_lines * 4, n_lines)]
     eks = np.array([t.E_k_ev for t in pool], dtype=float)
     chosen: List = []
-    if len(pool) > n_lines and eks.size and float(eks.max() - eks.min()) > 0:
+    if prefer_spread and len(pool) > n_lines and eks.size and float(eks.max() - eks.min()) > 0:
         edges = np.linspace(eks.min(), eks.max(), n_lines + 1)
         used: set = set()
         for b in range(n_lines):
@@ -963,6 +970,7 @@ def _select_emissivity(
     select_temperature_K: float,
     min_separation_nm: float,
     exclude_resonance: bool,
+    prefer_spread: bool = True,
 ) -> List[SelectedLine]:
     """Default policy: emissivity-ranked, wide-E_k spread over ``stages``."""
     cands = _gather_candidate_transitions(
@@ -973,7 +981,9 @@ def _select_emissivity(
         cands = _gather_candidate_transitions(
             db, element, stages, window, select_temperature_K, allow_resonance=True
         )
-    return _to_selected_lines(element, _spread_pick(cands, n_lines, min_separation_nm))
+    return _to_selected_lines(
+        element, _spread_pick(cands, n_lines, min_separation_nm, prefer_spread=prefer_spread)
+    )
 
 
 def _select_neutral_anchor(
@@ -1024,6 +1034,7 @@ def select_lines_by_policy(
     select_temperature_K: Optional[float] = None,
     min_separation_nm: float = 0.12,
     exclude_resonance: bool = True,
+    prefer_spread: bool = True,
 ) -> List[SelectedLine]:
     """Pick up to ``n_lines`` candidate lines for ``element`` from the DB + window.
 
@@ -1059,6 +1070,13 @@ def select_lines_by_policy(
         Under ``"emissivity"``, exclude resonance lines (with a too-few
         fallback). Ignored by ``"neutral_anchor"`` (which manages resonance
         anchoring itself).
+    prefer_spread : bool, default True
+        Under ``"emissivity"``, force a wide upper-level-energy (E_k) spread for
+        a single-element Boltzmann slope. Set ``False`` to take the strongest,
+        cleanest isolated lines instead (the DED constrained-extraction regime,
+        where T is constrained jointly across elements via the Saha-Boltzmann
+        graph so per-element spread-forcing only admits weak/blended high-E_k
+        lines). Ignored by ``"neutral_anchor"``.
 
     Returns
     -------
@@ -1074,7 +1092,15 @@ def select_lines_by_policy(
     if policy == "emissivity":
         temp = DEFAULT_SELECT_T_K if select_temperature_K is None else select_temperature_K
         return _select_emissivity(
-            db, element, window, n_lines, stages, temp, min_separation_nm, exclude_resonance
+            db,
+            element,
+            window,
+            n_lines,
+            stages,
+            temp,
+            min_separation_nm,
+            exclude_resonance,
+            prefer_spread=prefer_spread,
         )
     if policy == "neutral_anchor":
         temp = NEUTRAL_ANCHOR_SELECT_T_K if select_temperature_K is None else select_temperature_K

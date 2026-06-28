@@ -346,6 +346,43 @@ class AnalysisPipelineConfig:
     #: ``opc_thin_filter`` (which discards the same lines CD-SB uses); the OPC ``F`` must
     #: be calibrated on the matching CD-SB recovery pipeline.
     opc_cdsb_matrix: bool = False
+    # --- Constrained known-feedstock force-extraction (opt-in; default off) ---
+    #: When True, BYPASS generic peak detection + element identification and
+    #: instead force-extract at the KNOWN feedstock element set's catalog line
+    #: positions (peak-locked windowed integration;
+    #: ``cflibs.inversion.physics.constrained_extraction.constrained_extract``).
+    #: This is the validated DED known-feedstock path: it guarantees every known
+    #: minor element is measured every spectrum (generic detection drops dense-
+    #: matrix-blended minors), composing with the opt-in matrix-isolation filter
+    #: and OPC. ``False`` (default) leaves the generic-detection path byte-
+    #: identical. Use with the ``metallic_ded`` preset (standard sum-to-one
+    #: closure) for an alloy.
+    constrained_extraction: bool = False
+    #: Optional override of the KNOWN feedstock element set used by the
+    #: constrained extraction. ``None`` (default) falls back to ``elements``.
+    known_elements: Optional[list] = None
+    #: Per-element maximum line count for the constrained line list (e.g.
+    #: ``{"Ti": 12, "Al": 4, "V": 6}``). Elements absent use
+    #: ``constrained_default_budget``. Empty (default) uses the default budget
+    #: for every element.
+    constrained_line_budget: dict = field(default_factory=dict)
+    #: Per-element line budget when ``constrained_line_budget`` omits an element.
+    constrained_default_budget: int = 8
+    #: Emissivity-ranking temperature (K) for the constrained line list.
+    constrained_select_temperature_K: float = 10000.0
+    #: Optional ``(min_nm, max_nm)`` selection window for the constrained line
+    #: list; ``None`` (default) uses the spectrum's own min/max.
+    constrained_window_nm: Optional[tuple] = None
+    #: Optional spectrometer detector gaps ``[(lo, hi), ...]`` (nm); constrained
+    #: lines inside a gap are dropped (e.g. ``constrained_extraction
+    #: .SUPERCAM_DETECTOR_GAPS`` for a SuperCam-class instrument). ``None``
+    #: (default) applies no gap filtering.
+    constrained_detector_gaps: Optional[list] = None
+    #: Instrument line FWHM (nm) for the constrained peak-locked integration.
+    constrained_instrument_fwhm_nm: float = 0.18
+    #: Peak-lock search half-width (nm) for the constrained extraction (the
+    #: maximum per-spectrometer wavelength offset to tolerate).
+    constrained_search_tol_nm: float = 0.35
 
 
 #: Sentinel marking "knob not provided at this tier". Unlike ``None`` it lets
@@ -554,6 +591,17 @@ def build_pipeline_config(
         opc=ov.get("opc", None),
         opc_thin_filter=bool(knob("opc_thin_filter", None, False)),
         opc_cdsb_matrix=bool(knob("opc_cdsb_matrix", None, False)),
+        constrained_extraction=bool(knob("constrained_extraction", None, False)),
+        known_elements=knob("known_elements", None, None),
+        constrained_line_budget=dict(knob("constrained_line_budget", None, {}) or {}),
+        constrained_default_budget=int(knob("constrained_default_budget", None, 8)),
+        constrained_select_temperature_K=float(
+            knob("constrained_select_temperature_K", None, 10000.0)
+        ),
+        constrained_window_nm=knob("constrained_window_nm", None, None),
+        constrained_detector_gaps=knob("constrained_detector_gaps", None, None),
+        constrained_instrument_fwhm_nm=float(knob("constrained_instrument_fwhm_nm", None, 0.18)),
+        constrained_search_tol_nm=float(knob("constrained_search_tol_nm", None, 0.35)),
     )
     _log_pipeline_config(pipeline)
     return pipeline
@@ -1002,6 +1050,84 @@ def detect_and_select_lines(
         "calibration_s": calibration_s,
     }
     return selected_lines, diagnostics
+
+
+def _constrained_detect_and_extract(wavelength, intensity, atomic_db, pipeline):
+    """Constrained known-feedstock force-extraction path for ``run_pipeline``.
+
+    Replaces generic detection + identification with force-extraction at the
+    KNOWN feedstock element set's catalog line positions (peak-locked windowed
+    integration), then composes the opt-in matrix-isolation filter. Returns the
+    same ``(observations, diagnostics)`` contract ``detect_and_select_lines``
+    does (so the rest of ``run_pipeline`` is unchanged), including a
+    ``calibration_s`` key (always 0.0 — no RANSAC wavelength calibration runs in
+    this mode; the peak-lock handles the per-spectrometer offset directly).
+
+    Only reached when ``pipeline.constrained_extraction`` is True; the default
+    generic-detection path is byte-identical.
+    """
+    from cflibs.inversion.physics.constrained_extraction import constrained_extract
+
+    elements = list(pipeline.known_elements or pipeline.elements)
+    window = pipeline.constrained_window_nm
+    if window is not None:
+        window = (float(window[0]), float(window[1]))
+
+    observations, specs = constrained_extract(
+        wavelength,
+        intensity,
+        atomic_db,
+        elements,
+        window=window,
+        budget=pipeline.constrained_line_budget or None,
+        default_budget=pipeline.constrained_default_budget,
+        select_temperature_K=pipeline.constrained_select_temperature_K,
+        detector_gaps=pipeline.constrained_detector_gaps,
+        instrument_fwhm_nm=pipeline.constrained_instrument_fwhm_nm,
+        search_tol_nm=pipeline.constrained_search_tol_nm,
+        return_specs=True,
+    )
+
+    # Matrix-isolation filter (opt-in; composes with constrained extraction). On a
+    # dominant-matrix alloy the dense matrix forest blends with the trace lines,
+    # contaminating their extracted intensity; drop the trace lines blended with a
+    # comparable-or-stronger matrix transition. The matrix element's own lines are
+    # untouched. Pure atomic-data + window; skipped when the knob is unset.
+    matrix_dropped: list = []
+    if pipeline.matrix_isolation_element is not None:
+        from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
+
+        observations, matrix_dropped = filter_matrix_blended_lines(
+            observations,
+            atomic_db,
+            pipeline.matrix_isolation_element,
+            resolving_power=pipeline.resolving_power,
+            n_fwhm=pipeline.matrix_isolation_n_fwhm,
+            contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
+            min_lines_per_element=max(1, pipeline.min_lines_per_element),
+        )
+
+    detected_elements = {o.element for o in observations}
+    dropped: dict = {el: "constrained_extraction" for el in elements if el not in detected_elements}
+    diagnostics = {
+        "requested_elements": list(elements),
+        "detected_elements": sorted(detected_elements),
+        "selected_elements": sorted(detected_elements),
+        "dropped_elements": dropped,
+        "matrix_isolation_dropped": [
+            (o.element, o.ionization_stage, o.wavelength_nm) for o in matrix_dropped
+        ],
+        "constrained_extraction": {
+            "n_line_specs": len(specs),
+            "n_observations": len(observations),
+            "window_nm": list(window) if window is not None else None,
+            "elements": list(elements),
+        },
+        # No wavelength-calibration stage in constrained mode (peak-lock absorbs
+        # the per-spectrometer offset); keep the key so run_pipeline can pop it.
+        "calibration_s": 0.0,
+    }
+    return observations, diagnostics
 
 
 def _finalize_closure_kwargs(pipeline: AnalysisPipelineConfig, observations) -> dict:
@@ -1464,46 +1590,54 @@ def run_pipeline(
         )
 
     _t_detect0 = time.perf_counter()
-    observations, diagnostics = detect_and_select_lines(
-        wavelength,
-        intensity,
-        atomic_db,
-        pipeline.elements,
-        min_relative_intensity=pipeline.min_relative_intensity,
-        top_k_per_element=pipeline.top_k_per_element,
-        resolving_power=pipeline.resolving_power,
-        wavelength_tolerance_nm=pipeline.wavelength_tolerance_nm,
-        min_peak_height=pipeline.min_peak_height,
-        peak_width_nm=pipeline.peak_width_nm,
-        apply_self_absorption=pipeline.apply_self_absorption,
-        exclude_resonance=pipeline.exclude_resonance,
-        min_snr=pipeline.min_snr,
-        min_energy_spread_ev=pipeline.min_energy_spread_ev,
-        min_lines_per_element=pipeline.min_lines_per_element,
-        isolation_wavelength_nm=pipeline.isolation_wavelength_nm,
-        max_lines_per_element=pipeline.max_lines_per_element,
-        wavelength_calibration=pipeline.wavelength_calibration,
-        shift_coherence_veto=pipeline.shift_coherence_veto,
-        residual_shift_scan_nm=pipeline.residual_shift_scan_nm,
-        global_shift_scan_nm=pipeline.global_shift_scan_nm,
-        affine_coverage_gate=pipeline.affine_coverage_gate,
-        line_residual_gate=pipeline.line_residual_gate,
-        calib_pool_cache=pipeline.calib_pool_cache,
-        hough_calib_seed=pipeline.hough_calib_seed,
-        # ``False`` (the default) -> ``None`` so the ``CFLIBS_RANSAC_EARLY_EXIT``
-        # env var is still consulted inside the calibrator (config True forces on;
-        # config False defers to the env var, matching the prototype's behaviour).
-        ransac_early_exit=(pipeline.ransac_early_exit or None),
-        grade_aware_selection=pipeline.grade_aware_selection,
-        target_sigma_t=pipeline.target_sigma_t,
-        plasma_temperature_K=pipeline.plasma_temperature_K,
-        reliability_ranked_selection=pipeline.reliability_ranked_selection,
-        matrix_isolation_element=pipeline.matrix_isolation_element,
-        matrix_isolation_n_fwhm=pipeline.matrix_isolation_n_fwhm,
-        matrix_isolation_contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
-        detection_overrides=pipeline.detection_overrides,
-        return_diagnostics=True,
-    )
+    if pipeline.constrained_extraction:
+        # Opt-in constrained known-feedstock force-extraction: bypass generic
+        # detection + identification and measure the KNOWN element set at its
+        # catalog line positions (peak-locked). Default path untouched.
+        observations, diagnostics = _constrained_detect_and_extract(
+            wavelength, intensity, atomic_db, pipeline
+        )
+    else:
+        observations, diagnostics = detect_and_select_lines(
+            wavelength,
+            intensity,
+            atomic_db,
+            pipeline.elements,
+            min_relative_intensity=pipeline.min_relative_intensity,
+            top_k_per_element=pipeline.top_k_per_element,
+            resolving_power=pipeline.resolving_power,
+            wavelength_tolerance_nm=pipeline.wavelength_tolerance_nm,
+            min_peak_height=pipeline.min_peak_height,
+            peak_width_nm=pipeline.peak_width_nm,
+            apply_self_absorption=pipeline.apply_self_absorption,
+            exclude_resonance=pipeline.exclude_resonance,
+            min_snr=pipeline.min_snr,
+            min_energy_spread_ev=pipeline.min_energy_spread_ev,
+            min_lines_per_element=pipeline.min_lines_per_element,
+            isolation_wavelength_nm=pipeline.isolation_wavelength_nm,
+            max_lines_per_element=pipeline.max_lines_per_element,
+            wavelength_calibration=pipeline.wavelength_calibration,
+            shift_coherence_veto=pipeline.shift_coherence_veto,
+            residual_shift_scan_nm=pipeline.residual_shift_scan_nm,
+            global_shift_scan_nm=pipeline.global_shift_scan_nm,
+            affine_coverage_gate=pipeline.affine_coverage_gate,
+            line_residual_gate=pipeline.line_residual_gate,
+            calib_pool_cache=pipeline.calib_pool_cache,
+            hough_calib_seed=pipeline.hough_calib_seed,
+            # ``False`` (the default) -> ``None`` so the ``CFLIBS_RANSAC_EARLY_EXIT``
+            # env var is still consulted inside the calibrator (config True forces on;
+            # config False defers to the env var, matching the prototype's behaviour).
+            ransac_early_exit=(pipeline.ransac_early_exit or None),
+            grade_aware_selection=pipeline.grade_aware_selection,
+            target_sigma_t=pipeline.target_sigma_t,
+            plasma_temperature_K=pipeline.plasma_temperature_K,
+            reliability_ranked_selection=pipeline.reliability_ranked_selection,
+            matrix_isolation_element=pipeline.matrix_isolation_element,
+            matrix_isolation_n_fwhm=pipeline.matrix_isolation_n_fwhm,
+            matrix_isolation_contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
+            detection_overrides=pipeline.detection_overrides,
+            return_diagnostics=True,
+        )
     _detect_s = time.perf_counter() - _t_detect0
     diagnostics["preset"] = pipeline.preset
     diagnostics["saha_boltzmann_graph"] = pipeline.saha_boltzmann_graph
