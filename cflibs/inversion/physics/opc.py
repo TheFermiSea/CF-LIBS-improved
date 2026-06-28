@@ -61,6 +61,9 @@ __all__ = [
     "apply_opc",
     "measure_line_width",
     "select_optically_thin_lines",
+    "cdsb_raw_ordinate",
+    "cdsb_global_scale",
+    "apply_cdsb_matrix",
     "DEFAULT_COND_T_K",
     "DEFAULT_T_GRID",
     "F_MIN",
@@ -74,6 +77,11 @@ __all__ = [
     "THIN_FILTER_INSTR_WIDTH_PCT",
     "THIN_FILTER_WIDTH_HALF_NM",
     "THIN_FILTER_MIN_KEEP",
+    "CDSB_COG_EXP",
+    "CDSB_THIN_REF_WIDTH_NM",
+    "CDSB_LAMBDA_REF_NM",
+    "CDSB_KL_MAX",
+    "CDSB_KL_FLOOR",
 ]
 
 # --- a-priori constants (lifted unchanged from the winning benchmark lever) ---
@@ -198,12 +206,20 @@ class OPCCalibration:
         Names of the standards that passed the conditioning gate (provenance).
     conditioning_rule : str
         Human-readable description of the exact a-priori gate used.
+    cdsb_scale : float
+        Global Columnar-Density Saha-Boltzmann (CD-SB) unit scale ``S`` derived
+        from the standards only (geometric mean of ``geomean(measured matrix
+        areas) / geomean(CD-SB raw)``). A single constant for every spectrum;
+        consumed by :func:`apply_cdsb_matrix` only when the opt-in CD-SB matrix
+        mode is enabled. Defaults to ``1.0`` (CD-SB off / plain OPC, byte-
+        identical). See :func:`apply_cdsb_matrix` for the physics.
     """
 
     robust_T_K: float
     F: dict[str, float]
     selected_standards: list[str]
     conditioning_rule: str
+    cdsb_scale: float = 1.0
 
 
 class _OPCObservation(Protocol):
@@ -674,3 +690,268 @@ def select_optically_thin_lines(
             if i not in keep:
                 drop.add(i)
     return [o for i, o in enumerate(observations) if i not in drop]
+
+
+# --- Columnar-Density Saha-Boltzmann (CD-SB) matrix ordinate (opt-in) ---------
+#
+# Real-steel L6 winning lever (``tests/benchmarks/real_steel/lever_l6_cdsb.py``
+# mode="cdsb"; Cristoforetti & Tognoni 2013, Spectrochim. Acta B 86, 51; the
+# Pisa-group curve-of-growth relation). The optically-thick matrix element (Fe in
+# steel, 85-95 wt%) is self-absorbed by a *different* amount in every spectrum
+# (variable matrix content), so a single shared OPC scalar ``F`` cannot carry the
+# per-spectrum variation -- and the L5 thin filter *discards* those lines entirely.
+#
+# CD-SB instead KEEPS the self-absorbed matrix lines and REPLACES each line's
+# solver ordinate with a columnar-density value read from the line's WIDTH (not
+# its suppressed peak intensity). In classical CF-LIBS the Boltzmann-plot ordinate
+# ``ln(I*lambda/(g_k*A_ki))`` is proportional to the upper-level density ``n_k`` and
+# is only valid for optically-thin lines. CD-SB rewrites the plot in terms of the
+# lower-level *columnar density* ``n_i^l`` (Cristoforetti & Tognoni eqn 12), read
+# from the integrated absorption coefficient ``kl``. ``kl`` is recovered from the
+# measured self-absorption broadening via the Pisa-group curve-of-growth relation
+# (eqn 13): ``Delta_lambda / Delta_lambda_0 = ((1 - e^{-kl}) / kl)^{-COG_EXP}``,
+# where ``Delta_lambda_0`` is the optically-thin reference FWHM.
+#
+# The shipped Saha-Boltzmann solver ingests per-line *intensities* and internally
+# forms ``n_k`` from ``I*lambda/(g_k*A_ki)``. So to put the thick element on the
+# CD-SB ordinate we inject, for each of its lines, the intensity the solver needs
+# to recover the CD-SB columnar density; after the ``A_ki`` and per-element
+# constants cancel this is
+#
+#     I_cdsb(line)  proportional_to  g_k * kl * exp(-(E_k - E_i)/(k_B T)) / lambda^5
+#
+# with ``E_k - E_i = hc/lambda`` the photon energy. The MEASURED (self-absorbed)
+# intensity does NOT enter -- only the WIDTH does. This is an ordinate REPLACEMENT,
+# not an intensity scale: it does not live in the same multiplicative subspace as
+# the OPC scalar ``F`` (which would double-correct), so it composes cleanly with
+# OPC. A single global unit scale ``S`` (standards only) places the width-derived
+# ordinate at the measured matrix lines' average brightness; ``F`` is then
+# RE-DERIVED on this CD-SB pipeline so it corrects only the static residual, never
+# the per-spectrum self-absorption the CD-SB ordinate already encodes.
+#
+# Held-out real-steel gate (36 samples, honest leave-one-out): plain OPC 10.124,
+# L5 thin_filter 9.561 -> CD-SB 8.383 wt% overall (Fe 19.6 -> 16.5). It reads ONLY
+# measured line widths -- never a recovered composition -- so there is no
+# positive-feedback loop. The COG exponent (0.56) and the optically-thin reference
+# width (0.08 nm) are physical CD-SB / El Sherbini constants, not gate-tuned.
+
+#: Photon energy conversion: ``E[eV] = CDSB_HC_EV_NM / lambda[nm]``.
+CDSB_HC_EV_NM: float = 1239.84193
+#: Boltzmann constant in eV/K (for the CD-SB ``exp(-(E_k-E_i)/(k_B T))`` factor).
+CDSB_K_B_EV: float = 8.617333262e-5
+#: Pisa-group curve-of-growth exponent: ``dl/dl0 = ((1-e^-kl)/kl)^-CDSB_COG_EXP``.
+CDSB_COG_EXP: float = 0.56
+#: Optically-thin intrinsic reference width ``Delta_lambda_0`` (nm), El Sherbini 2005.
+CDSB_THIN_REF_WIDTH_NM: float = 0.08
+#: Numeric reference for the ``(lref/lambda)^5`` factor (cancels into ``S``/``F``).
+CDSB_LAMBDA_REF_NM: float = 370.0
+#: Cap on the recovered optical depth ``kl`` (saturated self-absorption guard).
+CDSB_KL_MAX: float = 50.0
+#: Floor so a marginally-broadened thick-element line still casts a columnar vote.
+CDSB_KL_FLOOR: float = 0.1
+
+
+class _CDSBObservation(Protocol):
+    """Structural type for a CD-SB-replaceable line observation."""
+
+    element: str
+    wavelength_nm: float
+    g_k: float
+    intensity: float
+
+
+def _cdsb_geomean(vals: Sequence[float]) -> float:
+    """Geometric mean of strictly-positive finite values (1.0 if none)."""
+    v = [float(x) for x in vals if np.isfinite(x) and x > 0]
+    return float(np.exp(np.mean(np.log(v)))) if v else 1.0
+
+
+def _solve_cdsb_kl_from_ratio(
+    ratio: float,
+    *,
+    cog_exp: float = CDSB_COG_EXP,
+    kl_max: float = CDSB_KL_MAX,
+    n_iter: int = 60,
+) -> float:
+    """Invert the COG relation ``dl/dl0 = ((1-e^-kl)/kl)^-cog_exp`` for ``kl``.
+
+    ``ratio`` is the measured self-absorption broadening
+    ``Delta_lambda/Delta_lambda_0`` (>= 1). Returns 0 for an unbroadened
+    (optically-thin) line and a bisection root otherwise. ``g(kl) =
+    (1-e^-kl)/kl`` decreases monotonically from 1 (kl->0) to 0, so the root is
+    bracketed on ``[0, kl_max]`` and found by bisection.
+    """
+    if not np.isfinite(ratio) or ratio <= 1.0:
+        return 0.0
+    target = ratio ** (-1.0 / cog_exp)  # g(kl) we must match, in (0, 1)
+
+    def g(kl: float) -> float:
+        return 1.0 if kl <= 0.0 else (1.0 - np.exp(-kl)) / kl
+
+    if g(kl_max) >= target:  # even at kl_max not thick enough -> cap
+        return kl_max
+    lo, hi = 0.0, kl_max
+    for _ in range(n_iter):
+        mid = 0.5 * (lo + hi)
+        if g(mid) > target:
+            lo = mid  # g too high -> need larger kl
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def cdsb_raw_ordinate(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    observations: Sequence[_CDSBObservation],
+    T_K: float,
+    *,
+    thin_ref_width_nm: float = CDSB_THIN_REF_WIDTH_NM,
+    min_corr_lines: int = THIN_FILTER_MIN_CORR_LINES,
+    snr_min: float = THIN_FILTER_SNR_MIN,
+    thick_ratio: float = THIN_FILTER_THICK_RATIO,
+    instr_width_pct: float = THIN_FILTER_INSTR_WIDTH_PCT,
+    width_half_nm: float = THIN_FILTER_WIDTH_HALF_NM,
+) -> tuple[dict[int, float], dict[str, float]]:
+    """Per-line CD-SB raw columnar-density ordinate for every optically-thick element.
+
+    Returns ``({obs_index: raw_value}, diagnostics)``. ``raw`` (before the global
+    unit scale ``S``) is ``g_k * kl * exp(-(E_k-E_i)/(k_B T)) * (lref/lambda)^5``
+    with ``kl`` from the COG inversion (:func:`_solve_cdsb_kl_from_ratio`) of the
+    instrument-deconvolved line width. Only the WIDTH enters -- never the measured
+    (self-absorbed) intensity. Optically-thin elements (median width at the
+    instrument floor) get no entries (the caller leaves them on measured
+    intensity). The thickness gate is identical to
+    :func:`select_optically_thin_lines` (same a-priori width-ratio constants).
+
+    Parameters
+    ----------
+    wavelength, intensity : np.ndarray
+        Measured spectrum axes (nm, intensity) the widths are measured from.
+    observations : Sequence
+        Line observations, each exposing ``element``, ``wavelength_nm`` and
+        ``g_k`` (upper-level statistical weight).
+    T_K : float
+        Plasma temperature (K) for the ``exp(-(E_k-E_i)/(k_B T))`` Boltzmann factor.
+    thin_ref_width_nm, min_corr_lines, snr_min, thick_ratio, instr_width_pct, width_half_nm
+        A-priori CD-SB / width-gating parameters (defaults are the lifted lever
+        constants).
+
+    Returns
+    -------
+    tuple of (dict, dict)
+        ``(raw_by_index, thickness_diag)``: per-line raw ordinate keyed by the
+        observation index, plus a ``{element: median_width / instr}`` diagnostic
+        for each thick element corrected.
+    """
+    widths: dict[int, float] = {}
+    snrs: dict[int, float] = {}
+    by_el: dict[str, list[int]] = {}
+    for i, o in enumerate(observations):
+        fwhm, snr = measure_line_width(wavelength, intensity, o.wavelength_nm, width_half_nm)
+        widths[i] = fwhm
+        snrs[i] = snr
+        by_el.setdefault(o.element, []).append(i)
+
+    good_all = [widths[i] for i in widths if np.isfinite(widths[i]) and snrs[i] >= snr_min]
+    if not good_all:
+        return {}, {}
+    instr = float(np.percentile(good_all, instr_width_pct))
+    if instr <= 0:
+        return {}, {}
+    ref = max(float(thin_ref_width_nm), 1e-6)
+
+    raw: dict[int, float] = {}
+    diag: dict[str, float] = {}
+    for el, idxs in by_el.items():
+        good = [i for i in idxs if np.isfinite(widths[i]) and snrs[i] >= snr_min]
+        if len(good) < min_corr_lines:
+            continue
+        median_w = float(np.median([widths[i] for i in good]))
+        if median_w / instr < thick_ratio:
+            continue  # optically thin element -> not CD-SB corrected
+        diag[el] = median_w / instr
+        for i in idxs:
+            # Marginal / unmeasurable lines fall back to the element median width so
+            # every thick-element line still gets a (floored) columnar-density vote.
+            w = widths[i] if (np.isfinite(widths[i]) and snrs[i] >= snr_min) else median_w
+            intrinsic = float(np.sqrt(max(w**2 - instr**2, 0.0)))
+            kl = max(_solve_cdsb_kl_from_ratio(intrinsic / ref), CDSB_KL_FLOOR)
+            o = observations[i]
+            lam = float(o.wavelength_nm)
+            photon_ev = CDSB_HC_EV_NM / lam
+            boltz = float(np.exp(-photon_ev / (CDSB_K_B_EV * T_K)))
+            raw_i = float(o.g_k) * kl * boltz * (CDSB_LAMBDA_REF_NM / lam) ** 5
+            if np.isfinite(raw_i) and raw_i > 0:
+                raw[i] = raw_i
+    return raw, diag
+
+
+def cdsb_global_scale(observations: Sequence[_CDSBObservation], raw: Mapping[int, float]) -> float:
+    """Per-standard CD-SB unit factor ``geomean(measured thick areas) / geomean(raw)``.
+
+    Placing the CD-SB ordinate at the same average brightness as the measured
+    matrix (e.g. Fe) lines ON THE STANDARD keeps the re-derived ``F`` near O(1)
+    (inside the OPC clamp band). The run-level scale ``S`` is the geometric mean
+    of this factor across the selected standards and is applied UNCHANGED to every
+    spectrum, so it never removes the per-spectrum ``kl`` magnitude (the
+    matrix-content adaptivity the CD-SB ordinate carries).
+
+    Returns ``1.0`` when there is no CD-SB-replaced line.
+    """
+    if not raw:
+        return 1.0
+    meas = [float(observations[i].intensity) for i in raw]
+    return _cdsb_geomean(meas) / max(_cdsb_geomean([raw[i] for i in raw]), 1e-300)
+
+
+def apply_cdsb_matrix(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    observations: Sequence[_CDSBObservation],
+    T_K: float,
+    scale: float,
+) -> tuple[int, float]:
+    """In-place: replace each thick-element line's intensity with its CD-SB ordinate.
+
+    The self-absorbed matrix lines are KEPT (vs :func:`select_optically_thin_lines`,
+    which drops them) and placed on the columnar-density ordinate ``scale * raw``
+    (width-derived via :func:`cdsb_raw_ordinate`, NOT the measured intensity).
+    Optically-thin elements are untouched. After calling this the caller applies
+    the OPC ``F`` rescale (:func:`apply_opc`) and solves at the calibration's
+    ``robust_T_K``. Reads only the measured line widths -- never a recovered
+    composition -- so there is no positive-feedback loop.
+
+    Parameters
+    ----------
+    wavelength, intensity : np.ndarray
+        Measured spectrum axes (nm, intensity) the widths are measured from.
+    observations : Sequence
+        Line observations with mutable ``intensity`` (and an optional
+        ``intensity_uncertainty``); thick-element entries are modified in place.
+    T_K : float
+        Plasma temperature (K) for the CD-SB Boltzmann factor (the calibration's
+        ``robust_T_K``).
+    scale : float
+        Global CD-SB unit scale ``S`` (standards only; ``OPCCalibration.cdsb_scale``).
+
+    Returns
+    -------
+    tuple of (int, float)
+        ``(n_replaced, max_raw)``: number of lines moved onto the CD-SB ordinate
+        and the maximum raw (pre-scale) columnar value (diagnostic).
+    """
+    raw, _diag = cdsb_raw_ordinate(wavelength, intensity, observations, T_K)
+    if not raw:
+        return 0, 0.0
+    n = 0
+    mx = 0.0
+    for i, raw_i in raw.items():
+        o = observations[i]
+        o.intensity = float(scale) * raw_i
+        unc = getattr(o, "intensity_uncertainty", None)
+        if unc is not None:
+            setattr(o, "intensity_uncertainty", max(o.intensity * 0.05, 1e-12))
+        n += 1
+        mx = max(mx, raw_i)
+    return n, mx

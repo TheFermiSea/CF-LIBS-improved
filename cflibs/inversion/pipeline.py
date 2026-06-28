@@ -320,6 +320,21 @@ class AnalysisPipelineConfig:
     #: The OPC ``F`` should be calibrated on the matching (thin-filtered) recovery
     #: pipeline so the calibration and inference selections agree.
     opc_thin_filter: bool = False
+    #: Opt-in Columnar-Density Saha-Boltzmann (CD-SB) matrix mode for the known-matrix
+    #: / OPC path (real-steel L6 winning lever). When True AND an ``opc`` calibration is
+    #: supplied, ``run_pipeline`` KEEPS the width-broadened (self-absorbed) lines of the
+    #: optically-thick matrix element and REPLACES each one's solver ordinate with a
+    #: width-derived columnar-density value (``cflibs.inversion.physics.opc
+    #: .apply_cdsb_matrix``) BEFORE the OPC ``F`` rescale, using the calibration's
+    #: ``robust_T_K`` and global unit scale ``cdsb_scale`` (standards only). It is an
+    #: ordinate REPLACEMENT, not an intensity scale, so it composes cleanly with the OPC
+    #: scalar ``F`` (no double-correction) -- the categorical difference from a per-line
+    #: intensity boost. Reads only the measured line widths -- never a recovered
+    #: composition. Held-out real-steel 9.561 -> 8.383 wt% (Fe 19.6 -> 16.5). ``False``
+    #: (default) leaves the OPC path byte-identical. This is an ALTERNATIVE to
+    #: ``opc_thin_filter`` (which discards the same lines CD-SB uses); the OPC ``F`` must
+    #: be calibrated on the matching CD-SB recovery pipeline.
+    opc_cdsb_matrix: bool = False
 
 
 #: Sentinel marking "knob not provided at this tier". Unlike ``None`` it lets
@@ -522,6 +537,7 @@ def build_pipeline_config(
         fixed_temperature_K=knob("fixed_temperature_K", None, None),
         opc=ov.get("opc", None),
         opc_thin_filter=bool(knob("opc_thin_filter", None, False)),
+        opc_cdsb_matrix=bool(knob("opc_cdsb_matrix", None, False)),
     )
     _log_pipeline_config(pipeline)
     return pipeline
@@ -1485,6 +1501,34 @@ def run_pipeline(
                     "OPC optically-thin filter dropped %d self-absorbed line(s), kept %d.",
                     n_dropped,
                     len(thin),
+                )
+
+        # Columnar-Density Saha-Boltzmann (CD-SB) matrix ordinate (opt-in; real-steel
+        # L6 winning lever). KEEP the width-broadened (self-absorbed) matrix lines and
+        # REPLACE each one's solver ordinate with a width-derived columnar-density value
+        # BEFORE the OPC F-rescale, using the calibration's robust_T and global unit
+        # scale ``cdsb_scale`` (standards only). An ordinate REPLACEMENT (not an
+        # intensity scale), so it composes cleanly with the OPC scalar F (no double-
+        # counting). Reads only the measured line widths -- never a recovered
+        # composition. Off by default (OPC path byte-identical when False). It is an
+        # ALTERNATIVE to opc_thin_filter (which discards the lines CD-SB uses).
+        if pipeline.opc_cdsb_matrix:
+            from cflibs.inversion.physics.opc import apply_cdsb_matrix
+
+            n_cdsb, max_raw = apply_cdsb_matrix(
+                wavelength, intensity, observations, opc.robust_T_K, opc.cdsb_scale
+            )
+            if n_cdsb > 0:
+                diagnostics["opc_cdsb_matrix"] = {
+                    "n_replaced": int(n_cdsb),
+                    "cdsb_scale": float(opc.cdsb_scale),
+                    "max_raw": float(max_raw),
+                }
+                logger.info(
+                    "OPC CD-SB matrix ordinate replaced %d self-absorbed matrix "
+                    "line(s) (scale=%.4g).",
+                    n_cdsb,
+                    opc.cdsb_scale,
                 )
 
         apply_opc(observations, opc)
