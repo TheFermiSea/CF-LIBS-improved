@@ -478,6 +478,126 @@ def run_chemcam(db, limit: Optional[int]) -> dict:
 _TI6AL4V_NOMINAL_WT = {"Ti": 89.5, "Al": 6.1, "V": 4.0}  # corpus CCCT9 x100
 _TI6AL4V_ELEMENTS = ("Ti", "Al", "V")
 
+#: SuperCam 3-spectrometer detector gaps (nm): UV|VIO and VIO|VNIR boundaries.
+#: Lines falling in a gap are physically unmeasurable, so the forced known-line
+#: list drops them (measured on the data: 341.4-379.3 and 464.5-537.6).
+_SUPERCAM_DETECTOR_GAPS = ((341.4, 379.3), (464.5, 537.6))
+#: Per-element budget for the forced Ti-6Al-4V line list. Al has only its four
+#: strong resonance lines (394.4/396.15/308.2/309.27) outside the gaps.
+_TI6AL4V_FORCED_BUDGET = {"Ti": 12, "Al": 4, "V": 6}
+_FWHM_TO_SIGMA = 1.0 / 2.354820045
+
+
+def _in_detector_gap(wavelength_nm: float) -> bool:
+    return any(lo <= wavelength_nm <= hi for lo, hi in _SUPERCAM_DETECTOR_GAPS)
+
+
+def build_titanium_line_list(
+    db,
+    elements: Sequence[str],
+    window: Tuple[float, float] = (250.0, 500.0),
+    T_K: float = 10000.0,
+    budget: Optional[Dict[str, int]] = None,
+):
+    """Curated KNOWN-position {Ti,Al,V} line list for constrained force-extraction.
+
+    Reuses the DED ``select_lines`` emissivity ranking -- the line positions and
+    atomic parameters come from the atomic DB, NOT from the truth composition, so
+    this is honest (it encodes only the KNOWN element set, the legitimate DED
+    feedstock assumption). Resonance lines are KEPT (Al's only strong lines in
+    this window are its 394.4/396.15 and 308.2/309.27 resonance doublets), and
+    lines that fall in a SuperCam detector gap are dropped.
+    """
+    from tests.benchmarks.ded_precision.line_lists import select_lines
+
+    budget = budget or _TI6AL4V_FORCED_BUDGET
+    specs = []
+    for el in elements:
+        n = budget.get(el, 8)
+        cand = select_lines(
+            db, el, window, n * 4, T_K=T_K, exclude_resonance=False, prefer_spread=False
+        )
+        cand = [s for s in cand if not _in_detector_gap(s.wavelength_nm)]
+        specs.extend(cand[:n])
+    return specs
+
+
+def _extract_peak_locked(wl, inten, specs, instrument_fwhm_nm: float, search_tol_nm: float):
+    """Peak-locked windowed extraction at known line positions -> observations.
+
+    For each known LineSpec, lock onto the local peak within +/-``search_tol_nm``
+    of the catalog wavelength (handles the SuperCam spectrometer-dependent
+    wavelength offset measured on these data: ~+0.15 nm in VIO, ~-0.3 nm in UV),
+    then integrate over +/-1.5 sigma after a robust local linear baseline. This
+    GUARANTEES every known line is measured -- including the dense-Ti-blended Al
+    lines that generic peak detection drops (~44% of spectra here).
+    """
+    from cflibs.inversion.common import LineObservation
+
+    _trapz = getattr(np, "trapezoid", None) or np.trapz
+    wl = np.asarray(wl, dtype=float)
+    inten = np.asarray(inten, dtype=float)
+    if wl.size < 5:
+        return []
+    step = float(np.median(np.diff(wl)))
+    sigma = instrument_fwhm_nm * _FWHM_TO_SIGMA
+    half = max(1.5 * sigma, 3.0 * step)
+    obs = []
+    for ls in specs:
+        sm = (wl >= ls.wavelength_nm - search_tol_nm) & (wl <= ls.wavelength_nm + search_tol_nm)
+        if int(sm.sum()) < 5:
+            continue
+        xs, ys = wl[sm], inten[sm]
+        k = max(1, xs.size // 6)
+        base = np.interp(xs, [xs[0], xs[-1]], [np.median(ys[:k]), np.median(ys[-k:])])
+        peak_wl = float(xs[int(np.argmax(ys - base))])
+        im = (wl >= peak_wl - half) & (wl <= peak_wl + half)
+        if int(im.sum()) < 4:
+            continue
+        x, y = wl[im], inten[im].astype(float)
+        k2 = max(1, x.size // 6)
+        b = np.interp(x, [x[0], x[-1]], [np.median(y[:k2]), np.median(y[-k2:])])
+        area = float(_trapz(y - b, x))
+        if not np.isfinite(area) or area <= 0.0:
+            continue
+        obs.append(
+            LineObservation(
+                wavelength_nm=peak_wl,
+                intensity=area,
+                intensity_uncertainty=max(area * 0.05, 1e-12),
+                element=ls.element,
+                ionization_stage=ls.ionization_stage,
+                E_k_ev=ls.E_k_ev,
+                g_k=ls.g_k,
+                A_ki=ls.A_ki,
+                aki_uncertainty=ls.aki_uncertainty,
+            )
+        )
+    return obs
+
+
+def forced_observations(
+    db,
+    wl: np.ndarray,
+    inten: np.ndarray,
+    specs,
+    instrument_fwhm_nm: float = 0.18,
+    search_tol_nm: float = 0.35,
+):
+    """Force-extract known lines + the shipped Stark n_e diagnostic on the result."""
+    from cflibs.inversion.physics.stark_ne import measure_stark_ne
+
+    obs = _extract_peak_locked(wl, inten, specs, instrument_fwhm_nm, search_tol_nm)
+    stark = None
+    if obs:
+        try:
+            sr = measure_stark_ne(wl, inten, obs, db, resolving_power=2000.0)
+            if sr is not None and sr.usable:
+                stark = sr.diagnostics
+        except Exception:  # noqa: BLE001
+            stark = None
+    return obs, stark
+
 
 def _load_titanium_fits(path: Path) -> Tuple[np.ndarray, np.ndarray]:
     """Mean spectrum from a SuperCam CL1 SCCT_TITANIUM FITS product."""
@@ -496,7 +616,13 @@ def _load_titanium_fits(path: Path) -> Tuple[np.ndarray, np.ndarray]:
     return enforce_strictly_increasing(wl, np.clip(inten, 0.0, None))
 
 
-def run_titanium(db, limit: Optional[int], matrix_isolation: bool = False) -> dict:
+def run_titanium(
+    db,
+    limit: Optional[int],
+    matrix_isolation: bool = False,
+    forced: bool = False,
+    avg_group: int = 1,
+) -> dict:
     """Constrained {Ti,Al,V} solve on real Mars SuperCam Ti-6Al-4V spectra.
 
     The SCCT_TITANIUM target is the rover-deck Ti6Al4V wavelength-calibration
@@ -504,6 +630,16 @@ def run_titanium(db, limit: Optional[int], matrix_isolation: bool = False) -> di
     a same-composition leave-one-observation-out (the DED scenario: a KNOWN
     feedstock matrix, OPC learns the recovery bias and is applied held-out to
     other observations of the same alloy). Truth is the nominal Ti-6Al-4V panel.
+
+    ``forced`` switches the observation source from generic peak detection to
+    constrained force-extraction at the KNOWN {Ti,Al,V} line positions
+    (:func:`build_titanium_line_list` + :func:`forced_observations`). Generic
+    detection drops Al in ~44% of these dense-Ti-forest spectra even though Al
+    is well above SNR; force-extraction measures every known line every spectrum.
+
+    ``avg_group`` averages consecutive-sol spectra into higher-SNR composites
+    before extraction (the multi-shot averaging SNR lever); ``avg_group=1`` keeps
+    one independent observation per sol (the strongest held-out OPC test).
     """
     print("\n" + "=" * 74)
     print("  PART 3 -- Ti-6Al-4V (DED matrix): real Mars SuperCam SCCT_TITANIUM")
@@ -515,37 +651,75 @@ def run_titanium(db, limit: Optional[int], matrix_isolation: bool = False) -> di
         paths = sorted(cl1.glob("sol_*/*scct_titanium*.fits"))
     if limit:
         paths = paths[:limit]
+    mode = "FORCED known-position extraction" if forced else "generic detection"
     print(
         f"  {len(paths)} Ti-6Al-4V observations (one point-33 raster per sol); "
         f"nominal truth Ti/Al/V = {_TI6AL4V_NOMINAL_WT}"
     )
+    print(f"  mode = {mode};  avg_group = {avg_group}")
 
     elements = list(_TI6AL4V_ELEMENTS)
     # Dominant matrix element = the most abundant nominal constituent (Ti).
-    matrix_el = max(_TI6AL4V_NOMINAL_WT, key=_TI6AL4V_NOMINAL_WT.get) if matrix_isolation else None
-    if matrix_isolation:
+    matrix_el = (
+        max(_TI6AL4V_NOMINAL_WT, key=_TI6AL4V_NOMINAL_WT.get)
+        if (matrix_isolation and not forced)
+        else None
+    )
+    if matrix_el is not None:
         print(f"  matrix-isolation ON: dropping trace lines blended with {matrix_el}")
-    samples = []
-    for i, p in enumerate(paths):
+    specs = None
+    if forced:
+        specs = build_titanium_line_list(db, elements)
+        scnt = {e: sum(1 for s in specs if s.element == e) for e in elements}
+        print(f"  forced line list: {len(specs)} known lines {scnt}")
+
+    # Load all spectra onto the shared instrument wavelength axis, then group
+    # consecutive sols into avg_group-sized composites (averaging SNR lever).
+    loaded: List[Tuple[str, np.ndarray]] = []
+    wl_ref: Optional[np.ndarray] = None
+    for p in paths:
         sol = p.name.split("_")[1]
         wl, inten = _load_titanium_fits(p)
+        if wl_ref is None:
+            wl_ref = wl
+        if inten.shape != wl_ref.shape:
+            continue
+        loaded.append((sol, inten))
+
+    samples = []
+    n_groups = (len(loaded) + avg_group - 1) // avg_group
+    for gi in range(n_groups):
+        chunk = loaded[gi * avg_group : (gi + 1) * avg_group]
+        if not chunk:
+            continue
+        sols = [c[0] for c in chunk]
+        label = f"sol{sols[0]}" if len(sols) == 1 else f"sol{sols[0]}-{sols[-1]}"
+        inten = chunk[0][1] if len(chunk) == 1 else np.mean(np.vstack([c[1] for c in chunk]), 0)
         t0 = time.perf_counter()
-        obs, stark = detect_observations(
-            db,
-            wl,
-            inten,
-            elements,
-            2000.0,
-            preset="metallic_ded",
-            matrix_isolation_element=matrix_el,
-        )
+        if forced:
+            obs, stark = forced_observations(db, wl_ref, inten, specs)
+        else:
+            obs, stark = detect_observations(
+                db,
+                wl_ref,
+                inten,
+                elements,
+                2000.0,
+                preset="metallic_ded",
+                matrix_isolation_element=matrix_el,
+            )
         cnt = {e: sum(1 for o in obs if o.element == e) for e in elements}
-        samples.append((f"sol{sol}", obs, stark, dict(_TI6AL4V_NOMINAL_WT)))
+        samples.append((label, obs, stark, dict(_TI6AL4V_NOMINAL_WT)))
         print(
-            f"  [{i+1}/{len(paths)}] sol {sol}: {len(obs)} obs {cnt}, "
-            f"detect {time.perf_counter()-t0:.1f}s",
+            f"  [{gi+1}/{n_groups}] {label}: {len(obs)} obs {cnt}, "
+            f"{time.perf_counter()-t0:.1f}s",
             flush=True,
         )
+
+    al_rate = (
+        float(np.mean([any(o.element == "Al" for o in s[1]) for s in samples])) if samples else 0.0
+    )
+    print(f"  Al-measured rate = {al_rate:.2f} ({int(round(al_rate*len(samples)))}/{len(samples)})")
 
     base_pairs, opc_pairs, prov = opc_heldout(db, samples, closure_mode="standard")
     bsc = score(base_pairs)
@@ -560,6 +734,9 @@ def run_titanium(db, limit: Optional[int], matrix_isolation: bool = False) -> di
     print("        realization, the DED known-feedstock scenario (not cross-composition).")
     return {
         "n_observations": len(samples),
+        "mode": mode,
+        "avg_group": avg_group,
+        "al_measured_rate": al_rate,
         "nominal_truth_wt": _TI6AL4V_NOMINAL_WT,
         "baseline": bsc,
         "opc_loo": osc,
@@ -588,6 +765,18 @@ def main(argv=None) -> None:
         action="store_true",
         help="Part 3: drop trace lines blended with the dominant matrix (Ti) element.",
     )
+    ap.add_argument(
+        "--forced",
+        action="store_true",
+        help="Part 3: constrained force-extraction at KNOWN {Ti,Al,V} line positions "
+        "(guarantees Al is measured every spectrum) instead of generic detection.",
+    )
+    ap.add_argument(
+        "--avg-group",
+        type=int,
+        default=1,
+        help="Part 3: average this many consecutive-sol spectra into higher-SNR composites.",
+    )
     ap.add_argument("--out", default=None, help="Write the result JSON here.")
     args = ap.parse_args(argv)
     if not (args.bhvo2 or args.chemcam or args.titanium):
@@ -608,7 +797,13 @@ def main(argv=None) -> None:
     if args.chemcam:
         result["chemcam"] = run_chemcam(db, args.limit)
     if args.titanium:
-        result["titanium"] = run_titanium(db, args.limit, matrix_isolation=args.matrix_isolation)
+        result["titanium"] = run_titanium(
+            db,
+            args.limit,
+            matrix_isolation=args.matrix_isolation,
+            forced=args.forced,
+            avg_group=args.avg_group,
+        )
 
     out_path = (
         Path(args.out) if args.out else (_REPO_ROOT / "output" / "pds_opc" / "benchmark.json")
