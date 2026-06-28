@@ -256,8 +256,11 @@ def test_forward_bridge_parity(db_path, tmp_path):
     """``to_atomic_snapshot`` matches ``AtomicDatabase.snapshot`` field-for-field.
 
     The reference 15-element candidate set yields N_species=30, level pad
-    (30, 676) (AC4). We compare per-species IP, the canonical partition poly,
-    its validity window, and the full line wavelength set in the window.
+    (30, 1027) on the complete-DB / Kurucz M5 ingest (was (30, 676) before the
+    energy_levels table was expanded; the wider pad reflects the extra
+    tabulated levels, not a parity change). We compare per-species IP, the
+    canonical partition poly, its validity window, and the full line
+    wavelength set in the window.
     """
     from cflibs.jitpipe import build_snapshot
     from cflibs.jitpipe import parity
@@ -267,9 +270,9 @@ def test_forward_bridge_parity(db_path, tmp_path):
         CANDIDATE_ELEMENTS, WL_RANGE, db_path=db_path, include_levels=True
     )
 
-    # AC4 measured reference shapes.
+    # AC4 measured reference shapes (complete-DB / Kurucz M5 level pad).
     assert len(ref.species) == 30, len(ref.species)
-    assert np.asarray(ref.level_g).shape == (30, 676)
+    assert np.asarray(ref.level_g).shape == (30, 1027), np.asarray(ref.level_g).shape
 
     sp_to_row = {sp: i for i, sp in enumerate(snap.species)}
     ip_mine = np.asarray(snap.species_physics)[:, 0]

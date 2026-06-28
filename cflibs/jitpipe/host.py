@@ -372,12 +372,26 @@ def _scan_species(conn: sqlite3.Connection) -> tuple[tuple[str, int], ...]:
 def _scan_lines(
     conn: sqlite3.Connection, species_idx: dict[tuple[str, int], int]
 ) -> dict[str, object]:
-    """Read the full ``lines`` table into the §2 line block (sorted, stable)."""
+    """Read the EMITTING ``lines`` into the §2 line block (sorted, stable).
+
+    Mirrors the reference forward path's emitting-line filter in
+    ``AtomicDatabase._build_transitions_query`` (``get_transitions``): only
+    rows with a usable spontaneous-emission rate and upper level
+    (``aki > 0`` and non-NULL ``ek_ev``/``gk``) belong in the CF-LIBS line
+    pool. The M5 complete-DB ingest added ~74k observation-only transitions
+    with NULL ``aki`` (and sometimes NULL ``ek_ev``/``gk``) that carry
+    position+intensity but cannot emit; without this cut the snapshot line
+    block would carry tens of thousands of non-emitting lines that the
+    reference snapshot/forward/detect path never sees -- a line-set parity
+    break (J0 AC4) and a polluted detection/identification catalog.
+    """
     rows = conn.execute("""
         SELECT element, sp_num, wavelength_nm, aki, ei_ev, ek_ev, gi, gk,
                stark_w, stark_alpha, stark_shift, aki_uncertainty,
                is_resonance, stark_w_source, gamma_vdw_log
         FROM lines
+        WHERE aki IS NOT NULL AND aki > 0
+          AND ek_ev IS NOT NULL AND gk IS NOT NULL
         ORDER BY element, sp_num, wavelength_nm, id
         """).fetchall()
 
