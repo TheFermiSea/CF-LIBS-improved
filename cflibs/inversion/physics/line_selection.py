@@ -307,6 +307,63 @@ class LineSelector:
         self.plasma_temperature_K = plasma_temperature_K
         self.reliability_ranked_selection = reliability_ranked_selection
 
+    @classmethod
+    def from_accuracy_target(
+        cls,
+        rel_temp_target: float,
+        n_lines: int,
+        temperature_K: float,
+        snr: float = 10.0,
+        distribution: str = "uniform",
+        **kwargs: object,
+    ) -> "LineSelector":
+        """Build a selector whose gates are *derived* from a target temperature accuracy.
+
+        Instead of the tuned defaults, ``min_energy_spread_ev``, ``min_snr``, and
+        ``min_lines_per_element`` are computed from a target relative-temperature error
+        ``sigma_T/T`` via the machine-verified error-propagation chain (see
+        :mod:`cflibs.inversion.physics.error_budget`, mirroring ``cflibs-formal``'s
+        ``ErrorBudget.lean``). This makes the line-selection thresholds *derived, not tuned*.
+
+        Parameters
+        ----------
+        rel_temp_target : float
+            Target relative temperature error ``sigma_T / T`` (e.g. ``0.05`` for 5 %).
+        n_lines : int
+            Assumed number of usable lines per element.
+        temperature_K : float
+            Plasma (excitation) temperature in kelvin.
+        snr : float, optional
+            Expected per-line SNR (default 10.0); also used as ``min_snr``.
+        distribution : str, optional
+            Energy-spread-to-span model, ``"uniform"`` (default) or ``"endpoints"``; see
+            :func:`cflibs.inversion.physics.error_budget.required_energy_span_ev`.
+        **kwargs
+            Forwarded to :meth:`__init__` (e.g. ``exclude_resonance``,
+            ``max_lines_per_element``).
+
+        Returns
+        -------
+        LineSelector
+            A selector with spec-derived gates. Existing behaviour is unchanged unless this
+            constructor is used; the bare :meth:`__init__` defaults are untouched.
+        """
+        from cflibs.inversion.physics.error_budget import derive_line_selection_thresholds
+
+        t = derive_line_selection_thresholds(
+            rel_temp_target=rel_temp_target,
+            n_lines=n_lines,
+            t_k=temperature_K,
+            snr=snr,
+            distribution=distribution,
+        )
+        return cls(
+            min_snr=t.min_snr,
+            min_energy_spread_ev=t.min_energy_spread_ev,
+            min_lines_per_element=t.min_lines_per_element,
+            **kwargs,  # type: ignore[arg-type]
+        )
+
     def select(
         self,
         observations: List[LineObservation],
