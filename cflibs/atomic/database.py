@@ -26,6 +26,22 @@ from cflibs.core.pool import get_pool
 
 logger = get_logger("atomic.database")
 
+#: SQL predicate keeping only *emitting* lines from the ``lines`` table.
+#:
+#: The M5 complete-DB ingest added the full NIST line list, which includes
+#: ~74k observation-only transitions with NULL ``aki`` (and sometimes NULL
+#: upper-level ``ek_ev``/``gk``). Those carry position+intensity for synthetic
+#: generation / beyond-CF-LIBS methods but cannot emit, so a :class:`Transition`
+#: (which requires ``A_ki``/``E_k``/``g_k``) is undefined for them -- exclude them
+#: here so the forward model, RANSAC calibration, manifold generation and the
+#: jitpipe snapshot only ever see emitting lines (the old A-only DB made this
+#: filter implicit). Format with ``p`` = the ``lines`` column prefix for the
+#: enclosing SELECT (``""`` when the table is unaliased, ``"l."`` for the
+#: manifold join).
+EMITTING_LINE_PREDICATE = (
+    "{p}aki IS NOT NULL AND {p}aki > 0 AND {p}ek_ev IS NOT NULL AND {p}gk IS NOT NULL"
+)
+
 
 class AtomicDatabase:
     """
@@ -437,9 +453,12 @@ class AtomicDatabase:
         wavelength_max: float | None,
         min_relative_intensity: float | None,
     ) -> tuple[str, list[object]]:
-        """Build the SQL query and bound parameters for :meth:`get_transitions`."""
+        """Build the SQL query and bound parameters for :meth:`get_transitions`.
+
+        Only emitting lines are returned (see :data:`EMITTING_LINE_PREDICATE`).
+        """
         # Select all relevant columns.
-        query = """
+        query = f"""
             SELECT
                 element, sp_num, wavelength_nm, aki, ek_ev, ei_ev,
                 gk, gi, rel_int,
@@ -447,16 +466,8 @@ class AtomicDatabase:
                 aki_uncertainty, accuracy_grade
             FROM lines
             WHERE element = ?
-              AND aki IS NOT NULL AND aki > 0
-              AND ek_ev IS NOT NULL AND gk IS NOT NULL
+              AND {EMITTING_LINE_PREDICATE.format(p="")}
         """
-        # The M5 complete-DB ingest added the full NIST line list, which includes
-        # ~74k observation-only transitions with NULL aki (and sometimes NULL
-        # upper-level ek_ev/gk). Those carry position+intensity for synthetic
-        # generation / beyond-CF-LIBS methods but cannot emit, so a Transition
-        # (which requires A_ki/E_k/g_k) is undefined for them -- exclude here so
-        # the forward model, RANSAC calibration and snapshot only see emitting
-        # lines (the old A-only DB made this filter implicit).
         params: list[object] = [element]
 
         if ionization_stage is not None:

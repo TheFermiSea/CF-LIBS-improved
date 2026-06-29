@@ -31,7 +31,7 @@ except ImportError:
 
 from cflibs.core.jax_runtime import HAS_JAX, jax, jit_if_available, jnp, vmap_if_available
 from cflibs.core.constants import SAHA_CONST_CM3, C_LIGHT, EV_TO_J, EV_TO_K, H_PLANCK, M_PROTON
-from cflibs.atomic.database import AtomicDatabase
+from cflibs.atomic.database import EMITTING_LINE_PREDICATE, AtomicDatabase
 from cflibs.atomic.masses import DEFAULT_ATOMIC_MASS_AMU, STANDARD_ATOMIC_MASSES
 from cflibs.manifold.config import ManifoldConfig
 from cflibs.core.logging_config import get_logger
@@ -124,15 +124,12 @@ class ManifoldGenerator:
 
         logger.info("Loading atomic data from database...")
 
-        # Build query for all elements (including Stark parameters)
+        # Build query for all elements (including Stark parameters). The emitting-
+        # line filter (EMITTING_LINE_PREDICATE) is the canonical
+        # AtomicDatabase.get_transitions cut: without it a single NaN aki from an
+        # observation-only transition poisons the whole summed snapshot (every
+        # pixel becomes NaN).
         placeholders = ",".join(["?"] * len(self.config.elements))
-        # The M5 complete-DB ingest added the full NIST line list, which includes
-        # ~74k observation-only transitions with NULL aki (and sometimes NULL
-        # upper-level ek_ev/gk). Those cannot emit in LTE -- the emissivity
-        # epsilon = (hc/4pi lambda) * A_ki * n_k is undefined without A_ki/E_k/g_k
-        # -- and a single NaN aki poisons the whole summed snapshot (every pixel
-        # becomes NaN). Filter them out here, identical to the canonical
-        # AtomicDatabase.get_transitions query (database.py:450).
         query = f"""
             SELECT
                 l.element, l.sp_num, l.wavelength_nm, l.aki, l.ek_ev, l.gk,
@@ -141,8 +138,7 @@ class ManifoldGenerator:
             JOIN species_physics sp ON l.element = sp.element AND l.sp_num = sp.sp_num
             WHERE l.wavelength_nm BETWEEN ? AND ?
             AND l.element IN ({placeholders})
-            AND l.aki IS NOT NULL AND l.aki > 0
-            AND l.ek_ev IS NOT NULL AND l.gk IS NOT NULL
+            AND {EMITTING_LINE_PREDICATE.format(p="l.")}
             ORDER BY l.wavelength_nm
         """
         params = [
