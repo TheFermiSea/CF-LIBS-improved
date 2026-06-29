@@ -649,6 +649,24 @@ def provider_for(
 _level_cache: Dict[Tuple[str, str, int, int], Tuple[np.ndarray, np.ndarray, float]] = {}
 
 
+def bound_levels_sorted(g: np.ndarray, E: np.ndarray, ip: float) -> Tuple[np.ndarray, np.ndarray]:
+    """Sort levels by energy and drop autoionizing levels at/above ``ip``.
+
+    Returns ``(g, E)`` sorted ascending in energy with every level ``E >= ip``
+    removed. Shared by the reference partition direct sum
+    (:func:`get_levels_for_species`) and the jitpipe snapshot bridge
+    (``cflibs.jitpipe.snapshot``) so both builders produce the identical
+    bound-level set — a field-for-field snapshot-parity requirement (the lax
+    kernel re-masks ``E < ip`` at eval time, so the cut is representation-only and
+    leaves the partition value unchanged).
+    """
+    order = np.argsort(E)
+    g = g[order]
+    E = E[order]
+    below_ip = E < ip
+    return g[below_ip], E[below_ip]
+
+
 def get_levels_for_species(
     atomic_db: Any,
     element: str,
@@ -687,15 +705,9 @@ def get_levels_for_species(
     g_arr = np.array([lev.g for lev in levels], dtype=np.float64)
     E_arr = np.array([lev.energy_ev for lev in levels], dtype=np.float64)
 
-    # Sort by energy
-    sort_idx = np.argsort(E_arr)
-    g_arr = g_arr[sort_idx]
-    E_arr = E_arr[sort_idx]
-
-    # Pre-filter autoionizing levels (belt-and-suspenders with DB cleanup)
-    below_ip = E_arr < ip
-    g_arr = g_arr[below_ip]
-    E_arr = E_arr[below_ip]
+    # Sort by energy and drop autoionizing levels at/above the IP
+    # (belt-and-suspenders with DB cleanup; shared with the jitpipe snapshot).
+    g_arr, E_arr = bound_levels_sorted(g_arr, E_arr, ip)
 
     result = (g_arr, E_arr, ip)
     _level_cache[cache_key] = result
