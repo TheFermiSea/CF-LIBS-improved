@@ -50,6 +50,8 @@ from typing import Callable, Iterable, Mapping, Protocol, Sequence, TypeVar
 
 import numpy as np
 
+from cflibs.core.constants import HC_EV_NM, KB_EV
+
 __all__ = [
     "OPCCalibration",
     "Standard",
@@ -129,6 +131,11 @@ THIN_FILTER_WIDTH_HALF_NM: float = 0.6
 #: lines remain (else its lines are kept as-is, so a noisy spectrum never strips
 #: the matrix anchor entirely).
 THIN_FILTER_MIN_KEEP: int = 2
+
+#: Relative (fractional) floor on a line's intensity uncertainty when an ordinate
+#: is replaced/re-extracted (CD-SB injection, constrained peak-locked extraction):
+#: ``sigma_I = max(I * RELATIVE_INTENSITY_UNCERTAINTY_FLOOR, 1e-12)``.
+RELATIVE_INTENSITY_UNCERTAINTY_FLOOR: float = 0.05
 
 
 # --- public data structures --------------------------------------------------
@@ -274,6 +281,16 @@ def _composition_rmsep(
     return float(np.sqrt(np.mean(np.asarray(errs) ** 2)))
 
 
+def _geomean(values: Sequence[float]) -> float:
+    """Geometric mean ``exp(mean(log v))`` of an already-filtered positive sequence.
+
+    Callers filter to strictly-positive finite values first (the degenerate /
+    clamp-saturation rules differ between callers); an empty sequence is the
+    caller's degenerate case and must not be passed.
+    """
+    return float(np.exp(np.mean(np.log(values))))
+
+
 def _geomean_F(F_list: Sequence[Mapping[str, float]]) -> dict[str, float]:
     """Per-element geometric mean of OPC factor dicts, clamp-saturated filtered.
 
@@ -318,12 +335,10 @@ def _derive_F(standard: Standard, T_K: float) -> dict[str, float]:
     clamped to ``[F_MIN, F_MAX]``.
     """
     certified_norm = _renorm100(standard.certified)
-    rec = standard.recover(float(T_K)).composition
-    tot = sum(v for v in rec.values() if np.isfinite(v) and v > 0)
+    rec_norm = _renorm100(standard.recover(float(T_K)).composition)
     F: dict[str, float] = {}
     for e, tv in certified_norm.items():
-        rv = rec.get(e, 0.0)
-        cn = (rv / tot * 100.0) if (tot > 0 and np.isfinite(rv)) else 0.0
+        cn = rec_norm.get(e, 0.0)
         f = max(tv, MIN_WT) / max(cn, MIN_WT)
         F[e] = float(np.clip(f, F_MIN, F_MAX))
     return F
@@ -397,13 +412,12 @@ def assess_conditioning(
     degenerate = bool(rec.degenerate)
     in_rmsep = _composition_rmsep(certified_norm, rec.composition)
     matrix_el = max(certified_norm, key=lambda e: certified_norm[e]) if certified_norm else None
-    ps = sum(v for v in rec.composition.values() if np.isfinite(v) and v > 0)
+    rec_norm = _renorm100(rec.composition)
     nonmatrix_max = 0.0
-    if ps > 0:
-        for e, v in rec.composition.items():
-            if e == matrix_el or not np.isfinite(v):
-                continue
-            nonmatrix_max = max(nonmatrix_max, v / ps * 100.0)
+    for e, v in rec_norm.items():
+        if e == matrix_el:
+            continue
+        nonmatrix_max = max(nonmatrix_max, v)
     passed = bool(
         converged
         and (not degenerate)
@@ -559,6 +573,19 @@ def apply_opc(observations: Iterable[_OPCObservation], calibration: OPCCalibrati
 # unchanged from the lever.
 
 
+def _local_baseline(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Robust median-edge local baseline over a window.
+
+    A straight line interpolated between the median of the first and last ~1/6 of
+    the window (a per-window continuum estimate robust to single-sample noise).
+    Shared by :func:`measure_line_width` (OPC width measure) and the constrained
+    peak-locked extractor; the line-detection extractor deliberately uses a
+    different plain-trapz baseline and is NOT routed through here.
+    """
+    k = max(1, x.size // 6)
+    return np.interp(x, [x[0], x[-1]], [float(np.median(y[:k])), float(np.median(y[-k:]))])
+
+
 def measure_line_width(
     wavelength: np.ndarray,
     intensity: np.ndarray,
@@ -593,8 +620,7 @@ def measure_line_width(
     x = wl[mask]
     y = inten[mask].astype(float)
     k = max(1, x.size // 6)
-    base = np.interp(x, [x[0], x[-1]], [float(np.median(y[:k])), float(np.median(y[-k:]))])
-    y = y - base
+    y = y - _local_baseline(x, y)
     peak = float(y.max())
     if peak <= 0:
         return float("nan"), 0.0
@@ -609,6 +635,58 @@ def measure_line_width(
     var = float(np.sum((x - mu) ** 2 * yp) / tot)
     fwhm = 2.354820045 * np.sqrt(max(var, 1e-12))
     return fwhm, snr
+
+
+def _assess_thickness(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    observations: Sequence[_LineWidthObservation],
+    *,
+    min_corr_lines: int,
+    snr_min: float,
+    thick_ratio: float,
+    instr_width_pct: float,
+    width_half_nm: float,
+) -> tuple[dict[int, float], dict[int, float], dict[str, list[int]], float, dict[str, float]]:
+    """Measure per-line widths/SNRs and identify the optically-thick elements.
+
+    Shared a-priori front-end of :func:`select_optically_thin_lines` and
+    :func:`cdsb_raw_ordinate`: per-line FWHM + peak SNR, the per-spectrum
+    instrument width (a low percentile of the well-measured widths), and the set
+    of optically-thick elements (>= ``min_corr_lines`` well-measured lines whose
+    median width exceeds ``thick_ratio * instr``).
+
+    Returns ``(widths, snrs, by_el, instr, thick)`` where ``thick`` maps each
+    optically-thick element to its ``median_width / instr`` ratio. ``instr`` is
+    ``0.0`` and ``thick`` empty when no line is well measured (the callers treat
+    that as "leave everything untouched").
+    """
+    widths: dict[int, float] = {}
+    snrs: dict[int, float] = {}
+    by_el: dict[str, list[int]] = {}
+    for i, o in enumerate(observations):
+        fwhm, snr = measure_line_width(wavelength, intensity, o.wavelength_nm, width_half_nm)
+        widths[i] = fwhm
+        snrs[i] = snr
+        by_el.setdefault(o.element, []).append(i)
+
+    good_all = [widths[i] for i in widths if np.isfinite(widths[i]) and snrs[i] >= snr_min]
+    if not good_all:
+        return widths, snrs, by_el, 0.0, {}
+    instr = float(np.percentile(good_all, instr_width_pct))
+    if instr <= 0:
+        return widths, snrs, by_el, 0.0, {}
+
+    thick: dict[str, float] = {}
+    for el, idxs in by_el.items():
+        good = [i for i in idxs if np.isfinite(widths[i]) and snrs[i] >= snr_min]
+        if len(good) < min_corr_lines:
+            continue
+        median_w = float(np.median([widths[i] for i in good]))
+        if median_w / instr < thick_ratio:
+            continue
+        thick[el] = median_w / instr
+    return widths, snrs, by_el, instr, thick
 
 
 def select_optically_thin_lines(
@@ -658,30 +736,23 @@ def select_optically_thin_lines(
         broadened lines removed). When no line is well measured the full input is
         returned unchanged.
     """
-    widths: dict[int, float] = {}
-    snrs: dict[int, float] = {}
-    by_el: dict[str, list[int]] = {}
-    for i, o in enumerate(observations):
-        fwhm, snr = measure_line_width(wavelength, intensity, o.wavelength_nm, width_half_nm)
-        widths[i] = fwhm
-        snrs[i] = snr
-        by_el.setdefault(o.element, []).append(i)
-
-    good_all = [widths[i] for i in widths if np.isfinite(widths[i]) and snrs[i] >= snr_min]
-    if not good_all:
-        return list(observations)
-    instr = float(np.percentile(good_all, instr_width_pct))
+    widths, snrs, by_el, instr, thick = _assess_thickness(
+        wavelength,
+        intensity,
+        observations,
+        min_corr_lines=min_corr_lines,
+        snr_min=snr_min,
+        thick_ratio=thick_ratio,
+        instr_width_pct=instr_width_pct,
+        width_half_nm=width_half_nm,
+    )
     if instr <= 0:
         return list(observations)
 
     drop: set[int] = set()
-    for _el, idxs in by_el.items():
+    for el in thick:
+        idxs = by_el[el]
         good = [i for i in idxs if np.isfinite(widths[i]) and snrs[i] >= snr_min]
-        if len(good) < min_corr_lines:
-            continue
-        median_w = float(np.median([widths[i] for i in good]))
-        if median_w / instr < thick_ratio:
-            continue  # optically thin element -> keep all its lines
         thin = [i for i in good if widths[i] / instr < thick_ratio]
         if len(thin) < min_keep:
             continue  # too few thin anchors -> keep the element's lines as-is
@@ -735,10 +806,6 @@ def select_optically_thin_lines(
 # positive-feedback loop. The COG exponent (0.56) and the optically-thin reference
 # width (0.08 nm) are physical CD-SB / El Sherbini constants, not gate-tuned.
 
-#: Photon energy conversion: ``E[eV] = CDSB_HC_EV_NM / lambda[nm]``.
-CDSB_HC_EV_NM: float = 1239.84193
-#: Boltzmann constant in eV/K (for the CD-SB ``exp(-(E_k-E_i)/(k_B T))`` factor).
-CDSB_K_B_EV: float = 8.617333262e-5
 #: Pisa-group curve-of-growth exponent: ``dl/dl0 = ((1-e^-kl)/kl)^-CDSB_COG_EXP``.
 CDSB_COG_EXP: float = 0.56
 #: Optically-thin intrinsic reference width ``Delta_lambda_0`` (nm), El Sherbini 2005.
@@ -844,33 +911,27 @@ def cdsb_raw_ordinate(
         observation index, plus a ``{element: median_width / instr}`` diagnostic
         for each thick element corrected.
     """
-    widths: dict[int, float] = {}
-    snrs: dict[int, float] = {}
-    by_el: dict[str, list[int]] = {}
-    for i, o in enumerate(observations):
-        fwhm, snr = measure_line_width(wavelength, intensity, o.wavelength_nm, width_half_nm)
-        widths[i] = fwhm
-        snrs[i] = snr
-        by_el.setdefault(o.element, []).append(i)
-
-    good_all = [widths[i] for i in widths if np.isfinite(widths[i]) and snrs[i] >= snr_min]
-    if not good_all:
-        return {}, {}
-    instr = float(np.percentile(good_all, instr_width_pct))
+    widths, snrs, by_el, instr, thick = _assess_thickness(
+        wavelength,
+        intensity,
+        observations,
+        min_corr_lines=min_corr_lines,
+        snr_min=snr_min,
+        thick_ratio=thick_ratio,
+        instr_width_pct=instr_width_pct,
+        width_half_nm=width_half_nm,
+    )
     if instr <= 0:
         return {}, {}
     ref = max(float(thin_ref_width_nm), 1e-6)
 
     raw: dict[int, float] = {}
     diag: dict[str, float] = {}
-    for el, idxs in by_el.items():
+    for el, ratio in thick.items():
+        idxs = by_el[el]
         good = [i for i in idxs if np.isfinite(widths[i]) and snrs[i] >= snr_min]
-        if len(good) < min_corr_lines:
-            continue
         median_w = float(np.median([widths[i] for i in good]))
-        if median_w / instr < thick_ratio:
-            continue  # optically thin element -> not CD-SB corrected
-        diag[el] = median_w / instr
+        diag[el] = ratio
         for i in idxs:
             # Marginal / unmeasurable lines fall back to the element median width so
             # every thick-element line still gets a (floored) columnar-density vote.
@@ -879,8 +940,8 @@ def cdsb_raw_ordinate(
             kl = max(_solve_cdsb_kl_from_ratio(intrinsic / ref), CDSB_KL_FLOOR)
             o = observations[i]
             lam = float(o.wavelength_nm)
-            photon_ev = CDSB_HC_EV_NM / lam
-            boltz = float(np.exp(-photon_ev / (CDSB_K_B_EV * T_K)))
+            photon_ev = HC_EV_NM / lam
+            boltz = float(np.exp(-photon_ev / (KB_EV * T_K)))
             raw_i = float(o.g_k) * kl * boltz * (CDSB_LAMBDA_REF_NM / lam) ** 5
             if np.isfinite(raw_i) and raw_i > 0:
                 raw[i] = raw_i
@@ -951,7 +1012,11 @@ def apply_cdsb_matrix(
         o.intensity = float(scale) * raw_i
         unc = getattr(o, "intensity_uncertainty", None)
         if unc is not None:
-            setattr(o, "intensity_uncertainty", max(o.intensity * 0.05, 1e-12))
+            setattr(
+                o,
+                "intensity_uncertainty",
+                max(o.intensity * RELATIVE_INTENSITY_UNCERTAINTY_FLOOR, 1e-12),
+            )
         n += 1
         mx = max(mx, raw_i)
     return n, mx

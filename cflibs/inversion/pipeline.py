@@ -657,6 +657,50 @@ def _log_pipeline_config(pipeline: AnalysisPipelineConfig) -> None:
     )
 
 
+def _apply_matrix_isolation(
+    observations,
+    atomic_db,
+    *,
+    matrix_isolation_element,
+    resolving_power,
+    n_fwhm,
+    contamination_ratio,
+    min_lines_per_element,
+):
+    """Apply the opt-in matrix-isolation blend filter, or pass through when off.
+
+    Returns ``(kept, dropped)``. When ``matrix_isolation_element`` is None the
+    input observations are returned unchanged with an empty dropped list. Shared
+    by the generic (:func:`detect_and_select_lines`) and constrained
+    (:func:`_constrained_detect_and_extract`) detection paths, which differ only
+    in whether the knob values come from local args or ``pipeline`` attributes —
+    hence the explicit keyword parameters rather than a ``pipeline`` argument.
+    """
+    if matrix_isolation_element is None:
+        return observations, []
+    from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
+
+    return filter_matrix_blended_lines(
+        observations,
+        atomic_db,
+        matrix_isolation_element,
+        resolving_power=resolving_power,
+        n_fwhm=n_fwhm,
+        contamination_ratio=contamination_ratio,
+        min_lines_per_element=max(1, min_lines_per_element),
+    )
+
+
+def _observation_counts(observations) -> dict:
+    """Per-element line counts (skips observations without an ``element``)."""
+    counts: dict = {}
+    for obs in observations:
+        element = getattr(obs, "element", None)
+        if element is not None:
+            counts[element] = counts.get(element, 0) + 1
+    return counts
+
+
 def detect_and_select_lines(
     wavelength,
     intensity,
@@ -999,7 +1043,6 @@ def detect_and_select_lines(
     )
 
     selected_lines = selection.selected_lines
-    matrix_dropped: list = []
     # Matrix-isolation filter (opt-in, default-off): on a dominant-matrix alloy
     # the dense forest of matrix-element lines blends with the trace elements'
     # analytical lines, contaminating their extracted intensity (e.g. V over-
@@ -1007,18 +1050,15 @@ def detect_and_select_lines(
     # the trace-element lines blended with a comparable-or-stronger matrix
     # transition inside the instrument resolution element. Pure atomic-data +
     # window function; the matrix element's own lines are untouched.
-    if matrix_isolation_element is not None:
-        from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
-
-        selected_lines, matrix_dropped = filter_matrix_blended_lines(
-            selected_lines,
-            atomic_db,
-            matrix_isolation_element,
-            resolving_power=resolving_power,
-            n_fwhm=matrix_isolation_n_fwhm,
-            contamination_ratio=matrix_isolation_contamination_ratio,
-            min_lines_per_element=max(1, min_lines_per_element),
-        )
+    selected_lines, matrix_dropped = _apply_matrix_isolation(
+        selected_lines,
+        atomic_db,
+        matrix_isolation_element=matrix_isolation_element,
+        resolving_power=resolving_power,
+        n_fwhm=matrix_isolation_n_fwhm,
+        contamination_ratio=matrix_isolation_contamination_ratio,
+        min_lines_per_element=min_lines_per_element,
+    )
 
     if not return_diagnostics:
         return selected_lines
@@ -1093,19 +1133,15 @@ def _constrained_detect_and_extract(wavelength, intensity, atomic_db, pipeline):
     # contaminating their extracted intensity; drop the trace lines blended with a
     # comparable-or-stronger matrix transition. The matrix element's own lines are
     # untouched. Pure atomic-data + window; skipped when the knob is unset.
-    matrix_dropped: list = []
-    if pipeline.matrix_isolation_element is not None:
-        from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
-
-        observations, matrix_dropped = filter_matrix_blended_lines(
-            observations,
-            atomic_db,
-            pipeline.matrix_isolation_element,
-            resolving_power=pipeline.resolving_power,
-            n_fwhm=pipeline.matrix_isolation_n_fwhm,
-            contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
-            min_lines_per_element=max(1, pipeline.min_lines_per_element),
-        )
+    observations, matrix_dropped = _apply_matrix_isolation(
+        observations,
+        atomic_db,
+        matrix_isolation_element=pipeline.matrix_isolation_element,
+        resolving_power=pipeline.resolving_power,
+        n_fwhm=pipeline.matrix_isolation_n_fwhm,
+        contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
+        min_lines_per_element=pipeline.min_lines_per_element,
+    )
 
     detected_elements = {o.element for o in observations}
     dropped: dict = {el: "constrained_extraction" for el in elements if el not in detected_elements}
@@ -1647,11 +1683,7 @@ def run_pipeline(
     # Per-element observation counts (which elements survived detection +
     # selection, and with how many lines). Benchmark harnesses score these;
     # the CLI trust report ignores them.
-    observation_counts: dict = {}
-    for obs in observations:
-        element = getattr(obs, "element", None)
-        if element is not None:
-            observation_counts[element] = observation_counts.get(element, 0) + 1
+    observation_counts = _observation_counts(observations)
     diagnostics["observation_counts"] = observation_counts
     diagnostics["n_observations"] = len(observations)
 
@@ -1685,11 +1717,7 @@ def run_pipeline(
             n_dropped = len(observations) - len(thin)
             if thin and n_dropped > 0:
                 observations = thin
-                observation_counts = {}
-                for obs in observations:
-                    element = getattr(obs, "element", None)
-                    if element is not None:
-                        observation_counts[element] = observation_counts.get(element, 0) + 1
+                observation_counts = _observation_counts(observations)
                 diagnostics["observation_counts"] = observation_counts
                 diagnostics["n_observations"] = len(observations)
                 diagnostics["opc_thin_filter"] = {

@@ -100,7 +100,8 @@ Literature References
 
 from dataclasses import dataclass, field
 from collections import defaultdict
-from typing import List, Dict, Optional, Sequence, Tuple, Set
+from bisect import bisect_left, bisect_right
+from typing import Iterable, List, Dict, Optional, Sequence, Tuple, Set
 import numpy as np
 
 from cflibs.core.constants import KB_EV, MCWHIRTER_CONST
@@ -1151,6 +1152,62 @@ def _instrument_fwhm_nm(
     return 0.0
 
 
+def _matrix_contamination_prelude(
+    obs: LineObservation,
+    matrix_element: str,
+    *,
+    half_window_nm: float,
+    matrix_dominance: float,
+    abundance_prior: Optional[Dict[str, float]],
+    select_temperature_K: float,
+) -> Optional[Tuple[float, float, float, float]]:
+    """Window bounds + abundance dominance + trace per-atom emissivity for a line.
+
+    Returns ``(lo, hi, dominance, trace_w)`` or ``None`` when the line cannot be
+    judged (non-positive window or non-positive trace emissivity) so the caller
+    keeps it. ``dominance`` = ``a_matrix / a_trace`` from ``abundance_prior`` when
+    both elements are present, else the scalar ``matrix_dominance``.
+    """
+    if half_window_nm <= 0.0:
+        return None
+    trace_w = float(obs.g_k * obs.A_ki * np.exp(-obs.E_k_ev / (KB_EV * select_temperature_K)))
+    if trace_w <= 0.0:
+        return None
+
+    if abundance_prior is not None:
+        a_matrix = float(abundance_prior.get(matrix_element, 0.0))
+        a_trace = float(abundance_prior.get(obs.element, 0.0))
+        dominance = (a_matrix / a_trace) if a_trace > 0 else matrix_dominance
+    else:
+        dominance = matrix_dominance
+
+    lo, hi = obs.wavelength_nm - half_window_nm, obs.wavelength_nm + half_window_nm
+    return lo, hi, dominance, trace_w
+
+
+def _contamination_from_transitions(
+    transitions: Iterable,
+    *,
+    dominance: float,
+    trace_w: float,
+    select_temperature_K: float,
+) -> Optional[float]:
+    """Max abundance-scaled matrix:trace per-atom-emissivity ratio over ``transitions``.
+
+    ``None`` when no usable matrix transition is present (the candidate set is
+    empty or every entry is missing ``A_ki``/``g_k``/``E_k``).
+    """
+    best: Optional[float] = None
+    for tr in transitions:
+        if not tr.A_ki or tr.A_ki <= 0 or not tr.g_k or tr.g_k <= 0 or tr.E_k_ev is None:
+            continue
+        matrix_w = float(tr.g_k * tr.A_ki * np.exp(-tr.E_k_ev / (KB_EV * select_temperature_K)))
+        ratio = matrix_w * dominance / trace_w
+        if best is None or ratio > best:
+            best = ratio
+    return best
+
+
 def _matrix_contamination_ratio(
     obs: LineObservation,
     db,
@@ -1167,36 +1224,81 @@ def _matrix_contamination_ratio(
     Returns the maximum, over matrix transitions within ``half_window_nm`` of the
     trace line ``obs``, of the abundance-scaled per-atom-emissivity ratio
     ``(g_k A_ki e^{-E_k/kT})_matrix * a_matrix / ((g_k A_ki e^{-E_k/kT})_trace *
-    a_trace)``. ``a_*`` come from ``abundance_prior`` when both elements are
-    present, else the scalar ``matrix_dominance`` (= a_matrix / a_trace). Returns
-    ``None`` when the ratio cannot be judged (zero window, non-positive trace
-    emissivity, or no matrix transition in band) so the caller keeps the line.
+    a_trace)``. Returns ``None`` when the ratio cannot be judged (zero window,
+    non-positive trace emissivity, or no matrix transition in band) so the caller
+    keeps the line. Queries the DB per stage; see
+    :func:`_matrix_contamination_ratio_in_band` for the batched-band variant used
+    by :func:`filter_matrix_blended_lines`.
     """
-    if half_window_nm <= 0.0:
+    prelude = _matrix_contamination_prelude(
+        obs,
+        matrix_element,
+        half_window_nm=half_window_nm,
+        matrix_dominance=matrix_dominance,
+        abundance_prior=abundance_prior,
+        select_temperature_K=select_temperature_K,
+    )
+    if prelude is None:
         return None
-    trace_w = float(obs.g_k * obs.A_ki * np.exp(-obs.E_k_ev / (KB_EV * select_temperature_K)))
-    if trace_w <= 0.0:
-        return None
-
-    if abundance_prior is not None:
-        a_matrix = float(abundance_prior.get(matrix_element, 0.0))
-        a_trace = float(abundance_prior.get(obs.element, 0.0))
-        dominance = (a_matrix / a_trace) if a_trace > 0 else matrix_dominance
-    else:
-        dominance = matrix_dominance
-
-    lo, hi = obs.wavelength_nm - half_window_nm, obs.wavelength_nm + half_window_nm
+    lo, hi, dominance, trace_w = prelude
     best: Optional[float] = None
     for stage in stages:
-        for tr in db.get_transitions(
-            matrix_element, ionization_stage=stage, wavelength_min=lo, wavelength_max=hi
-        ):
-            if not tr.A_ki or tr.A_ki <= 0 or not tr.g_k or tr.g_k <= 0 or tr.E_k_ev is None:
-                continue
-            matrix_w = float(tr.g_k * tr.A_ki * np.exp(-tr.E_k_ev / (KB_EV * select_temperature_K)))
-            ratio = matrix_w * dominance / trace_w
-            if best is None or ratio > best:
-                best = ratio
+        r = _contamination_from_transitions(
+            db.get_transitions(
+                matrix_element, ionization_stage=stage, wavelength_min=lo, wavelength_max=hi
+            ),
+            dominance=dominance,
+            trace_w=trace_w,
+            select_temperature_K=select_temperature_K,
+        )
+        if r is not None and (best is None or r > best):
+            best = r
+    return best
+
+
+def _matrix_contamination_ratio_in_band(
+    obs: LineObservation,
+    band_by_stage: Sequence[Tuple[Sequence[float], Sequence]],
+    matrix_element: str,
+    *,
+    half_window_nm: float,
+    matrix_dominance: float,
+    abundance_prior: Optional[Dict[str, float]],
+    select_temperature_K: float,
+) -> Optional[float]:
+    """Batched-band twin of :func:`_matrix_contamination_ratio`.
+
+    ``band_by_stage`` is one ``(sorted_wavelengths, transitions)`` pair per stage,
+    pre-fetched for the whole selection band. Each line's window is selected by
+    bisect rather than a fresh per-line DB query. The transition set considered is
+    identical to the per-line query (``wavelength_nm`` in ``[lo, hi]`` inclusive),
+    so the contamination decision is unchanged.
+    """
+    prelude = _matrix_contamination_prelude(
+        obs,
+        matrix_element,
+        half_window_nm=half_window_nm,
+        matrix_dominance=matrix_dominance,
+        abundance_prior=abundance_prior,
+        select_temperature_K=select_temperature_K,
+    )
+    if prelude is None:
+        return None
+    lo, hi, dominance, trace_w = prelude
+    best: Optional[float] = None
+    for wls, trs in band_by_stage:
+        left = bisect_left(wls, lo)
+        right = bisect_right(wls, hi)
+        if left >= right:
+            continue
+        r = _contamination_from_transitions(
+            trs[left:right],
+            dominance=dominance,
+            trace_w=trace_w,
+            select_temperature_K=select_temperature_K,
+        )
+        if r is not None and (best is None or r > best):
+            best = r
     return best
 
 
@@ -1285,20 +1387,40 @@ def filter_matrix_blended_lines(
     flagged: Dict[str, List[Tuple[LineObservation, float]]] = defaultdict(list)
     kept_count: Dict[str, int] = defaultdict(int)
 
+    # Fetch matrix transitions for the whole selection band ONCE per stage, then
+    # bisect each trace line's window in-memory. The per-line db.get_transitions
+    # call used a distinct window every time (a query-cache miss => an O(N) SQLite
+    # round-trip); batching turns N*len(stages) queries into len(stages) while
+    # leaving the per-line contamination decision identical.
+    g_lo, g_hi = float("inf"), float("-inf")
+    for obs in observations:
+        if obs.element == matrix_element:
+            continue
+        hw = half_base * _instrument_fwhm_nm(obs.wavelength_nm, resolving_power, fwhm_nm)
+        if hw > 0:
+            g_lo = min(g_lo, obs.wavelength_nm - hw)
+            g_hi = max(g_hi, obs.wavelength_nm + hw)
+    band_by_stage: List[Tuple[List[float], List]] = []
+    if g_hi >= g_lo:
+        for stage in stages:
+            trs = db.get_transitions(
+                matrix_element, ionization_stage=stage, wavelength_min=g_lo, wavelength_max=g_hi
+            )
+            band_by_stage.append(([float(tr.wavelength_nm) for tr in trs], trs))
+
     for obs in observations:
         if obs.element == matrix_element:
             kept.append(obs)
             continue
         fwhm = _instrument_fwhm_nm(obs.wavelength_nm, resolving_power, fwhm_nm)
-        ratio = _matrix_contamination_ratio(
+        ratio = _matrix_contamination_ratio_in_band(
             obs,
-            db,
+            band_by_stage,
             matrix_element,
             half_window_nm=half_base * fwhm,
             matrix_dominance=matrix_dominance,
             abundance_prior=abundance_prior,
             select_temperature_K=select_temperature_K,
-            stages=stages,
         )
         if ratio is not None and ratio >= contamination_ratio:
             flagged[obs.element].append((obs, ratio))

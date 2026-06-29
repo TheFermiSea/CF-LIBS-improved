@@ -34,6 +34,7 @@ from typing import Any
 import numpy as np
 
 from cflibs.jitpipe import host as _host
+from cflibs.plasma.partition import bound_levels_sorted
 
 # Field groups -------------------------------------------------------------
 
@@ -466,11 +467,8 @@ class PipelineSnapshot:
             # field-for-field parity break (J0 AC4). The lax kernel already
             # masks ``E < ip`` at eval time, so this is representation-only and
             # leaves the partition value unchanged.
-            order = np.argsort(E)
-            g = g[order]
-            E = E[order]
-            below_ip = E < float(ip_col[row])
-            return g[below_ip], E[below_ip], True
+            g, E = bound_levels_sorted(g, E, float(ip_col[row]))
+            return g, E, True
 
         for i, el in enumerate(elements):
             r1 = sp_to_row.get((el, 1))

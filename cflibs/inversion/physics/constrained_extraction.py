@@ -38,6 +38,7 @@ import numpy as np
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.common import LineObservation
 from cflibs.inversion.physics.line_selection import SelectedLine, _select_emissivity
+from cflibs.inversion.physics.opc import RELATIVE_INTENSITY_UNCERTAINTY_FLOOR, _local_baseline
 
 logger = get_logger("inversion.constrained_extraction")
 
@@ -201,15 +202,13 @@ def extract_peak_locked(
         if int(sm.sum()) < 5:
             continue
         xs, ys = wl[sm], inten[sm]
-        k = max(1, xs.size // 6)
-        base = np.interp(xs, [xs[0], xs[-1]], [np.median(ys[:k]), np.median(ys[-k:])])
+        base = _local_baseline(xs, ys)
         peak_wl = float(xs[int(np.argmax(ys - base))])
         im = (wl >= peak_wl - half) & (wl <= peak_wl + half)
         if int(im.sum()) < 4:
             continue
         x, y = wl[im], inten[im].astype(float)
-        k2 = max(1, x.size // 6)
-        b = np.interp(x, [x[0], x[-1]], [np.median(y[:k2]), np.median(y[-k2:])])
+        b = _local_baseline(x, y)
         area = float(_trapz(y - b, x))
         if not np.isfinite(area) or area <= 0.0:
             continue
@@ -217,7 +216,7 @@ def extract_peak_locked(
             LineObservation(
                 wavelength_nm=peak_wl,
                 intensity=area,
-                intensity_uncertainty=max(area * 0.05, 1e-12),
+                intensity_uncertainty=max(area * RELATIVE_INTENSITY_UNCERTAINTY_FLOOR, 1e-12),
                 element=ls.element,
                 ionization_stage=ls.ionization_stage,
                 E_k_ev=ls.E_k_ev,

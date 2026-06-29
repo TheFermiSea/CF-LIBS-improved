@@ -58,6 +58,9 @@ J_TO_EV = 1.0 / EV_TO_J
 CM_TO_EV = 1.23984193e-4  # cm^-1 to eV
 EV_TO_CM = 1.0 / CM_TO_EV
 
+# Photon energy <-> wavelength: E[eV] = HC_EV_NM / lambda[nm] (hc in eV*nm).
+HC_EV_NM = 1239.84193  # eV*nm
+
 # Temperature conversions
 K_TO_EV = KB_EV  # K to eV (at room temp, ~0.025 eV)
 EV_TO_K = 1.0 / K_TO_EV

@@ -385,13 +385,14 @@ def _scan_lines(
     reference snapshot/forward/detect path never sees -- a line-set parity
     break (J0 AC4) and a polluted detection/identification catalog.
     """
-    rows = conn.execute("""
+    from cflibs.atomic.database import EMITTING_LINE_PREDICATE
+
+    rows = conn.execute(f"""
         SELECT element, sp_num, wavelength_nm, aki, ei_ev, ek_ev, gi, gk,
                stark_w, stark_alpha, stark_shift, aki_uncertainty,
                is_resonance, stark_w_source, gamma_vdw_log
         FROM lines
-        WHERE aki IS NOT NULL AND aki > 0
-          AND ek_ev IS NOT NULL AND gk IS NOT NULL
+        WHERE {EMITTING_LINE_PREDICATE.format(p="")}
         ORDER BY element, sp_num, wavelength_nm, id
         """).fetchall()
 
